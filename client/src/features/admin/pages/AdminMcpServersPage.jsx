@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
@@ -192,7 +189,6 @@ function StatusBadge({ status, t }) {
 
 function AdminMcpServersPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState([]);
   const [message, setMessage] = useState(null);
@@ -316,50 +312,38 @@ function AdminMcpServersPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-16">
           <LoadingSpinner size="lg" />
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
-            <div>
-              <button
-                onClick={() => navigate('/admin')}
-                className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-2"
-              >
-                <Icon name="chevron-left" size="sm" className="mr-1" />
-                {t('admin.nav.home', 'Admin')}
-              </button>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {t('admin.mcp.servers.title', 'MCP servers (outbound)')}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                {t(
-                  'admin.mcp.servers.subtitle',
-                  'External MCP servers iHub connects to. Their tools are merged into the tool catalog with per-server prefixing.'
-                )}
-              </p>
-            </div>
-            <button
-              onClick={startCreate}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-            >
-              <Icon name="plus" size="md" className="mr-2" />
-              {t('admin.mcp.servers.create', 'Add MCP server')}
-            </button>
-          </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            {t('admin.mcp.servers.title', 'MCP servers (outbound)')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            {t(
+              'admin.mcp.servers.subtitle',
+              'External MCP servers iHub connects to. Their tools are merged into the tool catalog with per-server prefixing.'
+            )}
+          </p>
         </div>
+        <button
+          onClick={startCreate}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+        >
+          <Icon name="plus" size="md" className="mr-2" />
+          {t('admin.mcp.servers.create', 'Add MCP server')}
+        </button>
+      </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div>
           {message && (
             <div
               className={`mb-6 p-4 rounded-md border ${
@@ -611,7 +595,6 @@ function AdminMcpServersPage() {
           </div>
         )}
       </div>
-    </AdminAuth>
   );
 }
 

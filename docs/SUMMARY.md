@@ -2,6 +2,7 @@
   - [Getting Started](GETTING_STARTED.md)
   - [Installation Guide](INSTALLATION.md)
   - [User Guide](user-guide.md)
+  - [Admin UI Guide](admin-ui.md)
   - [Architecture Overview](architecture.md)
   - [Configuration]()
     - [App Configuration](apps.md)

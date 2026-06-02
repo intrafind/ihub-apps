@@ -209,7 +209,7 @@ function getNtlmMiddleware(ntlmConfig) {
  * @param {Object} ntlmConfig - NTLM configuration
  * @returns {Object|null} Processed user object or null
  */
-function processNtlmUser(req, ntlmConfig) {
+export function processNtlmUser(req, ntlmConfig) {
   if (!req.ntlm) {
     logger.debug('NTLM Auth: no NTLM data in request', { component: 'NtlmAuth' });
     return null;
@@ -236,10 +236,15 @@ function processNtlmUser(req, ntlmConfig) {
     username: ntlmUser.UserName || ntlmUser.username
   });
 
-  // Extract user information
+  // Extract user information.
+  // express-ntlm exposes the authenticated identity as `UserName` and the
+  // domain as `DomainName` (capitalized). `.domain` / `.Domain` are checked
+  // first only to stay compatible with custom middleware that may set
+  // them. Without the `DomainName` fallback `user.domain` was always
+  // undefined, which made the standard `domain\\username` JWT subject
+  // template fall back to bare username.
   const userId = ntlmUser.username || ntlmUser.UserName;
-  const domain = ntlmUser.domain || ntlmUser.Domain;
-  const fullUsername = domain ? `${domain}\\${userId}` : userId;
+  const domain = ntlmUser.domain || ntlmUser.Domain || ntlmUser.DomainName;
 
   // Extract groups - check all possible field names
   let groups = [];
@@ -289,11 +294,19 @@ function processNtlmUser(req, ntlmConfig) {
 
   logger.debug('NTLM Auth: final groups for user', { component: 'NtlmAuth', mappedGroups });
 
-  // Create normalized user object
+  // Create normalized user object.
+  // `id` is the bare userId (not `domain\\userId`). Before the `DomainName`
+  // fix above, `domain` was always undefined and `id` therefore always equal
+  // to `userId`, so existing users.json entries were keyed by username
+  // alone. Keeping `id` as `userId` preserves that lookup key — switching
+  // to `domain\\userId` here would orphan every existing NTLM user record.
+  // The domain is exposed separately on `user.domain` for use by the
+  // `domain\\username` standard subject value and `${user.domain}`
+  // placeholder.
   const user = {
-    id: fullUsername,
+    id: userId,
     username: userId,
-    name: ntlmUser.DisplayName || ntlmUser.displayName || fullUsername,
+    name: ntlmUser.DisplayName || ntlmUser.displayName || userId,
     email: ntlmUser.email || ntlmUser.Email || null,
     groups: mappedGroups,
     externalGroups: groups, // Store original external groups for debugging
@@ -652,7 +665,7 @@ export function ntlmAuthMiddleware(req, res, next) {
             req.jwtExpiresIn = expiresIn;
 
             // Set HTTP-only cookie for authentication
-            res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
+            res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
           } catch (tokenError) {
             logger.error('NTLM Auth: JWT token generation failed', {
               component: 'NtlmAuth',

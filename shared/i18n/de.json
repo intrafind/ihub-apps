@@ -133,16 +133,24 @@
     "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
   },
   "office": {
+    "showTaskPane": "Aufgabenbereich anzeigen",
+    "insertIntoEmail": "In E-Mail einfügen",
+    "insertIntoDocument": "In Dokument einfügen",
     "pinned": {
-      "addCurrent": "Diese E-Mail hinzufügen",
-      "addCurrentTooltip": "Diese E-Mail an den Chat anhängen",
-      "addSelected": "Ausgewählte E-Mails hinzufügen",
-      "addSelectedTooltip": "Alle in Outlook ausgewählten E-Mails anhängen",
+      "addEmails": "E-Mail(s) hinzufügen",
+      "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",
       "alreadyAdded": "Bereits hinzugefügt",
       "removeOne": "Aus dem Chat entfernen",
       "clearAll": "Leeren",
       "clearAllTooltip": "Alle angehefteten E-Mails entfernen",
       "untitled": "(kein Betreff)"
+    },
+    "settingsDialog": {
+      "title": "Einstellungen",
+      "account": "Konto",
+      "language": "Sprache",
+      "cancel": "Abbrechen",
+      "save": "Speichern"
     }
   },
   "pages": {
@@ -597,10 +605,6 @@
       "tooltipAutomatic": "In Editor diktieren (Strg+M) - automatisch",
       "ariaLabel": "Text in Editor diktieren"
     }
-  },
-  "office": {
-    "insertIntoEmail": "In E-Mail einfügen",
-    "insertIntoDocument": "In Dokument einfügen"
   },
   "admin": {
     "providers": {
@@ -1800,6 +1804,7 @@
       "usernamePlaceholder": "Benutzername eingeben",
       "password": "Passwort",
       "passwordPlaceholder": "Passwort eingeben",
+      "rememberMe": "Angemeldet bleiben",
       "button": "Anmelden",
       "error": "Ungültiger Benutzername oder Passwort",
       "required": "Dieses Feld ist erforderlich",

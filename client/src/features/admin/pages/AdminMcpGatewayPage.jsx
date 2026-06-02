@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
@@ -38,7 +34,6 @@ function Toggle({ checked, onChange, label, description }) {
 
 function AdminMcpGatewayPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
@@ -109,41 +104,29 @@ function AdminMcpGatewayPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-16">
           <LoadingSpinner size="lg" />
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <button
-              onClick={() => navigate('/admin')}
-              className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-2"
-            >
-              <Icon name="chevron-left" size="sm" className="mr-1" />
-              {t('admin.nav.home', 'Admin')}
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {t('admin.mcp.gateway.title', 'MCP gateway (inbound)')}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {t(
-                'admin.mcp.gateway.subtitle',
-                'Expose iHub tools, apps, and workflows over the Model Context Protocol so MCP-aware clients (Claude Desktop, Cursor, agents) can use them as tools.'
-              )}
-            </p>
-          </div>
-        </div>
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          {t('admin.mcp.gateway.title', 'MCP gateway (inbound)')}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          {t(
+            'admin.mcp.gateway.subtitle',
+            'Expose iHub tools, apps, and workflows over the Model Context Protocol so MCP-aware clients (Claude Desktop, Cursor, agents) can use them as tools.'
+          )}
+        </p>
+      </div>
 
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="space-y-6">
           {message && (
             <div
               className={`p-4 rounded-md border ${
@@ -306,20 +289,22 @@ function AdminMcpGatewayPage() {
                 {t('admin.mcp.gateway.connection', 'Connection examples')}
               </h3>
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                Endpoint:{' '}
+                {t('admin.mcp.gateway.endpointLabel', 'Endpoint:')}{' '}
                 <code className="font-mono">
                   {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp
                 </code>
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                Discovery:{' '}
+                {t('admin.mcp.gateway.discoveryLabel', 'Discovery:')}{' '}
                 <code className="font-mono">
                   {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp/.well-known
                 </code>
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                Authenticate with an OAuth client (see /admin/oauth/clients) that grants the
-                relevant mcp:* scopes.
+                {t(
+                  'admin.mcp.gateway.connectionHint',
+                  'Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes.'
+                )}
               </p>
             </section>
           )}
@@ -340,9 +325,8 @@ function AdminMcpGatewayPage() {
               )}
             </button>
           </div>
-        </div>
       </div>
-    </AdminAuth>
+    </div>
   );
 }
 

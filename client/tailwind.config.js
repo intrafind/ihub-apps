@@ -10,6 +10,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        admin: {
+          50: '#f8f9ff',
+          100: '#f0f2ff',
+          accent: '#4f46e5',
+          'accent-hover': '#4338ca',
+          surface: '#ffffff',
+          'surface-dark': '#1f2937',
+          border: '#e5e7eb',
+          'border-dark': '#374151',
+          muted: '#6b7280',
+          'muted-dark': '#9ca3af'
+        },
         indigo: {
           50: '#eef2ff',
           100: '#e0e7ff',

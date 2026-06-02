@@ -36,12 +36,10 @@ function OfficeContextStrip({
   pinned,
   onUnpin,
   onClearPinned,
-  onPinCurrent,
-  onPinSelected,
-  canPinCurrent,
-  isCurrentPinned,
-  isMultiSelectSupported,
-  multiSelectLoading
+  onAddEmails,
+  canAddEmails,
+  addEmailsLoading,
+  addEmailsDisabled
 }) {
   const isAppointment = ctx?.itemKind === 'appointment';
   const attachments = useMemo(
@@ -60,7 +58,7 @@ function OfficeContextStrip({
   // single calendar item, so we suppress them when the user is on an
   // appointment surface to keep the strip focused on the meeting metadata.
   const hasPinned = !isAppointment && pinnedList.length > 0;
-  const hasPinControls = !isAppointment && (canPinCurrent || isMultiSelectSupported);
+  const hasPinControls = !isAppointment && !!canAddEmails;
 
   // Default-collapse threshold counts what the user would actually see
   // once expanded — attachments still in the queue plus pinned emails.
@@ -172,28 +170,47 @@ function OfficeContextStrip({
 
   return (
     <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOverrideExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 transition-colors rounded-t-lg"
-        aria-expanded={expanded}
-        aria-label={expanded ? 'Collapse email context' : 'Expand email context'}
-        title={expanded ? 'Collapse email context' : 'Expand email context'}
-      >
-        <Icon name="mail" size="sm" className="flex-shrink-0 text-slate-500" />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium text-slate-900 truncate" title={headerTitle}>
-            {headerTitle}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setOverrideExpanded(!expanded)}
+          className="flex-1 flex items-center gap-2 text-left hover:bg-slate-50 transition-colors rounded-md px-1 py-0.5 -ml-1"
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Collapse email context' : 'Expand email context'}
+          title={expanded ? 'Collapse email context' : 'Expand email context'}
+        >
+          <Icon name="mail" size="sm" className="flex-shrink-0 text-slate-500" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-900 truncate" title={headerTitle}>
+              {headerTitle}
+            </div>
+            {summaryLine && (
+              <div className="text-[11px] text-slate-500 truncate">{summaryLine}</div>
+            )}
           </div>
-          {summaryLine && <div className="text-[11px] text-slate-500 truncate">{summaryLine}</div>}
-        </div>
-        <Icon
-          name={expanded ? 'chevronUp' : 'chevronDown'}
-          size="sm"
-          className="flex-shrink-0 text-slate-400"
-          aria-hidden
-        />
-      </button>
+          <Icon
+            name={expanded ? 'chevronUp' : 'chevronDown'}
+            size="sm"
+            className="flex-shrink-0 text-slate-400"
+            aria-hidden
+          />
+        </button>
+
+        {/* Always show pin controls in the header, even when collapsed */}
+        {!expanded && hasPinControls && (
+          <PinnedEmailsBar
+            pinned={[]}
+            onUnpin={() => {}}
+            onClearAll={() => {}}
+            onAddEmails={onAddEmails}
+            canAddEmails={canAddEmails}
+            addEmailsLoading={addEmailsLoading}
+            addEmailsDisabled={addEmailsDisabled}
+            embedded
+            collapsedMode
+          />
+        )}
+      </div>
 
       {expanded && (
         <div className="border-t border-slate-100">
@@ -216,12 +233,10 @@ function OfficeContextStrip({
               pinned={pinnedList}
               onUnpin={onUnpin}
               onClearAll={onClearPinned}
-              onPinCurrent={onPinCurrent}
-              onPinSelected={onPinSelected}
-              canPinCurrent={canPinCurrent}
-              isCurrentPinned={isCurrentPinned}
-              isMultiSelectSupported={isMultiSelectSupported}
-              multiSelectLoading={multiSelectLoading}
+              onAddEmails={onAddEmails}
+              canAddEmails={canAddEmails}
+              addEmailsLoading={addEmailsLoading}
+              addEmailsDisabled={addEmailsDisabled}
               embedded
             />
           )}

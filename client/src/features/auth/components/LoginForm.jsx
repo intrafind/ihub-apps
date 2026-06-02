@@ -1,8 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+
+// localStorage key for the last successfully logged-in username so we can
+// pre-fill the field on return visits when the user opted into "Remember me".
+const REMEMBERED_USERNAME_KEY = 'ihub_rememberedUsername';
+
+const getRememberedUsername = () => {
+  try {
+    return localStorage.getItem(REMEMBERED_USERNAME_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const saveRememberedUsername = username => {
+  try {
+    if (username) {
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+    } else {
+      localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+    }
+  } catch {
+    // Storage may be unavailable (e.g. privacy mode); silently degrade.
+  }
+};
 
 // Defined outside LoginForm to ensure a stable reference across renders.
 // Defining component types inside a render function causes React to unmount
@@ -15,19 +39,24 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
   const { t } = useTranslation();
   const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
+  const initialRememberedUsername = getRememberedUsername();
   const [formData, setFormData] = useState({
-    username: '',
+    username: initialRememberedUsername,
     password: '',
-    provider: '' // For LDAP provider selection
+    provider: '', // For LDAP provider selection
+    rememberMe: true
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedAuthMethod, setSelectedAuthMethod] = useState(null); // 'local' or 'ldap'
 
+  const usernameInputRef = useRef(null);
+  const passwordInputRef = useRef(null);
+
   const handleInputChange = e => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -54,6 +83,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
       }
 
       if (result.success) {
+        saveRememberedUsername(formData.rememberMe ? formData.username : '');
         onSuccess?.();
       }
     } catch (error) {
@@ -69,7 +99,9 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
 
   const handleBackToMethodSelection = () => {
     setSelectedAuthMethod(null);
-    setFormData({ username: '', password: '', provider: '' });
+    // Preserve any remembered username and the Remember Me preference
+    // so switching auth methods doesn't force the user to retype.
+    setFormData(prev => ({ ...prev, password: '', provider: '' }));
   };
 
   const handleOidcLogin = providerName => {
@@ -127,6 +159,27 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
   };
 
   const isFormLoading = isLoading || isSubmitting;
+
+  // Focus username when empty, password when pre-filled from "Remember me".
+  // setTimeout(0) defers focus past parent focus-trap effects (e.g. the modal
+  // wrapper in UserAuthMenu), which would otherwise steal focus to the close
+  // button after our useEffect runs.
+  useEffect(() => {
+    const formVisible = !showAuthMethodSelection && hasUsernamePasswordAuth;
+    if (!formVisible) return;
+    const timeoutId = setTimeout(() => {
+      if (formData.username && passwordInputRef.current) {
+        passwordInputRef.current.focus();
+      } else if (usernameInputRef.current) {
+        usernameInputRef.current.focus();
+      }
+    }, 0);
+    return () => clearTimeout(timeoutId);
+    // Re-focus only when the form becomes visible or the user picks a method.
+    // formData.username is read inside but intentionally excluded so focus
+    // doesn't jump back to the field on every keystroke.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [selectedAuthMethod, showAuthMethodSelection, hasUsernamePasswordAuth]);
 
   const Wrapper = embedded ? 'div' : StandaloneWrapper;
 
@@ -217,9 +270,11 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               {t('auth.login.username', 'Username or Email')}
             </label>
             <input
+              ref={usernameInputRef}
               type="text"
               id="username"
               name="username"
+              autoComplete="username"
               value={formData.username}
               onChange={handleInputChange}
               required
@@ -234,9 +289,11 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               {t('auth.login.password', 'Password')}
             </label>
             <input
+              ref={passwordInputRef}
               type="password"
               id="password"
               name="password"
+              autoComplete="current-password"
               value={formData.password}
               onChange={handleInputChange}
               required
@@ -244,6 +301,21 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
               placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
             />
+          </div>
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="rememberMe"
+              name="rememberMe"
+              checked={formData.rememberMe}
+              onChange={handleInputChange}
+              disabled={isFormLoading}
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+            />
+            <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+              {t('auth.login.rememberMe', 'Remember me')}
+            </label>
           </div>
 
           <div className="flex gap-3 pt-4">

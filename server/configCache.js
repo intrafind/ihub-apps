@@ -52,20 +52,46 @@ function resolveEnvVars(value) {
  * subsystems (e.g. server/telemetry.js) that read raw JSON before configCache
  * is up can perform the same `${VAR}` / `${VAR:-default}` substitution the
  * rest of the platform expects.
+ *
+ * Callers can pass `skipPaths` to opt out specific dot-paths from env var
+ * substitution. This matters for fields that contain *user-data* templates
+ * (e.g. `${user.username}` is a placeholder for the authenticated user's
+ * username, NOT for `process.env.username`) — Windows automatically sets
+ * `process.env.username` to the OS user running the process, so without an
+ * opt-out the resolver would silently leak the service account into every
+ * such template. The skip decision belongs to whoever owns the config
+ * schema (e.g. `setCacheEntry` for platform.json); this function is just
+ * the mechanism.
+ *
+ * @param {*} obj - Object/array/primitive to recursively resolve
+ * @param {Object} [options]
+ * @param {string[]|Set<string>} [options.skipPaths] - Dot-paths to leave verbatim
+ * @param {string} [options.path] - Internal: current dot-path used for skip-list checks
  */
-export function resolveEnvVarsInObject(obj) {
+export function resolveEnvVarsInObject(obj, options = {}) {
   if (!obj || typeof obj !== 'object') return obj;
 
+  const path = options.path || '';
+  const skipPaths =
+    options.skipPaths instanceof Set ? options.skipPaths : new Set(options.skipPaths || []);
+
   if (Array.isArray(obj)) {
-    return obj.map(item => resolveEnvVarsInObject(item));
+    return obj.map((item, idx) =>
+      resolveEnvVarsInObject(item, { skipPaths, path: `${path}[${idx}]` })
+    );
   }
 
   const resolved = {};
   for (const [key, value] of Object.entries(obj)) {
+    const childPath = path ? `${path}.${key}` : key;
+    if (skipPaths.has(childPath)) {
+      resolved[key] = value;
+      continue;
+    }
     if (typeof value === 'string') {
       resolved[key] = resolveEnvVars(value);
     } else if (typeof value === 'object') {
-      resolved[key] = resolveEnvVarsInObject(value);
+      resolved[key] = resolveEnvVarsInObject(value, { skipPaths, path: childPath });
     } else {
       resolved[key] = value;
     }
@@ -198,6 +224,21 @@ function setNestedValue(obj, pathParts, value) {
 const IHUB_ENV_PREFIXES = {
   'config/platform.json': 'IHUB_PLATFORM__',
   'config/ui.json': 'IHUB_UI__'
+};
+
+/**
+ * Per-cache-key config paths that must NOT be passed through env var
+ * substitution. Used by `setCacheEntry` to opt specific fields out.
+ *
+ * Add an entry here when a config field is a *user-data* template
+ * (e.g. `${user.username}` placeholder) rather than an env var reference.
+ * Without this, `${name}` would be eaten by `resolveEnvVars` when an OS
+ * env var of the same name exists (notably Windows `process.env.username`
+ * = the OS user running the server) — silently leaking that value into
+ * the templated field.
+ */
+const ENV_VAR_SKIP_PATHS_BY_KEY = {
+  'config/platform.json': ['iFinder.jwtSubjectField']
 };
 
 /**
@@ -525,8 +566,11 @@ class ConfigCache {
       clearTimeout(this.refreshTimers.get(key));
     }
 
-    // Resolve environment variables in the data
-    const resolvedData = resolveEnvVarsInObject(data);
+    // Resolve environment variables in the data, opting specific fields out
+    // when they contain user-data templates instead of env var references.
+    const resolvedData = resolveEnvVarsInObject(data, {
+      skipPaths: ENV_VAR_SKIP_PATHS_BY_KEY[key]
+    });
 
     // Apply IHUB_* environment variable overrides
     applyIhubEnvOverrides(key, resolvedData);

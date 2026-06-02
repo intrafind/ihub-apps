@@ -951,7 +951,20 @@ Configures integration with the IntraFind iFinder enterprise search platform. Wh
 | `audience`               | String  | `"ifinder-api"`   | JWT `aud` claim value                                                                   |
 | `tokenExpirationSeconds` | Number  | `3600`            | Lifetime of generated JWT tokens in seconds                                             |
 | `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
-| `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. Options: `"email"`, `"username"`           |
+| `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
+
+### `jwtSubjectField` supported values
+
+The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
+
+Accepted forms:
+
+- `"email"` (default) — `user.email`, falling back to `user.username`, then `user.id`.
+- `"username"` — `user.username`, falling back to `user.email`, then `user.id`.
+- `"domain\\username"` — `user.domain + "\\" + user.username`, useful for NTLM/AD setups.
+- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
+
+> **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
 For integration details see [iFinder Integration](iFinder-Integration.md).
 

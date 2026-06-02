@@ -780,7 +780,7 @@ export function createOidcCallbackHandler(providerName) {
           });
 
           // Set HTTP-only cookie for authentication (needed for OAuth authorize endpoint)
-          res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
+          res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
 
           return res.redirect(oauthRedirectPath);
         }

@@ -15,6 +15,8 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
+import { FormValidationProvider } from './formValidationContext';
 
 /**
  * AppFormEditor - Form-based editor for app configuration
@@ -283,2202 +285,2244 @@ function AppFormEditor({
     );
   }
 
+  const errorLabels = {
+    id: t('admin.apps.edit.appId', 'App ID'),
+    name: t('admin.apps.edit.name', 'Name'),
+    description: t('admin.apps.edit.description', 'Description'),
+    color: t('admin.apps.edit.color', 'Color'),
+    icon: t('admin.apps.edit.icon', 'Icon'),
+    system: t('admin.apps.edit.systemPrompt', 'System Prompt'),
+    tokenLimit: t('admin.apps.edit.tokenLimit', 'Token Limit')
+  };
+
   return (
-    <div className="app-form-editor space-y-6">
-      {/* Basic Information */}
-      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              {t('admin.apps.edit.basicInfo', 'Basic Information')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {t('admin.apps.edit.basicInfoDesc', 'Basic app configuration and metadata')}
-            </p>
-          </div>
-          <div className="mt-5 md:col-span-2 md:mt-0">
-            <div className="grid grid-cols-6 gap-6">
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.appId', 'App ID')}
-                  {isFieldRequired('id', jsonSchema) && (
+    <FormValidationProvider errors={validationErrors}>
+      <div className="app-form-editor space-y-6">
+        <AdminFormErrorSummary
+          errors={validationErrors}
+          labels={errorLabels}
+          title={t('admin.apps.edit.fixErrors', 'Please fix the following errors')}
+        />
+        {/* Basic Information */}
+        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                {t('admin.apps.edit.basicInfo', 'Basic Information')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t('admin.apps.edit.basicInfoDesc', 'Basic app configuration and metadata')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="grid grid-cols-6 gap-6">
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.appId', 'App ID')}
+                    {isFieldRequired('id', jsonSchema) && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
+                  </label>
+                  <input
+                    id="id"
+                    type="text"
+                    required={isFieldRequired('id', jsonSchema)}
+                    value={app.id || ''}
+                    onChange={e => handleInputChange('id', e.target.value)}
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                      validationErrors.id ? 'border-red-300' : ''
+                    }`}
+                    aria-invalid={!!validationErrors.id || undefined}
+                    aria-describedby={validationErrors.id ? 'id-error' : undefined}
+                  />
+                  {validationErrors.id && (
+                    <p
+                      id="id-error"
+                      role="alert"
+                      className="mt-1 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {validationErrors.id}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.appType', 'App Type')}
                     <span className="text-red-500 ml-1">*</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  required={isFieldRequired('id', jsonSchema)}
-                  value={app.id || ''}
-                  onChange={e => handleInputChange('id', e.target.value)}
-                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                    validationErrors.id ? 'border-red-300' : ''
-                  }`}
-                  aria-invalid={!!validationErrors.id || undefined}
-                  aria-describedby={validationErrors.id ? 'id-error' : undefined}
-                />
-                {validationErrors.id && (
-                  <p
-                    id="id-error"
-                    role="alert"
-                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  </label>
+                  <select
+                    value={app.type || 'chat'}
+                    onChange={e => handleInputChange('type', e.target.value)}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   >
-                    {validationErrors.id}
+                    <option value="chat">{t('admin.apps.edit.typeChat', 'Chat')}</option>
+                    <option value="iframe">{t('admin.apps.edit.typeIframe', 'Iframe')}</option>
+                    <option value="redirect">
+                      {t('admin.apps.edit.typeRedirect', 'Redirect')}
+                    </option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.appTypeHint',
+                      'Chat apps use AI models, Iframe apps embed external content, Redirect apps open external links'
+                    )}
                   </p>
-                )}
-              </div>
+                </div>
 
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.appType', 'App Type')}
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <select
-                  value={app.type || 'chat'}
-                  onChange={e => handleInputChange('type', e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="chat">{t('admin.apps.edit.typeChat', 'Chat')}</option>
-                  <option value="iframe">{t('admin.apps.edit.typeIframe', 'Iframe')}</option>
-                  <option value="redirect">{t('admin.apps.edit.typeRedirect', 'Redirect')}</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.appTypeHint',
-                    'Chat apps use AI models, Iframe apps embed external content, Redirect apps open external links'
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.order', 'Order')}
+                  </label>
+                  <input
+                    type="number"
+                    value={app.order || 0}
+                    onChange={e => handleInputChange('order', parseInt(e.target.value) || 0)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.category', 'Category')}
+                  </label>
+                  <select
+                    value={app.category || ''}
+                    onChange={e => handleInputChange('category', e.target.value)}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">
+                      {t('admin.apps.edit.selectCategory', 'Select category...')}
+                    </option>
+                    {uiConfig?.appsList?.categories?.list
+                      ?.filter(cat => cat.id !== 'all')
+                      .map(category => (
+                        <option key={category.id} value={category.id}>
+                          {getLocalizedContent(category.name, currentLanguage)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="col-span-6">
+                  <DynamicLanguageEditor
+                    label={
+                      <span>
+                        {t('admin.apps.edit.name', 'Name')}
+                        <span className="text-red-500 ml-1">*</span>
+                      </span>
+                    }
+                    value={app.name || {}}
+                    onChange={value => handleLocalizedChange('name', value)}
+                    required={true}
+                    placeholder={{
+                      en: 'Enter app name in English',
+                      de: 'App-Name auf Deutsch eingeben'
+                    }}
+                    error={validationErrors.name}
+                    name="name"
+                  />
+                </div>
+
+                <div className="col-span-6">
+                  <DynamicLanguageEditor
+                    label={
+                      <span>
+                        {t('admin.apps.edit.description', 'Description')}
+                        <span className="text-red-500 ml-1">*</span>
+                      </span>
+                    }
+                    value={app.description || {}}
+                    onChange={value => handleLocalizedChange('description', value)}
+                    required={true}
+                    type="textarea"
+                    placeholder={{
+                      en: 'Enter app description in English',
+                      de: 'App-Beschreibung auf Deutsch eingeben'
+                    }}
+                    error={validationErrors.description}
+                    name="description"
+                  />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.color', 'Color')}
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    id="color"
+                    type="color"
+                    value={app.color || '#4F46E5'}
+                    onChange={e => handleInputChange('color', e.target.value)}
+                    className={`mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                      validationErrors.color ? 'border-red-300' : ''
+                    }`}
+                    aria-invalid={!!validationErrors.color || undefined}
+                    aria-describedby={validationErrors.color ? 'color-error' : undefined}
+                  />
+                  {validationErrors.color && (
+                    <p
+                      id="color-error"
+                      role="alert"
+                      className="mt-1 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {validationErrors.color}
+                    </p>
                   )}
-                </p>
-              </div>
+                </div>
 
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.order', 'Order')}
-                </label>
-                <input
-                  type="number"
-                  value={app.order || 0}
-                  onChange={e => handleInputChange('order', parseInt(e.target.value) || 0)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                />
-              </div>
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.icon', 'Icon')}
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div data-field="icon">
+                    <IconPicker
+                      value={app.icon || ''}
+                      onChange={value => handleInputChange('icon', value)}
+                      error={validationErrors.icon}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
 
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.category', 'Category')}
-                </label>
-                <select
-                  value={app.category || ''}
-                  onChange={e => handleInputChange('category', e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="">
-                    {t('admin.apps.edit.selectCategory', 'Select category...')}
-                  </option>
-                  {uiConfig?.appsList?.categories?.list
-                    ?.filter(cat => cat.id !== 'all')
-                    .map(category => (
-                      <option key={category.id} value={category.id}>
-                        {getLocalizedContent(category.name, currentLanguage)}
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.preferredModel', 'Preferred Model')}
+                  </label>
+                  <select
+                    value={app.preferredModel || ''}
+                    onChange={e => handleInputChange('preferredModel', e.target.value)}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
+                    {availableModels.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {getLocalizedContent(model.name, currentLanguage)}
                       </option>
                     ))}
-                </select>
-              </div>
-
-              <div className="col-span-6">
-                <DynamicLanguageEditor
-                  label={
-                    <span>
-                      {t('admin.apps.edit.name', 'Name')}
-                      <span className="text-red-500 ml-1">*</span>
-                    </span>
-                  }
-                  value={app.name || {}}
-                  onChange={value => handleLocalizedChange('name', value)}
-                  required={true}
-                  placeholder={{
-                    en: 'Enter app name in English',
-                    de: 'App-Name auf Deutsch eingeben'
-                  }}
-                  error={validationErrors.name}
-                  name="name"
-                />
-              </div>
-
-              <div className="col-span-6">
-                <DynamicLanguageEditor
-                  label={
-                    <span>
-                      {t('admin.apps.edit.description', 'Description')}
-                      <span className="text-red-500 ml-1">*</span>
-                    </span>
-                  }
-                  value={app.description || {}}
-                  onChange={value => handleLocalizedChange('description', value)}
-                  required={true}
-                  type="textarea"
-                  placeholder={{
-                    en: 'Enter app description in English',
-                    de: 'App-Beschreibung auf Deutsch eingeben'
-                  }}
-                  error={validationErrors.description}
-                  name="description"
-                />
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.color', 'Color')}
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <input
-                  type="color"
-                  value={app.color || '#4F46E5'}
-                  onChange={e => handleInputChange('color', e.target.value)}
-                  className={`mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                    validationErrors.color ? 'border-red-300' : ''
-                  }`}
-                  aria-invalid={!!validationErrors.color || undefined}
-                  aria-describedby={validationErrors.color ? 'color-error' : undefined}
-                />
-                {validationErrors.color && (
-                  <p
-                    id="color-error"
-                    role="alert"
-                    className="mt-1 text-sm text-red-600 dark:text-red-400"
-                  >
-                    {validationErrors.color}
-                  </p>
-                )}
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.icon', 'Icon')}
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <IconPicker
-                  value={app.icon || ''}
-                  onChange={value => handleInputChange('icon', value)}
-                  error={validationErrors.icon}
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.preferredModel', 'Preferred Model')}
-                </label>
-                <select
-                  value={app.preferredModel || ''}
-                  onChange={e => handleInputChange('preferredModel', e.target.value)}
-                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
-                  {availableModels.map(model => (
-                    <option key={model.id} value={model.id}>
-                      {getLocalizedContent(model.name, currentLanguage)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.temperature', 'Temperature')}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={app.preferredTemperature || 0.7}
-                  onChange={e =>
-                    handleInputChange('preferredTemperature', parseFloat(e.target.value))
-                  }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                />
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.tokenLimit', 'Token Limit')}
-                  {isFieldRequired('tokenLimit', jsonSchema) && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={app.tokenLimit || 4096}
-                  onChange={e => handleInputChange('tokenLimit', parseInt(e.target.value))}
-                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                    validationErrors.tokenLimit ? 'border-red-300' : ''
-                  }`}
-                  required={isFieldRequired('tokenLimit', jsonSchema)}
-                  aria-invalid={!!validationErrors.tokenLimit || undefined}
-                  aria-describedby={validationErrors.tokenLimit ? 'tokenLimit-error' : undefined}
-                />
-                {validationErrors.tokenLimit && (
-                  <p
-                    id="tokenLimit-error"
-                    role="alert"
-                    className="mt-1 text-sm text-red-600 dark:text-red-400"
-                  >
-                    {validationErrors.tokenLimit}
-                  </p>
-                )}
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.apps.edit.outputFormat', 'Output Format')}
-                </label>
-                <select
-                  value={app.preferredOutputFormat || 'markdown'}
-                  onChange={e => handleInputChange('preferredOutputFormat', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
-                  <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
-                  <option value="json">{t('appConfig.json', 'JSON')}</option>
-                </select>
-              </div>
-
-              <div className="col-span-6">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={app.enabled !== false}
-                    onChange={e => handleInputChange('enabled', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.enabled', 'Enabled')}
-                  </label>
+                  </select>
                 </div>
-              </div>
 
-              {/* Auto-start - Only for chat apps */}
-              {(app.type === 'chat' || !app.type) && (
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.temperature', 'Temperature')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={app.preferredTemperature || 0.7}
+                    onChange={e =>
+                      handleInputChange('preferredTemperature', parseFloat(e.target.value))
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.tokenLimit', 'Token Limit')}
+                    {isFieldRequired('tokenLimit', jsonSchema) && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
+                  </label>
+                  <input
+                    id="tokenLimit"
+                    type="number"
+                    min="1"
+                    value={app.tokenLimit || 4096}
+                    onChange={e => handleInputChange('tokenLimit', parseInt(e.target.value))}
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                      validationErrors.tokenLimit ? 'border-red-300' : ''
+                    }`}
+                    required={isFieldRequired('tokenLimit', jsonSchema)}
+                    aria-invalid={!!validationErrors.tokenLimit || undefined}
+                    aria-describedby={validationErrors.tokenLimit ? 'tokenLimit-error' : undefined}
+                  />
+                  {validationErrors.tokenLimit && (
+                    <p
+                      id="tokenLimit-error"
+                      role="alert"
+                      className="mt-1 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {validationErrors.tokenLimit}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.outputFormat', 'Output Format')}
+                  </label>
+                  <select
+                    value={app.preferredOutputFormat || 'markdown'}
+                    onChange={e => handleInputChange('preferredOutputFormat', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
+                    <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
+                    <option value="json">{t('appConfig.json', 'JSON')}</option>
+                  </select>
+                </div>
+
                 <div className="col-span-6">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={app.autoStart === true}
-                      onChange={e => handleInputChange('autoStart', e.target.checked)}
+                      checked={app.enabled !== false}
+                      onChange={e => handleInputChange('enabled', e.target.checked)}
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
+                      {t('admin.apps.edit.enabled', 'Enabled')}
                     </label>
                   </div>
-                  <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.autoStartHelp',
-                      'When enabled, the app will automatically start the conversation when the chat is opened or reset'
-                    )}
-                  </p>
                 </div>
-              )}
+
+                {/* Auto-start - Only for chat apps */}
+                {(app.type === 'chat' || !app.type) && (
+                  <div className="col-span-6">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.autoStart === true}
+                        onChange={e => handleInputChange('autoStart', e.target.checked)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
+                      </label>
+                    </div>
+                    <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.autoStartHelp',
+                        'When enabled, the app will automatically start the conversation when the chat is opened or reset'
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Type-specific Configuration */}
-      {(app.type === 'chat' || !app.type) && (
-        <>
-          {/* System Instructions - Only for chat apps */}
+        {/* Type-specific Configuration */}
+        {(app.type === 'chat' || !app.type) && (
+          <>
+            {/* System Instructions - Only for chat apps */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.systemInstructions', 'System Instructions')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.systemInstructionsDesc',
+                      'System prompts that define the app behavior'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <DynamicLanguageEditor
+                    label={
+                      <span>
+                        {t('admin.apps.edit.systemInstructions', 'System Instructions')}
+                        <span className="text-red-500 ml-1">*</span>
+                      </span>
+                    }
+                    value={app.system || {}}
+                    onChange={value => handleLocalizedChange('system', value)}
+                    type="textarea"
+                    placeholder={{
+                      en: 'Enter system instructions in English',
+                      de: 'Systeminstruktionen auf Deutsch eingeben'
+                    }}
+                    className="mb-6"
+                    error={validationErrors.system}
+                    name="system"
+                  />
+
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.messagePlaceholder', 'Message Placeholder')}
+                    value={app.messagePlaceholder || {}}
+                    onChange={value => handleLocalizedChange('messagePlaceholder', value)}
+                    placeholder={{
+                      en: 'Enter message placeholder in English',
+                      de: 'Nachrichtenplatzhalter auf Deutsch eingeben'
+                    }}
+                    className="mb-6"
+                  />
+
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.prompt', 'Prompt Template')}
+                    value={app.prompt || {}}
+                    onChange={value => handleLocalizedChange('prompt', value)}
+                    type="textarea"
+                    placeholder={{
+                      en: 'Enter prompt template in English',
+                      de: 'Prompt-Vorlage auf Deutsch eingeben'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Iframe Configuration - Only for iframe apps */}
+        {app.type === 'iframe' && (
           <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
                 <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.systemInstructions', 'System Instructions')}
+                  {t('admin.apps.edit.iframeConfig', 'Iframe Configuration')}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.systemInstructionsDesc',
-                    'System prompts that define the app behavior'
-                  )}
+                  {t('admin.apps.edit.iframeConfigDesc', 'Configure the embedded iframe content')}
                 </p>
               </div>
               <div className="mt-5 md:col-span-2 md:mt-0">
-                <DynamicLanguageEditor
-                  label={
-                    <span>
-                      {t('admin.apps.edit.systemInstructions', 'System Instructions')}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.apps.edit.iframeUrl', 'Iframe URL')}
                       <span className="text-red-500 ml-1">*</span>
-                    </span>
-                  }
-                  value={app.system || {}}
-                  onChange={value => handleLocalizedChange('system', value)}
-                  type="textarea"
-                  placeholder={{
-                    en: 'Enter system instructions in English',
-                    de: 'Systeminstruktionen auf Deutsch eingeben'
-                  }}
-                  className="mb-6"
-                  error={validationErrors.system}
-                  name="system"
-                />
-
-                <DynamicLanguageEditor
-                  label={t('admin.apps.edit.messagePlaceholder', 'Message Placeholder')}
-                  value={app.messagePlaceholder || {}}
-                  onChange={value => handleLocalizedChange('messagePlaceholder', value)}
-                  placeholder={{
-                    en: 'Enter message placeholder in English',
-                    de: 'Nachrichtenplatzhalter auf Deutsch eingeben'
-                  }}
-                  className="mb-6"
-                />
-
-                <DynamicLanguageEditor
-                  label={t('admin.apps.edit.prompt', 'Prompt Template')}
-                  value={app.prompt || {}}
-                  onChange={value => handleLocalizedChange('prompt', value)}
-                  type="textarea"
-                  placeholder={{
-                    en: 'Enter prompt template in English',
-                    de: 'Prompt-Vorlage auf Deutsch eingeben'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Iframe Configuration - Only for iframe apps */}
-      {app.type === 'iframe' && (
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.iframeConfig', 'Iframe Configuration')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.apps.edit.iframeConfigDesc', 'Configure the embedded iframe content')}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.apps.edit.iframeUrl', 'Iframe URL')}
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <input
-                    type="url"
-                    value={app.iframeConfig?.url || ''}
-                    onChange={e =>
-                      handleInputChange('iframeConfig', {
-                        ...app.iframeConfig,
-                        url: e.target.value
-                      })
-                    }
-                    placeholder="https://example.com"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={app.iframeConfig?.allowFullscreen !== false}
-                    onChange={e =>
-                      handleInputChange('iframeConfig', {
-                        ...app.iframeConfig,
-                        allowFullscreen: e.target.checked
-                      })
-                    }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.allowFullscreen', 'Allow Fullscreen')}
-                  </label>
-                </div>
-
-                {/* Sandbox Configuration */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.apps.edit.sandboxPermissions', 'Sandbox Permissions')}
-                  </label>
-                  <p className="text-xs text-gray-500 mb-3">
-                    {t(
-                      'admin.apps.edit.sandboxPermissionsDesc',
-                      'Control what the embedded content is allowed to do. Uncheck options to restrict permissions for better security.'
-                    )}
-                  </p>
-                  <div className="space-y-2 pl-4">
-                    {[
-                      {
-                        value: 'allow-scripts',
-                        label: t(
-                          'admin.apps.edit.allowScripts',
-                          'Allow Scripts (required for most interactive content)'
-                        )
-                      },
-                      {
-                        value: 'allow-same-origin',
-                        label: t(
-                          'admin.apps.edit.allowSameOrigin',
-                          'Allow Same Origin (enables localStorage, cookies)'
-                        )
-                      },
-                      {
-                        value: 'allow-forms',
-                        label: t(
-                          'admin.apps.edit.allowForms',
-                          'Allow Forms (enable form submission)'
-                        )
-                      },
-                      {
-                        value: 'allow-popups',
-                        label: t('admin.apps.edit.allowPopups', 'Allow Popups')
-                      },
-                      {
-                        value: 'allow-modals',
-                        label: t(
-                          'admin.apps.edit.allowModals',
-                          'Allow Modals (alert, confirm, etc.)'
-                        )
-                      },
-                      {
-                        value: 'allow-top-navigation',
-                        label: t(
-                          'admin.apps.edit.allowTopNavigation',
-                          'Allow Top Navigation (navigate parent window)'
-                        )
+                    </label>
+                    <input
+                      type="url"
+                      value={app.iframeConfig?.url || ''}
+                      onChange={e =>
+                        handleInputChange('iframeConfig', {
+                          ...app.iframeConfig,
+                          url: e.target.value
+                        })
                       }
-                    ].map(permission => {
-                      const currentSandbox =
-                        app.iframeConfig?.sandbox ||
-                        (app.iframeConfig
-                          ? []
-                          : ['allow-scripts', 'allow-same-origin', 'allow-forms']);
-                      const isChecked = currentSandbox.includes(permission.value);
+                      placeholder="https://example.com"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.iframeConfig?.allowFullscreen !== false}
+                      onChange={e =>
+                        handleInputChange('iframeConfig', {
+                          ...app.iframeConfig,
+                          allowFullscreen: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.allowFullscreen', 'Allow Fullscreen')}
+                    </label>
+                  </div>
 
-                      return (
-                        <div key={permission.value} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={e => {
-                              const currentSandbox = app.iframeConfig?.sandbox || [
-                                'allow-scripts',
-                                'allow-same-origin',
-                                'allow-forms'
-                              ];
-                              const newSandbox = e.target.checked
-                                ? [...currentSandbox, permission.value]
-                                : currentSandbox.filter(p => p !== permission.value);
+                  {/* Sandbox Configuration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.apps.edit.sandboxPermissions', 'Sandbox Permissions')}
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {t(
+                        'admin.apps.edit.sandboxPermissionsDesc',
+                        'Control what the embedded content is allowed to do. Uncheck options to restrict permissions for better security.'
+                      )}
+                    </p>
+                    <div className="space-y-2 pl-4">
+                      {[
+                        {
+                          value: 'allow-scripts',
+                          label: t(
+                            'admin.apps.edit.allowScripts',
+                            'Allow Scripts (required for most interactive content)'
+                          )
+                        },
+                        {
+                          value: 'allow-same-origin',
+                          label: t(
+                            'admin.apps.edit.allowSameOrigin',
+                            'Allow Same Origin (enables localStorage, cookies)'
+                          )
+                        },
+                        {
+                          value: 'allow-forms',
+                          label: t(
+                            'admin.apps.edit.allowForms',
+                            'Allow Forms (enable form submission)'
+                          )
+                        },
+                        {
+                          value: 'allow-popups',
+                          label: t('admin.apps.edit.allowPopups', 'Allow Popups')
+                        },
+                        {
+                          value: 'allow-modals',
+                          label: t(
+                            'admin.apps.edit.allowModals',
+                            'Allow Modals (alert, confirm, etc.)'
+                          )
+                        },
+                        {
+                          value: 'allow-top-navigation',
+                          label: t(
+                            'admin.apps.edit.allowTopNavigation',
+                            'Allow Top Navigation (navigate parent window)'
+                          )
+                        }
+                      ].map(permission => {
+                        const currentSandbox =
+                          app.iframeConfig?.sandbox ||
+                          (app.iframeConfig
+                            ? []
+                            : ['allow-scripts', 'allow-same-origin', 'allow-forms']);
+                        const isChecked = currentSandbox.includes(permission.value);
 
-                              handleInputChange('iframeConfig', {
-                                ...app.iframeConfig,
-                                sandbox: newSandbox
-                              });
-                            }}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                          />
-                          <label className="ml-2 block text-sm text-gray-700">
-                            {permission.label}
-                          </label>
-                        </div>
-                      );
-                    })}
+                        return (
+                          <div key={permission.value} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={e => {
+                                const currentSandbox = app.iframeConfig?.sandbox || [
+                                  'allow-scripts',
+                                  'allow-same-origin',
+                                  'allow-forms'
+                                ];
+                                const newSandbox = e.target.checked
+                                  ? [...currentSandbox, permission.value]
+                                  : currentSandbox.filter(p => p !== permission.value);
+
+                                handleInputChange('iframeConfig', {
+                                  ...app.iframeConfig,
+                                  sandbox: newSandbox
+                                });
+                              }}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm text-gray-700">
+                              {permission.label}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Redirect Configuration - Only for redirect apps */}
-      {app.type === 'redirect' && (
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.apps.edit.redirectConfig', 'Redirect Configuration')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.apps.edit.redirectConfigDesc', 'Configure the redirect behavior')}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.apps.edit.redirectUrl', 'Redirect URL')}
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <input
-                    type="url"
-                    value={app.redirectConfig?.url || ''}
-                    onChange={e =>
-                      handleInputChange('redirectConfig', {
-                        ...app.redirectConfig,
-                        url: e.target.value
-                      })
-                    }
-                    placeholder="https://example.com"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={app.redirectConfig?.openInNewTab !== false}
-                    onChange={e =>
-                      handleInputChange('redirectConfig', {
-                        ...app.redirectConfig,
-                        openInNewTab: e.target.checked
-                      })
-                    }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.openInNewTab', 'Open in New Tab')}
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={app.redirectConfig?.showWarning !== false}
-                    onChange={e =>
-                      handleInputChange('redirectConfig', {
-                        ...app.redirectConfig,
-                        showWarning: e.target.checked
-                      })
-                    }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.showWarning', 'Show Warning Before Redirect')}
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chat-specific sections - Only show for chat apps */}
-      {(app.type === 'chat' || !app.type) && (
-        <>
-          {/* Web Search Configuration */}
+        {/* Redirect Configuration - Only for redirect apps */}
+        {app.type === 'redirect' && (
           <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
                 <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.websearch', 'Web Search')}
+                  {t('admin.apps.edit.redirectConfig', 'Redirect Configuration')}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.websearchDesc',
-                    'Configure web search capabilities for this app'
-                  )}
+                  {t('admin.apps.edit.redirectConfigDesc', 'Configure the redirect behavior')}
                 </p>
               </div>
-              <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
-                {/* Enable Web Search toggle */}
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.apps.edit.websearchEnabled', 'Enable Web Search')}
-                  </label>
-                  <label className="relative inline-flex items-center cursor-pointer">
+              <div className="mt-5 md:col-span-2 md:mt-0">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.apps.edit.redirectUrl', 'Redirect URL')}
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={app.websearch?.enabled ?? false}
+                      type="url"
+                      value={app.redirectConfig?.url || ''}
                       onChange={e =>
-                        handleInputChange('websearch', {
-                          ...(app.websearch || {}),
-                          enabled: e.target.checked
+                        handleInputChange('redirectConfig', {
+                          ...app.redirectConfig,
+                          url: e.target.value
                         })
                       }
-                      className="sr-only peer"
+                      placeholder="https://example.com"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                  </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.redirectConfig?.openInNewTab !== false}
+                      onChange={e =>
+                        handleInputChange('redirectConfig', {
+                          ...app.redirectConfig,
+                          openInNewTab: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.openInNewTab', 'Open in New Tab')}
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.redirectConfig?.showWarning !== false}
+                      onChange={e =>
+                        handleInputChange('redirectConfig', {
+                          ...app.redirectConfig,
+                          showWarning: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.showWarning', 'Show Warning Before Redirect')}
+                    </label>
+                  </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                {/* Web Search settings - only shown when enabled */}
-                {app.websearch?.enabled && (
-                  <div className="space-y-4 pl-1">
-                    {/* Provider */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.websearchProvider', 'Provider')}
-                      </label>
-                      <select
-                        value={app.websearch?.provider ?? 'auto'}
-                        onChange={e =>
-                          handleInputChange('websearch', {
-                            ...app.websearch,
-                            provider: e.target.value
-                          })
-                        }
-                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      >
-                        <option value="auto">
-                          {t('admin.apps.edit.websearchProviderAuto', 'Auto')}
-                        </option>
-                        <option value="brave">
-                          {t('admin.apps.edit.websearchProviderBrave', 'Brave')}
-                        </option>
-                        <option value="tavily">
-                          {t('admin.apps.edit.websearchProviderTavily', 'Tavily')}
-                        </option>
-                      </select>
-                    </div>
-
-                    {/* Use Native Search */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.apps.edit.websearchUseNative', 'Use Native Search')}
-                        </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.apps.edit.websearchUseNativeDesc',
-                            "Use the model's built-in search when available (e.g. Google, OpenAI)"
-                          )}
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={app.websearch?.useNativeSearch ?? true}
-                          onChange={e =>
-                            handleInputChange('websearch', {
-                              ...app.websearch,
-                              useNativeSearch: e.target.checked
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-
-                    {/* Max Results */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.websearchMaxResults', 'Max Results')}
-                      </label>
+        {/* Chat-specific sections - Only show for chat apps */}
+        {(app.type === 'chat' || !app.type) && (
+          <>
+            {/* Web Search Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.websearch', 'Web Search')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.websearchDesc',
+                      'Configure web search capabilities for this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+                  {/* Enable Web Search toggle */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.apps.edit.websearchEnabled', 'Enable Web Search')}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
                       <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={app.websearch?.maxResults ?? 5}
+                        type="checkbox"
+                        checked={app.websearch?.enabled ?? false}
                         onChange={e =>
                           handleInputChange('websearch', {
-                            ...app.websearch,
-                            maxResults: parseInt(e.target.value) || 5
+                            ...(app.websearch || {}),
+                            enabled: e.target.checked
                           })
                         }
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="sr-only peer"
                       />
-                    </div>
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
 
-                    {/* Extract Content */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.apps.edit.websearchExtractContent', 'Extract Content')}
-                        </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.apps.edit.websearchExtractContentDesc',
-                            'Fetch and extract full page content from search results'
-                          )}
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={app.websearch?.extractContent ?? true}
-                          onChange={e =>
-                            handleInputChange('websearch', {
-                              ...app.websearch,
-                              extractContent: e.target.checked
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-
-                    {/* Content Max Length */}
-                    {(app.websearch?.extractContent ?? true) && (
+                  {/* Web Search settings - only shown when enabled */}
+                  {app.websearch?.enabled && (
+                    <div className="space-y-4 pl-1">
+                      {/* Provider */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.apps.edit.websearchContentMaxLength', 'Content Max Length')}
+                          {t('admin.apps.edit.websearchProvider', 'Provider')}
                         </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          {t(
-                            'admin.apps.edit.websearchContentMaxLengthDesc',
-                            'Maximum characters extracted per page (500–50000)'
-                          )}
-                        </p>
-                        <input
-                          type="number"
-                          min="500"
-                          max="50000"
-                          step="500"
-                          value={app.websearch?.contentMaxLength ?? 3000}
+                        <select
+                          value={app.websearch?.provider ?? 'auto'}
                           onChange={e =>
                             handleInputChange('websearch', {
                               ...app.websearch,
-                              contentMaxLength: parseInt(e.target.value) || 3000
+                              provider: e.target.value
+                            })
+                          }
+                          className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value="auto">
+                            {t('admin.apps.edit.websearchProviderAuto', 'Auto')}
+                          </option>
+                          <option value="brave">
+                            {t('admin.apps.edit.websearchProviderBrave', 'Brave')}
+                          </option>
+                          <option value="tavily">
+                            {t('admin.apps.edit.websearchProviderTavily', 'Tavily')}
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* Use Native Search */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.apps.edit.websearchUseNative', 'Use Native Search')}
+                          </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.apps.edit.websearchUseNativeDesc',
+                              "Use the model's built-in search when available (e.g. Google, OpenAI)"
+                            )}
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
+                          <input
+                            type="checkbox"
+                            checked={app.websearch?.useNativeSearch ?? true}
+                            onChange={e =>
+                              handleInputChange('websearch', {
+                                ...app.websearch,
+                                useNativeSearch: e.target.checked
+                              })
+                            }
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Max Results */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.websearchMaxResults', 'Max Results')}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={app.websearch?.maxResults ?? 5}
+                          onChange={e =>
+                            handleInputChange('websearch', {
+                              ...app.websearch,
+                              maxResults: parseInt(e.target.value) || 5
                             })
                           }
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                         />
                       </div>
-                    )}
 
-                    {/* Enabled by Default */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.apps.edit.websearchEnabledByDefault', 'Enabled by Default')}
-                        </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.apps.edit.websearchEnabledByDefaultDesc',
-                            'Whether web search is turned on by default for users'
-                          )}
-                        </p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer ml-4">
-                        <input
-                          type="checkbox"
-                          checked={app.websearch?.enabledByDefault ?? false}
-                          onChange={e =>
-                            handleInputChange('websearch', {
-                              ...app.websearch,
-                              enabledByDefault: e.target.checked
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* iAssistant Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.iassistant', 'iAssistant')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.iassistantDesc',
-                    'Configure iAssistant integration for this app'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
-                {/* Enable iAssistant toggle */}
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.apps.edit.iassistantEnabled', 'Enable iAssistant')}
-                  </label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={app.iassistant?.enabled ?? false}
-                      onChange={e =>
-                        handleInputChange('iassistant', {
-                          ...(app.iassistant || {}),
-                          enabled: e.target.checked
-                        })
-                      }
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                {/* iAssistant settings - only shown when enabled */}
-                {app.iassistant?.enabled && (
-                  <div className="space-y-4 pl-1">
-                    {/* Profile ID */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.iassistantProfileId', 'Profile ID')}
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {t(
-                          'admin.apps.edit.iassistantProfileIdDesc',
-                          'The iAssistant profile to use for this app (e.g., iassistant-workspace)'
-                        )}
-                      </p>
-                      <input
-                        type="text"
-                        value={app.iassistant?.profileId ?? ''}
-                        onChange={e =>
-                          handleInputChange('iassistant', {
-                            ...app.iassistant,
-                            profileId: e.target.value
-                          })
-                        }
-                        placeholder="iassistant-workspace"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </div>
-
-                    {/* Search Profile */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.iassistantSearchProfile', 'Search Profile')}
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {t(
-                          'admin.apps.edit.iassistantSearchProfileDesc',
-                          'The search profile to use for retrieval using iFinder (e.g., searchprofile-standard)'
-                        )}
-                      </p>
-                      <input
-                        type="text"
-                        value={app.iassistant?.searchProfile ?? ''}
-                        onChange={e =>
-                          handleInputChange('iassistant', {
-                            ...app.iassistant,
-                            searchProfile: e.target.value
-                          })
-                        }
-                        placeholder="searchprofile-standard"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </div>
-
-                    {/* Extra Context */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.iassistantExtraContext', 'Extra Context')}
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {t(
-                          'admin.apps.edit.iassistantExtraContextDesc',
-                          'Additional context to be added to the response state prompt. Use with care as changes can impact answer quality.'
-                        )}
-                      </p>
-                      <textarea
-                        value={app.iassistant?.extraContext ?? ''}
-                        onChange={e =>
-                          handleInputChange('iassistant', {
-                            ...app.iassistant,
-                            extraContext: e.target.value
-                          })
-                        }
-                        rows={3}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </div>
-
-                    {/* System Prompt Preamble */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t(
-                          'admin.apps.edit.iassistantSystemPromptPreamble',
-                          'System Prompt Preamble'
-                        )}
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {t(
-                          'admin.apps.edit.iassistantSystemPromptPreambleDesc',
-                          'The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care.'
-                        )}
-                      </p>
-                      <textarea
-                        value={app.iassistant?.systemPromptPreamble ?? ''}
-                        onChange={e =>
-                          handleInputChange('iassistant', {
-                            ...app.iassistant,
-                            systemPromptPreamble: e.target.value
-                          })
-                        }
-                        rows={3}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Tools Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.tools', 'Tools')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.toolsDesc',
-                    'Configure which tools are available for this app'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:mt-0 md:col-span-2">
-                <ToolsSelector
-                  selectedTools={app.tools || []}
-                  onToolsChange={tools => handleInputChange('tools', tools)}
-                  excludeToolIds={[
-                    'braveSearch',
-                    'enhancedWebSearch',
-                    'tavilySearch',
-                    'googleSearch',
-                    'webSearch',
-                    'webContentExtractor'
-                  ]}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Workflows Configuration */}
-          {featureFlags.isEnabled('workflows', true) && (
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.workflows', 'Workflows')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.workflowsDesc',
-                      'Attach workflows to this app. Users can trigger them in chat with @workflow-id.'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:mt-0 md:col-span-2">
-                  <WorkflowsSelector
-                    selectedWorkflows={app.workflows || []}
-                    onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Skills Configuration */}
-          {featureFlags.isEnabled('skills', false) && (
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.skills', 'Skills')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.skillsDesc',
-                      'Configure which agent skills are available for this app'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:mt-0 md:col-span-2">
-                  <SkillsSelector
-                    selectedSkills={app.skills || []}
-                    onSkillsChange={skills => handleInputChange('skills', skills)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Variables Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.variables', 'Variables')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.variablesDesc',
-                    'Configure input variables for dynamic prompts'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  {(app.variables || []).map((variable, index) => (
-                    <div
-                      key={index}
-                      className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {t('admin.apps.edit.variable', 'Variable')} {index + 1}
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => removeVariable(index)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Icon name="trash" className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-6 gap-4">
-                        <div className="col-span-6 sm:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t('admin.apps.edit.variableName', 'Name')}
+                      {/* Extract Content */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.apps.edit.websearchExtractContent', 'Extract Content')}
                           </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.apps.edit.websearchExtractContentDesc',
+                              'Fetch and extract full page content from search results'
+                            )}
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
                           <input
-                            type="text"
-                            value={variable.name || ''}
-                            onChange={e => handleVariableChange(index, 'name', e.target.value)}
+                            type="checkbox"
+                            checked={app.websearch?.extractContent ?? true}
+                            onChange={e =>
+                              handleInputChange('websearch', {
+                                ...app.websearch,
+                                extractContent: e.target.checked
+                              })
+                            }
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Content Max Length */}
+                      {(app.websearch?.extractContent ?? true) && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.apps.edit.websearchContentMaxLength', 'Content Max Length')}
+                          </label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {t(
+                              'admin.apps.edit.websearchContentMaxLengthDesc',
+                              'Maximum characters extracted per page (500–50000)'
+                            )}
+                          </p>
+                          <input
+                            type="number"
+                            min="500"
+                            max="50000"
+                            step="500"
+                            value={app.websearch?.contentMaxLength ?? 3000}
+                            onChange={e =>
+                              handleInputChange('websearch', {
+                                ...app.websearch,
+                                contentMaxLength: parseInt(e.target.value) || 3000
+                              })
+                            }
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                           />
                         </div>
+                      )}
 
-                        <div className="col-span-6 sm:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t('admin.apps.edit.variableType', 'Type')}
+                      {/* Enabled by Default */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.apps.edit.websearchEnabledByDefault', 'Enabled by Default')}
                           </label>
-                          <select
-                            value={variable.type || 'string'}
-                            onChange={e => handleVariableChange(index, 'type', e.target.value)}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.apps.edit.websearchEnabledByDefaultDesc',
+                              'Whether web search is turned on by default for users'
+                            )}
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer ml-4">
+                          <input
+                            type="checkbox"
+                            checked={app.websearch?.enabledByDefault ?? false}
+                            onChange={e =>
+                              handleInputChange('websearch', {
+                                ...app.websearch,
+                                enabledByDefault: e.target.checked
+                              })
+                            }
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* iAssistant Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.iassistant', 'iAssistant')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.iassistantDesc',
+                      'Configure iAssistant integration for this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+                  {/* Enable iAssistant toggle */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.apps.edit.iassistantEnabled', 'Enable iAssistant')}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={app.iassistant?.enabled ?? false}
+                        onChange={e =>
+                          handleInputChange('iassistant', {
+                            ...(app.iassistant || {}),
+                            enabled: e.target.checked
+                          })
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  {/* iAssistant settings - only shown when enabled */}
+                  {app.iassistant?.enabled && (
+                    <div className="space-y-4 pl-1">
+                      {/* Profile ID */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.iassistantProfileId', 'Profile ID')}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.apps.edit.iassistantProfileIdDesc',
+                            'The iAssistant profile to use for this app (e.g., iassistant-workspace)'
+                          )}
+                        </p>
+                        <input
+                          type="text"
+                          value={app.iassistant?.profileId ?? ''}
+                          onChange={e =>
+                            handleInputChange('iassistant', {
+                              ...app.iassistant,
+                              profileId: e.target.value
+                            })
+                          }
+                          placeholder="iassistant-workspace"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+
+                      {/* Search Profile */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.iassistantSearchProfile', 'Search Profile')}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.apps.edit.iassistantSearchProfileDesc',
+                            'The search profile to use for retrieval using iFinder (e.g., searchprofile-standard)'
+                          )}
+                        </p>
+                        <input
+                          type="text"
+                          value={app.iassistant?.searchProfile ?? ''}
+                          onChange={e =>
+                            handleInputChange('iassistant', {
+                              ...app.iassistant,
+                              searchProfile: e.target.value
+                            })
+                          }
+                          placeholder="searchprofile-standard"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+
+                      {/* Extra Context */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.iassistantExtraContext', 'Extra Context')}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.apps.edit.iassistantExtraContextDesc',
+                            'Additional context to be added to the response state prompt. Use with care as changes can impact answer quality.'
+                          )}
+                        </p>
+                        <textarea
+                          value={app.iassistant?.extraContext ?? ''}
+                          onChange={e =>
+                            handleInputChange('iassistant', {
+                              ...app.iassistant,
+                              extraContext: e.target.value
+                            })
+                          }
+                          rows={3}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+
+                      {/* System Prompt Preamble */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t(
+                            'admin.apps.edit.iassistantSystemPromptPreamble',
+                            'System Prompt Preamble'
+                          )}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.apps.edit.iassistantSystemPromptPreambleDesc',
+                            'The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care.'
+                          )}
+                        </p>
+                        <textarea
+                          value={app.iassistant?.systemPromptPreamble ?? ''}
+                          onChange={e =>
+                            handleInputChange('iassistant', {
+                              ...app.iassistant,
+                              systemPromptPreamble: e.target.value
+                            })
+                          }
+                          rows={3}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Tools Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.tools', 'Tools')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.toolsDesc',
+                      'Configure which tools are available for this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2">
+                  <ToolsSelector
+                    selectedTools={app.tools || []}
+                    onToolsChange={tools => handleInputChange('tools', tools)}
+                    excludeToolIds={[
+                      'braveSearch',
+                      'enhancedWebSearch',
+                      'tavilySearch',
+                      'googleSearch',
+                      'webSearch',
+                      'webContentExtractor'
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Workflows Configuration */}
+            {featureFlags.isEnabled('workflows', true) && (
+              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                <div className="md:grid md:grid-cols-3 md:gap-6">
+                  <div className="md:col-span-1">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.workflows', 'Workflows')}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.workflowsDesc',
+                        'Attach workflows to this app. Users can trigger them in chat with @workflow-id.'
+                      )}
+                    </p>
+                  </div>
+                  <div className="mt-5 md:mt-0 md:col-span-2">
+                    <WorkflowsSelector
+                      selectedWorkflows={app.workflows || []}
+                      onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Skills Configuration */}
+            {featureFlags.isEnabled('skills', false) && (
+              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                <div className="md:grid md:grid-cols-3 md:gap-6">
+                  <div className="md:col-span-1">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.skills', 'Skills')}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.skillsDesc',
+                        'Configure which agent skills are available for this app'
+                      )}
+                    </p>
+                  </div>
+                  <div className="mt-5 md:mt-0 md:col-span-2">
+                    <SkillsSelector
+                      selectedSkills={app.skills || []}
+                      onSkillsChange={skills => handleInputChange('skills', skills)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Variables Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.variables', 'Variables')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.variablesDesc',
+                      'Configure input variables for dynamic prompts'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    {(app.variables || []).map((variable, index) => (
+                      <div
+                        key={index}
+                        className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <h4 className="text-sm font-medium text-gray-900">
+                            {t('admin.apps.edit.variable', 'Variable')} {index + 1}
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => removeVariable(index)}
+                            className="text-red-600 hover:text-red-800"
                           >
-                            <option value="string">
-                              {t('admin.apps.edit.typeString', 'String')}
-                            </option>
-                            <option value="text">{t('admin.apps.edit.typeText', 'Text')}</option>
-                            <option value="select">
-                              {t('admin.apps.edit.typeSelect', 'Select')}
-                            </option>
-                            <option value="date">{t('admin.apps.edit.typeDate', 'Date')}</option>
-                            <option value="number">
-                              {t('admin.apps.edit.typeNumber', 'Number')}
-                            </option>
-                          </select>
+                            <Icon name="trash" className="h-4 w-4" />
+                          </button>
                         </div>
 
-                        <div className="col-span-6 sm:col-span-2 flex items-end">
-                          <div className="flex items-center h-5">
+                        <div className="grid grid-cols-6 gap-4">
+                          <div className="col-span-6 sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {t('admin.apps.edit.variableName', 'Name')}
+                            </label>
+                            <input
+                              type="text"
+                              value={variable.name || ''}
+                              onChange={e => handleVariableChange(index, 'name', e.target.value)}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            />
+                          </div>
+
+                          <div className="col-span-6 sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {t('admin.apps.edit.variableType', 'Type')}
+                            </label>
+                            <select
+                              value={variable.type || 'string'}
+                              onChange={e => handleVariableChange(index, 'type', e.target.value)}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            >
+                              <option value="string">
+                                {t('admin.apps.edit.typeString', 'String')}
+                              </option>
+                              <option value="text">{t('admin.apps.edit.typeText', 'Text')}</option>
+                              <option value="select">
+                                {t('admin.apps.edit.typeSelect', 'Select')}
+                              </option>
+                              <option value="date">{t('admin.apps.edit.typeDate', 'Date')}</option>
+                              <option value="number">
+                                {t('admin.apps.edit.typeNumber', 'Number')}
+                              </option>
+                            </select>
+                          </div>
+
+                          <div className="col-span-6 sm:col-span-2 flex items-end">
+                            <div className="flex items-center h-5">
+                              <input
+                                type="checkbox"
+                                checked={variable.required || false}
+                                onChange={e =>
+                                  handleVariableChange(index, 'required', e.target.checked)
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                              />
+                              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                {t('admin.apps.edit.required', 'Required')}
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="col-span-6">
+                            <DynamicLanguageEditor
+                              label={t('admin.apps.edit.variableLabel', 'Label')}
+                              value={variable.label || {}}
+                              onChange={value => handleVariableChange(index, 'label', value)}
+                              placeholder={{
+                                en: 'Enter variable label in English',
+                                de: 'Variablenbeschriftung auf Deutsch eingeben'
+                              }}
+                            />
+                          </div>
+
+                          <div className="col-span-6">
+                            <DynamicLanguageEditor
+                              label={t('admin.apps.edit.defaultValue', 'Default Value')}
+                              value={variable.defaultValue || {}}
+                              onChange={value => handleVariableChange(index, 'defaultValue', value)}
+                              placeholder={{
+                                en: 'Enter default value in English',
+                                de: 'Standardwert auf Deutsch eingeben'
+                              }}
+                            />
+                          </div>
+
+                          <div className="col-span-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
+                            </label>
+                            <p className="text-xs text-gray-500 mb-2">
+                              {variable.type === 'select'
+                                ? t(
+                                    'admin.apps.edit.predefinedValuesHintSelect',
+                                    'Options that will be available in the dropdown menu.'
+                                  )
+                                : t(
+                                    'admin.apps.edit.predefinedValuesHint',
+                                    'Optional suggested values that can be used as autocomplete options.'
+                                  )}
+                            </p>
+                            <div className="space-y-2">
+                              {(variable.predefinedValues || []).map(
+                                (predefinedValue, valueIndex) => (
+                                  <div key={valueIndex} className="flex items-center space-x-2">
+                                    <div className="flex-1">
+                                      <DynamicLanguageEditor
+                                        label={`${t('admin.apps.edit.option', 'Option')} ${valueIndex + 1}`}
+                                        value={predefinedValue.label || {}}
+                                        onChange={value =>
+                                          handleVariablePredefinedValueChange(
+                                            index,
+                                            valueIndex,
+                                            'label',
+                                            value
+                                          )
+                                        }
+                                        placeholder={{
+                                          en: 'Option label',
+                                          de: 'Options-Beschriftung'
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="w-32">
+                                      <input
+                                        type="text"
+                                        value={predefinedValue.value || ''}
+                                        onChange={e =>
+                                          handleVariablePredefinedValueChange(
+                                            index,
+                                            valueIndex,
+                                            'value',
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder={t('admin.apps.edit.value', 'Value')}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removePredefinedValue(index, valueIndex)}
+                                      className="text-red-600 hover:text-red-800"
+                                    >
+                                      <Icon name="trash" className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                )
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => addPredefinedValue(index)}
+                                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              >
+                                <Icon name="plus" className="h-4 w-4 mr-2" />
+                                {t('admin.apps.edit.addOption', 'Add Option')}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={addVariable}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <Icon name="plus" className="h-4 w-4 mr-2" />
+                      {t('admin.apps.edit.addVariable', 'Add Variable')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Starter Prompts */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.starterPrompts', 'Starter Prompts')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.starterPromptsDesc',
+                      'Pre-defined prompts to help users get started'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    {(app.starterPrompts || []).map((prompt, index) => (
+                      <div
+                        key={index}
+                        className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <h4 className="text-sm font-medium text-gray-900">
+                            {t('admin.apps.edit.starterPrompt', 'Starter Prompt')} {index + 1}
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => removeStarterPrompt(index)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Icon name="trash" className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <DynamicLanguageEditor
+                            label={t('admin.apps.edit.title', 'Title')}
+                            value={prompt.title || {}}
+                            onChange={value => handleStarterPromptChange(index, 'title', value)}
+                            placeholder={{
+                              en: 'Enter prompt title in English',
+                              de: 'Prompt-Titel auf Deutsch eingeben'
+                            }}
+                          />
+
+                          <DynamicLanguageEditor
+                            label={t('admin.apps.edit.message', 'Message')}
+                            value={prompt.message || {}}
+                            onChange={value => handleStarterPromptChange(index, 'message', value)}
+                            type="textarea"
+                            placeholder={{
+                              en: 'Enter prompt message in English',
+                              de: 'Prompt-Nachricht auf Deutsch eingeben'
+                            }}
+                          />
+
+                          <div className="flex items-center">
                             <input
                               type="checkbox"
-                              checked={variable.required || false}
+                              checked={prompt.autoSend || false}
                               onChange={e =>
-                                handleVariableChange(index, 'required', e.target.checked)
+                                handleStarterPromptChange(index, 'autoSend', e.target.checked)
                               }
                               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                             />
                             <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                              {t('admin.apps.edit.required', 'Required')}
+                              {t('admin.apps.edit.autoSendPrompt', 'Send immediately when clicked')}
                             </label>
                           </div>
                         </div>
-
-                        <div className="col-span-6">
-                          <DynamicLanguageEditor
-                            label={t('admin.apps.edit.variableLabel', 'Label')}
-                            value={variable.label || {}}
-                            onChange={value => handleVariableChange(index, 'label', value)}
-                            placeholder={{
-                              en: 'Enter variable label in English',
-                              de: 'Variablenbeschriftung auf Deutsch eingeben'
-                            }}
-                          />
-                        </div>
-
-                        <div className="col-span-6">
-                          <DynamicLanguageEditor
-                            label={t('admin.apps.edit.defaultValue', 'Default Value')}
-                            value={variable.defaultValue || {}}
-                            onChange={value => handleVariableChange(index, 'defaultValue', value)}
-                            placeholder={{
-                              en: 'Enter default value in English',
-                              de: 'Standardwert auf Deutsch eingeben'
-                            }}
-                          />
-                        </div>
-
-                        <div className="col-span-6">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
-                          </label>
-                          <p className="text-xs text-gray-500 mb-2">
-                            {variable.type === 'select'
-                              ? t(
-                                  'admin.apps.edit.predefinedValuesHintSelect',
-                                  'Options that will be available in the dropdown menu.'
-                                )
-                              : t(
-                                  'admin.apps.edit.predefinedValuesHint',
-                                  'Optional suggested values that can be used as autocomplete options.'
-                                )}
-                          </p>
-                          <div className="space-y-2">
-                            {(variable.predefinedValues || []).map(
-                              (predefinedValue, valueIndex) => (
-                                <div key={valueIndex} className="flex items-center space-x-2">
-                                  <div className="flex-1">
-                                    <DynamicLanguageEditor
-                                      label={`${t('admin.apps.edit.option', 'Option')} ${valueIndex + 1}`}
-                                      value={predefinedValue.label || {}}
-                                      onChange={value =>
-                                        handleVariablePredefinedValueChange(
-                                          index,
-                                          valueIndex,
-                                          'label',
-                                          value
-                                        )
-                                      }
-                                      placeholder={{
-                                        en: 'Option label',
-                                        de: 'Options-Beschriftung'
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="w-32">
-                                    <input
-                                      type="text"
-                                      value={predefinedValue.value || ''}
-                                      onChange={e =>
-                                        handleVariablePredefinedValueChange(
-                                          index,
-                                          valueIndex,
-                                          'value',
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder={t('admin.apps.edit.value', 'Value')}
-                                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removePredefinedValue(index, valueIndex)}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    <Icon name="trash" className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => addPredefinedValue(index)}
-                              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            >
-                              <Icon name="plus" className="h-4 w-4 mr-2" />
-                              {t('admin.apps.edit.addOption', 'Add Option')}
-                            </button>
-                          </div>
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  <button
-                    type="button"
-                    onClick={addVariable}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.apps.edit.addVariable', 'Add Variable')}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={addStarterPrompt}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <Icon name="plus" className="h-4 w-4 mr-2" />
+                      {t('admin.apps.edit.addStarterPrompt', 'Add Starter Prompt')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Starter Prompts */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.starterPrompts', 'Starter Prompts')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.starterPromptsDesc',
-                    'Pre-defined prompts to help users get started'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  {(app.starterPrompts || []).map((prompt, index) => (
-                    <div
-                      key={index}
-                      className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {t('admin.apps.edit.starterPrompt', 'Starter Prompt')} {index + 1}
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={() => removeStarterPrompt(index)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Icon name="trash" className="h-4 w-4" />
-                        </button>
-                      </div>
+            {/* Upload Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.upload', 'Upload Configuration')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.uploadDesc',
+                      'Configure file and image upload capabilities'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-6">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.upload?.enabled || false}
+                        onChange={e =>
+                          handleInputChange('upload', { ...app.upload, enabled: e.target.checked })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableUpload', 'Enable Upload')}
+                      </label>
+                    </div>
 
-                      <div className="space-y-4">
-                        <DynamicLanguageEditor
-                          label={t('admin.apps.edit.title', 'Title')}
-                          value={prompt.title || {}}
-                          onChange={value => handleStarterPromptChange(index, 'title', value)}
-                          placeholder={{
-                            en: 'Enter prompt title in English',
-                            de: 'Prompt-Titel auf Deutsch eingeben'
-                          }}
-                        />
-
-                        <DynamicLanguageEditor
-                          label={t('admin.apps.edit.message', 'Message')}
-                          value={prompt.message || {}}
-                          onChange={value => handleStarterPromptChange(index, 'message', value)}
-                          type="textarea"
-                          placeholder={{
-                            en: 'Enter prompt message in English',
-                            de: 'Prompt-Nachricht auf Deutsch eingeben'
-                          }}
-                        />
-
+                    {app.upload?.enabled && (
+                      <div className="space-y-4 pl-6">
                         <div className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={prompt.autoSend || false}
-                            onChange={e =>
-                              handleStarterPromptChange(index, 'autoSend', e.target.checked)
-                            }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                          />
-                          <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                            {t('admin.apps.edit.autoSendPrompt', 'Send immediately when clicked')}
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={addStarterPrompt}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.apps.edit.addStarterPrompt', 'Add Starter Prompt')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Upload Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.upload', 'Upload Configuration')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.apps.edit.uploadDesc', 'Configure file and image upload capabilities')}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-6">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.upload?.enabled || false}
-                      onChange={e =>
-                        handleInputChange('upload', { ...app.upload, enabled: e.target.checked })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableUpload', 'Enable Upload')}
-                    </label>
-                  </div>
-
-                  {app.upload?.enabled && (
-                    <div className="space-y-4 pl-6">
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={app.upload?.allowMultiple || false}
-                          onChange={e =>
-                            handleInputChange('upload', {
-                              ...app.upload,
-                              allowMultiple: e.target.checked
-                            })
-                          }
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                        <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                          {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
-                        </label>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center mb-2">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.imageUpload?.enabled || false}
+                            checked={app.upload?.allowMultiple || false}
                             onChange={e =>
                               handleInputChange('upload', {
                                 ...app.upload,
-                                imageUpload: {
-                                  ...app.upload.imageUpload,
-                                  enabled: e.target.checked
-                                }
+                                allowMultiple: e.target.checked
                               })
                             }
                             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
-                          <label className="ml-2 block text-sm font-medium text-gray-900">
-                            {t('admin.apps.edit.enableImageUpload', 'Enable Image Upload')}
+                          <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                            {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
                           </label>
                         </div>
-                        {app.upload?.imageUpload?.enabled && (
-                          <div className="ml-6 space-y-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700">
-                                {t('admin.apps.edit.maxImageSize', 'Max Image Size (MB)')}
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="50"
-                                value={app.upload?.imageUpload?.maxFileSizeMB || 10}
-                                onChange={e =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    imageUpload: {
-                                      ...app.upload.imageUpload,
-                                      maxFileSizeMB: parseInt(e.target.value)
-                                    }
-                                  })
-                                }
-                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
-                              />
-                            </div>
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={app.upload?.imageUpload?.resizeImages !== false}
-                                onChange={e =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    imageUpload: {
-                                      ...app.upload.imageUpload,
-                                      resizeImages: e.target.checked
-                                    }
-                                  })
-                                }
-                                className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                              />
-                              <label className="ml-2 block text-xs text-gray-700">
-                                {t('admin.apps.edit.resizeImages', 'Resize Images')}
-                              </label>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700">
-                                {t(
-                                  'admin.apps.edit.supportedImageFormats',
-                                  'Supported Image Formats'
-                                )}
-                              </label>
-                              <MimeTypeSelector
-                                categoryType="images"
-                                selectedFormats={
-                                  app.upload?.imageUpload?.supportedFormats || [
+
+                        <div>
+                          <div className="flex items-center mb-2">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.imageUpload?.enabled || false}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  imageUpload: {
+                                    ...app.upload.imageUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm font-medium text-gray-900">
+                              {t('admin.apps.edit.enableImageUpload', 'Enable Image Upload')}
+                            </label>
+                          </div>
+                          {app.upload?.imageUpload?.enabled && (
+                            <div className="ml-6 space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {t('admin.apps.edit.maxImageSize', 'Max Image Size (MB)')}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="50"
+                                  value={app.upload?.imageUpload?.maxFileSizeMB || 10}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      imageUpload: {
+                                        ...app.upload.imageUpload,
+                                        maxFileSizeMB: parseInt(e.target.value)
+                                      }
+                                    })
+                                  }
+                                  className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                                />
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={app.upload?.imageUpload?.resizeImages !== false}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      imageUpload: {
+                                        ...app.upload.imageUpload,
+                                        resizeImages: e.target.checked
+                                      }
+                                    })
+                                  }
+                                  className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                                />
+                                <label className="ml-2 block text-xs text-gray-700">
+                                  {t('admin.apps.edit.resizeImages', 'Resize Images')}
+                                </label>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {t(
+                                    'admin.apps.edit.supportedImageFormats',
+                                    'Supported Image Formats'
+                                  )}
+                                </label>
+                                <MimeTypeSelector
+                                  categoryType="images"
+                                  selectedFormats={
+                                    app.upload?.imageUpload?.supportedFormats || [
+                                      'image/jpeg',
+                                      'image/jpg',
+                                      'image/png',
+                                      'image/gif',
+                                      'image/webp'
+                                    ]
+                                  }
+                                  onChange={newFormats =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      imageUpload: {
+                                        ...app.upload.imageUpload,
+                                        supportedFormats: newFormats
+                                      }
+                                    })
+                                  }
+                                  defaultFormats={[
                                     'image/jpeg',
                                     'image/jpg',
                                     'image/png',
                                     'image/gif',
                                     'image/webp'
-                                  ]
-                                }
-                                onChange={newFormats =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    imageUpload: {
-                                      ...app.upload.imageUpload,
-                                      supportedFormats: newFormats
-                                    }
-                                  })
-                                }
-                                defaultFormats={[
-                                  'image/jpeg',
-                                  'image/jpg',
-                                  'image/png',
-                                  'image/gif',
-                                  'image/webp'
-                                ]}
-                              />
+                                  ]}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center mb-2">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.fileUpload?.enabled || false}
-                            onChange={e =>
-                              handleInputChange('upload', {
-                                ...app.upload,
-                                fileUpload: { ...app.upload.fileUpload, enabled: e.target.checked }
-                              })
-                            }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                          />
-                          <label className="ml-2 block text-sm font-medium text-gray-900">
-                            {t('admin.apps.edit.enableFileUpload', 'Enable File Upload')}
-                          </label>
+                          )}
                         </div>
-                        {app.upload?.fileUpload?.enabled && (
-                          <div className="ml-6 space-y-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700">
-                                {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={app.upload?.fileUpload?.maxFileSizeMB || 5}
-                                onChange={e =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    fileUpload: {
-                                      ...app.upload.fileUpload,
-                                      maxFileSizeMB: parseInt(e.target.value)
-                                    }
-                                  })
-                                }
-                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700">
-                                {t('admin.apps.edit.supportedFormats', 'Supported File Formats')}
-                              </label>
-                              <MimeTypeSelector
-                                categoryType="documents"
-                                selectedFormats={
-                                  app.upload?.fileUpload?.supportedFormats || [
+
+                        <div>
+                          <div className="flex items-center mb-2">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.fileUpload?.enabled || false}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  fileUpload: {
+                                    ...app.upload.fileUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm font-medium text-gray-900">
+                              {t('admin.apps.edit.enableFileUpload', 'Enable File Upload')}
+                            </label>
+                          </div>
+                          {app.upload?.fileUpload?.enabled && (
+                            <div className="ml-6 space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={app.upload?.fileUpload?.maxFileSizeMB || 5}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      fileUpload: {
+                                        ...app.upload.fileUpload,
+                                        maxFileSizeMB: parseInt(e.target.value)
+                                      }
+                                    })
+                                  }
+                                  className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {t('admin.apps.edit.supportedFormats', 'Supported File Formats')}
+                                </label>
+                                <MimeTypeSelector
+                                  categoryType="documents"
+                                  selectedFormats={
+                                    app.upload?.fileUpload?.supportedFormats || [
+                                      'text/plain',
+                                      'text/markdown',
+                                      'text/csv',
+                                      'application/json',
+                                      'application/pdf',
+                                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                    ]
+                                  }
+                                  onChange={newFormats =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      fileUpload: {
+                                        ...app.upload.fileUpload,
+                                        supportedFormats: newFormats
+                                      }
+                                    })
+                                  }
+                                  defaultFormats={[
                                     'text/plain',
                                     'text/markdown',
                                     'text/csv',
                                     'application/json',
                                     'application/pdf',
                                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                                  ]
-                                }
-                                onChange={newFormats =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    fileUpload: {
-                                      ...app.upload.fileUpload,
-                                      supportedFormats: newFormats
-                                    }
-                                  })
-                                }
-                                defaultFormats={[
-                                  'text/plain',
-                                  'text/markdown',
-                                  'text/csv',
-                                  'application/json',
-                                  'application/pdf',
-                                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                                ]}
-                              />
+                                  ]}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center mb-2">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.audioUpload?.enabled || false}
-                            onChange={e =>
-                              handleInputChange('upload', {
-                                ...app.upload,
-                                audioUpload: {
-                                  ...app.upload.audioUpload,
-                                  enabled: e.target.checked
-                                }
-                              })
-                            }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                          />
-                          <label className="ml-2 block text-sm font-medium text-gray-900">
-                            {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
-                          </label>
+                          )}
                         </div>
-                        {app.upload?.audioUpload?.enabled && (
-                          <div className="ml-6 space-y-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700">
-                                {t('admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)')}
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={app.upload?.audioUpload?.maxFileSizeMB || 20}
-                                onChange={e =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    audioUpload: {
-                                      ...app.upload.audioUpload,
-                                      maxFileSizeMB: parseInt(e.target.value)
-                                    }
-                                  })
-                                }
-                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-2">
-                                {t(
-                                  'admin.apps.edit.supportedAudioFormats',
-                                  'Supported Audio Formats'
-                                )}
-                              </label>
-                              <MimeTypeSelector
-                                categoryType="audio"
-                                selectedFormats={
-                                  app.upload?.audioUpload?.supportedFormats || [
+
+                        <div>
+                          <div className="flex items-center mb-2">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.audioUpload?.enabled || false}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  audioUpload: {
+                                    ...app.upload.audioUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm font-medium text-gray-900">
+                              {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
+                            </label>
+                          </div>
+                          {app.upload?.audioUpload?.enabled && (
+                            <div className="ml-6 space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {t('admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)')}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={app.upload?.audioUpload?.maxFileSizeMB || 20}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      audioUpload: {
+                                        ...app.upload.audioUpload,
+                                        maxFileSizeMB: parseInt(e.target.value)
+                                      }
+                                    })
+                                  }
+                                  className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-2">
+                                  {t(
+                                    'admin.apps.edit.supportedAudioFormats',
+                                    'Supported Audio Formats'
+                                  )}
+                                </label>
+                                <MimeTypeSelector
+                                  categoryType="audio"
+                                  selectedFormats={
+                                    app.upload?.audioUpload?.supportedFormats || [
+                                      'audio/mpeg',
+                                      'audio/mp3',
+                                      'audio/wav',
+                                      'audio/flac',
+                                      'audio/ogg'
+                                    ]
+                                  }
+                                  onChange={newFormats =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      audioUpload: {
+                                        ...app.upload.audioUpload,
+                                        supportedFormats: newFormats
+                                      }
+                                    })
+                                  }
+                                  defaultFormats={[
                                     'audio/mpeg',
                                     'audio/mp3',
                                     'audio/wav',
                                     'audio/flac',
                                     'audio/ogg'
-                                  ]
-                                }
-                                onChange={newFormats =>
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    audioUpload: {
-                                      ...app.upload.audioUpload,
-                                      supportedFormats: newFormats
-                                    }
-                                  })
-                                }
-                                defaultFormats={[
-                                  'audio/mpeg',
-                                  'audio/mp3',
-                                  'audio/wav',
-                                  'audio/flac',
-                                  'audio/ogg'
-                                ]}
-                              />
+                                  ]}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center mb-2">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.cloudStorageUpload?.enabled || false}
-                            onChange={e =>
-                              handleInputChange('upload', {
-                                ...app.upload,
-                                cloudStorageUpload: {
-                                  ...app.upload.cloudStorageUpload,
-                                  enabled: e.target.checked
-                                }
-                              })
-                            }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                          />
-                          <label className="ml-2 block text-sm font-medium text-gray-900">
-                            {t(
-                              'admin.apps.edit.enableCloudStorageUpload',
-                              'Enable Cloud Storage Upload'
-                            )}
-                          </label>
+                          )}
                         </div>
-                        {app.upload?.cloudStorageUpload?.enabled && (
-                          <div className="ml-6">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {t(
-                                'admin.apps.edit.cloudStorageUploadDesc',
-                                'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
-                              )}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Magic Prompt Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.magicPrompt', 'Magic Prompt')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.apps.edit.magicPromptDesc', 'AI-powered prompt enhancement feature')}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.features?.magicPrompt?.enabled || false}
-                      onChange={e =>
-                        handleInputChange('features', {
-                          ...app.features,
-                          magicPrompt: { ...app.features?.magicPrompt, enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
-                    </label>
-                  </div>
-
-                  {app.features?.magicPrompt?.enabled && (
-                    <div className="space-y-4 pl-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
-                        </label>
-                        <select
-                          value={app.features?.magicPrompt?.model || ''}
-                          onChange={e =>
-                            handleInputChange('features', {
-                              ...app.features,
-                              magicPrompt: {
-                                ...app.features?.magicPrompt,
-                                model: e.target.value || undefined
+                        <div>
+                          <div className="flex items-center mb-2">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.cloudStorageUpload?.enabled || false}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  cloudStorageUpload: {
+                                    ...app.upload.cloudStorageUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
                               }
-                            })
-                          }
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        >
-                          <option value="">
-                            {t('admin.apps.edit.selectModel', 'Select model...')}
-                          </option>
-                          {availableModels.map(model => (
-                            <option key={model.id} value={model.id}>
-                              {getLocalizedContent(model.name, currentLanguage)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t(
-                            'admin.apps.edit.magicPromptInstructions',
-                            'Magic Prompt Instructions'
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm font-medium text-gray-900">
+                              {t(
+                                'admin.apps.edit.enableCloudStorageUpload',
+                                'Enable Cloud Storage Upload'
+                              )}
+                            </label>
+                          </div>
+                          {app.upload?.cloudStorageUpload?.enabled && (
+                            <div className="ml-6">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.apps.edit.cloudStorageUploadDesc',
+                                  'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
+                                )}
+                              </p>
+                            </div>
                           )}
-                        </label>
-                        <textarea
-                          value={
-                            app.features?.magicPrompt?.prompt ||
-                            'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
-                          }
-                          onChange={e =>
-                            handleInputChange('features', {
-                              ...app.features,
-                              magicPrompt: { ...app.features?.magicPrompt, prompt: e.target.value }
-                            })
-                          }
-                          rows={3}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          placeholder="Enter instructions for the magic prompt feature..."
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.apps.edit.magicPromptPlaceholder',
-                            "Use {{prompt}} to reference the user's original prompt"
-                          )}
-                        </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Export Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.export', 'Export')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.exportDesc',
-                    'Control whether users can export conversations from this app'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.features?.export !== false}
-                      onChange={e =>
-                        handleInputChange('features', {
-                          ...app.features,
-                          export: e.target.checked
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableExport', 'Enable Export')}
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.exportNote',
-                      'When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.'
-                    )}
+            {/* Magic Prompt Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.magicPrompt', 'Magic Prompt')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.apps.edit.magicPromptDesc', 'AI-powered prompt enhancement feature')}
                   </p>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Compare Mode Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.compareMode', 'Compare Mode')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.compareModeDesc',
-                    'Allow users to query two models simultaneously and compare their responses side-by-side'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.features?.compareMode?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('features', {
-                          ...app.features,
-                          compareMode: { ...app.features?.compareMode, enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableCompareMode', 'Enable Compare Mode')}
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.compareModeNote',
-                      'When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.'
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Input Mode & Microphone Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.inputMode', 'Input Mode & Microphone')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.apps.edit.inputModeDesc',
-                    'Configure input methods and voice recognition'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.apps.edit.inputType', 'Input Type')}
-                    </label>
-                    <select
-                      value={app.inputMode?.type || 'multiline'}
-                      onChange={e =>
-                        handleInputChange('inputMode', {
-                          ...app.inputMode,
-                          type: e.target.value
-                        })
-                      }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    >
-                      <option value="singleline">
-                        {t('admin.apps.edit.singleLine', 'Single Line')}
-                      </option>
-                      <option value="multiline">
-                        {t('admin.apps.edit.multiLine', 'Multi Line')}
-                      </option>
-                    </select>
-                  </div>
-
-                  {app.inputMode?.type === 'multiline' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.textareaRows', 'Textarea Rows')}
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={app.inputMode?.rows || 5}
-                        onChange={e =>
-                          handleInputChange('inputMode', {
-                            ...app.inputMode,
-                            rows: parseInt(e.target.value)
-                          })
-                        }
-                        className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex items-center mb-2">
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={app.inputMode?.microphone?.enabled !== false}
+                        checked={app.features?.magicPrompt?.enabled || false}
                         onChange={e =>
-                          handleInputChange('inputMode', {
-                            ...app.inputMode,
-                            microphone: { ...app.inputMode?.microphone, enabled: e.target.checked }
+                          handleInputChange('features', {
+                            ...app.features,
+                            magicPrompt: { ...app.features?.magicPrompt, enabled: e.target.checked }
                           })
                         }
                         className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                       />
-                      <label className="ml-2 block text-sm font-medium text-gray-900">
-                        {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
                       </label>
                     </div>
 
-                    {app.inputMode?.microphone?.enabled && (
-                      <div className="space-y-3 pl-6">
+                    {app.features?.magicPrompt?.enabled && (
+                      <div className="space-y-4 pl-6">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t('admin.apps.edit.microphoneMode', 'Microphone Mode')}
+                            {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
                           </label>
                           <select
-                            value={app.inputMode?.microphone?.mode || 'manual'}
+                            value={app.features?.magicPrompt?.model || ''}
                             onChange={e =>
-                              handleInputChange('inputMode', {
-                                ...app.inputMode,
-                                microphone: { ...app.inputMode?.microphone, mode: e.target.value }
+                              handleInputChange('features', {
+                                ...app.features,
+                                magicPrompt: {
+                                  ...app.features?.magicPrompt,
+                                  model: e.target.value || undefined
+                                }
                               })
                             }
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                           >
-                            <option value="manual">
-                              {t('admin.apps.edit.manualMode', 'Manual (Click to Record)')}
+                            <option value="">
+                              {t('admin.apps.edit.selectModel', 'Select model...')}
                             </option>
-                            <option value="automatic">
-                              {t('admin.apps.edit.automaticMode', 'Automatic (Voice Activation)')}
-                            </option>
+                            {availableModels.map(model => (
+                              <option key={model.id} value={model.id}>
+                                {getLocalizedContent(model.name, currentLanguage)}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={app.inputMode?.microphone?.showTranscript !== false}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t(
+                              'admin.apps.edit.magicPromptInstructions',
+                              'Magic Prompt Instructions'
+                            )}
+                          </label>
+                          <textarea
+                            value={
+                              app.features?.magicPrompt?.prompt ||
+                              'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
+                            }
                             onChange={e =>
-                              handleInputChange('inputMode', {
-                                ...app.inputMode,
-                                microphone: {
-                                  ...app.inputMode?.microphone,
-                                  showTranscript: e.target.checked
+                              handleInputChange('features', {
+                                ...app.features,
+                                magicPrompt: {
+                                  ...app.features?.magicPrompt,
+                                  prompt: e.target.value
                                 }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            rows={3}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            placeholder="Enter instructions for the magic prompt feature..."
                           />
-                          <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                            {t('admin.apps.edit.showTranscript', 'Show Transcript')}
-                          </label>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.apps.edit.magicPromptPlaceholder',
+                              "Use {{prompt}} to reference the user's original prompt"
+                            )}
+                          </p>
                         </div>
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.apps.edit.speechRecognitionService', 'Speech Recognition Service')}
-                    </label>
-                    <select
-                      value={app.settings?.speechRecognition?.service || 'default'}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          speechRecognition: {
-                            ...app.settings?.speechRecognition,
-                            service: e.target.value
-                          }
-                        })
-                      }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    >
-                      <option value="default">
-                        {t('admin.apps.edit.defaultService', 'Default (Browser)')}
-                      </option>
-                      <option value="custom">
-                        {t('admin.apps.edit.customService', 'Custom Service')}
-                      </option>
-                    </select>
-                  </div>
-
-                  {app.settings?.speechRecognition?.service === 'custom' && (
-                    <div className="pl-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
-                      </label>
+            {/* Export Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.export', 'Export')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.exportDesc',
+                      'Control whether users can export conversations from this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center">
                       <input
-                        type="url"
-                        value={app.settings?.speechRecognition?.host || ''}
+                        type="checkbox"
+                        checked={app.features?.export !== false}
+                        onChange={e =>
+                          handleInputChange('features', {
+                            ...app.features,
+                            export: e.target.checked
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableExport', 'Enable Export')}
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.exportNote',
+                        'When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Compare Mode Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.compareMode', 'Compare Mode')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.compareModeDesc',
+                      'Allow users to query two models simultaneously and compare their responses side-by-side'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.features?.compareMode?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('features', {
+                            ...app.features,
+                            compareMode: { ...app.features?.compareMode, enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableCompareMode', 'Enable Compare Mode')}
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.compareModeNote',
+                        'When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Mode & Microphone Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.inputMode', 'Input Mode & Microphone')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.inputModeDesc',
+                      'Configure input methods and voice recognition'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('admin.apps.edit.inputType', 'Input Type')}
+                      </label>
+                      <select
+                        value={app.inputMode?.type || 'multiline'}
+                        onChange={e =>
+                          handleInputChange('inputMode', {
+                            ...app.inputMode,
+                            type: e.target.value
+                          })
+                        }
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        <option value="singleline">
+                          {t('admin.apps.edit.singleLine', 'Single Line')}
+                        </option>
+                        <option value="multiline">
+                          {t('admin.apps.edit.multiLine', 'Multi Line')}
+                        </option>
+                      </select>
+                    </div>
+
+                    {app.inputMode?.type === 'multiline' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.textareaRows', 'Textarea Rows')}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={app.inputMode?.rows || 5}
+                          onChange={e =>
+                            handleInputChange('inputMode', {
+                              ...app.inputMode,
+                              rows: parseInt(e.target.value)
+                            })
+                          }
+                          className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          checked={app.inputMode?.microphone?.enabled !== false}
+                          onChange={e =>
+                            handleInputChange('inputMode', {
+                              ...app.inputMode,
+                              microphone: {
+                                ...app.inputMode?.microphone,
+                                enabled: e.target.checked
+                              }
+                            })
+                          }
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                        />
+                        <label className="ml-2 block text-sm font-medium text-gray-900">
+                          {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
+                        </label>
+                      </div>
+
+                      {app.inputMode?.microphone?.enabled && (
+                        <div className="space-y-3 pl-6">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {t('admin.apps.edit.microphoneMode', 'Microphone Mode')}
+                            </label>
+                            <select
+                              value={app.inputMode?.microphone?.mode || 'manual'}
+                              onChange={e =>
+                                handleInputChange('inputMode', {
+                                  ...app.inputMode,
+                                  microphone: { ...app.inputMode?.microphone, mode: e.target.value }
+                                })
+                              }
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            >
+                              <option value="manual">
+                                {t('admin.apps.edit.manualMode', 'Manual (Click to Record)')}
+                              </option>
+                              <option value="automatic">
+                                {t('admin.apps.edit.automaticMode', 'Automatic (Voice Activation)')}
+                              </option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={app.inputMode?.microphone?.showTranscript !== false}
+                              onChange={e =>
+                                handleInputChange('inputMode', {
+                                  ...app.inputMode,
+                                  microphone: {
+                                    ...app.inputMode?.microphone,
+                                    showTranscript: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                            />
+                            <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                              {t('admin.apps.edit.showTranscript', 'Show Transcript')}
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t(
+                          'admin.apps.edit.speechRecognitionService',
+                          'Speech Recognition Service'
+                        )}
+                      </label>
+                      <select
+                        value={app.settings?.speechRecognition?.service || 'default'}
                         onChange={e =>
                           handleInputChange('settings', {
                             ...app.settings,
                             speechRecognition: {
                               ...app.settings?.speechRecognition,
-                              host: e.target.value
+                              service: e.target.value
                             }
                           })
                         }
-                        placeholder="https://your-speech-service.com"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sources Configuration - Only show if sources feature is enabled */}
-          {isSourcesEnabled && (
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.sources', 'Sources Configuration')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.sourcesDesc',
-                      'Configure data sources that provide content to this app'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <div className="space-y-6">
-                    {/* Source References */}
-                    <div>
-                      <p className="text-sm text-gray-600 mb-4">
-                        {t(
-                          'admin.apps.edit.sourcesDesc',
-                          'Select data sources configured in the admin interface to provide content to this app'
-                        )}
-                      </p>
-                      <SourcePicker
-                        value={app.sources || []}
-                        onChange={handleSourcesChange}
-                        allowMultiple={true}
-                        className="mb-4"
-                      />
+                      >
+                        <option value="default">
+                          {t('admin.apps.edit.defaultService', 'Default (Browser)')}
+                        </option>
+                        <option value="custom">
+                          {t('admin.apps.edit.customService', 'Custom Service')}
+                        </option>
+                      </select>
                     </div>
 
-                    {/* Sources Summary */}
-                    {app.sources && app.sources.length > 0 && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                        <div className="flex">
-                          <div className="flex-shrink-0">
-                            <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
-                          </div>
-                          <div className="ml-3">
-                            <h3 className="text-sm font-medium text-blue-800">
-                              {t('admin.apps.edit.sourcesConfigured', 'Sources Configured')}
-                            </h3>
-                            <div className="mt-2 text-sm text-blue-700">
-                              <p>
-                                {t(
-                                  'admin.apps.edit.sourcesCount',
-                                  'This app has {{count}} source(s) configured:',
-                                  { count: app.sources.length }
-                                )}
-                              </p>
-                              <ul className="list-disc list-inside mt-1 space-y-1">
-                                {app.sources.map((sourceId, index) => (
-                                  <li key={`source-${index}`}>
-                                    <span className="font-mono text-xs bg-blue-100 px-1 rounded">
-                                      {sourceId}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                              <p className="mt-2 text-xs">
-                                {t(
-                                  'admin.apps.edit.sourcesUsage',
-                                  'Sources will be loaded and their content made available via {{sources}} template in system prompts.'
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                    {app.settings?.speechRecognition?.service === 'custom' && (
+                      <div className="pl-6">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
+                        </label>
+                        <input
+                          type="url"
+                          value={app.settings?.speechRecognition?.host || ''}
+                          onChange={e =>
+                            handleInputChange('settings', {
+                              ...app.settings,
+                              speechRecognition: {
+                                ...app.settings?.speechRecognition,
+                                host: e.target.value
+                              }
+                            })
+                          }
+                          placeholder="https://your-speech-service.com"
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
                       </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Settings Configuration */}
-          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                  {t('admin.apps.edit.settings', 'User Settings')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.apps.edit.settingsDesc', 'Configure which settings users can modify')}
-                </p>
+            {/* Sources Configuration - Only show if sources feature is enabled */}
+            {isSourcesEnabled && (
+              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                <div className="md:grid md:grid-cols-3 md:gap-6">
+                  <div className="md:col-span-1">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.sources', 'Sources Configuration')}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.sourcesDesc',
+                        'Configure data sources that provide content to this app'
+                      )}
+                    </p>
+                  </div>
+                  <div className="mt-5 md:col-span-2 md:mt-0">
+                    <div className="space-y-6">
+                      {/* Source References */}
+                      <div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          {t(
+                            'admin.apps.edit.sourcesDesc',
+                            'Select data sources configured in the admin interface to provide content to this app'
+                          )}
+                        </p>
+                        <SourcePicker
+                          value={app.sources || []}
+                          onChange={handleSourcesChange}
+                          allowMultiple={true}
+                          className="mb-4"
+                        />
+                      </div>
+
+                      {/* Sources Summary */}
+                      {app.sources && app.sources.length > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
+                            </div>
+                            <div className="ml-3">
+                              <h3 className="text-sm font-medium text-blue-800">
+                                {t('admin.apps.edit.sourcesConfigured', 'Sources Configured')}
+                              </h3>
+                              <div className="mt-2 text-sm text-blue-700">
+                                <p>
+                                  {t(
+                                    'admin.apps.edit.sourcesCount',
+                                    'This app has {{count}} source(s) configured:',
+                                    { count: app.sources.length }
+                                  )}
+                                </p>
+                                <ul className="list-disc list-inside mt-1 space-y-1">
+                                  {app.sources.map((sourceId, index) => (
+                                    <li key={`source-${index}`}>
+                                      <span className="font-mono text-xs bg-blue-100 px-1 rounded">
+                                        {sourceId}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <p className="mt-2 text-xs">
+                                  {t(
+                                    'admin.apps.edit.sourcesUsage',
+                                    'Sources will be loaded and their content made available via {{sources}} template in system prompts.'
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.settings?.model?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          model: { enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableModelSelection', 'Enable Model Selection')}
-                    </label>
-                  </div>
+            )}
 
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.settings?.temperature?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          temperature: { enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableTemperatureControl', 'Enable Temperature Control')}
-                    </label>
-                  </div>
+            {/* Settings Configuration */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.settings', 'User Settings')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.apps.edit.settingsDesc', 'Configure which settings users can modify')}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.model?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            model: { enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableModelSelection', 'Enable Model Selection')}
+                      </label>
+                    </div>
 
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.settings?.outputFormat?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          outputFormat: { enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableOutputFormat', 'Enable Output Format Selection')}
-                    </label>
-                  </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.temperature?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            temperature: { enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t(
+                          'admin.apps.edit.enableTemperatureControl',
+                          'Enable Temperature Control'
+                        )}
+                      </label>
+                    </div>
 
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.settings?.chatHistory?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          chatHistory: { enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableChatHistory', 'Enable Chat History Control')}
-                    </label>
-                  </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.outputFormat?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            outputFormat: { enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableOutputFormat', 'Enable Output Format Selection')}
+                      </label>
+                    </div>
 
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.settings?.style?.enabled !== false}
-                      onChange={e =>
-                        handleInputChange('settings', {
-                          ...app.settings,
-                          style: { enabled: e.target.checked }
-                        })
-                      }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
-                    </label>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.chatHistory?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            chatHistory: { enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableChatHistory', 'Enable Chat History Control')}
+                      </label>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.style?.enabled !== false}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            style: { enabled: e.target.checked }
+                          })
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </FormValidationProvider>
   );
 }
 

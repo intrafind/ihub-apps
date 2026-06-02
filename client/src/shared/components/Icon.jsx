@@ -84,6 +84,10 @@ import {
   TicketIcon as OutlineTicketIcon,
   KeyIcon as OutlineKeyIcon,
   ChevronLeftIcon as OutlineChevronLeftIcon,
+  ChevronDoubleLeftIcon as OutlineChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon as OutlineChevronDoubleRightIcon,
+  ChevronUpDownIcon as OutlineChevronUpDownIcon,
+  EllipsisVerticalIcon as OutlineEllipsisVerticalIcon,
   AdjustmentsVerticalIcon as OutlineAdjustmentsVerticalIcon,
   FunnelIcon as OutlineFunnelIcon,
   DocumentIcon as OutlineDocumentIcon,
@@ -159,6 +163,10 @@ import {
   TicketIcon as SolidTicketIcon,
   KeyIcon as SolidKeyIcon,
   ChevronLeftIcon as SolidChevronLeftIcon,
+  ChevronDoubleLeftIcon as SolidChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon as SolidChevronDoubleRightIcon,
+  ChevronUpDownIcon as SolidChevronUpDownIcon,
+  EllipsisVerticalIcon as SolidEllipsisVerticalIcon,
   AdjustmentsVerticalIcon as SolidAdjustmentsVerticalIcon,
   FunnelIcon as SolidFunnelIcon,
   DocumentIcon as SolidDocumentIcon,
@@ -295,6 +303,16 @@ const iconMap = {
   ticket: { outline: OutlineTicketIcon, solid: SolidTicketIcon },
   key: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
   'chevron-left': { outline: OutlineChevronLeftIcon, solid: SolidChevronLeftIcon },
+  'chevron-double-left': {
+    outline: OutlineChevronDoubleLeftIcon,
+    solid: SolidChevronDoubleLeftIcon
+  },
+  'chevron-double-right': {
+    outline: OutlineChevronDoubleRightIcon,
+    solid: SolidChevronDoubleRightIcon
+  },
+  'chevron-up-down': { outline: OutlineChevronUpDownIcon, solid: SolidChevronUpDownIcon },
+  'ellipsis-vertical': { outline: OutlineEllipsisVerticalIcon, solid: SolidEllipsisVerticalIcon },
   'adjustments-vertical': {
     outline: OutlineAdjustmentsVerticalIcon,
     solid: SolidAdjustmentsVerticalIcon

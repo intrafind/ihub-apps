@@ -63,7 +63,8 @@ export function resolveGroupInheritance(groupsConfig) {
         models: new Set(),
         workflows: new Set(),
         skills: new Set(),
-        adminAccess: false
+        adminAccess: false,
+        contentAdmin: false
       };
 
       // Merge from parent groups first (in order)
@@ -99,6 +100,11 @@ export function resolveGroupInheritance(groupsConfig) {
         if (parentPerms.adminAccess === true) {
           mergedPermissions.adminAccess = true;
         }
+
+        // Content admin: if any parent has content admin, inherit it
+        if (parentPerms.contentAdmin === true) {
+          mergedPermissions.contentAdmin = true;
+        }
       }
 
       // Merge own permissions on top (overrides parents)
@@ -121,6 +127,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
       }
+      if (ownPerms.contentAdmin === true) {
+        mergedPermissions.contentAdmin = true;
+      }
 
       // Update the group with resolved permissions
       groups[groupId] = {
@@ -131,7 +140,8 @@ export function resolveGroupInheritance(groupsConfig) {
           models: Array.from(mergedPermissions.models),
           workflows: Array.from(mergedPermissions.workflows),
           skills: Array.from(mergedPermissions.skills),
-          adminAccess: mergedPermissions.adminAccess
+          adminAccess: mergedPermissions.adminAccess,
+          contentAdmin: mergedPermissions.contentAdmin
         }
       };
 
@@ -200,6 +210,7 @@ export function loadGroupPermissions() {
       workflows: group.permissions?.workflows || [],
       skills: group.permissions?.skills || [],
       adminAccess: group.permissions?.adminAccess || false,
+      contentAdmin: group.permissions?.contentAdmin || false,
       description: group.description || ''
     };
   }
@@ -311,7 +322,8 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     models: new Set(),
     workflows: new Set(),
     skills: new Set(),
-    adminAccess: false
+    adminAccess: false,
+    contentAdmin: false
   };
 
   if (!Array.isArray(userGroups)) {
@@ -363,6 +375,11 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
+    }
+
+    // Content admin access
+    if (groupPerms.contentAdmin) {
+      permissions.contentAdmin = true;
     }
   }
 

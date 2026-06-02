@@ -8,8 +8,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import UsageTimeline from '../components/UsageTimeline';
 
 function StatCard({ title, value, icon, color, change, changeType }) {
@@ -1152,113 +1150,110 @@ function AdminUsageReports() {
   );
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-6">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {t('admin.usage.title', 'Admin Dashboard')}
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  {t('admin.usage.subtitle', 'Usage analytics and system overview')}
-                </p>
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={downloadCsv}
-                  className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {t('admin.usage.downloadCsv', 'Download CSV')}
-                </button>
-                <button
-                  onClick={downloadJson}
-                  className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {t('admin.usage.downloadJson', 'Download JSON')}
-                </button>
-              </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                {t('admin.usage.title', 'Admin Dashboard')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                {t('admin.usage.subtitle', 'Usage analytics and system overview')}
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={downloadCsv}
+                className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('admin.usage.downloadCsv', 'Download CSV')}
+              </button>
+              <button
+                onClick={downloadJson}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('admin.usage.downloadJson', 'Download JSON')}
+              </button>
             </div>
           </div>
-        </div>
-
-        {/* Stats Bar */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('admin.usage.lastUpdated', 'Last Updated')}
-                </div>
-                <div className="text-sm font-medium dark:text-gray-100">
-                  {new Date(lastUpdated).toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('admin.usage.lastReset', 'Last Reset')}
-                </div>
-                <div className="text-sm font-medium dark:text-gray-100">
-                  {new Date(lastReset).toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('admin.usage.activeUsers', 'Active Users')}
-                </div>
-                <div className="text-sm font-medium dark:text-gray-100">
-                  {Object.keys(messages.perUser || {}).length}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('admin.usage.activeApps', 'Active Apps')}
-                </div>
-                <div className="text-sm font-medium dark:text-gray-100">
-                  {Object.keys(messages.perApp || {}).length}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {activeTab === 'overview' && renderOverview()}
-          {activeTab === 'users' && renderUsers()}
-          {activeTab === 'apps' && renderApps()}
-          {activeTab === 'magic' && renderMagic()}
-          {activeTab === 'feedback' && renderFeedback()}
-          {activeTab === 'timeline' && <UsageTimeline />}
-          {activeTab === 'details' && renderDetails()}
         </div>
       </div>
-    </AdminAuth>
+
+      {/* Stats Bar */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.usage.lastUpdated', 'Last Updated')}
+              </div>
+              <div className="text-sm font-medium dark:text-gray-100">
+                {new Date(lastUpdated).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.usage.lastReset', 'Last Reset')}
+              </div>
+              <div className="text-sm font-medium dark:text-gray-100">
+                {new Date(lastReset).toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.usage.activeUsers', 'Active Users')}
+              </div>
+              <div className="text-sm font-medium dark:text-gray-100">
+                {Object.keys(messages.perUser || {}).length}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.usage.activeApps', 'Active Apps')}
+              </div>
+              <div className="text-sm font-medium dark:text-gray-100">
+                {Object.keys(messages.perApp || {}).length}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="-mb-px flex space-x-8">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`inline-flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'users' && renderUsers()}
+        {activeTab === 'apps' && renderApps()}
+        {activeTab === 'magic' && renderMagic()}
+        {activeTab === 'feedback' && renderFeedback()}
+        {activeTab === 'timeline' && <UsageTimeline />}
+        {activeTab === 'details' && renderDetails()}
+      </div>
+    </div>
   );
 }
 

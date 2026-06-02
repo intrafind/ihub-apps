@@ -3,7 +3,7 @@ import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
-import { adminAuth } from '../../middleware/adminAuth.js';
+import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
   validateSourceConfig,
   validateSourcesArray,
@@ -19,6 +19,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
  * Initialize source manager singleton
@@ -483,7 +485,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { data: sources, etag } = configCache.getSources(true);
@@ -548,7 +550,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -673,7 +675,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.post(
     buildServerPath('/api/admin/sources'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const sourceData = req.body;
@@ -720,6 +722,24 @@ export default function registerAdminSourcesRoutes(app) {
         // Refresh cache
         await configCache.refreshSourcesCache();
 
+        await logAdminAction({
+          req,
+          action: 'create',
+          resource: 'source',
+          resourceId: newSource.id,
+          summary: `Created source ${newSource.id}`
+        });
+        try {
+          await saveSnapshot({
+            resource: 'source',
+            id: newSource.id,
+            before: null,
+            after: newSource,
+            admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+          });
+        } catch {
+          /* skip */
+        }
         res.json({ message: 'Source created successfully', source: newSource });
       } catch (error) {
         sendFailedOperationError(res, 'create source', error);
@@ -807,7 +827,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.put(
     buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -845,6 +865,8 @@ export default function registerAdminSourcesRoutes(app) {
           return sendNotFound(res, 'Source');
         }
 
+        const oldSource = { ...sources[existingIndex] };
+
         // Preserve creation timestamp
         updatedSource.created = sources[existingIndex].created;
 
@@ -855,6 +877,24 @@ export default function registerAdminSourcesRoutes(app) {
         await saveSourcesConfig(updatedSources);
         await configCache.refreshSourcesCache();
 
+        await logAdminAction({
+          req,
+          action: 'update',
+          resource: 'source',
+          resourceId: id,
+          summary: `Updated source ${id}`
+        });
+        try {
+          await saveSnapshot({
+            resource: 'source',
+            id,
+            before: oldSource,
+            after: updatedSource,
+            admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+          });
+        } catch {
+          /* skip */
+        }
         res.json({ message: 'Source updated successfully', source: updatedSource });
       } catch (error) {
         sendFailedOperationError(res, 'update source', error);
@@ -939,7 +979,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.delete(
     buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -960,6 +1000,8 @@ export default function registerAdminSourcesRoutes(app) {
           return sendNotFound(res, 'Source');
         }
 
+        const oldSource = { ...sources[sourceIndex] };
+
         // Check for dependencies (apps using this source)
         const dependencies = await findSourceDependencies(id);
         if (dependencies.length > 0) {
@@ -973,6 +1015,24 @@ export default function registerAdminSourcesRoutes(app) {
         await saveSourcesConfig(updatedSources);
         await configCache.refreshSourcesCache();
 
+        await logAdminAction({
+          req,
+          action: 'delete',
+          resource: 'source',
+          resourceId: id,
+          summary: `Deleted source ${id}`
+        });
+        try {
+          await saveSnapshot({
+            resource: 'source',
+            id,
+            before: oldSource,
+            after: null,
+            admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+          });
+        } catch {
+          /* skip */
+        }
         res.json({ message: 'Source deleted successfully' });
       } catch (error) {
         sendFailedOperationError(res, 'delete source', error);
@@ -1039,7 +1099,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.post(
     buildServerPath('/api/admin/sources/:id/test'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1164,7 +1224,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.post(
     buildServerPath('/api/admin/sources/:id/preview'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1274,7 +1334,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.post(
     buildServerPath('/api/admin/sources/_toggle'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { sourceIds, enabled } = req.body;
@@ -1343,7 +1403,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/_stats'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { data: sources } = configCache.getSources(true);
@@ -1411,7 +1471,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/_types'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const manager = getSourceManager();
@@ -1478,7 +1538,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/_dependencies/:id'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1571,7 +1631,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1682,7 +1742,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.get(
     buildServerPath('/api/admin/sources/:id/files/content'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1799,7 +1859,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.post(
     buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1912,7 +1972,7 @@ export default function registerAdminSourcesRoutes(app) {
   app.delete(
     buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { id } = req.params;

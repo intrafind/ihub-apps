@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import AdminNavigation from '../components/AdminNavigation';
-import AdminAuth from '../components/AdminAuth';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminShortLinkEditPage() {
   const { code } = useParams();
@@ -11,7 +12,7 @@ function AdminShortLinkEditPage() {
   const { t } = useTranslation();
   const isNew = code === 'new';
 
-  const [link, setLink] = useState({
+  const defaultLink = {
     code: '',
     appId: '',
     userId: '',
@@ -20,11 +21,16 @@ function AdminShortLinkEditPage() {
     includeParams: false,
     params: {},
     expiresAt: ''
-  });
+  };
+
+  const [link, setLink] = useState(defaultLink);
+  const [initialData, setInitialData] = useState(isNew ? defaultLink : null);
   const [paramsText, setParamsText] = useState('{}');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, link);
 
   useEffect(() => {
     if (!isNew) {
@@ -32,11 +38,13 @@ function AdminShortLinkEditPage() {
         try {
           const res = await makeAdminApiCall(`/shortlinks/${code}`);
           const data = res.data;
-          setLink({
+          const loadedLink = {
             ...data,
             params: data.params || {},
             expiresAt: data.expiresAt || ''
-          });
+          };
+          setLink(loadedLink);
+          setInitialData(loadedLink);
           setParamsText(JSON.stringify(data.params || {}, null, 2));
         } catch (e) {
           setError(e.message);
@@ -74,6 +82,7 @@ function AdminShortLinkEditPage() {
           expiresAt: link.expiresAt ? new Date(link.expiresAt).toISOString() : null
         })
       });
+      markSaved();
       navigate('/admin/shortlinks');
     } catch (err) {
       setError(err.message);
@@ -91,126 +100,141 @@ function AdminShortLinkEditPage() {
   }
 
   return (
-    <AdminAuth>
-      <div>
-        <AdminNavigation />
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            {isNew
-              ? t('admin.shortlinks.new', 'Create Short Link')
-              : t('admin.shortlinks.edit', 'Edit Short Link')}
-          </h1>
-          {error && <div className="text-red-600">{error}</div>}
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.code', 'Code')}
-              </label>
-              <input
-                type="text"
-                value={link.code}
-                onChange={e => handleChange('code', e.target.value)}
-                disabled={!isNew}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.appId', 'App ID')}
-              </label>
-              <input
-                type="text"
-                value={link.appId}
-                onChange={e => handleChange('appId', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.userId', 'User ID')}
-              </label>
-              <input
-                type="text"
-                value={link.userId}
-                onChange={e => handleChange('userId', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.path', 'Path')}
-              </label>
-              <input
-                type="text"
-                value={link.path || ''}
-                onChange={e => handleChange('path', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.url', 'Redirect URL')}
-              </label>
-              <input
-                type="text"
-                value={link.url || ''}
-                onChange={e => handleChange('url', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={link.includeParams}
-                onChange={e => handleChange('includeParams', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-              />
-              <label className="ml-2 block text-sm text-gray-700">
-                {t('admin.shortlinks.includeParams', 'Include Params')}
-              </label>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.expiresAt', 'Expires At')}
-              </label>
-              <input
-                type="datetime-local"
-                value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
-                onChange={e => handleChange('expiresAt', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {t('admin.shortlinks.params', 'Params (JSON)')}
-              </label>
-              <textarea
-                rows="4"
-                value={paramsText}
-                onChange={e => setParamsText(e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm font-mono"
-              />
-            </div>
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/shortlinks')}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-              </button>
-            </div>
-          </form>
-        </div>
+    <div>
+      <div className="max-w-2xl mx-auto p-6 space-y-6">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Short Links', href: '/admin/shortlinks' },
+            { label: isNew ? 'New Short Link' : (link?.code ?? code) }
+          ]}
+        />
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+          {isNew
+            ? t('admin.shortlinks.new', 'Create Short Link')
+            : t('admin.shortlinks.edit', 'Edit Short Link')}
+        </h1>
+        {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.code', 'Code')}
+            </label>
+            <input
+              type="text"
+              value={link.code}
+              onChange={e => handleChange('code', e.target.value)}
+              disabled={!isNew}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.appId', 'App ID')}
+            </label>
+            <input
+              type="text"
+              value={link.appId}
+              onChange={e => handleChange('appId', e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.userId', 'User ID')}
+            </label>
+            <input
+              type="text"
+              value={link.userId}
+              onChange={e => handleChange('userId', e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.path', 'Path')}
+            </label>
+            <input
+              type="text"
+              value={link.path || ''}
+              onChange={e => handleChange('path', e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.url', 'Redirect URL')}
+            </label>
+            <input
+              type="text"
+              value={link.url || ''}
+              onChange={e => handleChange('url', e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={link.includeParams}
+              onChange={e => handleChange('includeParams', e.target.checked)}
+              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+            />
+            <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.includeParams', 'Include Params')}
+            </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.expiresAt', 'Expires At')}
+            </label>
+            <input
+              type="datetime-local"
+              value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
+              onChange={e => handleChange('expiresAt', e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.shortlinks.params', 'Params (JSON)')}
+            </label>
+            <textarea
+              rows="4"
+              value={paramsText}
+              onChange={e => setParamsText(e.target.value)}
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
+            />
+          </div>
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={() => navigate('/admin/shortlinks')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+            >
+              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+            </button>
+          </div>
+        </form>
       </div>
-    </AdminAuth>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
+    </div>
   );
 }
 

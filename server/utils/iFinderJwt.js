@@ -135,20 +135,43 @@ function resolveJwtSubject(user, config) {
         ? `${user.domain}\\${user.username || user.id}`
         : user.username || user.id;
       break;
-    default:
-      // Custom template: replace ${field} placeholders. Warn on missing keys so
-      // misconfigurations surface in logs instead of producing an empty `sub`.
-      resolved = field.replace(/\$\{(\w+)\}/g, (_, key) => {
+    default: {
+      // Custom template. Placeholders ALWAYS resolve from the authenticated
+      // user object (`user[field]`), never from environment variables.
+      //
+      // Two accepted forms:
+      //   ${user.field}  — preferred, self-documenting.
+      //   ${field}       — legacy. configCache opts this path out of env var
+      //                    resolution via the `ENV_VAR_SKIP_PATHS_BY_KEY`
+      //                    entry for `config/platform.json`, so this form
+      //                    is now safe; before that skip was added it could
+      //                    collide with `process.env.field` (notably
+      //                    `process.env.username` on Windows = the OS
+      //                    service account running the server), leaking
+      //                    that account into every JWT subject. We still
+      //                    warn so admins migrate to the explicit
+      //                    `${user.field}` form.
+      if (/\$\{(?!user\.)\w+\}/.test(field)) {
+        logger.warn(
+          'iFinder jwtSubjectField uses legacy ${field} placeholder syntax. ' +
+            'Use ${user.field} instead (e.g. "BMG\\\\${user.username}") to ' +
+            'avoid collision with environment variable names.',
+          { component: 'iFinderJwt', jwtSubjectField: field }
+        );
+      }
+      resolved = field.replace(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
         const value = user[key];
         if (value === undefined || value === null || value === '') {
           logger.warn(
-            `iFinder JWT subject template placeholder \${${key}} resolved to empty for user ${user.id || user.username || '<unknown>'}`,
+            `iFinder JWT subject template placeholder for user.${key} resolved to empty for user ${user.id || user.username || '<unknown>'}`,
             { component: 'iFinderJwt', jwtSubjectField: field }
           );
           return '';
         }
         return value;
       });
+      break;
+    }
   }
 
   if (typeof resolved !== 'string' || resolved.trim() === '') {

@@ -119,16 +119,24 @@
     "toggleDescription": "Search the web for up-to-date information"
   },
   "office": {
+    "showTaskPane": "Show Task Pane",
+    "insertIntoEmail": "Add to email",
+    "insertIntoDocument": "Add to document",
     "pinned": {
-      "addCurrent": "Add this email",
-      "addCurrentTooltip": "Attach this email to the chat",
-      "addSelected": "Add selected emails",
-      "addSelectedTooltip": "Attach every email you have selected in Outlook",
+      "addEmails": "Add email(s)",
+      "addEmailsTooltip": "Attach the open email — or every email you've selected in Outlook — to the chat",
       "alreadyAdded": "Already added",
       "removeOne": "Remove from chat",
       "clearAll": "Clear",
       "clearAllTooltip": "Remove every pinned email",
       "untitled": "(no subject)"
+    },
+    "settingsDialog": {
+      "title": "Settings",
+      "account": "Account",
+      "language": "Language",
+      "cancel": "Cancel",
+      "save": "Save"
     }
   },
   "pages": {
@@ -346,6 +354,7 @@
       "usernamePlaceholder": "Enter your username",
       "password": "Password",
       "passwordPlaceholder": "Enter your password",
+      "rememberMe": "Remember me",
       "button": "Sign in",
       "error": "Invalid username or password",
       "required": "This field is required",
@@ -1872,10 +1881,6 @@
       "tooltipAutomatic": "Dictate to editor (Ctrl+M) - automatic",
       "ariaLabel": "Dictate text to editor"
     }
-  },
-  "office": {
-    "insertIntoEmail": "Add to email",
-    "insertIntoDocument": "Add to document"
   },
   "teams": {
     "status": {

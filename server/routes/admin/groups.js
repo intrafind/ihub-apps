@@ -13,6 +13,8 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
  * @swagger
@@ -586,6 +588,13 @@ export default function registerAdminGroupRoutes(app) {
 
       logger.info('Created new group', { component: 'AdminGroups', name, id });
 
+      await logAdminAction({
+        req,
+        action: 'create',
+        resource: 'group',
+        resourceId: id,
+        summary: `Created group ${id}`
+      });
       res.json({ group: newGroup });
     } catch (error) {
       return sendInternalError(res, error, 'create group');
@@ -685,6 +694,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       const group = groupsData.groups[groupId];
+      const oldGroup = JSON.parse(JSON.stringify(group));
 
       // Update fields
       if (name !== undefined) group.name = name;
@@ -721,6 +731,20 @@ export default function registerAdminGroupRoutes(app) {
 
       logger.info('Updated group', { component: 'AdminGroups', groupName: group.name, groupId });
 
+      await saveSnapshot({
+        resource: 'group',
+        id: groupId,
+        before: oldGroup,
+        after: group,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+      await logAdminAction({
+        req,
+        action: 'update',
+        resource: 'group',
+        resourceId: groupId,
+        summary: `Updated group ${groupId}`
+      });
       res.json({ group });
     } catch (error) {
       return sendInternalError(res, error, 'update group');
@@ -825,7 +849,17 @@ export default function registerAdminGroupRoutes(app) {
         return sendNotFound(res, 'Group');
       }
 
-      const groupName = groupsData.groups[groupId].name;
+      const deletedGroup = groupsData.groups[groupId];
+      const groupName = deletedGroup.name;
+
+      // Save snapshot before deletion
+      await saveSnapshot({
+        resource: 'group',
+        id: groupId,
+        before: deletedGroup,
+        after: null,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
 
       // Remove group
       delete groupsData.groups[groupId];
@@ -839,6 +873,13 @@ export default function registerAdminGroupRoutes(app) {
 
       logger.info('Deleted group', { component: 'AdminGroups', groupName, groupId });
 
+      await logAdminAction({
+        req,
+        action: 'delete',
+        resource: 'group',
+        resourceId: groupId,
+        summary: `Deleted group ${groupId}`
+      });
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'delete group');

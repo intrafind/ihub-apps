@@ -12,6 +12,7 @@ import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -237,6 +238,13 @@ export async function exportConfig(req, res) {
     archive.append(JSON.stringify(metadata, null, 2), { name: 'backup-metadata.json' });
 
     await archive.finalize();
+    await logAdminAction({
+      req,
+      action: 'export',
+      resource: 'backup',
+      resourceId: 'backup',
+      summary: `Exported configuration backup (${fileCount} files)`
+    });
     logger.info('Configuration export completed', { component: 'AdminBackup' });
   } catch (error) {
     logger.error('Export error', { component: 'AdminBackup', error });
@@ -355,6 +363,13 @@ export async function importConfig(req, res) {
     // Count imported files
     const importedFiles = await getAllFiles(contentsPath);
 
+    await logAdminAction({
+      req,
+      action: 'import',
+      resource: 'backup',
+      resourceId: 'backup',
+      summary: `Imported configuration backup (${importedFiles.length} files)`
+    });
     res.json({
       success: true,
       message: migrationError

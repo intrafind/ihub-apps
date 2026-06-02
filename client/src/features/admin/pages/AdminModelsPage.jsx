@@ -1,12 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+
+function ModelNameCell({ model, currentLanguage }) {
+  return (
+    <div className="flex items-center">
+      <div className="flex-shrink-0 h-8 w-8">
+        <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+          <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        </div>
+      </div>
+      <div className="ml-3 min-w-0">
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          {getLocalizedContent(model.name, currentLanguage)}
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{model.id}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatusCell({ model, t }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          model.enabled
+            ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+        }`}
+      >
+        {model.enabled
+          ? t('admin.models.enabled', 'Enabled')
+          : t('admin.models.disabled', 'Disabled')}
+      </span>
+      {model.default && (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
+          {t('admin.models.default', 'Default')}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function AdminModelsPage() {
   const { t, i18n } = useTranslation();
@@ -15,8 +56,8 @@ function AdminModelsPage() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [testingModel, setTestingModel] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
@@ -29,18 +70,10 @@ function AdminModelsPage() {
       setError(null);
       const response = await makeAdminApiCall('/admin/models');
       const data = response.data;
-
-      // Ensure we have an array
-      const modelsArray = Array.isArray(data) ? data : [];
-      setModels(modelsArray);
-
-      if (modelsArray.length === 0) {
-        console.warn('No models returned from API');
-      }
+      setModels(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Error loading models:', err);
       setError(err.message);
-      setModels([]); // Set empty array on error
+      setModels([]);
     } finally {
       setLoading(false);
     }
@@ -55,15 +88,8 @@ function AdminModelsPage() {
       const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
         method: 'POST'
       });
-
       const result = response.data;
-
-      // Update the model in the local state
-      setModels(prevModels =>
-        prevModels.map(model =>
-          model.id === modelId ? { ...model, enabled: result.enabled } : model
-        )
-      );
+      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
     } catch (err) {
       setError(err.message);
     }
@@ -93,18 +119,11 @@ function AdminModelsPage() {
       const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
         method: 'POST'
       });
-
-      const result = response.data;
-
-      setTestResults(prevResults => ({
-        ...prevResults,
-        [modelId]: result
-      }));
+      setTestResults(prev => ({ ...prev, [modelId]: response.data }));
     } catch (err) {
-      // Handle error responses from the server
       const errorData = err.response?.data || {};
-      setTestResults(prevResults => ({
-        ...prevResults,
+      setTestResults(prev => ({
+        ...prev,
         [modelId]: {
           success: false,
           message: errorData.message || 'Test failed',
@@ -116,19 +135,12 @@ function AdminModelsPage() {
     }
   };
 
-  const handleModelClick = model => {
-    setSelectedModel(model);
-    setShowModelDetails(true);
-  };
-
   const handleCloneModel = model => {
     navigate('/admin/models/new', { state: { templateModel: model } });
   };
 
   const handleDeleteModel = async modelId => {
-    if (!confirm(t('admin.models.deleteConfirm', 'Delete this model?'))) {
-      return;
-    }
+    if (!confirm(t('admin.models.deleteConfirm', 'Delete this model?'))) return;
     try {
       await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
       setModels(prev => prev.filter(m => m.id !== modelId));
@@ -141,13 +153,9 @@ function AdminModelsPage() {
     try {
       const response = await makeAdminApiCall(`/admin/models/${modelId}`);
       const model = response.data;
-
-      // Create a clean config object for download
       const configData = JSON.stringify(model, null, 2);
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-
-      // Create download link
       const link = document.createElement('a');
       link.href = url;
       link.download = `model-${modelId}.json`;
@@ -163,19 +171,15 @@ function AdminModelsPage() {
   const handleUploadConfig = async event => {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!file.name.endsWith('.json')) {
       setError('Please select a JSON file');
       return;
     }
-
     setUploading(true);
     let modelConfig;
     try {
       const fileContent = await file.text();
       modelConfig = JSON.parse(fileContent);
-
-      // Validate required fields
       if (
         !modelConfig.id ||
         !modelConfig.name ||
@@ -186,17 +190,8 @@ function AdminModelsPage() {
           'Invalid model config: missing required fields (id, name, description, provider)'
         );
       }
-
-      // Upload the config
-      await makeAdminApiCall('/admin/models', {
-        method: 'POST',
-        body: modelConfig
-      });
-
-      // Reload models to show the new one
+      await makeAdminApiCall('/admin/models', { method: 'POST', body: modelConfig });
       await loadModels();
-
-      // Clear the file input
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
@@ -230,30 +225,146 @@ function AdminModelsPage() {
     return matchesSearch && matchesFilter;
   });
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
+  const columns = [
+    {
+      key: 'name',
+      header: t('admin.models.name', 'Name'),
+      sortable: true,
+      sortAccessor: m => getLocalizedContent(m.name, currentLanguage),
+      render: m => <ModelNameCell model={m} currentLanguage={currentLanguage} />
+    },
+    {
+      key: 'provider',
+      header: t('admin.models.provider', 'Provider'),
+      sortable: true,
+      hideBelow: 'md',
+      render: m => m.provider || '-'
+    },
+    {
+      key: 'status',
+      header: t('admin.models.table.status', 'Status'),
+      sortable: true,
+      sortAccessor: m => (m.enabled ? 1 : 0),
+      render: m => <StatusCell model={m} t={t} />
+    }
+  ];
+
+  const actions = [
+    {
+      id: 'edit',
+      label: t('common.edit', 'Edit'),
+      icon: 'pencil',
+      priority: 'primary',
+      onClick: m => navigate(`/admin/models/${m.id}`)
+    },
+    {
+      id: 'toggle',
+      label: t('admin.models.toggle', 'Toggle enabled'),
+      icon: 'eye',
+      priority: 'primary',
+      onClick: m => toggleModel(m.id)
+    },
+    {
+      id: 'test',
+      label: t('admin.models.test', 'Test'),
+      icon: 'play',
+      busy: m => testingModel === m.id,
+      onClick: m => testModel(m.id)
+    },
+    {
+      id: 'clone',
+      label: t('admin.models.clone', 'Clone'),
+      icon: 'copy',
+      onClick: m => handleCloneModel(m)
+    },
+    {
+      id: 'download',
+      label: t('admin.models.download', 'Download Config'),
+      icon: 'download',
+      onClick: m => downloadModelConfig(m.id)
+    },
+    {
+      id: 'delete',
+      label: t('admin.models.delete', 'Delete'),
+      icon: 'trash',
+      destructive: true,
+      onClick: m => handleDeleteModel(m.id)
+    }
+  ];
+
+  const getRowExpansion = model => {
+    const result = testResults[model.id];
+    if (!result) return null;
+    return {
+      expanded: true,
+      content: (
+        <div className="flex items-start space-x-3">
+          {result.success ? (
+            <>
+              <Icon name="check-circle" className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-green-800 dark:text-green-300">
+                  {t('admin.models.test.success', 'Test Successful')}
+                </div>
+                <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                  {result.response}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <Icon
+                name="exclamation-circle"
+                className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-red-800 dark:text-red-300">
+                  {result.message || t('admin.models.test.failed', 'Test Failed')}
+                </div>
+                {result.error && (
+                  <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                    {result.error}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          <button
+            onClick={() =>
+              setTestResults(prev => {
+                const next = { ...prev };
+                delete next[model.id];
+                return next;
+              })
+            }
+            className="text-gray-400 hover:text-gray-600"
+            title={t('common.close', 'Close')}
+          >
+            <Icon name="x" className="h-5 w-5" />
+          </button>
+        </div>
+      )
+    };
+  };
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <div className="flex">
-          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">
-              {t('admin.models.loadError', 'Error loading models')}
-            </h3>
-            <p className="mt-1 text-sm text-red-700">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500"
-            >
-              {t('common.retry', 'Retry')}
-            </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
+                {t('admin.models.loadError', 'Error loading models')}
+              </h3>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-sm text-red-600 dark:text-red-300 hover:text-red-500"
+              >
+                {t('common.retry', 'Retry')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -261,333 +372,102 @@ function AdminModelsPage() {
   }
 
   return (
-    <AdminAuth>
-      <div>
-        <AdminNavigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="sm:flex sm:items-center">
-            <div className="sm:flex-auto">
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {t('admin.models.title', 'Model Management')}
-              </h1>
-              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                {t('admin.models.subtitle', 'Configure and manage AI models for your applications')}
-              </p>
-            </div>
-            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => navigate('/admin/models/new')}
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.models.addNew', 'Add New Model')}
-                </button>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleUploadConfig}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={uploading}
-                    title={t('admin.models.uploadConfig', 'Upload Model Config')}
-                  >
-                    <Icon
-                      name={uploading ? 'refresh' : 'upload'}
-                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                    />
-                    {uploading
-                      ? t('admin.models.uploading', 'Uploading...')
-                      : t('admin.models.uploadConfig', 'Upload Config')}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={enableAllModels}
-                >
-                  {t('admin.common.enableAll', 'Enable All')}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={disableAllModels}
-                >
-                  {t('admin.common.disableAll', 'Disable All')}
-                </button>
-              </div>
-            </div>
+    <div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="sm:flex sm:items-center">
+          <div className="sm:flex-auto">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.models.title', 'Model Management')}
+            </h1>
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+              {t('admin.models.subtitle', 'Configure and manage AI models for your applications')}
+            </p>
           </div>
-
-          {/* Search and Filter */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Icon name="search" className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="sm:w-48">
-              <select
-                value={filterEnabled}
-                onChange={e => setFilterEnabled(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate('/admin/models/new')}
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
-                <option value="all">{t('admin.models.filterAll', 'All Models')}</option>
-                <option value="enabled">{t('admin.models.filterEnabled', 'Enabled Only')}</option>
-                <option value="disabled">
-                  {t('admin.models.filterDisabled', 'Disabled Only')}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          {/* Models Table */}
-          <div className="mt-8 flex flex-col">
-            <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-              <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >
-                          {t('admin.models.name', 'Name')}
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >
-                          {t('admin.models.provider', 'Provider')}
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >
-                          {t('admin.models.table.status', 'Status')}
-                        </th>
-                        <th scope="col" className="relative px-6 py-3">
-                          <span className="sr-only">{t('admin.models.actions', 'Actions')}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                      {filteredModels.map(model => (
-                        <React.Fragment key={model.id}>
-                          <tr
-                            className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                            onClick={() => handleModelClick(model)}
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-8 w-8">
-                                  <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
-                                    <Icon
-                                      name="cpu-chip"
-                                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {getLocalizedContent(model.name, currentLanguage)}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {model.id}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                              {model.provider || '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    model.enabled
-                                      ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                                  }`}
-                                >
-                                  {model.enabled
-                                    ? t('admin.models.enabled', 'Enabled')
-                                    : t('admin.models.disabled', 'Disabled')}
-                                </span>
-                                {model.default && (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
-                                    {t('admin.models.default', 'Default')}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex items-center justify-end space-x-2">
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    testModel(model.id);
-                                  }}
-                                  disabled={testingModel === model.id}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full disabled:opacity-50"
-                                  title={t('admin.models.test', 'Test')}
-                                >
-                                  <Icon name="play" className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    toggleModel(model.id);
-                                  }}
-                                  className={`p-2 rounded-full ${
-                                    model.enabled
-                                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
-                                      : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
-                                  }`}
-                                  title={
-                                    model.enabled
-                                      ? t('admin.models.disable', 'Disable')
-                                      : t('admin.models.enable', 'Enable')
-                                  }
-                                >
-                                  <Icon
-                                    name={model.enabled ? 'eye-slash' : 'eye'}
-                                    className="h-4 w-4"
-                                  />
-                                </button>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    navigate(`/admin/models/${model.id}`);
-                                  }}
-                                  className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
-                                  title={t('common.edit', 'Edit')}
-                                >
-                                  <Icon name="pencil" className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleCloneModel(model);
-                                  }}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
-                                  title={t('admin.models.clone', 'Clone')}
-                                >
-                                  <Icon name="copy" className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    downloadModelConfig(model.id);
-                                  }}
-                                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
-                                  title={t('admin.models.download', 'Download Config')}
-                                >
-                                  <Icon name="download" className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleDeleteModel(model.id);
-                                  }}
-                                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
-                                  title={t('admin.models.delete', 'Delete')}
-                                >
-                                  <Icon name="trash" className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {/* Test result row */}
-                          {testResults[model.id] && (
-                            <tr key={`${model.id}-test-result`}>
-                              <td colSpan="4" className="px-6 py-3 bg-gray-50 dark:bg-gray-800">
-                                <div className="flex items-start space-x-3">
-                                  {testResults[model.id].success ? (
-                                    <>
-                                      <Icon
-                                        name="check-circle"
-                                        className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5"
-                                      />
-                                      <div className="flex-1">
-                                        <div className="text-sm font-medium text-green-800 dark:text-green-300">
-                                          {t('admin.models.test.success', 'Test Successful')}
-                                        </div>
-                                        <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                                          {testResults[model.id].response}
-                                        </div>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Icon
-                                        name="x-circle"
-                                        className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
-                                      />
-                                      <div className="flex-1">
-                                        <div className="text-sm font-medium text-red-800">
-                                          {testResults[model.id].message ||
-                                            t('admin.models.test.failed', 'Test Failed')}
-                                        </div>
-                                        {testResults[model.id].error && (
-                                          <div className="text-sm text-gray-700 mt-1">
-                                            {testResults[model.id].error}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </>
-                                  )}
-                                  <button
-                                    onClick={() => {
-                                      setTestResults(prev => {
-                                        const newResults = { ...prev };
-                                        delete newResults[model.id];
-                                        return newResults;
-                                      });
-                                    }}
-                                    className="text-gray-400 hover:text-gray-600"
-                                    title={t('common.close', 'Close')}
-                                  >
-                                    <Icon name="x-mark" className="h-5 w-5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                {t('admin.models.addNew', 'Add New Model')}
+              </button>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleUploadConfig}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={uploading}
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={uploading}
+                  title={t('admin.models.uploadConfig', 'Upload Model Config')}
+                >
+                  <Icon
+                    name={uploading ? 'refresh' : 'upload'}
+                    className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                  />
+                  {uploading
+                    ? t('admin.models.uploading', 'Uploading...')
+                    : t('admin.models.uploadConfig', 'Upload Config')}
+                </button>
               </div>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                onClick={enableAllModels}
+              >
+                {t('admin.common.enableAll', 'Enable All')}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                onClick={disableAllModels}
+              >
+                {t('admin.common.disableAll', 'Disable All')}
+              </button>
             </div>
           </div>
+        </div>
 
-          {filteredModels.length === 0 && (
-            <div className="text-center py-12">
-              <Icon name="cpu-chip" className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                {t('admin.models.noModels', 'No models found')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {t('admin.models.noModelsDesc', 'Get started by creating a new model.')}
-              </p>
-              <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
+          />
+          <FilterSelect
+            label={t('admin.models.statusLabel', 'Status')}
+            value={filterEnabled}
+            onChange={setFilterEnabled}
+            options={[
+              { value: 'all', label: t('admin.models.filterAll', 'All Models') },
+              { value: 'enabled', label: t('admin.models.filterEnabled', 'Enabled Only') },
+              { value: 'disabled', label: t('admin.models.filterDisabled', 'Disabled Only') }
+            ]}
+          />
+        </div>
+
+        <div className="mt-6">
+          <DataTable
+            columns={columns}
+            data={filteredModels}
+            getRowId={m => m.id}
+            actions={actions}
+            loading={loading}
+            getRowExpansion={getRowExpansion}
+            onRowClick={model => {
+              setSelectedModel(model);
+              setShowModelDetails(true);
+            }}
+            empty={{
+              icon: 'cpu-chip',
+              title: t('admin.models.noModels', 'No models found'),
+              description: t('admin.models.noModelsDesc', 'Get started by creating a new model.'),
+              action: (
                 <button
                   onClick={() => navigate('/admin/models/new')}
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -595,19 +475,18 @@ function AdminModelsPage() {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.models.addNew', 'Add New Model')}
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* Model Details Popup */}
-          <ModelDetailsPopup
-            model={selectedModel}
-            isOpen={showModelDetails}
-            onClose={() => setShowModelDetails(false)}
+              )
+            }}
           />
         </div>
+
+        <ModelDetailsPopup
+          model={selectedModel}
+          isOpen={showModelDetails}
+          onClose={() => setShowModelDetails(false)}
+        />
       </div>
-    </AdminAuth>
+    </div>
   );
 }
 
