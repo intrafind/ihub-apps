@@ -178,13 +178,13 @@ export default function registerAdminMcpServersRoutes(app) {
     }
   });
 
-  // Probe connection and refresh tool catalog.
+  // Probe a saved server connection and refresh its tool catalog.
   app.post(buildServerPath('/api/admin/mcp/servers/:id/test'), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       if (!validateIdForPath(id, 'mcpServer', res)) return;
-      const status = await mcpClientManager.testConnection(id);
-      res.json({ success: true, status });
+      const { status, tools } = await mcpClientManager.testConnection(id);
+      res.json({ success: true, status, tools });
     } catch (error) {
       logger.warn('[MCP Admin] Test connection failed', {
         component: 'AdminMcp',
@@ -194,9 +194,50 @@ export default function registerAdminMcpServersRoutes(app) {
     }
   });
 
+  // Probe an arbitrary (possibly unsaved) server config. Used by the create /
+  // edit dialog so the admin can validate a connection and preview the tools
+  // before persisting. Redacted secrets submitted for an existing server are
+  // restored from the stored (encrypted) config so editing without retyping a
+  // token still tests correctly.
+  app.post(buildServerPath('/api/admin/mcp/test'), adminAuth, async (req, res) => {
+    try {
+      const incoming = { ...req.body };
+      const cfg = await readConfig();
+      const existing = (cfg.servers || []).find(s => s.id === incoming.id);
+      if (incoming.auth && existing?.auth) {
+        incoming.auth = { ...incoming.auth };
+        for (const f of ['token', 'password', 'clientSecret']) {
+          if (incoming.auth[f] === '***REDACTED***' && existing.auth[f]) {
+            incoming.auth[f] = existing.auth[f];
+          }
+        }
+      }
+      const { status, tools } = await mcpClientManager.testConfig(incoming);
+      res.json({ success: true, status, tools });
+    } catch (error) {
+      logger.warn('[MCP Admin] Test config failed', {
+        component: 'AdminMcp',
+        error: error.message
+      });
+      res.status(400).json({ success: false, error: error.message, details: error.details });
+    }
+  });
+
   // Aggregate health snapshot.
   app.get(buildServerPath('/api/admin/mcp/status'), adminAuth, (req, res) => {
     res.json({ success: true, servers: mcpClientManager.status() });
+  });
+
+  // Per-server tool catalog for the app editor's MCP picker. Best-effort: each
+  // server reports its discovered tools, or an `error` if discovery failed.
+  app.get(buildServerPath('/api/admin/mcp/tools'), adminAuth, async (req, res) => {
+    try {
+      const servers = await mcpClientManager.listToolsByServer();
+      res.json({ success: true, servers });
+    } catch (error) {
+      logger.error('[MCP Admin] Tool catalog error', { component: 'AdminMcp', error });
+      res.status(500).json({ success: false, error: 'Failed to list MCP tools' });
+    }
   });
 
   // ---- Inbound gateway settings ----

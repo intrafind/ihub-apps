@@ -1455,6 +1455,13 @@
         "actions": {
           "test": "Verbindung testen"
         },
+        "test": {
+          "button": "Verbindung testen",
+          "running": "Verbindung wird getestet …",
+          "success": "Verbunden — {{count}} Tools gefunden",
+          "failed": "Verbindung fehlgeschlagen: {{error}}",
+          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert)."
+        },
         "status": {
           "unknown": "unbekannt",
           "unhealthy": "fehlerhaft",
@@ -1654,6 +1661,20 @@
       "edit": {
         "autoStart": "Konversation automatisch starten",
         "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
+        "mcpTools": {
+          "title": "MCP-Server-Tools",
+          "desc": "Aktivieren Sie Tools, die von verbundenen MCP-Servern bereitgestellt werden, für diese App.",
+          "loading": "MCP-Tools werden geladen …",
+          "error": "MCP-Tools konnten nicht geladen werden: {{error}}",
+          "empty": "Es sind keine MCP-Server konfiguriert. Fügen Sie unter Integrationen → MCP-Server einen hinzu, um dessen Tools hier anzuzeigen.",
+          "disabled": "deaktiviert",
+          "selectedCount": "{{count}} ausgewählt",
+          "selectAll": "Alle auswählen",
+          "deselectAll": "Alle abwählen",
+          "serverError": "Tools konnten nicht aufgelistet werden: {{error}}",
+          "noServerTools": "Dieser Server stellt keine Tools bereit.",
+          "helper": "Von verbundenen MCP-Servern bereitgestellte Tools. Die Auswahl wird mit der App gespeichert und zur Laufzeit aufgelöst."
+        },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
         "websearchEnabled": "Websuche aktivieren",
