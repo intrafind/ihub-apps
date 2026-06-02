@@ -42,7 +42,7 @@ function DataTable({
   onSortChange,
   defaultSort = null,
   actions,
-  kebabThreshold = 3,
+  kebabThreshold = 4,
   onRowClick,
   getRowExpansion,
   rowClassName,
@@ -115,7 +115,10 @@ function DataTable({
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <table
+          className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+          aria-busy={loading || undefined}
+        >
           <DataTableHeader
             columns={columns}
             sort={activeSort}

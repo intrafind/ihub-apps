@@ -3,35 +3,30 @@ import DataTableKebabMenu from './DataTableKebabMenu';
 
 /**
  * Split an action list into "inline" (rendered as icon buttons) and "overflow"
- * (rendered as kebab-menu items), respecting `priority`, `destructive`, and a
- * threshold. Hidden actions are pre-filtered.
+ * (rendered as kebab-menu items). Rules:
+ *
+ * - Hidden actions (`hidden(row)` returns truthy) are dropped.
+ * - If the visible count is below `kebabThreshold` (default 4), everything is inline.
+ * - Otherwise: every action with `priority: 'primary'` stays inline, every
+ *   `destructive` action stays inline, everything else goes into the kebab.
+ * - If no action is marked `primary` at all, the first non-destructive action
+ *   is promoted to keep at least one obvious action inline.
  */
-export function splitActions(actions, row, kebabThreshold = 3) {
+export function splitActions(actions, row, kebabThreshold = 4) {
   const visible = (actions || []).filter(a => !(a.hidden && a.hidden(row)));
   if (visible.length === 0) return { inline: [], overflow: [] };
   if (visible.length < kebabThreshold) return { inline: visible, overflow: [] };
 
-  const inline = [];
-  const overflow = [];
-  // Explicit priority always wins
-  const explicitPrimary = visible.filter(a => a.priority === 'primary');
-  const explicitSecondary = visible.filter(a => a.priority === 'secondary');
-  const unranked = visible.filter(a => !a.priority);
-
-  if (explicitPrimary.length > 0 || explicitSecondary.length > 0) {
-    explicitPrimary.forEach(a => inline.push(a));
-    // First unranked acts as a primary if no explicit primary
-    if (explicitPrimary.length === 0 && unranked.length > 0) inline.push(unranked[0]);
-    const rest = explicitPrimary.length === 0 ? unranked.slice(1) : unranked;
-    rest.forEach(a => (a.destructive ? inline.push(a) : overflow.push(a)));
-    explicitSecondary.forEach(a => overflow.push(a));
-    return { inline, overflow };
+  const hasPrimary = visible.some(a => a.priority === 'primary');
+  let promoted = null;
+  if (!hasPrimary) {
+    promoted = visible.find(a => !a.destructive) || null;
   }
 
-  // No explicit priority — first non-destructive is "primary", destructive stays inline.
-  const firstPrimary = unranked.find(a => !a.destructive);
-  unranked.forEach(a => {
-    if (a === firstPrimary || a.destructive) inline.push(a);
+  const inline = [];
+  const overflow = [];
+  visible.forEach(a => {
+    if (a.priority === 'primary' || a.destructive || a === promoted) inline.push(a);
     else overflow.push(a);
   });
   return { inline, overflow };
@@ -102,7 +97,7 @@ function DataTableRowActions({ actions, row, kebabThreshold = 3, density = 'norm
         'whitespace-nowrap text-right',
         'bg-white dark:bg-gray-900',
         'group-hover:bg-gray-50 dark:group-hover:bg-gray-800',
-        'shadow-[inset_1px_0_0_rgba(0,0,0,0.06)] dark:shadow-[inset_1px_0_0_rgba(255,255,255,0.08)]'
+        'shadow-[inset_1px_0_0_rgba(0,0,0,0.12)] dark:shadow-[inset_1px_0_0_rgba(255,255,255,0.14)]'
       ].join(' ')}
       onClick={e => e.stopPropagation()}
     >

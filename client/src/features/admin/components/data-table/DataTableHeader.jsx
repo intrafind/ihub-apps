@@ -67,14 +67,16 @@ function DataTableHeader({ columns, sort, onSortChange, hasActions, stickyHeader
               </th>
             );
           }
+          const ariaSort = isSorted
+            ? sort.direction === 'asc'
+              ? 'ascending'
+              : 'descending'
+            : 'none';
           return (
-            <th key={column.key} scope="col" className={baseClass}>
+            <th key={column.key} scope="col" className={baseClass} aria-sort={ariaSort}>
               <button
                 type="button"
                 onClick={() => handleSortClick(column)}
-                aria-sort={
-                  isSorted ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
-                }
                 className="group/th inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none focus:text-gray-900 dark:focus:text-gray-100"
               >
                 <span>{column.header}</span>
@@ -86,7 +88,7 @@ function DataTableHeader({ columns, sort, onSortChange, hasActions, stickyHeader
         {hasActions && (
           <th
             scope="col"
-            className="sticky right-0 z-20 bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap shadow-[inset_1px_0_0_rgba(0,0,0,0.06)] dark:shadow-[inset_1px_0_0_rgba(255,255,255,0.08)]"
+            className="sticky right-0 z-20 bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap shadow-[inset_1px_0_0_rgba(0,0,0,0.12)] dark:shadow-[inset_1px_0_0_rgba(255,255,255,0.14)]"
           >
             <span className="sr-only">Actions</span>
           </th>

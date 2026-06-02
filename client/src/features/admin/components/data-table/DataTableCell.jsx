@@ -38,11 +38,16 @@ function DataTableCell({ column, row, density = 'normal' }) {
     : column.maxLines
       ? LINE_CLAMP[column.maxLines] || ''
       : '';
+  // Multi-line content needs top-alignment; single-line columns look better
+  // centered. Truncate/clamp columns and explicit opt-ins use `align-top`.
+  const vAlign =
+    column.valign === 'top' || column.truncate || column.maxLines ? 'align-top' : 'align-middle';
 
   const cellClass = [
     'px-4',
     padY,
-    'align-top text-sm text-gray-900 dark:text-gray-100',
+    vAlign,
+    'text-sm text-gray-900 dark:text-gray-100',
     ALIGN[column.align] || ALIGN.left,
     column.hideBelow ? HIDE_BELOW[column.hideBelow] : '',
     // Width clamp prevents columns from being stretched by long values.

@@ -8,6 +8,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import { FormValidationProvider } from './formValidationContext';
 
 /**
  * UserFormEditor - Form-based editor for user configuration
@@ -148,319 +149,324 @@ function UserFormEditor({
   };
 
   return (
-    <div className="user-form-editor space-y-6">
-      <AdminFormErrorSummary
-        errors={validationErrors}
-        labels={errorLabels}
-        title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
-      />
-      {/* Basic Information */}
-      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              {t('admin.users.basicInformation', 'Basic Information')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {t(
-                'admin.users.basicUserConfiguration',
-                'Basic user configuration and contact information'
-              )}
-            </p>
-          </div>
-          <div className="mt-5 md:col-span-2 md:mt-0">
-            <div className="grid grid-cols-6 gap-6">
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.users.username', 'Username')}
-                  {isFieldRequired('username', jsonSchema) && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  required={isFieldRequired('username', jsonSchema)}
-                  value={user.username || ''}
-                  onChange={e => handleInputChange('username', e.target.value)}
-                  disabled={!isNewUser}
-                  className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
-                    validationErrors.username ? 'border-red-300' : ''
-                  }`}
-                  placeholder="Enter username"
-                />
-                {validationErrors.username && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                    {validationErrors.username}
-                  </p>
-                )}
-                {!isNewUser && (
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.users.usernameCannotBeChanged',
-                      'Username cannot be changed after creation'
-                    )}
-                  </p>
-                )}
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.users.email', 'Email')}
-                  {isFieldRequired('email', jsonSchema) && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </label>
-                <input
-                  type="email"
-                  required={isFieldRequired('email', jsonSchema)}
-                  value={user.email || ''}
-                  onChange={e => handleInputChange('email', e.target.value)}
-                  className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                    validationErrors.email ? 'border-red-300' : ''
-                  }`}
-                  placeholder="Enter email address"
-                />
-                {validationErrors.email && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                    {validationErrors.email}
-                  </p>
-                )}
-              </div>
-
-              <div className="col-span-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.users.fullName', 'Full Name')}
-                </label>
-                <input
-                  type="text"
-                  value={user.fullName || ''}
-                  onChange={e => handleInputChange('fullName', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="Enter full name"
-                />
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={user.enabled !== false && user.active !== false}
-                    onChange={e => {
-                      handleInputChange('enabled', e.target.checked);
-                      handleInputChange('active', e.target.checked);
-                    }}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                    {t('admin.users.enabled', 'Enabled')}
-                  </label>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Disabled users cannot log in or access the system
-                </p>
-              </div>
-
-              {/* Auth Methods - selector for new users, read-only for existing */}
-              <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.users.authMethods', 'Authentication Method')}
-                </label>
-                {isNewUser ? (
-                  <>
-                    <select
-                      value={user.authMethods?.[0] || 'local'}
-                      onChange={e => handleInputChange('authMethods', [e.target.value])}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    >
-                      <option value="local">
-                        {t('admin.users.authMethod.local', 'Local (Username/Password)')}
-                      </option>
-                      <option value="ntlm">
-                        {t('admin.users.authMethod.ntlm', 'NTLM (Windows Domain)')}
-                      </option>
-                      <option value="ldap">{t('admin.users.authMethod.ldap', 'LDAP')}</option>
-                      <option value="oidc">
-                        {t('admin.users.authMethod.oidc', 'OIDC (OpenID Connect)')}
-                      </option>
-                      <option value="proxy">
-                        {t('admin.users.authMethod.proxy', 'Proxy (Header-based)')}
-                      </option>
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.users.authMethodHelp',
-                        'How this user will authenticate. Local users need a password.'
-                      )}
-                    </p>
-                  </>
-                ) : user.authMethods && user.authMethods.length > 0 ? (
-                  <>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {user.authMethods.map((method, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                        >
-                          {method.toUpperCase()}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.users.authMethodReadOnly',
-                        'Authentication method cannot be changed after creation'
-                      )}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.users.noAuthMethod', 'No authentication method set')}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Password Settings - only show for local auth users or new users */}
-      {(isLocalAuthUser || isNewUser) && (
+    <FormValidationProvider errors={validationErrors}>
+      <div className="user-form-editor space-y-6">
+        <AdminFormErrorSummary
+          errors={validationErrors}
+          labels={errorLabels}
+          title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
+        />
+        {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.users.passwordSettings', 'Password Settings')}
+                {t('admin.users.basicInformation', 'Basic Information')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {hasExternalAuth
-                  ? t(
-                      'admin.users.passwordOptionalExternal',
-                      'Optional - user authenticates via external provider'
-                    )
-                  : isNewUser
-                    ? t('admin.users.setInitialPassword', 'Set the initial password for this user')
-                    : t('admin.users.changePassword', 'Leave blank to keep current password')}
+                {t(
+                  'admin.users.basicUserConfiguration',
+                  'Basic user configuration and contact information'
+                )}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="grid grid-cols-6 gap-6">
                 <div className="col-span-6 sm:col-span-3">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {isNewUser
-                      ? t('admin.users.password', 'Password')
-                      : t('admin.users.newPassword', 'New Password')}
-                    {isNewUser && isLocalAuthUser && !hasExternalAuth && (
+                    {t('admin.users.username', 'Username')}
+                    {isFieldRequired('username', jsonSchema) && (
                       <span className="text-red-500 ml-1">*</span>
                     )}
                   </label>
                   <input
-                    type="password"
-                    required={isNewUser && isLocalAuthUser && !hasExternalAuth}
-                    value={user.password || ''}
-                    onChange={e => handleInputChange('password', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                      validationErrors.password ? 'border-red-300' : ''
+                    type="text"
+                    required={isFieldRequired('username', jsonSchema)}
+                    value={user.username || ''}
+                    onChange={e => handleInputChange('username', e.target.value)}
+                    disabled={!isNewUser}
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
+                      validationErrors.username ? 'border-red-300' : ''
                     }`}
-                    placeholder={
-                      hasExternalAuth
-                        ? 'Optional - user has external auth'
-                        : isNewUser
-                          ? 'Enter password'
-                          : 'Enter new password (optional)'
-                    }
+                    placeholder="Enter username"
                   />
-                  {validationErrors.password && (
+                  {validationErrors.username && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.password}
+                      {validationErrors.username}
+                    </p>
+                  )}
+                  {!isNewUser && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.users.usernameCannotBeChanged',
+                        'Username cannot be changed after creation'
+                      )}
                     </p>
                   )}
                 </div>
 
                 <div className="col-span-6 sm:col-span-3">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.users.confirmPassword', 'Confirm Password')}
-                    {user.password && <span className="text-red-500 ml-1">*</span>}
+                    {t('admin.users.email', 'Email')}
+                    {isFieldRequired('email', jsonSchema) && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
                   </label>
                   <input
-                    type="password"
-                    required={!!user.password}
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
+                    type="email"
+                    required={isFieldRequired('email', jsonSchema)}
+                    value={user.email || ''}
+                    onChange={e => handleInputChange('email', e.target.value)}
                     className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                      validationErrors.confirmPassword ? 'border-red-300' : ''
+                      validationErrors.email ? 'border-red-300' : ''
                     }`}
-                    placeholder="Confirm password"
+                    placeholder="Enter email address"
                   />
-                  {validationErrors.confirmPassword && (
+                  {validationErrors.email && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.confirmPassword}
+                      {validationErrors.email}
                     </p>
                   )}
                 </div>
 
                 <div className="col-span-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Password must be at least 6 characters long and should contain a mix of letters,
-                    numbers, and special characters.
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.users.fullName', 'Full Name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={user.fullName || ''}
+                    onChange={e => handleInputChange('fullName', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="Enter full name"
+                  />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={user.enabled !== false && user.active !== false}
+                      onChange={e => {
+                        handleInputChange('enabled', e.target.checked);
+                        handleInputChange('active', e.target.checked);
+                      }}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      {t('admin.users.enabled', 'Enabled')}
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Disabled users cannot log in or access the system
                   </p>
+                </div>
+
+                {/* Auth Methods - selector for new users, read-only for existing */}
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.users.authMethods', 'Authentication Method')}
+                  </label>
+                  {isNewUser ? (
+                    <>
+                      <select
+                        value={user.authMethods?.[0] || 'local'}
+                        onChange={e => handleInputChange('authMethods', [e.target.value])}
+                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        <option value="local">
+                          {t('admin.users.authMethod.local', 'Local (Username/Password)')}
+                        </option>
+                        <option value="ntlm">
+                          {t('admin.users.authMethod.ntlm', 'NTLM (Windows Domain)')}
+                        </option>
+                        <option value="ldap">{t('admin.users.authMethod.ldap', 'LDAP')}</option>
+                        <option value="oidc">
+                          {t('admin.users.authMethod.oidc', 'OIDC (OpenID Connect)')}
+                        </option>
+                        <option value="proxy">
+                          {t('admin.users.authMethod.proxy', 'Proxy (Header-based)')}
+                        </option>
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.users.authMethodHelp',
+                          'How this user will authenticate. Local users need a password.'
+                        )}
+                      </p>
+                    </>
+                  ) : user.authMethods && user.authMethods.length > 0 ? (
+                    <>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {user.authMethods.map((method, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                          >
+                            {method.toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.users.authMethodReadOnly',
+                          'Authentication method cannot be changed after creation'
+                        )}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {t('admin.users.noAuthMethod', 'No authentication method set')}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Group Membership */}
-      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              {t('admin.users.groupMembership', 'Group Membership')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Assign this user to groups to control their permissions and access levels
-            </p>
-          </div>
-          <div className="mt-5 md:col-span-2 md:mt-0">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Groups (comma-separated)
-              </label>
-              <input
-                type="text"
-                value={(user.internalGroups || []).join(', ')}
-                onChange={e => handleGroupsChange(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="admin, users, editors"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Enter group names separated by commas. Users inherit permissions from all assigned
-                groups.
-              </p>
+        {/* Password Settings - only show for local auth users or new users */}
+        {(isLocalAuthUser || isNewUser) && (
+          <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+            <div className="md:grid md:grid-cols-3 md:gap-6">
+              <div className="md:col-span-1">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                  {t('admin.users.passwordSettings', 'Password Settings')}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {hasExternalAuth
+                    ? t(
+                        'admin.users.passwordOptionalExternal',
+                        'Optional - user authenticates via external provider'
+                      )
+                    : isNewUser
+                      ? t(
+                          'admin.users.setInitialPassword',
+                          'Set the initial password for this user'
+                        )
+                      : t('admin.users.changePassword', 'Leave blank to keep current password')}
+                </p>
+              </div>
+              <div className="mt-5 md:col-span-2 md:mt-0">
+                <div className="grid grid-cols-6 gap-6">
+                  <div className="col-span-6 sm:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {isNewUser
+                        ? t('admin.users.password', 'Password')
+                        : t('admin.users.newPassword', 'New Password')}
+                      {isNewUser && isLocalAuthUser && !hasExternalAuth && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      required={isNewUser && isLocalAuthUser && !hasExternalAuth}
+                      value={user.password || ''}
+                      onChange={e => handleInputChange('password', e.target.value)}
+                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                        validationErrors.password ? 'border-red-300' : ''
+                      }`}
+                      placeholder={
+                        hasExternalAuth
+                          ? 'Optional - user has external auth'
+                          : isNewUser
+                            ? 'Enter password'
+                            : 'Enter new password (optional)'
+                      }
+                    />
+                    {validationErrors.password && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                        {validationErrors.password}
+                      </p>
+                    )}
+                  </div>
 
-              {user.internalGroups && user.internalGroups.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Current Groups:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {user.internalGroups.map((group, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                      >
-                        <Icon name="users" size="xs" className="mr-1" />
-                        {group}
-                      </span>
-                    ))}
+                  <div className="col-span-6 sm:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.users.confirmPassword', 'Confirm Password')}
+                      {user.password && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    <input
+                      type="password"
+                      required={!!user.password}
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                        validationErrors.confirmPassword ? 'border-red-300' : ''
+                      }`}
+                      placeholder="Confirm password"
+                    />
+                    {validationErrors.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                        {validationErrors.confirmPassword}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-span-6">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Password must be at least 6 characters long and should contain a mix of
+                      letters, numbers, and special characters.
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Group Membership */}
+        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                {t('admin.users.groupMembership', 'Group Membership')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Assign this user to groups to control their permissions and access levels
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Groups (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={(user.internalGroups || []).join(', ')}
+                  onChange={e => handleGroupsChange(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="admin, users, editors"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Enter group names separated by commas. Users inherit permissions from all assigned
+                  groups.
+                </p>
+
+                {user.internalGroups && user.internalGroups.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Current Groups:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {user.internalGroups.map((group, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        >
+                          <Icon name="users" size="xs" className="mr-1" />
+                          {group}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </FormValidationProvider>
   );
 }
 

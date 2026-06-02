@@ -118,7 +118,21 @@ Existing pages can adopt these incrementally — they still accept arbitrary chi
 
 ## Form Validation Error Summary Banner
 
-New `<AdminFormErrorSummary>` component renders a red banner at the top of admin forms listing every validation error. Each entry is a click-to-focus link that scrolls and focuses the corresponding field. Accepts either an `{ fieldId: message }` object or an array of `{ fieldId, message, label }` entries.
+When an admin tries to save an invalid app, model, prompt, group, or user, a red banner appears at the top of the form listing every validation error. Each entry is a clickable link that scrolls to and focuses the field. Errored fields stay highlighted with a red border until fixed.
+
+Localized fields are fully supported: errors on `description.en` jump straight to the English input and read as "Description — English" in the banner. The kebab overflow menu in tables now supports full keyboard navigation (Esc closes, arrow keys cycle), and tables announce themselves as busy during loading.
+
+## Unified Admin Tables
+
+All 12 admin list pages (Models, Apps, Sources, Prompts, Tools, Workflows, Agents, Users, Groups, Pages, Short Links, Audit Log) now use a shared table component with consistent behavior:
+
+- **Click column headers to sort** — works on every table, sort state survives reload via the URL.
+- **Pagination** with 10 / 25 / 50 / 100 page sizes, also URL-persisted.
+- **Sticky right-aligned actions column** — primary actions stay reachable when the table scrolls horizontally. On narrow screens, low-priority actions collapse into a ⋮ overflow menu.
+- **Long values are clamped** so a long description can no longer stretch a column or blow up row height.
+- **Consistent loading skeletons, empty states, and dark mode** across every table.
+
+The Audit Log keeps server-side pagination but adopts the new page-number controls instead of Prev / Next only.
 
 ## OAuth Pages — Merged into a Single Tabbed Surface
 
