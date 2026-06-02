@@ -1,5 +1,24 @@
+import { Marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+
+// Isolated marked instance for static exports (PDF/HTML). It intentionally does
+// NOT use the global configureMarked() renderer, which injects interactive
+// toolbars/buttons and mermaid placeholders that don't work in a downloaded
+// document. GFM is enabled so tables, lists, and code blocks render correctly.
+const exportMarked = new Marked({
+  gfm: true,
+  breaks: true,
+  pedantic: false
+});
+
+// Convert message markdown to sanitized HTML for export documents.
+const renderMarkdownForExport = content => {
+  if (!content) return '';
+  const html = exportMarked.parse(String(content));
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+};
 
 // Apps
 export const fetchApps = async (options = {}) => {
@@ -147,73 +166,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     }
   };
 
-  const formatContent = content => {
-    if (!content) return '';
-
-    // Split content into lines to process block-level elements
-    const lines = content.split('\n');
-    const processedLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
-
-      // Handle horizontal rules: ***, ---, ___ (three or more)
-      if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
-        processedLines.push('<hr>');
-        continue;
-      }
-
-      // Handle headings (# through ######)
-      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
-      if (headingMatch) {
-        const level = headingMatch[1].length;
-        const text = headingMatch[2];
-        processedLines.push(`<h${level}>${processInlineMarkdown(text)}</h${level}>`);
-        continue;
-      }
-
-      // Handle unordered lists (* - +) - must check AFTER horizontal rule
-      const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
-      if (unorderedListMatch) {
-        processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
-        continue;
-      }
-
-      // Handle ordered lists (1. 2. etc.)
-      const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
-      if (orderedListMatch) {
-        processedLines.push(
-          `<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`
-        );
-        continue;
-      }
-
-      // Empty line creates paragraph break
-      if (trimmedLine === '') {
-        if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '<br>') {
-          processedLines.push('<br>');
-        }
-        continue;
-      }
-
-      // Regular paragraph text
-      processedLines.push(processInlineMarkdown(line));
-      processedLines.push('<br>');
-    }
-
-    // Join with line breaks and wrap in paragraph tags
-    return processedLines.join('');
-  };
-
-  // Helper function to process inline markdown (bold, italic, code)
-  const processInlineMarkdown = text => {
-    return text
-      .replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
-      .replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>') // **bold**
-      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic*
-      .replace(/`([^`]+?)`/g, '<code>$1</code>'); // `code`
-  };
+  const formatContent = renderMarkdownForExport;
 
   const messagesHTML = messages
     .filter(msg => !msg.isGreeting) // Exclude greeting messages
@@ -228,7 +181,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
             <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
           </div>
           <div class="message-content">
-            <p>${formatContent(message.content)}</p>
+            ${formatContent(message.content)}
           </div>
         </div>
       `;
@@ -453,16 +406,83 @@ const getTemplateStyles = template => {
       margin: 15px 0;
     }
     
-    .message-content li {
-      margin-left: 20px;
-      margin-bottom: 5px;
+    .message-content ul,
+    .message-content ol {
+      margin: 10px 0;
+      padding-left: 24px;
+    }
+
+    .message-content ul {
       list-style-type: disc;
     }
-    
-    .message-content li.ordered {
+
+    .message-content ol {
       list-style-type: decimal;
     }
-    
+
+    .message-content li {
+      margin-bottom: 5px;
+    }
+
+    .message-content pre {
+      background-color: #1a202c;
+      color: #f7fafc;
+      padding: 12px 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .message-content pre code {
+      background-color: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .message-content blockquote {
+      border-left: 4px solid #cbd5e0;
+      padding-left: 12px;
+      margin: 12px 0;
+      color: #4a5568;
+    }
+
+    .message-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .message-content th,
+    .message-content td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .message-content th {
+      background-color: #f7fafc;
+      font-weight: 600;
+    }
+
+    .message-content tr:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+
+    .message-content a {
+      color: #3182ce;
+      text-decoration: underline;
+    }
+
+    .message-content img {
+      max-width: 100%;
+      height: auto;
+    }
+
     @media print {
       .container {
         max-width: none;

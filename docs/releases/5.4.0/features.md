@@ -155,6 +155,14 @@ The audit log now supports a configurable retention policy.
 
 The admin Overview now shows a **Recent activity** card listing the eight most recent audit log entries (action pill, summary, admin, resource, relative time). Clicking "View all" jumps to the filtered Audit Log page.
 
+## Chat Export — Proper Markdown Rendering in PDF and HTML
+
+PDF and HTML chat exports now render the full assistant markdown instead of showing raw markup. The export previously used a limited hand-rolled parser that left GFM tables as raw `| ... |` text, emitted list items without proper `<ul>`/`<ol>` wrappers, and wrapped all block content in a single invalid `<p>` tag.
+
+- Exports now use the same `marked` + DOMPurify pipeline the chat UI uses, so **tables, headings, ordered/unordered lists, code blocks, blockquotes, links, and horizontal rules** all render correctly.
+- An isolated `marked` instance is used for exports so the downloaded document contains clean semantic HTML — no interactive copy/download toolbars or mermaid placeholders that wouldn't work outside the app.
+- Added print-friendly styling for tables, code blocks, blockquotes, and links in the export template.
+
 ## Accessibility — WCAG 2.2 AA Tooling and Remediation
 
 The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alignment with EN 301 549 and BITV 2.0 for public-sector procurement.
