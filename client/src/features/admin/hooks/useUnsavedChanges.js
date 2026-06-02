@@ -33,34 +33,46 @@ export function useUnsavedChanges(initialData, currentData) {
 
   const isDirty = !savedRef.current && initialData !== null && !deepEqual(initialData, currentData);
 
+  // Live ref so the navigation interceptor reads the current dirty state at
+  // call-time. markSaved() typically runs synchronously right before navigate()
+  // (e.g. in a save handler), before React re-renders. Reading a ref avoids
+  // blocking that programmatic navigation with a stale, closure-captured value.
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+
   const markSaved = useCallback(() => {
     savedRef.current = true;
+    isDirtyRef.current = false;
   }, []);
 
-  // Intercept React Router's navigator.push / navigator.replace when dirty.
+  // Intercept React Router's navigator.push / navigator.replace.
   // This is the recommended BrowserRouter workaround since useBlocker requires
-  // a data router. We patch and restore on cleanup to avoid stacking interceptors.
+  // a data router. The interceptor stays installed and checks the live dirty
+  // ref so a save-then-navigate sequence is never blocked. We restore on
+  // cleanup to avoid stacking interceptors.
   useEffect(() => {
-    if (!isDirty) return undefined;
-
     const origPush = navigator.push.bind(navigator);
     const origReplace = navigator.replace.bind(navigator);
 
     navigator.push = (...args) => {
+      if (!isDirtyRef.current) return origPush(...args);
       pendingNavRef.current = { fn: origPush, args };
       setBlockerState('blocked');
+      return undefined;
     };
 
     navigator.replace = (...args) => {
+      if (!isDirtyRef.current) return origReplace(...args);
       pendingNavRef.current = { fn: origReplace, args };
       setBlockerState('blocked');
+      return undefined;
     };
 
     return () => {
       navigator.push = origPush;
       navigator.replace = origReplace;
     };
-  }, [isDirty, navigator]);
+  }, [navigator]);
 
   // Browser close / reload
   useEffect(() => {
