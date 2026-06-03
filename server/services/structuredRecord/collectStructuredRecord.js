@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { evidenceRecordSchema } from '../../validators/evidenceRecordSchema.js';
 import { getExtractionSchema } from './schemas.js';
+import { jsonSchemaToZod } from './jsonSchemaToZod.js';
 
 /**
  * Build a validated structured record from a per-document LLM extraction.
@@ -13,26 +14,27 @@ import { getExtractionSchema } from './schemas.js';
  * consumer; a second consumer with different envelope needs would warrant
  * a generic record schema in this directory.
  *
- * The function:
- *   1. Validates `rawExtraction` against the named extraction schema.
- *   2. Validates the assembled record against `evidenceRecordSchema`.
- *   3. Returns `{ record, failures }`. On validation failure the record is
- *      still returned (with `status: 'failed'`) so the workflow keeps moving
- *      and the failure surfaces in the final coverage report — hard-fail is
- *      not appropriate for an audit-style pipeline where one bad document
- *      should not poison the whole run.
+ * Schema resolution precedence:
+ *   1. Inline `schema` (JSON Schema) — converted on the fly via jsonSchemaToZod.
+ *      Lets workflow authors define new shapes without shipping code.
+ *   2. Named `schemaName` + `schemaVersion` — looked up in the registry.
+ *      Useful for shared schemas reused across workflows.
+ *   3. Neither — validation is skipped; the upstream prompt's
+ *      `outputSchema` (sent to the LLM as responseSchema) is the primary
+ *      shape guarantee.
  *
  * @param {Object} args
  * @param {string} args.runId
  * @param {string} args.nodeId
  * @param {number} [args.iterationIndex]
- * @param {string} args.schemaName              e.g. 'stellungnahmenReview'
- * @param {string} args.schemaVersion           e.g. 'v1'
- * @param {Object} args.rawExtraction           shape declared by the schema
- * @param {Object} args.source                  { docId, sourceSystem, title?, url?, retrievedAt? }
- * @param {Array}  [args.quotes]                pre-extracted quotes (will be validated later)
+ * @param {Object} [args.schema]                 inline JSON Schema (preferred over schemaName)
+ * @param {string} [args.schemaName]             e.g. 'stellungnahmenReview'
+ * @param {string} [args.schemaVersion]          e.g. 'v1'
+ * @param {Object} args.rawExtraction            shape declared by the schema
+ * @param {Object} args.source                   { docId, sourceSystem, title?, url?, retrievedAt? }
+ * @param {Array}  [args.quotes]                 pre-extracted quotes (will be validated later)
  * @param {Object} [args.classification]
- * @param {Object} [args.llm]                   { model?, promptHash?, tokensIn?, tokensOut? }
+ * @param {Object} [args.llm]                    { model?, promptHash?, tokensIn?, tokensOut? }
  * @returns {{ record: Object, failures: Array<{code: string, message: string}> }}
  */
 export function collectStructuredRecord(args) {
@@ -40,6 +42,7 @@ export function collectStructuredRecord(args) {
     runId,
     nodeId,
     iterationIndex,
+    schema,
     schemaName,
     schemaVersion,
     rawExtraction,
@@ -53,18 +56,21 @@ export function collectStructuredRecord(args) {
   let extractionData = rawExtraction;
   let status = 'ok';
 
-  // 1. Validate the LLM extraction against the named schema.
-  try {
-    const extractionSchema = getExtractionSchema(schemaName, schemaVersion);
-    extractionData = extractionSchema.parse(rawExtraction);
-  } catch (err) {
-    status = 'failed';
-    failures.push({
-      code: 'EXTRACTION_SCHEMA_MISMATCH',
-      message: err?.message || 'extraction did not match declared schema'
-    });
-    // Keep the original raw payload so a human reviewer can see what the LLM emitted.
-    extractionData = rawExtraction ?? {};
+  // 1. Validate the LLM extraction against the configured schema.
+  //    Inline > named > skip. Failures soft-fail with `status='failed'`
+  //    and the original payload retained for human inspection.
+  const extractionSchema = resolveSchema({ schema, schemaName, schemaVersion });
+  if (extractionSchema) {
+    try {
+      extractionData = extractionSchema.parse(rawExtraction);
+    } catch (err) {
+      status = 'failed';
+      failures.push({
+        code: 'EXTRACTION_SCHEMA_MISMATCH',
+        message: err?.message || 'extraction did not match declared schema'
+      });
+      extractionData = rawExtraction ?? {};
+    }
   }
 
   const record = {
@@ -100,6 +106,20 @@ export function collectStructuredRecord(args) {
   }
 
   return { record, failures: record.failures };
+}
+
+function resolveSchema({ schema, schemaName, schemaVersion }) {
+  if (schema && typeof schema === 'object') {
+    return jsonSchemaToZod(schema);
+  }
+  if (schemaName) {
+    try {
+      return getExtractionSchema(schemaName, schemaVersion);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export default collectStructuredRecord;

@@ -24,14 +24,9 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
    * @param {Object} context
    */
   async execute(node, state, context) {
-    try {
-      this.validateConfig(node, ['schemaName', 'schemaVersion']);
-    } catch (err) {
-      return this.createErrorResult(err.message, { nodeId: node?.id });
-    }
-
     const config = node.config || {};
     const {
+      schema,
       schemaName,
       schemaVersion,
       inputPath = '$.data._extractionOutput',
@@ -93,6 +88,7 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
         : rawExtraction;
 
     const { record } = collectStructuredRecord({
+      schema,
       runId,
       nodeId: node.id,
       iterationIndex,
@@ -157,12 +153,16 @@ function normalizeSource(raw, configuredSystem) {
   if (!raw || typeof raw !== 'object') {
     return { docId: 'unknown', sourceSystem: configuredSystem || 'upload' };
   }
-  // Common loop-item shapes from corpus_search results.
-  const docId = raw.docId || raw.id || raw.documentId || 'unknown';
+  // Common loop-item shapes from corpus_search results AND chat-uploaded
+  // file shapes (which carry `fileName` but no explicit `docId`/`title`).
+  // Fall back to fileName so per-upload records still get distinct
+  // identifiers + a human-readable title without requiring a custom
+  // fanout step in the workflow.
+  const docId = raw.docId || raw.id || raw.documentId || raw.fileName || 'unknown';
   return {
     docId: String(docId),
     sourceSystem: configuredSystem || raw.sourceSystem || 'ifinder',
-    title: raw.title || raw.name,
+    title: raw.title || raw.name || raw.fileName,
     url: raw.url || raw.deepLink,
     retrievedAt: raw.retrievedAt || raw.indexingDate || new Date().toISOString()
   };

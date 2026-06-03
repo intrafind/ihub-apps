@@ -33,7 +33,8 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       synthesisVar = '_synthesis',
       template,
       artifactName = 'final-report.md',
-      reportVar = '_report'
+      outputVariable,
+      reportVar
     } = config;
 
     if (!FILENAME_RE.test(artifactName)) {
@@ -84,8 +85,9 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
           nodeId: node.id,
           error: err.message
         });
-        // Non-fatal: the report is still available in state[reportVar] for
-        // the workflow's `end` node to surface as final output.
+        // Non-fatal: the rendered markdown is still written to
+        // state[outputVariable] (or state[reportVar]) for the workflow's
+        // `end` node to surface as final output.
       }
     } else {
       this.logger.warn('template-render: no runId in context; skipping artifact write', {
@@ -120,22 +122,32 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       }
     }
 
+    const stateUpdates = {};
+    if (outputVariable) {
+      // Primary output: the rendered markdown string. Mirrors the prompt
+      // node's `outputVariable` convention so workflows can wire this
+      // straight into `chatIntegration.primaryOutput` without an extra
+      // transform.
+      stateUpdates[outputVariable] = markdown;
+    }
+    if (reportVar) {
+      // Optional rich-object output for workflows that need metadata
+      // (byte size, artifact name, generation timestamp) in state.
+      stateUpdates[reportVar] = {
+        markdown,
+        bytes,
+        artifactName: artifactPath ? artifactName : null,
+        generatedAt: new Date().toISOString()
+      };
+    }
+
     return this.createSuccessResult(
       {
         bytes,
         artifactName: artifactPath ? artifactName : null,
         artifactPath
       },
-      {
-        stateUpdates: {
-          [reportVar]: {
-            markdown,
-            bytes,
-            artifactName: artifactPath ? artifactName : null,
-            generatedAt: new Date().toISOString()
-          }
-        }
-      }
+      { stateUpdates }
     );
   }
 }

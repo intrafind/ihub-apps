@@ -108,6 +108,7 @@
       "name": { "en": "Initialise iteration cursor", "de": "Iterationszähler initialisieren" },
       "position": { "x": 100, "y": 600 },
       "config": {
+        "chatVisible": false,
         "operations": [
           { "lengthOf": "_corpus", "to": "_docsTotal" },
           { "set": "_docIndex", "value": 0 },
@@ -121,6 +122,7 @@
       "name": { "en": "Pick next document", "de": "Nächstes Dokument auswählen" },
       "position": { "x": 100, "y": 720 },
       "config": {
+        "chatVisible": false,
         "operations": [
           { "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }
         ]
@@ -132,7 +134,8 @@
       "name": { "en": "Announce document", "de": "Dokument ankündigen" },
       "position": { "x": 100, "y": 840 },
       "config": {
-        "message": "📄 Analysing document {{_docHuman}} / {{_docsTotal}}: \"{{_currentDoc.title}}\""
+        "chatVisible": false,
+        "message": "📄 Analysing document {{_docHuman}} / {{_docsTotal}} — \"{{_currentDoc.title}}\""
       }
     },
     {
@@ -178,8 +181,16 @@
       "name": { "en": "Capture structured evidence", "de": "Strukturierte Evidenz erfassen" },
       "position": { "x": 100, "y": 1080 },
       "config": {
-        "schemaName": "corpusAnalysis",
-        "schemaVersion": "v1",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "keyStatements": { "type": "array", "items": { "type": "string" } },
+            "entities": { "type": "array", "items": { "type": "string" } },
+            "position": { "type": "string" },
+            "evidenceQuotes": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["keyStatements"]
+        },
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
         "sourceSystem": "ifinder",
@@ -193,6 +204,7 @@
       "name": { "en": "Advance to next document", "de": "Zum nächsten Dokument fortschreiten" },
       "position": { "x": 100, "y": 1200 },
       "config": {
+        "chatVisible": false,
         "operations": [
           { "increment": "_coverage.processed", "by": 1 },
           { "increment": "_docIndex", "by": 1 },
@@ -208,6 +220,7 @@
       "name": { "en": "More documents?", "de": "Weitere Dokumente?" },
       "position": { "x": 100, "y": 1320 },
       "config": {
+        "chatVisible": false,
         "type": "expression",
         "expression": "$.data._docIndex < $.data._docsTotal"
       }
@@ -253,29 +266,15 @@
         "coverageVar": "_coverage",
         "synthesisVar": "_synthesis",
         "artifactName": "corpus-analysis-direct.md",
-        "reportVar": "_report",
+        "outputVariable": "finalReport",
         "template": "# Korpus-Vollständigkeitsanalyse\n\n## Frage\n\n{{userQuestion}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if evidence}}\n## Per-Dokument-Evidenz\n\n{{#each evidence}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **URL:** {{this.source.url}}\n- **Status:** {{this.status}}\n- **Position:** {{this.extraction.data.position}}\n\n{{#if this.extraction.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.extraction.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate (validiert):**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich gefunden — nächstgelegene Passage: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n{{#if this.failures}}\n**Hinweise:**\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
-      }
-    },
-    {
-      "id": "expose-output",
-      "type": "transform",
-      "name": {
-        "en": "Expose user-facing output",
-        "de": "Nutzersichtbare Ausgabe bereitstellen"
-      },
-      "position": { "x": 100, "y": 1880 },
-      "config": {
-        "operations": [
-          { "copy": "_report.markdown", "to": "finalReport" }
-        ]
       }
     },
     {
       "id": "end",
       "type": "end",
       "name": { "en": "Done", "de": "Fertig" },
-      "position": { "x": 100, "y": 2020 },
+      "position": { "x": 100, "y": 1880 },
       "config": { "outputVariables": ["finalReport"] }
     }
   ],
@@ -304,8 +303,7 @@
     },
     { "id": "e12", "source": "validate", "target": "synthesise" },
     { "id": "e13", "source": "synthesise", "target": "compose" },
-    { "id": "e14", "source": "compose", "target": "expose-output" },
-    { "id": "e15", "source": "expose-output", "target": "end" }
+    { "id": "e14", "source": "compose", "target": "end" }
   ],
   "allowedGroups": [],
   "chatIntegration": {

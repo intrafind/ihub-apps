@@ -82,30 +82,16 @@
       }
     },
     {
-      "id": "build-corpus",
-      "type": "code",
-      "name": {
-        "en": "Fan out uploaded files into corpus",
-        "de": "Hochgeladene Dateien in Korpus zerlegen"
-      },
-      "position": { "x": 100, "y": 200 },
-      "config": {
-        "code": "const raw = data._fileData || data._document; const files = Array.isArray(raw) ? raw : (raw ? [raw] : []); const diag = files.map((f, i) => ({ index: i, fileName: f && (f.fileName || f.name) || '(no name)', type: f && f.type, hasContent: typeof (f && f.content) === 'string' && f.content.length > 0, contentLen: typeof (f && f.content) === 'string' ? f.content.length : 0 })); console.log('build-corpus received ' + files.length + ' file(s):', JSON.stringify(diag)); const valid = files.filter(f => f && f.content && typeof f.content === 'string'); if (valid.length === 0) { throw new Error('No documents with extractable content received. ' + files.length + ' file(s) arrived. Diagnostic: ' + JSON.stringify(diag) + '. If files are showing as attached but content is empty, this likely means chat resend stripped the extracted text — please re-upload the files directly instead of using resend.'); } valid.map((f, i) => ({ docId: 'uploaded-' + (i + 1), sourceSystem: 'upload', title: f.fileName || f.name || ('document-' + (i + 1)), fileName: f.fileName || f.name || ('document-' + (i + 1)), content: f.content, type: 'document' }));",
-        "outputVariable": "_corpusRaw",
-        "timeout": 5000
-      }
-    },
-    {
       "id": "init-coverage",
       "type": "transform",
       "name": {
         "en": "Initialise corpus + counters",
         "de": "Korpus + Zähler initialisieren"
       },
-      "position": { "x": 100, "y": 340 },
+      "position": { "x": 100, "y": 200 },
       "config": {
         "operations": [
-          { "copy": "_corpusRaw.result", "to": "_corpus" },
+          { "copy": "_fileData", "to": "_corpus" },
           { "set": "_evidence", "value": [] },
           {
             "set": "_coverage",
@@ -122,8 +108,7 @@
           { "lengthOf": "_corpus", "to": "_docsTotal" },
           { "set": "_docIndex", "value": 0 },
           { "set": "_docHuman", "value": 1 },
-          { "set": "_document", "value": null },
-          { "set": "_corpusRaw", "value": null }
+          { "set": "_document", "value": null }
         ]
       }
     },
@@ -136,6 +121,7 @@
       },
       "position": { "x": 100, "y": 480 },
       "config": {
+        "chatVisible": false,
         "operations": [
           { "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }
         ]
@@ -150,7 +136,8 @@
       },
       "position": { "x": 100, "y": 600 },
       "config": {
-        "message": "📄 Analysiere Dokument {{_docHuman}} / {{_docsTotal}}: \"{{_currentDoc.fileName}}\""
+        "chatVisible": false,
+        "message": "📄 Analysiere Dokument {{_docHuman}} / {{_docsTotal}} — \"{{_currentDoc.fileName}}\""
       }
     },
     {
@@ -216,8 +203,26 @@
       },
       "position": { "x": 100, "y": 860 },
       "config": {
-        "schemaName": "stellungnahmenReview",
-        "schemaVersion": "v1",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "organisation": { "type": "string" },
+            "title": { "type": "string" },
+            "demandedChanges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "paragraphReference": { "type": "string" },
+                  "summary": { "type": "string" },
+                  "sourceQuote": { "type": "string" }
+                },
+                "required": ["summary"]
+              }
+            }
+          },
+          "required": ["organisation", "title", "demandedChanges"]
+        },
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
         "sourceSystem": "upload",
@@ -234,6 +239,7 @@
       },
       "position": { "x": 100, "y": 980 },
       "config": {
+        "chatVisible": false,
         "operations": [
           { "increment": "_coverage.processed", "by": 1 },
           { "increment": "_docIndex", "by": 1 },
@@ -252,6 +258,7 @@
       },
       "position": { "x": 100, "y": 1100 },
       "config": {
+        "chatVisible": false,
         "type": "expression",
         "expression": "$.data._docIndex < $.data._docsTotal"
       }
@@ -268,57 +275,41 @@
         "evidenceVar": "_evidence",
         "coverageVar": "_coverage",
         "artifactName": "stellungnahmen-review.md",
-        "reportVar": "_report",
+        "outputVariable": "finalReport",
         "template": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n\n{{#each evidence}}\n**Autor:** {{this.extraction.data.organisation}}\n\n**Titel:** {{this.extraction.data.title}}\n\n**Datei:** `{{this.source.title}}`\n\n{{#if this.extraction.data.demandedChanges}}\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n{{#each this.extraction.data.demandedChanges}}\n| {{@index}} | {{this.paragraphReference}} | {{this.summary}} _({{this.sourceQuote}})_ |\n{{/each}}\n{{/if}}\n{{#unless this.extraction.data.demandedChanges}}\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n{{/unless}}\n\n{{#if this.failures}}\n_Hinweise:_\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n"
-      }
-    },
-    {
-      "id": "expose-output",
-      "type": "transform",
-      "name": {
-        "en": "Expose user-facing output",
-        "de": "Nutzersichtbare Ausgabe bereitstellen"
-      },
-      "position": { "x": 100, "y": 1380 },
-      "config": {
-        "operations": [
-          { "copy": "_report.markdown", "to": "finalReport" }
-        ]
       }
     },
     {
       "id": "end",
       "type": "end",
       "name": { "en": "Done", "de": "Fertig" },
-      "position": { "x": 100, "y": 1520 },
+      "position": { "x": 100, "y": 1380 },
       "config": {
         "outputVariables": ["finalReport"]
       }
     }
   ],
   "edges": [
-    { "id": "e1", "source": "start", "target": "build-corpus" },
-    { "id": "e2", "source": "build-corpus", "target": "init-coverage" },
-    { "id": "e3", "source": "init-coverage", "target": "pick-doc" },
-    { "id": "e4", "source": "pick-doc", "target": "announce-doc" },
-    { "id": "e5", "source": "announce-doc", "target": "extract-evidence" },
-    { "id": "e6", "source": "extract-evidence", "target": "collect-evidence" },
-    { "id": "e7", "source": "collect-evidence", "target": "advance-doc" },
-    { "id": "e8", "source": "advance-doc", "target": "more-docs" },
+    { "id": "e1", "source": "start", "target": "init-coverage" },
+    { "id": "e2", "source": "init-coverage", "target": "pick-doc" },
+    { "id": "e3", "source": "pick-doc", "target": "announce-doc" },
+    { "id": "e4", "source": "announce-doc", "target": "extract-evidence" },
+    { "id": "e5", "source": "extract-evidence", "target": "collect-evidence" },
+    { "id": "e6", "source": "collect-evidence", "target": "advance-doc" },
+    { "id": "e7", "source": "advance-doc", "target": "more-docs" },
     {
-      "id": "e9-continue",
+      "id": "e8-continue",
       "source": "more-docs",
       "target": "pick-doc",
       "condition": { "type": "equals", "field": "result.branch", "value": "true" }
     },
     {
-      "id": "e9-done",
+      "id": "e8-done",
       "source": "more-docs",
       "target": "compose-report",
       "condition": { "type": "equals", "field": "result.branch", "value": "false" }
     },
-    { "id": "e10", "source": "compose-report", "target": "expose-output" },
-    { "id": "e11", "source": "expose-output", "target": "end" }
+    { "id": "e9", "source": "compose-report", "target": "end" }
   ],
   "allowedGroups": [],
   "chatIntegration": {
