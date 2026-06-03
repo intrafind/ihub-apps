@@ -84,6 +84,144 @@ const renderValue = value => {
 const LONG_STRING_THRESHOLD = 500;
 
 /**
+ * Renders a workflow start-input value with sensible UX for the common
+ * shapes (string, plain object, uploaded-file object, file array).
+ * Uploaded files have shape { type:'document', fileName, content, fileSize, ... }
+ * — showing the full `content` inline produces a wall of PDF text and dominates
+ * the entire page. Instead we show a file chip with size info and let the user
+ * expand it explicitly if they need to inspect the extracted text.
+ */
+function InputValueRenderer({ value, t }) {
+  const [expanded, setExpanded] = useState({});
+
+  const formatBytes = n => {
+    if (typeof n !== 'number' || !isFinite(n) || n < 0) return '';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const isFileLike = v =>
+    v && typeof v === 'object' && !Array.isArray(v) &&
+    typeof v.fileName === 'string' &&
+    (typeof v.content === 'string' || Array.isArray(v.pageImages));
+
+  const renderFile = (file, key) => {
+    const isExpanded = !!expanded[key];
+    const contentLen = typeof file.content === 'string' ? file.content.length : 0;
+    return (
+      <div key={key} className="flex flex-col gap-1 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2">
+        <div className="flex items-center gap-2 text-sm">
+          <Icon name="document" className="w-4 h-4 text-gray-500" />
+          <span className="font-medium text-gray-900 dark:text-gray-100 break-all">{file.fileName}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {file.fileType || file.displayType || file.type}
+            {file.fileSize ? ` · ${formatBytes(file.fileSize)}` : ''}
+            {contentLen ? ` · ${contentLen.toLocaleString()} chars` : ''}
+          </span>
+          {contentLen > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(prev => ({ ...prev, [key]: !isExpanded }))}
+              className="ml-auto text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {isExpanded ? t('common.collapse', 'Collapse') : t('common.expand', 'Expand')}
+            </button>
+          )}
+        </div>
+        {isExpanded && contentLen > 0 && (
+          <pre className="text-xs whitespace-pre-wrap break-all bg-white dark:bg-gray-800 p-2 rounded max-h-96 overflow-auto">
+            {file.content}
+          </pre>
+        )}
+      </div>
+    );
+  };
+
+  if (value === null || value === undefined) {
+    return <span className="text-gray-400 italic">{t('common.empty', 'empty')}</span>;
+  }
+  if (typeof value === 'string') {
+    if (value.length > LONG_STRING_THRESHOLD) {
+      const isExpanded = !!expanded.__str;
+      return (
+        <div>
+          <pre className="whitespace-pre-wrap break-words text-sm">
+            {isExpanded ? value : value.slice(0, LONG_STRING_THRESHOLD) + '…'}
+          </pre>
+          <button
+            type="button"
+            onClick={() => setExpanded(prev => ({ ...prev, __str: !isExpanded }))}
+            className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {isExpanded
+              ? t('common.showLess', 'Show less')
+              : t('common.showMore', `Show ${value.length - LONG_STRING_THRESHOLD} more`)}
+          </button>
+        </div>
+      );
+    }
+    return <span className="whitespace-pre-wrap break-words">{value}</span>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-gray-400 italic">[]</span>;
+    if (value.every(isFileLike)) {
+      return (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            {t('workflows.fileCount', '{{count}} file(s)', { count: value.length })}
+          </div>
+          {value.map((f, i) => renderFile(f, `f${i}`))}
+        </div>
+      );
+    }
+    const isExpanded = !!expanded.__arr;
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setExpanded(prev => ({ ...prev, __arr: !isExpanded }))}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {isExpanded
+            ? t('common.collapse', 'Collapse')
+            : t('common.expandArray', `Expand array ({{count}} items)`, { count: value.length })}
+        </button>
+        {isExpanded && (
+          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded max-h-96 overflow-auto">
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        )}
+      </div>
+    );
+  }
+  if (typeof value === 'object') {
+    if (isFileLike(value)) return renderFile(value, 'f');
+    const isExpanded = !!expanded.__obj;
+    const keys = Object.keys(value);
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setExpanded(prev => ({ ...prev, __obj: !isExpanded }))}
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {isExpanded
+            ? t('common.collapse', 'Collapse')
+            : t('common.expandObject', `Expand object ({{count}} fields)`, { count: keys.length })}
+        </button>
+        {isExpanded && (
+          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded max-h-96 overflow-auto">
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        )}
+      </div>
+    );
+  }
+  return <span>{String(value)}</span>;
+}
+
+/**
  * Page for viewing and interacting with a single workflow execution.
  */
 function WorkflowExecutionPage() {
@@ -476,13 +614,15 @@ function WorkflowExecutionPage() {
               {key.replace(/_/g, ' ')}
             </h4>
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              {typeof value === 'string'
-                ? `${value.length} ${t('workflows.output.chars', 'chars')}`
-                : typeof value === 'object'
-                  ? Array.isArray(value)
-                    ? `[${value.length}]`
-                    : `{${Object.keys(value).length}}`
-                  : typeof value}
+              {value === null || value === undefined
+                ? 'null'
+                : typeof value === 'string'
+                  ? `${value.length} ${t('workflows.output.chars', 'chars')}`
+                  : typeof value === 'object'
+                    ? Array.isArray(value)
+                      ? `[${value.length}]`
+                      : `{${Object.keys(value).length}}`
+                    : typeof value}
             </span>
           </div>
           {isExpanded && renderFieldActions(key, value)}
@@ -920,10 +1060,8 @@ function WorkflowExecutionPage() {
                           ? getLocalizedContent(input.label, currentLanguage) || input.name
                           : input.name}
                       </dt>
-                      <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">
-                        {typeof input.value === 'string'
-                          ? input.value
-                          : JSON.stringify(input.value, null, 2)}
+                      <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                        <InputValueRenderer value={input.value} t={t} />
                       </dd>
                     </div>
                   ))}

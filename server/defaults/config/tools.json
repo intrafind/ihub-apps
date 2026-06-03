@@ -858,5 +858,159 @@
       },
       "required": ["question"]
     }
+  },
+  {
+    "id": "evidence",
+    "name": {
+      "en": "Evidence — Completeness Analysis",
+      "de": "Evidenz — Vollständigkeitsanalyse"
+    },
+    "description": {
+      "en": "Build structured evidence records, fast-path validate verbatim quotes, and compose an auditable Markdown report. The agent counterpart of the workflow primitives in concepts/2026-06-02 Completeness Analysis Workflows.md.",
+      "de": "Strukturierte Evidenzdatensätze erzeugen, wörtliche Zitate per Fast-Path validieren und einen revisionssicheren Markdown-Bericht erzeugen. Das Agenten-Pendant zu den Workflow-Primitiven in concepts/2026-06-02 Completeness Analysis Workflows.md."
+    },
+    "script": "evidence.js",
+    "functions": {
+      "collect": {
+        "description": {
+          "en": "Validate a per-document LLM extraction against a registered schema (e.g. 'stellungnahmenReview/v1') and build a structured Evidence record. Always call this before composing the report.",
+          "de": "Validiert eine pro-Dokument LLM-Extraktion gegen ein registriertes Schema (z.B. 'stellungnahmenReview/v1') und erzeugt einen strukturierten Evidenzdatensatz. Vor der Berichtserstellung immer aufrufen."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "runId": { "type": "string" },
+            "schemaName": {
+              "type": "string",
+              "description": {
+                "en": "Registered extraction schema name. Currently: 'stellungnahmenReview' or 'corpusAnalysis'.",
+                "de": "Registrierter Extraktions-Schemaname. Derzeit: 'stellungnahmenReview' oder 'corpusAnalysis'."
+              }
+            },
+            "schemaVersion": {
+              "type": "string",
+              "default": "v1",
+              "description": {
+                "en": "Schema version, e.g. 'v1'.",
+                "de": "Schemaversion, z.B. 'v1'."
+              }
+            },
+            "extraction": {
+              "type": "object",
+              "description": {
+                "en": "Raw extraction payload matching the declared schema.",
+                "de": "Rohe Extraktion gemäß dem deklarierten Schema."
+              }
+            },
+            "source": {
+              "type": "object",
+              "description": {
+                "en": "Provenance: { docId, sourceSystem ('ifinder'|'upload'|'url'|'inbox'), title?, url?, retrievedAt? }",
+                "de": "Herkunft: { docId, sourceSystem, title?, url?, retrievedAt? }"
+              },
+              "properties": {
+                "docId": { "type": "string" },
+                "sourceSystem": {
+                  "type": "string",
+                  "enum": ["ifinder", "upload", "url", "inbox"]
+                },
+                "title": { "type": "string" },
+                "url": { "type": "string" }
+              },
+              "required": ["docId", "sourceSystem"]
+            },
+            "quotes": {
+              "type": "array",
+              "description": {
+                "en": "Verbatim quotes the extractor pulled from the source. Each quote will be validated against the source text later.",
+                "de": "Wörtliche Zitate, die der Extraktor aus dem Dokument gezogen hat. Jedes Zitat wird später gegen den Quelltext validiert."
+              },
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string" },
+                  "locator": {
+                    "type": "object",
+                    "properties": {
+                      "page": { "type": "integer" },
+                      "section": { "type": "string" }
+                    }
+                  }
+                },
+                "required": ["text"]
+              }
+            },
+            "iterationIndex": { "type": "integer" },
+            "classification": { "type": "object" },
+            "llm": { "type": "object" }
+          },
+          "required": ["schemaName", "schemaVersion", "extraction", "source"]
+        }
+      },
+      "validateQuotesFastPath": {
+        "description": {
+          "en": "Run a normalized substring check against a batch of quotes (unicode NFC, whitespace collapse, dehyphenation). Returns per-quote verdicts and a summary. For quotes flagged 'needsLlm', use your own reasoning to verify against the source — paraphrases must NOT be accepted; only verbatim matches modulo normal PDF artifacts count as validated.",
+          "de": "Normalisierte Substring-Prüfung über eine Liste von Zitaten (Unicode NFC, Whitespace-Komprimierung, Bindestrich-Auflösung). Liefert pro Zitat ein Urteil + Zusammenfassung. Für 'needsLlm'-markierte Zitate bitte selbst gegen den Quelltext prüfen — Paraphrasen NICHT als valide akzeptieren."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "quotes": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  { "type": "string" },
+                  { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }
+                ]
+              }
+            },
+            "sourceText": {
+              "type": "string",
+              "description": {
+                "en": "The verbatim text of the source document.",
+                "de": "Der wörtliche Text des Quelldokuments."
+              }
+            }
+          },
+          "required": ["quotes", "sourceText"]
+        }
+      },
+      "composeReport": {
+        "description": {
+          "en": "Render the final Markdown report from accumulated evidence records, coverage stats, and an optional pre-computed synthesis text. Optionally persists the report as a run artifact when runId is provided.",
+          "de": "Erzeugt den finalen Markdown-Bericht aus gesammelten Evidenzdatensätzen, Abdeckungsstatistik und optionalem Synthese-Text. Wenn runId angegeben ist, wird der Bericht als Run-Artefakt persistiert."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "evidence": {
+              "type": "array",
+              "description": {
+                "en": "Evidence records as returned by evidence.collect.",
+                "de": "Evidenzdatensätze wie von evidence.collect zurückgegeben."
+              }
+            },
+            "coverage": {
+              "type": "object",
+              "description": {
+                "en": "Coverage state: { candidates: {total}, processed, skipped, failed, quotesChecked, quotesValidated }.",
+                "de": "Abdeckungs-State: { candidates: {total}, processed, skipped, failed, quotesChecked, quotesValidated }."
+              }
+            },
+            "synthesis": { "type": "string" },
+            "template": {
+              "type": "string",
+              "description": {
+                "en": "Optional Handlebars-style template. If omitted, a built-in default is used.",
+                "de": "Optionale Handlebars-ähnliche Vorlage. Wird nichts angegeben, wird eine eingebaute Standardvorlage verwendet."
+              }
+            },
+            "runId": { "type": "string" },
+            "artifactName": { "type": "string", "default": "final-report.md" },
+            "chatId": { "type": "string" }
+          }
+        }
+      }
+    }
   }
 ]

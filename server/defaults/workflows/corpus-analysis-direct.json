@@ -1,0 +1,258 @@
+{
+  "id": "corpus-analysis-direct",
+  "name": {
+    "en": "Corpus Completeness Analysis — Direct (case A)",
+    "de": "Korpus-Vollständigkeitsanalyse — Direkt (Fall A)"
+  },
+  "description": {
+    "en": "Free-form question → query plan → iFinder search → per-document evidence extraction → audit-grade report with coverage stats. The 'flat' completeness pattern: one search, loop over results.",
+    "de": "Freie Frage → Suchplan → iFinder-Suche → Evidenzextraktion pro Dokument → revisionssicherer Bericht mit Abdeckungsstatistik. Das 'flache' Vollständigkeitsmuster: eine Suche, Iteration über Ergebnisse."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 600000,
+    "maxNodes": 25,
+    "maxIterations": 5,
+    "allowCycles": false,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Pose Question", "de": "Frage stellen" },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "userQuestion",
+            "type": "string",
+            "required": true,
+            "label": { "en": "Question", "de": "Frage" },
+            "description": {
+              "en": "The question you want analysed across the indexed corpus.",
+              "de": "Die Frage, die über den indexierten Korpus hinweg analysiert werden soll."
+            }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": { "en": "Topic seeds (optional)", "de": "Themenstichwörter (optional)" },
+            "description": {
+              "en": "Comma-separated topics the planner MUST include verbatim.",
+              "de": "Kommagetrennte Themen, die der Planner WÖRTLICH übernehmen muss."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "init-coverage",
+      "type": "transform",
+      "name": { "en": "Init coverage", "de": "Abdeckung initialisieren" },
+      "position": { "x": 100, "y": 180 },
+      "config": {
+        "operations": [
+          { "set": "_evidence", "value": [] },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": { "total": 0 },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan",
+      "type": "query-plan",
+      "name": { "en": "Expand into search plan", "de": "In Suchplan expandieren" },
+      "position": { "x": 100, "y": 320 },
+      "config": {
+        "questionPath": "$.data.userQuestion",
+        "seedsPath": "$.data.topicSeeds",
+        "outputVar": "_queryPlan",
+        "maxTopics": 6,
+        "maxSynonymsPerTopic": 4
+      }
+    },
+    {
+      "id": "search",
+      "type": "corpus-search",
+      "name": { "en": "Search iFinder", "de": "iFinder durchsuchen" },
+      "position": { "x": 100, "y": 460 },
+      "config": {
+        "planPath": "$.data._queryPlan",
+        "corpusVar": "_corpus",
+        "coverageVar": "_coverage",
+        "maxPerTopic": 25,
+        "maxTotalDocs": 200,
+        "fetchFulltext": true,
+        "maxFulltextChars": 40000
+      }
+    },
+    {
+      "id": "analyse-each-doc",
+      "type": "loop",
+      "name": { "en": "Analyse every candidate", "de": "Jeden Kandidaten auswerten" },
+      "position": { "x": 100, "y": 620 },
+      "config": {
+        "mode": "forEach",
+        "array": "_corpus",
+        "maxIterations": 500,
+        "body": [
+          {
+            "id": "extract-evidence",
+            "type": "prompt",
+            "config": {
+              "temperature": 0.2,
+              "system": {
+                "en": "You are a corpus analyst. Extract structured findings from a single document for an audit-grade pipeline that verifies every quote against the source verbatim. Never invent. Quotes are character-for-character."
+              },
+              "prompt": {
+                "en": "## User question\n${$.data.userQuestion}\n\n## Document (index {{_loopIndex}} of total candidates)\nTitle: {{_loopItem.title}}\nDocId: {{_loopItem.docId}}\nSource: {{_loopItem.url}}\n\n### Content\n{{_loopItem.fulltext}}\n\n## Output\nReturn ONLY JSON of this shape (no prose, no markdown fences):\n\n{\n  \"keyStatements\": [\"<concise statement the document makes that is relevant to the user question>\"],\n  \"entities\": [\"<people / organisations / regulations named in the document>\"],\n  \"position\": \"<one-sentence summary of the document's overall position on the question, or empty>\",\n  \"evidenceQuotes\": [\"<each VERBATIM source quote used to ground a keyStatement>\"],\n  \"quotes\": [{ \"text\": \"<each VERBATIM source quote, one entry per quote>\" }]\n}\n\nThe `quotes` array MUST contain the same verbatim strings as `evidenceQuotes`; it's what the downstream validator checks."
+              },
+              "outputVariable": "_extractionOutput",
+              "maxIterations": 1,
+              "maxTokens": 6000,
+              "outputSchema": {
+                "type": "object",
+                "properties": {
+                  "keyStatements": { "type": "array", "items": { "type": "string" } },
+                  "entities": { "type": "array", "items": { "type": "string" } },
+                  "position": { "type": "string" },
+                  "evidenceQuotes": { "type": "array", "items": { "type": "string" } },
+                  "quotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": { "text": { "type": "string" } },
+                      "required": ["text"]
+                    }
+                  }
+                },
+                "required": ["keyStatements", "quotes"]
+              }
+            },
+            "execution": { "timeout": 90000, "retries": 1 }
+          },
+          {
+            "id": "collect-evidence",
+            "type": "structured-record",
+            "config": {
+              "schemaName": "corpusAnalysis",
+              "schemaVersion": "v1",
+              "inputPath": "$.data._extractionOutput",
+              "sourcePath": "$.data._loopItem",
+              "sourceSystem": "ifinder",
+              "evidenceVar": "_evidence",
+              "iterationIndexPath": "$.data._loopIndex"
+            }
+          },
+          {
+            "id": "increment-processed",
+            "type": "transform",
+            "config": {
+              "operations": [{ "increment": "_coverage.processed", "by": 1 }]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "validate",
+      "type": "quote-validator",
+      "name": { "en": "Validate quotes", "de": "Zitate validieren" },
+      "position": { "x": 100, "y": 800 },
+      "config": {
+        "evidenceVar": "_evidence",
+        "coverageVar": "_coverage",
+        "corpusVar": "_corpus",
+        "maxSourceChars": 40000
+      }
+    },
+    {
+      "id": "synthesise",
+      "type": "prompt",
+      "name": { "en": "Cross-document synthesis", "de": "Dokumentübergreifende Synthese" },
+      "position": { "x": 100, "y": 960 },
+      "config": {
+        "temperature": 0.3,
+        "system": {
+          "en": "You synthesise a corpus of structured evidence records into a clear narrative — themes, majority position, contradictions, open points. You DO NOT add facts beyond the evidence. You cite the docIds you draw from."
+        },
+        "prompt": {
+          "en": "## User question\n${$.data.userQuestion}\n\n## Evidence records (structured)\n{{#each _evidence}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.extraction.data.position}} — key statements: {{this.extraction.data.keyStatements}}\n{{/each}}\n\nWrite a markdown synthesis: ## Themes, ## Mehrheitslinie, ## Abweichende Aussagen, ## Offene Punkte. Cite docIds inline like (doc-123)."
+        },
+        "outputVariable": "_synthesis",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": { "timeout": 60000 }
+    },
+    {
+      "id": "compose",
+      "type": "template-render",
+      "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
+      "position": { "x": 100, "y": 1120 },
+      "config": {
+        "evidenceVar": "_evidence",
+        "coverageVar": "_coverage",
+        "synthesisVar": "_synthesis",
+        "artifactName": "corpus-analysis-direct.md",
+        "reportVar": "_report",
+        "template": "# Korpus-Vollständigkeitsanalyse\n\n## Frage\n\n{{userQuestion}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if evidence}}\n## Per-Dokument-Evidenz\n\n{{#each evidence}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **URL:** {{this.source.url}}\n- **Status:** {{this.status}}\n- **Position:** {{this.extraction.data.position}}\n\n{{#if this.extraction.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.extraction.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate (validiert):**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich gefunden — nächstgelegene Passage: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n{{#if this.failures}}\n**Hinweise:**\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+      }
+    },
+    {
+      "id": "expose-output",
+      "type": "transform",
+      "name": {
+        "en": "Expose user-facing output",
+        "de": "Nutzersichtbare Ausgabe bereitstellen"
+      },
+      "position": { "x": 100, "y": 1200 },
+      "config": {
+        "operations": [
+          { "copy": "_report.markdown", "to": "finalReport" }
+        ]
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "Done", "de": "Fertig" },
+      "position": { "x": 100, "y": 1340 },
+      "config": { "outputVariables": ["finalReport"] }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "init-coverage" },
+    { "id": "e2", "source": "init-coverage", "target": "plan" },
+    { "id": "e3", "source": "plan", "target": "search" },
+    { "id": "e4", "source": "search", "target": "analyse-each-doc" },
+    { "id": "e5", "source": "analyse-each-doc", "target": "validate" },
+    { "id": "e6", "source": "validate", "target": "synthesise" },
+    { "id": "e7", "source": "synthesise", "target": "compose" },
+    { "id": "e8", "source": "compose", "target": "expose-output" },
+    { "id": "e9", "source": "expose-output", "target": "end" }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

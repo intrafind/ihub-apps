@@ -1,5 +1,21 @@
 # Features — 5.4.0
 
+## Completeness Analysis Workflows — Audit-grade Stellungnahmen Review
+
+iHub now ships a reusable set of workflow primitives for **audit-grade corpus-completeness analysis**, plus a working reference workflow and agent profile for the German government law-consultation use case (Stellungnahmen review).
+
+Three new workflow node types — `evidence-collect`, `quote-validator`, `report-compose` — and a matching `evidence` tool family (three functions) let workflow authors and agents build pipelines that extract structured findings from documents, verify every cited quote against the source, and produce a Markdown report with a transparent coverage block.
+
+Highlights:
+
+- **Verbatim quote validation** with a hybrid strategy: normalized substring match (fast path) falls back to an LLM verdict for misses caused by PDF artifacts (line wraps, hyphenation, whitespace). Unvalidated quotes are flagged inline in the report rather than silently dropped.
+- **Structured evidence schema** with a versioned registry. Two named schemas ship: `stellungnahmenReview/v1` for law-consultation notes and `corpusAnalysis/v1` for generic completeness analysis.
+- **Reference workflow `stellungnahmen-review`** processes an uploaded PDF/DOCX/TXT and produces a Markdown audit report with per-document table (Nr | Paragraph | Forderung | Quelle) and validation status per quote. Generalises across laws via `lawReference` and `topicSeeds` runtime input.
+- **Reference agent profile `completeness-analyst-stellungnahmen`** does the same job dynamically via the `evidence` tools, enabling A/B comparison between deterministic workflow and dynamic agent on the same input.
+- **Loop hard cap raised** from 200 to 500 iterations to accommodate per-document analysis over larger corpora.
+
+See `concepts/2026-06-02 Completeness Analysis Workflows.md` for the full design.
+
 ## Redesigned Admin Navigation — Collapsible Left-Rail Sidebar
 
 The flat horizontal tab bar with a 20-item "More" dropdown has been replaced with a

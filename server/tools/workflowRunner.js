@@ -39,25 +39,54 @@ function resolveLocalized(value, lang = 'en') {
  * If the output is already a string, return it.
  * If it's an object, look for common report/content fields.
  */
+/**
+ * Coerce an error-shaped value into a readable string. Workflow events may
+ * carry `error` as a string, a plain {message,code,...} object, or a real
+ * Error instance — direct interpolation produces `[object Object]` for the
+ * latter two, which is what users see in chat. Walks common shapes to get
+ * a useful message.
+ */
+function coerceErrorMessage(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value !== 'object') return String(value);
+  // Common shapes: { message }, { error: { message } }, nested details.
+  if (typeof value.message === 'string' && value.message) return value.message;
+  if (typeof value.error === 'string' && value.error) return value.error;
+  if (value.error && typeof value.error.message === 'string') return value.error.message;
+  if (value.originalError && typeof value.originalError === 'string') return value.originalError;
+  if (typeof value.code === 'string' && value.code) return value.code;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
+function getNestedField(obj, path) {
+  if (!obj || !path || typeof path !== 'string') return undefined;
+  const parts = path.split('.');
+  let cur = obj;
+  for (const p of parts) {
+    if (cur === null || cur === undefined) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
 function extractReadableOutput(output, primaryOutput) {
   if (!output) return null;
   if (typeof output === 'string') return output;
   if (typeof output !== 'object') return String(output);
 
-  logger.info('extractReadableOutput debug', {
-    component: 'workflowRunner',
-    primaryOutput,
-    outputKeys: Object.keys(output),
-    primaryFieldType: primaryOutput ? typeof output[primaryOutput] : 'N/A',
-    primaryFieldLength:
-      primaryOutput && typeof output[primaryOutput] === 'string' ? output[primaryOutput].length : -1
-  });
+  // Workflow-declared primary output field. Supports dot-notation paths
+  // (e.g. "_report.markdown") so workflows can emit a structured object
+  // and still expose a flat string to the chat output.
+  const primaryVal = primaryOutput ? getNestedField(output, primaryOutput) : undefined;
 
-  // Use workflow-declared primary output field first
-  if (primaryOutput && output[primaryOutput] !== undefined && output[primaryOutput] !== null) {
-    const val = output[primaryOutput];
-    if (typeof val === 'string' && val.length > 0) return val;
-    if (typeof val === 'object') return JSON.stringify(val, null, 2);
+  if (primaryVal !== undefined && primaryVal !== null) {
+    if (typeof primaryVal === 'string' && primaryVal.length > 0) return primaryVal;
+    if (typeof primaryVal === 'object') return JSON.stringify(primaryVal, null, 2);
   }
 
   // Fallback: look for common content field names
@@ -154,11 +183,30 @@ export default async function workflowRunner(params = {}) {
     initialData._userHint = input;
   }
 
+  // Build a per-file shape summary so we can diagnose missing-content issues
+  // (e.g. chat resend sending file metadata without the extracted content).
+  const fileDiagnostic = (() => {
+    if (!_fileData) return null;
+    const arr = Array.isArray(_fileData) ? _fileData : [_fileData];
+    return arr.map((f, i) => ({
+      index: i,
+      fileName: f?.fileName || f?.name || '(no name)',
+      type: f?.type,
+      fileType: f?.fileType,
+      hasContent: typeof f?.content === 'string' && f.content.length > 0,
+      contentLength: typeof f?.content === 'string' ? f.content.length : 0,
+      hasPageImages: Array.isArray(f?.pageImages) && f.pageImages.length > 0,
+      pageImageCount: Array.isArray(f?.pageImages) ? f.pageImages.length : 0,
+      topLevelKeys: f && typeof f === 'object' ? Object.keys(f).join(',') : null
+    }));
+  })();
+
   logger.info('Workflow runner invoked', {
     component: 'workflowRunner',
     workflowId,
     hasFileData: !!_fileData,
-    fileDataFileName: _fileData?.fileName || 'none',
+    fileDataCount: Array.isArray(_fileData) ? _fileData.length : _fileData ? 1 : 0,
+    fileDiagnostic,
     hasInput: !!input,
     extraInputVarKeys: Object.keys(extraInputVars).join(', '),
     paramKeys: Object.keys(params).join(', ')
@@ -168,15 +216,22 @@ export default async function workflowRunner(params = {}) {
     initialData._chatHistory = _chatHistory;
   }
   if (_fileData) {
-    // Map file data to the workflow's declared file/image input variable
+    // Map file data to the workflow's declared file/image input variable.
+    // Avoid duplicating the (often multi-MB) payload — only fall back to
+    // `_fileData` when no input variable matched. With both names set, every
+    // state checkpoint serialised the same files twice, contributing to the
+    // 50MB state-size limit being hit on bigger uploads.
+    let mappedToVar = false;
     if (inputVars?.length > 0) {
       const fileVar = inputVars.find(v => v.type === 'file' || v.type === 'image');
       if (fileVar) {
         initialData[fileVar.name] = _fileData;
+        mappedToVar = true;
       }
     }
-    // Also keep under _fileData for backward compatibility
-    initialData._fileData = _fileData;
+    if (!mappedToVar) {
+      initialData._fileData = _fileData;
+    }
   }
 
   // 4. Start workflow
@@ -213,7 +268,7 @@ export default async function workflowRunner(params = {}) {
   } catch (error) {
     logger.warn('Failed to register execution', {
       component: 'workflowRunner',
-      error: err
+      error
     });
   }
 
@@ -327,6 +382,34 @@ export default async function workflowRunner(params = {}) {
         });
       }
 
+      // Bridge for in-node progress events emitted by executors that run
+      // INSIDE a loop body. Loop body nodes don't go through
+      // WorkflowEngine.executeNode, so no `workflow.node.start` fires for
+      // them. Executors (StructuredRecord, QuoteValidator, TemplateRender) fire
+      // `workflow.node.progress` with a descriptive `message`; this bridge
+      // re-emits it on the chat's real chatId so the client renders it as a
+      // normal workflow step. (The executor's `context.chatId` is the
+      // executionId — not the chat's chatId — because workflowRunner doesn't
+      // pass chatId into engine.start; that's why direct trackWorkflowStep
+      // calls from inside the executor never reached the chat.)
+      if (eventType === 'workflow.node.progress') {
+        if (chatId) {
+          // Honor the event's status so executors can emit 'running' for
+          // start-of-iteration events. The chat client (useAppChat.js:198)
+          // auto-completes the previous 'running' step when a new 'running'
+          // step arrives — that gives a clean one-step-per-iteration UX
+          // for loop bodies.
+          actionTracker.trackWorkflowStep(chatId, {
+            workflowName,
+            nodeName: event.message || event.nodeId || 'progress',
+            nodeType: 'prompt',
+            status: event.status || 'running',
+            executionId,
+            chatVisible: true
+          });
+        }
+      }
+
       if (eventType === 'workflow.node.complete' && chatId) {
         const node = (workflow.nodes || []).find(n => n.id === event.nodeId);
         // Skip chat step indicator for nodes with chatVisible: false
@@ -417,8 +500,8 @@ export default async function workflowRunner(params = {}) {
         }
 
         const errorMsg =
-          event.error ||
-          event.message ||
+          coerceErrorMessage(event.error) ||
+          coerceErrorMessage(event.message) ||
           (isCancelled ? 'Workflow cancelled' : 'Workflow execution failed');
         const errorContent = isCancelled
           ? `Workflow cancelled: ${errorMsg}`

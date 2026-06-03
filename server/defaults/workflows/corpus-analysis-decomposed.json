@@ -1,0 +1,249 @@
+{
+  "id": "corpus-analysis-decomposed",
+  "name": {
+    "en": "Corpus Completeness Analysis — Decomposed (case B)",
+    "de": "Korpus-Vollständigkeitsanalyse — Zerlegt (Fall B)"
+  },
+  "description": {
+    "en": "Free-form question → planner emits sub-questions → for each sub-question run its own iFinder search and per-document evidence extraction → audit-grade report. The 'nested' completeness pattern; same primitives, search happens INSIDE the outer loop.",
+    "de": "Freie Frage → Planner erzeugt Teilfragen → für jede Teilfrage eine eigene iFinder-Suche und Evidenzextraktion pro Dokument → revisionssicherer Bericht. Das 'verschachtelte' Vollständigkeitsmuster; selbe Primitive, die Suche liegt INNERHALB der äußeren Schleife."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 900000,
+    "maxNodes": 30,
+    "maxIterations": 5,
+    "allowCycles": false,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Pose Question", "de": "Frage stellen" },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "userQuestion",
+            "type": "string",
+            "required": true,
+            "label": { "en": "Question", "de": "Frage" }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": { "en": "Topic seeds (optional)", "de": "Themenstichwörter (optional)" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "init",
+      "type": "transform",
+      "name": { "en": "Init accumulators", "de": "Akkumulatoren initialisieren" },
+      "position": { "x": 100, "y": 180 },
+      "config": {
+        "operations": [
+          { "set": "_evidence", "value": [] },
+          { "set": "_corpusAll", "value": [] },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": { "total": 0, "source": "ifinder" },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan-subquestions",
+      "type": "query-plan",
+      "name": { "en": "Decompose into sub-questions", "de": "In Teilfragen zerlegen" },
+      "position": { "x": 100, "y": 320 },
+      "config": {
+        "questionPath": "$.data.userQuestion",
+        "seedsPath": "$.data.topicSeeds",
+        "outputVar": "_queryPlan",
+        "maxTopics": 5,
+        "maxSynonymsPerTopic": 3
+      }
+    },
+    {
+      "id": "for-each-subquestion",
+      "type": "loop",
+      "name": { "en": "Per sub-question", "de": "Pro Teilfrage" },
+      "position": { "x": 100, "y": 480 },
+      "config": {
+        "mode": "forEach",
+        "array": "_queryPlan.topics",
+        "maxIterations": 10,
+        "body": [
+          {
+            "id": "search-subquestion",
+            "type": "corpus-search",
+            "config": {
+              "queryPath": "$.data._subQuestion",
+              "corpusVar": "_corpus",
+              "coverageVar": "_coverage",
+              "maxPerTopic": 25,
+              "maxTotalDocs": 100,
+              "fetchFulltext": true,
+              "maxFulltextChars": 30000
+            }
+          },
+          {
+            "id": "accumulate-corpus",
+            "type": "code",
+            "config": {
+              "code": "const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];",
+              "outputVariable": "_corpusAllRaw",
+              "timeout": 5000
+            }
+          },
+          {
+            "id": "unwrap-corpus-accumulator",
+            "type": "transform",
+            "config": {
+              "operations": [{ "copy": "_corpusAllRaw.result", "to": "_corpusAll" }]
+            }
+          },
+          {
+            "id": "for-each-doc",
+            "type": "loop",
+            "config": {
+              "mode": "forEach",
+              "array": "_corpus",
+              "maxIterations": 200,
+              "body": [
+                {
+                  "id": "extract-evidence",
+                  "type": "prompt",
+                  "config": {
+                    "temperature": 0.2,
+                    "system": {
+                      "en": "You analyse one document for one specific sub-question. Extract structured findings, ground every claim in the source, quote verbatim. The downstream validator checks every quote against the source."
+                    },
+                    "prompt": {
+                      "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-question being investigated\n{{_subQuestion}}\n\n## Document (index {{_loopIndex}} for sub-question)\nTitle: {{_loopItem.title}}\nDocId: {{_loopItem.docId}}\n\n### Content\n{{_loopItem.fulltext}}\n\n## Output (JSON only, no markdown fences)\n{\n  \"keyStatements\": [\"<statement relevant to the sub-question>\"],\n  \"entities\": [\"<named entities>\"],\n  \"position\": \"<document's position on the sub-question, or empty>\",\n  \"evidenceQuotes\": [\"<VERBATIM source quote>\"],\n  \"quotes\": [{ \"text\": \"<each VERBATIM quote, one per entry>\" }]\n}"
+                    },
+                    "outputVariable": "_extractionOutput",
+                    "maxIterations": 1,
+                    "maxTokens": 6000
+                  },
+                  "execution": { "timeout": 90000, "retries": 1 }
+                },
+                {
+                  "id": "collect",
+                  "type": "structured-record",
+                  "config": {
+                    "schemaName": "corpusAnalysis",
+                    "schemaVersion": "v1",
+                    "inputPath": "$.data._extractionOutput",
+                    "sourcePath": "$.data._loopItem",
+                    "sourceSystem": "ifinder",
+                    "evidenceVar": "_evidence",
+                    "iterationIndexPath": "$.data._loopIndex"
+                  }
+                },
+                {
+                  "id": "increment-processed",
+                  "type": "transform",
+                  "config": {
+                    "operations": [{ "increment": "_coverage.processed", "by": 1 }]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "validate",
+      "type": "quote-validator",
+      "name": { "en": "Validate all quotes", "de": "Alle Zitate validieren" },
+      "position": { "x": 100, "y": 700 },
+      "config": {
+        "evidenceVar": "_evidence",
+        "coverageVar": "_coverage",
+        "corpusVar": "_corpusAll",
+        "maxSourceChars": 30000
+      }
+    },
+    {
+      "id": "synthesise",
+      "type": "prompt",
+      "name": { "en": "Synthesise across sub-questions", "de": "Über Teilfragen synthetisieren" },
+      "position": { "x": 100, "y": 860 },
+      "config": {
+        "temperature": 0.3,
+        "system": {
+          "en": "You synthesise evidence collected across multiple sub-questions into a single narrative. Group findings by sub-question, then offer cross-cutting themes. Cite docIds inline. Do not add facts beyond the evidence."
+        },
+        "prompt": {
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-questions\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n\n## Evidence (across all sub-questions)\n{{#each _evidence}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.extraction.data.position}}\n{{/each}}\n\nWrite a markdown synthesis: for each sub-question a short paragraph, then a cross-cutting ## Themes section and ## Offene Punkte."
+        },
+        "outputVariable": "_synthesis",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": { "timeout": 60000 }
+    },
+    {
+      "id": "compose",
+      "type": "template-render",
+      "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
+      "position": { "x": 100, "y": 1020 },
+      "config": {
+        "evidenceVar": "_evidence",
+        "coverageVar": "_coverage",
+        "synthesisVar": "_synthesis",
+        "artifactName": "corpus-analysis-decomposed.md",
+        "reportVar": "_report",
+        "template": "# Korpus-Vollständigkeitsanalyse (zerlegt)\n\n## Frage\n\n{{userQuestion}}\n\n{{#if _queryPlan.topics}}\n## Teilfragen\n\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert (über alle Teilfragen):** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if evidence}}\n## Per-Dokument-Evidenz\n\n{{#each evidence}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **Status:** {{this.status}}\n- **Position:** {{this.extraction.data.position}}\n\n{{#if this.extraction.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.extraction.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate:**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich — nächstgelegen: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+      }
+    },
+    {
+      "id": "expose-output",
+      "type": "transform",
+      "name": {
+        "en": "Expose user-facing output",
+        "de": "Nutzersichtbare Ausgabe bereitstellen"
+      },
+      "position": { "x": 100, "y": 1120 },
+      "config": {
+        "operations": [{ "copy": "_report.markdown", "to": "finalReport" }]
+      }
+    },
+    { "id": "end", "type": "end", "name": { "en": "Done", "de": "Fertig" }, "position": { "x": 100, "y": 1240 }, "config": { "outputVariables": ["finalReport"] } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "init" },
+    { "id": "e2", "source": "init", "target": "plan-subquestions" },
+    { "id": "e3", "source": "plan-subquestions", "target": "for-each-subquestion" },
+    { "id": "e4", "source": "for-each-subquestion", "target": "validate" },
+    { "id": "e5", "source": "validate", "target": "synthesise" },
+    { "id": "e6", "source": "synthesise", "target": "compose" },
+    { "id": "e7", "source": "compose", "target": "expose-output" },
+    { "id": "e8", "source": "expose-output", "target": "end" }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

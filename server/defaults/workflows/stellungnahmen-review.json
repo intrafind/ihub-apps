@@ -1,0 +1,286 @@
+{
+  "id": "stellungnahmen-review",
+  "name": {
+    "en": "Stellungnahmen Review (Audit-grade)",
+    "de": "Stellungnahmen-Auswertung (revisionssicher)"
+  },
+  "description": {
+    "en": "Drop one or more Stellungnahmen (PDF/DOCX/TXT) into the chat and trigger this workflow. Extracts each demanded change with its paragraph reference and verbatim source quote, produces an auditable Markdown report with one table per document.",
+    "de": "Eine oder mehrere Stellungnahmen (PDF/DOCX/TXT) in den Chat ziehen und diesen Workflow auslösen. Extrahiert jede geforderte Änderung mit Paragraphenbezug und wörtlichem Quellenzitat und erzeugt einen revisionssicheren Markdown-Bericht mit einer Tabelle pro Dokument."
+  },
+  "version": "1.2.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 900000,
+    "maxNodes": 25,
+    "maxIterations": 5,
+    "allowCycles": false,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Upload Stellungnahmen",
+        "de": "Stellungnahmen hochladen"
+      },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "_document",
+            "type": "file",
+            "required": false,
+            "label": {
+              "en": "Stellungnahme document(s)",
+              "de": "Stellungnahmen-Dokument(e)"
+            },
+            "description": {
+              "en": "One or more PDF/DOCX/TXT Stellungnahmen on a draft law. When triggered from chat via @mention, all files attached to the message are processed.",
+              "de": "Eine oder mehrere PDF/DOCX/TXT-Stellungnahmen zu einem Gesetzentwurf. Bei Auslösung aus dem Chat per @Mention werden alle an die Nachricht angehängten Dateien verarbeitet."
+            },
+            "accept": [
+              "application/pdf",
+              "text/plain",
+              "text/markdown",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ],
+            "maxSizeMB": 15
+          },
+          {
+            "name": "lawReference",
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Law reference (optional)",
+              "de": "Gesetzesbezug (optional)"
+            },
+            "description": {
+              "en": "The law being commented on, e.g. 'Notfallreform' or 'SGB V'. Helps the extractor focus.",
+              "de": "Das kommentierte Gesetz, z.B. 'Notfallreform' oder 'SGB V'. Hilft dem Extraktor beim Fokussieren."
+            }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Topic seeds (optional, comma-separated)",
+              "de": "Themenstichwörter (optional, kommagetrennt)"
+            },
+            "description": {
+              "en": "Comma-separated themes the extractor should hunt for. Example: '§ 60 SGB V, § 133 SGB V, Fahrtkosten, Rettungsdienst, Notfallrettung'.",
+              "de": "Kommagetrennte Themen, die der Extraktor suchen soll. Beispiel: '§ 60 SGB V, § 133 SGB V, Fahrtkosten, Rettungsdienst, Notfallrettung'."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "build-corpus",
+      "type": "code",
+      "name": {
+        "en": "Fan out uploaded files into corpus",
+        "de": "Hochgeladene Dateien in Korpus zerlegen"
+      },
+      "position": { "x": 100, "y": 200 },
+      "config": {
+        "code": "const raw = data._fileData || data._document; const files = Array.isArray(raw) ? raw : (raw ? [raw] : []); const diag = files.map((f, i) => ({ index: i, fileName: f && (f.fileName || f.name) || '(no name)', type: f && f.type, hasContent: typeof (f && f.content) === 'string' && f.content.length > 0, contentLen: typeof (f && f.content) === 'string' ? f.content.length : 0 })); console.log('build-corpus received ' + files.length + ' file(s):', JSON.stringify(diag)); const valid = files.filter(f => f && f.content && typeof f.content === 'string'); if (valid.length === 0) { throw new Error('No documents with extractable content received. ' + files.length + ' file(s) arrived. Diagnostic: ' + JSON.stringify(diag) + '. If files are showing as attached but content is empty, this likely means chat resend stripped the extracted text — please re-upload the files directly instead of using resend.'); } valid.map((f, i) => ({ docId: 'uploaded-' + (i + 1), sourceSystem: 'upload', title: f.fileName || f.name || ('document-' + (i + 1)), fileName: f.fileName || f.name || ('document-' + (i + 1)), content: f.content, type: 'document' }));",
+        "outputVariable": "_corpusRaw",
+        "timeout": 5000
+      }
+    },
+    {
+      "id": "init-coverage",
+      "type": "transform",
+      "name": {
+        "en": "Initialise corpus + coverage",
+        "de": "Korpus + Abdeckung initialisieren"
+      },
+      "position": { "x": 100, "y": 340 },
+      "config": {
+        "operations": [
+          { "copy": "_corpusRaw.result", "to": "_corpus" },
+          { "set": "_evidence", "value": [] },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": { "total": 0, "source": "upload" },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          },
+          { "lengthOf": "_corpus", "to": "_coverage.candidates.total" },
+          { "set": "_document", "value": null },
+          { "set": "_corpusRaw", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "analyse-each-doc",
+      "type": "loop",
+      "name": {
+        "en": "Analyse each document",
+        "de": "Jedes Dokument auswerten"
+      },
+      "position": { "x": 100, "y": 480 },
+      "config": {
+        "chatVisible": false,
+        "mode": "forEach",
+        "array": "_corpus",
+        "maxIterations": 50,
+        "body": [
+          {
+            "id": "announce-doc",
+            "type": "progress",
+            "config": {
+              "message": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}}: \"{{_loopItem.fileName}}\""
+            }
+          },
+          {
+            "id": "extract-evidence",
+            "type": "prompt",
+            "name": {
+              "en": "Extract demanded changes",
+              "de": "Geforderte Änderungen extrahieren"
+            },
+            "config": {
+              "system": {
+                "en": "You are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.",
+                "de": "Sie sind ein KI-Assistent, der PDF-Dokumente durchsuchen kann. Sie analysieren eine einzelne Stellungnahme zu einem Gesetzentwurf. Halten Sie sich strikt an folgende Regeln:\n- Antworten Sie immer in der Sprache des analysierten Dokuments. Vermischen Sie keine Sprachen.\n- Stützen Sie jede Aussage auf das Dokument. Niemals erfinden.\n- Zitate sind Zeichen für Zeichen aus der Quelle übernommen. Niemals paraphrasieren. Lassen Sie keine Zwischensätze aus einem zitierten Abschnitt weg.\n- Wiederholen Sie den Analyseprozess intern und verbessern Sie Ihr Ergebnis, bevor Sie es zurückgeben. Geben Sie ausschließlich das verbesserte Ergebnis aus."
+              },
+              "prompt": {
+                "en": "## Document\nAttached: Stellungnahme (document {{_loopHuman}} of {{_coverage.candidates.total}}).\n\nLaw reference (focus): {{lawReference}}\nTopic seeds (consider similar terms, word families, and synonyms): {{topicSeeds}}\n\n## Tasks\n1. Extract every demanded legislative change related to the topic seeds (and similar / synonymous terms) from the text.\n2. Write a one-sentence summary of each demanded change.\n3. For each demand, specify which part of the law it relates to (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). If no paragraph is named, leave the reference empty.\n4. Number the demands consecutively (Nr. 1, 2, 3 …).\n5. For each demand, provide the EXACT original formulation from the text as the `sourceQuote`. The quote must be character-for-character identical to the document and findable verbatim. Do not omit middle sentences — for example \"Sentence 1 is important. Sentence 2 is not important. Sentence 3 is important.\" must be quoted in full even when sentence 2 is not relevant.\n6. Sort the demands by paragraph and subsection. If no paragraph is given, sort by topic.\n7. Determine the author of the Stellungnahme as the organisation (not the individual person).\n8. Determine the title of the Stellungnahme.\n9. Internally repeat the process and improve the result before output.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
+                "de": "## Dokument\nAngehängt: Stellungnahme (Dokument {{_loopHuman}} von {{_coverage.candidates.total}}).\n\nGesetzesbezug (Fokus): {{lawReference}}\nThemenstichwörter (auch ähnliche Begriffe aus der Wortfamilie und Synonyme berücksichtigen): {{topicSeeds}}\n\n## Aufgaben\n1. Extrahieren Sie jede geforderte Gesetzesänderung zu den Themenstichwörtern (sowie ähnlichen Begriffen / Synonymen) aus dem Text.\n2. Beschreiben Sie jede geforderte Gesetzesänderung in einem Satz.\n3. Spezifizieren Sie für jede Forderung, auf welchen Teil des Gesetzes sie sich bezieht (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Wenn kein Paragraph genannt wird, lassen Sie das Feld leer.\n4. Nummerieren Sie die Forderungen fortlaufend (Nr. 1, 2, 3 …).\n5. Liefern Sie für jede Forderung die genaue Originalformulierung aus dem Text als `sourceQuote`. Das Zitat muss exakt aus dem Originaltext übernommen und in dieser Formulierung im Text auffindbar sein. Lassen Sie keine Sätze in der Mitte weg — zum Beispiel muss \"Satz 1 ist wichtig. Satz 2 ist nicht wichtig. Satz 3 ist wichtig.\" genauso zitiert werden, auch wenn Satz 2 nicht relevant ist.\n6. Sortieren Sie die Forderungen nach Paragraphen und Absätzen. Wenn kein Paragraph genannt wird, sortieren Sie nach Themen.\n7. Bestimmen Sie den Autor der Stellungnahme im Sinne der Organisation (nicht der Person).\n8. Bestimmen Sie den Titel der Stellungnahme.\n9. Wiederholen Sie den Prozess intern und verbessern Sie das Ergebnis vor der Ausgabe.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
+              },
+              "inputFiles": ["_loopItem"],
+              "outputVariable": "_extractionOutput",
+              "maxTokens": 16000,
+              "outputSchema": {
+                "type": "object",
+                "properties": {
+                  "organisation": { "type": "string" },
+                  "title": { "type": "string" },
+                  "demandedChanges": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "paragraphReference": { "type": "string" },
+                        "summary": { "type": "string" },
+                        "sourceQuote": { "type": "string" }
+                      },
+                      "required": ["summary"]
+                    }
+                  },
+                  "quotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": { "text": { "type": "string" } },
+                      "required": ["text"]
+                    }
+                  }
+                },
+                "required": ["organisation", "title", "demandedChanges", "quotes"]
+              }
+            },
+            "execution": {
+              "timeout": 300000,
+              "retries": 1
+            }
+          },
+          {
+            "id": "collect-evidence",
+            "type": "structured-record",
+            "name": {
+              "en": "Capture structured evidence",
+              "de": "Strukturierte Evidenz erfassen"
+            },
+            "config": {
+              "schemaName": "stellungnahmenReview",
+              "schemaVersion": "v1",
+              "inputPath": "$.data._extractionOutput",
+              "sourcePath": "$.data._loopItem",
+              "sourceSystem": "upload",
+              "evidenceVar": "_evidence",
+              "iterationIndexPath": "$.data._loopIndex"
+            }
+          },
+          {
+            "id": "mark-processed",
+            "type": "transform",
+            "config": {
+              "operations": [
+                { "increment": "_coverage.processed", "by": 1 },
+                { "set": "_extractionOutput", "value": null }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "compose-report",
+      "type": "template-render",
+      "name": {
+        "en": "Render audit report",
+        "de": "Auditbericht erzeugen"
+      },
+      "position": { "x": 100, "y": 800 },
+      "config": {
+        "evidenceVar": "_evidence",
+        "coverageVar": "_coverage",
+        "artifactName": "stellungnahmen-review.md",
+        "reportVar": "_report",
+        "template": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n\n{{#each evidence}}\n**Autor:** {{this.extraction.data.organisation}}\n\n**Titel:** {{this.extraction.data.title}}\n\n**Datei:** `{{this.source.title}}`\n\n{{#if this.extraction.data.demandedChanges}}\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n{{#each this.extraction.data.demandedChanges}}\n| {{@index}} | {{this.paragraphReference}} | {{this.summary}} _({{this.sourceQuote}})_ |\n{{/each}}\n{{/if}}\n{{#unless this.extraction.data.demandedChanges}}\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n{{/unless}}\n\n{{#if this.failures}}\n_Hinweise:_\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n"
+      }
+    },
+    {
+      "id": "expose-output",
+      "type": "transform",
+      "name": {
+        "en": "Expose user-facing output",
+        "de": "Nutzersichtbare Ausgabe bereitstellen"
+      },
+      "position": { "x": 100, "y": 940 },
+      "config": {
+        "operations": [
+          { "copy": "_report.markdown", "to": "finalReport" }
+        ]
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "Done", "de": "Fertig" },
+      "position": { "x": 100, "y": 1080 },
+      "config": {
+        "outputVariables": ["finalReport"]
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "build-corpus" },
+    { "id": "e2", "source": "build-corpus", "target": "init-coverage" },
+    { "id": "e3", "source": "init-coverage", "target": "analyse-each-doc" },
+    { "id": "e4", "source": "analyse-each-doc", "target": "compose-report" },
+    { "id": "e5", "source": "compose-report", "target": "expose-output" },
+    { "id": "e6", "source": "expose-output", "target": "end" }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

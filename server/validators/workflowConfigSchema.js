@@ -118,7 +118,14 @@ const nodeTypeEnum = z.enum([
   'verifier',
   'loop',
   'http',
-  'code'
+  'code',
+  // Completeness-analysis primitives. See concepts/2026-06-02 Completeness Analysis Workflows.md
+  'query-plan',
+  'corpus-search',
+  'structured-record',
+  'quote-validator',
+  'template-render',
+  'progress'
 ]);
 
 /**

@@ -1312,6 +1312,17 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         messageCount: currentMessages.length
       });
 
+      // When the node declares `outputSchema`, forward it to the LLM as
+      // `responseSchema` so adapters that support native structured output
+      // (Google Gemini sets `generationConfig.response_schema`; OpenAI uses
+      // `response_format.json_schema`) force the model to emit conformant
+      // JSON instead of free-form prose. Without this we rely on
+      // post-response parsing in `parseStructuredOutput`, which fails when
+      // the LLM wraps the JSON in unexpected ways or adds explanatory
+      // prose — the source of "Could not parse structured output" warnings.
+      const responseSchema = config.outputSchema || undefined;
+      const responseFormat = responseSchema ? 'json' : undefined;
+
       // Execute the request using the helper (filters invalid options like user, chatId)
       const response = await this.llmHelper.executeStreamingRequest({
         model,
@@ -1320,7 +1331,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         options: {
           temperature,
           maxTokens,
-          tools: tools.length > 0 ? tools : undefined
+          tools: tools.length > 0 ? tools : undefined,
+          responseSchema,
+          responseFormat
           // Note: user and chatId are intentionally NOT passed here
           // They are not valid adapter options and would corrupt provider request bodies
         },
@@ -1330,6 +1343,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Accumulate content
       if (response.content) {
         finalContent += response.content;
+      }
+
+      // When responseSchema is set, the Anthropic adapter implements structured
+      // output by forcing a synthetic `json` tool call (since Anthropic has no
+      // native response_format JSON schema). The LLM's reply arrives as a
+      // tool_use block, not as content. Lift its arguments into finalContent so
+      // downstream parseStructuredOutput sees the JSON, and drop the synthetic
+      // call so the tool-execution loop below doesn't try to run a tool that
+      // doesn't exist.
+      if (responseSchema && response.toolCalls?.length > 0) {
+        const jsonCall = response.toolCalls.find(tc => tc.function?.name === 'json');
+        if (jsonCall?.function?.arguments) {
+          finalContent += jsonCall.function.arguments;
+          response.toolCalls = response.toolCalls.filter(tc => tc !== jsonCall);
+        }
       }
 
       // Capture Gemini native grounding metadata (googleSearch). Unlike
