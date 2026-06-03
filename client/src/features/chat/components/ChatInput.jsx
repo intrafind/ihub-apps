@@ -375,12 +375,33 @@ function ChatInput({
       {fileTokenWarning && (
         <div className="mx-2 mb-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
           <span className="mt-0.5 flex-shrink-0">⚠️</span>
-          <span>
-            {t('errors.documentTooLarge', {
-              estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-              tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
-            })}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span>
+              {(fileTokenWarning.files?.length || 0) > 1
+                ? t('errors.documentTooLargeCombined', {
+                    fileCount: fileTokenWarning.files.length,
+                    estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
+                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                  })
+                : t('errors.documentTooLarge', {
+                    fileName: fileTokenWarning.files?.[0]?.fileName || '',
+                    estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
+                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                  })}
+            </span>
+            {(fileTokenWarning.files?.length || 0) > 1 && (
+              <ul className="ml-1 list-inside list-disc">
+                {fileTokenWarning.files.map((f, idx) => (
+                  <li key={idx}>
+                    {t('errors.documentTooLargeFileItem', {
+                      fileName: f.fileName,
+                      estimatedTokens: f.estimatedTokens.toLocaleString(i18n.language)
+                    })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 

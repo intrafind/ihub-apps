@@ -302,23 +302,29 @@ function AppChat({ preloadedApp = null }) {
       return;
     }
 
-    // Estimate token count using chars/4 approximation (standard heuristic for English text;
-    // token-to-character ratios vary for other languages and scripts)
-    const totalEstimatedTokens = documentFiles.reduce(
-      (sum, f) => sum + Math.ceil((f.content?.length || 0) / 4),
-      0
-    );
+    // Estimate token count per file using chars/4 approximation (standard heuristic for English
+    // text; token-to-character ratios vary for other languages and scripts)
+    const perFile = documentFiles.map((f, index) => ({
+      fileName:
+        f.fileName ||
+        f.name ||
+        t('common.untitledFile', 'Document {{index}}', { index: index + 1 }),
+      estimatedTokens: Math.ceil((f.content?.length || 0) / 4)
+    }));
+    const totalEstimatedTokens = perFile.reduce((sum, f) => sum + f.estimatedTokens, 0);
 
-    // Warn when document content alone would exceed 80% of the model's context window
+    // Warn when document content alone would exceed 80% of the model's context window.
+    // The estimate is the combined total across ALL attached documents, not per file.
     if (totalEstimatedTokens > currentModel.tokenLimit * 0.8) {
       setFileTokenWarning({
         estimatedTokens: totalEstimatedTokens,
-        tokenLimit: currentModel.tokenLimit
+        tokenLimit: currentModel.tokenLimit,
+        files: perFile
       });
     } else {
       setFileTokenWarning(null);
     }
-  }, [fileUploadHandler.selectedFile, selectedModel, models]);
+  }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
 
   // Integration authentication detection
   const {

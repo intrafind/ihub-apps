@@ -1623,7 +1623,9 @@
     "tiffProcessingError": "Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.",
     "readError": "Error reading file",
     "fileProcessingError": "Error processing file. Please try again.",
-    "documentTooLarge": "The document is large (~{{estimatedTokens}} estimated tokens) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider using a shorter document or selecting a model with a larger context window."
+    "documentTooLarge": "\"{{fileName}}\" is large (~{{estimatedTokens}} estimated tokens) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider using a shorter document or selecting a model with a larger context window.",
+    "documentTooLargeCombined": "The {{fileCount}} attached documents together are large (~{{estimatedTokens}} estimated tokens combined) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider removing some documents or selecting a model with a larger context window.",
+    "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} tokens"
   },
   "toolbar": {
     "bold": "Bold",
