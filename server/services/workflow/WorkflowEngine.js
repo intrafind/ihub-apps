@@ -25,10 +25,14 @@ const MIN_NODE_TIMEOUT = 1000; // 1 second
 const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
 
 /**
- * Maximum number of execution iterations to prevent infinite loops
+ * Engine-level cap on total scheduler iterations (each iteration runs one
+ * ready node). This is a backstop above the per-node `maxIterations`
+ * check; the per-node cap is the primary safety. Set high enough to
+ * accommodate cycle-shaped workflows that visit many nodes many times
+ * (e.g. 5 sub-questions × 100 docs × ~5 inner cycle nodes ≈ 2500).
  * @constant {number}
  */
-const MAX_EXECUTION_ITERATIONS = 200;
+const MAX_EXECUTION_ITERATIONS = 10000;
 
 /**
  * WorkflowEngine is the main orchestrator for executing workflow definitions.
