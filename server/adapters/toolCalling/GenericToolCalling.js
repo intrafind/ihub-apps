@@ -274,6 +274,14 @@ export function sanitizeSchemaForProvider(schema, provider) {
         delete obj.format; // Google has limited format support
         delete obj.minLength; // Use 'minimum' instead for strings
         delete obj.maxLength; // Use 'maximum' instead for strings
+        // JSON Schema meta keywords that Google's restricted OpenAPI subset
+        // rejects with HTTP 400 ("Unknown name ..."). MCP tools routinely emit
+        // these ($schema + additionalProperties: false from their JSON Schema
+        // draft), so strip them or every MCP tool call to Gemini fails.
+        delete obj.$schema;
+        delete obj.$id;
+        delete obj.additionalProperties;
+        delete obj.patternProperties;
       }
 
       if (provider === 'anthropic') {

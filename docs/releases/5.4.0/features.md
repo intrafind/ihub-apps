@@ -203,3 +203,11 @@ Attaching many files to a chat message no longer pushes the message box and send
 - When expanded, the list is **height-capped and scrolls internally** — about 6 rows on desktop and 4 rows in the narrow Outlook task pane — so the chat input always remains reachable.
 - **1–3 files** display exactly as before, with no extra controls.
 - **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.
+
+## MCP and JSON Schema Tools Now Work with Google Gemini
+
+Tools whose parameter schemas include standard JSON Schema metadata — most notably tools exposed through MCP servers — now work with Google Gemini models. Previously these calls failed with a `400 INVALID_REQUEST` error from Google.
+
+- Gemini's tool format rejects JSON Schema keywords such as `$schema` and `additionalProperties`, which MCP tools routinely emit. These keywords are now stripped from tool parameter schemas before the request is sent to Google.
+- A parameter literally named `additionalProperties` is preserved, so legitimate tool inputs are unaffected.
+- Other providers (OpenAI, Anthropic, Bedrock, Mistral) are unchanged.
