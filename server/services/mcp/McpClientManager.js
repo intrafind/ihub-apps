@@ -1,6 +1,22 @@
 import { McpServerConnection } from './McpServerConnection.js';
-import { mcpServersFileSchema } from '../../validators/mcpServerConfigSchema.js';
+import {
+  mcpServersFileSchema,
+  mcpServerConfigSchema
+} from '../../validators/mcpServerConfigSchema.js';
 import logger from '../../utils/logger.js';
+
+/**
+ * Slim down the internal tool representation for transport to the admin UI.
+ * Drops the `_mcp` dispatch markers and keeps the human-facing fields.
+ */
+function summarizeTools(tools) {
+  return (tools || []).map(t => ({
+    name: t.name,
+    originalName: t._mcp?.originalName ?? t.name,
+    description: t.description || '',
+    parameters: t.parameters || { type: 'object', properties: {} }
+  }));
+}
 
 /**
  * Singleton that owns one McpServerConnection per configured MCP server.
@@ -179,8 +195,41 @@ class McpClientManager {
   }
 
   /**
-   * Force-trigger a connection attempt and return its status. Used by the
-   * admin "Test connection" button.
+   * Per-server tool catalog used by the app editor's MCP picker. Unlike
+   * `listAllTools` (which flattens + dedupes across servers) this preserves the
+   * server grouping so the UI can present "tools from server X". Best-effort:
+   * a server that fails tool discovery is returned with an `error` and an empty
+   * tool list rather than poisoning the whole response.
+   */
+  async listToolsByServer() {
+    if (!this.initialized) return [];
+    const out = [];
+    await Promise.all(
+      Array.from(this.connections.values()).map(async conn => {
+        const entry = {
+          id: conn.config.id,
+          name: conn.config.name || conn.config.id,
+          enabled: conn.config.enabled !== false,
+          tools: [],
+          error: null
+        };
+        if (entry.enabled) {
+          try {
+            entry.tools = summarizeTools(await conn.listTools());
+          } catch (err) {
+            entry.error = err.message;
+          }
+        }
+        out.push(entry);
+      })
+    );
+    return out;
+  }
+
+  /**
+   * Force-trigger a connection attempt on an already-configured server and
+   * return its status plus the discovered tool catalog. Used by the admin
+   * "Test connection" button on saved servers.
    */
   async testConnection(serverId) {
     const conn = this.connections.get(serverId);
@@ -189,8 +238,34 @@ class McpClientManager {
     conn.consecutiveFailures = 0;
     conn.unhealthy = false;
     await conn.connect();
-    await conn.listTools(); // also exercise tools/list
-    return conn.status();
+    const tools = await conn.listTools(); // also exercise tools/list
+    return { status: conn.status(), tools: summarizeTools(tools) };
+  }
+
+  /**
+   * Probe an arbitrary (possibly unsaved) server config without registering
+   * it. Used by the admin dialog so an operator can validate a connection and
+   * preview the available tools before persisting the server. The ephemeral
+   * connection is always torn down, even on failure, so no socket or child
+   * process leaks.
+   */
+  async testConfig(rawServerConfig) {
+    const parsed = mcpServerConfigSchema.safeParse(rawServerConfig);
+    if (!parsed.success) {
+      const err = new Error('Invalid server config');
+      err.details = parsed.error.errors;
+      throw err;
+    }
+    // Force-enable for the probe: the admin explicitly asked to test it, even
+    // if they intend to leave the server disabled after saving.
+    const conn = new McpServerConnection({ ...parsed.data, enabled: true }, this.security);
+    try {
+      await conn.connect();
+      const tools = await conn.listTools();
+      return { status: conn.status(), tools: summarizeTools(tools) };
+    } finally {
+      await conn.disconnect().catch(() => {});
+    }
   }
 }
 
