@@ -155,6 +155,14 @@ The audit log now supports a configurable retention policy.
 
 The admin Overview now shows a **Recent activity** card listing the eight most recent audit log entries (action pill, summary, admin, resource, relative time). Clicking "View all" jumps to the filtered Audit Log page.
 
+## Chat Export — Proper Markdown Rendering in PDF and HTML
+
+PDF and HTML chat exports now render the full assistant markdown instead of showing raw markup. The export previously used a limited hand-rolled parser that left GFM tables as raw `| ... |` text, emitted list items without proper `<ul>`/`<ol>` wrappers, and wrapped all block content in a single invalid `<p>` tag.
+
+- Exports now use the same `marked` + DOMPurify pipeline the chat UI uses, so **tables, headings, ordered/unordered lists, code blocks, blockquotes, links, and horizontal rules** all render correctly.
+- An isolated `marked` instance is used for exports so the downloaded document contains clean semantic HTML — no interactive copy/download toolbars or mermaid placeholders that wouldn't work outside the app.
+- Added print-friendly styling for tables, code blocks, blockquotes, and links in the export template.
+
 ## Accessibility — WCAG 2.2 AA Tooling and Remediation
 
 The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alignment with EN 301 549 and BITV 2.0 for public-sector procurement.
@@ -172,3 +180,19 @@ Configuring and using external MCP (Model Context Protocol) servers is now far s
 - **Test before you save**: a **Test connection** button inside the create/edit dialog probes the server (even with unsaved changes) and lists the tools it exposes, so you can verify credentials and discover tool names without saving first.
 - **Dedicated MCP tools section in the app editor**: each app now has an **MCP server tools** section that groups available tools by server with per-tool and "select all" toggles, instead of requiring you to know and type MCP tool ids in the generic tools list.
 - **Stronger gateway authorization**: the inbound MCP gateway now re-checks the caller's scope (and, for apps and workflows, their permissions) at call time — not just when listing — so revoked access takes effect immediately within a session.
+
+## Fix — Spurious "Unsaved Changes" Prompt After Saving
+
+Clicking **Save** on any admin edit page (apps, models, prompts, sources, users, groups, and others) no longer triggers the "You have unsaved changes" confirmation dialog. Saving now navigates back to the list immediately.
+
+- The unsaved-changes guard previously used a stale dirty-state value captured before the save completed, so the navigation triggered by Save itself was treated as an unsaved-changes navigation.
+- The guard now reads the live dirty state at navigation time, so genuine back/cancel navigation with unsaved edits is still protected.
+
+## File Attachments — Collapsible List Keeps the Chat Input in View
+
+Attaching many files to a chat message no longer pushes the message box and send button off-screen. The attached-files list now stays compact regardless of how many files are queued.
+
+- With **four or more files**, the list **auto-collapses** to a one-line summary (`12 files · 4.3 MB`) with a chevron to expand it. Users can expand or collapse it at any time.
+- When expanded, the list is **height-capped and scrolls internally** — about 6 rows on desktop and 4 rows in the narrow Outlook task pane — so the chat input always remains reachable.
+- **1–3 files** display exactly as before, with no extra controls.
+- **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.
