@@ -2,12 +2,12 @@ import { describe, it, expect } from '@jest/globals';
 import { listMcpResources, readMcpResource } from '../../services/mcp/resourceAdapter.js';
 
 describe('MCP resource adapter — URI parsing', () => {
-  it('listMcpResources returns [] when expose.resources is false', () => {
-    expect(listMcpResources({ user: {}, expose: { resources: false } })).toEqual([]);
+  it('listMcpResources returns [] when expose.resources is false', async () => {
+    await expect(listMcpResources({ user: {}, expose: { resources: false } })).resolves.toEqual([]);
   });
 
-  it('listMcpResources returns an array when expose.resources is true', () => {
-    const r = listMcpResources({ user: { permissions: {} }, expose: { resources: true } });
+  it('listMcpResources returns an array when expose.resources is true', async () => {
+    const r = await listMcpResources({ user: { permissions: {} }, expose: { resources: true } });
     expect(Array.isArray(r)).toBe(true);
   });
 
@@ -34,14 +34,16 @@ describe('MCP resource adapter — URI parsing', () => {
   });
 
   it('rejects URL-encoded path-traversal in source ids', async () => {
+    // The path.basename sanitiser rejects the decoded `../config` before any
+    // source lookup, so the failure surfaces as "Invalid resource id".
     await expect(readMcpResource('ihub://source/..%2Fconfig', { user: {} })).rejects.toThrow(
-      /Source not found/
+      /Invalid resource id/
     );
   });
 
   it('rejects URL-encoded path-traversal in skill names', async () => {
     await expect(readMcpResource('ihub://skill/..%2Fetc%2Fpasswd', { user: {} })).rejects.toThrow(
-      /Skill not found/
+      /Invalid resource id/
     );
   });
 

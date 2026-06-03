@@ -2,19 +2,13 @@ export default {
   // Use Node.js environment for testing
   testEnvironment: 'node',
 
-  // Support ES modules
-  preset: '@babel/preset-env',
-  extensionsToTreatAsEsm: ['.js'],
-
-  // Transform files with Babel
-  transform: {
-    '^.+\\.js$': [
-      'babel-jest',
-      {
-        presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
-      }
-    ]
-  },
+  // The package is "type": "module" and source files use native ESM features
+  // such as `import.meta.url`, so tests run as real ES modules under Jest's
+  // experimental VM modules (the `test` script sets --experimental-vm-modules).
+  // .js is treated as ESM automatically because package.json is type:module, and
+  // an empty transform lets Node execute the ESM directly — a CommonJS
+  // down-level transpile would break `import.meta`.
+  transform: {},
 
   // Test file patterns
   testMatch: ['**/tests/**/*.test.js', '**/__tests__/**/*.js'],
@@ -41,8 +35,9 @@ export default {
     }
   },
 
-  // Module name mapping for mocks
-  moduleNameMapping: {
+  // Strip explicit .js extensions from relative imports so they resolve under
+  // Jest's transpiled-CommonJS module system.
+  moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
 

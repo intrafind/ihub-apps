@@ -172,6 +172,15 @@ The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alig
 - **Remediations**: the Export dialog is now a proper focus-trapped modal (`role="dialog"`, Escape to close, focus restored on close); image remove/download buttons expose screen-reader labels; and footer links are grouped in a labeled navigation landmark.
 - See **docs/accessibility.md** for the full compliance statement, keyboard reference, and manual testing checklist.
 
+## MCP Servers — Easier Setup, Connection Testing, and Per-App Tool Selection
+
+Configuring and using external MCP (Model Context Protocol) servers is now far smoother.
+
+- **Readable "Add MCP server" dialog**: form fields are no longer invisible (white-on-white) — inputs now have proper borders and focus styling in both light and dark mode.
+- **Test before you save**: a **Test connection** button inside the create/edit dialog probes the server (even with unsaved changes) and lists the tools it exposes, so you can verify credentials and discover tool names without saving first.
+- **Dedicated MCP tools section in the app editor**: each app now has an **MCP server tools** section that groups available tools by server with per-tool and "select all" toggles, instead of requiring you to know and type MCP tool ids in the generic tools list.
+- **Stronger gateway authorization**: the inbound MCP gateway now re-checks the caller's scope (and, for apps and workflows, their permissions) at call time — not just when listing — so revoked access takes effect immediately within a session.
+
 ## Fix — Spurious "Unsaved Changes" Prompt After Saving
 
 Clicking **Save** on any admin edit page (apps, models, prompts, sources, users, groups, and others) no longer triggers the "You have unsaved changes" confirmation dialog. Saving now navigates back to the list immediately.
@@ -185,3 +194,12 @@ The warning shown when an attached document may exceed the model's context windo
 
 - For a single document, the warning includes the file name (e.g. `"report.pdf" is large (~270,509 estimated tokens)…`).
 - When multiple documents are attached, the warning makes clear the estimate is the **combined** total across all of them and lists each file with its individual token estimate, so it's obvious which files contribute most.
+
+## File Attachments — Collapsible List Keeps the Chat Input in View
+
+Attaching many files to a chat message no longer pushes the message box and send button off-screen. The attached-files list now stays compact regardless of how many files are queued.
+
+- With **four or more files**, the list **auto-collapses** to a one-line summary (`12 files · 4.3 MB`) with a chevron to expand it. Users can expand or collapse it at any time.
+- When expanded, the list is **height-capped and scrolls internally** — about 6 rows on desktop and 4 rows in the narrow Outlook task pane — so the chat input always remains reachable.
+- **1–3 files** display exactly as before, with no extra controls.
+- **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.

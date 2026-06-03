@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ToolsSelector from '../../../shared/components/ToolsSelector';
+import McpToolsSelector from './McpToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import WorkflowsSelector from '../../../shared/components/WorkflowsSelector';
 import SourcePicker from './SourcePicker';
@@ -43,6 +44,9 @@ function AppFormEditor({
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
+  // Tool ids sourced from MCP servers. Managed in a dedicated section and
+  // excluded from the generic tools picker so they don't appear twice.
+  const [mcpToolIds, setMcpToolIds] = useState([]);
   const featureFlags = useFeatureFlags();
 
   // Check if sources feature is enabled
@@ -1267,8 +1271,33 @@ function AppFormEditor({
                       'tavilySearch',
                       'googleSearch',
                       'webSearch',
-                      'webContentExtractor'
+                      'webContentExtractor',
+                      ...mcpToolIds
                     ]}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* MCP Server Tools */}
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                    {t('admin.apps.edit.mcpTools.title', 'MCP server tools')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.mcpTools.desc',
+                      'Enable tools provided by connected MCP servers for this app.'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2">
+                  <McpToolsSelector
+                    selectedTools={app.tools || []}
+                    onToolsChange={tools => handleInputChange('tools', tools)}
+                    onMcpToolIdsChange={setMcpToolIds}
                   />
                 </div>
               </div>

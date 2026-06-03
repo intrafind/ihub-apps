@@ -11,7 +11,13 @@
     "remove": "Remove file",
     "sourceLocal": "Local file",
     "sourceCloud": "Cloud file",
-    "loading": "Loading document..."
+    "loading": "Loading document...",
+    "title": "Attachments",
+    "summary": "{{count}} files · {{size}}",
+    "loadingCount": "{{count}} loading…",
+    "showList": "Show file list",
+    "hideList": "Hide file list",
+    "regionLabel": "Attached files"
   },
   "app": {
     "title": "iHub Apps",
@@ -1209,6 +1215,13 @@
         "actions": {
           "test": "Test connection"
         },
+        "test": {
+          "button": "Test connection",
+          "running": "Testing connection…",
+          "success": "Connected — {{count}} tools discovered",
+          "failed": "Connection failed: {{error}}",
+          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist)."
+        },
         "status": {
           "unknown": "unknown",
           "unhealthy": "unhealthy",
@@ -1408,6 +1421,20 @@
       "edit": {
         "autoStart": "Auto-start conversation",
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
+        "mcpTools": {
+          "title": "MCP server tools",
+          "desc": "Enable tools provided by connected MCP servers for this app.",
+          "loading": "Loading MCP tools…",
+          "error": "Failed to load MCP tools: {{error}}",
+          "empty": "No MCP servers are configured. Add one under Integrations → MCP servers to expose its tools here.",
+          "disabled": "disabled",
+          "selectedCount": "{{count}} selected",
+          "selectAll": "Select all",
+          "deselectAll": "Deselect all",
+          "serverError": "Could not list tools: {{error}}",
+          "noServerTools": "This server exposes no tools.",
+          "helper": "Tools provided by connected MCP servers. Selections are saved with the app and resolved at runtime."
+        },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
         "websearchEnabled": "Enable Web Search",

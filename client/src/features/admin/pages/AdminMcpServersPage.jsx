@@ -16,6 +16,15 @@ const BLANK_FORM = {
   timeoutMs: 30000
 };
 
+// Shared input styling. The project does not use @tailwindcss/forms, so a bare
+// `border-gray-300` sets only the colour and leaves the element with no border
+// width — invisible against the white modal background. These classes set an
+// explicit border, padding, text colour, and focus ring so inputs are legible
+// in both light and dark mode.
+const INPUT_CLASS =
+  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
+const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
+
 function transportFields(transport, onChange, t) {
   if (
     transport.type === 'streamableHttp' ||
@@ -32,7 +41,7 @@ function transportFields(transport, onChange, t) {
           required
           value={transport.url || ''}
           onChange={e => onChange({ ...transport, url: e.target.value })}
-          className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          className={INPUT_CLASS}
           placeholder="https://mcp.example.com/sse"
         />
       </div>
@@ -50,7 +59,7 @@ function transportFields(transport, onChange, t) {
             required
             value={transport.command || ''}
             onChange={e => onChange({ ...transport, command: e.target.value })}
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+            className={INPUT_CLASS}
             placeholder="/usr/local/bin/my-mcp-server"
           />
         </div>
@@ -70,7 +79,7 @@ function transportFields(transport, onChange, t) {
                   .filter(Boolean)
               })
             }
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+            className={MONO_INPUT_CLASS}
           />
         </div>
       </div>
@@ -96,7 +105,7 @@ function authFields(auth, onChange, t) {
             if (v === 'oauth')
               return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecret: '' });
           }}
-          className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+          className={INPUT_CLASS}
         >
           <option value="none">{t('admin.mcp.servers.form.authNone', 'None')}</option>
           <option value="bearer">{t('admin.mcp.servers.form.authBearer', 'Bearer token')}</option>
@@ -115,7 +124,7 @@ function authFields(auth, onChange, t) {
             type="password"
             value={auth.token || ''}
             onChange={e => onChange({ ...auth, token: e.target.value })}
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+            className={MONO_INPUT_CLASS}
             placeholder="ghp_..."
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -136,7 +145,7 @@ function authFields(auth, onChange, t) {
               type="text"
               value={auth.username || ''}
               onChange={e => onChange({ ...auth, username: e.target.value })}
-              className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+              className={INPUT_CLASS}
             />
           </div>
           <div>
@@ -147,7 +156,7 @@ function authFields(auth, onChange, t) {
               type="password"
               value={auth.password || ''}
               onChange={e => onChange({ ...auth, password: e.target.value })}
-              className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+              className={INPUT_CLASS}
             />
           </div>
         </>
@@ -194,6 +203,8 @@ function AdminMcpServersPage() {
   const [message, setMessage] = useState(null);
   const [editing, setEditing] = useState(null); // null | server | 'new'
   const [form, setForm] = useState(BLANK_FORM);
+  const [draftTesting, setDraftTesting] = useState(false);
+  const [draftTest, setDraftTest] = useState(null); // null | { ok, status, tools } | { ok:false, error }
 
   const load = async () => {
     setLoading(true);
@@ -219,6 +230,7 @@ function AdminMcpServersPage() {
 
   const startCreate = () => {
     setForm(BLANK_FORM);
+    setDraftTest(null);
     setEditing('new');
   };
 
@@ -230,23 +242,55 @@ function AdminMcpServersPage() {
       description:
         typeof server.description === 'string' ? server.description : server.description?.en || ''
     });
+    setDraftTest(null);
     setEditing(server.id);
+  };
+
+  const closeDialog = () => {
+    setEditing(null);
+    setDraftTest(null);
+  };
+
+  // Build the request body shared by save() and the in-dialog test probe.
+  const buildBody = () => ({
+    ...form,
+    name: form.name ? { en: form.name } : undefined,
+    description: form.description ? { en: form.description } : undefined,
+    allowedTools:
+      typeof form.allowedTools === 'string'
+        ? form.allowedTools
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+        : form.allowedTools || ['*']
+  });
+
+  // Probe the connection for the config currently in the dialog, without
+  // persisting it. Lets the admin validate credentials and preview the tool
+  // catalog before saving.
+  const testDraft = async () => {
+    setDraftTesting(true);
+    setDraftTest(null);
+    try {
+      const { data } = await makeAdminApiCall('/admin/mcp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody())
+      });
+      setDraftTest({ ok: true, status: data.status, tools: data.tools || [] });
+    } catch (err) {
+      setDraftTest({
+        ok: false,
+        error: err.response?.data?.error || err.message
+      });
+    } finally {
+      setDraftTesting(false);
+    }
   };
 
   const save = async () => {
     try {
-      const body = {
-        ...form,
-        name: form.name ? { en: form.name } : undefined,
-        description: form.description ? { en: form.description } : undefined,
-        allowedTools:
-          typeof form.allowedTools === 'string'
-            ? form.allowedTools
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean)
-            : form.allowedTools || ['*']
-      };
+      const body = buildBody();
       const path =
         editing === 'new'
           ? '/admin/mcp/servers'
@@ -258,7 +302,7 @@ function AdminMcpServersPage() {
         body: JSON.stringify(body)
       });
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
-      setEditing(null);
+      closeDialog();
       await load();
     } catch (err) {
       setMessage({
@@ -444,7 +488,7 @@ function AdminMcpServersPage() {
                     required
                     value={form.id}
                     onChange={e => setForm({ ...form, id: e.target.value })}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                    className={INPUT_CLASS}
                     placeholder="github-mcp"
                   />
                 </div>
@@ -457,7 +501,7 @@ function AdminMcpServersPage() {
                   type="text"
                   value={form.name || ''}
                   onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                  className={INPUT_CLASS}
                 />
               </div>
               <div>
@@ -468,7 +512,7 @@ function AdminMcpServersPage() {
                   rows={2}
                   value={form.description || ''}
                   onChange={e => setForm({ ...form, description: e.target.value })}
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                  className={INPUT_CLASS}
                 />
               </div>
               <div className="flex items-center space-x-2">
@@ -496,7 +540,7 @@ function AdminMcpServersPage() {
                         type === 'stdio' ? { type, command: '', args: [] } : { type, url: '' };
                       setForm({ ...form, transport: next });
                     }}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                    className={INPUT_CLASS}
                   >
                     <option value="streamableHttp">
                       {t(
@@ -539,7 +583,7 @@ function AdminMcpServersPage() {
                     value={form.toolPrefix || ''}
                     onChange={e => setForm({ ...form, toolPrefix: e.target.value })}
                     placeholder={`${form.id || 'server'}__`}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+                    className={MONO_INPUT_CLASS}
                   />
                 </div>
                 <div>
@@ -552,7 +596,7 @@ function AdminMcpServersPage() {
                     max="600000"
                     value={form.timeoutMs}
                     onChange={e => setForm({ ...form, timeoutMs: Number(e.target.value) })}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </div>
@@ -572,23 +616,89 @@ function AdminMcpServersPage() {
                       : form.allowedTools || '*'
                   }
                   onChange={e => setForm({ ...form, allowedTools: e.target.value })}
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+                  className={MONO_INPUT_CLASS}
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2">
+              {(draftTesting || draftTest) && (
+                <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
+                  {draftTesting ? (
+                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                      <LoadingSpinner size="sm" />
+                      <span className="ml-2">
+                        {t('admin.mcp.servers.test.running', 'Testing connection…')}
+                      </span>
+                    </div>
+                  ) : draftTest?.ok ? (
+                    <div>
+                      <div className="flex items-center text-sm font-medium text-green-700 dark:text-green-400">
+                        <Icon name="check" size="sm" className="mr-1.5" />
+                        {t(
+                          'admin.mcp.servers.test.success',
+                          'Connected — {{count}} tools discovered',
+                          { count: draftTest.tools.length }
+                        )}
+                      </div>
+                      {draftTest.tools.length > 0 ? (
+                        <ul className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                          {draftTest.tools.map(tool => (
+                            <li key={tool.name} className="px-3 py-2">
+                              <div className="font-mono text-xs text-gray-900 dark:text-gray-100">
+                                {tool.name}
+                              </div>
+                              {tool.description && (
+                                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                  {tool.description}
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.mcp.servers.test.noTools',
+                            'The server connected but exposed no tools (or all were filtered by the allowlist).'
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-start text-sm text-red-700 dark:text-red-400">
+                      <Icon name="x-circle" size="sm" className="mr-1.5 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {t('admin.mcp.servers.test.failed', 'Connection failed: {{error}}', {
+                          error: draftTest?.error || 'unknown error'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-2">
                 <button
-                  onClick={() => setEditing(null)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
+                  onClick={testDraft}
+                  disabled={draftTesting}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
-                  {t('common.cancel', 'Cancel')}
+                  <Icon name="play" size="sm" className="mr-1.5" />
+                  {t('admin.mcp.servers.test.button', 'Test connection')}
                 </button>
-                <button
-                  onClick={save}
-                  className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  {t('common.save', 'Save')}
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={closeDialog}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                  <button
+                    onClick={save}
+                    className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    {t('common.save', 'Save')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
