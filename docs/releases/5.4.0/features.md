@@ -178,3 +178,10 @@ Clicking **Save** on any admin edit page (apps, models, prompts, sources, users,
 
 - The unsaved-changes guard previously used a stale dirty-state value captured before the save completed, so the navigation triggered by Save itself was treated as an unsaved-changes navigation.
 - The guard now reads the live dirty state at navigation time, so genuine back/cancel navigation with unsaved edits is still protected.
+
+## Clearer Document Size Warning on File Upload
+
+The warning shown when an attached document may exceed the model's context window now names the file responsible, so users can tell which upload is too large.
+
+- For a single document, the warning includes the file name (e.g. `"report.pdf" is large (~270,509 estimated tokens)…`).
+- When multiple documents are attached, the warning makes clear the estimate is the **combined** total across all of them and lists each file with its individual token estimate, so it's obvious which files contribute most.
