@@ -1,125 +1,75 @@
 import { randomUUID } from 'crypto';
-import { evidenceRecordSchema } from '../../validators/evidenceRecordSchema.js';
-import { getExtractionSchema } from './schemas.js';
+import { structuredRecordSchema } from './recordSchema.js';
 import { jsonSchemaToZod } from './jsonSchemaToZod.js';
 
 /**
  * Build a validated structured record from a per-document LLM extraction.
  *
  * Used by `StructuredRecordNodeExecutor` (workflow path) and the
- * `evidence_collect` agent tool (agent path) so both surfaces share one
- * implementation and produce structurally identical records. The envelope
- * shape is currently audit-evidence-flavored (`evidenceId`, optional
- * `quotes`, `failures` for soft-fail) since that is the first concrete
- * consumer; a second consumer with different envelope needs would warrant
- * a generic record schema in this directory.
+ * `evidence_collect` agent tool (agent path) so both surfaces produce
+ * structurally identical records.
  *
- * Schema resolution precedence:
- *   1. Inline `schema` (JSON Schema) — converted on the fly via jsonSchemaToZod.
- *      Lets workflow authors define new shapes without shipping code.
- *   2. Named `schemaName` + `schemaVersion` — looked up in the registry.
- *      Useful for shared schemas reused across workflows.
- *   3. Neither — validation is skipped; the upstream prompt's
- *      `outputSchema` (sent to the LLM as responseSchema) is the primary
- *      shape guarantee.
+ * Optional inline JSON Schema validates `rawExtraction`. Without a schema,
+ * validation is skipped and the upstream prompt's `outputSchema` (sent to
+ * the LLM as responseSchema) is the primary shape guarantee.
  *
  * @param {Object} args
  * @param {string} args.runId
  * @param {string} args.nodeId
  * @param {number} [args.iterationIndex]
- * @param {Object} [args.schema]                 inline JSON Schema (preferred over schemaName)
- * @param {string} [args.schemaName]             e.g. 'stellungnahmenReview'
- * @param {string} [args.schemaVersion]          e.g. 'v1'
- * @param {Object} args.rawExtraction            shape declared by the schema
- * @param {Object} args.source                   { docId, sourceSystem, title?, url?, retrievedAt? }
- * @param {Array}  [args.quotes]                 pre-extracted quotes (will be validated later)
- * @param {Object} [args.classification]
- * @param {Object} [args.llm]                    { model?, promptHash?, tokensIn?, tokensOut? }
+ * @param {Object} [args.schema]            inline JSON Schema for the extraction
+ * @param {Object} args.rawExtraction       payload from the per-document LLM call
+ * @param {Object} args.source              { docId, sourceSystem, title?, url?, retrievedAt? }
+ * @param {Array}  [args.quotes]            pre-extracted quotes (validated later by quote-validator)
  * @returns {{ record: Object, failures: Array<{code: string, message: string}> }}
  */
 export function collectStructuredRecord(args) {
-  const {
-    runId,
-    nodeId,
-    iterationIndex,
-    schema,
-    schemaName,
-    schemaVersion,
-    rawExtraction,
-    source,
-    quotes = [],
-    classification,
-    llm
-  } = args || {};
+  const { runId, nodeId, iterationIndex, schema, rawExtraction, source, quotes = [] } =
+    args || {};
 
   const failures = [];
-  let extractionData = rawExtraction;
+  let data = rawExtraction;
   let status = 'ok';
 
-  // 1. Validate the LLM extraction against the configured schema.
-  //    Inline > named > skip. Failures soft-fail with `status='failed'`
-  //    and the original payload retained for human inspection.
-  const extractionSchema = resolveSchema({ schema, schemaName, schemaVersion });
-  if (extractionSchema) {
+  if (schema && typeof schema === 'object') {
     try {
-      extractionData = extractionSchema.parse(rawExtraction);
+      data = jsonSchemaToZod(schema).parse(rawExtraction);
     } catch (err) {
       status = 'failed';
       failures.push({
         code: 'EXTRACTION_SCHEMA_MISMATCH',
         message: err?.message || 'extraction did not match declared schema'
       });
-      extractionData = rawExtraction ?? {};
+      data = rawExtraction ?? {};
     }
   }
 
   const record = {
-    evidenceId: randomUUID(),
+    recordId: randomUUID(),
     runId: String(runId || ''),
     nodeId: String(nodeId || ''),
     iterationIndex,
     source: source || { docId: 'unknown', sourceSystem: 'upload' },
-    extraction: {
-      schemaName,
-      schemaVersion,
-      data: extractionData
-    },
+    data,
     quotes: Array.isArray(quotes) ? quotes : [],
-    classification,
-    llm,
     status,
     failures
   };
 
-  // 2. Validate the record envelope. Envelope failures are programmer errors
-  // (missing runId, malformed source); they get surfaced loudly rather than
-  // silently downgraded.
-  const envelope = evidenceRecordSchema.safeParse(record);
+  // Envelope validation surfaces programmer errors (missing runId, malformed
+  // source) loudly rather than silently downgrading status.
+  const envelope = structuredRecordSchema.safeParse(record);
   if (!envelope.success) {
     record.status = 'failed';
     record.failures.push({
-      code: 'EVIDENCE_ENVELOPE_INVALID',
+      code: 'RECORD_ENVELOPE_INVALID',
       message: envelope.error?.issues
         ?.map(i => `${i.path.join('.')}: ${i.message}`)
-        .join('; ') || 'evidence envelope failed validation'
+        .join('; ') || 'record envelope failed validation'
     });
   }
 
   return { record, failures: record.failures };
-}
-
-function resolveSchema({ schema, schemaName, schemaVersion }) {
-  if (schema && typeof schema === 'object') {
-    return jsonSchemaToZod(schema);
-  }
-  if (schemaName) {
-    try {
-      return getExtractionSchema(schemaName, schemaVersion);
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 export default collectStructuredRecord;

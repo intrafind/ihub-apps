@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchInboxes, createInbox } from '../../../api/agentsAdminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentInboxesPage() {
   const { t } = useTranslation();
@@ -48,6 +49,13 @@ export default function AdminAgentInboxesPage() {
   return (
     <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
       <div className="max-w-4xl mx-auto py-8 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: t('admin.title', 'Admin'), href: '/admin' },
+            { label: t('admin.agents.title', 'Agent Profiles'), href: '/admin/agents' },
+            { label: t('admin.agents.inboxes.title', 'Agent Inboxes') }
+          ]}
+        />
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           {t('admin.agents.inboxes.title', 'Agent Inboxes')}
         </h1>

@@ -873,26 +873,18 @@
     "functions": {
       "collect": {
         "description": {
-          "en": "Validate a per-document LLM extraction against a registered schema (e.g. 'stellungnahmenReview/v1') and build a structured Evidence record. Always call this before composing the report.",
-          "de": "Validiert eine pro-Dokument LLM-Extraktion gegen ein registriertes Schema (z.B. 'stellungnahmenReview/v1') und erzeugt einen strukturierten Evidenzdatensatz. Vor der Berichtserstellung immer aufrufen."
+          "en": "Validate a per-document LLM extraction and build a structured record. Optionally pass an inline `schema` (JSON Schema) to validate the extraction shape. Always call this before composing the report.",
+          "de": "Validiert eine pro-Dokument LLM-Extraktion und erzeugt einen strukturierten Datensatz. Übergeben Sie optional ein inline `schema` (JSON Schema) zur Validierung der Extraktionsstruktur. Vor der Berichtserstellung immer aufrufen."
         },
         "parameters": {
           "type": "object",
           "properties": {
             "runId": { "type": "string" },
-            "schemaName": {
-              "type": "string",
+            "schema": {
+              "type": "object",
               "description": {
-                "en": "Registered extraction schema name. Currently: 'stellungnahmenReview' or 'corpusAnalysis'.",
-                "de": "Registrierter Extraktions-Schemaname. Derzeit: 'stellungnahmenReview' oder 'corpusAnalysis'."
-              }
-            },
-            "schemaVersion": {
-              "type": "string",
-              "default": "v1",
-              "description": {
-                "en": "Schema version, e.g. 'v1'.",
-                "de": "Schemaversion, z.B. 'v1'."
+                "en": "Inline JSON Schema for the extraction shape (optional).",
+                "de": "Inline JSON Schema für die Extraktionsstruktur (optional)."
               }
             },
             "extraction": {
@@ -940,11 +932,9 @@
                 "required": ["text"]
               }
             },
-            "iterationIndex": { "type": "integer" },
-            "classification": { "type": "object" },
-            "llm": { "type": "object" }
+            "iterationIndex": { "type": "integer" }
           },
-          "required": ["schemaName", "schemaVersion", "extraction", "source"]
+          "required": ["extraction", "source"]
         }
       },
       "validateQuotesFastPath": {
@@ -977,17 +967,17 @@
       },
       "composeReport": {
         "description": {
-          "en": "Render the final Markdown report from accumulated evidence records, coverage stats, and an optional pre-computed synthesis text. Optionally persists the report as a run artifact when runId is provided.",
-          "de": "Erzeugt den finalen Markdown-Bericht aus gesammelten Evidenzdatensätzen, Abdeckungsstatistik und optionalem Synthese-Text. Wenn runId angegeben ist, wird der Bericht als Run-Artefakt persistiert."
+          "en": "Render the final Markdown report from accumulated records, coverage stats, and an optional pre-computed synthesis text. Optionally persists the report as a run artifact when runId is provided.",
+          "de": "Erzeugt den finalen Markdown-Bericht aus gesammelten Datensätzen, Abdeckungsstatistik und optionalem Synthese-Text. Wenn runId angegeben ist, wird der Bericht als Run-Artefakt persistiert."
         },
         "parameters": {
           "type": "object",
           "properties": {
-            "evidence": {
+            "records": {
               "type": "array",
               "description": {
-                "en": "Evidence records as returned by evidence.collect.",
-                "de": "Evidenzdatensätze wie von evidence.collect zurückgegeben."
+                "en": "Structured records as returned by evidence.collect.",
+                "de": "Strukturierte Datensätze wie von evidence.collect zurückgegeben."
               }
             },
             "coverage": {
@@ -1001,14 +991,15 @@
             "template": {
               "type": "string",
               "description": {
-                "en": "Optional Handlebars-style template. If omitted, a built-in default is used.",
-                "de": "Optionale Handlebars-ähnliche Vorlage. Wird nichts angegeben, wird eine eingebaute Standardvorlage verwendet."
+                "en": "Required Handlebars-style template that references {{records}} / {{coverage}} / {{synthesis}}.",
+                "de": "Pflicht: Handlebars-ähnliche Vorlage, die auf {{records}} / {{coverage}} / {{synthesis}} verweist."
               }
             },
             "runId": { "type": "string" },
             "artifactName": { "type": "string", "default": "final-report.md" },
             "chatId": { "type": "string" }
-          }
+          },
+          "required": ["template"]
         }
       }
     }

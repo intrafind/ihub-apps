@@ -170,12 +170,18 @@ export default async function workflowRunner(params = {}) {
     initialData._modelOverride = modelId;
   }
 
-  // Map generic 'input' to the workflow's primary text input variable name
-  // (skip file/image variables — those are mapped from _fileData below)
+  // Map the chat-message `input` to the workflow's primary text input
+  // variable. Workflow authors mark one variable with `primaryInput: true`
+  // to claim that slot explicitly — important for workflows whose first
+  // input variable is a file (the @mention chat text should land in a
+  // topic-seed-style slot, not in the file slot's text neighbour).
+  // Fallback: first non-file/image variable, matching legacy behaviour
+  // for single-text-input workflows.
   const startNode = (workflow.nodes || []).find(n => n.type === 'start');
   const inputVars = startNode?.config?.inputVariables;
   if (inputVars?.length > 0 && input) {
-    const textVar = inputVars.find(v => v.type !== 'file' && v.type !== 'image');
+    const explicit = inputVars.find(v => v?.primaryInput === true);
+    const textVar = explicit || inputVars.find(v => v.type !== 'file' && v.type !== 'image');
     if (textVar && textVar.name !== 'input' && !initialData[textVar.name]) {
       initialData[textVar.name] = input;
     }

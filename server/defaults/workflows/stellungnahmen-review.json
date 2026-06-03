@@ -53,29 +53,17 @@
             "maxSizeMB": 15
           },
           {
-            "name": "lawReference",
+            "name": "userPrompt",
             "type": "string",
             "required": false,
+            "primaryInput": true,
             "label": {
-              "en": "Law reference (optional)",
-              "de": "Gesetzesbezug (optional)"
+              "en": "Focus prompt",
+              "de": "Fokus-Anweisung"
             },
             "description": {
-              "en": "The law being commented on, e.g. 'Notfallreform' or 'SGB V'. Helps the extractor focus.",
-              "de": "Das kommentierte Gesetz, z.B. 'Notfallreform' oder 'SGB V'. Hilft dem Extraktor beim Fokussieren."
-            }
-          },
-          {
-            "name": "topicSeeds",
-            "type": "string",
-            "required": false,
-            "label": {
-              "en": "Topic seeds (optional, comma-separated)",
-              "de": "Themenstichwörter (optional, kommagetrennt)"
-            },
-            "description": {
-              "en": "Comma-separated themes the extractor should hunt for. Example: '§ 60 SGB V, § 133 SGB V, Fahrtkosten, Rettungsdienst, Notfallrettung'.",
-              "de": "Kommagetrennte Themen, die der Extraktor suchen soll. Beispiel: '§ 60 SGB V, § 133 SGB V, Fahrtkosten, Rettungsdienst, Notfallrettung'."
+              "en": "Free-form prompt: what to focus on, which law, which paragraphs, which topics. Example: 'Krankengeld, § 48 SGB V — Begrenzung der Bezugsdauer' or 'Notfallreform, § 60 / § 133 SGB V, Fahrtkosten und Rettungsdienst'. When triggered via @mention, the chat message lands here.",
+              "de": "Freier Text: worauf der Fokus liegen soll, welches Gesetz, welche Paragraphen, welche Themen. Beispiel: 'Krankengeld, § 48 SGB V — Begrenzung der Bezugsdauer' oder 'Notfallreform, § 60 / § 133 SGB V, Fahrtkosten und Rettungsdienst'. Bei @Mention landet die Chat-Nachricht hier."
             }
           }
         ]
@@ -91,8 +79,7 @@
       "position": { "x": 100, "y": 200 },
       "config": {
         "operations": [
-          { "copy": "_fileData", "to": "_corpus" },
-          { "set": "_evidence", "value": [] },
+          { "set": "_records", "value": [] },
           {
             "set": "_coverage",
             "value": {
@@ -104,11 +91,10 @@
               "quotesValidated": 0
             }
           },
-          { "lengthOf": "_corpus", "to": "_coverage.candidates.total" },
-          { "lengthOf": "_corpus", "to": "_docsTotal" },
+          { "lengthOf": "_document", "to": "_coverage.candidates.total" },
+          { "lengthOf": "_document", "to": "_docsTotal" },
           { "set": "_docIndex", "value": 0 },
-          { "set": "_docHuman", "value": 1 },
-          { "set": "_document", "value": null }
+          { "set": "_docHuman", "value": 1 }
         ]
       }
     },
@@ -123,7 +109,7 @@
       "config": {
         "chatVisible": false,
         "operations": [
-          { "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }
+          { "arrayGet": "_document", "index": "_docIndex", "to": "_currentDoc" }
         ]
       }
     },
@@ -154,8 +140,8 @@
           "de": "Sie sind ein KI-Assistent, der PDF-Dokumente durchsuchen kann. Sie analysieren eine einzelne Stellungnahme zu einem Gesetzentwurf. Halten Sie sich strikt an folgende Regeln:\n- Antworten Sie immer in der Sprache des analysierten Dokuments. Vermischen Sie keine Sprachen.\n- Stützen Sie jede Aussage auf das Dokument. Niemals erfinden.\n- Zitate sind Zeichen für Zeichen aus der Quelle übernommen. Niemals paraphrasieren. Lassen Sie keine Zwischensätze aus einem zitierten Abschnitt weg.\n- Wiederholen Sie den Analyseprozess intern und verbessern Sie Ihr Ergebnis, bevor Sie es zurückgeben. Geben Sie ausschließlich das verbesserte Ergebnis aus."
         },
         "prompt": {
-          "en": "## Document\nAttached: Stellungnahme (document {{_docHuman}} of {{_docsTotal}}).\n\nLaw reference (focus): {{lawReference}}\nTopic seeds (consider similar terms, word families, and synonyms): {{topicSeeds}}\n\n## Tasks\n1. Extract every demanded legislative change related to the topic seeds (and similar / synonymous terms) from the text.\n2. Write a one-sentence summary of each demanded change.\n3. For each demand, specify which part of the law it relates to (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). If no paragraph is named, leave the reference empty.\n4. Number the demands consecutively (Nr. 1, 2, 3 …).\n5. For each demand, provide the EXACT original formulation from the text as the `sourceQuote`. The quote must be character-for-character identical to the document and findable verbatim. Do not omit middle sentences — for example \"Sentence 1 is important. Sentence 2 is not important. Sentence 3 is important.\" must be quoted in full even when sentence 2 is not relevant.\n6. Sort the demands by paragraph and subsection. If no paragraph is given, sort by topic.\n7. Determine the author of the Stellungnahme as the organisation (not the individual person).\n8. Determine the title of the Stellungnahme.\n9. Internally repeat the process and improve the result before output.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
-          "de": "## Dokument\nAngehängt: Stellungnahme (Dokument {{_docHuman}} von {{_docsTotal}}).\n\nGesetzesbezug (Fokus): {{lawReference}}\nThemenstichwörter (auch ähnliche Begriffe aus der Wortfamilie und Synonyme berücksichtigen): {{topicSeeds}}\n\n## Aufgaben\n1. Extrahieren Sie jede geforderte Gesetzesänderung zu den Themenstichwörtern (sowie ähnlichen Begriffen / Synonymen) aus dem Text.\n2. Beschreiben Sie jede geforderte Gesetzesänderung in einem Satz.\n3. Spezifizieren Sie für jede Forderung, auf welchen Teil des Gesetzes sie sich bezieht (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Wenn kein Paragraph genannt wird, lassen Sie das Feld leer.\n4. Nummerieren Sie die Forderungen fortlaufend (Nr. 1, 2, 3 …).\n5. Liefern Sie für jede Forderung die genaue Originalformulierung aus dem Text als `sourceQuote`. Das Zitat muss exakt aus dem Originaltext übernommen und in dieser Formulierung im Text auffindbar sein. Lassen Sie keine Sätze in der Mitte weg — zum Beispiel muss \"Satz 1 ist wichtig. Satz 2 ist nicht wichtig. Satz 3 ist wichtig.\" genauso zitiert werden, auch wenn Satz 2 nicht relevant ist.\n6. Sortieren Sie die Forderungen nach Paragraphen und Absätzen. Wenn kein Paragraph genannt wird, sortieren Sie nach Themen.\n7. Bestimmen Sie den Autor der Stellungnahme im Sinne der Organisation (nicht der Person).\n8. Bestimmen Sie den Titel der Stellungnahme.\n9. Wiederholen Sie den Prozess intern und verbessern Sie das Ergebnis vor der Ausgabe.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
+          "en": "## Document\nAttached: Stellungnahme (document {{_docHuman}} of {{_docsTotal}}).\n\n## User focus\n{{userPrompt}}\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
+          "de": "## Dokument\nAngehängt: Stellungnahme (Dokument {{_docHuman}} von {{_docsTotal}}).\n\n## Nutzer-Fokus\n{{userPrompt}}\n\nDer Nutzer-Fokus nennt das Gesetz, die Paragraphen oder Themen, auf die es dem Nutzer ankommt. Bei der Relevanzprüfung sind Wortfamilien und Synonyme zu berücksichtigen (z. B. „Krankengeld\" trifft auf „§ 48 SGB V\", „Höchstbezugsdauer\", „Anspruchsdauer\" zu). Wenn der Nutzer-Fokus leer ist, gelten ALLE Forderungen als relevant.\n\n## Vorgehen\n\n**Schritt 1 — Inventur.** Listen Sie intern jeden Paragraphen und jedes eigenständige Thema auf, zu dem diese Stellungnahme eine Änderung fordert. Diese Liste nicht ausgeben.\n\n**Schritt 2 — Filtern gegen den Nutzer-Fokus.** Dies ist der wichtigste Schritt. Streng anwenden:\n- Wenn der Nutzer-Fokus **nicht leer** ist UND nichts in Ihrer Schritt-1-Inventur (auch unter Berücksichtigung von Synonymen / Wortfamilien) dazu passt, ist die korrekte Ausgabe `demandedChanges: []`. KEINE themenfremden Forderungen aufnehmen. Themenfremde Forderungen auszugeben ist ein Fehler.\n- Wenn mindestens eine inventarisierte Forderung zum Fokus passt, behalten Sie NUR diese.\n- Wenn der Nutzer-Fokus leer ist, behalten Sie alle.\n\n**Schritt 3 — Extraktion der gefilterten Forderungen.** Für jede:\n1. `summary` — ein Satz, der die Forderung beschreibt.\n2. `paragraphReference` — der exakte Paragraphenbezug (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Leerstring wenn kein Paragraph genannt wird.\n3. `sourceQuote` — das EXAKTE wörtliche Zitat aus dem Dokument. Zeichen für Zeichen. Per Substring-Suche im Originaltext auffindbar. Mittelsätze nicht weglassen — „Satz 1. Satz 2. Satz 3.\" muss vollständig zitiert werden, auch wenn Satz 2 nicht unmittelbar relevant ist.\n4. Nach Paragraph und Absatz sortieren; wenn kein Paragraph, nach Thema.\n\n**Schritt 4 — Metadaten.** Bestimmen Sie `organisation` (die einreichende Stelle, nicht die Person) und `title` der Stellungnahme.\n\n**Schritt 5 — Eigenkontrolle.** Wenden Sie Schritt 2 erneut auf Ihre extrahierte Liste an. Verwerfen Sie jede Forderung, deren Paragraphenbezug und Thema nicht zum Nutzer-Fokus passen. `demandedChanges: []` zurückzugeben ist die korrekte und erwartete Antwort, wenn dieses Dokument den Nutzer-Fokus nicht behandelt.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
         },
         "inputFiles": ["_currentDoc"],
         "outputVariable": "_extractionOutput",
@@ -226,7 +212,7 @@
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
         "sourceSystem": "upload",
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "iterationIndexPath": "$.data._docIndex"
       }
     },
@@ -272,11 +258,11 @@
       },
       "position": { "x": 100, "y": 1240 },
       "config": {
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "coverageVar": "_coverage",
         "artifactName": "stellungnahmen-review.md",
         "outputVariable": "finalReport",
-        "template": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n\n{{#each evidence}}\n**Autor:** {{this.extraction.data.organisation}}\n\n**Titel:** {{this.extraction.data.title}}\n\n**Datei:** `{{this.source.title}}`\n\n{{#if this.extraction.data.demandedChanges}}\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n{{#each this.extraction.data.demandedChanges}}\n| {{@index}} | {{this.paragraphReference}} | {{this.summary}} _({{this.sourceQuote}})_ |\n{{/each}}\n{{/if}}\n{{#unless this.extraction.data.demandedChanges}}\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n{{/unless}}\n\n{{#if this.failures}}\n_Hinweise:_\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n"
+        "template": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n\n{{#each records}}\n**Autor:** {{this.data.organisation}}\n\n**Titel:** {{this.data.title}}\n\n**Datei:** `{{this.source.title}}`\n\n{{#if this.data.demandedChanges}}\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n{{#each this.data.demandedChanges}}\n| {{@index}} | {{this.paragraphReference}} | {{this.summary}} _({{this.sourceQuote}})_ |\n{{/each}}\n{{/if}}\n{{#unless this.data.demandedChanges}}\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n{{/unless}}\n\n{{#if this.failures}}\n_Hinweise:_\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n"
       }
     },
     {

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import StepDetails from '../components/StepDetails';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
@@ -509,6 +510,22 @@ export default function AgentRunDetailPage() {
     <>
       <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
         <div className="max-w-6xl mx-auto py-8 px-4">
+          <AdminBreadcrumb
+            crumbs={[
+              { label: t('admin.title', 'Admin'), href: '/admin' },
+              { label: t('admin.agents.title', 'Agent Profiles'), href: '/admin/agents' },
+              ...(profileId
+                ? [
+                    { label: profileId, href: `/admin/agents/${profileId}` },
+                    {
+                      label: t('admin.agents.runs.title', 'Runs'),
+                      href: `/admin/agents/${profileId}/runs`
+                    }
+                  ]
+                : [{ label: t('admin.agents.runs.title', 'Runs') }]),
+              { label: runId.length > 18 ? `${runId.slice(0, 18)}…` : runId }
+            ]}
+          />
           <div className="flex justify-between items-start mb-6 gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{runTitle}</h1>

@@ -1,7 +1,9 @@
 export { collectStructuredRecord } from './collectStructuredRecord.js';
+export { jsonSchemaToZod } from './jsonSchemaToZod.js';
 export {
-  getExtractionSchema,
-  listExtractionSchemas,
-  stellungnahmenReviewV1,
-  corpusAnalysisV1
-} from './schemas.js';
+  structuredRecordSchema,
+  sourceSchema,
+  failureSchema,
+  quoteSchema,
+  quoteLocatorSchema
+} from './recordSchema.js';

@@ -1,8 +1,8 @@
 /**
  * Executor for `quote-validator` workflow nodes.
  *
- * Runs after a `forEach` loop has populated `state.data._evidence`. For each
- * quote in each Evidence record:
+ * Runs after a loop has populated the records array (default `_records`).
+ * For each quote in each record:
  *
  *   1. Attempts a normalized substring match against the source fulltext
  *      (fast path — no LLM cost).
@@ -43,7 +43,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
     const config = node.config || {};
     const {
-      evidenceVar = '_evidence',
+      recordsVar = '_records',
       coverageVar = '_coverage',
       corpusVar = '_corpus',
       modelId,
@@ -51,12 +51,12 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     } = config;
     const language = context?.language || 'en';
 
-    const evidence = this.resolveVariable(`$.data.${evidenceVar}`, state);
-    if (!Array.isArray(evidence) || evidence.length === 0) {
-      this.logger.info('quote-validator: no evidence to validate', {
+    const records = this.resolveVariable(`$.data.${recordsVar}`, state);
+    if (!Array.isArray(records) || records.length === 0) {
+      this.logger.info('quote-validator: no records to validate', {
         component: 'QuoteValidatorNodeExecutor',
         nodeId: node.id,
-        evidenceVar
+        recordsVar
       });
       return this.createSuccessResult({ validatedRecords: 0, llmCalls: 0 });
     }
@@ -71,10 +71,10 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     let apiKey = null;
     let llmCalls = 0;
 
-    const updatedEvidence = [];
-    emitProgress(context, `Validating quotes across ${evidence.length} document(s)…`);
+    const updatedRecords = [];
+    emitProgress(context, `Validating quotes across ${records.length} document(s)…`);
 
-    for (const record of evidence) {
+    for (const record of records) {
       const updatedRecord = { ...record, quotes: [...(record.quotes || [])], failures: [...(record.failures || [])] };
       const sourceText = resolveSourceText(updatedRecord, corpusMap, maxSourceChars);
 
@@ -190,7 +190,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
         updatedRecord.status = 'partial';
       }
 
-      updatedEvidence.push(updatedRecord);
+      updatedRecords.push(updatedRecord);
     }
 
     coverage.completedAt = coverage.completedAt || new Date().toISOString();
@@ -198,7 +198,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     this.logger.info('quote-validator complete', {
       component: 'QuoteValidatorNodeExecutor',
       nodeId: node.id,
-      evidenceCount: updatedEvidence.length,
+      recordCount: updatedRecords.length,
       llmCalls,
       quotesChecked: coverage.quotesChecked,
       quotesValidated: coverage.quotesValidated
@@ -206,14 +206,14 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
 
     return this.createSuccessResult(
       {
-        validatedRecords: updatedEvidence.length,
+        validatedRecords: updatedRecords.length,
         llmCalls,
         quotesChecked: coverage.quotesChecked,
         quotesValidated: coverage.quotesValidated
       },
       {
         stateUpdates: {
-          [evidenceVar]: updatedEvidence,
+          [recordsVar]: updatedRecords,
           [coverageVar]: coverage
         }
       }

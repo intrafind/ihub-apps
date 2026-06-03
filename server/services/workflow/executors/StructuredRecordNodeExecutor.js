@@ -1,15 +1,12 @@
 /**
  * Executor for `structured-record` workflow nodes.
  *
- * Sits inside a `forEach` loop body. Reads the per-document LLM extraction
- * from a preceding `prompt` node, validates it against a named schema from
- * the schema registry, and appends a structured record to a configurable
- * state array (default `_evidence` — kept for backwards compatibility with
- * the audit-evidence workflows that introduced this node type).
+ * Reads the per-document LLM extraction from a preceding `prompt` node,
+ * optionally validates it against the node's inline `schema` (JSON Schema),
+ * and appends a structured record to a configurable state array (default
+ * `_records`).
  *
- * The record envelope shape is defined by `validators/evidenceRecordSchema.js`
- * and is shared with the agent-tool path so both routes (workflow execution
- * and agent execution) produce structurally identical records.
+ * Record envelope shape: see `services/structuredRecord/recordSchema.js`.
  *
  * @module services/workflow/executors/StructuredRecordNodeExecutor
  */
@@ -27,22 +24,62 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
     const config = node.config || {};
     const {
       schema,
-      schemaName,
-      schemaVersion,
       inputPath = '$.data._extractionOutput',
       sourcePath = '$.data._loopItem',
-      evidenceVar = '_evidence',
-      classificationPath,
-      llmMetadataPath,
+      recordsVar = '_records',
       iterationIndexPath = '$.data._loopIndex'
     } = config;
 
+    const sourceRaw = this.resolveVariable(sourcePath, state) || {};
+    const source = normalizeSource(sourceRaw, config.sourceSystem);
+    const iterationIndex = toNumberOrUndefined(
+      this.resolveVariable(iterationIndexPath, state)
+    );
+    const runId =
+      context?.runId ||
+      context?.executionId ||
+      state?.metadata?.runId ||
+      state?.metadata?.executionId;
+
     const rawExtractionRaw = this.resolveVariable(inputPath, state);
+
+    // Soft-fail when the upstream prompt produced no output. The LLM may
+    // have errored, returned empty content, been blocked by a safety
+    // filter, or failed to produce parseable JSON. We record this as a
+    // failed entry with a clear failure note and let the workflow
+    // continue — one bad iteration must not poison the whole run.
     if (rawExtractionRaw === undefined || rawExtractionRaw === null) {
-      return this.createErrorResult(
-        `structured-record node '${node.id}' could not resolve inputPath '${inputPath}' — ` +
-          `the preceding prompt node must place its structured output at that path.`,
-        { nodeId: node.id, inputPath }
+      this.logger.warn('No extraction output — recording soft failure', {
+        component: 'StructuredRecordNodeExecutor',
+        nodeId: node.id,
+        inputPath,
+        docId: source.docId
+      });
+
+      const { record: emptyRecord } = collectStructuredRecord({
+        runId,
+        nodeId: node.id,
+        iterationIndex,
+        rawExtraction: {},
+        source,
+        quotes: []
+      });
+      emptyRecord.status = 'failed';
+      emptyRecord.failures.push({
+        code: 'NO_EXTRACTION_OUTPUT',
+        message:
+          `Upstream prompt produced no output at ${inputPath}. ` +
+          `The LLM may have errored, returned empty content, or been blocked by a safety filter.`
+      });
+
+      const existing = Array.isArray(this.resolveVariable(`$.data.${recordsVar}`, state))
+        ? this.resolveVariable(`$.data.${recordsVar}`, state)
+        : [];
+      const nextRecords = [...existing, emptyRecord];
+
+      return this.createSuccessResult(
+        { recordId: emptyRecord.recordId, status: 'failed' },
+        { stateUpdates: { [recordsVar]: nextRecords } }
       );
     }
 
@@ -53,30 +90,9 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
     // EXTRACTION_SCHEMA_MISMATCH ("Expected object, received string").
     const rawExtraction = coerceLlmJson(rawExtractionRaw);
 
-    const sourceRaw = this.resolveVariable(sourcePath, state) || {};
-    const source = normalizeSource(sourceRaw, config.sourceSystem);
-
     const quotes = Array.isArray(rawExtraction?.quotes)
       ? rawExtraction.quotes.map(toQuoteRecord)
       : [];
-
-    const classification = classificationPath
-      ? this.resolveVariable(classificationPath, state)
-      : rawExtraction?.classification;
-
-    const llm = llmMetadataPath
-      ? this.resolveVariable(llmMetadataPath, state)
-      : undefined;
-
-    const iterationIndex = toNumberOrUndefined(
-      this.resolveVariable(iterationIndexPath, state)
-    );
-
-    const runId =
-      context?.runId ||
-      context?.executionId ||
-      state?.metadata?.runId ||
-      state?.metadata?.executionId;
 
     // The extraction payload may carry the structured fields directly OR
     // nest them under `.data` (some workflows wrap the prompt's JSON
@@ -92,35 +108,31 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
       runId,
       nodeId: node.id,
       iterationIndex,
-      schemaName,
-      schemaVersion,
       rawExtraction: extractionData,
       source,
-      quotes,
-      classification,
-      llm
+      quotes
     });
 
-    const existing = Array.isArray(this.resolveVariable(`$.data.${evidenceVar}`, state))
-      ? this.resolveVariable(`$.data.${evidenceVar}`, state)
+    const existing = Array.isArray(this.resolveVariable(`$.data.${recordsVar}`, state))
+      ? this.resolveVariable(`$.data.${recordsVar}`, state)
       : [];
-    const nextEvidence = [...existing, record];
+    const nextRecords = [...existing, record];
 
     this.logger.info('Structured record collected', {
       component: 'StructuredRecordNodeExecutor',
       nodeId: node.id,
-      evidenceId: record.evidenceId,
+      recordId: record.recordId,
       docId: record.source?.docId,
       status: record.status,
       failureCount: record.failures?.length || 0,
-      totalRecords: nextEvidence.length
+      totalRecords: nextRecords.length
     });
 
     return this.createSuccessResult(
-      { evidenceId: record.evidenceId, status: record.status },
+      { recordId: record.recordId, status: record.status },
       {
         stateUpdates: {
-          [evidenceVar]: nextEvidence
+          [recordsVar]: nextRecords
         }
       }
     );

@@ -1,25 +1,20 @@
 /**
  * Evidence tool family.
  *
- * Exposes the audit-evidence primitives to agents (and any other LLM-driven
- * tool caller). The core logic lives in the now-split service modules
- * (`services/structuredRecord/`, `services/auditQuotes/`,
- * `services/templating/`) and is shared with the workflow node executors so
- * both surfaces produce structurally identical Evidence records and reports.
+ * Audit-flavored agent tool surface that wraps generic primitives from
+ * `services/structuredRecord/`, `services/auditQuotes/`, and
+ * `services/templating/`. Workflow node executors and this tool family
+ * share the same core code so workflow runs and agent runs produce
+ * structurally identical records.
  *
- * Three functions:
- *
- *   - collect(args) — validate a per-document LLM extraction against a
- *     named schema and build an Evidence record.
- *
- *   - validateQuotesFastPath(args) — normalized substring check across a
- *     batch of quotes against a source text. Returns per-quote verdicts;
- *     for each miss the agent decides whether to accept it (inline LLM
- *     reasoning in the agent's own context) or flag it.
- *
- *   - composeReport(args) — render an evidence-based Markdown report.
- *     Optional artifact write through `writeArtifactDirect` when runId
- *     is provided.
+ *   - collect(args)                  build a structured record from a
+ *                                    per-document extraction.
+ *   - validateQuotesFastPath(args)   normalized substring check across a
+ *                                    batch of quotes; misses are returned
+ *                                    so the agent can decide via inline
+ *                                    reasoning whether to accept them.
+ *   - composeReport(args)            render Markdown from a template;
+ *                                    optionally persist via artifactStore.
  *
  * @module tools/evidence
  */
@@ -30,45 +25,33 @@ import { composeReport as composeReportCore } from '../services/templating/compo
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
 
 /**
- * Build an Evidence record from a per-document extraction.
+ * Build a structured record from a per-document extraction.
  *
  * @param {Object} params
  * @param {string} params.runId
  * @param {string} [params.nodeId='agent.evidence.collect']
  * @param {number} [params.iterationIndex]
- * @param {string} params.schemaName        e.g. 'stellungnahmenReview'
- * @param {string} params.schemaVersion     e.g. 'v1'
- * @param {Object} params.extraction        raw shape declared by the schema
+ * @param {Object} [params.schema]          inline JSON Schema for the extraction
+ * @param {Object} params.extraction        raw payload from the per-document LLM call
  * @param {Object} params.source            { docId, sourceSystem, title?, url? }
- * @param {Array}  [params.quotes]          per-quote entries to attach
- * @param {Object} [params.classification]
- * @param {Object} [params.llm]             { model?, promptHash?, tokensIn?, tokensOut? }
- * @returns {Promise<{ ok: boolean, evidenceId: string, status: string, failures: Array, record: Object }>}
+ * @param {Array}  [params.quotes]          per-quote entries (validated later)
+ * @returns {Promise<{ ok: boolean, recordId: string, status: string, failures: Array, record: Object }>}
  */
 export async function collect(params) {
   const {
     runId,
     nodeId = 'agent.evidence.collect',
     iterationIndex,
-    schemaName,
-    schemaVersion,
+    schema,
     extraction,
     source,
-    quotes,
-    classification,
-    llm
+    quotes
   } = params || {};
 
-  if (!schemaName || !schemaVersion) {
-    return {
-      ok: false,
-      error: 'schemaName and schemaVersion are required'
-    };
-  }
   if (!source || !source.docId) {
     return {
       ok: false,
-      error: 'source.docId is required so the evidence record can be linked back to its origin'
+      error: 'source.docId is required so the record can be linked back to its origin'
     };
   }
 
@@ -76,18 +59,15 @@ export async function collect(params) {
     runId,
     nodeId,
     iterationIndex,
-    schemaName,
-    schemaVersion,
+    schema,
     rawExtraction: extraction,
     source,
-    quotes,
-    classification,
-    llm
+    quotes
   });
 
   return {
     ok: record.status !== 'failed',
-    evidenceId: record.evidenceId,
+    recordId: record.recordId,
     status: record.status,
     failures,
     record
@@ -125,10 +105,10 @@ export async function validateQuotesFastPath(params) {
  * artifact.
  *
  * @param {Object} params
- * @param {Array}  [params.evidence=[]]
+ * @param {Array}  [params.records=[]]            list of structured records
  * @param {Object} [params.coverage]
  * @param {string} [params.synthesis='']
- * @param {string} [params.template]              workflow-author template
+ * @param {string} [params.template]              workflow-author template (required)
  * @param {Object} [params.extra]                 additional template context
  * @param {string} [params.runId]                 if present, persist via artifactStore
  * @param {string} [params.artifactName='final-report.md']
@@ -137,7 +117,7 @@ export async function validateQuotesFastPath(params) {
  */
 export async function composeReport(params) {
   const {
-    evidence = [],
+    records = [],
     coverage,
     synthesis = '',
     template,
@@ -148,7 +128,7 @@ export async function composeReport(params) {
   } = params || {};
 
   const { markdown, bytes } = composeReportCore({
-    evidence,
+    records,
     coverage,
     synthesis,
     template,
@@ -169,8 +149,7 @@ export async function composeReport(params) {
       artifactPath = result.path;
       persistedName = artifactName;
     } catch (err) {
-      // Surface the persistence failure but still return the rendered markdown
-      // so the agent can continue (or include the report inline in its response).
+      // Surface the persistence failure but still return the rendered markdown.
       return {
         ok: true,
         markdown,

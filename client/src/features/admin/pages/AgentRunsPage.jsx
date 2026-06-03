@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchAgentRuns } from '../../../api/agentsAdminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AgentRunsPage() {
   const navigate = useNavigate();
@@ -39,6 +40,14 @@ export default function AgentRunsPage() {
   return (
     <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
       <div className="max-w-6xl mx-auto py-8 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Agent Profiles', href: '/admin/agents' },
+            ...(profileId ? [{ label: profileId, href: `/admin/agents/${profileId}` }] : []),
+            { label: 'Runs' }
+          ]}
+        />
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           Agent Runs{profileId ? ` — ${profileId}` : ''}
         </h1>

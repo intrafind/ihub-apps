@@ -24,6 +24,8 @@ import {
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import MarkdownDownloadMenu from '../../../shared/components/MarkdownDownloadMenu';
+import MarkdownViewer from '../../../shared/components/MarkdownViewer';
 import { apiClient } from '../../../api/client';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
 
@@ -253,6 +255,8 @@ function WorkflowExecutionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState(null);
+  // { key, name, content } when a markdown field is opened in the viewer modal
+  const [viewerField, setViewerField] = useState(null);
 
   const { state, loading, connected, error, respondToCheckpoint, cancelExecution, refetch } =
     useWorkflowExecution(executionId);
@@ -522,38 +526,48 @@ function WorkflowExecutionPage() {
     state.status === 'rejected' ||
     (state.status === 'cancelled' && workflowOutputKeys.length > 0);
 
-  const renderFieldActions = (key, value) => (
-    <div className="flex items-center gap-1.5">
-      <button
-        onClick={e => {
-          e.stopPropagation();
-          copyToClipboard(key, value);
-        }}
-        className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
-        title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
-      >
-        <Icon name={copiedFields.has(key) ? 'check' : 'copy'} className="w-3 h-3" />
-        {copiedFields.has(key)
-          ? t('workflows.output.copied', 'Copied')
-          : t('workflows.output.copy', 'Copy')}
-      </button>
-      {typeof value === 'string' &&
-        (key.toLowerCase().includes('report') ||
-          key.toLowerCase().includes('summary') ||
-          value.length > 200) && (
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              downloadAsFile(value, `${key}-${workflowSlug}-${shortExecId}.md`);
-            }}
-            className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
-          >
-            <Icon name="download" className="w-3 h-3" />
-            {t('workflows.download', 'Download')}
-          </button>
+  const renderFieldActions = (key, value) => {
+    const isLongMarkdownLike =
+      typeof value === 'string' &&
+      (key.toLowerCase().includes('report') ||
+        key.toLowerCase().includes('summary') ||
+        isMarkdown(value) ||
+        value.length > 200);
+    const fileBase = `${key}-${workflowSlug}-${shortExecId}`;
+    return (
+      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={e => {
+            e.stopPropagation();
+            copyToClipboard(key, value);
+          }}
+          className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+          title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
+        >
+          <Icon name={copiedFields.has(key) ? 'check' : 'copy'} className="w-3 h-3" />
+          {copiedFields.has(key)
+            ? t('workflows.output.copied', 'Copied')
+            : t('workflows.output.copy', 'Copy')}
+        </button>
+        {isLongMarkdownLike && (
+          <>
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                setViewerField({ key, name: fileBase, content: value });
+              }}
+              className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+              title={t('workflows.output.viewFullscreen', 'View report in full-screen')}
+            >
+              <Icon name="eye" className="w-3 h-3" />
+              {t('workflows.output.view', 'View')}
+            </button>
+            <MarkdownDownloadMenu content={value} name={fileBase} />
+          </>
         )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderFieldContent = (key, value) => {
     if (
@@ -1169,6 +1183,15 @@ function WorkflowExecutionPage() {
         onClose={() => setShowAppSelection(false)}
         onSelect={handleStartChatWithResults}
       />
+
+      {/* Full-screen markdown viewer (download menu lives in its header) */}
+      {viewerField && (
+        <MarkdownViewer
+          content={viewerField.content}
+          name={viewerField.name}
+          onClose={() => setViewerField(null)}
+        />
+      )}
 
       {/* Confirm dialog for cancelling the workflow */}
       <ConfirmDialog

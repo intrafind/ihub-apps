@@ -33,6 +33,7 @@
             "name": "userQuestion",
             "type": "string",
             "required": true,
+            "primaryInput": true,
             "label": { "en": "Question", "de": "Frage" }
           },
           {
@@ -51,7 +52,7 @@
       "position": { "x": 100, "y": 180 },
       "config": {
         "operations": [
-          { "set": "_evidence", "value": [] },
+          { "set": "_records", "value": [] },
           { "set": "_corpusAll", "value": [] },
           {
             "set": "_coverage",
@@ -238,7 +239,7 @@
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
         "sourceSystem": "ifinder",
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "iterationIndexPath": "$.data._docIndex"
       }
     },
@@ -301,7 +302,7 @@
       "name": { "en": "Validate all quotes", "de": "Alle Zitate validieren" },
       "position": { "x": 100, "y": 2400 },
       "config": {
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "coverageVar": "_coverage",
         "corpusVar": "_corpusAll",
         "maxSourceChars": 30000
@@ -318,7 +319,7 @@
           "en": "You synthesise evidence collected across multiple sub-questions into a single narrative. Group findings by sub-question, then offer cross-cutting themes. Cite docIds inline. Do not add facts beyond the evidence."
         },
         "prompt": {
-          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-questions\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n\n## Evidence (across all sub-questions)\n{{#each _evidence}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.extraction.data.position}}\n{{/each}}\n\nWrite a markdown synthesis: for each sub-question a short paragraph, then a cross-cutting ## Themes section and ## Offene Punkte."
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-questions\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n\n## Records (across all sub-questions)\n{{#each _records}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.data.position}}\n{{/each}}\n\nWrite a markdown synthesis: for each sub-question a short paragraph, then a cross-cutting ## Themes section and ## Offene Punkte."
         },
         "outputVariable": "_synthesis",
         "maxIterations": 1,
@@ -332,12 +333,12 @@
       "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
       "position": { "x": 100, "y": 2680 },
       "config": {
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "coverageVar": "_coverage",
         "synthesisVar": "_synthesis",
         "artifactName": "corpus-analysis-decomposed.md",
         "outputVariable": "finalReport",
-        "template": "# Korpus-Vollständigkeitsanalyse (zerlegt)\n\n## Frage\n\n{{userQuestion}}\n\n{{#if _queryPlan.topics}}\n## Teilfragen\n\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert (über alle Teilfragen):** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if evidence}}\n## Per-Dokument-Evidenz\n\n{{#each evidence}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **Status:** {{this.status}}\n- **Position:** {{this.extraction.data.position}}\n\n{{#if this.extraction.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.extraction.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate:**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich — nächstgelegen: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+        "template": "# Korpus-Vollständigkeitsanalyse (zerlegt)\n\n## Frage\n\n{{userQuestion}}\n\n{{#if _queryPlan.topics}}\n## Teilfragen\n\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert (über alle Teilfragen):** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if records}}\n## Per-Dokument-Datensätze\n\n{{#each records}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **Status:** {{this.status}}\n- **Position:** {{this.data.position}}\n\n{{#if this.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate:**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich — nächstgelegen: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
       }
     },
     {

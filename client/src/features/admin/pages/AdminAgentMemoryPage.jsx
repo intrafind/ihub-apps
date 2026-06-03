@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchAgentMemory, writeAgentMemory } from '../../../api/agentsAdminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentMemoryPage() {
   const { t } = useTranslation();
@@ -65,6 +66,14 @@ export default function AdminAgentMemoryPage() {
   return (
     <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
       <div className="max-w-4xl mx-auto py-8 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: t('admin.title', 'Admin'), href: '/admin' },
+            { label: t('admin.agents.title', 'Agent Profiles'), href: '/admin/agents' },
+            { label: profileId, href: `/admin/agents/${profileId}` },
+            { label: t('admin.agents.memory.crumb', 'Memory') }
+          ]}
+        />
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {t('admin.agents.memory.title', 'Memory — {{profileId}}', { profileId })}

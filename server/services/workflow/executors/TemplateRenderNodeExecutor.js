@@ -2,10 +2,9 @@
  * Executor for `template-render` workflow nodes.
  *
  * Renders a workflow-author template into Markdown and persists the result
- * as a run artifact via the existing artifact store. The default state-key
- * reads (`_evidence`, `_coverage`, `_synthesis`) reflect this node's first
- * concrete consumer (the audit-evidence workflows); each is configurable so
- * non-audit workflows can wire their own aggregation keys.
+ * as a run artifact via the existing artifact store. Default state-key
+ * reads (`_records`, `_coverage`, `_synthesis`) cover the typical
+ * map-reduce shape; each is configurable.
  *
  * Template syntax matches `{{var}}` / `{{#each}}` / `{{#if}}` so authors
  * have the same mental model as in prompt templates. See
@@ -28,7 +27,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
     const config = node.config || {};
     const {
-      evidenceVar = '_evidence',
+      recordsVar = '_records',
       coverageVar = '_coverage',
       synthesisVar = '_synthesis',
       template,
@@ -45,7 +44,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       );
     }
 
-    const evidence = this.resolveVariable(`$.data.${evidenceVar}`, state) || [];
+    const records = this.resolveVariable(`$.data.${recordsVar}`, state) || [];
     const coverage = this.resolveVariable(`$.data.${coverageVar}`, state);
     const synthesis = this.resolveVariable(`$.data.${synthesisVar}`, state);
 
@@ -56,7 +55,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       state?.metadata?.executionId;
 
     const { markdown, bytes } = composeReport({
-      evidence: Array.isArray(evidence) ? evidence : [],
+      records: Array.isArray(records) ? records : [],
       coverage,
       synthesis: typeof synthesis === 'string' ? synthesis : '',
       template,
@@ -101,7 +100,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       nodeId: node.id,
       bytes,
       artifactPath,
-      evidenceCount: Array.isArray(evidence) ? evidence.length : 0
+      recordCount: Array.isArray(records) ? records.length : 0
     });
 
     // Emit workflow.node.progress keyed by executionId so the workflowRunner

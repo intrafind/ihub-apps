@@ -33,6 +33,7 @@
             "name": "userQuestion",
             "type": "string",
             "required": true,
+            "primaryInput": true,
             "label": { "en": "Question", "de": "Frage" },
             "description": {
               "en": "The question you want analysed across the indexed corpus.",
@@ -59,7 +60,7 @@
       "position": { "x": 100, "y": 180 },
       "config": {
         "operations": [
-          { "set": "_evidence", "value": [] },
+          { "set": "_records", "value": [] },
           {
             "set": "_coverage",
             "value": {
@@ -194,7 +195,7 @@
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
         "sourceSystem": "ifinder",
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "iterationIndexPath": "$.data._docIndex"
       }
     },
@@ -231,7 +232,7 @@
       "name": { "en": "Validate quotes", "de": "Zitate validieren" },
       "position": { "x": 100, "y": 1460 },
       "config": {
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "coverageVar": "_coverage",
         "corpusVar": "_corpus",
         "maxSourceChars": 40000
@@ -248,7 +249,7 @@
           "en": "You synthesise a corpus of structured evidence records into a clear narrative — themes, majority position, contradictions, open points. You DO NOT add facts beyond the evidence. You cite the docIds you draw from."
         },
         "prompt": {
-          "en": "## User question\n${$.data.userQuestion}\n\n## Evidence records (structured)\n{{#each _evidence}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.extraction.data.position}} — key statements: {{this.extraction.data.keyStatements}}\n{{/each}}\n\nWrite a markdown synthesis: ## Themes, ## Mehrheitslinie, ## Abweichende Aussagen, ## Offene Punkte. Cite docIds inline like (doc-123)."
+          "en": "## User question\n${$.data.userQuestion}\n\n## Structured records (structured)\n{{#each _records}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.data.position}} — key statements: {{this.data.keyStatements}}\n{{/each}}\n\nWrite a markdown synthesis: ## Themes, ## Mehrheitslinie, ## Abweichende Aussagen, ## Offene Punkte. Cite docIds inline like (doc-123)."
         },
         "outputVariable": "_synthesis",
         "maxIterations": 1,
@@ -262,12 +263,12 @@
       "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
       "position": { "x": 100, "y": 1740 },
       "config": {
-        "evidenceVar": "_evidence",
+        "recordsVar": "_records",
         "coverageVar": "_coverage",
         "synthesisVar": "_synthesis",
         "artifactName": "corpus-analysis-direct.md",
         "outputVariable": "finalReport",
-        "template": "# Korpus-Vollständigkeitsanalyse\n\n## Frage\n\n{{userQuestion}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if evidence}}\n## Per-Dokument-Evidenz\n\n{{#each evidence}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **URL:** {{this.source.url}}\n- **Status:** {{this.status}}\n- **Position:** {{this.extraction.data.position}}\n\n{{#if this.extraction.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.extraction.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate (validiert):**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich gefunden — nächstgelegene Passage: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n{{#if this.failures}}\n**Hinweise:**\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+        "template": "# Korpus-Vollständigkeitsanalyse\n\n## Frage\n\n{{userQuestion}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if records}}\n## Per-Dokument-Datensätze\n\n{{#each records}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **URL:** {{this.source.url}}\n- **Status:** {{this.status}}\n- **Position:** {{this.data.position}}\n\n{{#if this.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate (validiert):**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich gefunden — nächstgelegene Passage: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n{{#if this.failures}}\n**Hinweise:**\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
       }
     },
     {

@@ -1,16 +1,15 @@
 /**
  * Render a Markdown report from a workflow-author-supplied template and a
- * conventional context shape (`{evidence, coverage, synthesis, ...extra}`).
+ * conventional context shape (`{records, coverage, synthesis, ...extra}`).
  *
  * Pure function so the caller can persist the result however it likes
- * (artifact store, response body, test fixture). The context arg names
- * (`evidence`, `coverage`, `synthesis`) are an aggregation convention used by
- * audit-evidence workflows — a non-audit caller can simply pass empty
- * defaults and put its own keys under `extra`.
+ * (artifact store, response body, test fixture). The context keys
+ * (`records`, `coverage`, `synthesis`) are an aggregation convention used by
+ * map-reduce workflows — a caller that doesn't follow the convention can
+ * pass empty defaults and put its own keys under `extra`.
  *
  * No default template is provided: omitting `template` is treated as a
- * configuration error so misconfigured workflows fail loudly rather than
- * silently producing audit-flavored output.
+ * configuration error so misconfigured workflows fail loudly.
  *
  * @module services/templating/composeReport
  */
@@ -19,16 +18,16 @@ import { renderTemplate } from './renderTemplate.js';
 
 /**
  * @param {Object} args
- * @param {string} args.template            author-supplied template (required)
- * @param {Array}  [args.evidence]          list of records (state.data._evidence by convention)
- * @param {Object} [args.coverage]          coverage state (state.data._coverage by convention)
- * @param {string} [args.synthesis]         optional pre-computed cross-document text
- * @param {Object} [args.extra]             additional template context (run id, workflow id, etc.)
+ * @param {string} args.template       author-supplied template (required)
+ * @param {Array}  [args.records]      list of records (state.data._records by convention)
+ * @param {Object} [args.coverage]     coverage state (state.data._coverage by convention)
+ * @param {string} [args.synthesis]    optional pre-computed cross-document text
+ * @param {Object} [args.extra]        additional template context (run id, workflow id, etc.)
  * @returns {{ markdown: string, bytes: number }}
  */
 export function composeReport(args) {
   const {
-    evidence = [],
+    records = [],
     coverage,
     synthesis = '',
     template,
@@ -40,7 +39,7 @@ export function composeReport(args) {
   }
 
   const context = {
-    evidence: Array.isArray(evidence) ? evidence : [],
+    records: Array.isArray(records) ? records : [],
     coverage: hydrateCoverage(coverage),
     synthesis: synthesis || '',
     ...extra
