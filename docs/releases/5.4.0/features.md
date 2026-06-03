@@ -178,3 +178,12 @@ Clicking **Save** on any admin edit page (apps, models, prompts, sources, users,
 
 - The unsaved-changes guard previously used a stale dirty-state value captured before the save completed, so the navigation triggered by Save itself was treated as an unsaved-changes navigation.
 - The guard now reads the live dirty state at navigation time, so genuine back/cancel navigation with unsaved edits is still protected.
+
+## File Attachments — Collapsible List Keeps the Chat Input in View
+
+Attaching many files to a chat message no longer pushes the message box and send button off-screen. The attached-files list now stays compact regardless of how many files are queued.
+
+- With **four or more files**, the list **auto-collapses** to a one-line summary (`12 files · 4.3 MB`) with a chevron to expand it. Users can expand or collapse it at any time.
+- When expanded, the list is **height-capped and scrolls internally** — about 6 rows on desktop and 4 rows in the narrow Outlook task pane — so the chat input always remains reachable.
+- **1–3 files** display exactly as before, with no extra controls.
+- **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.

@@ -11,7 +11,13 @@
     "remove": "Remove file",
     "sourceLocal": "Local file",
     "sourceCloud": "Cloud file",
-    "loading": "Loading document..."
+    "loading": "Loading document...",
+    "title": "Attachments",
+    "summary": "{{count}} files · {{size}}",
+    "loadingCount": "{{count}} loading…",
+    "showList": "Show file list",
+    "hideList": "Hide file list",
+    "regionLabel": "Attached files"
   },
   "app": {
     "title": "iHub Apps",
