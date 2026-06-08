@@ -220,11 +220,9 @@ function TableExportDialog({ isOpen, onClose, content }) {
               </div>
               {tables[selectedTableIndex].rows.length > 5 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  {t(
-                    'pages.appChat.tableExport.previewNote',
-                    'Showing first 5 rows of {{total}}',
-                    { total: tables[selectedTableIndex].rows.length }
-                  )}
+                  {t('pages.appChat.tableExport.previewNote', 'Showing first 5 rows of {{total}}', {
+                    total: tables[selectedTableIndex].rows.length
+                  })}
                 </p>
               )}
             </div>
