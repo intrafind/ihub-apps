@@ -105,6 +105,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // the right prompts without needing to reopen the taskpane.
   const [isAppointment, setIsAppointment] = useState(() => isOutlookAppointmentMode());
   const multiSelectSupported = isMultiSelectBodySupported();
+  // Incremented each time a message is sent (manual submit or starter prompt)
+  // to trigger auto-collapse of the OfficeContextStrip, giving the user more
+  // reading space for the assistant's response. The strip listens to changes
+  // and collapses when this counter increments (see issue for attachments
+  // auto-collapse).
+  const [collapseStripCounter, setCollapseStripCounter] = useState(0);
 
   // Initialize variables when app changes
   useEffect(() => {
@@ -326,6 +332,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       setInputValue('');
       selectedStarterPromptRef.current = null;
       fileUploadHandler.clearSelectedFile();
+      // Trigger auto-collapse of the OfficeContextStrip so the user has more
+      // reading space for the assistant's response.
+      setCollapseStripCounter(prev => prev + 1);
     },
     [
       selectedApp,
@@ -587,6 +596,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 !!currentItemId &&
                 pinnedEmails.some(p => p.itemId === currentItemId)
               }
+              collapseOnMessageSent={collapseStripCounter}
             />
 
             {/* Input */}
