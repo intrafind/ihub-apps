@@ -31,6 +31,7 @@ function ExportDialog({
   const [selectedFormat, setSelectedFormat] = useState('pdf');
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const dialogRef = useRef(null);
 
@@ -73,6 +74,118 @@ function ExportDialog({
 
   const getAppName = () => {
     return uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'iHub Apps';
+  };
+
+  // Helper functions to generate content for copying
+  const generateTextContent = messages => {
+    return messages
+      .filter(m => !m.isGreeting)
+      .map(m => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const timestamp = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        let text = `[${role}]`;
+        if (timestamp) {
+          text += ` - ${timestamp}`;
+        }
+        text += '\n' + '-'.repeat(50) + '\n';
+        text += (m.content || '') + '\n';
+        return text;
+      })
+      .join('\n');
+  };
+
+  const generateMarkdownContent = messages => {
+    return messages
+      .filter(m => !m.isGreeting)
+      .map(m => `**${m.role}**: ${m.content || ''}`)
+      .join('\n\n');
+  };
+
+  const generateJSONContent = (messages, settings) => {
+    const buildMetadata = () => ({
+      model: settings?.model,
+      style: settings?.style,
+      outputFormat: settings?.outputFormat,
+      temperature: settings?.temperature,
+      variables: settings?.variables
+    });
+    return JSON.stringify(
+      { ...buildMetadata(), messages: messages.filter(m => !m.isGreeting) },
+      null,
+      2
+    );
+  };
+
+  const generateJSONLContent = (messages, settings) => {
+    const buildMetadata = () => ({
+      model: settings?.model,
+      style: settings?.style,
+      outputFormat: settings?.outputFormat,
+      temperature: settings?.temperature,
+      variables: settings?.variables
+    });
+    const lines = [JSON.stringify({ meta: buildMetadata() })];
+    messages.filter(m => !m.isGreeting).forEach(m => lines.push(JSON.stringify(m)));
+    return lines.join('\n');
+  };
+
+  const handleCopy = async () => {
+    setCopied(false);
+    setExportError(null);
+
+    try {
+      const filteredMessages = messages.filter(m => !m.isGreeting);
+      const exportSettings = buildMeta();
+      let content = '';
+
+      // Generate content based on selected format
+      switch (selectedFormat) {
+        case 'txt':
+          content = generateTextContent(filteredMessages);
+          break;
+        case 'markdown':
+          content = generateMarkdownContent(filteredMessages);
+          break;
+        case 'json':
+          content = generateJSONContent(filteredMessages, exportSettings);
+          break;
+        case 'jsonl':
+          content = generateJSONLContent(filteredMessages, exportSettings);
+          break;
+        case 'html':
+          // For HTML, we need to generate it via the API since it's complex
+          setExportError(
+            t(
+              'pages.appChat.export.copyNotSupported',
+              'Copy not supported for this format. Please use download instead.'
+            )
+          );
+          return;
+        case 'pdf':
+        case 'docx':
+        case 'xlsx':
+        case 'csv':
+        case 'pptx':
+          // Binary formats can't be copied to clipboard
+          setExportError(
+            t(
+              'pages.appChat.export.copyNotSupported',
+              'Copy not supported for this format. Please use download instead.'
+            )
+          );
+          return;
+        default:
+          throw new Error(`Unsupported format: ${selectedFormat}`);
+      }
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error(`Copy to clipboard failed:`, error);
+      setExportError(error.message || 'Copy failed');
+    }
   };
 
   const handleExport = async () => {
@@ -417,6 +530,23 @@ function ExportDialog({
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('common.cancel', 'Cancel')}
+          </button>
+          <button
+            onClick={handleCopy}
+            disabled={isExporting || !selectedFormat}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {copied ? (
+              <>
+                <Icon name="check" size="sm" />
+                {t('pages.appChat.export.copied', 'Copied!')}
+              </>
+            ) : (
+              <>
+                <Icon name="clipboard" size="sm" />
+                {t('pages.appChat.export.copy', 'Copy')}
+              </>
+            )}
           </button>
           <button
             onClick={handleExport}

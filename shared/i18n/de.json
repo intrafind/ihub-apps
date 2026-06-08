@@ -270,6 +270,9 @@
         "selectFormat": "Exportformat auswählen",
         "export": "Exportieren",
         "exporting": "Exportiere...",
+        "copy": "Kopieren",
+        "copied": "Kopiert!",
+        "copyNotSupported": "Kopieren wird für dieses Format nicht unterstützt. Bitte verwenden Sie stattdessen Download.",
         "pdfOptions": "PDF-Optionen",
         "watermarkPlaceholder": "Wasserzeichentext eingeben",
         "formats": {
