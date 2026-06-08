@@ -795,6 +795,21 @@ class ToolExecutor {
       userFileData
     } = prep;
 
+    // Detect email context in messages and track as knowledge source
+    // Email context is added by the Office add-in with markers like:
+    // "--- Current email ---" or "--- Pinned emails (N) ---" or "--- Current meeting ---"
+    const hasEmailContext = llmMessages.some(msg => {
+      const content = msg.content || '';
+      return (
+        content.includes('--- Current email ---') ||
+        content.includes('--- Pinned emails') ||
+        content.includes('--- Current meeting ---')
+      );
+    });
+    if (hasEmailContext) {
+      this.streamingHandler.addKnowledgeSource(chatId, 'email');
+    }
+
     // Debug: Log available tools and file data for workflow debugging
     logger.info('processChatWithTools called', {
       component: 'ToolExecutor',

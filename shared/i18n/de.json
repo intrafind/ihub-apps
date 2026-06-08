@@ -469,6 +469,7 @@
       "sources": "Basierend auf konfigurierten Quellen",
       "iassistant": "Basierend auf iAssistant-Wissensbasis",
       "grounding": "Basierend auf Such-Grounding",
+      "email": "Basierend auf E-Mail-Inhalt",
       "mixed": "Basierend auf externem Wissen",
       "workflow": "Erzeugt durch Workflow",
       "workflowTooltip": "Workflow-Ausführung öffnen",

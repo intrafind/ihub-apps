@@ -100,6 +100,12 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
         colorClasses =
           'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-200 dark:border-teal-800';
         break;
+      case 'email':
+        displayText = t('chatMessage.answerSource.email');
+        iconName = 'mail';
+        colorClasses =
+          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+        break;
       default:
         // Keep default mixed styling
         break;
