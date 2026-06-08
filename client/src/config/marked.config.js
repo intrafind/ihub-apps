@@ -30,6 +30,68 @@ const renderMermaidPlaceholder = (code, language) => {
 export const configureMarked = t => {
   const renderer = new marked.Renderer();
 
+  // --- Table Renderer ---
+  renderer.table = (header, body) => {
+    // Extract header and body strings from the token object (marked v5+)
+    let actualHeader = header;
+    let actualBody = body;
+
+    // Handle token object structure
+    if (typeof header === 'object' && header !== null) {
+      actualHeader = header.header || header;
+      actualBody = body || header.body;
+    }
+
+    const tableId = `table-${generateId()}`;
+
+    return `
+      <div class="table-container relative group my-4 border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table id="${tableId}" class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              ${actualHeader}
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              ${actualBody}
+            </tbody>
+          </table>
+        </div>
+        <div class="table-toolbar flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2">
+          <span class="text-xs font-medium text-gray-600">${t ? t('common.table', 'Table') : 'Table'}</span>
+          <div class="flex flex-row items-center gap-2">
+            <button
+              class="table-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              data-format="excel"
+              type="button"
+              title="${t ? t('common.downloadTableExcel', 'Download as Excel') : 'Download as Excel'}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="hidden sm:inline">${t ? t('common.excel', 'Excel') : 'Excel'}</span>
+            </button>
+            <button
+              class="table-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              data-format="csv"
+              type="button"
+              title="${t ? t('common.downloadTableCSV', 'Download as CSV') : 'Download as CSV'}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="hidden sm:inline">${t ? t('common.csv', 'CSV') : 'CSV'}</span>
+            </button>
+            <button
+              class="table-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              data-format="json"
+              type="button"
+              title="${t ? t('common.downloadTableJSON', 'Download as JSON') : 'Download as JSON'}"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="hidden sm:inline">${t ? t('common.json', 'JSON') : 'JSON'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   // --- Code Renderer ---
   renderer.code = (code, language) => {
     // Extract actual code string and language from the parameters

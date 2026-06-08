@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCodeBlockInteractions } from '../../hooks/useCodeBlockInteractions';
+import { useTableInteractions } from '../../hooks/useTableInteractions';
 import { useMermaidRenderer } from '../../hooks/useMermaidRenderer';
 import { configureMarked } from '../../config/marked.config';
 
@@ -12,6 +13,9 @@ function MarkdownRenderer() {
 
   // Custom hook for copy/download buttons on standard code blocks
   useCodeBlockInteractions();
+
+  // Custom hook for table download buttons
+  useTableInteractions();
 
   // Custom hook for all Mermaid-related logic
   useMermaidRenderer({ t });
