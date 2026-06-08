@@ -224,19 +224,54 @@ function ExportDialog({
           await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
           break;
         case 'xlsx':
-          await exportToXLSX(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
+          await exportToXLSX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'csv':
-          await exportToCSV(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
+          await exportToCSV(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'docx':
-          await exportToDOCX(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
+          await exportToDOCX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'txt':
-          await exportToTXT(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
+          await exportToTXT(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'pptx':
-          await exportToPPTX(filteredMessages, exportSettings, appName, appId, chatId, isSingleMessage);
+          await exportToPPTX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);

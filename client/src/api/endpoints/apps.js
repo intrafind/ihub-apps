@@ -170,7 +170,14 @@ export const exportChatToPDF = async (
 };
 
 // Generate HTML content for PDF
-const generatePDFHTML = (messages, settings, template, watermark, appName, isSingleMessage = false) => {
+const generatePDFHTML = (
+  messages,
+  settings,
+  template,
+  watermark,
+  appName,
+  isSingleMessage = false
+) => {
   const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
   const styles = getTemplateStyles(template);
   const watermarkStyle = getWatermarkStyle(watermark);
