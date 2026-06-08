@@ -260,9 +260,13 @@
         "toMarkdown": "as Markdown",
         "toHTML": "as HTML",
         "dialogTitle": "Export Conversation",
+        "dialogTitleSingleMessage": "Export Message",
         "selectFormat": "Select export format",
         "export": "Export",
         "exporting": "Exporting...",
+        "copy": "Copy",
+        "copied": "Copied!",
+        "copyNotSupported": "Copy not supported for this format. Please use download instead.",
         "pdfOptions": "PDF Options",
         "watermarkPlaceholder": "Enter watermark text",
         "formats": {

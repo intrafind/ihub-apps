@@ -266,9 +266,13 @@
         "toMarkdown": "als Markdown",
         "toHTML": "als HTML",
         "dialogTitle": "Unterhaltung exportieren",
+        "dialogTitleSingleMessage": "Nachricht exportieren",
         "selectFormat": "Exportformat auswählen",
         "export": "Exportieren",
         "exporting": "Exportiere...",
+        "copy": "Kopieren",
+        "copied": "Kopiert!",
+        "copyNotSupported": "Kopieren wird für dieses Format nicht unterstützt. Bitte verwenden Sie stattdessen Download.",
         "pdfOptions": "PDF-Optionen",
         "watermarkPlaceholder": "Wasserzeichentext eingeben",
         "formats": {
