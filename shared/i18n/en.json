@@ -485,7 +485,8 @@
       "disabled": "Disabled",
       "default": "Default",
       "actions": "Actions",
-      "test": {
+      "test": "Test",
+      "testResults": {
         "success": "Test Successful",
         "failed": "Test Failed",
         "messages": {

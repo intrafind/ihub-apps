@@ -708,7 +708,8 @@
       "disabled": "Deaktiviert",
       "default": "Standard",
       "actions": "Aktionen",
-      "test": {
+      "test": "Testen",
+      "testResults": {
         "success": "Test erfolgreich",
         "failed": "Test fehlgeschlagen",
         "messages": {

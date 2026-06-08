@@ -304,7 +304,7 @@ function AdminModelsPage() {
               <Icon name="check-circle" className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-medium text-green-800 dark:text-green-300">
-                  {t('admin.models.test.success', 'Test Successful')}
+                  {t('admin.models.testResults.success', 'Test Successful')}
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                   {result.response}
@@ -319,7 +319,7 @@ function AdminModelsPage() {
               />
               <div className="flex-1">
                 <div className="text-sm font-medium text-red-800 dark:text-red-300">
-                  {result.message || t('admin.models.test.failed', 'Test Failed')}
+                  {result.message || t('admin.models.testResults.failed', 'Test Failed')}
                 </div>
                 {result.error && (
                   <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">

@@ -75,18 +75,18 @@ function AdminProvidersPage() {
   // Helper function to translate model test messages
   const translateTestMessage = message => {
     const messageMap = {
-      'Model test successful': 'admin.models.test.messages.successful',
-      'Model test failed': 'admin.models.test.messages.testFailed',
-      'Connection timeout': 'admin.models.test.messages.connectionTimeout',
-      'Connection refused': 'admin.models.test.messages.connectionRefused',
-      'Service not found': 'admin.models.test.messages.serviceNotFound',
-      'Network error': 'admin.models.test.messages.networkError',
-      'Request timeout': 'admin.models.test.messages.requestTimeout',
-      'Authentication failed': 'admin.models.test.messages.authenticationFailed',
-      'Access denied': 'admin.models.test.messages.accessDenied',
-      'Model not found': 'admin.models.test.messages.modelNotFound',
-      'Rate limit exceeded': 'admin.models.test.messages.rateLimitExceeded',
-      'Server error': 'admin.models.test.messages.serverError'
+      'Model test successful': 'admin.models.testResults.messages.successful',
+      'Model test failed': 'admin.models.testResults.messages.testFailed',
+      'Connection timeout': 'admin.models.testResults.messages.connectionTimeout',
+      'Connection refused': 'admin.models.testResults.messages.connectionRefused',
+      'Service not found': 'admin.models.testResults.messages.serviceNotFound',
+      'Network error': 'admin.models.testResults.messages.networkError',
+      'Request timeout': 'admin.models.testResults.messages.requestTimeout',
+      'Authentication failed': 'admin.models.testResults.messages.authenticationFailed',
+      'Access denied': 'admin.models.testResults.messages.accessDenied',
+      'Model not found': 'admin.models.testResults.messages.modelNotFound',
+      'Rate limit exceeded': 'admin.models.testResults.messages.rateLimitExceeded',
+      'Server error': 'admin.models.testResults.messages.serverError'
     };
 
     const translationKey = messageMap[message];
