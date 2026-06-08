@@ -230,16 +230,17 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // Build messages from config and state
-      const messages = this.buildMessages(config, state, context);
-
-      // Get model configuration (pass state for model override support)
+      // Get model configuration first — buildMessages uses it to decide
+      // whether image attachments are appropriate for this model.
       const model = await this.getModel(config.modelId, context, state);
       if (!model) {
         return this.createErrorResult(`Model not found: ${config.modelId || 'default'}`, {
           nodeId: node.id
         });
       }
+
+      // Build messages from config and state
+      const messages = this.buildMessages(config, state, context, model);
 
       // Resolve the agent profile if this is an agent run (used by tool registrar,
       // memory auto-include, and App-as-tool gateway).
@@ -511,7 +512,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Parse output according to schema if defined
       let output = response.content;
       if (config.outputSchema) {
-        output = this.parseStructuredOutput(response.content, config.outputSchema, node.id);
+        output = this.parseStructuredOutput(response.content, config.outputSchema, node.id, {
+          modelId: model.id,
+          finishReason: response.finishReason,
+          maxTokens: response.maxTokens
+        });
       }
 
       this.logger.info('Agent node completed', {
@@ -564,18 +569,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         { stateUpdates: hasStateUpdates ? stateUpdates : undefined }
       );
 
-      // Promote model + token info to the top of the result so they survive
-      // even when result.output is replaced by the bare outputVariable value
-      // (and so the persisted state exposes them to the UI).
+      // Promote model + token info to the top of the result so the persisted
+      // state exposes them to the UI.
       result.tokens = response.tokens;
       result.model = model.id;
       result.modelName = model.name;
       result.content = output;
 
-      // Add outputVariable to result for UI display
+      // Surface the outputVariable name (UI hint). The value itself is
+      // applied to state via stateUpdates above — no need to also embed
+      // it as `result.output`, which only duplicated `result.content`.
       if (config.outputVariable) {
         result.outputVariable = config.outputVariable;
-        result.output = output; // Store the actual output value directly
       }
 
       return result;
@@ -607,9 +612,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {Array<Object>} Array of message objects
    * @private
    */
-  buildMessages(config, state, context) {
+  buildMessages(config, state, context, model = null) {
     const messages = [];
     const language = context?.language || 'en';
+    const modelSupportsVision = !!(model && (model.supportsVision || model.supportsImages));
 
     // Add system message if configured
     if (config.system) {
@@ -703,11 +709,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         const fileData = raw;
 
         if (fileData.type === 'image' && fileData.base64) {
-          // Image file: add to imageData array (adapters handle provider-specific formatting)
-          imageParts.push({
-            base64: fileData.base64,
-            fileType: fileData.fileType || 'image/jpeg'
-          });
+          // Image file: only attach if the model can see images. Otherwise
+          // we'd be silently shipping bytes the model will refuse or hallucinate
+          // around.
+          if (modelSupportsVision) {
+            imageParts.push({
+              base64: fileData.base64,
+              fileType: fileData.fileType || 'image/jpeg'
+            });
+          } else {
+            const fileName = fileData.fileName || varName;
+            const fileType = fileData.displayType || fileData.fileType || 'unknown';
+            fileParts.push(
+              `[File: ${fileName} (${fileType})]\n\nNote: This is an image file but the selected model does not support vision input. The image was not attached.\n`
+            );
+            this.logger.warn('Skipping image attachment — model lacks vision support', {
+              component: 'PromptNodeExecutor',
+              modelId: model?.id,
+              fileName
+            });
+          }
         } else if (fileData.content) {
           // Text-based file (PDF, DOCX, etc.): prepend as text
           const fileName = fileData.fileName || varName;
@@ -717,11 +738,23 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           // Image-based PDF with rendered page images
           const fileName = fileData.fileName || varName;
           const fileType = fileData.displayType || fileData.fileType || 'unknown';
-          fileParts.push(
-            `[File: ${fileName} (${fileType})] - ${fileData.pageImages.length} page(s) rendered as images:\n`
-          );
-          for (const img of fileData.pageImages) {
-            imageParts.push({ base64: img, fileType: 'image/jpeg' });
+          if (modelSupportsVision) {
+            fileParts.push(
+              `[File: ${fileName} (${fileType})] - ${fileData.pageImages.length} page(s) rendered as images:\n`
+            );
+            for (const img of fileData.pageImages) {
+              imageParts.push({ base64: img, fileType: 'image/jpeg' });
+            }
+          } else {
+            fileParts.push(
+              `[File: ${fileName} (${fileType})]\n\nNote: ${fileData.pageImages.length} page(s) were rendered as images, but the selected model does not support vision input. The images were not attached and no text content could be extracted from this file.\n`
+            );
+            this.logger.warn('Skipping page images — model lacks vision support', {
+              component: 'PromptNodeExecutor',
+              modelId: model?.id,
+              fileName,
+              pageImageCount: fileData.pageImages.length
+            });
           }
         } else if (fileData.fileName) {
           // File uploaded but content extraction failed (e.g., scanned/image-based PDF)
@@ -1292,6 +1325,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     let currentMessages = [...messages];
     let iteration = 0;
     let finalContent = '';
+    let finalFinishReason = null;
     // Accumulate token usage across iterations
     const totalTokens = { input: 0, output: 0 };
 
@@ -1345,6 +1379,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         finalContent += response.content;
       }
 
+      // Track the last iteration's finishReason — when the loop breaks
+      // (no more tool calls), this is the model's actual stop reason and
+      // signals whether the output was truncated by the token cap.
+      if (response.finishReason) {
+        finalFinishReason = response.finishReason;
+      }
+
       // When responseSchema is set, the Anthropic adapter implements structured
       // output by forcing a synthetic `json` tool call (since Anthropic has no
       // native response_format JSON schema). The LLM's reply arrives as a
@@ -1367,7 +1408,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // synthesizer can cite them just like any other web/source result.
       if (response.groundingMetadata) {
         try {
-          this._captureCitationsFromGroundingMetadata({
+          await this._captureCitationsFromGroundingMetadata({
             groundingMetadata: response.groundingMetadata,
             state: context._workflowState,
             taskId: context._taskId || null
@@ -1432,7 +1473,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     return {
       content: finalContent,
       iterations: iteration,
-      tokens: totalTokens
+      tokens: totalTokens,
+      finishReason: finalFinishReason,
+      maxTokens
     };
   }
 
@@ -1870,10 +1913,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @param {string} content - Raw LLM response content
    * @param {Object} schema - JSON schema for validation
    * @param {string} nodeId - Node ID for error reporting
+   * @param {Object} [meta] - Diagnostic context from the LLM call
+   * @param {string} [meta.modelId] - Model that produced the output
+   * @param {string} [meta.finishReason] - LLM finish reason ('stop'|'length'|'tool_calls'|...)
+   * @param {number} [meta.maxTokens] - Configured output token cap for this call
    * @returns {*} Parsed output
    * @private
    */
-  parseStructuredOutput(content, schema, nodeId) {
+  parseStructuredOutput(content, schema, nodeId, meta = {}) {
     if (!content) {
       return null;
     }
@@ -1900,15 +1947,60 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // If no JSON found, return content as-is
       this.logger.warn('Could not parse structured output, returning raw content', {
         component: 'PromptNodeExecutor',
-        nodeId
+        nodeId,
+        modelId: meta.modelId,
+        finishReason: meta.finishReason,
+        contentLength: content.length
       });
       return content;
     } catch (error) {
-      this.logger.warn('JSON parse error for structured output', {
-        component: 'PromptNodeExecutor',
-        nodeId,
-        error
-      });
+      // Distinguish a truncated response (model hit its output token cap
+      // mid-JSON) from a malformed-but-complete response. Both yield JSON
+      // parse errors, but the remedy is different:
+      //   - 'length' finishReason or an "Unterminated string/value" error
+      //     near the end of the buffer → output was cut off. Raise maxTokens,
+      //     switch to a model with a larger output cap, or use a stricter
+      //     structured-output mode (response_format: json_schema) so the
+      //     model self-limits.
+      //   - any other parse error → the model emitted malformed JSON
+      //     despite finishing. Inspect the tail of the content.
+      const errorMessage = error?.message || String(error);
+      const truncationByFinishReason = meta.finishReason === 'length';
+      const truncationByErrorShape = /^(Unterminated|Unexpected end of)/i.test(errorMessage);
+      const isTruncated = truncationByFinishReason || truncationByErrorShape;
+      const tail = content.length > 240 ? `…${content.slice(-240)}` : content;
+
+      if (isTruncated) {
+        this.logger.warn(
+          'Structured output was truncated by the model — JSON is incomplete. ' +
+            'Raise maxTokens, pick a model with a larger output cap, or use a stricter ' +
+            'structured-output mode so the model self-limits the response.',
+          {
+            component: 'PromptNodeExecutor',
+            nodeId,
+            modelId: meta.modelId,
+            finishReason: meta.finishReason,
+            configuredMaxTokens: meta.maxTokens,
+            contentLength: content.length,
+            parseError: errorMessage,
+            truncationSignal: truncationByFinishReason
+              ? 'finish_reason=length'
+              : 'unterminated-value-at-end',
+            contentTail: tail
+          }
+        );
+      } else {
+        this.logger.warn('JSON parse error for structured output', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          modelId: meta.modelId,
+          finishReason: meta.finishReason,
+          configuredMaxTokens: meta.maxTokens,
+          contentLength: content.length,
+          parseError: errorMessage,
+          contentTail: tail
+        });
+      }
       return content;
     }
   }
@@ -2143,6 +2235,51 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       } catch {
         // Best effort.
+      }
+
+      // Incrementally publish this task's result + timing to the PARENT
+      // (root) execution's state. Without this, _taskResults only lands in
+      // the parent at the end-of-sub-workflow bubble-up — so if the parent
+      // planner node times out (or crashes) before that point, the UI on
+      // reload sees an empty _taskResults and renders the task as "open"
+      // even though its artifact is on disk. By writing per-task into the
+      // parent state here, every completed task survives a reload independent
+      // of whether bubble-up ever runs.
+      try {
+        const parentId = await this._resolveRootRunId(state, context);
+        if (parentId && parentId !== state.executionId) {
+          const { getStateManager } = await import('../StateManager.js');
+          const stateManager = getStateManager();
+          await stateManager.update(parentId, {
+            data: {
+              _taskResults: { [taskId]: taskResults[taskId] },
+              _taskTimings: { [taskId]: taskTimings[taskId] }
+            }
+          });
+          // Flush the parent's state to disk so the run survives a server
+          // restart mid-sub-workflow. Without this, the parent's planner node
+          // blocks for the whole sub-workflow duration and the engine only
+          // checkpoints when the planner returns — so a restart during a
+          // long research run loses everything except the per-task artifacts
+          // that writeArtifactDirect already saved.
+          try {
+            await stateManager.checkpoint(parentId, `after_task_${taskId}`);
+          } catch (checkpointErr) {
+            this.logger.warn('Per-task checkpoint of parent state failed', {
+              component: 'PromptNodeExecutor',
+              parentId,
+              taskId,
+              error: checkpointErr.message
+            });
+          }
+        }
+      } catch (persistErr) {
+        this.logger.warn('Incremental task-result publish to parent failed', {
+          component: 'PromptNodeExecutor',
+          nodeId: node.id,
+          taskId,
+          error: persistErr.message
+        });
       }
     }
 
@@ -2454,7 +2591,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
-  _captureCitationsFromGroundingMetadata({ groundingMetadata, state, taskId }) {
+  async _captureCitationsFromGroundingMetadata({ groundingMetadata, state, taskId }) {
     if (!state || !state.data) return;
     if (!groundingMetadata || typeof groundingMetadata !== 'object') return;
 
@@ -2468,12 +2605,27 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       : [];
     const queryStr = queries.length > 0 ? queries.join(' | ') : undefined;
 
+    // Resolve Gemini's vertexaisearch grounding-redirect URLs to their
+    // canonical destinations before storing. Feeding the raw redirect
+    // URLs back into a follow-up Gemini call triggers 400 INVALID_ARGUMENT
+    // (the model refuses input containing its own grounding-redirect
+    // tokens). Resolving here means every downstream consumer — the
+    // synthesizer's citations ledger, the UI, logs — gets a clean URL.
+    const rawUrls = [];
+    for (const chunk of chunks) {
+      const web = chunk?.web || chunk?.retrievedContext?.web;
+      const url = web?.uri || web?.url;
+      if (typeof url === 'string' && url) rawUrls.push(url);
+    }
+    const resolvedMap = await this._resolveGroundingRedirects(rawUrls);
+
     const seen = new Set((state.data._citations || []).map(c => c.url).filter(Boolean));
     const newEntries = [];
     for (const chunk of chunks) {
       const web = chunk?.web || chunk?.retrievedContext?.web;
-      const url = web?.uri || web?.url;
-      if (typeof url !== 'string' || !url) continue;
+      const rawUrl = web?.uri || web?.url;
+      if (typeof rawUrl !== 'string' || !rawUrl) continue;
+      const url = resolvedMap.get(rawUrl) || rawUrl;
       if (seen.has(url)) continue;
       seen.add(url);
       newEntries.push({
@@ -2488,6 +2640,79 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (newEntries.length > 0) {
       state.data._citations = [...(state.data._citations || []), ...newEntries];
     }
+  }
+
+  /**
+   * Resolve Gemini's `vertexaisearch.cloud.google.com/grounding-api-redirect/<token>`
+   * URLs to their canonical destinations via a HEAD request that does not
+   * auto-follow. Non-grounding URLs pass through unchanged. Failures fall
+   * back to a token-stripped placeholder so the original redirect token
+   * never reaches a follow-up Gemini call (which rejects it with 400).
+   *
+   * Results are memoized on the executor instance because the same
+   * citation often appears across multiple tasks in one workflow run.
+   *
+   * @private
+   * @param {string[]} urls
+   * @returns {Promise<Map<string,string>>}
+   */
+  async _resolveGroundingRedirects(urls) {
+    const REDIRECT_PREFIX = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/';
+    const out = new Map();
+    if (!this._groundingResolveCache) this._groundingResolveCache = new Map();
+    const cache = this._groundingResolveCache;
+
+    const toFetch = [];
+    for (const url of urls) {
+      if (out.has(url)) continue;
+      if (!url.startsWith(REDIRECT_PREFIX)) {
+        out.set(url, url);
+        continue;
+      }
+      if (cache.has(url)) {
+        out.set(url, cache.get(url));
+        continue;
+      }
+      toFetch.push(url);
+    }
+
+    if (toFetch.length === 0) return out;
+
+    await Promise.all(
+      toFetch.map(async url => {
+        let resolved;
+        try {
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort(), 5000);
+          const resp = await fetch(url, {
+            method: 'HEAD',
+            redirect: 'manual',
+            signal: ac.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 iHub-Apps' }
+          });
+          clearTimeout(timer);
+          const location = resp.headers.get('location');
+          if (location && !location.startsWith(REDIRECT_PREFIX)) {
+            resolved = location;
+          }
+        } catch (err) {
+          this.logger.debug?.('Grounding redirect resolution failed', {
+            component: 'PromptNodeExecutor',
+            error: err.message
+          });
+        }
+        // Fallback: strip the long opaque token so the URL no longer
+        // trips Gemini's input filter. We still keep the host so the
+        // citation is recognizable as a Google grounding result.
+        if (!resolved) {
+          resolved = `${REDIRECT_PREFIX}unresolved`;
+        }
+        cache.set(url, resolved);
+        out.set(url, resolved);
+      })
+    );
+
+    return out;
   }
 
   /**

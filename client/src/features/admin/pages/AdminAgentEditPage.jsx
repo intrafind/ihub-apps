@@ -975,6 +975,12 @@ export default function AdminAgentEditPage() {
                     onChange={e => handleBudgets({ maxWallTimeSec: Number(e.target.value) })}
                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t(
+                      'admin.agents.edit.maxWallTimeSecHint',
+                      'Caps the whole run AND drives the planner-node timeout (= this value − 5s). If the planner times out before the sub-workflow finishes, partial work survives but the final synthesizer never runs. Defaults to 600s (10 min). Raise to 1800s (30 min) or more for multi-task research runs.'
+                    )}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

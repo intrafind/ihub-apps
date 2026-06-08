@@ -33,7 +33,6 @@
             "name": "userQuestion",
             "type": "string",
             "required": true,
-            "primaryInput": true,
             "label": { "en": "Question", "de": "Frage" }
           },
           {
@@ -207,6 +206,7 @@
       "name": { "en": "Extract evidence", "de": "Evidenz extrahieren" },
       "position": { "x": 100, "y": 1660 },
       "config": {
+        "chatVisible": false,
         "temperature": 0.2,
         "system": {
           "en": "You analyse one document for one specific sub-question. Extract structured findings, ground every claim in the source, quote verbatim. The downstream validator checks every quote against the source."
@@ -226,6 +226,7 @@
       "name": { "en": "Capture structured evidence", "de": "Strukturierte Evidenz erfassen" },
       "position": { "x": 100, "y": 1780 },
       "config": {
+        "chatVisible": false,
         "schema": {
           "type": "object",
           "properties": {

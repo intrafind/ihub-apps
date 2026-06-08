@@ -286,7 +286,14 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             user: context.user,
             chatId: context.chatId,
             appConfig: context.appConfig,
-            language: context.language
+            language: context.language,
+            // Always checkpoint per-node in planner-spawned sub-workflows.
+            // Tasks here are multi-minute LLM calls; without disk persistence
+            // a server restart during a research run loses all progress
+            // (parent's planner is blocked waiting, so the parent's
+            // after-node checkpoint doesn't fire until the whole sub-workflow
+            // finishes).
+            checkpointOnNode: true
           }
         );
 
@@ -563,7 +570,16 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
     }
   ],
   "reasoning": "Brief explanation of the plan"
-}`;
+}
+
+Dependency rules:
+- If a task uses the output of another task (mapping, synthesizing, comparing, or pitching based on facts the other task gathered, or drafting a final summary/report that should reflect another task's findings), list the upstream task FIRST in the array AND set the dependent task's dependsOn to the upstream task's id.
+- Use the exact id string you assigned to the upstream task. Do not use the title. Do not use unquoted identifiers — every dependsOn entry must be a JSON string in double quotes.
+- Empty dependsOn means no upstream task is needed. Tasks with empty dependsOn run in array order, so order independent tasks meaningfully too.
+
+Output rules:
+- Return ONLY the JSON object. No markdown fences, no prose before or after, no comments.
+- Every string value must be in double quotes. Arrays must contain valid JSON values only.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -586,11 +602,21 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
       stepLog.tools = []; // planner has no tools by design
     }
 
+    // Ask the provider to enforce JSON output where supported. For Gemini /
+    // OpenAI / vLLM with json_object, the model is constrained to emit a
+    // valid JSON document; for providers without native support, this is a
+    // hint that the adapter ignores. Either way we still run our own
+    // best-effort parse below as a safety net.
+    //
+    // Explicit maxTokens: the Google adapter defaults to 2048, which is enough
+    // for typical plans but we'd rather not depend on adapter defaults — and
+    // for richer plans (10 tasks × ~200-token descriptions) we need more
+    // headroom anyway. 8192 is well within Gemini Flash's output budget.
     const response = await this.llmHelper.executeStreamingRequest({
       model,
       messages,
       apiKey: apiKeyResult.apiKey,
-      options: { temperature: 0.7 },
+      options: { temperature: 0.7, responseFormat: 'json', maxTokens: 8192 },
       language
     });
 
@@ -599,21 +625,67 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
       stepLog.responseLength = typeof response.content === 'string' ? response.content.length : 0;
     }
 
-    // Extract and parse JSON from the LLM response
+    // Extract and parse JSON from the LLM response. Strategy: try the whole
+    // trimmed content first (works when responseFormat=json was honored),
+    // then strip a markdown code fence, then fall back to the first-`{` /
+    // last-`}` slice. On every failure path we log the raw tail so future
+    // parse errors are diagnosable from the server log without needing the
+    // step log persisted (which doesn't happen if the planner throws).
     const content = response.content || '';
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (stepLog) {
-          stepLog.reasoning = parsed.reasoning || null;
-        }
-        return parsed;
+    const tryParse = candidate => {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        return null;
       }
-      throw new Error('No JSON found in LLM response');
-    } catch (e) {
-      throw new Error(`Failed to parse plan: ${e.message}`);
+    };
+    const trimmed = content.trim();
+    let parsed = tryParse(trimmed);
+    if (!parsed) {
+      const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
+      if (fenceMatch) parsed = tryParse(fenceMatch[1].trim());
     }
+    if (!parsed) {
+      const firstBrace = trimmed.indexOf('{');
+      const lastBrace = trimmed.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        parsed = tryParse(trimmed.slice(firstBrace, lastBrace + 1));
+      }
+    }
+    if (!parsed) {
+      const tail = trimmed.length > 600 ? `…${trimmed.slice(-600)}` : trimmed;
+      const truncatedByLength = response.finishReason === 'length';
+      const truncatedByShape =
+        /^(Unterminated|Unexpected end of)/i.test(trimmed) ||
+        // The content ends inside an open string / array / object.
+        /[":,]\s*$/.test(trimmed) ||
+        !/[}\]]\s*$/.test(trimmed);
+      const probablyTruncated = truncatedByLength || truncatedByShape;
+      this.logger.error('Planner LLM emitted unparseable JSON', {
+        component: 'PlannerNodeExecutor',
+        modelId: model.id,
+        finishReason: response.finishReason,
+        usage: response.usage,
+        contentLength: content.length,
+        probablyTruncated,
+        truncationSignal: truncatedByLength
+          ? 'finish_reason=length'
+          : truncatedByShape
+            ? 'content-does-not-end-with-close-bracket'
+            : null,
+        contentTail: tail
+      });
+      const remedy = probablyTruncated
+        ? ' The response was likely truncated — raise the planner model output cap or use a model with a larger output budget.'
+        : ' The response looks complete but is malformed — review the prompt or model.';
+      throw new Error(
+        `Failed to parse plan: LLM did not return valid JSON (contentLength=${content.length}, finishReason=${response.finishReason || 'unknown'}).${remedy}`
+      );
+    }
+    if (stepLog) {
+      stepLog.reasoning = parsed.reasoning || null;
+    }
+    return parsed;
   }
 
   /**

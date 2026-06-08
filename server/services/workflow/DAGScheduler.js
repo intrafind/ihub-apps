@@ -236,45 +236,85 @@ export class DAGScheduler {
 
     const completedSet = new Set(completedNodes || []);
 
-    // MVP: Sequential execution - return first current node only
-    // This ensures deterministic behavior for initial implementation
-    // TODO: Enable parallel execution when parallel: true in workflow config
-
-    // For now, just validate that the first node can execute
-    const firstNode = currentNodes[0];
-
-    // Check incoming edges to this node
-    const incomingEdges = (workflow.edges || []).filter(edge => edge.target === firstNode);
-
-    // For workflows with cycles/loops, we use "any" dependency logic:
-    // A node is ready if AT LEAST ONE incoming edge has a completed source.
-    // This allows:
-    // - Initial execution when the "forward" edge source is complete
-    // - Loop execution when the "back" edge source (loop trigger) is complete
+    // Two dependency-readiness modes, picked by workflow.config.allowCycles:
     //
-    // For strict DAG workflows (no cycles), this is equivalent to "all" logic
-    // since each node typically has only one incoming edge path active at a time.
-    const anyDependencyMet =
-      incomingEdges.length === 0 || incomingEdges.some(edge => completedSet.has(edge.source));
+    // (A) Cyclic workflows — `allowCycles: true` (default).
+    //     Use OR-semantics: a node is ready if ANY incoming edge's source is
+    //     completed. This is required for loop bodies, where the back-edge
+    //     source completes on every iteration and re-triggers the body.
+    //     Requiring ALL incoming edges to be satisfied would deadlock — the
+    //     loop's "forward" edge source would have to complete every iteration
+    //     too, but it doesn't.
+    //
+    // (B) DAG workflows — `allowCycles: false` (planner sub-workflows).
+    //     Use AND-semantics: a node is ready ONLY when ALL its incoming
+    //     edges have completed sources. This is what `dependsOn` and the
+    //     sequential safety net in SubWorkflowMaterializer rely on — if we
+    //     used OR here, declaring `dependsOn: ['A']` on a task that ALSO
+    //     has a sequential predecessor `B` would let the task run as soon
+    //     as either A or B completes (whichever fires first), defeating the
+    //     dependency ordering. With AND, both must complete first.
+    //
+    // The legacy comment that "for DAGs, OR is equivalent to AND because
+    // each node has only one incoming edge active" is no longer true: the
+    // materializer's sequential safety net deliberately adds a second
+    // incoming edge alongside `dependsOn` to harden ordering, so DAGs now
+    // routinely have multiple incoming edges per node.
+    const allowCycles = workflow.config?.allowCycles !== false;
 
-    if (anyDependencyMet) {
-      const satisfiedEdges = incomingEdges.filter(e => completedSet.has(e.source));
-      logger.debug('Node ready for execution', {
-        component: 'DAGScheduler',
-        nodeId: firstNode,
-        satisfiedDependencies: satisfiedEdges.map(e => e.source),
-        totalIncomingEdges: incomingEdges.length
-      });
-      return [firstNode];
+    // MVP: Sequential execution — return the FIRST currentNode that's ready.
+    // Previously this only ever checked `currentNodes[0]`, which worked under
+    // OR-semantics (almost any current node was "ready"). Under AND-semantics
+    // a node can be blocked behind unsatisfied upstreams; iterating lets a
+    // later-in-the-list ready node run instead of stalling the whole loop.
+    // TODO: Return all ready nodes for true parallel execution.
+    const edges = workflow.edges || [];
+    const isReady = nodeId => {
+      const incomingEdges = edges.filter(edge => edge.target === nodeId);
+      if (incomingEdges.length === 0) return { ready: true, incomingEdges };
+      const ready = allowCycles
+        ? incomingEdges.some(edge => completedSet.has(edge.source))
+        : incomingEdges.every(edge => completedSet.has(edge.source));
+      return { ready, incomingEdges };
+    };
+
+    for (const nodeId of currentNodes) {
+      const { ready, incomingEdges } = isReady(nodeId);
+      if (ready) {
+        logger.debug('Node ready for execution', {
+          component: 'DAGScheduler',
+          nodeId,
+          dependencyMode: allowCycles ? 'any' : 'all',
+          satisfiedDependencies: incomingEdges
+            .filter(e => completedSet.has(e.source))
+            .map(e => e.source),
+          totalIncomingEdges: incomingEdges.length
+        });
+        return [nodeId];
+      }
     }
 
-    // No incoming edges are satisfied - node is blocked
-    logger.warn('Node has no satisfied dependencies', {
-      component: 'DAGScheduler',
-      nodeId: firstNode,
-      requiredNodes: incomingEdges.map(e => e.source),
-      completedNodes: Array.from(completedSet)
-    });
+    // No current node is ready. Log a deadlock warning for the first
+    // current node so operators see *something*; the per-node loop above
+    // already debug-logged each waiter.
+    const firstNode = currentNodes[0];
+    const { incomingEdges } = isReady(firstNode);
+    const unsatisfied = incomingEdges.filter(e => !completedSet.has(e.source));
+    if (unsatisfied.length === incomingEdges.length) {
+      logger.warn('No current nodes have any satisfied dependencies', {
+        component: 'DAGScheduler',
+        currentNodes,
+        dependencyMode: allowCycles ? 'any' : 'all',
+        requiredNodes: incomingEdges.map(e => e.source),
+        completedNodes: Array.from(completedSet)
+      });
+    } else {
+      logger.debug('All current nodes still waiting for upstream dependencies', {
+        component: 'DAGScheduler',
+        currentNodes,
+        waitingFor: unsatisfied.map(e => e.source)
+      });
+    }
 
     return [];
   }

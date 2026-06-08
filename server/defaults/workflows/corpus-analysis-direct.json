@@ -33,7 +33,6 @@
             "name": "userQuestion",
             "type": "string",
             "required": true,
-            "primaryInput": true,
             "label": { "en": "Question", "de": "Frage" },
             "description": {
               "en": "The question you want analysed across the indexed corpus.",
@@ -145,6 +144,7 @@
       "name": { "en": "Extract evidence", "de": "Evidenz extrahieren" },
       "position": { "x": 100, "y": 960 },
       "config": {
+        "chatVisible": false,
         "temperature": 0.2,
         "system": {
           "en": "You are a corpus analyst. Extract structured findings from a single document for an audit-grade pipeline that verifies every quote against the source verbatim. Never invent. Quotes are character-for-character."
@@ -182,6 +182,7 @@
       "name": { "en": "Capture structured evidence", "de": "Strukturierte Evidenz erfassen" },
       "position": { "x": 100, "y": 1080 },
       "config": {
+        "chatVisible": false,
         "schema": {
           "type": "object",
           "properties": {

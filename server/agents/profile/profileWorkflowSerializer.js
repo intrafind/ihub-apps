@@ -212,8 +212,8 @@ function buildSimpleWorkflow(profile) {
       { id: 'end', type: 'end' }
     ],
     edges: [
-      { from: 'start', to: 'agent' },
-      { from: 'agent', to: 'end' }
+      { source: 'start', target: 'agent' },
+      { source: 'agent', target: 'end' }
     ]
   };
 }
@@ -258,9 +258,9 @@ function buildDrainOnlyWorkflow(profile) {
       { id: 'end', type: 'end' }
     ],
     edges: [
-      { from: 'start', to: 'seed' },
-      { from: 'seed', to: 'drain' },
-      { from: 'drain', to: 'end' }
+      { source: 'start', target: 'seed' },
+      { source: 'seed', target: 'drain' },
+      { source: 'drain', target: 'end' }
     ]
   };
 }
@@ -364,10 +364,10 @@ function buildPlannerWorkflow(profile) {
       type: 'inbox-load',
       config: { inboxId: profile.inboxId }
     });
-    edges.push({ from: 'start', to: 'inbox-load' });
-    edges.push({ from: 'inbox-load', to: 'planner' });
+    edges.push({ source: 'start', target: 'inbox-load' });
+    edges.push({ source: 'inbox-load', target: 'planner' });
   } else {
-    edges.push({ from: 'start', to: 'planner' });
+    edges.push({ source: 'start', target: 'planner' });
   }
 
   nodes.push(buildPlannerNode(profile, { hasInbox }));
@@ -376,7 +376,7 @@ function buildPlannerWorkflow(profile) {
   let lastWorkflowNodeId = 'planner';
   if (useSynth) {
     nodes.push(buildSynthesizerNode(profile));
-    edges.push({ from: 'planner', to: 'synthesize' });
+    edges.push({ source: 'planner', target: 'synthesize' });
     lastWorkflowNodeId = 'synthesize';
   }
   if (hasInbox) {
@@ -385,10 +385,10 @@ function buildPlannerWorkflow(profile) {
       type: 'inbox-finalize',
       config: { inboxId: profile.inboxId }
     });
-    edges.push({ from: lastWorkflowNodeId, to: 'inbox-finalize' });
-    edges.push({ from: 'inbox-finalize', to: 'end' });
+    edges.push({ source: lastWorkflowNodeId, target: 'inbox-finalize' });
+    edges.push({ source: 'inbox-finalize', target: 'end' });
   } else {
-    edges.push({ from: lastWorkflowNodeId, to: 'end' });
+    edges.push({ source: lastWorkflowNodeId, target: 'end' });
   }
 
   nodes.push({ id: 'end', type: 'end' });
@@ -484,8 +484,8 @@ function buildInboxWorkerWorkflow(profile) {
     }
   ];
   const edges = [
-    { from: 'start', to: 'inbox-load' },
-    { from: 'inbox-load', to: 'agent' }
+    { source: 'start', target: 'inbox-load' },
+    { source: 'inbox-load', target: 'agent' }
   ];
 
   let lastId = 'agent';
@@ -541,12 +541,12 @@ function buildInboxWorkerWorkflow(profile) {
         maxIterations: 50
       }
     });
-    edges.push({ from: 'agent', to: 'drain' });
+    edges.push({ source: 'agent', target: 'drain' });
     lastId = 'drain';
   }
   if (useSynth) {
     nodes.push(buildSynthesizerNode(profile));
-    edges.push({ from: lastId, to: 'synthesize' });
+    edges.push({ source: lastId, target: 'synthesize' });
     lastId = 'synthesize';
   }
   nodes.push({
@@ -554,8 +554,8 @@ function buildInboxWorkerWorkflow(profile) {
     type: 'inbox-finalize',
     config: { inboxId: profile.inboxId }
   });
-  edges.push({ from: lastId, to: 'inbox-finalize' });
-  edges.push({ from: 'inbox-finalize', to: 'end' });
+  edges.push({ source: lastId, target: 'inbox-finalize' });
+  edges.push({ source: 'inbox-finalize', target: 'end' });
 
   nodes.push({ id: 'end', type: 'end' });
   return { nodes, edges };

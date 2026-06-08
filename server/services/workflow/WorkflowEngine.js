@@ -1250,6 +1250,21 @@ export class WorkflowEngine {
     const lastRunElapsed =
       startedAtTs && interruptedAtTs ? Math.max(0, interruptedAtTs - startedAtTs) : 0;
 
+    // Reset the per-node iteration counter for the nodes we're about to
+    // re-execute. The counter is a CYCLE guard (catches a node that loops
+    // back to itself N times within a single run), not a RETRY counter —
+    // a failed attempt followed by a resume should start fresh. Without
+    // this reset, every resume bumps the counter and after `maxIterations`
+    // resumes the engine refuses to run the node with
+    // `MAX_NODE_ITERATIONS_EXCEEDED`. We deepMerge `_nodeIterations` so
+    // counters for OTHER nodes (which may legitimately be mid-loop) are
+    // preserved.
+    const prevIterations = state.data?._nodeIterations || {};
+    const resetIterations = { ...prevIterations };
+    for (const nodeId of resumeNodes) {
+      resetIterations[nodeId] = 0;
+    }
+
     // Clear the terminal markers, requeue the resume nodes, clear failedNodes
     // so the engine doesn't immediately re-flag them on retry. completedNodes
     // is preserved so already-finished work is not re-run.
@@ -1264,7 +1279,8 @@ export class WorkflowEngine {
         _resumedFromStatus: state.status,
         _executionDeadline: newDeadline,
         _totalElapsedMs: previousElapsed + lastRunElapsed,
-        _resumeCount: (state.data?._resumeCount || 0) + 1
+        _resumeCount: (state.data?._resumeCount || 0) + 1,
+        _nodeIterations: resetIterations
       }
     });
 

@@ -7,7 +7,12 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import StepDetails from '../components/StepDetails';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
-import { approveAgentRun, cancelAgentRun, fetchRunArtifacts } from '../../../api/agentsAdminApi';
+import {
+  approveAgentRun,
+  cancelAgentRun,
+  fetchRunArtifacts,
+  resumeAgentRun
+} from '../../../api/agentsAdminApi';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -88,6 +93,16 @@ export default function AgentRunDetailPage() {
     }
   }
 
+  async function handleResume() {
+    setActionError(null);
+    try {
+      await resumeAgentRun(runId);
+      refetch();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || err.message);
+    }
+  }
+
   async function handleApprove(response) {
     const checkpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
     if (!checkpoint) return;
@@ -151,8 +166,16 @@ export default function AgentRunDetailPage() {
     for (const h of taskHistory) {
       const kind = eventKind(h);
       if (kind === 'start') {
-        // Don't downgrade a 'done' or 'failed' from a later event.
-        if (!map[h.nodeId]) map[h.nodeId] = 'in_progress';
+        // A `start` is normally only set when the slot is empty. The
+        // exception is the resume / retry case: when a node previously
+        // ended in `failed` and the run was resumed, the engine fires
+        // `node_start` again — we want the UI to reflect the new
+        // in-flight attempt rather than the stale failure. We do NOT
+        // override `done` (a completed node won't legitimately re-start
+        // outside of cycles, and we don't want late SSE to flicker the
+        // UI back to in-progress).
+        const prev = map[h.nodeId];
+        if (!prev || prev === 'failed') map[h.nodeId] = 'in_progress';
       } else if (kind === 'complete') {
         map[h.nodeId] = 'done';
       } else if (kind === 'error') {
@@ -599,6 +622,18 @@ export default function AgentRunDetailPage() {
                   className="px-3 py-2 bg-red-600 text-white rounded text-sm"
                 >
                   {t('common.cancel', 'Cancel')}
+                </button>
+              )}
+              {(status === 'failed' || status === 'cancelled' || status === 'timed_out') && (
+                <button
+                  onClick={handleResume}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 transition-colors"
+                  title={t(
+                    'admin.agents.runs.resumeHint',
+                    'Restart from the last checkpoint. Completed tasks are preserved.'
+                  )}
+                >
+                  {t('admin.agents.runs.resume', 'Resume')}
                 </button>
               )}
             </div>

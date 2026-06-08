@@ -56,7 +56,6 @@
             "name": "userPrompt",
             "type": "string",
             "required": false,
-            "primaryInput": true,
             "label": {
               "en": "Focus prompt",
               "de": "Fokus-Anweisung"
@@ -135,6 +134,7 @@
       },
       "position": { "x": 100, "y": 720 },
       "config": {
+        "chatVisible": false,
         "system": {
           "en": "You are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.",
           "de": "Sie sind ein KI-Assistent, der PDF-Dokumente durchsuchen kann. Sie analysieren eine einzelne Stellungnahme zu einem Gesetzentwurf. Halten Sie sich strikt an folgende Regeln:\n- Antworten Sie immer in der Sprache des analysierten Dokuments. Vermischen Sie keine Sprachen.\n- Stützen Sie jede Aussage auf das Dokument. Niemals erfinden.\n- Zitate sind Zeichen für Zeichen aus der Quelle übernommen. Niemals paraphrasieren. Lassen Sie keine Zwischensätze aus einem zitierten Abschnitt weg.\n- Wiederholen Sie den Analyseprozess intern und verbessern Sie Ihr Ergebnis, bevor Sie es zurückgeben. Geben Sie ausschließlich das verbesserte Ergebnis aus."
@@ -189,6 +189,7 @@
       },
       "position": { "x": 100, "y": 860 },
       "config": {
+        "chatVisible": false,
         "schema": {
           "type": "object",
           "properties": {

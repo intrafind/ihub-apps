@@ -97,6 +97,13 @@ export async function cancelAgentRun(runId, reason) {
   });
 }
 
+export async function resumeAgentRun(runId) {
+  return await makeAdminApiCall(`/agents/runs/${runId}/resume`, {
+    method: 'POST',
+    body: {}
+  });
+}
+
 export async function approveAgentRun(runId, payload) {
   return await makeAdminApiCall(`/agents/runs/${runId}/approve`, {
     method: 'POST',
