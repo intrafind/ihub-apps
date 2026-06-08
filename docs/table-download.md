@@ -26,6 +26,8 @@ The feature follows the existing pattern for code block interactions:
 - **Excel (.xlsx)**: Uses the `xlsx` library to create Excel workbooks
 - **CSV (.csv)**: Standard comma-separated values format with proper escaping
 - **JSON (.json)**: First row is used as headers, data rows are converted to objects
+- **Markdown (.md)**: Markdown table format with pipe separators and alignment rows
+- **HTML (.html)**: Properly formatted HTML table with thead/tbody structure and escaping
 
 ### Table Data Extraction
 
@@ -38,7 +40,7 @@ Tables are extracted by:
 
 Downloaded files are named with the format: `table-{timestamp}.{extension}`
 - Timestamp format: `YYYY-MM-DDTHH-mm-ss`
-- Extensions: `.xlsx`, `.csv`, `.json`
+- Extensions: `.xlsx`, `.csv`, `.json`, `.md`, `.html`
 
 ## Usage
 
@@ -51,7 +53,7 @@ Tables in markdown are automatically enhanced with download buttons:
 | Bob | 25 | LA |
 ```
 
-Will render with three download buttons below the table for Excel, CSV, and JSON formats.
+Will render with five download buttons below the table for Excel, CSV, JSON, Markdown, and HTML formats.
 
 ## User Experience
 
@@ -67,9 +69,13 @@ All UI text supports internationalization through the i18n system:
 - `common.excel` - "Excel" button label
 - `common.csv` - "CSV" button label
 - `common.json` - "JSON" button label
+- `common.markdown` - "Markdown" button label
+- `common.html` - "HTML" button label
 - `common.downloadTableExcel` - Excel download tooltip
 - `common.downloadTableCSV` - CSV download tooltip
 - `common.downloadTableJSON` - JSON download tooltip
+- `common.downloadTableMarkdown` - Markdown download tooltip
+- `common.downloadTableHTML` - HTML download tooltip
 
 Currently supported languages:
 - English (en)
@@ -97,7 +103,7 @@ Currently supported languages:
 ## Future Enhancements
 
 Potential improvements for future iterations:
-1. Support for more export formats (PDF, Markdown, HTML)
+1. Support for PDF export format
 2. Configurable column selection before export
 3. Preserve table styling in Excel exports
 4. Support for merged cells and complex table structures

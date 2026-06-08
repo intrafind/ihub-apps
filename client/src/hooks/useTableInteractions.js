@@ -88,6 +88,66 @@ const tableToJSON = data => {
   return JSON.stringify(jsonData, null, 2);
 };
 
+// Convert table data to Markdown format
+const tableToMarkdown = data => {
+  if (data.length === 0) return '';
+
+  const lines = [];
+
+  // Add header row
+  if (data.length > 0) {
+    lines.push('| ' + data[0].join(' | ') + ' |');
+    // Add separator row
+    lines.push('| ' + data[0].map(() => '---').join(' | ') + ' |');
+  }
+
+  // Add data rows
+  for (let i = 1; i < data.length; i++) {
+    lines.push('| ' + data[i].join(' | ') + ' |');
+  }
+
+  return lines.join('\n');
+};
+
+// Convert table data to HTML format
+const tableToHTML = data => {
+  if (data.length === 0) return '<table></table>';
+
+  let html = '<table border="1" cellpadding="5" cellspacing="0">\n';
+
+  // Add header row
+  if (data.length > 0) {
+    html += '  <thead>\n    <tr>\n';
+    data[0].forEach(cell => {
+      html += `      <th>${escapeHTML(cell)}</th>\n`;
+    });
+    html += '    </tr>\n  </thead>\n';
+  }
+
+  // Add body rows
+  if (data.length > 1) {
+    html += '  <tbody>\n';
+    for (let i = 1; i < data.length; i++) {
+      html += '    <tr>\n';
+      data[i].forEach(cell => {
+        html += `      <td>${escapeHTML(cell)}</td>\n`;
+      });
+      html += '    </tr>\n';
+    }
+    html += '  </tbody>\n';
+  }
+
+  html += '</table>';
+  return html;
+};
+
+// Helper to escape HTML special characters
+const escapeHTML = str => {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+};
+
 // Download file with given content and filename
 const downloadFile = (content, filename, mimeType) => {
   const blob = new Blob([content], { type: mimeType });
@@ -144,6 +204,16 @@ export const useTableInteractions = () => {
             content = tableToJSON(tableData);
             filename = `table-${timestamp}.json`;
             mimeType = 'application/json';
+            break;
+          case 'markdown':
+            content = tableToMarkdown(tableData);
+            filename = `table-${timestamp}.md`;
+            mimeType = 'text/markdown';
+            break;
+          case 'html':
+            content = tableToHTML(tableData);
+            filename = `table-${timestamp}.html`;
+            mimeType = 'text/html';
             break;
           default:
             throw new Error('Unknown format');
