@@ -300,6 +300,27 @@
           "jsonl": "JSON-Zeilen-Format"
         }
       },
+      "tableExport": {
+        "dialogTitle": "Tabelle exportieren",
+        "selectTable": "Tabelle zum Exportieren auswählen",
+        "tableNumber": "Tabelle {{number}}",
+        "tableDimensions": "{{rows}} Zeilen × {{columns}} Spalten",
+        "preview": "Vorschau",
+        "previewNote": "Zeige ersten 5 Zeilen von {{total}}",
+        "selectFormat": "Exportformat auswählen",
+        "export": "Tabelle exportieren",
+        "exporting": "Exportiere...",
+        "formats": {
+          "csv": "CSV-Datei",
+          "xlsx": "Excel-Tabelle",
+          "html": "HTML-Tabelle"
+        },
+        "descriptions": {
+          "csv": "Durch Kommas getrennte Werte",
+          "xlsx": "Excel-Arbeitsmappe",
+          "html": "HTML-Tabellendatei"
+        }
+      },
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
       "showThoughts": "Denkanalyse anzeigen",
@@ -466,6 +487,7 @@
     "linkCopied": "Link kopiert!",
     "downloadMessage": "Nachricht herunterladen",
     "downloadOptions": "Download-Optionen",
+    "downloadTable": "Tabelle herunterladen",
     "deleteMessage": "Nachricht löschen",
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",

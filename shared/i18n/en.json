@@ -294,6 +294,27 @@
           "jsonl": "JSON Lines format"
         }
       },
+      "tableExport": {
+        "dialogTitle": "Export Table",
+        "selectTable": "Select table to export",
+        "tableNumber": "Table {{number}}",
+        "tableDimensions": "{{rows}} rows × {{columns}} columns",
+        "preview": "Preview",
+        "previewNote": "Showing first 5 rows of {{total}}",
+        "selectFormat": "Select export format",
+        "export": "Export Table",
+        "exporting": "Exporting...",
+        "formats": {
+          "csv": "CSV File",
+          "xlsx": "Excel Spreadsheet",
+          "html": "HTML Table"
+        },
+        "descriptions": {
+          "csv": "Comma-separated values",
+          "xlsx": "Excel workbook",
+          "html": "HTML table file"
+        }
+      },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
       "showThoughts": "Show thinking analysis",
@@ -1783,6 +1804,7 @@
     "linkCopied": "Link copied!",
     "downloadMessage": "Download message",
     "downloadOptions": "Download Options",
+    "downloadTable": "Download table",
     "deleteMessage": "Delete message",
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

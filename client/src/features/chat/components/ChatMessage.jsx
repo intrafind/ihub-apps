@@ -11,7 +11,8 @@ import {
   htmlToMarkdown,
   markdownToHtml,
   isMarkdown,
-  cleanHtmlForExport
+  cleanHtmlForExport,
+  hasMarkdownTable
 } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
@@ -52,6 +53,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
+import TableExportDialog from './TableExportDialog';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -112,11 +114,17 @@ function ChatMessage({
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showTableExportDialog, setShowTableExportDialog] = useState(false);
 
   // Get custom renderer info from message metadata (set when message completes)
   // This survives re-renders and component unmounting/remounting
   const customRendererFromMessage = message.customResponseRenderer;
   const outputFormatFromMessage = message.outputFormat;
+
+  // Check if message contains tables
+  const messageContent =
+    typeof message.content === 'string' ? message.content : message.content || '';
+  const containsTables = hasMarkdownTable(messageContent);
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
@@ -234,6 +242,11 @@ function ChatMessage({
   const handleDownload = () => {
     // Open the export dialog for single message download
     setShowExportDialog(true);
+  };
+
+  const handleDownloadTable = () => {
+    // Open the table export dialog
+    setShowTableExportDialog(true);
   };
 
   const handleCopyLink = () => {
@@ -1020,6 +1033,17 @@ function ChatMessage({
             <Icon name="download" size="sm" />
           </button>
 
+          {/* Download table button - shows only when message contains tables */}
+          {!isUser && !isError && containsTables && (
+            <button
+              onClick={handleDownloadTable}
+              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+              title={t('chatMessage.downloadTable', 'Download table')}
+            >
+              <Icon name="table-cells" size="sm" />
+            </button>
+          )}
+
           {/* Open in Canvas button for assistant messages */}
           {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
             <button
@@ -1176,6 +1200,15 @@ function ChatMessage({
           appId={appId}
           chatId={chatId}
           isSingleMessage={true}
+        />
+      )}
+
+      {/* Table Export Dialog */}
+      {showTableExportDialog && (
+        <TableExportDialog
+          isOpen={showTableExportDialog}
+          onClose={() => setShowTableExportDialog(false)}
+          content={messageContent}
         />
       )}
     </div>

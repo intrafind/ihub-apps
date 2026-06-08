@@ -94,3 +94,109 @@ export const cleanHtmlForExport = html => {
   // Return the cleaned HTML
   return tempDiv.innerHTML;
 };
+
+/**
+ * Detect if content contains markdown tables
+ * @param {string} content - The content to check
+ * @returns {boolean} True if content contains markdown tables
+ */
+export const hasMarkdownTable = content => {
+  if (!content || typeof content !== 'string') {
+    return false;
+  }
+
+  const lines = content.split('\n');
+  let foundTable = false;
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i].trim();
+    const nextLine = lines[i + 1].trim();
+
+    // Check if current line looks like a table header and next line is a separator
+    if (line.includes('|') && nextLine.match(/^[\|\s\-:]+$/)) {
+      foundTable = true;
+      break;
+    }
+  }
+
+  return foundTable;
+};
+
+/**
+ * Extract all markdown tables from content
+ * @param {string} content - The markdown content
+ * @returns {Array} Array of table objects with headers and rows
+ */
+export const extractMarkdownTables = content => {
+  if (!content || typeof content !== 'string') {
+    return [];
+  }
+
+  const tables = [];
+  const lines = content.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    // Check if this line starts a table (contains pipes)
+    if (line.includes('|')) {
+      const tableLines = [];
+      let tableStart = i;
+
+      // Collect consecutive lines that look like table rows
+      while (i < lines.length) {
+        const tableLine = lines[i].trim();
+        if (!tableLine || !tableLine.includes('|')) {
+          break;
+        }
+        tableLines.push(tableLine);
+        i++;
+      }
+
+      // Check if we have at least header + separator (minimum 2 lines)
+      if (tableLines.length >= 2) {
+        // Parse table header (first line)
+        const headerCells = tableLines[0]
+          .split('|')
+          .map(cell => cell.trim())
+          .filter(cell => cell);
+
+        // Check if second line is separator (contains dashes and pipes)
+        const separatorLine = tableLines[1];
+        const isSeparator = /^[\|\s\-:]+$/.test(separatorLine);
+
+        if (isSeparator && headerCells.length > 0) {
+          // Parse table body rows (skip header and separator)
+          const bodyRows = [];
+          for (let j = 2; j < tableLines.length; j++) {
+            const rowCells = tableLines[j]
+              .split('|')
+              .map(cell => cell.trim())
+              .filter(cell => cell);
+
+            if (rowCells.length > 0) {
+              bodyRows.push(rowCells);
+            }
+          }
+
+          // Add table to results
+          tables.push({
+            headers: headerCells,
+            rows: bodyRows,
+            startLine: tableStart,
+            endLine: i - 1
+          });
+          continue;
+        }
+      }
+
+      // If not a valid table, reset and continue
+      i = tableStart + 1;
+    } else {
+      i++;
+    }
+  }
+
+  return tables;
+};
