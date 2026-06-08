@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
 import OfficeMailContextBanner from './OfficeMailContextBanner';
@@ -21,6 +21,9 @@ const AUTO_COLLAPSE_THRESHOLD = 3;
  * Renders nothing at all when there's no context to show: no mail body,
  * no attachments, no pinned emails, and no actionable pin buttons. The
  * loading state of the mail snapshot is still surfaced via the banner.
+ *
+ * Auto-collapses when a message is sent or a predefined prompt is picked
+ * to give the user more reading space for the assistant's response.
  */
 function OfficeContextStrip({
   // Mail snapshot
@@ -39,7 +42,9 @@ function OfficeContextStrip({
   onAddEmails,
   canAddEmails,
   addEmailsLoading,
-  addEmailsDisabled
+  addEmailsDisabled,
+  // Auto-collapse trigger
+  collapseOnMessageSent = 0
 }) {
   const isAppointment = ctx?.itemKind === 'appointment';
   const attachments = useMemo(
@@ -77,6 +82,18 @@ function OfficeContextStrip({
     prevItemIdRef.current = itemId;
     if (overrideExpanded !== null) setOverrideExpanded(null);
   }
+
+  // Auto-collapse when a message is sent or a predefined prompt is picked.
+  // The parent increments collapseOnMessageSent to trigger a collapse, giving
+  // the user more reading space for the assistant's response (Outlook
+  // integration feature). Only collapse if there's actually content visible —
+  // no point collapsing an empty strip.
+  useEffect(() => {
+    if (collapseOnMessageSent > 0 && (hasBody || hasAttachments || hasPinned)) {
+      setOverrideExpanded(false);
+    }
+  }, [collapseOnMessageSent, hasBody, hasAttachments, hasPinned]);
+
   const expanded = overrideExpanded === null ? !shouldDefaultCollapse : overrideExpanded;
 
   if (loading) {
