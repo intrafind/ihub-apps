@@ -111,9 +111,6 @@ function ChatMessage({
   const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-  const downloadMenuRef = useRef(null);
-  const [downloaded, setDownloaded] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Get custom renderer info from message metadata (set when message completes)
@@ -131,17 +128,6 @@ function ChatMessage({
     const handleClick = e => {
       if (copyMenuRef.current && !copyMenuRef.current.contains(e.target)) {
         setShowCopyMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  // Close download menu on outside click
-  useEffect(() => {
-    const handleClick = e => {
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
-        setShowDownloadMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -245,62 +231,9 @@ function ChatMessage({
       });
   };
 
-  const handleDownload = (format = 'text') => {
-    // For simple formats (text, markdown, html), keep the original behavior
-    if (format === 'text' || format === 'markdown' || format === 'html') {
-      // Use the original streamed content directly
-      const raw = typeof message.content === 'string' ? message.content : message.content || '';
-
-      let data;
-      let mimeType;
-      let fileExtension;
-
-      switch (format) {
-        case 'html':
-          // Convert to HTML and clean up interactive elements (buttons, toolbars)
-          data = isMarkdown(raw) ? markdownToHtml(raw) : raw;
-          data = cleanHtmlForExport(data);
-          mimeType = 'text/html';
-          fileExtension = 'html';
-          break;
-        case 'markdown':
-          // For markdown format, return the raw content if it's already markdown, otherwise convert
-          data = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
-          mimeType = 'text/markdown';
-          fileExtension = 'md';
-          break;
-        default:
-          // For text format, always return the original raw content
-          data = raw;
-          mimeType = 'text/plain';
-          fileExtension = 'txt';
-      }
-
-      // Create a blob and download
-      try {
-        const blob = new Blob([data], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-        a.download = `message-${timestamp}.${fileExtension}`;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setDownloaded(true);
-        setTimeout(() => setDownloaded(false), 2000);
-        setShowDownloadMenu(false);
-      } catch (err) {
-        console.error('Failed to download content: ', err);
-      }
-    } else {
-      // For all other formats (pdf, docx, xlsx, etc.), open the export dialog
-      setShowDownloadMenu(false);
-      setShowExportDialog(true);
-    }
+  const handleDownload = () => {
+    // Open the export dialog for single message download
+    setShowExportDialog(true);
   };
 
   const handleCopyLink = () => {
@@ -1078,52 +1011,14 @@ function ChatMessage({
             )}
           </div>
 
-          {/* Download menu with format options */}
-          <div className="relative inline-flex items-center" ref={downloadMenuRef}>
-            <button
-              onClick={() => handleDownload('text')}
-              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-              title={t('chatMessage.downloadMessage', 'Download message')}
-            >
-              {downloaded ? <Icon name="check" size="sm" /> : <Icon name="download" size="sm" />}
-            </button>
-            <button
-              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-              className="ml-1 hover:text-gray-700"
-              title={t('chatMessage.downloadOptions', 'Download Options')}
-            >
-              <Icon name="chevron-down" size="sm" />
-            </button>
-            {showDownloadMenu && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded shadow z-10 text-gray-700">
-                <button
-                  onClick={() => handleDownload('text')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
-                >
-                  {t('canvas.export.downloadText', 'as Text')}
-                </button>
-                <button
-                  onClick={() => handleDownload('markdown')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
-                >
-                  {t('canvas.export.downloadMarkdown', 'as Markdown')}
-                </button>
-                <button
-                  onClick={() => handleDownload('html')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
-                >
-                  {t('canvas.export.downloadHTML', 'as HTML')}
-                </button>
-                <div className="border-t border-gray-200"></div>
-                <button
-                  onClick={() => handleDownload('other')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap font-medium"
-                >
-                  {t('chatMessage.moreFormats', 'More formats...')}
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Download button - opens export dialog */}
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+            title={t('chatMessage.downloadMessage', 'Download message')}
+          >
+            <Icon name="download" size="sm" />
+          </button>
 
           {/* Open in Canvas button for assistant messages */}
           {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
