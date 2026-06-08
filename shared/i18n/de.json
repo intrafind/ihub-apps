@@ -266,6 +266,7 @@
         "toMarkdown": "als Markdown",
         "toHTML": "als HTML",
         "dialogTitle": "Unterhaltung exportieren",
+        "dialogTitleSingleMessage": "Nachricht exportieren",
         "selectFormat": "Exportformat auswählen",
         "export": "Exportieren",
         "exporting": "Exportiere...",
@@ -462,6 +463,7 @@
     "linkCopied": "Link kopiert!",
     "downloadMessage": "Nachricht herunterladen",
     "downloadOptions": "Download-Optionen",
+    "moreFormats": "Weitere Formate...",
     "deleteMessage": "Nachricht löschen",
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",

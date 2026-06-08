@@ -14,7 +14,15 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, chatId }) {
+function ExportDialog({
+  isOpen,
+  onClose,
+  messages = [],
+  settings = {},
+  appId,
+  chatId,
+  isSingleMessage = false
+}) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
@@ -221,7 +229,9 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
             id="export-dialog-title"
             className="text-xl font-semibold text-gray-900 dark:text-gray-100"
           >
-            {t('pages.appChat.export.dialogTitle', 'Export Conversation')}
+            {isSingleMessage
+              ? t('pages.appChat.export.dialogTitleSingleMessage', 'Export Message')
+              : t('pages.appChat.export.dialogTitle', 'Export Conversation')}
           </h2>
           <button
             onClick={onClose}

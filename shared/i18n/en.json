@@ -260,6 +260,7 @@
         "toMarkdown": "as Markdown",
         "toHTML": "as HTML",
         "dialogTitle": "Export Conversation",
+        "dialogTitleSingleMessage": "Export Message",
         "selectFormat": "Select export format",
         "export": "Export",
         "exporting": "Exporting...",
@@ -1779,6 +1780,7 @@
     "linkCopied": "Link copied!",
     "downloadMessage": "Download message",
     "downloadOptions": "Download Options",
+    "moreFormats": "More formats...",
     "deleteMessage": "Delete message",
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

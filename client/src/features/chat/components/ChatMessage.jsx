@@ -51,6 +51,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
   );
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
+import ExportDialog from './ExportDialog';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -113,6 +114,7 @@ function ChatMessage({
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const downloadMenuRef = useRef(null);
   const [downloaded, setDownloaded] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Get custom renderer info from message metadata (set when message completes)
   // This survives re-renders and component unmounting/remounting
@@ -244,53 +246,60 @@ function ChatMessage({
   };
 
   const handleDownload = (format = 'text') => {
-    // Use the original streamed content directly
-    const raw = typeof message.content === 'string' ? message.content : message.content || '';
+    // For simple formats (text, markdown, html), keep the original behavior
+    if (format === 'text' || format === 'markdown' || format === 'html') {
+      // Use the original streamed content directly
+      const raw = typeof message.content === 'string' ? message.content : message.content || '';
 
-    let data;
-    let mimeType;
-    let fileExtension;
+      let data;
+      let mimeType;
+      let fileExtension;
 
-    switch (format) {
-      case 'html':
-        // Convert to HTML and clean up interactive elements (buttons, toolbars)
-        data = isMarkdown(raw) ? markdownToHtml(raw) : raw;
-        data = cleanHtmlForExport(data);
-        mimeType = 'text/html';
-        fileExtension = 'html';
-        break;
-      case 'markdown':
-        // For markdown format, return the raw content if it's already markdown, otherwise convert
-        data = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
-        mimeType = 'text/markdown';
-        fileExtension = 'md';
-        break;
-      default:
-        // For text format, always return the original raw content
-        data = raw;
-        mimeType = 'text/plain';
-        fileExtension = 'txt';
-    }
+      switch (format) {
+        case 'html':
+          // Convert to HTML and clean up interactive elements (buttons, toolbars)
+          data = isMarkdown(raw) ? markdownToHtml(raw) : raw;
+          data = cleanHtmlForExport(data);
+          mimeType = 'text/html';
+          fileExtension = 'html';
+          break;
+        case 'markdown':
+          // For markdown format, return the raw content if it's already markdown, otherwise convert
+          data = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
+          mimeType = 'text/markdown';
+          fileExtension = 'md';
+          break;
+        default:
+          // For text format, always return the original raw content
+          data = raw;
+          mimeType = 'text/plain';
+          fileExtension = 'txt';
+      }
 
-    // Create a blob and download
-    try {
-      const blob = new Blob([data], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      a.download = `message-${timestamp}.${fileExtension}`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Create a blob and download
+      try {
+        const blob = new Blob([data], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        a.download = `message-${timestamp}.${fileExtension}`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-      setDownloaded(true);
-      setTimeout(() => setDownloaded(false), 2000);
+        setDownloaded(true);
+        setTimeout(() => setDownloaded(false), 2000);
+        setShowDownloadMenu(false);
+      } catch (err) {
+        console.error('Failed to download content: ', err);
+      }
+    } else {
+      // For all other formats (pdf, docx, xlsx, etc.), open the export dialog
       setShowDownloadMenu(false);
-    } catch (err) {
-      console.error('Failed to download content: ', err);
+      setShowExportDialog(true);
     }
   };
 
@@ -1105,6 +1114,13 @@ function ChatMessage({
                 >
                   {t('canvas.export.downloadHTML', 'as HTML')}
                 </button>
+                <div className="border-t border-gray-200"></div>
+                <button
+                  onClick={() => handleDownload('other')}
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap font-medium"
+                >
+                  {t('chatMessage.moreFormats', 'More formats...')}
+                </button>
               </div>
             )}
           </div>
@@ -1253,6 +1269,19 @@ function ChatMessage({
             )}
           </div>
         </div>
+      )}
+
+      {/* Export Dialog for single message */}
+      {showExportDialog && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          messages={[message]}
+          settings={{}}
+          appId={appId}
+          chatId={chatId}
+          isSingleMessage={true}
+        />
       )}
     </div>
   );
