@@ -1,5 +1,5 @@
 import writeXlsxFile from 'write-excel-file';
-import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Document, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
 /**
@@ -90,6 +90,68 @@ const parseMarkdown = content => {
       });
       i++;
       continue;
+    }
+
+    // Markdown table: | col1 | col2 |
+    // Tables have header row, separator row (|---|---|), and data rows
+    if (trimmedLine.includes('|')) {
+      const tableLines = [];
+      let tableStart = i;
+
+      // Collect consecutive lines that look like table rows
+      while (i < lines.length) {
+        const tableLine = lines[i].trim();
+        if (!tableLine || !tableLine.includes('|')) {
+          break;
+        }
+        tableLines.push(tableLine);
+        i++;
+      }
+
+      // Check if we have at least header + separator (minimum 2 lines)
+      if (tableLines.length >= 2) {
+        // Parse table header (first line)
+        const headerCells = tableLines[0]
+          .split('|')
+          .map(cell => cell.trim())
+          .filter(cell => cell);
+
+        // Check if second line is separator (contains dashes and pipes)
+        const separatorLine = tableLines[1];
+        const isSeparator = /^[\|\s\-:]+$/.test(separatorLine);
+
+        if (isSeparator && headerCells.length > 0) {
+          // Parse table body rows (skip header and separator)
+          const bodyRows = [];
+          for (let j = 2; j < tableLines.length; j++) {
+            const rowCells = tableLines[j]
+              .split('|')
+              .map(cell => cell.trim())
+              .filter(cell => cell);
+
+            if (rowCells.length > 0) {
+              bodyRows.push(
+                rowCells.map(cell => ({
+                  segments: parseInlineMarkdown(cell)
+                }))
+              );
+            }
+          }
+
+          // Add table block
+          blocks.push({
+            type: 'table',
+            headers: headerCells.map(cell => ({
+              segments: parseInlineMarkdown(cell)
+            })),
+            rows: bodyRows
+          });
+          continue;
+        }
+      }
+
+      // If not a valid table, reset and process as paragraph
+      i = tableStart;
     }
 
     // Headings: # H1, ## H2, ### H3, etc.
@@ -251,6 +313,61 @@ const markdownToDOCX = blocks => {
           })
         );
       });
+    } else if (block.type === 'table') {
+      // Convert markdown table to DOCX table
+      const tableRows = [];
+
+      // Create header row
+      const headerCells = block.headers.map(header => {
+        const textRuns = header.segments.map(segment => {
+          const options = { text: segment.text, bold: true };
+          if (segment.format.italic) options.italics = true;
+          if (segment.format.code) options.font = 'Courier New';
+          return new TextRun(options);
+        });
+
+        return new TableCell({
+          children: [new Paragraph({ children: textRuns })],
+          shading: {
+            fill: 'E0E0E0' // Light gray background for headers
+          }
+        });
+      });
+
+      tableRows.push(new TableRow({ children: headerCells }));
+
+      // Create body rows
+      block.rows.forEach(row => {
+        const cells = row.map(cell => {
+          const textRuns = cell.segments.map(segment => {
+            const options = { text: segment.text };
+            if (segment.format.bold) options.bold = true;
+            if (segment.format.italic) options.italics = true;
+            if (segment.format.code) options.font = 'Courier New';
+            return new TextRun(options);
+          });
+
+          return new TableCell({
+            children: [new Paragraph({ children: textRuns })]
+          });
+        });
+
+        tableRows.push(new TableRow({ children: cells }));
+      });
+
+      // Add table to document
+      paragraphs.push(
+        new Table({
+          rows: tableRows,
+          width: {
+            size: 100,
+            type: 'pct' // 100% width
+          }
+        })
+      );
+
+      // Add spacing after table
+      paragraphs.push(new Paragraph({ text: '' }));
     } else if (block.type === 'paragraph') {
       // Check if this is an empty paragraph (line break)
       if (block.segments.length === 1 && block.segments[0].text === '') {
@@ -274,10 +391,19 @@ const markdownToDOCX = blocks => {
 };
 
 /**
- * Convert parsed markdown blocks to PPTX rich text
+ * Convert parsed markdown blocks to PPTX rich text and tables
+ * Returns array of objects with type 'text' or 'table'
  */
 const markdownToPPTX = blocks => {
-  const richTextParts = [];
+  const elements = [];
+  let currentTextParts = [];
+
+  const flushText = () => {
+    if (currentTextParts.length > 0) {
+      elements.push({ type: 'text', content: currentTextParts });
+      currentTextParts = [];
+    }
+  };
 
   blocks.forEach((block, blockIndex) => {
     if (block.type === 'heading') {
@@ -291,18 +417,55 @@ const markdownToPPTX = blocks => {
         if (segment.format.italic) textObj.italic = true;
         if (segment.format.code) textObj.fontFace = 'Courier New';
 
-        richTextParts.push(textObj);
+        currentTextParts.push(textObj);
       });
-      richTextParts.push({ text: '\n' });
+      currentTextParts.push({ text: '\n' });
     } else if (block.type === 'hr') {
       // Horizontal rule as line
-      richTextParts.push({ text: '___________________________________________\n' });
+      currentTextParts.push({ text: '___________________________________________\n' });
+    } else if (block.type === 'table') {
+      // Flush any accumulated text before adding table
+      flushText();
+
+      // Convert markdown table to PPTX table format
+      const tableData = [];
+
+      // Add header row
+      const headerRow = block.headers.map(header => {
+        // Combine segments into single text
+        const text = header.segments.map(seg => seg.text).join('');
+        return {
+          text,
+          options: {
+            bold: true,
+            fill: 'E0E0E0', // Light gray background
+            color: '000000'
+          }
+        };
+      });
+      tableData.push(headerRow);
+
+      // Add body rows
+      block.rows.forEach(row => {
+        const rowData = row.map(cell => {
+          // Combine segments into single text with formatting
+          const text = cell.segments.map(seg => seg.text).join('');
+          const options = {};
+          // Check if any segment has formatting
+          if (cell.segments.some(seg => seg.format.bold)) options.bold = true;
+          if (cell.segments.some(seg => seg.format.italic)) options.italic = true;
+          return { text, options };
+        });
+        tableData.push(rowData);
+      });
+
+      elements.push({ type: 'table', content: tableData });
     } else if (block.type === 'list') {
       // Lists in PPTX
       block.items.forEach((item, itemIndex) => {
         // Add bullet/number
         const bullet = block.ordered ? `${itemIndex + 1}. ` : '• ';
-        richTextParts.push({ text: bullet });
+        currentTextParts.push({ text: bullet });
 
         item.segments.forEach(segment => {
           const textObj = { text: segment.text };
@@ -310,15 +473,15 @@ const markdownToPPTX = blocks => {
           if (segment.format.italic) textObj.italic = true;
           if (segment.format.code) textObj.fontFace = 'Courier New';
 
-          richTextParts.push(textObj);
+          currentTextParts.push(textObj);
         });
-        richTextParts.push({ text: '\n' });
+        currentTextParts.push({ text: '\n' });
       });
     } else if (block.type === 'paragraph') {
       // Check if this is an empty paragraph (line break)
       if (block.segments.length === 1 && block.segments[0].text === '') {
         // Add newline for spacing
-        richTextParts.push({ text: '\n' });
+        currentTextParts.push({ text: '\n' });
       } else {
         block.segments.forEach(segment => {
           const textObj = { text: segment.text };
@@ -326,16 +489,19 @@ const markdownToPPTX = blocks => {
           if (segment.format.italic) textObj.italic = true;
           if (segment.format.code) textObj.fontFace = 'Courier New';
 
-          richTextParts.push(textObj);
+          currentTextParts.push(textObj);
         });
         if (blockIndex < blocks.length - 1) {
-          richTextParts.push({ text: '\n' });
+          currentTextParts.push({ text: '\n' });
         }
       }
     }
   });
 
-  return richTextParts;
+  // Flush any remaining text
+  flushText();
+
+  return elements;
 };
 
 /**
@@ -757,19 +923,44 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
     // Add content with markdown formatting preserved
     const content = msg.content || '';
 
-    // Parse markdown and convert to PPTX rich text
+    // Parse markdown and convert to PPTX elements (text and tables)
     const blocks = parseMarkdown(content);
-    const richText = markdownToPPTX(blocks);
+    const elements = markdownToPPTX(blocks);
 
-    slide.addText(richText, {
-      x: 0.5,
-      y: 1.5,
-      w: 9,
-      h: 4.5,
-      fontSize: 14,
-      color: '111827',
-      valign: 'top', // Align text to top
-      wrap: true // Enable text wrapping
+    let currentY = 1.5;
+
+    // Add each element to the slide
+    elements.forEach(element => {
+      if (element.type === 'text') {
+        // Calculate approximate height needed for text
+        const textHeight = Math.min(4.5, 0.3 + element.content.length * 0.02);
+
+        slide.addText(element.content, {
+          x: 0.5,
+          y: currentY,
+          w: 9,
+          h: textHeight,
+          fontSize: 14,
+          color: '111827',
+          valign: 'top',
+          wrap: true
+        });
+
+        currentY += textHeight + 0.2;
+      } else if (element.type === 'table') {
+        // Add table to slide
+        slide.addTable(element.content, {
+          x: 0.5,
+          y: currentY,
+          w: 9,
+          h: Math.min(3, element.content.length * 0.4),
+          fontSize: 12,
+          color: '111827',
+          border: { pt: 1, color: 'CCCCCC' }
+        });
+
+        currentY += Math.min(3, element.content.length * 0.4) + 0.2;
+      }
     });
 
     // Add slide number
