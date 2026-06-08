@@ -795,9 +795,10 @@ class ToolExecutor {
       userFileData
     } = prep;
 
-    // Detect email context in messages and track as knowledge source
+    // Detect email context and file uploads in messages and track as knowledge source
     // Email context is added by the Office add-in with markers like:
     // "--- Current email ---" or "--- Pinned emails (N) ---" or "--- Current meeting ---"
+    // File uploads are detected by the presence of fileData or imageData properties
     const hasEmailContext = llmMessages.some(msg => {
       const content = msg.content || '';
       return (
@@ -806,7 +807,16 @@ class ToolExecutor {
         content.includes('--- Current meeting ---')
       );
     });
-    if (hasEmailContext) {
+
+    // Check for uploaded files/attachments in messages
+    const hasFileUploads = llmMessages.some(msg => {
+      return (
+        (msg.fileData && (Array.isArray(msg.fileData) ? msg.fileData.length > 0 : true)) ||
+        (msg.imageData && (Array.isArray(msg.imageData) ? msg.imageData.length > 0 : true))
+      );
+    });
+
+    if (hasEmailContext || hasFileUploads) {
       this.streamingHandler.addKnowledgeSource(chatId, 'email');
     }
 
