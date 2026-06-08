@@ -123,9 +123,7 @@
       "position": { "x": 100, "y": 720 },
       "config": {
         "chatVisible": false,
-        "operations": [
-          { "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }
-        ]
+        "operations": [{ "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }]
       }
     },
     {

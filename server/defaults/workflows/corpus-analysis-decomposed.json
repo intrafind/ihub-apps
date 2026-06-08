@@ -134,7 +134,10 @@
     {
       "id": "accumulate-corpus",
       "type": "code",
-      "name": { "en": "Accumulate corpus across sub-questions", "de": "Korpus über Teilfragen akkumulieren" },
+      "name": {
+        "en": "Accumulate corpus across sub-questions",
+        "de": "Korpus über Teilfragen akkumulieren"
+      },
       "position": { "x": 100, "y": 940 },
       "config": {
         "chatVisible": false,
@@ -185,9 +188,7 @@
       "position": { "x": 100, "y": 1420 },
       "config": {
         "chatVisible": false,
-        "operations": [
-          { "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }
-        ]
+        "operations": [{ "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }]
       }
     },
     {
@@ -274,7 +275,10 @@
     {
       "id": "advance-subquestion",
       "type": "transform",
-      "name": { "en": "Advance to next sub-question", "de": "Zur nächsten Teilfrage fortschreiten" },
+      "name": {
+        "en": "Advance to next sub-question",
+        "de": "Zur nächsten Teilfrage fortschreiten"
+      },
       "position": { "x": 100, "y": 2140 },
       "config": {
         "chatVisible": false,

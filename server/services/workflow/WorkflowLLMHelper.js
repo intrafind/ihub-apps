@@ -175,14 +175,15 @@ export class WorkflowLLMHelper {
                   hasImageUrl: !!p?.image_url
                 }))
               : undefined,
-            hasImageData:
-              Array.isArray(m?.imageData) || !!m?.imageData || undefined,
+            hasImageData: Array.isArray(m?.imageData) || !!m?.imageData || undefined,
             hasToolCalls: Array.isArray(m?.tool_calls) && m.tool_calls.length > 0 ? true : undefined
           });
           // Google adapter shape (contents/systemInstruction) vs OpenAI shape
           // (messages). Cover both so this works for every provider that
           // routes through this helper.
-          const messages = Array.isArray(body.messages) ? body.messages.map(summarizeMessage) : null;
+          const messages = Array.isArray(body.messages)
+            ? body.messages.map(summarizeMessage)
+            : null;
           const contents = Array.isArray(body.contents)
             ? body.contents.map(c => ({
                 role: c?.role,

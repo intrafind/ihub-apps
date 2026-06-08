@@ -18,8 +18,7 @@ import { actionTracker } from '../../../actionTracker.js';
 
 export class ProgressNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
-    const messageTemplate =
-      (node.config && (node.config.message || node.config.progress)) || '';
+    const messageTemplate = (node.config && (node.config.message || node.config.progress)) || '';
     const resolved = resolveTemplate(messageTemplate, state?.data || {});
     // Default to 'running' so the chat client's step lifecycle works: when
     // the next iteration emits its own running step, the chat client marks
@@ -27,8 +26,7 @@ export class ProgressNodeExecutor extends BaseNodeExecutor {
     // instead of a separate start + done pair.
     const status = (node.config && node.config.status) || 'running';
 
-    const executionId =
-      context?.executionId || context?.runId || context?.chatId;
+    const executionId = context?.executionId || context?.runId || context?.chatId;
     if (executionId && resolved) {
       try {
         actionTracker.emit('fire-sse', {

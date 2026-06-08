@@ -26,13 +26,7 @@ import { renderTemplate } from './renderTemplate.js';
  * @returns {{ markdown: string, bytes: number }}
  */
 export function composeReport(args) {
-  const {
-    records = [],
-    coverage,
-    synthesis = '',
-    template,
-    extra = {}
-  } = args || {};
+  const { records = [], coverage, synthesis = '', template, extra = {} } = args || {};
 
   if (typeof template !== 'string' || !template.trim()) {
     throw new Error('composeReport: `template` is required');

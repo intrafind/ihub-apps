@@ -104,7 +104,9 @@ function InputValueRenderer({ value, t }) {
   };
 
   const isFileLike = v =>
-    v && typeof v === 'object' && !Array.isArray(v) &&
+    v &&
+    typeof v === 'object' &&
+    !Array.isArray(v) &&
     typeof v.fileName === 'string' &&
     (typeof v.content === 'string' || Array.isArray(v.pageImages));
 
@@ -112,10 +114,15 @@ function InputValueRenderer({ value, t }) {
     const isExpanded = !!expanded[key];
     const contentLen = typeof file.content === 'string' ? file.content.length : 0;
     return (
-      <div key={key} className="flex flex-col gap-1 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2">
+      <div
+        key={key}
+        className="flex flex-col gap-1 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2"
+      >
         <div className="flex items-center gap-2 text-sm">
           <Icon name="document" className="w-4 h-4 text-gray-500" />
-          <span className="font-medium text-gray-900 dark:text-gray-100 break-all">{file.fileName}</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100 break-all">
+            {file.fileName}
+          </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {file.fileType || file.displayType || file.type}
             {file.fileSize ? ` · ${formatBytes(file.fileSize)}` : ''}

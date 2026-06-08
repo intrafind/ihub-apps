@@ -24,8 +24,7 @@ import { jsonSchemaToZod } from './jsonSchemaToZod.js';
  * @returns {{ record: Object, failures: Array<{code: string, message: string}> }}
  */
 export function collectStructuredRecord(args) {
-  const { runId, nodeId, iterationIndex, schema, rawExtraction, source, quotes = [] } =
-    args || {};
+  const { runId, nodeId, iterationIndex, schema, rawExtraction, source, quotes = [] } = args || {};
 
   const failures = [];
   let data = rawExtraction;
@@ -63,9 +62,9 @@ export function collectStructuredRecord(args) {
     record.status = 'failed';
     record.failures.push({
       code: 'RECORD_ENVELOPE_INVALID',
-      message: envelope.error?.issues
-        ?.map(i => `${i.path.join('.')}: ${i.message}`)
-        .join('; ') || 'record envelope failed validation'
+      message:
+        envelope.error?.issues?.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') ||
+        'record envelope failed validation'
     });
   }
 

@@ -32,9 +32,7 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
 
     const sourceRaw = this.resolveVariable(sourcePath, state) || {};
     const source = normalizeSource(sourceRaw, config.sourceSystem);
-    const iterationIndex = toNumberOrUndefined(
-      this.resolveVariable(iterationIndexPath, state)
-    );
+    const iterationIndex = toNumberOrUndefined(this.resolveVariable(iterationIndexPath, state));
     const runId =
       context?.runId ||
       context?.executionId ||
@@ -150,7 +148,10 @@ export class StructuredRecordNodeExecutor extends BaseNodeExecutor {
 function coerceLlmJson(value) {
   if (value === null || value === undefined) return value;
   if (typeof value !== 'string') return value;
-  const trimmed = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  const trimmed = value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '');
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
   if (start === -1 || end === -1 || end <= start) return value;

@@ -32,8 +32,8 @@ export function normalizeForMatching(input) {
   if (typeof input !== 'string') return '';
   return input
     .normalize('NFC')
-    .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2')   // dehyphenate line wraps first
-    .replace(/[\s ]+/g, ' ')             // collapse whitespace (incl. nbsp)
+    .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2') // dehyphenate line wraps first
+    .replace(/[\s ]+/g, ' ') // collapse whitespace (incl. nbsp)
     .trim();
 }
 
@@ -124,9 +124,7 @@ export function buildLlmVerdictPrompt({ quoteText, sourceWindow }) {
     'Return ONLY JSON of the form ' +
     '{"validated": <bool>, "closestMatch": "<closest matching passage from the source, or empty>", "confidence": "high"|"medium"|"low"}. ' +
     'No prose, no markdown fences.';
-  const user =
-    `QUOTE TO VERIFY:\n"""${quoteText}"""\n\n` +
-    `SOURCE TEXT:\n"""${sourceWindow}"""`;
+  const user = `QUOTE TO VERIFY:\n"""${quoteText}"""\n\n` + `SOURCE TEXT:\n"""${sourceWindow}"""`;
   return { system, user };
 }
 

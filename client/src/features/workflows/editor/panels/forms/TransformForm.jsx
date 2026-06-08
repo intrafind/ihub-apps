@@ -135,7 +135,7 @@ function SmartValueField({ label, value, onChange, placeholder, scalarType = 'te
             className="text-[10px] text-blue-500 hover:text-blue-600"
             title="Switch to JSON value (object/array)"
           >
-            { }
+            {}
           </button>
         )}
         {isComplex && (

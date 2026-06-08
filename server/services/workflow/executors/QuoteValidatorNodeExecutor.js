@@ -75,7 +75,11 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     emitProgress(context, `Validating quotes across ${records.length} document(s)…`);
 
     for (const record of records) {
-      const updatedRecord = { ...record, quotes: [...(record.quotes || [])], failures: [...(record.failures || [])] };
+      const updatedRecord = {
+        ...record,
+        quotes: [...(record.quotes || [])],
+        failures: [...(record.failures || [])]
+      };
       const sourceText = resolveSourceText(updatedRecord, corpusMap, maxSourceChars);
 
       const plan = planQuoteValidation({
@@ -289,8 +293,7 @@ function emitProgress(context, message) {
   // Emit workflow.node.progress keyed by executionId; the workflowRunner
   // bridge re-emits on the chat's real chatId. This pattern is shared with
   // StructuredRecordNodeExecutor / TemplateRenderNodeExecutor.
-  const executionId =
-    context?.executionId || context?.runId || context?.chatId;
+  const executionId = context?.executionId || context?.runId || context?.chatId;
   if (!executionId) return;
   try {
     // chatId must equal executionId — the workflowRunner bridge filters on

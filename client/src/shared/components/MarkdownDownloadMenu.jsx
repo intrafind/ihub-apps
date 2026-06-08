@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  exportAsMarkdown,
-  exportAsHTML,
-  printAsPDF,
-  exportAsDOCX
-} from '../utils/markdownExports';
+import { exportAsMarkdown, exportAsHTML, printAsPDF, exportAsDOCX } from '../utils/markdownExports';
 
 /**
  * Compact ⬇ Download ▾ dropdown that operates on an in-memory markdown

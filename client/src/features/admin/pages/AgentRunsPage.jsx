@@ -17,10 +17,9 @@ const STATUS_BADGE_CLASSES = {
 };
 
 function StatusBadge({ status }) {
-  const cls = STATUS_BADGE_CLASSES[status] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
-  return (
-    <span className={`px-2 py-0.5 text-xs rounded font-medium ${cls}`}>{status}</span>
-  );
+  const cls =
+    STATUS_BADGE_CLASSES[status] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+  return <span className={`px-2 py-0.5 text-xs rounded font-medium ${cls}`}>{status}</span>;
 }
 
 export default function AgentRunsPage() {

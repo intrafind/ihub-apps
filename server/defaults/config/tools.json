@@ -950,7 +950,11 @@
               "items": {
                 "anyOf": [
                   { "type": "string" },
-                  { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }
+                  {
+                    "type": "object",
+                    "properties": { "text": { "type": "string" } },
+                    "required": ["text"]
+                  }
                 ]
               }
             },

@@ -105,8 +105,7 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
 
     // Emit workflow.node.progress keyed by executionId so the workflowRunner
     // bridge can re-emit on the chat's real chatId.
-    const executionId =
-      context?.executionId || context?.runId || context?.chatId;
+    const executionId = context?.executionId || context?.runId || context?.chatId;
     if (executionId) {
       try {
         // chatId must equal executionId — workflowRunner bridge filters on it.
