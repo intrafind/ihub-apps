@@ -3,6 +3,123 @@ import { Document, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell 
 import PptxGenJS from 'pptxgenjs';
 
 /**
+ * Filename- and title-building helpers shared by all chat export formats.
+ *
+ * Goal: replace generic "chat-export-2026-06-09T15-30-00.xlsx" filenames
+ * and "Chat Export - iHub Apps" document titles with something meaningful
+ * — the app name, a topic slug derived from the first user message, and a
+ * readable date.
+ */
+
+/** Strip markdown noise, collapse whitespace, ASCII-kebab-case, cap length. */
+export const slugifyForFilename = (text, maxChars = 40) => {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/```[\s\S]*?```/g, ' ') // drop fenced code
+    .replace(/`[^`]*`/g, ' ') // drop inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ') // drop images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // unwrap links
+    .replace(/[*_~#>]/g, ' ') // drop markdown markers
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '') // strip accents
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, maxChars)
+    .replace(/-+$/, '');
+};
+
+/**
+ * Derive a short topic slug from the first non-greeting user message.
+ * Returns '' when the chat has no user content to summarize from.
+ */
+export const getChatTopicSlug = messages => {
+  if (!Array.isArray(messages)) return '';
+  const firstUser = messages.find(m => m && m.role === 'user' && !m.isGreeting && m.content);
+  if (!firstUser) return '';
+  return slugifyForFilename(firstUser.content, 40);
+};
+
+const pad2 = n => String(n).padStart(2, '0');
+
+/** `2026-06-09_1530` — filesystem-safe, sortable. */
+export const formatDateTimeForFilename = (date = new Date()) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}_` +
+  `${pad2(date.getHours())}${pad2(date.getMinutes())}`;
+
+/** `2026-06-09 15:30` — human-readable, used in document titles. */
+export const formatDateTimeForTitle = (date = new Date()) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ` +
+  `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+/**
+ * Build a descriptive download filename.
+ *
+ *   Full chat with topic:  `sales-assistant-pricing-discussion-2026-06-09_1530.docx`
+ *   Full chat, no topic:   `sales-assistant-chat-2026-06-09_1530.docx`
+ *   Single message:        `sales-assistant-message-2026-06-09_1530.docx`
+ *   No app context:        `chat-2026-06-09_1530.docx`
+ */
+export const buildChatExportFilename = ({
+  format,
+  appName,
+  appId,
+  messages,
+  isSingleMessage = false,
+  date = new Date()
+}) => {
+  const ext = (format || '').toLowerCase();
+  const appSlug = slugifyForFilename(appId || appName || '', 30);
+  const dateStr = formatDateTimeForFilename(date);
+
+  let middle;
+  if (isSingleMessage) {
+    middle = 'message';
+  } else {
+    const topic = getChatTopicSlug(messages);
+    middle = topic || 'chat';
+  }
+
+  const parts = [appSlug, middle, dateStr].filter(Boolean);
+  return `${parts.join('-')}.${ext}`;
+};
+
+/**
+ * Build a descriptive in-document title.
+ *
+ *   `Sales Assistant — Pricing Discussion (2026-06-09 15:30)`
+ *   `Sales Assistant — Message (2026-06-09 15:30)`
+ *   `Sales Assistant — Chat (2026-06-09 15:30)`
+ */
+export const buildChatExportTitle = ({
+  appName,
+  messages,
+  isSingleMessage = false,
+  date = new Date()
+}) => {
+  const dateStr = formatDateTimeForTitle(date);
+  const app = appName || 'iHub Apps';
+
+  if (isSingleMessage) return `${app} — Message (${dateStr})`;
+
+  // Use the first user message as a short topic — capitalize words, cap length.
+  const firstUser = Array.isArray(messages)
+    ? messages.find(m => m && m.role === 'user' && !m.isGreeting && m.content)
+    : null;
+  if (firstUser?.content) {
+    const topic = firstUser.content
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/[*_~#>]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+    if (topic) return `${app} — ${topic} (${dateStr})`;
+  }
+  return `${app} — Chat (${dateStr})`;
+};
+
+/**
  * Parse inline markdown formatting (bold, italic, code) within a text line
  * Returns array of text segments with formatting information
  */
@@ -508,9 +625,22 @@ const markdownToPPTX = blocks => {
  * Export chat messages to XLSX (Excel) format
  * Creates a spreadsheet with columns: Role, Timestamp, Content
  */
-export const exportToXLSX = async (messages, settings, appName, appId, chatId) => {
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.xlsx`;
+export const exportToXLSX = async (
+  messages,
+  settings,
+  appName,
+  appId,
+  chatId,
+  isSingleMessage = false
+) => {
+  const filename = buildChatExportFilename({
+    format: 'xlsx',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
 
   // Define header style
   const headerStyle = {
@@ -521,7 +651,7 @@ export const exportToXLSX = async (messages, settings, appName, appId, chatId) =
   // Prepare data rows for write-excel-file
   const data = [
     // Header information
-    [{ value: 'Chat Export', span: 3, fontWeight: 'bold' }],
+    [{ value: docTitle, span: 3, fontWeight: 'bold' }],
     [{ value: 'App' }, { value: appName, span: 2 }],
     [{ value: 'Date' }, { value: new Date().toLocaleString(), span: 2 }],
     [{ value: '', span: 3 }],
@@ -570,9 +700,22 @@ export const exportToXLSX = async (messages, settings, appName, appId, chatId) =
  * Export chat messages to CSV format
  * Creates a CSV file with columns: Role, Timestamp, Content
  */
-export const exportToCSV = async (messages, settings, appName, appId, chatId) => {
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.csv`;
+export const exportToCSV = async (
+  messages,
+  settings,
+  appName,
+  appId,
+  chatId,
+  isSingleMessage = false
+) => {
+  const filename = buildChatExportFilename({
+    format: 'csv',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
 
   // Helper function to escape CSV values
   const escapeCSV = value => {
@@ -589,7 +732,7 @@ export const exportToCSV = async (messages, settings, appName, appId, chatId) =>
   const rows = [];
 
   // Header information
-  rows.push(['Chat Export', '', ''].map(escapeCSV).join(','));
+  rows.push([docTitle, '', ''].map(escapeCSV).join(','));
   rows.push(['App', appName, ''].map(escapeCSV).join(','));
   rows.push(['Date', new Date().toLocaleString(), ''].map(escapeCSV).join(','));
   rows.push(['', '', ''].map(escapeCSV).join(','));
@@ -623,16 +766,29 @@ export const exportToCSV = async (messages, settings, appName, appId, chatId) =>
  * Export chat messages to DOCX (Word) format
  * Creates a formatted Word document with the conversation
  */
-export const exportToDOCX = async (messages, settings, appName, appId, chatId) => {
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.docx`;
+export const exportToDOCX = async (
+  messages,
+  settings,
+  appName,
+  appId,
+  chatId,
+  isSingleMessage = false
+) => {
+  const filename = buildChatExportFilename({
+    format: 'docx',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
 
   const children = [];
 
   // Add title
   children.push(
     new Paragraph({
-      text: 'Chat Export',
+      text: docTitle,
       heading: HeadingLevel.HEADING_1
     })
   );
@@ -796,11 +952,24 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
  * Export chat messages to TXT (plain text) format
  * Creates a simple text file with the conversation
  */
-export const exportToTXT = (messages, settings, appName, appId, chatId) => {
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.txt`;
+export const exportToTXT = (
+  messages,
+  settings,
+  appName,
+  appId,
+  chatId,
+  isSingleMessage = false
+) => {
+  const filename = buildChatExportFilename({
+    format: 'txt',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
 
-  let content = 'Chat Export\n';
+  let content = `${docTitle}\n`;
   content += '='.repeat(50) + '\n\n';
   content += `App: ${appName}\n`;
   content += `Date: ${new Date().toLocaleString()}\n\n`;
@@ -847,9 +1016,22 @@ export const exportToTXT = (messages, settings, appName, appId, chatId) => {
  * Export chat messages to PPTX (PowerPoint) format
  * Creates a presentation with each message on a separate slide
  */
-export const exportToPPTX = async (messages, settings, appName, appId, chatId) => {
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.pptx`;
+export const exportToPPTX = async (
+  messages,
+  settings,
+  appName,
+  appId,
+  chatId,
+  isSingleMessage = false
+) => {
+  const filename = buildChatExportFilename({
+    format: 'pptx',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
 
   const pres = new PptxGenJS();
 
@@ -857,7 +1039,7 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
   const titleSlide = pres.addSlide();
   titleSlide.background = { color: '4F46E5' };
 
-  titleSlide.addText('Chat Export', {
+  titleSlide.addText(docTitle, {
     x: 0.5,
     y: 1.5,
     w: 9,
