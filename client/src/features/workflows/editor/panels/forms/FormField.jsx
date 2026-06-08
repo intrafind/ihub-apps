@@ -29,6 +29,31 @@ function FormField({
     );
   }
 
+  // Guard against object/array values reaching a scalar input — they'd render
+  // as "[object Object]" and silently corrupt the field on edit. Show a JSON
+  // preview and direct the user to the JSON tab instead.
+  const isComplex =
+    type !== 'select' && type !== 'textarea' && value !== null && typeof value === 'object';
+  if (isComplex) {
+    let preview;
+    try {
+      preview = JSON.stringify(value, null, 2);
+    } catch {
+      preview = String(value);
+    }
+    return (
+      <div>
+        <label className={labelClass}>{label}</label>
+        <pre className="w-full text-xs font-mono border border-amber-300 dark:border-amber-700 rounded px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+          {preview}
+        </pre>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+          Complex value — edit via the JSON tab.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <label className={labelClass}>{label}</label>

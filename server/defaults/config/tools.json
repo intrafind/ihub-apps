@@ -858,5 +858,154 @@
       },
       "required": ["question"]
     }
+  },
+  {
+    "id": "evidence",
+    "name": {
+      "en": "Evidence — Completeness Analysis",
+      "de": "Evidenz — Vollständigkeitsanalyse"
+    },
+    "description": {
+      "en": "Build structured evidence records, fast-path validate verbatim quotes, and compose an auditable Markdown report. The agent counterpart of the workflow primitives in concepts/2026-06-02 Completeness Analysis Workflows.md.",
+      "de": "Strukturierte Evidenzdatensätze erzeugen, wörtliche Zitate per Fast-Path validieren und einen revisionssicheren Markdown-Bericht erzeugen. Das Agenten-Pendant zu den Workflow-Primitiven in concepts/2026-06-02 Completeness Analysis Workflows.md."
+    },
+    "script": "evidence.js",
+    "functions": {
+      "collect": {
+        "description": {
+          "en": "Validate a per-document LLM extraction and build a structured record. Optionally pass an inline `schema` (JSON Schema) to validate the extraction shape. Always call this before composing the report.",
+          "de": "Validiert eine pro-Dokument LLM-Extraktion und erzeugt einen strukturierten Datensatz. Übergeben Sie optional ein inline `schema` (JSON Schema) zur Validierung der Extraktionsstruktur. Vor der Berichtserstellung immer aufrufen."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "runId": { "type": "string" },
+            "schema": {
+              "type": "object",
+              "description": {
+                "en": "Inline JSON Schema for the extraction shape (optional).",
+                "de": "Inline JSON Schema für die Extraktionsstruktur (optional)."
+              }
+            },
+            "extraction": {
+              "type": "object",
+              "description": {
+                "en": "Raw extraction payload matching the declared schema.",
+                "de": "Rohe Extraktion gemäß dem deklarierten Schema."
+              }
+            },
+            "source": {
+              "type": "object",
+              "description": {
+                "en": "Provenance: { docId, sourceSystem ('ifinder'|'upload'|'url'|'inbox'), title?, url?, retrievedAt? }",
+                "de": "Herkunft: { docId, sourceSystem, title?, url?, retrievedAt? }"
+              },
+              "properties": {
+                "docId": { "type": "string" },
+                "sourceSystem": {
+                  "type": "string",
+                  "enum": ["ifinder", "upload", "url", "inbox"]
+                },
+                "title": { "type": "string" },
+                "url": { "type": "string" }
+              },
+              "required": ["docId", "sourceSystem"]
+            },
+            "quotes": {
+              "type": "array",
+              "description": {
+                "en": "Verbatim quotes the extractor pulled from the source. Each quote will be validated against the source text later.",
+                "de": "Wörtliche Zitate, die der Extraktor aus dem Dokument gezogen hat. Jedes Zitat wird später gegen den Quelltext validiert."
+              },
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string" },
+                  "locator": {
+                    "type": "object",
+                    "properties": {
+                      "page": { "type": "integer" },
+                      "section": { "type": "string" }
+                    }
+                  }
+                },
+                "required": ["text"]
+              }
+            },
+            "iterationIndex": { "type": "integer" }
+          },
+          "required": ["extraction", "source"]
+        }
+      },
+      "validateQuotesFastPath": {
+        "description": {
+          "en": "Run a normalized substring check against a batch of quotes (unicode NFC, whitespace collapse, dehyphenation). Returns per-quote verdicts and a summary. For quotes flagged 'needsLlm', use your own reasoning to verify against the source — paraphrases must NOT be accepted; only verbatim matches modulo normal PDF artifacts count as validated.",
+          "de": "Normalisierte Substring-Prüfung über eine Liste von Zitaten (Unicode NFC, Whitespace-Komprimierung, Bindestrich-Auflösung). Liefert pro Zitat ein Urteil + Zusammenfassung. Für 'needsLlm'-markierte Zitate bitte selbst gegen den Quelltext prüfen — Paraphrasen NICHT als valide akzeptieren."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "quotes": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  { "type": "string" },
+                  {
+                    "type": "object",
+                    "properties": { "text": { "type": "string" } },
+                    "required": ["text"]
+                  }
+                ]
+              }
+            },
+            "sourceText": {
+              "type": "string",
+              "description": {
+                "en": "The verbatim text of the source document.",
+                "de": "Der wörtliche Text des Quelldokuments."
+              }
+            }
+          },
+          "required": ["quotes", "sourceText"]
+        }
+      },
+      "composeReport": {
+        "description": {
+          "en": "Render the final Markdown report from accumulated records, coverage stats, and an optional pre-computed synthesis text. Optionally persists the report as a run artifact when runId is provided.",
+          "de": "Erzeugt den finalen Markdown-Bericht aus gesammelten Datensätzen, Abdeckungsstatistik und optionalem Synthese-Text. Wenn runId angegeben ist, wird der Bericht als Run-Artefakt persistiert."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "records": {
+              "type": "array",
+              "description": {
+                "en": "Structured records as returned by evidence.collect.",
+                "de": "Strukturierte Datensätze wie von evidence.collect zurückgegeben."
+              }
+            },
+            "coverage": {
+              "type": "object",
+              "description": {
+                "en": "Coverage state: { candidates: {total}, processed, skipped, failed, quotesChecked, quotesValidated }.",
+                "de": "Abdeckungs-State: { candidates: {total}, processed, skipped, failed, quotesChecked, quotesValidated }."
+              }
+            },
+            "synthesis": { "type": "string" },
+            "template": {
+              "type": "string",
+              "description": {
+                "en": "Required Handlebars-style template that references {{records}} / {{coverage}} / {{synthesis}}.",
+                "de": "Pflicht: Handlebars-ähnliche Vorlage, die auf {{records}} / {{coverage}} / {{synthesis}} verweist."
+              }
+            },
+            "runId": { "type": "string" },
+            "artifactName": { "type": "string", "default": "final-report.md" },
+            "chatId": { "type": "string" }
+          },
+          "required": ["template"]
+        }
+      }
+    }
   }
 ]

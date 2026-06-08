@@ -43,6 +43,12 @@ export { HttpNodeExecutor } from './HttpNodeExecutor.js';
 export { CodeNodeExecutor } from './CodeNodeExecutor.js';
 export { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 export { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+export { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
+export { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
+export { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
+export { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
+export { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
+export { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -61,6 +67,12 @@ import { HttpNodeExecutor } from './HttpNodeExecutor.js';
 import { CodeNodeExecutor } from './CodeNodeExecutor.js';
 import { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 import { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+import { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
+import { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
+import { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
+import { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
+import { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
+import { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -82,7 +94,13 @@ const executorRegistry = {
   http: HttpNodeExecutor,
   code: CodeNodeExecutor,
   'inbox-load': InboxLoadNodeExecutor,
-  'inbox-finalize': InboxFinalizeNodeExecutor
+  'inbox-finalize': InboxFinalizeNodeExecutor,
+  'structured-record': StructuredRecordNodeExecutor,
+  'quote-validator': QuoteValidatorNodeExecutor,
+  'template-render': TemplateRenderNodeExecutor,
+  'query-plan': QueryPlanNodeExecutor,
+  'corpus-search': CorpusSearchNodeExecutor,
+  progress: ProgressNodeExecutor
 };
 
 /**

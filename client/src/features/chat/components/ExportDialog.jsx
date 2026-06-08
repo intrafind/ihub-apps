@@ -200,7 +200,8 @@ function ExportDialog({
       const options = {
         appId,
         chatId,
-        appName
+        appName,
+        isSingleMessage
       };
 
       // Handle different export formats
@@ -223,19 +224,54 @@ function ExportDialog({
           await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
           break;
         case 'xlsx':
-          await exportToXLSX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToXLSX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'csv':
-          await exportToCSV(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToCSV(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'docx':
-          await exportToDOCX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToDOCX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'txt':
-          await exportToTXT(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToTXT(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'pptx':
-          await exportToPPTX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToPPTX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);

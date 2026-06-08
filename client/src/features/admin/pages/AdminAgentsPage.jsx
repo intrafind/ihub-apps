@@ -10,6 +10,7 @@ import {
 } from '../../../api/agentsAdminApi';
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentsPage() {
   const { t } = useTranslation();
@@ -188,6 +189,12 @@ export default function AdminAgentsPage() {
     <>
       <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
         <div className="max-w-7xl mx-auto py-8 px-4">
+          <AdminBreadcrumb
+            crumbs={[
+              { label: t('admin.title', 'Admin'), href: '/admin' },
+              { label: t('admin.agents.title', 'Agent Profiles') }
+            ]}
+          />
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">

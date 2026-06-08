@@ -1,7 +1,12 @@
+import { useCallback } from 'react';
 import FormField from './FormField';
 import LocalizedField from './LocalizedField';
+import ResourcePicker from './ResourcePicker';
+import { fetchModels } from '../../../../../api/endpoints/models';
 
 function VerifierForm({ config, onChange }) {
+  const fetchModelsFn = useCallback(() => fetchModels(), []);
+
   return (
     <div className="space-y-3">
       <LocalizedField
@@ -10,6 +15,13 @@ function VerifierForm({ config, onChange }) {
         value={config.criteria}
         onChange={v => onChange({ ...config, criteria: v })}
         placeholder="Verification criteria..."
+      />
+      <ResourcePicker
+        label="Model ID"
+        fetchFn={fetchModelsFn}
+        value={config.modelId}
+        onChange={v => onChange({ ...config, modelId: v })}
+        placeholder="Search models..."
       />
       <FormField
         label="Input Variable"

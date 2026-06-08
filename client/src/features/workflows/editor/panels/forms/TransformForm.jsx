@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 const OP_TYPES = [
   { value: 'set', label: 'Set' },
   { value: 'copy', label: 'Copy' },
@@ -78,6 +80,100 @@ const OP_FIELDS = {
     ]
   }
 };
+
+/**
+ * Field that accepts either a scalar string/number or a JSON-encoded object/array.
+ * Object values would otherwise render as "[object Object]" in a plain input and
+ * silently get corrupted on edit. When the current value is complex, we render
+ * a JSON textarea (parse-on-blur); otherwise a plain input.
+ */
+function SmartValueField({ label, value, onChange, placeholder, scalarType = 'text' }) {
+  const isComplex = value !== null && typeof value === 'object';
+  const [jsonText, setJsonText] = useState(() => {
+    if (!isComplex) return '';
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return '';
+    }
+  });
+  const [parseError, setParseError] = useState(null);
+
+  useEffect(() => {
+    if (isComplex) {
+      try {
+        setJsonText(JSON.stringify(value, null, 2));
+        setParseError(null);
+      } catch {
+        // ignore
+      }
+    }
+  }, [value, isComplex]);
+
+  const inputClass =
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+
+  const handleJsonChange = text => {
+    setJsonText(text);
+    try {
+      const parsed = JSON.parse(text);
+      onChange(parsed);
+      setParseError(null);
+    } catch (e) {
+      setParseError(e.message);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-0.5">
+        <label className="block text-xs text-gray-500 dark:text-gray-400">{label}</label>
+        {!isComplex && (
+          <button
+            type="button"
+            onClick={() => onChange({})}
+            className="text-[10px] text-blue-500 hover:text-blue-600"
+            title="Switch to JSON value (object/array)"
+          >
+            {}
+          </button>
+        )}
+        {isComplex && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-[10px] text-gray-500 hover:text-gray-700"
+            title="Switch back to scalar value"
+          >
+            abc
+          </button>
+        )}
+      </div>
+      {isComplex ? (
+        <>
+          <textarea
+            value={jsonText}
+            onChange={e => handleJsonChange(e.target.value)}
+            rows={6}
+            className={`${inputClass} font-mono`}
+            placeholder="JSON value"
+          />
+          {parseError && <p className="text-xs text-red-500 mt-0.5">{parseError}</p>}
+        </>
+      ) : (
+        <input
+          type={scalarType}
+          value={value ?? ''}
+          onChange={e =>
+            onChange(scalarType === 'number' ? Number(e.target.value) : e.target.value)
+          }
+          placeholder={placeholder}
+          className={inputClass}
+        />
+      )}
+    </div>
+  );
+}
 
 function TransformForm({ config, onChange }) {
   const operations = Array.isArray(config.operations) ? config.operations : [];
@@ -163,24 +259,14 @@ function TransformForm({ config, onChange }) {
               </div>
               {/* Secondary fields */}
               {spec.fields.map(f => (
-                <div key={f.key}>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                    {f.label}
-                  </label>
-                  <input
-                    type={f.type || 'text'}
-                    value={op[f.key] ?? ''}
-                    onChange={e =>
-                      updateOp(
-                        index,
-                        f.key,
-                        f.type === 'number' ? Number(e.target.value) : e.target.value
-                      )
-                    }
-                    placeholder={f.placeholder}
-                    className={inputClass}
-                  />
-                </div>
+                <SmartValueField
+                  key={f.key}
+                  label={f.label}
+                  value={op[f.key]}
+                  onChange={val => updateOp(index, f.key, val)}
+                  placeholder={f.placeholder}
+                  scalarType={f.type || 'text'}
+                />
               ))}
             </div>
           );

@@ -3,10 +3,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import StepDetails from '../components/StepDetails';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
-import { approveAgentRun, cancelAgentRun, fetchRunArtifacts } from '../../../api/agentsAdminApi';
+import {
+  approveAgentRun,
+  cancelAgentRun,
+  fetchRunArtifacts,
+  resumeAgentRun
+} from '../../../api/agentsAdminApi';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -87,6 +93,16 @@ export default function AgentRunDetailPage() {
     }
   }
 
+  async function handleResume() {
+    setActionError(null);
+    try {
+      await resumeAgentRun(runId);
+      refetch();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || err.message);
+    }
+  }
+
   async function handleApprove(response) {
     const checkpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
     if (!checkpoint) return;
@@ -150,8 +166,16 @@ export default function AgentRunDetailPage() {
     for (const h of taskHistory) {
       const kind = eventKind(h);
       if (kind === 'start') {
-        // Don't downgrade a 'done' or 'failed' from a later event.
-        if (!map[h.nodeId]) map[h.nodeId] = 'in_progress';
+        // A `start` is normally only set when the slot is empty. The
+        // exception is the resume / retry case: when a node previously
+        // ended in `failed` and the run was resumed, the engine fires
+        // `node_start` again — we want the UI to reflect the new
+        // in-flight attempt rather than the stale failure. We do NOT
+        // override `done` (a completed node won't legitimately re-start
+        // outside of cycles, and we don't want late SSE to flicker the
+        // UI back to in-progress).
+        const prev = map[h.nodeId];
+        if (!prev || prev === 'failed') map[h.nodeId] = 'in_progress';
       } else if (kind === 'complete') {
         map[h.nodeId] = 'done';
       } else if (kind === 'error') {
@@ -509,6 +533,22 @@ export default function AgentRunDetailPage() {
     <>
       <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
         <div className="max-w-6xl mx-auto py-8 px-4">
+          <AdminBreadcrumb
+            crumbs={[
+              { label: t('admin.title', 'Admin'), href: '/admin' },
+              { label: t('admin.agents.title', 'Agent Profiles'), href: '/admin/agents' },
+              ...(profileId
+                ? [
+                    { label: profileId, href: `/admin/agents/${profileId}` },
+                    {
+                      label: t('admin.agents.runs.title', 'Runs'),
+                      href: `/admin/agents/${profileId}/runs`
+                    }
+                  ]
+                : [{ label: t('admin.agents.runs.title', 'Runs') }]),
+              { label: runId.length > 18 ? `${runId.slice(0, 18)}…` : runId }
+            ]}
+          />
           <div className="flex justify-between items-start mb-6 gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{runTitle}</h1>
@@ -582,6 +622,18 @@ export default function AgentRunDetailPage() {
                   className="px-3 py-2 bg-red-600 text-white rounded text-sm"
                 >
                   {t('common.cancel', 'Cancel')}
+                </button>
+              )}
+              {(status === 'failed' || status === 'cancelled' || status === 'timed_out') && (
+                <button
+                  onClick={handleResume}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 transition-colors"
+                  title={t(
+                    'admin.agents.runs.resumeHint',
+                    'Restart from the last checkpoint. Completed tasks are preserved.'
+                  )}
+                >
+                  {t('admin.agents.runs.resume', 'Resume')}
                 </button>
               )}
             </div>

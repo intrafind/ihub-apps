@@ -25,10 +25,14 @@ const MIN_NODE_TIMEOUT = 1000; // 1 second
 const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
 
 /**
- * Maximum number of execution iterations to prevent infinite loops
+ * Engine-level cap on total scheduler iterations (each iteration runs one
+ * ready node). This is a backstop above the per-node `maxIterations`
+ * check; the per-node cap is the primary safety. Set high enough to
+ * accommodate cycle-shaped workflows that visit many nodes many times
+ * (e.g. 5 sub-questions × 100 docs × ~5 inner cycle nodes ≈ 2500).
  * @constant {number}
  */
-const MAX_EXECUTION_ITERATIONS = 200;
+const MAX_EXECUTION_ITERATIONS = 10000;
 
 /**
  * WorkflowEngine is the main orchestrator for executing workflow definitions.
@@ -1246,6 +1250,21 @@ export class WorkflowEngine {
     const lastRunElapsed =
       startedAtTs && interruptedAtTs ? Math.max(0, interruptedAtTs - startedAtTs) : 0;
 
+    // Reset the per-node iteration counter for the nodes we're about to
+    // re-execute. The counter is a CYCLE guard (catches a node that loops
+    // back to itself N times within a single run), not a RETRY counter —
+    // a failed attempt followed by a resume should start fresh. Without
+    // this reset, every resume bumps the counter and after `maxIterations`
+    // resumes the engine refuses to run the node with
+    // `MAX_NODE_ITERATIONS_EXCEEDED`. We deepMerge `_nodeIterations` so
+    // counters for OTHER nodes (which may legitimately be mid-loop) are
+    // preserved.
+    const prevIterations = state.data?._nodeIterations || {};
+    const resetIterations = { ...prevIterations };
+    for (const nodeId of resumeNodes) {
+      resetIterations[nodeId] = 0;
+    }
+
     // Clear the terminal markers, requeue the resume nodes, clear failedNodes
     // so the engine doesn't immediately re-flag them on retry. completedNodes
     // is preserved so already-finished work is not re-run.
@@ -1260,7 +1279,8 @@ export class WorkflowEngine {
         _resumedFromStatus: state.status,
         _executionDeadline: newDeadline,
         _totalElapsedMs: previousElapsed + lastRunElapsed,
-        _resumeCount: (state.data?._resumeCount || 0) + 1
+        _resumeCount: (state.data?._resumeCount || 0) + 1,
+        _nodeIterations: resetIterations
       }
     });
 

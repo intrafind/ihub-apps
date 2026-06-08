@@ -209,8 +209,17 @@ export default function registerAgentRunRoutes(app) {
           maxExecutionTime: maxWallTimeSec * 1000
         };
 
+        // Persist a checkpoint after every node completes. Agent runs are
+        // long-lived (each task is a multi-minute LLM call) and otherwise
+        // exist only in-memory until the run reaches a terminal state.
+        // Without per-node checkpoints, a server restart mid-run loses the
+        // plan, task results, and progress — the UI then shows "no run
+        // found" even though the artifacts on disk indicate work happened.
+        // The state-file write is a deepMerge-after-update; cost is
+        // dominated by the LLM call time, so the I/O is negligible.
         const state = await getEngine().start(workflow, initialData, {
-          user: principal
+          user: principal,
+          checkpointOnNode: true
         });
 
         // Register the run in the ExecutionRegistry so the /api/agents/runs
@@ -554,6 +563,106 @@ export default function registerAgentRunRoutes(app) {
         res.json({ ok: true, status: state.status });
       } catch (error) {
         sendFailedOperationError(res, 'cancel agent run', error);
+      }
+    }
+  );
+
+  // ── Resume from terminated state ──────────────────────────────────────────
+  // Mirrors POST /api/workflows/executions/:executionId/resume-from-terminated.
+  // Used to restart an agent run that ended with failed/cancelled/timed-out
+  // status — typically after raising the wall-time budget. Picks up at the
+  // last checkpoint so completed task work is preserved.
+  //
+  // Unlike standard workflow runs, agent runs don't persist `_workflowDefinition`
+  // into state (the embedded workflow can be hefty — full system prompts etc),
+  // so we rebuild it here from the agent profile and pass it via options.
+  // Same logic used at run-start above (lines ~138-161).
+  app.post(
+    buildServerPath('/api/agents/runs/:runId/resume'),
+    authRequired,
+    authenticatedOnly,
+    async (req, res) => {
+      try {
+        const { runId } = req.params;
+        if (!validateIdForPath(runId, 'run', res)) return;
+        if (!(await authorizeRunAccess(req, res, runId))) return;
+
+        // Recover the profile id from state (preferred) or registry entry.
+        const state = await getEngine().stateManager.get(runId);
+        if (!state) return sendNotFound(res, 'Run');
+        let profileId = state.data?._agent?.profileId;
+        if (!profileId) {
+          const registry = getExecutionRegistry();
+          const entry = registry.get ? registry.get(runId) : null;
+          if (typeof entry?.userId === 'string' && entry.userId.startsWith('agent:')) {
+            profileId = entry.userId.slice('agent:'.length);
+          }
+        }
+        if (!profileId) {
+          return sendBadRequest(
+            res,
+            'Cannot identify agent profile for this run — refusing to resume without a workflow definition.'
+          );
+        }
+
+        const profile = lookupProfile(profileId);
+        if (!profile) return sendBadRequest(res, `Agent profile ${profileId} no longer exists`);
+
+        const serialized = serializeProfile(profile);
+        let workflow;
+        if (
+          serialized.workflow?.ref === 'external' &&
+          typeof serialized.workflow.workflowId === 'string'
+        ) {
+          const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
+          if (!wf) {
+            return sendBadRequest(
+              res,
+              `External workflow ${serialized.workflow.workflowId} not found`
+            );
+          }
+          workflow = JSON.parse(JSON.stringify(wf));
+        } else {
+          workflow = serialized.workflow?.definition || {};
+        }
+        workflow.id = workflow.id || `agent:${profileId}`;
+        // Refresh the wall-time budget from the (possibly updated) profile so
+        // the resumed run uses the operator's current setting, not whatever
+        // was baked in when the run originally started.
+        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
+        workflow.config = {
+          ...(workflow.config || {}),
+          maxExecutionTime: maxWallTimeSec * 1000
+        };
+
+        const newState = await getEngine().resumeFromTerminated(runId, {
+          user: req.user,
+          workflow,
+          checkpointOnNode: true
+        });
+        logger.info('Agent run resumed from terminated state', {
+          component: 'AgentRunsRoute',
+          runId,
+          profileId,
+          userId: req.user?.id
+        });
+        res.json({
+          ok: true,
+          executionId: newState.executionId,
+          status: newState.status,
+          currentNodes: newState.currentNodes
+        });
+      } catch (error) {
+        if (error.code === 'EXECUTION_NOT_FOUND') return sendNotFound(res, 'Run');
+        if (
+          error.code === 'INVALID_STATE_FOR_RESUME' ||
+          error.code === 'WORKFLOW_NOT_AVAILABLE' ||
+          error.code === 'NO_RESUME_POINT' ||
+          error.code === 'USER_CANCELLED'
+        ) {
+          return sendBadRequest(res, error.message);
+        }
+        sendFailedOperationError(res, 'resume agent run', error);
       }
     }
   );

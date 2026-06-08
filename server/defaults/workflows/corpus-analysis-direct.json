@@ -1,0 +1,315 @@
+{
+  "id": "corpus-analysis-direct",
+  "name": {
+    "en": "Corpus Completeness Analysis — Direct (case A)",
+    "de": "Korpus-Vollständigkeitsanalyse — Direkt (Fall A)"
+  },
+  "description": {
+    "en": "Free-form question → query plan → iFinder search → per-document evidence extraction → audit-grade report with coverage stats. The 'flat' completeness pattern: one search, cycle over results.",
+    "de": "Freie Frage → Suchplan → iFinder-Suche → Evidenzextraktion pro Dokument → revisionssicherer Bericht mit Abdeckungsstatistik. Das 'flache' Vollständigkeitsmuster: eine Suche, Zyklus über Ergebnisse."
+  },
+  "version": "2.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 1800000,
+    "maxNodes": 30,
+    "maxIterations": 1000,
+    "allowCycles": true,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Pose Question", "de": "Frage stellen" },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "userQuestion",
+            "type": "string",
+            "required": true,
+            "label": { "en": "Question", "de": "Frage" },
+            "description": {
+              "en": "The question you want analysed across the indexed corpus.",
+              "de": "Die Frage, die über den indexierten Korpus hinweg analysiert werden soll."
+            }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": { "en": "Topic seeds (optional)", "de": "Themenstichwörter (optional)" },
+            "description": {
+              "en": "Comma-separated topics the planner MUST include verbatim.",
+              "de": "Kommagetrennte Themen, die der Planner WÖRTLICH übernehmen muss."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "init-coverage",
+      "type": "transform",
+      "name": { "en": "Init coverage", "de": "Abdeckung initialisieren" },
+      "position": { "x": 100, "y": 180 },
+      "config": {
+        "operations": [
+          { "set": "_records", "value": [] },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": { "total": 0 },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan",
+      "type": "query-plan",
+      "name": { "en": "Expand into search plan", "de": "In Suchplan expandieren" },
+      "position": { "x": 100, "y": 320 },
+      "config": {
+        "questionPath": "$.data.userQuestion",
+        "seedsPath": "$.data.topicSeeds",
+        "outputVar": "_queryPlan",
+        "maxTopics": 6,
+        "maxSynonymsPerTopic": 4
+      }
+    },
+    {
+      "id": "search",
+      "type": "corpus-search",
+      "name": { "en": "Search iFinder", "de": "iFinder durchsuchen" },
+      "position": { "x": 100, "y": 460 },
+      "config": {
+        "planPath": "$.data._queryPlan",
+        "corpusVar": "_corpus",
+        "coverageVar": "_coverage",
+        "maxPerTopic": 25,
+        "maxTotalDocs": 200,
+        "fetchFulltext": true,
+        "maxFulltextChars": 40000
+      }
+    },
+    {
+      "id": "init-cursor",
+      "type": "transform",
+      "name": { "en": "Initialise iteration cursor", "de": "Iterationszähler initialisieren" },
+      "position": { "x": 100, "y": 600 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "lengthOf": "_corpus", "to": "_docsTotal" },
+          { "set": "_docIndex", "value": 0 },
+          { "set": "_docHuman", "value": 1 }
+        ]
+      }
+    },
+    {
+      "id": "pick-doc",
+      "type": "transform",
+      "name": { "en": "Pick next document", "de": "Nächstes Dokument auswählen" },
+      "position": { "x": 100, "y": 720 },
+      "config": {
+        "chatVisible": false,
+        "operations": [{ "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }]
+      }
+    },
+    {
+      "id": "announce-doc",
+      "type": "progress",
+      "name": { "en": "Announce document", "de": "Dokument ankündigen" },
+      "position": { "x": 100, "y": 840 },
+      "config": {
+        "chatVisible": false,
+        "message": "📄 Analysing document {{_docHuman}} / {{_docsTotal}} — \"{{_currentDoc.title}}\""
+      }
+    },
+    {
+      "id": "extract-evidence",
+      "type": "prompt",
+      "name": { "en": "Extract evidence", "de": "Evidenz extrahieren" },
+      "position": { "x": 100, "y": 960 },
+      "config": {
+        "chatVisible": false,
+        "temperature": 0.2,
+        "system": {
+          "en": "You are a corpus analyst. Extract structured findings from a single document for an audit-grade pipeline that verifies every quote against the source verbatim. Never invent. Quotes are character-for-character."
+        },
+        "prompt": {
+          "en": "## User question\n${$.data.userQuestion}\n\n## Document ({{_docHuman}} of {{_docsTotal}})\nTitle: {{_currentDoc.title}}\nDocId: {{_currentDoc.docId}}\nSource: {{_currentDoc.url}}\n\n### Content\n{{_currentDoc.fulltext}}\n\n## Output\nReturn ONLY JSON of this shape (no prose, no markdown fences):\n\n{\n  \"keyStatements\": [\"<concise statement the document makes that is relevant to the user question>\"],\n  \"entities\": [\"<people / organisations / regulations named in the document>\"],\n  \"position\": \"<one-sentence summary of the document's overall position on the question, or empty>\",\n  \"evidenceQuotes\": [\"<each VERBATIM source quote used to ground a keyStatement>\"],\n  \"quotes\": [{ \"text\": \"<each VERBATIM source quote, one entry per quote>\" }]\n}\n\nThe `quotes` array MUST contain the same verbatim strings as `evidenceQuotes`; it's what the downstream validator checks."
+        },
+        "outputVariable": "_extractionOutput",
+        "maxIterations": 1,
+        "maxTokens": 6000,
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "keyStatements": { "type": "array", "items": { "type": "string" } },
+            "entities": { "type": "array", "items": { "type": "string" } },
+            "position": { "type": "string" },
+            "evidenceQuotes": { "type": "array", "items": { "type": "string" } },
+            "quotes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": { "text": { "type": "string" } },
+                "required": ["text"]
+              }
+            }
+          },
+          "required": ["keyStatements", "quotes"]
+        }
+      },
+      "execution": { "timeout": 90000, "retries": 1 }
+    },
+    {
+      "id": "collect-evidence",
+      "type": "structured-record",
+      "name": { "en": "Capture structured evidence", "de": "Strukturierte Evidenz erfassen" },
+      "position": { "x": 100, "y": 1080 },
+      "config": {
+        "chatVisible": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "keyStatements": { "type": "array", "items": { "type": "string" } },
+            "entities": { "type": "array", "items": { "type": "string" } },
+            "position": { "type": "string" },
+            "evidenceQuotes": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["keyStatements"]
+        },
+        "inputPath": "$.data._extractionOutput",
+        "sourcePath": "$.data._currentDoc",
+        "sourceSystem": "ifinder",
+        "recordsVar": "_records",
+        "iterationIndexPath": "$.data._docIndex"
+      }
+    },
+    {
+      "id": "advance-doc",
+      "type": "transform",
+      "name": { "en": "Advance to next document", "de": "Zum nächsten Dokument fortschreiten" },
+      "position": { "x": 100, "y": 1200 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "increment": "_coverage.processed", "by": 1 },
+          { "increment": "_docIndex", "by": 1 },
+          { "increment": "_docHuman", "by": 1 },
+          { "set": "_currentDoc", "value": null },
+          { "set": "_extractionOutput", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "more-docs",
+      "type": "decision",
+      "name": { "en": "More documents?", "de": "Weitere Dokumente?" },
+      "position": { "x": 100, "y": 1320 },
+      "config": {
+        "chatVisible": false,
+        "type": "expression",
+        "expression": "$.data._docIndex < $.data._docsTotal"
+      }
+    },
+    {
+      "id": "validate",
+      "type": "quote-validator",
+      "name": { "en": "Validate quotes", "de": "Zitate validieren" },
+      "position": { "x": 100, "y": 1460 },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "corpusVar": "_corpus",
+        "maxSourceChars": 40000
+      }
+    },
+    {
+      "id": "synthesise",
+      "type": "prompt",
+      "name": { "en": "Cross-document synthesis", "de": "Dokumentübergreifende Synthese" },
+      "position": { "x": 100, "y": 1600 },
+      "config": {
+        "temperature": 0.3,
+        "system": {
+          "en": "You synthesise a corpus of structured evidence records into a clear narrative — themes, majority position, contradictions, open points. You DO NOT add facts beyond the evidence. You cite the docIds you draw from."
+        },
+        "prompt": {
+          "en": "## User question\n${$.data.userQuestion}\n\n## Structured records (structured)\n{{#each _records}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.data.position}} — key statements: {{this.data.keyStatements}}\n{{/each}}\n\nWrite a markdown synthesis: ## Themes, ## Mehrheitslinie, ## Abweichende Aussagen, ## Offene Punkte. Cite docIds inline like (doc-123)."
+        },
+        "outputVariable": "_synthesis",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": { "timeout": 60000 }
+    },
+    {
+      "id": "compose",
+      "type": "template-render",
+      "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
+      "position": { "x": 100, "y": 1740 },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "synthesisVar": "_synthesis",
+        "artifactName": "corpus-analysis-direct.md",
+        "outputVariable": "finalReport",
+        "template": "# Korpus-Vollständigkeitsanalyse\n\n## Frage\n\n{{userQuestion}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if records}}\n## Per-Dokument-Datensätze\n\n{{#each records}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **URL:** {{this.source.url}}\n- **Status:** {{this.status}}\n- **Position:** {{this.data.position}}\n\n{{#if this.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate (validiert):**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich gefunden — nächstgelegene Passage: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n{{#if this.failures}}\n**Hinweise:**\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "Done", "de": "Fertig" },
+      "position": { "x": 100, "y": 1880 },
+      "config": { "outputVariables": ["finalReport"] }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "init-coverage" },
+    { "id": "e2", "source": "init-coverage", "target": "plan" },
+    { "id": "e3", "source": "plan", "target": "search" },
+    { "id": "e4", "source": "search", "target": "init-cursor" },
+    { "id": "e5", "source": "init-cursor", "target": "pick-doc" },
+    { "id": "e6", "source": "pick-doc", "target": "announce-doc" },
+    { "id": "e7", "source": "announce-doc", "target": "extract-evidence" },
+    { "id": "e8", "source": "extract-evidence", "target": "collect-evidence" },
+    { "id": "e9", "source": "collect-evidence", "target": "advance-doc" },
+    { "id": "e10", "source": "advance-doc", "target": "more-docs" },
+    {
+      "id": "e11-continue",
+      "source": "more-docs",
+      "target": "pick-doc",
+      "condition": { "type": "equals", "field": "result.branch", "value": "true" }
+    },
+    {
+      "id": "e11-done",
+      "source": "more-docs",
+      "target": "validate",
+      "condition": { "type": "equals", "field": "result.branch", "value": "false" }
+    },
+    { "id": "e12", "source": "validate", "target": "synthesise" },
+    { "id": "e13", "source": "synthesise", "target": "compose" },
+    { "id": "e14", "source": "compose", "target": "end" }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

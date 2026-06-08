@@ -7,10 +7,14 @@
  * - `while`: Iterate as long as a JavaScript condition evaluates to true (VM-sandboxed)
  *
  * Each iteration executes a list of body nodes sequentially. Loop variables
- * (_loopIndex, _loopItem, _loopTotal) are injected into state.data during iteration
- * and cleaned up after the loop completes.
+ * (_loopIndex, _loopItem, _loopTotal, _loopHuman) are injected into state.data
+ * during iteration and cleaned up after the loop completes. `_loopHuman` is
+ * the 1-based counterpart of `_loopIndex` for user-facing progress messages
+ * (templates can't do arithmetic).
  *
- * A hard cap (default 50, max 200) prevents runaway loops.
+ * A hard cap (default 50, max 500) prevents runaway loops. The 500 ceiling
+ * accommodates corpus-completeness workflows that iterate per-document over
+ * a search result set; see concepts/2026-06-02 Completeness Analysis Workflows.md.
  *
  * @module services/workflow/executors/LoopNodeExecutor
  */
@@ -122,8 +126,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       outputVariable
     } = config;
 
-    // Hard cap prevents runaway loops regardless of user configuration
-    const hardCap = Math.min(maxIterations, 200);
+    // Hard cap prevents runaway loops regardless of user configuration.
+    // Raised from 200 → 500 to support per-document analysis over larger
+    // corpora; default per-node maxIterations stays 50.
+    const hardCap = Math.min(maxIterations, 500);
 
     try {
       const results = [];
@@ -135,6 +141,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           for (let i = 0; i < iterCount; i++) {
             if (context.abortSignal?.aborted) break;
             currentState.data._loopIndex = i;
+            currentState.data._loopHuman = i + 1;
             currentState.data._loopTotal = iterCount;
 
             const bodyResult = await this.executeBodyNodes(body, currentState, context);
@@ -161,6 +168,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           for (let i = 0; i < iterArr.length; i++) {
             if (context.abortSignal?.aborted) break;
             currentState.data._loopIndex = i;
+            currentState.data._loopHuman = i + 1;
             currentState.data._loopItem = iterArr[i];
             currentState.data._loopTotal = iterArr.length;
 
@@ -188,6 +196,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             if (!condResult) break;
 
             currentState.data._loopIndex = i;
+            currentState.data._loopHuman = i + 1;
             currentState.data._loopTotal = -1; // unknown for while loops
 
             const bodyResult = await this.executeBodyNodes(body, currentState, context);
@@ -235,6 +244,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             nextTask.updatedAt = new Date().toISOString();
             currentState.data._currentTask = nextTask;
             currentState.data._loopIndex = i;
+            currentState.data._loopHuman = i + 1;
 
             const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context);
             results.push(bodyResult.output);
@@ -278,6 +288,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
       // Clean up temporary loop variables from state
       delete currentState.data._loopIndex;
+      delete currentState.data._loopHuman;
       delete currentState.data._loopItem;
       delete currentState.data._loopTotal;
 

@@ -177,10 +177,10 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
   );
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0">
       <NodePalette onAddNode={handleAddNode} />
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         <ReactFlow
           nodes={enrichedNodes}
           edges={edges}

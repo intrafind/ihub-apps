@@ -120,6 +120,20 @@ export class WorkflowLLMHelper {
       hasTools: !!filteredOptions.tools
     });
 
+    // Debug mode: when LLM_DEBUG_DUMP_ALL=1 is set in the environment, dump
+    // EVERY outgoing request body to disk before it's sent — successes too,
+    // not just 4xx failures. Use case: capture one Pro run and one Flash run
+    // back-to-back, then diff the request bodies to see what (if anything)
+    // differs in the wire format. Turn OFF for normal runs; the dumps include
+    // the full prompt content and accumulate quickly.
+    if (process.env.LLM_DEBUG_DUMP_ALL === '1') {
+      try {
+        await this._dumpRequest(request, model, 'request');
+      } catch {
+        // best-effort; never block the request
+      }
+    }
+
     // Execute the request
     const response = await throttledFetch(model.id, request.url, {
       method: 'POST',
@@ -135,13 +149,111 @@ export class WorkflowLLMHelper {
         language
       );
 
+      // For 4xx errors (mostly INVALID_ARGUMENT) the provider's error body
+      // is often generic ("Request contains an invalid argument."), which
+      // makes diagnosis hard. Dump a SHAPE summary of the request body so
+      // we can see what was sent without leaking the full prompt content to
+      // logs. Sizes/keys are enough to spot empty messages, oversized
+      // payloads, missing fields, etc.
+      let requestShape = null;
+      if (response.status >= 400 && response.status < 500) {
+        try {
+          const body = request.body || {};
+          const summarizeMessage = m => ({
+            role: m?.role,
+            contentType: typeof m?.content,
+            contentLength:
+              typeof m?.content === 'string'
+                ? m.content.length
+                : Array.isArray(m?.content)
+                  ? m.content.length
+                  : null,
+            contentPartsShape: Array.isArray(m?.content)
+              ? m.content.map(p => ({
+                  type: p?.type,
+                  textLength: typeof p?.text === 'string' ? p.text.length : null,
+                  hasImageUrl: !!p?.image_url
+                }))
+              : undefined,
+            hasImageData: Array.isArray(m?.imageData) || !!m?.imageData || undefined,
+            hasToolCalls: Array.isArray(m?.tool_calls) && m.tool_calls.length > 0 ? true : undefined
+          });
+          // Google adapter shape (contents/systemInstruction) vs OpenAI shape
+          // (messages). Cover both so this works for every provider that
+          // routes through this helper.
+          const messages = Array.isArray(body.messages)
+            ? body.messages.map(summarizeMessage)
+            : null;
+          const contents = Array.isArray(body.contents)
+            ? body.contents.map(c => ({
+                role: c?.role,
+                partsCount: Array.isArray(c?.parts) ? c.parts.length : 0,
+                partsShape: Array.isArray(c?.parts)
+                  ? c.parts.map(p => ({
+                      keys: p ? Object.keys(p) : [],
+                      textLength: typeof p?.text === 'string' ? p.text.length : null,
+                      inlineDataMimeType: p?.inlineData?.mimeType,
+                      inlineDataLength: p?.inlineData?.data?.length
+                    }))
+                  : undefined
+              }))
+            : null;
+          const sysInst = body.systemInstruction;
+          requestShape = {
+            topLevelKeys: Object.keys(body),
+            model: body.model,
+            stream: body.stream,
+            maxTokens: body.max_tokens || body.generationConfig?.maxOutputTokens,
+            temperature: body.temperature || body.generationConfig?.temperature,
+            thinkingConfig: body.generationConfig?.thinkingConfig,
+            responseModalities: body.generationConfig?.responseModalities,
+            hasTools: Array.isArray(body.tools) && body.tools.length > 0,
+            toolCount: Array.isArray(body.tools) ? body.tools.length : 0,
+            hasResponseFormat: !!body.response_format,
+            responseFormatType: body.response_format?.type,
+            hasResponseSchema: !!body.generationConfig?.responseSchema,
+            responseMimeType: body.generationConfig?.responseMimeType,
+            messageCount: messages?.length,
+            messages,
+            contentsCount: contents?.length,
+            contents,
+            systemInstructionLength:
+              typeof sysInst?.parts?.[0]?.text === 'string'
+                ? sysInst.parts[0].text.length
+                : typeof sysInst === 'string'
+                  ? sysInst.length
+                  : null,
+            bodyJsonLength: JSON.stringify(body).length
+          };
+        } catch (shapeErr) {
+          requestShape = { shapeBuildError: shapeErr.message };
+        }
+      }
+
+      // For 4xx failures, dump the FULL request body + response to disk
+      // so we can inspect everything without overwhelming the log line. Files
+      // land under contents/data/debug/llm-failures/. Best-effort — never let
+      // a disk-write failure mask the original LLM error.
+      let dumpPath = null;
+      if (response.status >= 400 && response.status < 500) {
+        try {
+          dumpPath = await this._dumpRequest(request, model, 'failures', {
+            response: { status: response.status, body: errorInfo.details }
+          });
+        } catch (dumpErr) {
+          dumpPath = `dump-failed: ${dumpErr.message}`;
+        }
+      }
+
       logger.error('LLM request failed', {
         component: 'WorkflowLLMHelper',
         modelId: model.id,
         status: response.status,
         errorCode: errorInfo.code,
         errorMessage: errorInfo.message,
-        errorDetails: errorInfo.details
+        errorDetails: errorInfo.details,
+        requestShape,
+        dumpPath
       });
 
       const error = new Error(errorInfo.message);
@@ -153,6 +265,58 @@ export class WorkflowLLMHelper {
 
     // Process the streaming response
     return await this.processStreamingResponse(response, model);
+  }
+
+  /**
+   * Write a dump of the outbound request (and optionally the response) to
+   * `contents/data/debug/llm-{bucket}/<ts>-<modelId>-<status>.json`.
+   *
+   * Two callers:
+   *   - 4xx failure path (bucket='failures'): includes the error response
+   *   - LLM_DEBUG_DUMP_ALL=1 path (bucket='request'): request only, sent
+   *     BEFORE the fetch — used to compare what we send to different
+   *     models (e.g. Pro vs Flash) byte-for-byte.
+   *
+   * API keys are stripped from the URL and auth-style headers are redacted.
+   * Returns the absolute path to the file written.
+   * @private
+   */
+  async _dumpRequest(request, model, bucket, extra = {}) {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const path = await import('node:path');
+    const { getRootDir } = await import('../../pathUtils.js');
+    const cfg = (await import('../../config.js')).default;
+    const dir = path.join(getRootDir(), cfg.CONTENTS_DIR, 'data', 'debug', `llm-${bucket}`);
+    await mkdir(dir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeModelId = String(model.id || 'unknown').replace(/[^a-zA-Z0-9_-]+/g, '_');
+    const statusSuffix = extra.response?.status ? `-${extra.response.status}` : '';
+    const file = path.join(dir, `${ts}-${safeModelId}${statusSuffix}.json`);
+    const redactedUrl =
+      typeof request.url === 'string' ? request.url.replace(/key=[^&]+/, 'key=REDACTED') : null;
+    const redactedHeaders = { ...(request.headers || {}) };
+    for (const k of Object.keys(redactedHeaders)) {
+      if (/auth|api[-_]?key|bearer|token/i.test(k)) redactedHeaders[k] = 'REDACTED';
+    }
+    await writeFile(
+      file,
+      JSON.stringify(
+        {
+          timestamp: new Date().toISOString(),
+          model: { id: model.id, provider: model.provider, modelId: model.modelId },
+          request: {
+            url: redactedUrl,
+            method: 'POST',
+            headers: redactedHeaders,
+            body: request.body
+          },
+          ...(extra.response ? { response: extra.response } : {})
+        },
+        null,
+        2
+      )
+    );
+    return file;
   }
 
   /**

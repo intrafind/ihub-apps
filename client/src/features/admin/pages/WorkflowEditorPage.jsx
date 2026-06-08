@@ -178,7 +178,7 @@ function WorkflowEditorPage() {
   const { nodes: initialNodes, edges: initialEdges } = workflowToFlow(workflow);
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-full min-h-0 flex flex-col">
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -210,7 +210,7 @@ function WorkflowEditorPage() {
         )}
       </div>
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         <WorkflowEditor
           initialNodes={initialNodes}
           initialEdges={initialEdges}

@@ -453,15 +453,13 @@ export class StateManager {
     if (result !== null) {
       state.data.nodeResults = state.data.nodeResults || {};
 
-      // Store with iteration key if iteration info is available (for loops)
-      // This allows UI to display each iteration separately
-      const iteration = result.iteration || result.output?.iteration;
-      if (iteration !== undefined) {
-        state.data.nodeResults[`${nodeId}_iter${iteration}`] = result;
-      }
-
-      // Always store latest result under nodeId for backward compatibility
-      state.data.nodeResults[nodeId] = result;
+      // Strip stateUpdates from the persisted copy. They're applied to
+      // state.data below; nothing downstream reads them back off the
+      // node record, and they grow to ~400 KB per node by the end of a
+      // multi-task run (each snapshot replays every prior task's full
+      // output).
+      const { stateUpdates, ...resultToStore } = result;
+      state.data.nodeResults[nodeId] = resultToStore;
 
       // Track metrics if available
       if (result.metrics) {
@@ -483,8 +481,8 @@ export class StateManager {
       // Apply stateUpdates to state.data using deep merge (e.g., outputVariable values)
       // This allows subsequent nodes and showData to access values like $.research_results
       // Deep merge preserves nested properties (e.g., researchState.iteration during loops)
-      if (result.stateUpdates && typeof result.stateUpdates === 'object') {
-        state.data = deepMerge(state.data, result.stateUpdates);
+      if (stateUpdates && typeof stateUpdates === 'object') {
+        state.data = deepMerge(state.data, stateUpdates);
       }
     }
 

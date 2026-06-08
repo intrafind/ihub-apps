@@ -168,8 +168,12 @@ export class SubWorkflowMaterializer {
           // lifecycle tools layered on. Plan-task-level `tools` are
           // additive (e.g. the planner can spotlight `webSearch` for a
           // specific task) but must already exist in the tool catalog.
-          tools: [...(task.tools || []), ...(templateTools || [])],
-          outputVariable: `task_${taskId}_result`
+          tools: [...(task.tools || []), ...(templateTools || [])]
+          // No `outputVariable` — the runtime auto-persists planner-task
+          // results to state.data._taskResults[<taskId>] via
+          // PromptNodeExecutor._autoPersistResult. The legacy flat
+          // `task_<id>_result` state key it used to produce duplicated
+          // _taskResults[<id>].content and had zero readers.
         }
       };
     });
@@ -279,23 +283,38 @@ export class SubWorkflowMaterializer {
         target: taskNodes[0].id
       });
 
-      // Chain tasks based on dependsOn or sequential order
+      // Chain tasks. Two rules combined:
+      //   1. Sequential safety net — `tasks[i-1] → tasks[i]` for every i>0,
+      //      regardless of `dependsOn`. This guarantees execution follows the
+      //      planner's array order even when the LLM forgets to declare a
+      //      dependency, so a task that needs prior output never runs first.
+      //   2. Explicit `dependsOn` edges are added on top. They don't replace
+      //      the sequential chain — they just add upstream wait points. This
+      //      means a dependent task waits for BOTH its explicit dependencies
+      //      AND its array-predecessor. Costs some potential parallelism but
+      //      makes ordering predictable and bug-resistant.
       for (let i = 0; i < taskNodes.length; i++) {
         const task = plan.tasks[i];
-        if (task.dependsOn && task.dependsOn.length > 0) {
+        if (i > 0) {
+          edges.push({
+            id: `edge-t${i - 1}-t${i}`,
+            source: taskNodes[i - 1].id,
+            target: taskNodes[i].id
+          });
+        }
+        if (Array.isArray(task.dependsOn) && task.dependsOn.length > 0) {
           for (const dep of task.dependsOn) {
+            // Skip degenerate self-reference and the trivial array-predecessor
+            // (already covered by the sequential edge above) to avoid creating
+            // a duplicate edge.
+            if (dep === taskNodes[i].id) continue;
+            if (i > 0 && dep === taskNodes[i - 1].id) continue;
             edges.push({
               id: `edge-${dep}-${taskNodes[i].id}`,
               source: dep,
               target: taskNodes[i].id
             });
           }
-        } else if (i > 0) {
-          edges.push({
-            id: `edge-t${i - 1}-t${i}`,
-            source: taskNodes[i - 1].id,
-            target: taskNodes[i].id
-          });
         }
       }
 

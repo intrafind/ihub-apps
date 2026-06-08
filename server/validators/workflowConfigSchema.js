@@ -118,7 +118,14 @@ const nodeTypeEnum = z.enum([
   'verifier',
   'loop',
   'http',
-  'code'
+  'code',
+  // Completeness-analysis primitives. See concepts/2026-06-02 Completeness Analysis Workflows.md
+  'query-plan',
+  'corpus-search',
+  'structured-record',
+  'quote-validator',
+  'template-render',
+  'progress'
 ]);
 
 /**
@@ -321,9 +328,15 @@ const workflowGlobalConfigSchema = z
     /**
      * Maximum times any single node can be executed (for cycles/loops)
      * Used to prevent infinite loops in workflows with intentional cycles.
-     * Default: 10, Maximum: 100
+     * Default: 10, Maximum: 1000.
+     *
+     * Audit/completeness workflows that cycle once per document need this
+     * scaled with corpus size — e.g. a corpus-search returning up to 200
+     * docs visits its `pick-doc` cycle node up to 200 times, and a
+     * decomposed (sub-question × per-doc) shape can multiply further.
+     * The engine's per-node tracking still catches genuine infinite loops.
      */
-    maxIterations: z.number().int().min(1).max(100).optional().default(10),
+    maxIterations: z.number().int().min(1).max(1000).optional().default(10),
 
     /**
      * Whether to allow cycles/loops in the workflow graph

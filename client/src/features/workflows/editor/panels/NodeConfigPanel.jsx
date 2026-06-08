@@ -92,17 +92,19 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
   };
 
   return (
-    <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 overflow-y-auto">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+    <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col h-full min-h-0">
+      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
           <span
-            className="inline-block w-3 h-3 rounded-full"
+            className="inline-block w-3 h-3 rounded-full shrink-0"
             style={{ backgroundColor: NODE_TYPE_COLORS[nodeType] || '#6B7280' }}
             aria-hidden="true"
           />
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{nodeType}</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+            {nodeType}
+          </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {nodeType !== 'start' && nodeType !== 'end' && onDeleteNode && (
             <button
               onClick={handleDelete}
@@ -135,7 +137,7 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
             {t('workflows.editor.name', 'Name')}
@@ -191,13 +193,15 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
                 setConfigText(e.target.value);
                 setParseError(null);
               }}
-              rows={12}
+              rows={20}
               className="w-full text-xs font-mono border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             />
             {parseError && <p className="text-xs text-red-500 mt-1">{parseError}</p>}
           </div>
         )}
+      </div>
 
+      <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <button
           onClick={handleApply}
           className="w-full bg-blue-600 text-white text-sm py-2 rounded hover:bg-blue-700 transition-colors"

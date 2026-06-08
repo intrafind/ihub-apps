@@ -1,6 +1,12 @@
 /**
  * vLLM API adapter
- * vLLM provides an OpenAI-compatible API but with more restrictive JSON schema support
+ *
+ * vLLM exposes an OpenAI-compatible API. Modern vLLM (v0.12.0+) accepts the
+ * standard `response_format: { type: "json_schema", json_schema: { ... } }`
+ * shape and enforces the schema server-side via its structured-outputs
+ * backend (xgrammar / guidance / outlines, selected automatically). Older
+ * versions accepted the now-removed `guided_json` extra parameter; we don't
+ * target those.
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
@@ -73,7 +79,7 @@ class VLLMAdapterClass extends BaseAdapter {
    * Create a completion request for vLLM
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, maxTokens } =
+    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
@@ -106,11 +112,45 @@ class VLLMAdapterClass extends BaseAdapter {
       body.tool_choice = toolChoice;
     }
 
-    // vLLM has limited response format support
-    if (responseFormat === 'json') {
+    // Structured output: when a JSON schema is provided, ask vLLM to enforce
+    // it server-side via the standard OpenAI `json_schema` response_format.
+    // Without this, the model free-styles JSON and on long outputs (e.g. many
+    // verbatim quotes) routinely produces unterminated strings that blow past
+    // maxTokens. vLLM's xgrammar/guidance/outlines backend constrains the
+    // generation grammar, which both fixes the truncation and trims wasted
+    // tokens. Mirrors the OpenAI adapter, including the `additionalProperties:
+    // false` enforcement that some schema backends require.
+    if (responseSchema) {
+      const schemaClone = JSON.parse(JSON.stringify(responseSchema));
+      const enforceNoExtras = node => {
+        if (!node || typeof node !== 'object') return;
+        if (node.type === 'object') {
+          node.additionalProperties = false;
+        }
+        if (node.properties) {
+          Object.values(node.properties).forEach(enforceNoExtras);
+        }
+        if (node.items) {
+          const items = Array.isArray(node.items) ? node.items : [node.items];
+          items.forEach(enforceNoExtras);
+        }
+      };
+      enforceNoExtras(schemaClone);
+
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          schema: schemaClone,
+          name: 'response',
+          strict: true
+        }
+      };
+      logger.info('Using response schema for structured output', {
+        component: 'VLLMAdapter'
+      });
+    } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
-    // Note: vLLM may not support structured output schemas
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
     // logger.info('vLLM request body:', body);
