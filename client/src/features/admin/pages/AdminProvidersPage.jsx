@@ -72,6 +72,27 @@ function AdminProvidersPage() {
   const [healthStatus, setHealthStatus] = useState({});
   const [testingAll, setTestingAll] = useState(false);
 
+  // Helper function to translate model test messages
+  const translateTestMessage = message => {
+    const messageMap = {
+      'Model test successful': 'admin.models.test.messages.successful',
+      'Model test failed': 'admin.models.test.messages.testFailed',
+      'Connection timeout': 'admin.models.test.messages.connectionTimeout',
+      'Connection refused': 'admin.models.test.messages.connectionRefused',
+      'Service not found': 'admin.models.test.messages.serviceNotFound',
+      'Network error': 'admin.models.test.messages.networkError',
+      'Request timeout': 'admin.models.test.messages.requestTimeout',
+      'Authentication failed': 'admin.models.test.messages.authenticationFailed',
+      'Access denied': 'admin.models.test.messages.accessDenied',
+      'Model not found': 'admin.models.test.messages.modelNotFound',
+      'Rate limit exceeded': 'admin.models.test.messages.rateLimitExceeded',
+      'Server error': 'admin.models.test.messages.serverError'
+    };
+
+    const translationKey = messageMap[message];
+    return translationKey ? t(translationKey, message) : message;
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -570,7 +591,7 @@ function AdminProvidersPage() {
                                                 : 'text-red-700 dark:text-red-300'
                                             }`}
                                           >
-                                            {result.message}
+                                            {translateTestMessage(result.message)}
                                           </span>
                                         </div>
                                       ))}

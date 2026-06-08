@@ -710,7 +710,21 @@
       "actions": "Aktionen",
       "test": {
         "success": "Test erfolgreich",
-        "failed": "Test fehlgeschlagen"
+        "failed": "Test fehlgeschlagen",
+        "messages": {
+          "successful": "Modelltest erfolgreich",
+          "testFailed": "Modelltest fehlgeschlagen",
+          "connectionTimeout": "Verbindungs-Timeout",
+          "connectionRefused": "Verbindung abgelehnt",
+          "serviceNotFound": "Dienst nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "requestTimeout": "Anfrage-Timeout",
+          "authenticationFailed": "Authentifizierung fehlgeschlagen",
+          "accessDenied": "Zugriff verweigert",
+          "modelNotFound": "Modell nicht gefunden",
+          "rateLimitExceeded": "Ratenlimit überschritten",
+          "serverError": "Serverfehler"
+        }
       },
       "enable": "Aktivieren",
       "disable": "Deaktivieren",

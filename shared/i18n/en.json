@@ -487,7 +487,21 @@
       "actions": "Actions",
       "test": {
         "success": "Test Successful",
-        "failed": "Test Failed"
+        "failed": "Test Failed",
+        "messages": {
+          "successful": "Model test successful",
+          "testFailed": "Model test failed",
+          "connectionTimeout": "Connection timeout",
+          "connectionRefused": "Connection refused",
+          "serviceNotFound": "Service not found",
+          "networkError": "Network error",
+          "requestTimeout": "Request timeout",
+          "authenticationFailed": "Authentication failed",
+          "accessDenied": "Access denied",
+          "modelNotFound": "Model not found",
+          "rateLimitExceeded": "Rate limit exceeded",
+          "serverError": "Server error"
+        }
       },
       "enable": "Enable",
       "disable": "Disable",
