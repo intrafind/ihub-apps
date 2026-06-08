@@ -21,6 +21,18 @@ const renderMarkdownForExport = content => {
   return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 };
 
+// HTML-escape arbitrary text for safe interpolation into the export
+// document's <title>/<h1>. The doc title now includes the first user
+// message (via buildChatExportTitle), which is attacker-controlled and
+// must not be rendered as raw HTML.
+const escapeHtml = s =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 // Apps
 export const fetchApps = async (options = {}) => {
   const { language = null } = options;
@@ -241,7 +253,7 @@ const generatePDFHTML = (
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${docTitle}</title>
+  <title>${escapeHtml(docTitle)}</title>
   <style>
     ${styles}
     ${watermarkStyle}
@@ -250,7 +262,7 @@ const generatePDFHTML = (
 <body>
   <div class="container">
     <header class="header">
-      <h1>${docTitle}</h1>
+      <h1>${escapeHtml(docTitle)}</h1>
       ${appName ? `<h2>${appName}</h2>` : ''}
       <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
     </header>
