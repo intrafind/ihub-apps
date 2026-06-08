@@ -469,3 +469,34 @@ div .markdown-content .code-block-toolbar > div,
     border: 1px solid ButtonText;
   }
 }
+
+/* ============================================
+   Print Styles: Hide Interactive UI Elements
+   ============================================ */
+
+/* Hide all interactive UI elements when printing */
+@media print {
+  /* Hide code block toolbars (contains copy/download buttons and language labels) */
+  .code-block-toolbar,
+  .markdown-content .code-block-toolbar {
+    display: none !important;
+  }
+
+  /* Hide mermaid diagram controls */
+  .mermaid-diagram-controls {
+    display: none !important;
+  }
+
+  /* Hide all buttons within markdown and rendered HTML content */
+  .markdown-content button,
+  .rendered-html-content button,
+  .streaming-markdown button {
+    display: none !important;
+  }
+
+  /* Hide copy/download buttons explicitly */
+  .code-copy-btn,
+  .code-download-btn {
+    display: none !important;
+  }
+}

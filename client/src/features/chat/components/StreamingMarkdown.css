@@ -162,3 +162,14 @@
     color: rgb(4, 120, 87);
   }
 }
+
+/* Hide interactive UI elements when printing */
+@media print {
+  .streaming-markdown .code-block-toolbar,
+  .streaming-markdown .mermaid-diagram-controls,
+  .streaming-markdown button,
+  .streaming-markdown .code-copy-btn,
+  .streaming-markdown .code-download-btn {
+    display: none !important;
+  }
+}

@@ -64,3 +64,15 @@
   background-color: #7f1d1d; /* red-900 */
   color: #fecaca; /* red-200 */
 }
+
+/* Print styles: Hide interactive UI elements */
+@media print {
+  /* Hide action buttons and toolbars */
+  .chat-widget-message button,
+  .chat-widget-message .code-block-toolbar,
+  .chat-widget-message .mermaid-diagram-controls,
+  .chat-widget-message .code-copy-btn,
+  .chat-widget-message .code-download-btn {
+    display: none !important;
+  }
+}
