@@ -189,6 +189,25 @@ Sources are configured in `/contents/config/sources.json` as a JSON array:
 ]
 ```
 
+### Built-in Sources
+
+Fresh installations ship with a standard **iHub Documentation** source
+(`id: ihub-documentation`). It bundles the complete iHub Apps documentation —
+consolidated from the repository's `docs/` folder — into a single knowledge
+source and is exposed as a tool (`exposeAs: "tool"`), so the model retrieves it
+on demand rather than inflating every prompt. Add it to an app's `sources` list
+to build a self-service help or onboarding assistant.
+
+The bundled content lives at `contents/sources/ihub-documentation.md`. After
+changing the documentation, regenerate it with:
+
+```bash
+node scripts/build-documentation-source.js
+```
+
+Existing installations receive the source automatically via the configuration
+migration system on upgrade.
+
 ### Expose Modes
 
 Sources can be exposed in two ways:

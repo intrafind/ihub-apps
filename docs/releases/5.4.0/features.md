@@ -244,3 +244,12 @@ The chat export dialog now works inside the Outlook task pane and the browser-ex
 - **Responsive layout:** the format picker switches to a single column on narrow screens and the action buttons stack full-width, so the dialog stays usable in the Outlook task pane and on phones.
 - **Copy button reflects the selected format:** it is now enabled only for formats that can be copied as text (Text, Markdown, JSON, JSON Lines) and disabled with an explanatory tooltip for PDF, Word, Excel, PowerPoint, CSV, and HTML.
 - The dialog can be dismissed with the **✕ button** or the **Esc** key.
+
+## iHub Documentation as a Standard Knowledge Source
+
+iHub now ships with a built-in **iHub Documentation** source so apps can answer questions about the platform itself — configuration, authentication, features, and operations.
+
+- The source bundles the complete product documentation (consolidated from the `docs/` folder) into a single knowledge source.
+- It is exposed **as a tool**, so an app's model retrieves the documentation on demand instead of inflating every prompt. Add it under an app's **Sources** to build a self-service help or onboarding assistant.
+- Available out of the box on new installations; existing installations receive it automatically on upgrade.
+- Maintainers can refresh the bundled content after documentation changes by running `node scripts/build-documentation-source.js`.
