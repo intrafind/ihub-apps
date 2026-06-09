@@ -45,6 +45,21 @@ export async function writeAgentMemory(profileId, payload) {
   });
 }
 
+/**
+ * Run a registered tool with admin context and store its output as a named
+ * section in the agent profile's long-term memory. Used for operator-driven
+ * knowledge ingestion (e.g. running iFinder_discover to build a corpus map).
+ *
+ * @param {string} profileId
+ * @param {{ toolId: string, params?: object, section: string, mode?: 'replace-section'|'append' }} payload
+ */
+export async function buildMemoryFromTool(profileId, payload) {
+  return await makeAdminApiCall(`/admin/agents/profiles/${profileId}/memory/from-tool`, {
+    method: 'POST',
+    body: payload
+  });
+}
+
 export async function fetchInboxes() {
   return await makeAdminApiCall('/admin/agents/inboxes');
 }

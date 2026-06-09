@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { fetchAgentMemory, writeAgentMemory } from '../../../api/agentsAdminApi';
+import {
+  buildMemoryFromTool,
+  fetchAgentMemory,
+  writeAgentMemory
+} from '../../../api/agentsAdminApi';
+import { fetchAdminTools } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentMemoryPage() {
@@ -14,6 +19,16 @@ export default function AdminAgentMemoryPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // "Build from tool" form state
+  const [tools, setTools] = useState([]);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [builderToolId, setBuilderToolId] = useState('');
+  const [builderSection, setBuilderSection] = useState('iFinder corpus map');
+  const [builderMode, setBuilderMode] = useState('replace-section');
+  const [builderParams, setBuilderParams] = useState('{\n  "searchProfile": ""\n}');
+  const [building, setBuilding] = useState(false);
+  const [builderStatus, setBuilderStatus] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -30,6 +45,98 @@ export default function AdminAgentMemoryPage() {
       }
     })();
   }, [profileId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await fetchAdminTools();
+        // The admin tools endpoint returns the raw catalog (parents have a
+        // `functions` block). The dispatcher exposes each function as a
+        // separate tool id (e.g. `iFinder_discover`), so expand the same way
+        // here for the picker.
+        const expanded = [];
+        for (const tool of list || []) {
+          const baseName = typeof tool.name === 'string' ? tool.name : tool.name?.en || tool.id;
+          if (tool.functions && typeof tool.functions === 'object') {
+            for (const fn of Object.keys(tool.functions)) {
+              const fnId = `${tool.id}_${fn}`;
+              expanded.push({ id: fnId, label: `${baseName} · ${fn} (${fnId})` });
+            }
+          } else {
+            expanded.push({ id: tool.id, label: `${baseName} (${tool.id})` });
+          }
+        }
+        expanded.sort((a, b) => a.id.localeCompare(b.id));
+        setTools(expanded);
+      } catch {
+        setTools([]);
+      }
+    })();
+  }, []);
+
+  async function reloadMemory() {
+    const res = await fetchAgentMemory(profileId);
+    const data = res?.data || {};
+    setBody(data.body || '');
+    setVersion(data.version || 0);
+    setUpdatedAt(data.updatedAt || null);
+  }
+
+  async function handleBuild() {
+    setBuilderStatus(null);
+    if (!builderToolId) {
+      setBuilderStatus({
+        kind: 'error',
+        msg: t('admin.agents.memory.builder.pickTool', 'Pick a tool first.')
+      });
+      return;
+    }
+    if (!builderSection.trim()) {
+      setBuilderStatus({
+        kind: 'error',
+        msg: t('admin.agents.memory.builder.sectionRequired', 'Section heading is required.')
+      });
+      return;
+    }
+    let params;
+    try {
+      params = builderParams.trim() ? JSON.parse(builderParams) : {};
+    } catch (err) {
+      setBuilderStatus({
+        kind: 'error',
+        msg: t('admin.agents.memory.builder.invalidJson', 'Params must be valid JSON: {{msg}}', {
+          msg: err.message
+        })
+      });
+      return;
+    }
+    setBuilding(true);
+    try {
+      const res = await buildMemoryFromTool(profileId, {
+        toolId: builderToolId,
+        params,
+        section: builderSection.trim(),
+        mode: builderMode
+      });
+      const newVersion = res?.data?.version;
+      setBuilderStatus({
+        kind: 'success',
+        msg: t(
+          'admin.agents.memory.builder.success',
+          'Wrote section "{{section}}" (memory v{{version}}). The textarea below now shows the latest memory — edit and Save if you want to tweak it further.',
+          { section: builderSection.trim(), version: newVersion }
+        )
+      });
+      await reloadMemory();
+    } catch (err) {
+      setBuilderStatus({
+        kind: 'error',
+        msg: err?.response?.data?.message || err.message
+      });
+    } finally {
+      setBuilding(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -105,6 +212,113 @@ export default function AdminAgentMemoryPage() {
             {error}
           </div>
         )}
+
+        <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800">
+          <button
+            type="button"
+            onClick={() => setShowBuilder(s => !s)}
+            className="w-full px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t flex justify-between items-center"
+          >
+            <span>
+              {t('admin.agents.memory.builder.title', 'Build memory section from a tool')}
+            </span>
+            <span className="text-xs text-gray-500">{showBuilder ? '▾' : '▸'}</span>
+          </button>
+          {showBuilder && (
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-3 text-sm">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.agents.memory.builder.help',
+                  "Runs any registered tool with admin context and writes its (markdown) output to a named section of this profile's memory. Example: iFinder_discover with searchProfile builds a corpus map."
+                )}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 dark:text-gray-300 mb-1">
+                    {t('admin.agents.memory.builder.toolLabel', 'Tool')}
+                  </label>
+                  <select
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    value={builderToolId}
+                    onChange={e => setBuilderToolId(e.target.value)}
+                  >
+                    <option value="">
+                      {t('admin.agents.memory.builder.pickToolPlaceholder', '— pick a tool —')}
+                    </option>
+                    {tools.map(tool => (
+                      <option key={tool.id} value={tool.id}>
+                        {tool.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 dark:text-gray-300 mb-1">
+                    {t('admin.agents.memory.builder.sectionLabel', 'Section heading')}
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    value={builderSection}
+                    onChange={e => setBuilderSection(e.target.value)}
+                    placeholder="iFinder corpus map"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 dark:text-gray-300 mb-1">
+                    {t('admin.agents.memory.builder.modeLabel', 'Mode')}
+                  </label>
+                  <select
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    value={builderMode}
+                    onChange={e => setBuilderMode(e.target.value)}
+                  >
+                    <option value="replace-section">
+                      {t('admin.agents.memory.builder.modeReplace', 'Replace section')}
+                    </option>
+                    <option value="append">
+                      {t('admin.agents.memory.builder.modeAppend', 'Append')}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 dark:text-gray-300 mb-1">
+                  {t('admin.agents.memory.builder.paramsLabel', 'Tool params (JSON)')}
+                </label>
+                <textarea
+                  className="w-full h-32 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  value={builderParams}
+                  onChange={e => setBuilderParams(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end items-center gap-2">
+                {builderStatus && (
+                  <div
+                    className={`flex-1 text-xs ${
+                      builderStatus.kind === 'error'
+                        ? 'text-red-700 dark:text-red-300'
+                        : 'text-green-700 dark:text-green-300'
+                    }`}
+                  >
+                    {builderStatus.msg}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleBuild}
+                  disabled={building}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded disabled:opacity-50 text-sm"
+                >
+                  {building
+                    ? t('admin.agents.memory.builder.running', 'Running…')
+                    : t('admin.agents.memory.builder.run', 'Run and write to memory')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <textarea
           className="w-full h-[500px] font-mono text-sm p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           value={body}
