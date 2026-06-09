@@ -49,6 +49,12 @@ const BLANK_PROFILE = {
     modelId: ''
   },
   dynamicTasks: { enabled: false, maxDepth: 3 },
+  review: {
+    enabled: false,
+    maxRounds: 3,
+    modelId: '',
+    system: { en: '' }
+  },
   budgets: { maxWallTimeSec: 600 },
   concurrency: { maxConcurrent: 1 },
   artifacts: { outputDir: 'auto', primary: 'report.md' },
@@ -78,6 +84,7 @@ const TOP_LEVEL_FIELDS = new Set([
   'planner',
   'synthesizer',
   'dynamicTasks',
+  'review',
   'budgets',
   'concurrency',
   'artifacts',
@@ -164,6 +171,9 @@ export default function AdminAgentEditPage() {
   })();
   function handleDynamicTasks(partial) {
     setProfile(prev => ({ ...prev, dynamicTasks: { ...prev.dynamicTasks, ...partial } }));
+  }
+  function handleReview(partial) {
+    setProfile(prev => ({ ...prev, review: { ...prev.review, ...partial } }));
   }
   function handleMemory(partial) {
     setProfile(prev => ({ ...prev, memory: { ...prev.memory, ...partial } }));
@@ -253,6 +263,14 @@ export default function AdminAgentEditPage() {
           !payload.synthesizer.modelId.trim()
         ) {
           delete payload.synthesizer.modelId;
+        }
+      }
+      if (payload.review && typeof payload.review === 'object') {
+        const reviewSystem = cleanLocalized(payload.review.system);
+        if (reviewSystem) payload.review.system = reviewSystem;
+        else delete payload.review.system;
+        if (typeof payload.review.modelId === 'string' && !payload.review.modelId.trim()) {
+          delete payload.review.modelId;
         }
       }
 
@@ -871,6 +889,114 @@ export default function AdminAgentEditPage() {
                   {t(
                     'admin.agents.edit.synthesizerVariables',
                     'Available variables: ${$.data.brief}, ${$.data.currentInboxItem}, {{previousTaskResults}} — runtime-formatted markdown block of all completed task outputs in order.'
+                  )}
+                </p>
+              </div>
+            </Section>
+
+            {/* Plan-and-review loop — opt-in iterative planner */}
+            <Section
+              title={t('admin.agents.edit.review', 'Plan-and-review loop')}
+              hint={t(
+                'admin.agents.edit.reviewHint',
+                'After the planner finishes a round of tasks, a toolless reviewer judges sufficiency against the brief. If material gaps remain, the loop returns control to the planner with prior task results and reviewer-identified gaps surfaced; the planner emits only new gap-closing tasks (task ids namespaced "r{round}_*"). Bounded by Max rounds. Requires the Planner.'
+              )}
+            >
+              <div className="space-y-4">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!profile.review?.enabled}
+                    onChange={e => handleReview({ enabled: e.target.checked })}
+                    disabled={!profile.planner?.enabled}
+                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      {t('admin.agents.edit.reviewEnabled', 'Enable plan-and-review loop')}
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t(
+                        'admin.agents.edit.reviewEnabledHint',
+                        'Off by default. When on, the planner runs inside a while-loop with a reviewer; the loop terminates when the reviewer reports no material gaps or the Max rounds budget is reached, then the synthesizer runs once over the union of all rounds’ work.'
+                      )}
+                    </p>
+                    {!profile.planner?.enabled && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {t(
+                          'admin.agents.edit.reviewRequiresPlanner',
+                          'Enable the Planner section above to use the review loop.'
+                        )}
+                      </p>
+                    )}
+                  </span>
+                </label>
+
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewMaxRounds', 'Max rounds')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.reviewMaxRoundsHint',
+                      'Hard cap on planner-reviewer iterations (1–5). The first round is the initial plan; subsequent rounds run only if the reviewer flags material gaps. Total tasks across all rounds remain bounded by the shared planner budget (default 100).'
+                    )}
+                  </p>
+                  <input
+                    type="number"
+                    min="1"
+                    max="5"
+                    disabled={!profile.review?.enabled}
+                    value={profile.review?.maxRounds ?? 3}
+                    onChange={e => handleReview({ maxRounds: Number(e.target.value) || 3 })}
+                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewModel', 'Reviewer model (optional)')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.reviewModelHint',
+                      'Pin a specific model for the reviewer node. The reviewer is toolless and produces a short structured JSON verdict, so a cheaper/faster model is usually fine. Falls back to Preferred model when unset.'
+                    )}
+                  </p>
+                  <select
+                    disabled={!profile.review?.enabled}
+                    value={profile.review?.modelId || ''}
+                    onChange={e => handleReview({ modelId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                  >
+                    <option value="">
+                      {t('admin.agents.edit.reviewModelInherit', '(inherit Preferred model)')}
+                    </option>
+                    {models
+                      .filter(m => !m.supportsImageGeneration)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {getLocalizedContent(m.name, currentLanguage) || m.id}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <DynamicLanguageEditor
+                  label={t('admin.agents.edit.reviewSystem', 'Reviewer system prompt (optional)')}
+                  value={profile.review?.system || {}}
+                  onChange={v => handleReview({ system: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: 'You are a strict reviewer. Judge whether the planner gathered enough evidence to comprehensively answer the brief. Return JSON { "needs_more_work": <bool>, "rationale": "...", "gaps": ["..."] }. Set needs_more_work=true ONLY for material gaps. Cap gaps at 5.',
+                    de: 'Du bist ein strenger Reviewer. Beurteile, ob der Planner genügend Belege gesammelt hat, um den Auftrag umfassend zu beantworten. Antworte als JSON { "needs_more_work": <bool>, "rationale": "...", "gaps": ["..."] }. Setze needs_more_work nur bei wesentlichen Lücken auf true.'
+                  }}
+                  name="review-system"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.agents.edit.reviewVariables',
+                    'The default reviewer prompt template surfaces ${$.data.brief}, the current review round, {{previousTaskResults}}, the citations ledger, and prior reviewer rationale.'
                   )}
                 </p>
               </div>
