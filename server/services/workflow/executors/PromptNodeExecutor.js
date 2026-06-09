@@ -521,6 +521,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         // can see the reviewer's verdict / memory-composer decision / etc in
         // the timeline. Without this, `output: null` made structured-output
         // nodes look like they returned nothing.
+        //
+        // The UI does `JSON.parse(stepLog.output)` on this string, so the
+        // value MUST be valid JSON. `_previewToolValue` now produces a
+        // JSON-parseable string for objects (it truncates long string
+        // fields INSIDE the object before JSON.stringify, instead of
+        // chopping the serialised string with a `…[truncated]` suffix
+        // that breaks JSON.parse).
         try {
           stepLog.output = this._previewToolValue(output);
         } catch {
@@ -2577,7 +2584,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * JSON.stringify output stays under ~1KB while remaining VALID JSON.
    * String fields longer than `maxFieldLen` get a `…[+N]` suffix appended
    * in the cloned copy. Depth is bounded to keep cyclic / pathological
-   * inputs from blowing the stack.
+   * inputs from blowing the stack; arrays are capped at MAX_ARRAY_ITEMS
+   * with a trailing `…[+N items]` placeholder.
+   *
+   * Used by `_previewToolValue` so step-log previews of tool args/results
+   * AND structured-output rows (reviewer, memory-composer) all produce
+   * JSON the UI can `JSON.parse` to render details.
    *
    * @private
    */

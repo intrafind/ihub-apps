@@ -843,8 +843,12 @@ Output rules:
     // degenerates into hallucinating dozens of look-alike string values
     // until it hits maxTokens. Per-task `apps`/`sources`/`skills` aren't
     // consumed downstream anyway — the profile's taskTemplate supplies those.
-    // `tools` IS additive in SubWorkflowMaterializer, so we keep it but cap
-    // length to prevent the same hallucination loop.
+    // `tools` is REPLACE-when-provided in SubWorkflowMaterializer (the
+    // planner's array becomes the task's tool list, the template is
+    // dropped). This is what makes the per-task tool-selection guidance
+    // actually take effect on Gemini, where webSearch + function tools
+    // can't coexist. Cap length to prevent hallucination loops where the
+    // model fills the array with dozens of look-alike ids.
     // Enum-constrain every reference field to the configured catalog so the
     // model can't invent ids (observed failure: gemini-flash-latest filled an
     // unconstrained `tools` array with dozens of look-alike hallucinated tool

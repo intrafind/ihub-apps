@@ -214,6 +214,11 @@ async function run() {
         result.status === 'completed' && result.output?.noop === true
       );
       check('no profile → no writeMemory call', calls.length === 0);
+      check(
+        'no profile → emits a step log for the timeline',
+        !!result.stateUpdates?._stepLogs?.['memory-finalize'] &&
+          result.stateUpdates._stepLogs['memory-finalize'].noopReason === 'no profileId resolvable'
+      );
     } finally {
       memoryFile.writeMemory = orig;
     }

@@ -249,17 +249,16 @@ The chat export dialog now works inside the Outlook task pane and the browser-ex
 
 Agents running on Google/Gemini models with web grounding (`webSearch`) configured used to lose every other tool on grounded steps because Gemini's API rejects `google_search` + function tools in the same call. The most damaging consequence: **memory writes never landed**, because `write_memory` was silently dropped on every grounded planner task.
 
-iHub now writes long-term memory at the end of every agent run through a **two-step memory pipeline** that is immune to the grounding swap:
+iHub now writes long-term memory at the end of every agent run through TWO new dedicated steps, slotted between the synthesizer and inbox-finalize:
 
-1. **`memory-compose`** — a dedicated toolless LLM node that runs after the synthesizer. It sees the brief, sub-task results, citations, tools/apps used, and the current memory file, and returns a structured `{ skip, mode, content, summary }` decision.
-2. **`memory-finalize`** — a deterministic node (no LLM, no tool registration) that drains the composer's output and writes via `memoryFile.writeMemory()` directly.
+1. **`memory-compose`** — a toolless LLM node that sees the brief, every sub-task result, the citations ledger, the tools/apps the agent used, and the current memory file, then returns a structured `{ skip, mode, content, summary }` delta. The flat schema is Gemini-friendly (no union types) and the composer is told to cite the tool/URL behind each fact, skip duplicates, and prefer append over replace.
+2. **`memory-finalize`** — a deterministic node that drains the composer's delta into `memoryFile.writeMemory()` directly. No LLM, no tool registration, immune to the grounding swap.
 
-Because the actual write is deterministic, the Gemini grounding swap cannot strip it; because composition is a separate node from the synthesizer, the report writer stays focused on the report and operators get dedicated `profile.memory.{modelId, temperature, system, prompt}` knobs for memory hygiene.
+The synthesizer stays plain text (no JSON schema), so the Gemini structured-output proto issue can't recur on the report path. Operators get dedicated `profile.memory.{modelId, temperature, system, prompt}` knobs for memory hygiene.
 
 - New workflow node types: `memory-compose` (LLM, toolless) and `memory-finalize` (deterministic).
-- The synthesizer is now plain text again — the structured `outputSchema` lives on `memory-compose` instead, which also avoids Gemini's proto-schema rejection of union types.
 - The legacy LLM-driven `write_memory` tool stays auto-registered as a fallback for non-Gemini agents and for explicit mid-run writes — the deterministic finalize is additive insurance, not a replacement.
-- Profiles with `memory.enabled: false` skip both new nodes (no memory-compose, no memory-finalize).
+- Profiles with `memory.enabled: false` skip both new nodes (no `memory-compose`, no `memory-finalize`).
 
 ## Planner Now Splits Grounding and Function-tool Work Across Separate Tasks
 

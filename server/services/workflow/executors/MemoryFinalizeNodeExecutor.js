@@ -1,17 +1,25 @@
 /**
  * Executor for `memory-finalize` nodes — deterministic long-term memory write.
  *
- * Drains `state.data._pendingMemoryUpdates` (populated by the upstream
- * `memory-compose` LLM node — see profileWorkflowSerializer) and writes each
- * entry via `memoryFile.writeMemory()`. NO LLM call is made here — this
- * guarantees memory writes happen even on Gemini runs where the grounding
- * swap would otherwise have stripped the legacy `write_memory` LLM tool.
+ * Drains `state.data._pendingMemoryUpdates` and writes each entry via
+ * `memoryFile.writeMemory()`. Entries are populated by the upstream
+ * `memory-compose` node — an explicit toolless LLM step whose
+ * `_isMemoryComposer` branch in `PromptNodeExecutor._autoPersistResult`
+ * pushes the composer's `{mode, content, summary}` delta onto the queue.
+ *
+ * NO LLM call is made here — this guarantees memory writes happen even
+ * on Gemini runs where the grounding swap would otherwise have stripped
+ * the legacy `write_memory` LLM tool.
  *
  * Failure modes:
- *   - profileId missing            → log warning, emit noop step log + SSE
+ *   - profileId missing            → emit noop step log + SSE, return success
  *   - _pendingMemoryUpdates empty  → emit noop step log + SSE (with composer
  *                                    skip reason when available)
  *   - writeMemory throws           → log error, skip that entry, continue
+ *                                    (last-write-wins; no expectedVersion is
+ *                                    passed, so VERSION_CONFLICT is not
+ *                                    reachable here. See the catch comment
+ *                                    for the rationale and future race path.)
  *
  * @module services/workflow/executors/MemoryFinalizeNodeExecutor
  */
@@ -30,9 +38,11 @@ function emit(event, payload, chatId) {
 
 function isUpdateShape(entry) {
   if (!entry || typeof entry !== 'object') return false;
-  // Reject whitespace-only content — matches the memory composer's own
-  // skip check in PromptNodeExecutor._autoPersistResult so an entry only
-  // makes it here when content is genuinely non-empty.
+  // Trim before checking length so whitespace-only content (e.g. "  ", "\n")
+  // doesn't slip through and produce blank memory writes. The composer's
+  // own auto-persist branch already does this — apply the same guard here
+  // so the deterministic writer is safe for any other producer that
+  // pushes onto `_pendingMemoryUpdates`.
   if (typeof entry.content !== 'string' || entry.content.trim().length === 0) return false;
   if (entry.mode && entry.mode !== 'append' && entry.mode !== 'replace') return false;
   return true;
@@ -54,9 +64,10 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         component: 'MemoryFinalizeNodeExecutor',
         nodeId: node.id
       });
-      // Emit the same step-log + SSE shape as the other noop paths so the
-      // run timeline has a row for this node — otherwise operators see an
-      // unexplained gap between memory-compose and the next step.
+      // Emit a noop step log + SSE on this branch too so the run timeline
+      // has an explanation for the step. Without it the UI renders an
+      // unexplained "memory-finalize" row with no log details, and operators
+      // see an unexplained gap between memory-compose and the next step.
       const completedAtIso = new Date().toISOString();
       const durationMs = Date.now() - startMs;
       const noopReason = 'no profileId resolvable';

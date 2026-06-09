@@ -204,9 +204,12 @@ export class SubWorkflowMaterializer {
           prompt: promptParts.join('\n\n'),
           // Per-task tools / apps / sources — planner-authoritative when the
           // planner emitted the field, falling back to the profile-wide
-          // template otherwise. See semantics block above. The planner's
-          // response schema enum-binds each field to its catalog so unknown
-          // ids are rejected at structured-output time.
+          // template otherwise. See `taskToolsExplicit` block above for the
+          // full semantics. The planner's response schema enum-binds each
+          // field (tools/apps/sources) to its catalog when the catalog is
+          // non-empty, so unknown ids are rejected at structured-output
+          // time. Backward-compat for hand-written plans that omit a field
+          // is via the explicit-array check (omit → inherit template).
           tools: effectiveTools,
           apps: effectiveApps,
           sources: effectiveSources
