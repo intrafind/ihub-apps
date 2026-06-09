@@ -220,6 +220,14 @@ Attaching many files to a chat message no longer pushes the message box and send
 - **1–3 files** display exactly as before, with no extra controls.
 - **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.
 
+## Outlook Add-in — Scales Correctly on Small / High-DPI Laptops
+
+The iHub add-in in Outlook now sizes itself to the available task pane instead of rendering everything oversized on small, high-resolution laptops (e.g. a 13" Windows device at 125–150% display scaling). Previously users had to manually zoom the add-in out to fit the app tiles, chat input, and attachments on screen.
+
+- The add-in now uses a fluid base scale keyed to the task pane width, so the whole interface — app tiles, chat input, attachment chips, and dialogs — shrinks together on narrow or high-DPI panes and returns to full size on wider panes.
+- The app-selection tiles, which previously stayed at a fixed desktop size, now scale with the rest of the add-in.
+- No configuration required; the behavior applies automatically in the Outlook (and other Office) task pane.
+
 ## MCP and JSON Schema Tools Now Work with Google Gemini
 
 Tools whose parameter schemas include standard JSON Schema metadata — most notably tools exposed through MCP servers — now work with Google Gemini models. Previously these calls failed with a `400 INVALID_REQUEST` error from Google.

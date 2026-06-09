@@ -35,7 +35,10 @@ function AppCard({
     return (
       <div
         className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full"
-        style={{ height: '75px', minHeight: '72px' }}
+        // rem (not px) so the row scales with the Office task pane's responsive
+        // root font-size on small / high-DPI panes. 4.6875rem = 75px, 4.5rem = 72px
+        // at the default 16px base — identical sizing in the main web app.
+        style={{ height: '4.6875rem', minHeight: '4.5rem' }}
         role="listitem"
       >
         {onToggleFavorite && (

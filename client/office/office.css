@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Resolution-aware base scale for the Office task pane.
+ *
+ * Outlook desktop renders the add-in inside WebView2 at the OS display-scale
+ * factor — a small 13" Windows laptop is typically 125–150%. Crucially, the
+ * <meta name="viewport"> tag in taskpane.html is a no-op in desktop WebView2,
+ * so nothing in the add-in otherwise compensates for that scaling and the whole
+ * UI (tiles, chat input, attachments, dialogs) renders oversized — forcing the
+ * user to manually zoom out to fit the pane.
+ *
+ * Both "scaled small screen" and "narrow pane" surface as a small CSS-pixel
+ * viewport width (CSS px = device px / devicePixelRatio), so we key a fluid
+ * root font-size off the pane width. Because the entire add-in is built with
+ * rem-based Tailwind sizing (text, spacing, widths, icon sizes), shrinking the
+ * root font-size scales everything down together instead of patching each
+ * component. The pane viewport == the add-in's viewport, so `vw` is the pane
+ * width here.
+ *
+ * ~13px floor at/under a ~300px pane, ramping to the 16px default once the pane
+ * is comfortably wide (≥ ~470px).
+ */
+html {
+  font-size: clamp(13px, 1.7vw + 8px, 16px);
+}
+
 html,
 body {
   box-sizing: border-box;
