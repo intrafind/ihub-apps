@@ -49,9 +49,7 @@ async function main() {
   const ordered = await getSummaryOrder();
 
   // Discover all markdown files so unreferenced ones still get included.
-  const allEntries = (await fs.readdir(docsDir)).filter(
-    f => f.endsWith('.md') && !EXCLUDE.has(f)
-  );
+  const allEntries = (await fs.readdir(docsDir)).filter(f => f.endsWith('.md') && !EXCLUDE.has(f));
   const remaining = allEntries.filter(f => !ordered.includes(f)).sort();
   const files = [...ordered, ...remaining];
 

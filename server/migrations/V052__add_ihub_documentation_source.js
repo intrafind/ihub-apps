@@ -27,10 +27,7 @@ export async function up(ctx) {
   // 1. Ensure the consolidated documentation file exists in contents/sources/.
   if (!(await ctx.fileExists(CONTENT_PATH))) {
     try {
-      const defaultContent = await fs.readFile(
-        join(ctx.defaultsDir, CONTENT_PATH),
-        'utf8'
-      );
+      const defaultContent = await fs.readFile(join(ctx.defaultsDir, CONTENT_PATH), 'utf8');
       const targetDir = join(ctx.contentsDir, 'sources');
       await fs.mkdir(targetDir, { recursive: true });
       await fs.writeFile(join(ctx.contentsDir, CONTENT_PATH), defaultContent, 'utf8');
