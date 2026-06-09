@@ -101,49 +101,63 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'could have consulted.'
 };
 
-// Structured-output synthesizer system prompt — used when memory is enabled
-// so the synthesizer also emits a `memoryDelta` that the deterministic
-// `memory-finalize` node persists. Same content rules as
-// DEFAULT_SYNTHESIZER_SYSTEM, plus an explicit instruction to set
-// `memoryDelta: null` when nothing is worth remembering.
-const DEFAULT_SYNTHESIZER_SYSTEM_WITH_MEMORY = {
+// Memory composer is an explicit toolless LLM step that runs AFTER the
+// synthesizer. It sees the brief, task results, citations, the tools/apps
+// the agent used, and prior memory, and emits an explicit memoryDelta
+// which the deterministic memory-finalize node then drains. Splitting
+// this from the synthesizer keeps the report writer focused on the
+// report, avoids cross-provider schema headaches (Gemini's proto schema
+// rejects union types like ["object", "null"]), and gives operators a
+// dedicated knob for memory hygiene.
+const DEFAULT_MEMORY_COMPOSER_SYSTEM = {
   en:
-    'You are a report writer. You receive a brief, the item being processed, ' +
-    'the full results of every planned sub-task, and a citations ledger ' +
-    'listing every URL the agent actually consulted during research. ' +
-    'Produce a JSON object with TWO fields:\n\n' +
-    '  - "report": ONE COMPREHENSIVE markdown report that PRESERVES the ' +
-    'detail the sub-tasks gathered.\n' +
-    '  - "memoryDelta": a single object describing what (if anything) is ' +
-    "worth committing to the agent's long-term memory. Shape: " +
-    '{ "mode": "append"|"replace", "content": "<markdown to add or " +\n' +
-    'replace>", "summary": "<one-line summary>" }. Set "memoryDelta": null ' +
-    'when nothing learned in this run is worth keeping (no durable facts, ' +
-    'preferences, or context that would help future runs).\n\n' +
-    'RULES FOR "report":\n' +
-    '1. Treat the sub-task results as your evidence base. Every concrete ' +
-    'claim, fact, date, name, role, project, publication, or quote that ' +
-    'appears in a sub-task result is grounded and MUST be carried through ' +
-    'into the final report — do not silently drop information.\n' +
-    '2. Do NOT add facts that are not present in the sub-task results. Do ' +
-    'NOT draw on background knowledge or training data. If two sub-tasks ' +
-    'disagree, surface the disagreement explicitly.\n' +
-    '3. Cite inline as [N] when a citations-ledger URL supports a claim. ' +
-    'If a fact appears in a sub-task result but the ledger has no matching ' +
-    'URL, the fact is still GROUNDED — keep it; do not mark it ' +
-    '"[unverified]". Use "[unverified]" ONLY for facts you yourself added ' +
-    'that were not in the sub-tasks (which should be never).\n' +
-    '4. Aim for thorough coverage. The report should be at least as ' +
-    'information-dense as the sub-task results combined.\n' +
-    '5. End with a "## References" section listing every cited URL with ' +
-    'its index.\n' +
-    '6. Do not call tools. Just compose.\n\n' +
-    'RULES FOR "memoryDelta":\n' +
-    '- Use "append" by default — accumulating notes over time is the goal. ' +
-    'Only use "replace" when you need to overwrite an outdated section.\n' +
-    '- Keep "content" focused: durable facts about the subject, stable ' +
-    "preferences, recurring context. NOT a copy of this run's full report.\n" +
-    '- "summary" is a short caption shown in the memory file frontmatter.'
+    'You are a memory composer for an autonomous agent. Your job is to ' +
+    'decide what (if anything) from this run is worth committing to the ' +
+    "agent's long-term memory file for future runs.\n\n" +
+    'You receive:\n' +
+    '- The original brief (what was asked).\n' +
+    '- The current item being processed (if any).\n' +
+    '- Every planned sub-task and its result.\n' +
+    '- The citations ledger — every URL the agent actually consulted.\n' +
+    '- A list of tools / apps the agent used (so you can describe HOW ' +
+    'a fact was found, not just WHAT was found).\n' +
+    '- The current contents of the agent memory file (so you can spot ' +
+    'duplicates and decide between append vs. replace).\n\n' +
+    'Return STRICT JSON with these fields:\n' +
+    '  - "skip" (boolean): true when nothing from this run is worth ' +
+    'committing to memory. The other fields are ignored when skip=true.\n' +
+    '  - "mode" ("append"|"replace"): default to "append" — accumulating ' +
+    'notes over time is the goal. Only use "replace" when an existing ' +
+    'memory section needs to be overwritten because it became wrong.\n' +
+    '  - "content" (string): the markdown to add (or replace with). ' +
+    'Be CONCRETE — durable facts, names, identifiers, stable preferences, ' +
+    'recurring context. Include provenance: which tool/app produced the ' +
+    'fact, which URL backs it. Example: "Found via app__intrafind-websites: ' +
+    'X is Y\'s lead engineer (source: https://...)".\n' +
+    '  - "summary" (string): one short caption for the memory frontmatter.\n\n' +
+    'Rules:\n' +
+    '1. Only durable signal goes into memory. Skip ephemeral or task-specific ' +
+    'detail (e.g. "the user asked about X today" is ephemeral; "the user ' +
+    'prefers detailed reports with citations" is durable).\n' +
+    '2. Do NOT copy the full report into memory. Memory accumulates; the ' +
+    'report is per-run.\n' +
+    '3. Cite the tool/source ("found via webSearch", "from app__support-bot") ' +
+    'so future runs can trust and trace the fact.\n' +
+    '4. If memory already contains the same fact, skip=true. Do not duplicate.\n' +
+    '5. When unsure, prefer skip=true over polluting memory with low-value ' +
+    'notes — the user can always re-run with more specific input.\n' +
+    '6. Do NOT call tools. Just compose and return the JSON.'
+};
+
+const DEFAULT_MEMORY_COMPOSER_PROMPT = {
+  en:
+    '## Original brief\n${$.data.brief}\n\n' +
+    '## Current item being processed (if any)\n${$.data.currentInboxItem}\n\n' +
+    '## Sub-task results (with the tool / app that produced each)\n{{previousTaskResults}}\n\n' +
+    '## Citations ledger (URLs consulted)\n{{citations}}\n\n' +
+    '## Current memory file contents (verbatim)\n{{currentMemory}}\n\n' +
+    'Decide what (if anything) to commit to memory and return the JSON ' +
+    'specified in the system prompt.'
 };
 
 const DEFAULT_SYNTHESIZER_PROMPT = {
@@ -311,14 +325,6 @@ function buildDrainOnlyWorkflow(profile) {
 }
 
 function buildSynthesizerNode(profile) {
-  const memoryEnabled = profile.memory?.enabled !== false;
-  // Default system prompt depends on whether the synthesizer also has to emit
-  // a memoryDelta. When memory is off we keep the legacy plain-markdown
-  // prompt; when it's on we ask for the structured {report, memoryDelta}
-  // shape that the deterministic memory-finalize node drains.
-  const defaultSystem = memoryEnabled
-    ? DEFAULT_SYNTHESIZER_SYSTEM_WITH_MEMORY
-    : DEFAULT_SYNTHESIZER_SYSTEM;
   return {
     id: 'synthesize',
     type: 'prompt',
@@ -329,7 +335,7 @@ function buildSynthesizerNode(profile) {
         : {}),
       system: isLocalizedNonEmpty(profile.synthesizer?.system)
         ? profile.synthesizer.system
-        : defaultSystem,
+        : DEFAULT_SYNTHESIZER_SYSTEM,
       prompt: isLocalizedNonEmpty(profile.synthesizer?.prompt)
         ? profile.synthesizer.prompt
         : DEFAULT_SYNTHESIZER_PROMPT,
@@ -345,31 +351,44 @@ function buildSynthesizerNode(profile) {
           ? profile.synthesizer.maxTokens
           : 8000,
       _isSynthesizer: true,
-      outputVariable: '_synthesizerOutput',
-      // Structured output is on ONLY when memory is enabled, so legacy
-      // markdown-out behavior is preserved verbatim for profiles that opt
-      // out of memory. PromptNodeExecutor._autoPersistResult inspects this
-      // schema's presence to decide whether to split `report` + `memoryDelta`.
-      ...(memoryEnabled
-        ? {
-            outputSchema: {
-              type: 'object',
-              properties: {
-                report: { type: 'string' },
-                memoryDelta: {
-                  type: ['object', 'null'],
-                  properties: {
-                    mode: { type: 'string', enum: ['append', 'replace'] },
-                    content: { type: 'string' },
-                    summary: { type: 'string' }
-                  },
-                  required: ['mode', 'content']
-                }
-              },
-              required: ['report']
-            }
-          }
-        : {})
+      outputVariable: '_synthesizerOutput'
+    }
+  };
+}
+
+function buildMemoryComposerNode(profile) {
+  return {
+    id: 'memory-compose',
+    type: 'prompt',
+    config: {
+      modelId: profile.memory?.modelId || pickModel(profile),
+      // Memory composition is structured-output and benefits from low
+      // temperature — we want consistent, conservative writes.
+      temperature:
+        typeof profile.memory?.temperature === 'number' ? profile.memory.temperature : 0.2,
+      system: isLocalizedNonEmpty(profile.memory?.system)
+        ? profile.memory.system
+        : DEFAULT_MEMORY_COMPOSER_SYSTEM,
+      prompt: isLocalizedNonEmpty(profile.memory?.prompt)
+        ? profile.memory.prompt
+        : DEFAULT_MEMORY_COMPOSER_PROMPT,
+      tools: [],
+      maxIterations: 1,
+      maxTokens: 2000,
+      outputVariable: '_memoryDelta',
+      // Flat object schema — no union types so Gemini's proto schema is happy.
+      // All fields optional + skip flag lets the composer say "nothing worth
+      // remembering" without violating required-field constraints.
+      outputSchema: {
+        type: 'object',
+        properties: {
+          skip: { type: 'boolean' },
+          mode: { type: 'string', enum: ['append', 'replace'] },
+          content: { type: 'string' },
+          summary: { type: 'string' }
+        }
+      },
+      _isMemoryComposer: true
     }
   };
 }
@@ -585,6 +604,14 @@ function buildPlannerWorkflow(profile) {
     lastWorkflowNodeId = 'synthesize';
   }
   if (memoryEnabled) {
+    // memory-compose: explicit LLM step that decides WHAT to remember
+    // from this run, given brief + task results + citations + prior memory.
+    // Its structured output lands in state.data._memoryDelta and a
+    // PromptNodeExecutor branch (config._isMemoryComposer) pushes it onto
+    // _pendingMemoryUpdates for the deterministic finalize step to drain.
+    nodes.push(buildMemoryComposerNode(profile));
+    edges.push({ source: lastWorkflowNodeId, target: 'memory-compose' });
+    lastWorkflowNodeId = 'memory-compose';
     nodes.push({
       id: 'memory-finalize',
       type: 'memory-finalize',
@@ -763,11 +790,14 @@ function buildInboxWorkerWorkflow(profile) {
     edges.push({ source: lastId, target: 'synthesize' });
     lastId = 'synthesize';
   }
-  // memory-finalize sits between synthesizer and inbox-finalize so the
-  // synthesizer's emitted memoryDelta (when memory enabled) is persisted
-  // BEFORE the inbox item is marked done — keeps the run's user-visible
-  // closure (inbox marked) honest about the side effects (memory updated).
+  // memory-compose + memory-finalize sit between synthesizer and
+  // inbox-finalize so the memory write happens BEFORE the inbox item is
+  // marked done — keeps the run's user-visible closure (inbox marked)
+  // honest about the side effects (memory updated).
   if (profile.memory?.enabled !== false) {
+    nodes.push(buildMemoryComposerNode(profile));
+    edges.push({ source: lastId, target: 'memory-compose' });
+    lastId = 'memory-compose';
     nodes.push({
       id: 'memory-finalize',
       type: 'memory-finalize',

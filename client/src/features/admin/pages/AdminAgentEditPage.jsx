@@ -32,7 +32,15 @@ const BLANK_PROFILE = {
   sources: [],
   apps: [],
   skills: [],
-  memory: { enabled: true, autoInclude: true, maxBytes: 8192 },
+  memory: {
+    enabled: true,
+    autoInclude: true,
+    maxBytes: 8192,
+    modelId: '',
+    temperature: 0.2,
+    system: { en: '' },
+    prompt: { en: '' }
+  },
   inboxId: '',
   hitl: { approverGroups: [] },
   planner: {
@@ -263,6 +271,17 @@ export default function AdminAgentEditPage() {
           !payload.synthesizer.modelId.trim()
         ) {
           delete payload.synthesizer.modelId;
+        }
+      }
+      if (payload.memory && typeof payload.memory === 'object') {
+        const memorySystem = cleanLocalized(payload.memory.system);
+        if (memorySystem) payload.memory.system = memorySystem;
+        else delete payload.memory.system;
+        const memoryPrompt = cleanLocalized(payload.memory.prompt);
+        if (memoryPrompt) payload.memory.prompt = memoryPrompt;
+        else delete payload.memory.prompt;
+        if (typeof payload.memory.modelId === 'string' && !payload.memory.modelId.trim()) {
+          delete payload.memory.modelId;
         }
       }
       if (payload.review && typeof payload.review === 'object') {
@@ -1084,6 +1103,100 @@ export default function AdminAgentEditPage() {
                   {t('admin.agents.edit.editMemoryFile', 'Edit memory file →')}
                 </button>
               )}
+
+              {/* Memory composer — explicit LLM step at end of run */}
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {t('admin.agents.edit.memoryComposer', 'Memory composer (write step)')}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.memoryComposerHint',
+                      'A toolless LLM step that runs at the end of the workflow, sees the brief, task results, citations, tools/apps used, and the current memory file, and decides what (if anything) is worth committing to long-term memory. Its output goes through the deterministic memory-finalize node which performs the actual file write. Only used when Memory is enabled.'
+                    )}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t('admin.agents.edit.memoryComposerModel', 'Composer model (optional)')}
+                    </label>
+                    <select
+                      disabled={profile.memory?.enabled === false}
+                      value={profile.memory?.modelId || ''}
+                      onChange={e => handleMemory({ modelId: e.target.value })}
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    >
+                      <option value="">
+                        {t(
+                          'admin.agents.edit.memoryComposerModelInherit',
+                          '(inherit Preferred model)'
+                        )}
+                      </option>
+                      {models
+                        .filter(m => !m.supportsImageGeneration)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>
+                            {getLocalizedContent(m.name, currentLanguage) || m.id}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t(
+                        'admin.agents.edit.memoryComposerTemperature',
+                        'Composer temperature (default 0.2)'
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      disabled={profile.memory?.enabled === false}
+                      value={profile.memory?.temperature ?? 0.2}
+                      onChange={e =>
+                        handleMemory({
+                          temperature: Number.isFinite(Number(e.target.value))
+                            ? Number(e.target.value)
+                            : 0.2
+                        })
+                      }
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                <DynamicLanguageEditor
+                  label={t(
+                    'admin.agents.edit.memoryComposerSystem',
+                    'Composer system prompt (optional)'
+                  )}
+                  value={profile.memory?.system || {}}
+                  onChange={v => handleMemory({ system: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: 'You are a memory composer. Decide what (if anything) from this run is worth committing to long-term memory. Return JSON { "skip": <bool>, "mode": "append"|"replace", "content": "...", "summary": "..." }. Cite the tool/app/URL that produced each fact. Skip when memory already contains the fact or when nothing durable was learned.',
+                    de: 'Du bist ein Memory-Composer. Entscheide, was (wenn überhaupt) aus diesem Lauf in das Langzeitgedächtnis übernommen werden soll. Antworte als JSON { "skip": <bool>, "mode": "append"|"replace", "content": "...", "summary": "..." }. Nenne die Quelle (Tool / App / URL) zu jedem Fakt.'
+                  }}
+                  name="memory-composer-system"
+                />
+                <DynamicLanguageEditor
+                  label={t(
+                    'admin.agents.edit.memoryComposerPrompt',
+                    'Composer prompt template (optional)'
+                  )}
+                  value={profile.memory?.prompt || {}}
+                  onChange={v => handleMemory({ prompt: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: '## Original brief\n${$.data.brief}\n\n## Sub-task results\n{{previousTaskResults}}\n\n## Citations\n{{citations}}\n\n## Current memory\n{{currentMemory}}\n\nDecide what to commit and return the JSON.',
+                    de: '## Auftrag\n${$.data.brief}\n\n## Teilergebnisse\n{{previousTaskResults}}\n\n## Zitate\n{{citations}}\n\n## Aktuelles Gedächtnis\n{{currentMemory}}\n\nEntscheide und gib das JSON zurück.'
+                  }}
+                  name="memory-composer-prompt"
+                />
+              </div>
             </Section>
 
             {/* Budgets & concurrency */}

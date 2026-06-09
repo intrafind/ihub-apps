@@ -2284,51 +2284,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     }
 
     if (isSynthesizer) {
-      // When the synthesizer is configured with an outputSchema (memory-
-      // enabled profiles get { report, memoryDelta }), pull the report text
-      // out of the structured object instead of treating the whole
-      // JSON-stringified object as the report. Also peel off the memoryDelta
-      // so the deterministic memory-finalize node can persist it later.
-      // When no outputSchema is configured, fall back to the legacy plain-
-      // text artifact behavior (output IS the report).
-      let synthesizedReport = textContent;
-      let memoryDelta = null;
-      if (output && typeof output === 'object' && !Array.isArray(output)) {
-        if (typeof output.report === 'string' && output.report.length > 0) {
-          synthesizedReport = output.report;
-        }
-        if (output.memoryDelta && typeof output.memoryDelta === 'object') {
-          // Only forward deltas that have non-empty content. Synthesizers
-          // are told to return null when nothing's worth remembering, but
-          // defensive coercion guards against an empty-string content too.
-          const delta = output.memoryDelta;
-          if (typeof delta.content === 'string' && delta.content.trim().length > 0) {
-            memoryDelta = {
-              mode: delta.mode === 'replace' ? 'replace' : 'append',
-              content: delta.content,
-              ...(typeof delta.summary === 'string' && delta.summary.length > 0
-                ? { summary: delta.summary }
-                : {})
-            };
-          }
-        }
-      }
-
       // Stash the synthesizer text as a state variable for downstream nodes
-      // (e.g. inbox-finalize uses it for the completion note).
-      stateUpdates._synthesizerOutput = synthesizedReport;
-      stateUpdates._synthesizerSummary = synthesizedReport.slice(0, 240);
-
-      // Hand the memoryDelta off to the deterministic memory-finalize node
-      // via state. Concatenate with any pending updates (e.g. multi-round
-      // review loops could produce more than one synthesizer pass, though
-      // current shape only runs synthesize once at the tail).
-      if (memoryDelta) {
-        const prior = Array.isArray(state?.data?._pendingMemoryUpdates)
-          ? state.data._pendingMemoryUpdates
-          : [];
-        stateUpdates._pendingMemoryUpdates = [...prior, memoryDelta];
-      }
+      // (e.g. inbox-finalize uses it for the completion note). The
+      // synthesizer is plain-text now — memory writing is a separate
+      // explicit step (`memory-compose` → `memory-finalize`).
+      stateUpdates._synthesizerOutput = textContent;
+      stateUpdates._synthesizerSummary = textContent.slice(0, 240);
       // Record synthesizer timing in the same _taskTimings map keyed by
       // node id so the step timeline can display it like any other step.
       const synthCompletedMs = Date.now();
@@ -2367,7 +2328,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           await writeArtifactDirect({
             runId,
             name: primaryName,
-            content: synthesizedReport,
+            content: textContent,
             contentType: 'text/markdown',
             profileId,
             chatId,
@@ -2379,6 +2340,45 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             nodeId: node.id,
             primaryName,
             error: err.message
+          });
+        }
+      }
+    }
+
+    // Memory composer branch — the explicit LLM step that decides what (if
+    // anything) from this run is worth committing to long-term memory.
+    // Pushes a normalized entry onto state.data._pendingMemoryUpdates which
+    // the deterministic memory-finalize node drains on the next hop. A
+    // skip=true response (or empty content) is a no-op.
+    if (config?._isMemoryComposer === true) {
+      if (output && typeof output === 'object' && !Array.isArray(output)) {
+        const skip = output.skip === true;
+        const content = typeof output.content === 'string' ? output.content.trim() : '';
+        if (!skip && content.length > 0) {
+          const entry = {
+            mode: output.mode === 'replace' ? 'replace' : 'append',
+            content,
+            ...(typeof output.summary === 'string' && output.summary.trim().length > 0
+              ? { summary: output.summary.trim() }
+              : {})
+          };
+          const prior = Array.isArray(state?.data?._pendingMemoryUpdates)
+            ? state.data._pendingMemoryUpdates
+            : [];
+          stateUpdates._pendingMemoryUpdates = [...prior, entry];
+          this.logger.info('Memory composer produced a delta', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            mode: entry.mode,
+            contentLength: entry.content.length,
+            hasSummary: !!entry.summary
+          });
+        } else {
+          this.logger.info('Memory composer chose to skip (nothing worth remembering)', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            skipFlag: skip,
+            hadContent: content.length > 0
           });
         }
       }

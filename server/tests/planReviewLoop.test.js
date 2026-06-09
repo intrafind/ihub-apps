@@ -86,18 +86,30 @@ async function run() {
         loopNode.config.condition.includes('needs_more_work')
     );
 
-    const memNode = wf.nodes.find(n => n.id === 'memory-finalize');
-    check('memory-finalize node inserted when memory enabled', !!memNode);
-    check('memory-finalize type is memory-finalize', memNode?.type === 'memory-finalize');
+    const memComposeNode = wf.nodes.find(n => n.id === 'memory-compose');
+    const memFinalizeNode = wf.nodes.find(n => n.id === 'memory-finalize');
+    check('memory-compose node inserted when memory enabled', !!memComposeNode);
+    check(
+      'memory-compose is a toolless prompt with _isMemoryComposer marker',
+      memComposeNode?.type === 'prompt' &&
+        memComposeNode?.config?._isMemoryComposer === true &&
+        Array.isArray(memComposeNode?.config?.tools) &&
+        memComposeNode.config.tools.length === 0
+    );
+    check(
+      'memory-compose outputSchema has flat fields (Gemini-compatible)',
+      memComposeNode?.config?.outputSchema?.type === 'object' &&
+        memComposeNode.config.outputSchema.properties?.skip?.type === 'boolean' &&
+        memComposeNode.config.outputSchema.properties?.mode?.type === 'string' &&
+        memComposeNode.config.outputSchema.properties?.content?.type === 'string'
+    );
+    check('memory-finalize node inserted when memory enabled', !!memFinalizeNode);
+    check('memory-finalize type is memory-finalize', memFinalizeNode?.type === 'memory-finalize');
 
     const synth = wf.nodes.find(n => n.id === 'synthesize');
     check(
-      'synthesizer has structured outputSchema',
-      !!synth?.config?.outputSchema?.properties?.report
-    );
-    check(
-      'synthesizer outputSchema includes memoryDelta',
-      !!synth?.config?.outputSchema?.properties?.memoryDelta
+      'synthesizer is plain text (NO outputSchema — memory split into its own step)',
+      !synth?.config?.outputSchema
     );
   }
 
@@ -116,6 +128,10 @@ async function run() {
     check('no review-loop node', !wf.nodes.find(n => n.id === 'review-loop'));
     check('planner exists at top level', !!wf.nodes.find(n => n.id === 'planner'));
     check(
+      'memory-compose still inserted (memory enabled)',
+      !!wf.nodes.find(n => n.id === 'memory-compose')
+    );
+    check(
       'memory-finalize still inserted (memory enabled)',
       !!wf.nodes.find(n => n.id === 'memory-finalize')
     );
@@ -133,9 +149,10 @@ async function run() {
       review: { enabled: false }
     };
     const wf = buildDefaultWorkflowForProfile(profile);
+    check('no memory-compose node', !wf.nodes.find(n => n.id === 'memory-compose'));
     check('no memory-finalize node', !wf.nodes.find(n => n.id === 'memory-finalize'));
     const synth = wf.nodes.find(n => n.id === 'synthesize');
-    check('synthesizer has NO outputSchema when memory disabled', !synth?.config?.outputSchema);
+    check('synthesizer has NO outputSchema (plain text)', !synth?.config?.outputSchema);
   }
 
   // ── 2. Reviewer auto-persist branch bumps _reviewRound and stashes gaps
@@ -207,14 +224,12 @@ async function run() {
     );
   }
 
-  // ── 4. Synthesizer structured output splits report + memoryDelta ─────
-  console.log(
-    '\n🧪 _autoPersistResult — synthesizer with structured output splits report + memoryDelta\n'
-  );
+  // ── 4. Memory composer branch pushes delta onto _pendingMemoryUpdates ─
+  console.log('\n🧪 _autoPersistResult — memory-composer pushes delta\n');
   {
     const executor = new PromptNodeExecutor({ logger: silentLogger() });
-    executor._resolveRootRunId = async () => null; // skip artifact write
-    const node = { id: 'synthesize', type: 'prompt', config: { _isSynthesizer: true } };
+    executor._resolveRootRunId = async () => null;
+    const node = { id: 'memory-compose', type: 'prompt', config: { _isMemoryComposer: true } };
     const state = { executionId: 'x', data: {} };
 
     const updates = (
@@ -222,79 +237,103 @@ async function run() {
         node,
         config: node.config,
         output: {
-          report: '# Final report\nBody here.',
-          memoryDelta: {
-            mode: 'append',
-            content: 'Learned that X correlates with Y.',
-            summary: 'X↔Y correlation'
-          }
+          skip: false,
+          mode: 'append',
+          content: 'Found via app__support-bot: X is the lead on Y.',
+          summary: 'X→Y lead'
         },
-        response: { content: '{"report":"…","memoryDelta":{}}' },
-        state,
-        context: { chatId: null, user: { profileId: 'p' } },
-        agentProfile: { id: 'p' },
-        executeStartedAt: new Date(),
-        executeStartMs: Date.now() - 100,
-        stepLog: { nodeId: 'synthesize' },
-        effectiveTaskId: null,
-        effectiveTaskTitle: null,
-        effectiveLogKey: 'synthesize',
-        isDynamicTaskIteration: false
-      })
-    )?.stateUpdates;
-
-    check(
-      'synthesizer output set to report (not the JSON-stringified object)',
-      typeof updates?._synthesizerOutput === 'string' &&
-        updates._synthesizerOutput.includes('Final report')
-    );
-    check(
-      'memoryDelta pushed onto _pendingMemoryUpdates',
-      Array.isArray(updates?._pendingMemoryUpdates) &&
-        updates._pendingMemoryUpdates.length === 1 &&
-        updates._pendingMemoryUpdates[0].content === 'Learned that X correlates with Y.' &&
-        updates._pendingMemoryUpdates[0].mode === 'append' &&
-        updates._pendingMemoryUpdates[0].summary === 'X↔Y correlation'
-    );
-  }
-
-  // ── 5. Synthesizer with null memoryDelta does NOT push anything ──────
-  console.log('\n🧪 _autoPersistResult — synthesizer with null memoryDelta is a no-write\n');
-  {
-    const executor = new PromptNodeExecutor({ logger: silentLogger() });
-    executor._resolveRootRunId = async () => null;
-    const node = { id: 'synthesize', type: 'prompt', config: { _isSynthesizer: true } };
-    const state = { executionId: 'x', data: {} };
-
-    const updates = (
-      await executor._autoPersistResult({
-        node,
-        config: node.config,
-        output: { report: 'Just the report.', memoryDelta: null },
         response: { content: 'json' },
         state,
         context: { chatId: null, user: { profileId: 'p' } },
         agentProfile: { id: 'p' },
         executeStartedAt: new Date(),
         executeStartMs: Date.now() - 100,
-        stepLog: { nodeId: 'synthesize' },
+        stepLog: { nodeId: 'memory-compose' },
         effectiveTaskId: null,
         effectiveTaskTitle: null,
-        effectiveLogKey: 'synthesize',
+        effectiveLogKey: 'memory-compose',
         isDynamicTaskIteration: false
       })
     )?.stateUpdates;
 
     check(
-      'memoryDelta: null → _pendingMemoryUpdates not set',
+      'composer delta pushed onto _pendingMemoryUpdates',
+      Array.isArray(updates?._pendingMemoryUpdates) &&
+        updates._pendingMemoryUpdates.length === 1 &&
+        updates._pendingMemoryUpdates[0].content.startsWith('Found via app__support-bot') &&
+        updates._pendingMemoryUpdates[0].mode === 'append' &&
+        updates._pendingMemoryUpdates[0].summary === 'X→Y lead'
+    );
+  }
+
+  // ── 5. Memory composer with skip=true → no-op ────────────────────────
+  console.log('\n🧪 _autoPersistResult — memory-composer skip=true is a no-write\n');
+  {
+    const executor = new PromptNodeExecutor({ logger: silentLogger() });
+    executor._resolveRootRunId = async () => null;
+    const node = { id: 'memory-compose', type: 'prompt', config: { _isMemoryComposer: true } };
+    const state = { executionId: 'x', data: {} };
+
+    const updates = (
+      await executor._autoPersistResult({
+        node,
+        config: node.config,
+        output: { skip: true, mode: 'append', content: 'ignored', summary: 'ignored' },
+        response: { content: 'json' },
+        state,
+        context: { chatId: null, user: { profileId: 'p' } },
+        agentProfile: { id: 'p' },
+        executeStartedAt: new Date(),
+        executeStartMs: Date.now() - 100,
+        stepLog: { nodeId: 'memory-compose' },
+        effectiveTaskId: null,
+        effectiveTaskTitle: null,
+        effectiveLogKey: 'memory-compose',
+        isDynamicTaskIteration: false
+      })
+    )?.stateUpdates;
+
+    check(
+      'skip=true → _pendingMemoryUpdates not set',
       updates && updates._pendingMemoryUpdates === undefined
     );
   }
 
-  // ── 6. Legacy synthesizer (plain text, no outputSchema) preserved ────
-  console.log(
-    '\n🧪 _autoPersistResult — synthesizer without structured output keeps legacy shape\n'
-  );
+  // ── 6. Memory composer with empty content → no-op ────────────────────
+  console.log('\n🧪 _autoPersistResult — memory-composer empty content is a no-write\n');
+  {
+    const executor = new PromptNodeExecutor({ logger: silentLogger() });
+    executor._resolveRootRunId = async () => null;
+    const node = { id: 'memory-compose', type: 'prompt', config: { _isMemoryComposer: true } };
+    const state = { executionId: 'x', data: {} };
+
+    const updates = (
+      await executor._autoPersistResult({
+        node,
+        config: node.config,
+        output: { skip: false, mode: 'append', content: '   ' }, // whitespace only
+        response: { content: 'json' },
+        state,
+        context: { chatId: null, user: { profileId: 'p' } },
+        agentProfile: { id: 'p' },
+        executeStartedAt: new Date(),
+        executeStartMs: Date.now() - 100,
+        stepLog: { nodeId: 'memory-compose' },
+        effectiveTaskId: null,
+        effectiveTaskTitle: null,
+        effectiveLogKey: 'memory-compose',
+        isDynamicTaskIteration: false
+      })
+    )?.stateUpdates;
+
+    check(
+      'empty/whitespace content → _pendingMemoryUpdates not set',
+      updates && updates._pendingMemoryUpdates === undefined
+    );
+  }
+
+  // ── 7. Synthesizer plain-text path (post-split, no schema) ────────────
+  console.log('\n🧪 _autoPersistResult — synthesizer is plain text (memory split out)\n');
   {
     const executor = new PromptNodeExecutor({ logger: silentLogger() });
     executor._resolveRootRunId = async () => null;
@@ -321,11 +360,11 @@ async function run() {
     )?.stateUpdates;
 
     check(
-      'legacy: plain text becomes _synthesizerOutput verbatim',
+      'synthesizer: plain text becomes _synthesizerOutput verbatim',
       updates?._synthesizerOutput === '# Plain markdown report'
     );
     check(
-      'legacy: no _pendingMemoryUpdates set',
+      'synthesizer: NO _pendingMemoryUpdates set (memory composer is a separate step)',
       updates && updates._pendingMemoryUpdates === undefined
     );
   }

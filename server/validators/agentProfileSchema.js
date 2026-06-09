@@ -51,7 +51,13 @@ const memorySchema = z
   .object({
     enabled: z.boolean().optional().default(true),
     autoInclude: z.boolean().optional().default(true),
-    maxBytes: z.number().int().min(0).max(1_000_000).optional().default(8192)
+    maxBytes: z.number().int().min(0).max(1_000_000).optional().default(8192),
+    // Memory composer — explicit LLM step that decides what to commit to
+    // long-term memory at the end of a run. Only used when enabled=true.
+    modelId: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    system: optionalLocalizedStringSchema.optional(),
+    prompt: optionalLocalizedStringSchema.optional()
   })
   .strict();
 
