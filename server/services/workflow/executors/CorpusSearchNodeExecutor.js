@@ -35,10 +35,19 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
     } = config;
     // searchProfile can be either a literal id or a `$.data.x` reference so
     // workflows whose start node collects the profile from the user can pass
-    // it through.
+    // it through. Fail fast on unresolved references — silently falling back
+    // to iFinder's default profile would query the wrong corpus.
     let searchProfile = config.searchProfile;
     if (typeof searchProfile === 'string' && searchProfile.startsWith('$.')) {
-      searchProfile = this.resolveVariable(searchProfile, state);
+      const ref = searchProfile;
+      searchProfile = this.resolveVariable(ref, state);
+      if (typeof searchProfile !== 'string' || !searchProfile.trim()) {
+        return this.createErrorResult(
+          `corpus-search: searchProfile reference '${ref}' resolved to an empty value. ` +
+            `Make sure the workflow's start node collects searchProfile and that the user supplied a value.`,
+          { nodeId: node.id }
+        );
+      }
     }
 
     const user = context?.user;

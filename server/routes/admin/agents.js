@@ -46,9 +46,12 @@ function removeMemorySection(body, heading) {
       break;
     }
   }
-  // Drop the section plus one trailing blank if present so the body doesn't
-  // collect blank-line gaps on repeated replace cycles.
-  if (lines[endIdx - 1] === '') endIdx -= 0;
+  // Drop one trailing blank line after the section so repeated
+  // replace-section cycles don't accumulate blank-line gaps. We look at the
+  // line just before the next heading (or end of body): if it's empty, swallow
+  // it. The regex normalisation below is a belt-and-braces backstop for any
+  // remaining multi-blank runs.
+  if (endIdx > startIdx && lines[endIdx - 1] === '') endIdx -= 1;
   const next = [...lines.slice(0, startIdx), ...lines.slice(endIdx)].join('\n');
   return next.replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n');
 }
@@ -336,10 +339,14 @@ export default function registerAdminAgentsRoutes(app) {
             ? `${nextBody}${nextBody.length === 0 ? '' : '\n'}${append}`
             : `${nextBody}\n\n${append}`;
 
+        // Optimistic concurrency: anchor the write to the version we read so
+        // a concurrent edit (admin in another tab, agent run, etc.) surfaces
+        // as VERSION_CONFLICT below instead of silently overwriting.
         const writeResult = await memoryFile.writeMemory(profileId, {
           mode: 'replace',
           content: nextBody,
           summary: `memory build via ${toolId}`,
+          expectedVersion: current.version,
           updatedBy: req.user?.id || 'admin'
         });
 
