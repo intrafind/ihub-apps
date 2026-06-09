@@ -42,15 +42,40 @@ const DEFAULT_PLANNER_SYSTEM =
   'You are a planner. Given a brief, decompose it into independently-' +
   'executable research or work tasks. Return a structured JSON plan.\n\n' +
   'DECOMPOSITION QUALITY BAR:\n' +
-  '- Each task does ONE substantive piece of work — gathering information ' +
-  'about ONE angle, analyzing ONE dimension, drafting ONE section. Avoid ' +
-  '"research everything" tasks; instead split into multiple angle-specific ' +
-  'tasks (e.g. "professional history", "publications", "open-source ' +
-  'contributions", "public speaking", "current role detail").\n' +
-  '- Prefer 3–6 narrowly-scoped tasks over 1–2 broad ones. Each task should ' +
-  'have a clear, falsifiable deliverable.\n' +
+  '- ONE ANGLE PER TASK. A task addresses ONE question, ONE dimension, ONE ' +
+  'deliverable. When the brief explicitly lists multiple angles for the ' +
+  'SAME subject (e.g. "find out who X is, what they have written, their ' +
+  'views on Y, and collect quotes"), emit a SEPARATE task per angle:\n' +
+  '    * background / biography\n' +
+  '    * publications & body of work\n' +
+  '    * stated views / positions / criticisms\n' +
+  '    * direct quotes & evidence extraction\n' +
+  '  …not one "research everything about X" task. A task worker has ' +
+  'multiple tool calls available, but ONE focused task with 3–5 searches ' +
+  'on a single angle produces deeper, better-cited output than one broad ' +
+  'task that has to context-switch across 4 angles in 25 tool calls.\n' +
+  '- ONE ENTITY PER TASK. When the brief lists multiple distinct subjects ' +
+  '(several people, several products, several companies, several documents), ' +
+  'emit a separate task for EACH ONE. "Research A and B" is two tasks, never ' +
+  'one. "Research products X, Y, Z" is three tasks, never one. Combining ' +
+  'entities forces the worker to context-switch mid-task and dilutes the ' +
+  'output. The only exception is when entities are intrinsically paired ' +
+  '(e.g. compare X to Y) and the comparison itself is the deliverable — ' +
+  'and that case STILL benefits from per-entity research tasks feeding a ' +
+  'separate comparison task via `dependsOn`.\n' +
+  '- DECOMPOSITION TEST. Before emitting a task, read its own title and ' +
+  'description back: if you find the word "and" joining two research ' +
+  'subjects, or a comma-separated list of distinct angles/entities, the ' +
+  'task is too broad — split it. Examples of tasks that MUST be split:\n' +
+  '    × "Research Rowan Curran\'s background, publications, AI views, and quotes" (4 angles → 4 tasks)\n' +
+  '    × "Research Franz and Daniel" (2 people → 2 tasks)\n' +
+  '    × "Research iFinder, iAssistant and iHub" (3 products → 3 tasks)\n' +
+  '- Prefer 3–8 narrowly-scoped tasks over 1–2 broad ones. Each task ' +
+  'should have a clear, falsifiable deliverable.\n' +
   '- Later tasks may build on earlier ones — sequence accordingly. Use the ' +
-  '`dependsOn` array when a task genuinely requires another to complete first.\n' +
+  '`dependsOn` array when a task genuinely requires another to complete ' +
+  'first (e.g. "extract quotes from publications" dependsOn "find ' +
+  'publications").\n' +
   '- DO NOT include workflow plumbing steps (reading the inbox, marking ' +
   'items done, writing artifacts); those are handled outside the plan by ' +
   'the runtime.';
@@ -152,7 +177,7 @@ const DEFAULT_MEMORY_COMPOSER_SYSTEM = {
 const DEFAULT_MEMORY_COMPOSER_PROMPT = {
   en:
     '## Original brief\n${$.data.brief}\n\n' +
-    '## Current item being processed (if any)\n${$.data.currentInboxItem}\n\n' +
+    '## Current item being processed (if any)\n${$.data.currentInboxItem.text}\n\n' +
     '## Sub-task results (with the tool / app that produced each)\n{{previousTaskResults}}\n\n' +
     '## Citations ledger (URLs consulted)\n{{citations}}\n\n' +
     '## Current memory file contents (verbatim)\n{{currentMemory}}\n\n' +

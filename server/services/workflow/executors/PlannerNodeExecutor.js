@@ -64,6 +64,18 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       });
     }
 
+    // Hoisted above the try/catch so the failure handler can read them when
+    // _generatePlan or validation throws before the success-path step-log
+    // write would have fired.
+    const planningStartedAt = new Date();
+    const planningStartMs = planningStartedAt.getTime();
+    const stepLog = {
+      nodeId: node.id,
+      kind: 'planner',
+      startedAt: planningStartedAt.toISOString(),
+      toolCalls: []
+    };
+
     try {
       // Resolve goal with template variables from state
       const goal = this.resolveVariables(config.goal, state);
@@ -75,22 +87,6 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // then re-plan with their bodies in context. We allow ONE replan cycle
       // to prevent infinite loops. After the cycle, any further activations
       // happen via the task workers calling activate_skill themselves.
-      //
-      // Track the LLM-call duration separately from the total node duration
-      // (which includes the long sub-workflow wait). The step timeline uses
-      // the LLM-only time so "Planning" shows ~8s instead of ~5min.
-      const planningStartedAt = new Date();
-      const planningStartMs = planningStartedAt.getTime();
-
-      // Step log for the planner LLM call. Filled in by _generatePlan and
-      // persisted at the end of execute() so operators can see the model,
-      // the resolved goal/system prompt, and the resulting plan reasoning.
-      const stepLog = {
-        nodeId: node.id,
-        kind: 'planner',
-        startedAt: planningStartedAt.toISOString(),
-        toolCalls: []
-      };
 
       let plan;
       const maxReplans = 1;
@@ -462,9 +458,50 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         }
       );
     } catch (error) {
+      // Persist a failure step log so operators can see WHAT went wrong
+      // without combing the server logs. Without this, planner failures land
+      // as `output: null` in the loop's iteration result and the run timeline
+      // looks like the planner simply didn't run.
+      try {
+        const { getStateManager } = await import('../StateManager.js');
+        const stateManager = getStateManager();
+        const failedAtIso = new Date().toISOString();
+        const partialStepLog = {
+          nodeId: node.id,
+          kind: 'planner',
+          startedAt: stepLog?.startedAt || new Date(planningStartMs).toISOString(),
+          completedAt: failedAtIso,
+          durationMs: Date.now() - planningStartMs,
+          messages: stepLog?.messages || [],
+          model: stepLog?.model || null,
+          responseLength: stepLog?.responseLength || 0,
+          tokens: stepLog?.tokens || null,
+          failed: true,
+          error: error.message,
+          ...(error.code ? { errorCode: error.code } : {}),
+          ...(error.status ? { errorStatus: error.status } : {})
+        };
+        await stateManager.update(state.executionId, {
+          data: {
+            _stepLogs: {
+              ...(state?.data?._stepLogs || {}),
+              [node.id]: partialStepLog
+            }
+          }
+        });
+      } catch (writeErr) {
+        this.logger.warn('Failed to persist planner failure step log', {
+          component: 'PlannerNodeExecutor',
+          nodeId: node.id,
+          originalError: error.message,
+          writeError: writeErr.message
+        });
+      }
       return this.createErrorResult(`Planner failed: ${error.message}`, {
         nodeId: node.id,
-        error: error.message
+        error: error.message,
+        ...(error.code ? { errorCode: error.code } : {}),
+        ...(error.status ? { errorStatus: error.status } : {})
       });
     }
   }
@@ -578,6 +615,7 @@ Hard rules for this extension plan:
     // when the planner returns its JSON (or via the iterative replan flow).
     let skillsBlock = '';
     let activeSkillsBlock = '';
+    let availableSkillNames = [];
     try {
       const skillIds =
         Array.isArray(config?.skills) && config.skills.length > 0 ? config.skills : [];
@@ -589,6 +627,7 @@ Hard rules for this extension plan:
           platform
         );
         if (Array.isArray(filtered) && filtered.length > 0) {
+          availableSkillNames = filtered.map(s => s.name).filter(n => typeof n === 'string');
           const entries = filtered
             .map(
               s =>
@@ -647,18 +686,51 @@ If you set "activate_then_replan", you can omit "tasks" — the runtime ignores
 them and re-invokes you with the activated skill bodies in context.`
       : '';
 
+    // Catalogs of what the agent has configured. The planner can ONLY pick
+    // from these lists per task — the schema below enum-constrains each
+    // field, and the user prompt shows the catalog so the model has explicit
+    // guidance. A field with an empty catalog is omitted from BOTH the prompt
+    // template and the schema so the model isn't tempted to fabricate values.
+    const tt = config?.taskTemplate || {};
+    const uniqStrings = arr =>
+      Array.isArray(arr) ? Array.from(new Set(arr.filter(v => typeof v === 'string'))) : [];
+    const toolCatalog = uniqStrings(tt.tools);
+    const appCatalog = uniqStrings(tt.apps);
+    const sourceCatalog = uniqStrings(tt.sources);
+    const skillCatalog = uniqStrings(availableSkillNames);
+
+    const taskFieldLines = ['      "id": "unique-task-id"', '      "title": "Task title"'];
+    taskFieldLines.push(
+      '      "description": "Detailed description of what this task should accomplish"'
+    );
+    if (toolCatalog.length > 0) taskFieldLines.push('      "tools": []');
+    if (appCatalog.length > 0) taskFieldLines.push('      "apps": []');
+    if (sourceCatalog.length > 0) taskFieldLines.push('      "sources": []');
+    taskFieldLines.push('      "dependsOn": []');
+
+    const catalogsBlock = [];
+    if (toolCatalog.length > 0) {
+      catalogsBlock.push(`tools: ${toolCatalog.map(s => `"${s}"`).join(', ')}`);
+    }
+    if (appCatalog.length > 0) {
+      catalogsBlock.push(`apps: ${appCatalog.map(s => `"${s}"`).join(', ')}`);
+    }
+    if (sourceCatalog.length > 0) {
+      catalogsBlock.push(`sources: ${sourceCatalog.map(s => `"${s}"`).join(', ')}`);
+    }
+    const catalogsGuidance =
+      catalogsBlock.length > 0
+        ? `\n\nAvailable resources you may reference per task (use ONLY these exact ids — do not invent):\n  - ${catalogsBlock.join('\n  - ')}`
+        : '';
+
     const userPrompt = `Goal: ${goal}
 
-${contextData ? `Available context:\n${contextData}\n` : ''}${skillsGuidance}
+${contextData ? `Available context:\n${contextData}\n` : ''}${skillsGuidance}${catalogsGuidance}
 Create a plan with up to ${config.maxTasks || 10} tasks. Return JSON:
 {
 ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "tasks": [
     {
-      "id": "unique-task-id",
-      "title": "Task title",
-      "description": "Detailed description of what this task should accomplish",
-      "tools": [],
-      "dependsOn": []
+${taskFieldLines.join(',\n')}
     }
   ],
   "reasoning": "Brief explanation of the plan"
@@ -694,21 +766,102 @@ Output rules:
       stepLog.tools = []; // planner has no tools by design
     }
 
-    // Ask the provider to enforce JSON output where supported. For Gemini /
-    // OpenAI / vLLM with json_object, the model is constrained to emit a
-    // valid JSON document; for providers without native support, this is a
-    // hint that the adapter ignores. Either way we still run our own
-    // best-effort parse below as a safety net.
+    // Constrain the model with an explicit `responseSchema` (not just
+    // `responseFormat: json`). Gemini-flash-latest under plain `json` mode
+    // has been observed appending stray characters after the outer `}` —
+    // a valid object followed by a trailing `}` makes the response unparseable
+    // and the planner silently fails. With a schema, Gemini enforces the
+    // exact shape and the trailing-junk class of failures goes away.
+    //
+    // Schema is intentionally flat (no union types, no nested anyOf) so
+    // Gemini's proto-derived schema validator accepts it. The Google adapter
+    // strips `additionalProperties` automatically.
     //
     // Explicit maxTokens: the Google adapter defaults to 2048, which is enough
     // for typical plans but we'd rather not depend on adapter defaults — and
     // for richer plans (10 tasks × ~200-token descriptions) we need more
     // headroom anyway. 8192 is well within Gemini Flash's output budget.
+    // Schema fields mirror the user-prompt template exactly. Any field the
+    // prompt doesn't show as part of the JSON example is omitted — otherwise
+    // the model tries to fill it and (observed with gemini-flash-latest)
+    // degenerates into hallucinating dozens of look-alike string values
+    // until it hits maxTokens. Per-task `apps`/`sources`/`skills` aren't
+    // consumed downstream anyway — the profile's taskTemplate supplies those.
+    // `tools` IS additive in SubWorkflowMaterializer, so we keep it but cap
+    // length to prevent the same hallucination loop.
+    // Enum-constrain every reference field to the configured catalog so the
+    // model can't invent ids (observed failure: gemini-flash-latest filled an
+    // unconstrained `tools` array with dozens of look-alike hallucinated tool
+    // names until it hit maxTokens). A field is included in the schema only
+    // when its catalog is non-empty — the prompt template above mirrors the
+    // same condition.
+    const taskItemProperties = {
+      id: { type: 'string' },
+      title: { type: 'string' },
+      description: { type: 'string' },
+      dependsOn: { type: 'array', items: { type: 'string' }, maxItems: 8 }
+    };
+    if (toolCatalog.length > 0) {
+      taskItemProperties.tools = {
+        type: 'array',
+        items: { type: 'string', enum: toolCatalog },
+        maxItems: Math.max(1, toolCatalog.length)
+      };
+    }
+    if (appCatalog.length > 0) {
+      taskItemProperties.apps = {
+        type: 'array',
+        items: { type: 'string', enum: appCatalog },
+        maxItems: Math.max(1, appCatalog.length)
+      };
+    }
+    if (sourceCatalog.length > 0) {
+      taskItemProperties.sources = {
+        type: 'array',
+        items: { type: 'string', enum: sourceCatalog },
+        maxItems: Math.max(1, sourceCatalog.length)
+      };
+    }
+
+    const plannerSchemaProperties = {
+      tasks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: taskItemProperties,
+          required: ['id', 'title', 'description']
+        }
+      },
+      reasoning: { type: 'string' }
+    };
+    if (skillCatalog.length > 0) {
+      const skillItem = { type: 'string', enum: skillCatalog };
+      plannerSchemaProperties.activate_then_replan = {
+        type: 'array',
+        items: skillItem,
+        maxItems: Math.max(1, skillCatalog.length)
+      };
+      plannerSchemaProperties.skills_used = {
+        type: 'array',
+        items: skillItem,
+        maxItems: Math.max(1, skillCatalog.length)
+      };
+    }
+    const plannerResponseSchema = {
+      type: 'object',
+      properties: plannerSchemaProperties,
+      required: ['tasks']
+    };
     const response = await this.llmHelper.executeStreamingRequest({
       model,
       messages,
       apiKey: apiKeyResult.apiKey,
-      options: { temperature: 0.7, responseFormat: 'json', maxTokens: 8192 },
+      options: {
+        temperature: 0.7,
+        responseFormat: 'json',
+        responseSchema: plannerResponseSchema,
+        maxTokens: 8192
+      },
       language
     });
 

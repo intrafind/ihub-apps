@@ -517,6 +517,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           finishReason: response.finishReason,
           maxTokens: response.maxTokens
         });
+        // Surface the parsed structured output on the step log so operators
+        // can see the reviewer's verdict / memory-composer decision / etc in
+        // the timeline. Without this, `output: null` made structured-output
+        // nodes look like they returned nothing.
+        try {
+          stepLog.output = this._previewToolValue(output);
+        } catch {
+          // best effort — never fail a node on the preview helper
+        }
       }
 
       this.logger.info('Agent node completed', {

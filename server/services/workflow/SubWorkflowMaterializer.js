@@ -14,6 +14,10 @@
 
 import logger from '../../utils/logger.js';
 
+function dedupeStrings(arr) {
+  return Array.from(new Set((arr || []).filter(v => typeof v === 'string')));
+}
+
 export class SubWorkflowMaterializer {
   /**
    * Materialize a plan into a runnable workflow definition.
@@ -41,8 +45,17 @@ export class SubWorkflowMaterializer {
     });
 
     // Create agent nodes for each task in the plan.
-    // CRITICAL: Destructure tools from taskTemplate before spreading to prevent overwrite.
-    const { tools: templateTools, ...restTemplate } = parentConfig.taskTemplate || {};
+    // CRITICAL: Destructure tools/apps/sources from taskTemplate before
+    // spreading — each is additive at the task level (the planner may
+    // spotlight a per-task subset on top of the profile-wide template), so
+    // the spread of restTemplate must NOT overwrite the merged arrays we
+    // build below.
+    const {
+      tools: templateTools,
+      apps: templateApps,
+      sources: templateSources,
+      ...restTemplate
+    } = parentConfig.taskTemplate || {};
 
     const taskNodes = plan.tasks.map((task, index) => {
       // The agent's persona system prompt lives on the profile (carried via
@@ -101,7 +114,7 @@ export class SubWorkflowMaterializer {
       // a ledger to cite from, but the task worker's own output should
       // also include source URLs inline so the synthesizer can connect
       // facts to citations cleanly.
-      const inheritedTools = Array.isArray(restTemplate.tools) ? restTemplate.tools : [];
+      const inheritedTools = Array.isArray(templateTools) ? templateTools : [];
       const taskExtraTools = Array.isArray(task.tools) ? task.tools : [];
       const allTaskTools = [...inheritedTools, ...taskExtraTools];
       const hasSearchLikeTool = allTaskTools.some(t => {
@@ -164,11 +177,16 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Research tools come from the profile's task template — no
-          // lifecycle tools layered on. Plan-task-level `tools` are
-          // additive (e.g. the planner can spotlight `webSearch` for a
-          // specific task) but must already exist in the tool catalog.
-          tools: [...(task.tools || []), ...(templateTools || [])]
+          // Research tools / apps / sources come from the profile's task
+          // template — no lifecycle tools layered on. Plan-task-level
+          // entries are additive (planner can spotlight `webSearch` or a
+          // specific app/source for one task) but must already exist in the
+          // respective catalog — the planner's response schema enum-binds
+          // each field to that catalog so unknown ids are rejected at
+          // structured-output time.
+          tools: dedupeStrings([...(task.tools || []), ...(templateTools || [])]),
+          apps: dedupeStrings([...(task.apps || []), ...(templateApps || [])]),
+          sources: dedupeStrings([...(task.sources || []), ...(templateSources || [])])
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
           // PromptNodeExecutor._autoPersistResult. The legacy flat

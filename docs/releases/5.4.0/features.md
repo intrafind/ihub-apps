@@ -263,3 +263,83 @@ New profile block:
 - The reviewer returns structured `{ needs_more_work, rationale, gaps }`; the engine increments `_reviewRound` and surfaces the gaps and prior task results to the next planner iteration.
 - The shared planner budget caps total tasks across all rounds at 100, so a runaway loop cannot multiply task emission.
 - Defaults to OFF — existing profiles are unchanged in shape. Enable on profiles where extending and re-verifying a plan adds more value than a single planner pass.
+
+## Agent Profile Workflow Auto-Repair (Migration V052)
+
+Server startup now rebuilds the embedded workflow definition for every agent profile under `contents/agents/profiles/` so each profile picks up the canonical `synthesize → memory-compose → memory-finalize` chain and a cleaned-up planner prompt.
+
+Fixes two issues that affected existing hand-authored profiles:
+
+- **Long-term memory was never written.** Profiles whose embedded workflow wired `synthesize → memory-finalize` directly (without the explicit `memory-compose` LLM node) produced no entries for the deterministic memory-finalize executor to drain, leaving the memory file empty.
+- **Planner emitted a redundant review task.** Where `planner.system` still contained the legacy "add another planner task to review what has been done" instruction, the planner produced an extra task that ran as a generic research task and re-dumped the full report instead of focused gap-finding. The dedicated reviewer node + review-loop now own that responsibility.
+
+- Profiles with `workflow.ref === "external"` are untouched.
+- Idempotent — re-running the migration produces no further changes.
+- Admin profile saves already go through the same serializer, so future edits stay in the canonical shape.
+
+## Agent Planner Inbox-Item Template Fix (Migration V053)
+
+Agent profiles authored before the inbox-item accessor fix used `${$.data.currentInboxItem}` as a JSONPath template in planner/memory prompts. The runtime stringified the matching object literally as `"[object Object]"`, so the planner LLM was handed garbage and produced no plan — review-loop runs completed without any tasks ever running, then synthesizer wrote a report from an empty evidence base.
+
+Migration V053 normalizes the bare JSONPath form to `${$.data.currentInboxItem.text}` across all profile fields, then regenerates the embedded workflow so the corrected goal lands in the planner node. The matching default in the memory-composer prompt was also corrected.
+
+- Handlebars-style `{{currentInboxItem}}` is unaffected (its templating layer already renders the inbox item correctly with priority prefix).
+- Profiles with `workflow.ref === "external"` are untouched.
+- Idempotent.
+
+## Review-Loop Visibility & Memory-Skip Reason
+
+Agent runs that loop through plan-and-review now surface the loop's lifecycle in the run timeline and tell operators when memory was deliberately not written.
+
+- **Loop step log + SSE**: every loop node (review-loop, drain, forEach, …) now emits `agent.step.started`, per-iteration `agent.loop.iteration.started` / `agent.loop.iteration.completed`, and `agent.step.completed`. The loop also writes its own entry into `_stepLogs` with iteration count and per-iteration timings, so reviewers can see how many rounds ran and how long each took.
+- **Structured outputs surfaced in step logs**: prompt nodes that declare an `outputSchema` (reviewer, memory-composer, structured-record, …) now persist the parsed result onto `stepLog.output`. The timeline shows the reviewer's `{needs_more_work, gaps, rationale}` and the memory-composer's `{skip, mode, summary}` instead of `output: null`.
+- **Memory-finalize noop reason**: when nothing is written (because the composer chose to skip or returned empty content), the step log now records `noopReason` and `composerSummary`. The "Memory" row reads "composer chose to skip — <summary>" instead of looking like a silent failure.
+
+## Planner Failure Visibility
+
+When the planner LLM call fails (parse error, truncated response, 4xx/5xx, validation error), the run timeline now records a `planner` step log with `failed: true`, the error message, the resolved goal preview, model id, response length and token usage. Previously a planner failure left no step log behind and the run looked like the planner never ran.
+
+The matching loop step log already captures per-iteration timings and `failedAtNodeId`, so operators can see at a glance which iteration broke and why.
+
+## Planner Uses Strict Structured Output
+
+The planner's LLM call now passes an explicit `responseSchema` (in addition to `responseFormat: 'json'`). Without a schema, Gemini's "JSON mode" only hints at the format and `gemini-flash-latest` was observed appending stray characters after the closing brace, producing a valid object followed by a spurious trailing `}` — the planner then failed parsing and the run silently completed without any tasks.
+
+With a schema, Gemini enforces the exact shape (`tasks[]`, `reasoning`, optional `activate_then_replan` and `skills_used`) and the trailing-junk class of failures is closed off.
+
+## Planner Catalogs: Per-Task Tools, Apps, Sources, Skills
+
+The planner now sees the agent's actual catalog of configured resources and can spotlight a subset per task — but only ids it was given. Per-task `tools` was always additive in `SubWorkflowMaterializer`; `apps` and `sources` are now additive too.
+
+- Each catalog (`tools`, `apps`, `sources`) is built from `profile.taskTemplate.{tools,apps,sources}` and shown to the planner in the user prompt with the literal id list.
+- The response schema enum-binds every field to that catalog, so structured output rejects fabricated ids at the LLM boundary. Previously `gemini-flash-latest` with an unconstrained array field would degenerate into emitting dozens of look-alike hallucinated ids until it hit `maxTokens`.
+- Empty catalogs are omitted from both the prompt template and the schema so the model isn't tempted to populate a field it has nothing to fill.
+- `skills_used` and `activate_then_replan` are still plan-level and now enum-bound to the names in `<available_skills>`.
+
+## Gemini Structured Output Now Actually Enforced
+
+The Google adapter was sending the response schema to Gemini under the snake-case field name `response_schema`, but Gemini's REST API expects `responseSchema` (camelCase) — the snake variant is silently dropped. Every workflow node that declared an `outputSchema` (reviewer, memory-composer, planner, etc.) was running in vanilla JSON-mode despite our calls. Renaming the field activates real structured output: trailing-junk failures, hallucination loops, and shape drift go away at the API boundary instead of being post-parsed (and frequently failing) on our side.
+
+## Review Loop, Memory Composer, and Memory Finalize Visible in Run Timeline
+
+The agent run timeline now shows four rows that were previously invisible:
+
+- **Reviewing** — appears after the plan tasks. Description reflects the reviewer's structured verdict: "Round N: complete — no material gaps" or "Round N: more work needed — K gap(s)". Step log carries the full `{needs_more_work, rationale, gaps}` payload.
+- **Composing memory** — appears after the synthesizer. Description shows the composer's decision: "Composer chose to skip — \<summary\>" or "Composer append — \<summary\>".
+- **Memory written** / **Memory skipped** — final deterministic step. Title and description reflect actual outcome: how many updates were written, or why it skipped (composer skip, empty content, no profile id).
+
+Each row pulls from its node's persisted `_stepLogs[nodeId]` entry, so the timeline survives a refresh.
+
+## Planner: One Entity Per Task
+
+Added an explicit decomposition rule to the canonical planner system prompt: when the brief lists multiple distinct subjects (people, products, companies, documents), emit a separate task for each one. "Research A and B" is two tasks, never one; "Research products X, Y, Z" is three tasks, never one. The only exception is when the comparison itself is the deliverable — and even then, per-entity research tasks feed a separate comparison task via `dependsOn`.
+
+Existing profiles with hand-authored `planner.system` overrides are unaffected — operators who want this rule on those profiles need to add it to their override.
+
+## Planner Decomposition: One Angle Per Task
+
+When the brief enumerates multiple distinct angles for the same subject (e.g. "find out who X is, what they have written, their views on Y, and collect quotes"), the planner now emits a separate task per angle instead of one broad task. A single broad task with 25 tool iterations still tends to context-switch across angles and dilute coverage; a focused task with 3–5 searches on one angle reliably produces deeper, better-cited output.
+
+The canonical planner system prompt now carries an explicit **DECOMPOSITION TEST**: read each task's title and description back — if it contains "and" joining research subjects, or a comma-separated list of distinct angles, it must be split. Three worked examples (Rowan Curran's 4 angles, two people, three products) are included so the model has anchors.
+
+Migration **V054** clears stale `planner.system` overrides on agent profiles that were verbatim snapshots of the old default. Operator-customized prompts (longer than the snapshot or with a different opening sentence) are left untouched. Cleared profiles fall back to the canonical default at runtime, so the new decomposition rules take effect immediately on next server restart.

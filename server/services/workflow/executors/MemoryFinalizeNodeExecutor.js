@@ -59,16 +59,52 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
     const valid = pending.filter(isUpdateShape);
 
     if (valid.length === 0) {
+      // Surface why nothing was written. Most common: the memory-composer
+      // emitted `{skip: true}` because the run had no durable knowledge worth
+      // keeping. Without this, operators see an empty no-op step log and
+      // assume the memory pipeline is broken.
+      const composerDelta = state?.data?._memoryDelta;
+      let noopReason = 'no pending memory updates';
+      let composerSummary = null;
+      if (composerDelta && typeof composerDelta === 'object') {
+        if (composerDelta.skip === true) {
+          noopReason = 'composer chose to skip';
+        } else if (
+          typeof composerDelta.content === 'string' &&
+          composerDelta.content.trim() === ''
+        ) {
+          noopReason = 'composer emitted empty content';
+        }
+        if (typeof composerDelta.summary === 'string' && composerDelta.summary.trim().length > 0) {
+          composerSummary = composerDelta.summary.trim();
+        }
+      }
       this.logger.info('memory-finalize: no pending memory updates', {
         component: 'MemoryFinalizeNodeExecutor',
         nodeId: node.id,
         profileId,
-        dropped: pending.length - valid.length
+        dropped: pending.length - valid.length,
+        noopReason,
+        composerSummary
       });
       const completedAtIso = new Date().toISOString();
       const durationMs = Date.now() - startMs;
+      emit(
+        'agent.step.completed',
+        {
+          nodeId: node.id,
+          kind: 'memory-finalize',
+          startedAt: startedAt.toISOString(),
+          completedAt: completedAtIso,
+          durationMs,
+          written: 0,
+          noopReason,
+          composerSummary
+        },
+        chatId
+      );
       return this.createSuccessResult(
-        { ok: true, noop: true, profileId, written: 0 },
+        { ok: true, noop: true, profileId, written: 0, noopReason, composerSummary },
         {
           stateUpdates: {
             _stepLogs: {
@@ -82,7 +118,9 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
                 tools: [],
                 toolCalls: [],
                 messages: [],
-                written: 0
+                written: 0,
+                noopReason,
+                ...(composerSummary ? { composerSummary } : {})
               }
             }
           }
