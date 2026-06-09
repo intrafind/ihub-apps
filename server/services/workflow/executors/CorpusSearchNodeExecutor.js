@@ -31,9 +31,15 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       maxPerTopic = 25,
       maxTotalDocs = 500,
       fetchFulltext = true,
-      maxFulltextChars = 50000,
-      searchProfile
+      maxFulltextChars = 50000
     } = config;
+    // searchProfile can be either a literal id or a `$.data.x` reference so
+    // workflows whose start node collects the profile from the user can pass
+    // it through.
+    let searchProfile = config.searchProfile;
+    if (typeof searchProfile === 'string' && searchProfile.startsWith('$.')) {
+      searchProfile = this.resolveVariable(searchProfile, state);
+    }
 
     const user = context?.user;
     const chatId = context?.chatId || context?.runId || context?.executionId;

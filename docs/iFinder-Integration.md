@@ -483,4 +483,77 @@ For technical support with iFinder integration:
 
 ---
 
-_Last updated: January 2025_
+## Lazy corpus workflows
+
+The audit-grade `stellungnahmen-review` workflow expects each
+Stellungnahme to be uploaded into chat. For ministry-scale
+consultations that produces 200+ documents and breaks the chat upload
+ceiling. A second workflow ships alongside it:
+
+**`stellungnahmen-review-ifinder`** — same extract-and-report flow,
+same evidence schema, but candidates come from iFinder by topic and
+each document's fulltext is fetched one at a time inside the iteration
+loop.
+
+Key shape:
+
+1. `corpus-search` runs with `fetchFulltext: false`, so it returns
+   only the candidate metadata (no fulltext yet).
+2. An LLM `refine-decision` node inspects the candidate list and can
+   request 1-3 additional topics. The outer search loop is capped at
+   3 rounds (`_maxSearchIterations`).
+3. The per-document loop calls `iFinder_getContent` as a `tool` node
+   for the current document only. `advance-doc` clears
+   `_currentDocContent` between iterations.
+4. The extract prompt and JSON schema are identical to the upload
+   variant — same audit guarantees, same downstream consumers.
+
+Trade-off: lazy loading shifts cost from "200 calls up front" to
+"N calls in-loop". When every candidate is processed the totals are
+equal; when refinement filtering prunes candidates, lazy wins.
+
+Trigger via chat with `@workflow stellungnahmen-review-ifinder` and
+supply the focus prompt + search profile ID.
+
+## Admin-driven corpus discovery
+
+Some workflows benefit from a precomputed "corpus map" — which sources
+contribute, which languages are represented, what the typical document
+titles look like — so a downstream planner doesn't have to discover
+this at runtime. iHub exposes a generic admin endpoint for this:
+
+```
+POST /api/admin/agents/profiles/<profileId>/memory/from-tool
+  { "toolId": "iFinder_discover",
+    "params": { "searchProfile": "searchprofile-xyz", "query": "*:*" },
+    "section": "iFinder corpus map",
+    "mode": "replace-section" }
+```
+
+The endpoint runs the named tool with admin context and writes the
+result to the agent profile's long-term memory under the given heading
+(`## iFinder corpus map`). Subsequent agent runs see that section
+through the existing memory auto-include; the
+`stellungnahmen-review-ifinder` workflow can also read it when started
+with a non-empty `agentProfileId`.
+
+**Access control**: the endpoint only runs tools listed in
+`platform.json` under `agents.adminMemoryBuilderTools`. Defaults to an
+empty array, so installations opt in explicitly:
+
+```json
+{
+  "agents": {
+    "adminMemoryBuilderTools": ["iFinder_discover"]
+  }
+}
+```
+
+`iFinder_discover` is intentionally NOT added to any default agent
+profile's `tools` array — agents at runtime cannot invoke it; only the
+admin endpoint can. Operators re-run discovery when the underlying
+index changes significantly.
+
+---
+
+_Last updated: June 2026_

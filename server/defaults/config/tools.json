@@ -719,6 +719,51 @@
           },
           "required": ["documentId"]
         }
+      },
+      "discover": {
+        "description": {
+          "en": "Probe an iFinder search profile and return a markdown corpus map (facets, sources, sample titles). Intended for admin-driven memory population — NOT for agent runtime use.",
+          "de": "Ein iFinder-Suchprofil untersuchen und eine Markdown-Korpusübersicht zurückgeben (Facetten, Quellen, Beispieltitel). Für admin-gesteuerten Memory-Aufbau gedacht — NICHT für Agent-Laufzeit."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "searchProfile": {
+              "type": "string",
+              "description": {
+                "en": "iFinder search profile ID to probe (required)",
+                "de": "Zu untersuchende iFinder-Suchprofil-ID (erforderlich)"
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": {
+                "en": "Optional query to scope the probe. Defaults to '*:*'.",
+                "de": "Optionale Anfrage zur Eingrenzung der Untersuchung. Standard: '*:*'."
+              },
+              "default": "*:*"
+            },
+            "facets": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": {
+                "en": "Facet fields to request from iFinder. Defaults to ['sourceName','mediaType','language','application'].",
+                "de": "Von iFinder anzufordernde Facetten-Felder. Standard: ['sourceName','mediaType','language','application']."
+              }
+            },
+            "sampleSize": {
+              "type": "integer",
+              "description": {
+                "en": "Maximum number of sample documents to list in the markdown output.",
+                "de": "Maximale Anzahl Beispiel-Dokumente in der Markdown-Ausgabe."
+              },
+              "default": 10,
+              "minimum": 0,
+              "maximum": 50
+            }
+          },
+          "required": ["searchProfile"]
+        }
       }
     }
   },

@@ -17,6 +17,33 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { deepMerge } from '../../../utils/deepMerge.js';
+import memoryFile from '../../../agents/memory/memoryFile.js';
+import { AGENT_PROFILE_ID_PATTERN } from '../../../validators/agentProfileSchema.js';
+
+const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/;
+
+function sliceMemorySection(body, section) {
+  if (!body) return '';
+  const target = section.trim();
+  const lines = body.split('\n');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(SECTION_HEADING_RE);
+    if (m && m[1].trim() === target) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start === -1) return '';
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (SECTION_HEADING_RE.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n').trim();
+}
 
 /**
  * Transform node configuration
@@ -115,7 +142,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       const stateUpdates = {};
 
       for (const operation of operations) {
-        this.processOperation(operation, state, stateUpdates, context);
+        await this.processOperation(operation, state, stateUpdates, context);
       }
 
       this.logger.info('Transform node completed', {
@@ -151,7 +178,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
    * @param {Object} context - Execution context
    * @private
    */
-  processOperation(operation, state, stateUpdates, _context) {
+  async processOperation(operation, state, stateUpdates, _context) {
     // SET operation: set a variable to a literal value
     if ('set' in operation) {
       const variableName = operation.set;
@@ -329,6 +356,62 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           arrayPath,
           index
         });
+      }
+    }
+
+    // READ_AGENT_MEMORY_SECTION: load a section of an agent profile's
+    // long-term memory file. Used by workflows whose `start` collects an
+    // agentProfileId so the planner can read the corpus map that admin
+    // discovery populated. Validates profileId against the agent schema
+    // pattern; reads file via the same memoryFile module that other code
+    // paths use. The section is sliced between `## <heading>` and the next
+    // `## ` heading.
+    if (
+      'readAgentMemorySection' in operation &&
+      'to' in operation &&
+      typeof operation.readAgentMemorySection === 'object' &&
+      operation.readAgentMemorySection !== null
+    ) {
+      const { profileId: rawProfileId, profileIdPath, section } = operation.readAgentMemorySection;
+      const targetPath = operation.to;
+
+      const mergedData = deepMerge(state.data, stateUpdates);
+      const profileId = profileIdPath
+        ? this.getNestedValue(profileIdPath, mergedData)
+        : rawProfileId;
+
+      if (typeof profileId !== 'string' || !AGENT_PROFILE_ID_PATTERN.test(profileId)) {
+        this.logger.warn('READ_AGENT_MEMORY_SECTION skipped — invalid profileId', {
+          component: 'TransformNodeExecutor',
+          profileId
+        });
+        this.setNestedValue(targetPath, '', stateUpdates);
+      } else if (typeof section !== 'string' || !section.trim()) {
+        this.logger.warn('READ_AGENT_MEMORY_SECTION skipped — section is required', {
+          component: 'TransformNodeExecutor'
+        });
+        this.setNestedValue(targetPath, '', stateUpdates);
+      } else {
+        try {
+          const mem = await memoryFile.readMemory(profileId);
+          const slice = sliceMemorySection(mem.body, section);
+          this.setNestedValue(targetPath, slice, stateUpdates);
+          this.logger.debug('READ_AGENT_MEMORY_SECTION operation', {
+            component: 'TransformNodeExecutor',
+            profileId,
+            section,
+            targetPath,
+            bytes: slice.length
+          });
+        } catch (err) {
+          this.logger.warn('READ_AGENT_MEMORY_SECTION failed', {
+            component: 'TransformNodeExecutor',
+            profileId,
+            section,
+            error: err.message
+          });
+          this.setNestedValue(targetPath, '', stateUpdates);
+        }
       }
     }
 

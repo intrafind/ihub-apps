@@ -33,9 +33,23 @@ export async function getMetadata(params) {
   return iFinderService.getMetadata(params);
 }
 
+/**
+ * Probe a search profile and produce a markdown corpus map.
+ * Intended to be invoked by the admin "build memory from tool" endpoint,
+ * not by agent runs at runtime. See `agents.adminMemoryBuilderTools` in
+ * platform config for the allow-list.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>} Discovery result including `markdown` field
+ */
+export async function discover(params) {
+  return iFinderService.discover(params);
+}
+
 // Export default with all methods
 export default {
   search,
   getContent,
-  getMetadata
+  getMetadata,
+  discover
 };

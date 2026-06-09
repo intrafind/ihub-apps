@@ -15,8 +15,60 @@ import logger from '../../utils/logger.js';
 import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import memoryFile from '../../agents/memory/memoryFile.js';
+import { runTool } from '../../toolLoader.js';
 
 const PROFILES_DIR = 'contents/agents/profiles';
+
+const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/m;
+
+/**
+ * Splice a `## <heading>` section out of a memory body and return the body
+ * with the section removed. The section extends from its heading to (but not
+ * including) the next `## ` heading, or to end-of-body if it is the last
+ * section.
+ */
+function removeMemorySection(body, heading) {
+  if (!body || !heading) return body || '';
+  const lines = body.split('\n');
+  const target = `## ${heading.trim()}`;
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === target) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return body;
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (SECTION_HEADING_RE.test(lines[i])) {
+      endIdx = i;
+      break;
+    }
+  }
+  // Drop the section plus one trailing blank if present so the body doesn't
+  // collect blank-line gaps on repeated replace cycles.
+  if (lines[endIdx - 1] === '') endIdx -= 0;
+  const next = [...lines.slice(0, startIdx), ...lines.slice(endIdx)].join('\n');
+  return next.replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n');
+}
+
+/**
+ * Convert a tool-result into markdown suitable for storing in memory.
+ * Convention: strings are used verbatim, objects with a `markdown` field use
+ * that field, anything else is JSON-stringified inside a fenced block.
+ */
+function toolResultToMarkdown(result) {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object' && typeof result.markdown === 'string') {
+    return result.markdown;
+  }
+  try {
+    return '```json\n' + JSON.stringify(result, null, 2) + '\n```';
+  } catch {
+    return String(result);
+  }
+}
 
 function profilesDirPath() {
   return join(getRootDir(), PROFILES_DIR);
@@ -234,6 +286,100 @@ export default function registerAdminAgentsRoutes(app) {
           });
         }
         sendFailedOperationError(res, 'write agent memory', error);
+      }
+    }
+  );
+
+  // ─── Build memory section from a tool ─────────────────────────────────
+  // Runs any platform-allow-listed tool and stores its (markdown) output as
+  // a named section in the profile's memory file. Used for operator-driven
+  // knowledge ingestion — e.g. running `iFinder_discover` to build a
+  // corpus map that agent runs will see via the existing memory
+  // auto-include.
+  app.post(
+    buildServerPath('/api/admin/agents/profiles/:profileId/memory/from-tool'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { profileId } = req.params;
+        if (!validateIdForPath(profileId, 'profile', res)) return;
+        const { toolId, params = {}, section, mode = 'replace-section' } = req.body || {};
+        if (typeof toolId !== 'string' || !toolId) {
+          return sendBadRequest(res, 'toolId is required');
+        }
+        if (typeof section !== 'string' || !section.trim()) {
+          return sendBadRequest(res, 'section is required');
+        }
+        if (mode !== 'replace-section' && mode !== 'append') {
+          return sendBadRequest(res, 'mode must be replace-section or append');
+        }
+
+        const platform = configCache.getPlatform() || {};
+        const allowed = platform?.agents?.adminMemoryBuilderTools;
+        if (!Array.isArray(allowed) || !allowed.includes(toolId)) {
+          return res.status(403).json({
+            error: 'TOOL_NOT_ALLOWED',
+            message: `Tool ${toolId} is not in platform.agents.adminMemoryBuilderTools`
+          });
+        }
+
+        // Run the tool with admin context. `runTool` already deduplicates the
+        // skill / source / MCP / function-tool dispatch paths.
+        const toolResult = await runTool(toolId, {
+          ...params,
+          user: req.user,
+          chatId: req.headers['x-request-id'] || `admin-memory-build-${profileId}`
+        });
+
+        const newSectionContent = toolResultToMarkdown(toolResult);
+
+        const current = await memoryFile.readMemory(profileId);
+        let nextBody = current.body || '';
+        if (mode === 'replace-section') {
+          nextBody = removeMemorySection(nextBody, section.trim());
+        }
+        const heading = `## ${section.trim()}`;
+        const append = `${heading}\n\n${newSectionContent}\n`;
+        nextBody =
+          nextBody.endsWith('\n') || nextBody.length === 0
+            ? `${nextBody}${nextBody.length === 0 ? '' : '\n'}${append}`
+            : `${nextBody}\n\n${append}`;
+
+        const writeResult = await memoryFile.writeMemory(profileId, {
+          mode: 'replace',
+          content: nextBody,
+          summary: `memory build via ${toolId}`,
+          updatedBy: req.user?.id || 'admin'
+        });
+
+        logger.info('Built agent memory section from tool', {
+          component: 'AdminAgents',
+          profileId,
+          toolId,
+          section: section.trim(),
+          mode,
+          version: writeResult.version
+        });
+
+        res.json({
+          ok: true,
+          version: writeResult.version,
+          section: section.trim(),
+          toolId
+        });
+      } catch (error) {
+        if (error.code === 'VERSION_CONFLICT') {
+          return res.status(409).json({
+            error: 'VERSION_CONFLICT',
+            message: error.message,
+            currentVersion: error.currentVersion
+          });
+        }
+        logger.error('Failed to build memory from tool', {
+          component: 'AdminAgents',
+          error
+        });
+        sendFailedOperationError(res, 'build memory from tool', error);
       }
     }
   );
