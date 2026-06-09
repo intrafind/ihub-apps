@@ -245,9 +245,12 @@ function ChatInput({
         // Reset height to auto to get the correct scrollHeight
         textarea.style.height = 'auto';
 
-        // Calculate the new height based on content
+        // Calculate the new height based on content. Use the live root font-size
+        // rather than a hardcoded 16px so the min/max line heights follow the
+        // Office task pane's responsive scaling on small / high-DPI panes.
         const scrollHeight = textarea.scrollHeight;
-        const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
+        const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const minHeight = inputRows * 1.5 * rootFontSize; // line-height (1.5) × rows × base font
         // Default cap: 5 lines (single-line mode) / 12 lines (multiline mode).
         // `maxRows` lets the embedding host (Outlook taskpane) clamp lower.
         const defaultMaxLines = multilineMode ? 12 : 5;
@@ -255,7 +258,8 @@ function ChatInput({
           typeof maxRows === 'number' && maxRows > 0
             ? Math.max(maxRows, inputRows)
             : defaultMaxLines;
-        const maxHeight = effectiveMaxLines * 1.5 * 16 + (multilineMode ? 24 : 0);
+        const maxHeight =
+          effectiveMaxLines * 1.5 * rootFontSize + (multilineMode ? 1.5 * rootFontSize : 0);
 
         // Set the height to fit content, but respect min/max limits
         const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
