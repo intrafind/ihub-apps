@@ -232,12 +232,17 @@ Tools whose parameter schemas include standard JSON Schema metadata — most not
 
 Agents running on Google/Gemini models with web grounding (`webSearch`) configured used to lose every other tool on grounded steps because Gemini's API rejects `google_search` + function tools in the same call. The most damaging consequence: **memory writes never landed**, because `write_memory` was silently dropped on every grounded planner task.
 
-iHub now writes long-term memory at the end of every agent run through a **deterministic memory-finalize step** that calls the memory store directly — no LLM, no tool registration, immune to the grounding swap. The synthesizer is now asked to emit a structured `{ report, memoryDelta }` payload; the finalize step drains `memoryDelta` into the agent's memory file.
+iHub now writes long-term memory at the end of every agent run through TWO new dedicated steps, slotted between the synthesizer and inbox-finalize:
+
+1. **`memory-compose`** — a toolless LLM node that sees the brief, every sub-task result, the citations ledger, the tools/apps the agent used, and the current memory file, then returns a structured `{ skip, mode, content, summary }` delta. The flat schema is Gemini-friendly (no union types) and the composer is told to cite the tool/URL behind each fact, skip duplicates, and prefer append over replace.
+2. **`memory-finalize`** — a deterministic node that drains the composer's delta into `memoryFile.writeMemory()` directly. No LLM, no tool registration, immune to the grounding swap.
+
+The synthesizer stays plain text (no JSON schema), so the Gemini structured-output proto issue can't recur on the report path.
 
 - New workflow node type: `memory-finalize` (deterministic).
-- Synthesizer system prompt and `outputSchema` now request a `memoryDelta` field alongside the report (set `memoryDelta: null` when there's nothing worth remembering).
+- New workflow node type marker: `memory-compose` (toolless prompt). Profile-level overrides on `memory.modelId`, `memory.temperature`, `memory.system`, and `memory.prompt`.
 - The legacy LLM-driven `write_memory` tool stays auto-registered as a fallback for non-Gemini agents and for explicit mid-run writes — the deterministic finalize is additive insurance, not a replacement.
-- Profiles with `memory.enabled: false` are unchanged (no memory-finalize node, no `outputSchema` on the synthesizer).
+- Profiles with `memory.enabled: false` are unchanged (no `memory-compose` and no `memory-finalize` node).
 
 ## Planner Now Splits Grounding and Function-tool Work Across Separate Tasks
 

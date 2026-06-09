@@ -521,8 +521,16 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         // can see the reviewer's verdict / memory-composer decision / etc in
         // the timeline. Without this, `output: null` made structured-output
         // nodes look like they returned nothing.
+        //
+        // The UI does `JSON.parse(stepLog.output)` on this string, so the
+        // value MUST be valid JSON. `_previewToolValue` truncates the
+        // serialised string with a "…[truncated N chars]" marker — that
+        // breaks JSON.parse. Use the structured-output preview helper
+        // which truncates long string fields INSIDE the object before
+        // JSON.stringify, so the result always round-trips through
+        // JSON.parse.
         try {
-          stepLog.output = this._previewToolValue(output);
+          stepLog.output = JSON.stringify(this._previewStructuredOutput(output));
         } catch {
           // best effort — never fail a node on the preview helper
         }
@@ -2527,6 +2535,38 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     } catch {
       return '[unserialisable]';
     }
+  }
+
+  /**
+   * Produce a JSON-round-trippable preview of a structured-output object.
+   *
+   * Unlike `_previewToolValue`, which truncates the serialised JSON string
+   * (and so produces non-parseable output for large objects), this helper
+   * walks the object and caps long string fields IN PLACE. The returned
+   * object is always serialisable AND its JSON round-trips through
+   * JSON.parse — required because the UI does
+   * `JSON.parse(stepLog.output)` on reviewer/memory-composer rows.
+   *
+   * @param {*} value - The structured output to preview
+   * @param {number} [maxStringLen=1024] - Maximum length per string field
+   * @returns {*} Sanitised object/value safe to JSON.stringify
+   */
+  _previewStructuredOutput(value, maxStringLen = 1024) {
+    if (value == null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) {
+      return value.map(v => this._previewStructuredOutput(v, maxStringLen));
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === 'string' && v.length > maxStringLen) {
+        out[k] = `${v.slice(0, maxStringLen)}…[truncated ${v.length - maxStringLen} chars]`;
+      } else if (v && typeof v === 'object') {
+        out[k] = this._previewStructuredOutput(v, maxStringLen);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
   }
 
   /**

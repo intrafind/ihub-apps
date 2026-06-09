@@ -79,17 +79,31 @@ The Profile editor lets you pick the underlying shape implicitly:
 Power users can hand-author the workflow in `profile.workflow.definition` and
 mix Verifier, additional Loops, etc.
 
-### Deterministic memory finalize
+### Explicit memory write pipeline (`memory-compose` → `memory-finalize`)
 
 When `memory.enabled !== false` (the default), the planner / inbox-worker
-shapes now include a deterministic `memory-finalize` node between
-synthesize and end (or inbox-finalize). The synthesizer's `outputSchema`
-is extended to `{ report, memoryDelta }`; the runtime persists
-`memoryDelta` (if non-null) into `state.data._pendingMemoryUpdates`, and
-the finalize node calls `memoryFile.writeMemory()` directly without LLM
-involvement — so the write cannot be dropped by the Gemini grounding
-swap. The legacy `write_memory` LLM tool is still auto-registered as an
-in-run escape hatch.
+shapes insert TWO nodes after `synthesize`:
+
+  1. **`memory-compose`** — a toolless LLM prompt that sees the brief,
+     every sub-task result, the citations ledger, and the current memory
+     file. It returns a flat `{ skip, mode, content, summary }` JSON
+     object describing what (if anything) is worth committing to memory.
+     The composer is instructed to cite the tool/URL behind each fact,
+     skip duplicates already in memory, and prefer `append` over
+     `replace`. Operator-overridable via `memory.modelId`,
+     `memory.temperature` (default 0.2), `memory.system`, and
+     `memory.prompt`.
+  2. **`memory-finalize`** — a deterministic executor that drains
+     `state.data._pendingMemoryUpdates` into `memoryFile.writeMemory()`
+     directly. No LLM, immune to the Gemini grounding swap.
+
+The synthesizer itself is plain markdown (no JSON schema) — keeping the
+report and memory responsibilities split so a structured-output failure
+on one path can never break the other.
+
+The legacy `write_memory` LLM tool is still auto-registered as an
+in-run escape hatch for non-Gemini agents that want explicit mid-run
+writes.
 
 ### Plan-and-review loop (`review.enabled`)
 

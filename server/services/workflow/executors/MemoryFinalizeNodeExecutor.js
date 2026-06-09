@@ -1,15 +1,19 @@
 /**
  * Executor for `memory-finalize` nodes — deterministic long-term memory write.
  *
- * Drains `state.data._pendingMemoryUpdates` (populated by the synthesizer's
- * structured output) and writes each entry via `memoryFile.writeMemory()`.
- * NO LLM call is made — this guarantees memory writes happen even on Gemini
- * runs where the grounding swap would otherwise have stripped the
- * `write_memory` LLM tool.
+ * Drains `state.data._pendingMemoryUpdates` and writes each entry via
+ * `memoryFile.writeMemory()`. Entries are populated by the upstream
+ * `memory-compose` node — an explicit toolless LLM step whose
+ * `_isMemoryComposer` branch in `PromptNodeExecutor._autoPersistResult`
+ * pushes the composer's `{mode, content, summary}` delta onto the queue.
+ *
+ * NO LLM call is made here — this guarantees memory writes happen even
+ * on Gemini runs where the grounding swap would otherwise have stripped
+ * the legacy `write_memory` LLM tool.
  *
  * Failure modes:
- *   - profileId missing            → log warning, return success with noop
- *   - _pendingMemoryUpdates empty  → return success with noop
+ *   - profileId missing            → emit a noop step log + SSE, return success
+ *   - _pendingMemoryUpdates empty  → emit a noop step log + SSE, return success
  *   - VERSION_CONFLICT             → refetch + retry once, then continue
  *
  * @module services/workflow/executors/MemoryFinalizeNodeExecutor
@@ -29,7 +33,12 @@ function emit(event, payload, chatId) {
 
 function isUpdateShape(entry) {
   if (!entry || typeof entry !== 'object') return false;
-  if (typeof entry.content !== 'string' || entry.content.length === 0) return false;
+  // Trim before checking length so whitespace-only content (e.g. "  ", "\n")
+  // doesn't slip through and produce blank memory writes. The composer's
+  // own auto-persist branch already does this — apply the same guard here
+  // so the deterministic writer is safe for any other producer that
+  // pushes onto `_pendingMemoryUpdates`.
+  if (typeof entry.content !== 'string' || entry.content.trim().length === 0) return false;
   if (entry.mode && entry.mode !== 'append' && entry.mode !== 'replace') return false;
   return true;
 }
@@ -50,7 +59,46 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         component: 'MemoryFinalizeNodeExecutor',
         nodeId: node.id
       });
-      return this.createSuccessResult({ ok: true, noop: true, reason: 'no profileId' });
+      // Emit a noop step log + SSE so the run timeline still shows an
+      // explanation for this step. Without it the UI renders an
+      // unexplained "memory-finalize" row with no log details.
+      const completedAtIso = new Date().toISOString();
+      const durationMs = Date.now() - startMs;
+      emit(
+        'agent.step.completed',
+        {
+          nodeId: node.id,
+          kind: 'memory-finalize',
+          startedAt: startedAt.toISOString(),
+          completedAt: completedAtIso,
+          durationMs,
+          written: 0,
+          noopReason: 'no profileId resolvable'
+        },
+        chatId
+      );
+      return this.createSuccessResult(
+        { ok: true, noop: true, reason: 'no profileId', written: 0 },
+        {
+          stateUpdates: {
+            _stepLogs: {
+              ...(state?.data?._stepLogs || {}),
+              [node.id]: {
+                nodeId: node.id,
+                kind: 'memory-finalize',
+                startedAt: startedAt.toISOString(),
+                completedAt: completedAtIso,
+                durationMs,
+                tools: [],
+                toolCalls: [],
+                messages: [],
+                written: 0,
+                noopReason: 'no profileId resolvable'
+              }
+            }
+          }
+        }
+      );
     }
 
     const pending = Array.isArray(state?.data?._pendingMemoryUpdates)

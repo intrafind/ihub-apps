@@ -177,14 +177,27 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Research tools / apps / sources come from the profile's task
-          // template — no lifecycle tools layered on. Plan-task-level
-          // entries are additive (planner can spotlight `webSearch` or a
-          // specific app/source for one task) but must already exist in the
-          // respective catalog — the planner's response schema enum-binds
-          // each field to that catalog so unknown ids are rejected at
-          // structured-output time.
-          tools: dedupeStrings([...(task.tools || []), ...(templateTools || [])]),
+          // Tool selection per task:
+          //
+          //   - When the planner provides an explicit `tools` array (any
+          //     length, including empty), it REPLACES the template tools
+          //     for that task. This is what makes the planner's
+          //     per-task tool-selection guidance actually work — on Gemini,
+          //     the planner is told to OMIT `webSearch` from tasks that
+          //     need function tools; if we kept additive merge semantics,
+          //     a profile-wide `webSearch` would always be re-added and
+          //     the grounding swap would drop function tools anyway.
+          //   - When the planner omits `tools` entirely, we fall back to
+          //     the profile-wide `templateTools` (backward-compat with
+          //     hand-written plans and pre-tool-selection planners).
+          //
+          // Apps and sources stay additive because the planner schema
+          // does not currently expose them per-task (see PlannerNodeExecutor
+          // schema: only `tools` is enum-bound on tasks). If a hand-written
+          // plan does set them, additive matches the documented intent.
+          tools: Array.isArray(task.tools)
+            ? dedupeStrings(task.tools)
+            : dedupeStrings(templateTools || []),
           apps: dedupeStrings([...(task.apps || []), ...(templateApps || [])]),
           sources: dedupeStrings([...(task.sources || []), ...(templateSources || [])])
           // No `outputVariable` — the runtime auto-persists planner-task
