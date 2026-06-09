@@ -227,3 +227,12 @@ Tools whose parameter schemas include standard JSON Schema metadata — most not
 - Gemini's tool format rejects JSON Schema keywords such as `$schema` and `additionalProperties`, which MCP tools routinely emit. These keywords are now stripped from tool parameter schemas before the request is sent to Google.
 - A parameter literally named `additionalProperties` is preserved, so legitimate tool inputs are unaffected.
 - Other providers (OpenAI, Anthropic, Bedrock, Mistral) are unchanged.
+
+## Export Dialog — Reliable in Outlook and on Small Screens
+
+The chat export dialog now works inside the Outlook task pane and the browser-extension side panel, and adapts cleanly to narrow widths.
+
+- **PDF export no longer crashes in embedded hosts.** Printing previously relied on opening a new browser window, which is blocked in the Outlook task pane and produced a "null is not an object" error. Export now prints through an in-place hidden frame and, where printing is unavailable, downloads the formatted document as HTML instead.
+- **Responsive layout:** the format picker switches to a single column on narrow screens and the action buttons stack full-width, so the dialog stays usable in the Outlook task pane and on phones.
+- **Copy button reflects the selected format:** it is now enabled only for formats that can be copied as text (Text, Markdown, JSON, JSON Lines) and disabled with an explanatory tooltip for PDF, Word, Excel, PowerPoint, CSV, and HTML.
+- The dialog can be dismissed with the **✕ button** or the **Esc** key.

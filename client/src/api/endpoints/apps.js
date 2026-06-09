@@ -125,6 +125,67 @@ export const checkAppChatStatus = async (appId, chatId) => {
   );
 };
 
+// Print an HTML document via a hidden, same-origin iframe.
+//
+// We deliberately avoid `window.open()` here: inside sandboxed/embedded hosts
+// such as the Outlook taskpane and the browser-extension side panel, popups
+// are blocked and `window.open()` returns `null`. The previous implementation
+// then accessed `printWindow.document`, which crashed the whole export with
+// "null is not an object (evaluating '...document')". An offscreen iframe
+// prints the document in-place and works across those hosts.
+const printHtmlDocument = htmlContent =>
+  new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+
+    let settled = false;
+    const removeFrame = () => setTimeout(() => iframe.remove(), 1000);
+
+    const triggerPrint = () => {
+      if (settled) return;
+      try {
+        const frameWindow = iframe.contentWindow;
+        if (!frameWindow) throw new Error('Print frame is unavailable');
+        settled = true;
+        frameWindow.focus();
+        frameWindow.print();
+        removeFrame();
+        resolve();
+      } catch (err) {
+        settled = true;
+        removeFrame();
+        reject(err);
+      }
+    };
+
+    iframe.onload = triggerPrint;
+    // Safety net in case `onload` never fires for the generated document.
+    setTimeout(triggerPrint, 1500);
+
+    document.body.appendChild(iframe);
+
+    // Prefer `srcdoc`; fall back to document.write for engines that ignore it.
+    try {
+      iframe.srcdoc = htmlContent;
+    } catch {
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        settled = true;
+        iframe.remove();
+        reject(new Error('Unable to initialise print frame'));
+        return;
+      }
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+    }
+  });
+
 // Client-side PDF generation using browser print functionality
 export const exportChatToPDF = async (
   messages,
@@ -150,26 +211,6 @@ export const exportChatToPDF = async (
     isSingleMessage
   );
 
-  // Create a new window for printing
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-
-  // Wait for content to load
-  await new Promise(resolve => {
-    printWindow.onload = resolve;
-    setTimeout(resolve, 1000); // Fallback timeout
-  });
-
-  // Focus and print
-  printWindow.focus();
-  printWindow.print();
-
-  // Close after a delay
-  setTimeout(() => {
-    printWindow.close();
-  }, 1000);
-
   const filename = buildChatExportFilename({
     format: 'pdf',
     appName,
@@ -178,7 +219,24 @@ export const exportChatToPDF = async (
     isSingleMessage
   });
 
-  return { success: true, filename };
+  try {
+    await printHtmlDocument(htmlContent);
+    return { success: true, filename };
+  } catch (err) {
+    // Printing is unavailable in this host (e.g. a locked-down embedded
+    // sandbox). Fall back to downloading the rendered HTML so the user can
+    // still open and print it themselves, instead of hitting a hard crash.
+    console.warn('PDF print unavailable, falling back to HTML download:', err);
+    const htmlFilename = buildChatExportFilename({
+      format: 'html',
+      appName,
+      appId,
+      messages,
+      isSingleMessage
+    });
+    downloadFile(htmlContent, htmlFilename, 'text/html');
+    return { success: true, filename: htmlFilename, fallback: 'html' };
+  }
 };
 
 // Generate HTML content for PDF
