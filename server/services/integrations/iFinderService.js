@@ -567,7 +567,13 @@ class IFinderService {
     query = '*:*',
     chatId,
     user,
-    facets = ['sourceName', 'mediaType', 'language', 'application'],
+    facets = [
+      'sourceName.keyword',
+      'application.keyword',
+      'language.keyword',
+      'creators.keyword',
+      'navigationTree'
+    ],
     sampleSize = 10
   }) {
     if (!searchProfile || typeof searchProfile !== 'string') {

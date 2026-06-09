@@ -97,6 +97,14 @@ describe('iFinderService.discover', () => {
       user: { id: 'u1', email: 'u@example.com' }
     });
     expect(capturedArgs.query).toBe('*:*');
+    // Default facet list matches iFinder's actual `.keyword` field naming.
+    expect(capturedArgs.returnFacets).toEqual([
+      'sourceName.keyword',
+      'application.keyword',
+      'language.keyword',
+      'creators.keyword',
+      'navigationTree'
+    ]);
     expect(result.query).toBe('*:*');
     expect(result.sampleDocs).toEqual([]);
   });

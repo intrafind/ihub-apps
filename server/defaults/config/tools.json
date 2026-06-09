@@ -747,9 +747,16 @@
               "type": "array",
               "items": { "type": "string" },
               "description": {
-                "en": "Facet fields to request from iFinder. Defaults to ['sourceName','mediaType','language','application'].",
-                "de": "Von iFinder anzufordernde Facetten-Felder. Standard: ['sourceName','mediaType','language','application']."
-              }
+                "en": "Facet fields to request from iFinder. iFinder typically requires `.keyword` suffixes on string fields.",
+                "de": "Von iFinder anzufordernde Facetten-Felder. iFinder erwartet üblicherweise `.keyword`-Suffixe für String-Felder."
+              },
+              "default": [
+                "sourceName.keyword",
+                "application.keyword",
+                "language.keyword",
+                "creators.keyword",
+                "navigationTree"
+              ]
             },
             "sampleSize": {
               "type": "integer",
