@@ -453,7 +453,11 @@ const DEFAULT_REVIEWER_PROMPT = {
     '## Current review round\n${$.data._reviewRound}\n\n' +
     '## Sub-task results so far (across all rounds)\n{{previousTaskResults}}\n\n' +
     '## Citations ledger\n{{citations}}\n\n' +
-    '## Prior reviewer rationale (if any)\n${$.data._reviewOutput.rationale}\n\n' +
+    // Only include the prior rationale block when a prior review actually
+    // ran — otherwise the literal `${$.data._reviewOutput.rationale}`
+    // template string leaks into the prompt on round 0 (the JSONPath
+    // resolver returns the literal match when the path is undefined).
+    '{{#if _reviewOutput}}## Prior reviewer rationale\n${$.data._reviewOutput.rationale}\n\n{{/if}}' +
     'Judge whether the agent should run another planning round. Return the ' +
     'JSON shape specified in the system prompt.'
 };
@@ -595,15 +599,19 @@ function buildPlannerWorkflow(profile) {
     // raise the loop's own timeout instead, otherwise even a long-running
     // planner sub-workflow inside the loop fails the whole loop at 5min.
     //
-    // Budget = planner-style timeout × maxRounds (each iteration can take
-    // up to one full planner timeout), bounded above by the workflow's
-    // wall-time clock which fires first if too generous.
+    // Per-round budget = planner timeout + reviewer budget. The reviewer
+    // is a one-shot toolless LLM call so it's much cheaper than the
+    // planner sub-workflow, but on slow / thinking models a single
+    // reviewer call can still take 30-90s and that time was previously
+    // unbudgeted. Total loop budget bounds N rounds. The workflow's
+    // wall-time clock fires first if too generous.
     const reviewerNode = buildReviewerNode(profile);
     const condition =
       '(data._reviewRound === undefined) || (data._reviewOutput && ' +
       'data._reviewOutput.needs_more_work === true && ' +
       `data._reviewRound < ${maxRounds})`;
-    const perRoundTimeoutMs = plannerNodeTimeoutMs(profile);
+    const REVIEWER_BUDGET_PER_ROUND_MS = 120_000; // 2 min — generous for slow models
+    const perRoundTimeoutMs = plannerNodeTimeoutMs(profile) + REVIEWER_BUDGET_PER_ROUND_MS;
     const loopTimeoutMs = Math.max(perRoundTimeoutMs, perRoundTimeoutMs * maxRounds);
     nodes.push({
       id: reviewLoopId,

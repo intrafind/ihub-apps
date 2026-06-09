@@ -220,6 +220,14 @@ Attaching many files to a chat message no longer pushes the message box and send
 - **1–3 files** display exactly as before, with no extra controls.
 - **Remove All** stays one click away in both the collapsed and expanded states, and loading files are reflected in the summary.
 
+## Outlook Add-in — Scales Correctly on Small / High-DPI Laptops
+
+The iHub add-in in Outlook now sizes itself to the available task pane instead of rendering everything oversized on small, high-resolution laptops (e.g. a 13" Windows device at 125–150% display scaling). Previously users had to manually zoom the add-in out to fit the app tiles, chat input, and attachments on screen.
+
+- The add-in now uses a fluid base scale keyed to the task pane width, so the whole interface — app tiles, chat input, attachment chips, and dialogs — shrinks together on narrow or high-DPI panes and returns to full size on wider panes.
+- The app-selection tiles, which previously stayed at a fixed desktop size, now scale with the rest of the add-in.
+- No configuration required; the behavior applies automatically in the Outlook (and other Office) task pane.
+
 ## MCP and JSON Schema Tools Now Work with Google Gemini
 
 Tools whose parameter schemas include standard JSON Schema metadata — most notably tools exposed through MCP servers — now work with Google Gemini models. Previously these calls failed with a `400 INVALID_REQUEST` error from Google.
@@ -228,16 +236,30 @@ Tools whose parameter schemas include standard JSON Schema metadata — most not
 - A parameter literally named `additionalProperties` is preserved, so legitimate tool inputs are unaffected.
 - Other providers (OpenAI, Anthropic, Bedrock, Mistral) are unchanged.
 
+## Export Dialog — Reliable in Outlook and on Small Screens
+
+The chat export dialog now works inside the Outlook task pane and the browser-extension side panel, and adapts cleanly to narrow widths.
+
+- **PDF export no longer crashes in embedded hosts.** Printing previously relied on opening a new browser window, which is blocked in the Outlook task pane and produced a "null is not an object" error. Export now prints through an in-place hidden frame and, where printing is unavailable, downloads the formatted document as HTML instead.
+- **Responsive layout:** the format picker switches to a single column on narrow screens and the action buttons stack full-width, so the dialog stays usable in the Outlook task pane and on phones.
+- **Copy button reflects the selected format:** it is now enabled only for formats that can be copied as text (Text, Markdown, JSON, JSON Lines) and disabled with an explanatory tooltip for PDF, Word, Excel, PowerPoint, CSV, and HTML.
+- The dialog can be dismissed with the **✕ button** or the **Esc** key.
+
 ## Agent Long-term Memory Now Survives Gemini Grounded Runs
 
 Agents running on Google/Gemini models with web grounding (`webSearch`) configured used to lose every other tool on grounded steps because Gemini's API rejects `google_search` + function tools in the same call. The most damaging consequence: **memory writes never landed**, because `write_memory` was silently dropped on every grounded planner task.
 
-iHub now writes long-term memory at the end of every agent run through a **deterministic memory-finalize step** that calls the memory store directly — no LLM, no tool registration, immune to the grounding swap. The synthesizer is now asked to emit a structured `{ report, memoryDelta }` payload; the finalize step drains `memoryDelta` into the agent's memory file.
+iHub now writes long-term memory at the end of every agent run through a **two-step memory pipeline** that is immune to the grounding swap:
 
-- New workflow node type: `memory-finalize` (deterministic).
-- Synthesizer system prompt and `outputSchema` now request a `memoryDelta` field alongside the report (set `memoryDelta: null` when there's nothing worth remembering).
+1. **`memory-compose`** — a dedicated toolless LLM node that runs after the synthesizer. It sees the brief, sub-task results, citations, tools/apps used, and the current memory file, and returns a structured `{ skip, mode, content, summary }` decision.
+2. **`memory-finalize`** — a deterministic node (no LLM, no tool registration) that drains the composer's output and writes via `memoryFile.writeMemory()` directly.
+
+Because the actual write is deterministic, the Gemini grounding swap cannot strip it; because composition is a separate node from the synthesizer, the report writer stays focused on the report and operators get dedicated `profile.memory.{modelId, temperature, system, prompt}` knobs for memory hygiene.
+
+- New workflow node types: `memory-compose` (LLM, toolless) and `memory-finalize` (deterministic).
+- The synthesizer is now plain text again — the structured `outputSchema` lives on `memory-compose` instead, which also avoids Gemini's proto-schema rejection of union types.
 - The legacy LLM-driven `write_memory` tool stays auto-registered as a fallback for non-Gemini agents and for explicit mid-run writes — the deterministic finalize is additive insurance, not a replacement.
-- Profiles with `memory.enabled: false` are unchanged (no memory-finalize node, no `outputSchema` on the synthesizer).
+- Profiles with `memory.enabled: false` skip both new nodes (no memory-compose, no memory-finalize).
 
 ## Planner Now Splits Grounding and Function-tool Work Across Separate Tasks
 
@@ -274,7 +296,8 @@ Fixes two issues that affected existing hand-authored profiles:
 - **Planner emitted a redundant review task.** Where `planner.system` still contained the legacy "add another planner task to review what has been done" instruction, the planner produced an extra task that ran as a generic research task and re-dumped the full report instead of focused gap-finding. The dedicated reviewer node + review-loop now own that responsibility.
 
 - Profiles with `workflow.ref === "external"` are untouched.
-- Idempotent — re-running the migration produces no further changes.
+- The prior embedded workflow definition is **snapshotted into `workflow._preMigrationV052Backup`** before regeneration, so operators with hand-authored customizations (extra nodes, custom timeouts, inline edges) can recover them. The migration log records added / removed node ids per profile.
+- Idempotent — re-running the migration finds the backup already present and produces no further changes.
 - Admin profile saves already go through the same serializer, so future edits stay in the canonical shape.
 
 ## Agent Planner Inbox-Item Template Fix (Migration V053)

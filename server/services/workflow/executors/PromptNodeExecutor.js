@@ -2397,21 +2397,54 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // next planner iteration can read them. Loop entry/exit is driven by
     // LoopNodeExecutor.while reading state.data._reviewRound and
     // _reviewOutput, both of which we set here.
+    //
+    // Parse-failure handling: when the reviewer LLM returns a non-object
+    // output (Gemini schema mismatch, truncated JSON, etc.) the auto-persist
+    // path lands here with `output` as null / a string. We MUST still bump
+    // _reviewRound — otherwise the loop would re-enter forever — but we
+    // also synthesize an explicit `_reviewOutput = { needs_more_work: false,
+    // _parseError: true, ... }` so:
+    //   (a) the while-loop condition sees a falsy needs_more_work and exits,
+    //   (b) the operator can SEE the parse failure on the run timeline
+    //       instead of just observing an unexplained early exit.
     if (config?._isReviewer === true) {
       const priorRound =
         typeof state?.data?._reviewRound === 'number' ? state.data._reviewRound : 0;
+      const isValidObject = output && typeof output === 'object' && !Array.isArray(output);
       stateUpdates._reviewRound = priorRound + 1;
-      if (output && typeof output === 'object') {
+      if (isValidObject) {
         stateUpdates._lastReviewGaps = Array.isArray(output.gaps) ? output.gaps : [];
       } else {
+        // Surface the failure on state so downstream nodes / UI know why
+        // the loop didn't continue. outputVariable=_reviewOutput already
+        // landed `null` (or the malformed string) — replace it with a
+        // well-formed sentinel object so consumers don't have to special-
+        // case typeof checks.
         stateUpdates._lastReviewGaps = [];
+        stateUpdates._reviewOutput = {
+          needs_more_work: false,
+          rationale:
+            'Reviewer returned malformed output (not a structured object). ' +
+            'Treating as "no more work needed" to allow the run to finish; ' +
+            'see step log for the raw response.',
+          gaps: [],
+          _parseError: true
+        };
+        this.logger.warn('Reviewer output was not a structured object — exiting loop cleanly', {
+          component: 'PromptNodeExecutor',
+          nodeId: node.id,
+          round: priorRound + 1,
+          outputType: typeof output,
+          outputPreview: this._previewToolValue(output)
+        });
       }
       this.logger.info('Review round completed', {
         component: 'PromptNodeExecutor',
         nodeId: node.id,
         round: priorRound + 1,
-        needsMoreWork: output?.needs_more_work === true,
-        gapCount: Array.isArray(output?.gaps) ? output.gaps.length : 0
+        parseError: !isValidObject,
+        needsMoreWork: isValidObject && output?.needs_more_work === true,
+        gapCount: isValidObject && Array.isArray(output?.gaps) ? output.gaps.length : 0
       });
     }
 
@@ -2512,6 +2545,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
   _previewToolValue(value) {
     const MAX_LEN = 1024;
+    const MAX_FIELD_LEN = 320;
     if (value == null) return null;
     if (typeof value === 'string') {
       return value.length > MAX_LEN
@@ -2519,14 +2553,60 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         : value;
     }
     if (typeof value === 'number' || typeof value === 'boolean') return value;
+    // For objects/arrays we walk the structure and shorten long string fields
+    // IN PLACE, then JSON.stringify. The resulting preview stays parseable
+    // (the UI does JSON.parse on reviewer / memory-compose step output to
+    // render verdict details — a "…[truncated]" suffix appended to the JSON
+    // string itself broke that and showed a generic fallback).
     try {
-      const json = JSON.stringify(value);
+      const compact = this._compactStringsForPreview(value, MAX_FIELD_LEN, 0);
+      const json = JSON.stringify(compact);
+      // Final safety net: if the compacted form is still huge, fall back to
+      // truncating the JSON string (and accept that the UI's JSON.parse will
+      // fail for this row — better than spilling MB of state to disk).
       return json.length > MAX_LEN
         ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
         : json;
     } catch {
       return '[unserialisable]';
     }
+  }
+
+  /**
+   * Recursively shorten long string fields inside an object/array so the
+   * JSON.stringify output stays under ~1KB while remaining VALID JSON.
+   * String fields longer than `maxFieldLen` get a `…[+N]` suffix appended
+   * in the cloned copy. Depth is bounded to keep cyclic / pathological
+   * inputs from blowing the stack.
+   *
+   * @private
+   */
+  _compactStringsForPreview(value, maxFieldLen, depth) {
+    const MAX_DEPTH = 6;
+    const MAX_ARRAY_ITEMS = 20;
+    if (depth > MAX_DEPTH) return '[…]';
+    if (typeof value === 'string') {
+      return value.length > maxFieldLen
+        ? `${value.slice(0, maxFieldLen)}…[+${value.length - maxFieldLen}]`
+        : value;
+    }
+    if (Array.isArray(value)) {
+      const limited = value
+        .slice(0, MAX_ARRAY_ITEMS)
+        .map(v => this._compactStringsForPreview(v, maxFieldLen, depth + 1));
+      if (value.length > MAX_ARRAY_ITEMS) {
+        limited.push(`…[+${value.length - MAX_ARRAY_ITEMS} items]`);
+      }
+      return limited;
+    }
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = this._compactStringsForPreview(v, maxFieldLen, depth + 1);
+      }
+      return out;
+    }
+    return value;
   }
 
   /**

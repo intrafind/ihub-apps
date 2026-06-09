@@ -20,12 +20,20 @@
  * This migration:
  *   - Strips the legacy "add another planner task ... review" sentence from
  *     each profile's `planner.system` (string or localized object).
+ *   - Snapshots the prior `workflow.definition` (if any) into
+ *     `workflow._preMigrationV052Backup` BEFORE regenerating, so operators
+ *     who had inline customizations (extra nodes, custom timeouts, hand-
+ *     authored edges) can recover them.
  *   - Calls `serializeProfile()` to regenerate the embedded workflow
  *     definition from scratch — picking up `memory-compose` and dropping any
  *     hand-authored legacy nodes/outputSchemas.
+ *   - Logs a structured node-id diff per profile so on-disk changes are
+ *     visible in the migration log.
  *   - Leaves profiles with `workflow.ref === 'external'` untouched.
  *
- * Idempotent: re-running produces no further changes.
+ * Idempotent: re-running finds the backup already present and the new
+ * definition matches what serializeProfile would emit again, producing no
+ * further changes.
  */
 
 import { serializeProfile } from '../agents/profile/profileWorkflowSerializer.js';
@@ -116,10 +124,40 @@ export async function up(ctx) {
       skippedExternal++;
     } else {
       try {
+        // Snapshot the prior definition into a recovery slot before we
+        // clobber it. Skip the backup if one is already present (idempotent
+        // re-runs) or if the profile has no prior definition to lose.
+        const priorDef = profile.workflow?.definition;
+        const alreadyBackedUp = !!profile.workflow?._preMigrationV052Backup;
+        if (priorDef && !alreadyBackedUp) {
+          if (!profile.workflow) profile.workflow = { ref: 'embedded' };
+          profile.workflow._preMigrationV052Backup = {
+            snapshotAt: new Date().toISOString(),
+            definition: priorDef
+          };
+          touched = true;
+        }
+        const beforeNodeIds = Array.isArray(priorDef?.nodes)
+          ? priorDef.nodes.map(n => n?.id).filter(id => typeof id === 'string')
+          : [];
+
         const rebuiltProfile = serializeProfile(profile);
         profile = rebuiltProfile;
         rebuilt++;
         touched = true;
+
+        // Log a structured diff so operators can see at a glance what
+        // changed on disk. Quiet when the node-id sets match exactly.
+        const afterNodeIds = Array.isArray(profile.workflow?.definition?.nodes)
+          ? profile.workflow.definition.nodes.map(n => n?.id).filter(id => typeof id === 'string')
+          : [];
+        const added = afterNodeIds.filter(id => !beforeNodeIds.includes(id));
+        const removed = beforeNodeIds.filter(id => !afterNodeIds.includes(id));
+        if (added.length || removed.length) {
+          ctx.log(
+            `Workflow nodes for ${profile.id} — added:[${added.join(',') || '—'}] removed:[${removed.join(',') || '—'}]`
+          );
+        }
       } catch (err) {
         ctx.warn(`serializeProfile failed for ${profile.id}: ${err.message} — leaving as-is`);
         failed++;

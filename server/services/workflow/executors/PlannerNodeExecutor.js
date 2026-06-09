@@ -118,6 +118,14 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         return this.createErrorResult(budgetError, { nodeId: node.id });
       }
 
+      // Read the in-flight review round once, so every code path below
+      // (step-log key, SSE payload, task-id namespacing) uses a consistent
+      // value. Round 0 = first planner pass; the reviewer bumps this at the
+      // end of each iteration.
+      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
+        ? state.data._reviewRound
+        : 0;
+
       // Planning phase is DONE here — the LLM call returned a valid plan.
       // Capture the LLM-only duration NOW (not after _waitForChildCompletion,
       // which would conflate planning with the entire sub-workflow wait)
@@ -147,6 +155,13 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // bubble-up at the end of the sub-workflow — if the run times out
       // there, the audit trail for the planner's own LLM call would be
       // lost.
+      //
+      // Inside a plan-and-review loop the planner runs once per iteration
+      // and node.id is constant ('planner'). Suffix the log key by round
+      // so iteration N's transcript doesn't overwrite iteration N-1's.
+      // Round 0 stays as plain node.id for backward-compat with non-review
+      // runs and pre-loop tooling.
+      const plannerLogKey = activeReviewRound >= 1 ? `${node.id}_r${activeReviewRound}` : node.id;
       try {
         const { getStateManager } = await import('../StateManager.js');
         const stateManager = getStateManager();
@@ -154,7 +169,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           data: {
             _stepLogs: {
               ...(state?.data?._stepLogs || {}),
-              [node.id]: stepLog
+              [plannerLogKey]: stepLog
             }
           }
         });
@@ -215,21 +230,29 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // round-extension instructions in the system prompt — without it,
       // _taskResults[task.id] would silently overwrite the prior round's
       // entry for the same id.
-      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
-        ? state.data._reviewRound
-        : 0;
       if (activeReviewRound >= 1 && Array.isArray(plan?.tasks)) {
         const prefix = `r${activeReviewRound}_`;
-        // Re-id every task in place; reuse the materializer's downstream
-        // dependsOn validation by also rewriting references.
+        // First pass: collect every task id the LLM emitted on THIS round, so
+        // we know which dependsOn references point at same-round tasks
+        // (eligible for prefixing) vs. anything else (cross-round, left
+        // alone — _validatePlan already rejected unresolvable deps).
+        const sameRoundIds = new Set();
+        for (const task of plan.tasks) {
+          if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
+        }
+        // Second pass: re-id tasks; rewrite deps ONLY when they reference
+        // a same-round task id (or were already prefixed by the LLM).
         for (const task of plan.tasks) {
           if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
             task.id = `${prefix}${task.id}`;
           }
           if (Array.isArray(task?.dependsOn)) {
-            task.dependsOn = task.dependsOn.map(dep =>
-              typeof dep === 'string' && !dep.startsWith(prefix) ? `${prefix}${dep}` : dep
-            );
+            task.dependsOn = task.dependsOn.map(dep => {
+              if (typeof dep !== 'string') return dep;
+              if (dep.startsWith(prefix)) return dep; // already prefixed
+              if (sameRoundIds.has(dep)) return `${prefix}${dep}`; // same-round
+              return dep; // cross-round ref — preserve as-is
+            });
           }
         }
       }
@@ -481,11 +504,18 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           ...(error.code ? { errorCode: error.code } : {}),
           ...(error.status ? { errorStatus: error.status } : {})
         };
+        // Match the success-path keying: per-round suffix when inside a
+        // review loop so the failure of round N doesn't overwrite the
+        // success log of round N-1 (and vice versa).
+        const failedRound = Number.isFinite(state?.data?._reviewRound)
+          ? state.data._reviewRound
+          : 0;
+        const failureLogKey = failedRound >= 1 ? `${node.id}_r${failedRound}` : node.id;
         await stateManager.update(state.executionId, {
           data: {
             _stepLogs: {
               ...(state?.data?._stepLogs || {}),
-              [node.id]: partialStepLog
+              [failureLogKey]: partialStepLog
             }
           }
         });
@@ -551,23 +581,32 @@ Return a structured JSON plan.`;
     // planner chose.
     const TOOL_SELECTION_GUIDANCE = `
 
-## Tool selection per task
+## Tool selection per task (CRITICAL on Gemini models)
 
-For each task, decide which tools it needs and put them in the task's
-"tools" array. Some tools cannot be combined on the same task — split
-work across separate tasks instead:
+Each task you emit can carry its own \`tools\` array. The runtime treats
+that array as AUTHORITATIVE for the task — it does NOT merge with the
+agent's profile-wide default tools. Semantics:
+
+  - OMIT the \`tools\` field entirely → the task inherits the agent's
+    default tools (all of them). This is fine for non-Gemini agents but
+    on Gemini it triggers the grounding swap and drops every function
+    tool the task might have needed.
+  - \`"tools": [...]\` with one or more catalog ids → the task uses
+    EXACTLY those tools. No defaults are added.
+  - \`"tools": []\` → the task runs with NO tools (pure reasoning step).
+
+Because of this, on Gemini the safe pattern is to ALWAYS set \`tools\`
+per task. Some tools cannot be combined on the same task — split
+work across separate tasks:
 
   - For research / fact-finding that needs fresh web data, set
-    "tools": ["webSearch"] on that task. Do NOT add memory or app tools
-    to the same task on Gemini models — they will be silently dropped.
-  - For tasks that consult configured apps, write memory, or queue
-    follow-ups, OMIT "webSearch". The runtime will register the function
-    tools normally.
-  - If a single goal genuinely needs BOTH fresh search and function-tool
-    work, decompose it into two tasks with a "dependsOn" link
-    (search task → consume-results task that uses the function tools).
-  - Tasks with no explicit tool needs can leave "tools": [] — they will
-    inherit the agent's default tool template.`;
+    \`"tools": ["webSearch"]\`. Do NOT add memory or app tools to the
+    same task on Gemini — they will be silently dropped.
+  - For tasks that consult configured apps or write memory, list the
+    function tool ids and OMIT \`webSearch\`.
+  - If a single goal needs BOTH fresh search and function-tool work,
+    split it into two tasks with a \`dependsOn\` link (search task →
+    consume-results task that uses the function tools).`;
 
     // Round-aware extension block — only emitted on round 2+ (i.e. inside a
     // plan-and-review loop, after the reviewer flagged gaps). Surfaces
@@ -699,13 +738,30 @@ them and re-invokes you with the activated skill bodies in context.`
     const sourceCatalog = uniqStrings(tt.sources);
     const skillCatalog = uniqStrings(availableSkillNames);
 
+    // Skeleton lines for the JSON example. We deliberately DO NOT add empty
+    // `"tools": []` / `"apps": []` / `"sources": []` placeholders here —
+    // see TOOL_SELECTION_GUIDANCE above: an empty array means "no tools",
+    // and an empty literal in the skeleton would nudge the LLM toward
+    // emitting `[]` (defeating the per-task split that prevents Gemini's
+    // grounding-swap collision). The schema below still ENUM-CONSTRAINS
+    // these fields to their respective catalogs, so the LLM knows they
+    // exist and what values are allowed; it just isn't shown an "empty"
+    // default in the user-prompt template.
     const taskFieldLines = ['      "id": "unique-task-id"', '      "title": "Task title"'];
     taskFieldLines.push(
       '      "description": "Detailed description of what this task should accomplish"'
     );
-    if (toolCatalog.length > 0) taskFieldLines.push('      "tools": []');
-    if (appCatalog.length > 0) taskFieldLines.push('      "apps": []');
-    if (sourceCatalog.length > 0) taskFieldLines.push('      "sources": []');
+    if (toolCatalog.length > 0) {
+      // Show a populated example so the LLM knows the shape and is nudged to
+      // pick from the catalog rather than emit `[]`.
+      taskFieldLines.push(`      "tools": ["${toolCatalog[0]}"]`);
+    }
+    if (appCatalog.length > 0) {
+      taskFieldLines.push(`      "apps": ["${appCatalog[0]}"]`);
+    }
+    if (sourceCatalog.length > 0) {
+      taskFieldLines.push(`      "sources": ["${sourceCatalog[0]}"]`);
+    }
     taskFieldLines.push('      "dependsOn": []');
 
     const catalogsBlock = [];

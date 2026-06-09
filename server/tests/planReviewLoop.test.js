@@ -224,6 +224,47 @@ async function run() {
     );
   }
 
+  // ── 3b. Reviewer parse-failure: exits cleanly with sentinel verdict ──
+  console.log('\n🧪 _autoPersistResult — reviewer parse failure exits cleanly\n');
+  {
+    const executor = new PromptNodeExecutor({ logger: silentLogger() });
+    const node = { id: 'reviewer', type: 'prompt', config: { _isReviewer: true } };
+    const state = { executionId: 'x', data: { _reviewRound: 0 } };
+
+    // Reviewer output is a string (parse failure / Gemini schema mismatch).
+    const updates = (
+      await executor._autoPersistResult({
+        node,
+        config: node.config,
+        output: 'oops not json',
+        response: { content: 'oops not json' },
+        state,
+        context: { chatId: 'c', user: { profileId: 'p' } },
+        agentProfile: { id: 'p' },
+        executeStartedAt: new Date(),
+        executeStartMs: Date.now() - 100,
+        stepLog: { nodeId: 'reviewer' },
+        effectiveTaskId: null,
+        effectiveTaskTitle: null,
+        effectiveLogKey: 'reviewer',
+        isDynamicTaskIteration: false
+      })
+    )?.stateUpdates;
+
+    check('parse failure: round still bumped (so loop can exit)', updates?._reviewRound === 1);
+    check(
+      'parse failure: gaps cleared to empty',
+      Array.isArray(updates?._lastReviewGaps) && updates._lastReviewGaps.length === 0
+    );
+    check(
+      'parse failure: synthetic _reviewOutput with needs_more_work=false',
+      updates?._reviewOutput &&
+        updates._reviewOutput.needs_more_work === false &&
+        updates._reviewOutput._parseError === true &&
+        typeof updates._reviewOutput.rationale === 'string'
+    );
+  }
+
   // ── 4. Memory composer branch pushes delta onto _pendingMemoryUpdates ─
   console.log('\n🧪 _autoPersistResult — memory-composer pushes delta\n');
   {
@@ -372,36 +413,65 @@ async function run() {
   // ── 7. Planner round-prefixing logic ─────────────────────────────────
   console.log('\n🧪 planner — round 1+ namespaces task ids and dependsOn\n');
   {
-    // Test the prefix logic by directly applying it the same way the
-    // planner does inline. Mirrors the loop in PlannerNodeExecutor.js
-    // that runs before SubWorkflowMaterializer.materialize().
+    // Apply the SAME prefix logic the planner uses inline (see
+    // PlannerNodeExecutor.js — the same-round-only rewrite that protects
+    // cross-round refs from being corrupted). Inlined here so the test
+    // doesn't drag in the full planner module's transitive deps.
+    function applyRoundPrefix(plan, round) {
+      const prefix = `r${round}_`;
+      const sameRoundIds = new Set();
+      for (const task of plan.tasks) {
+        if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
+      }
+      for (const task of plan.tasks) {
+        if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
+          task.id = `${prefix}${task.id}`;
+        }
+        if (Array.isArray(task?.dependsOn)) {
+          task.dependsOn = task.dependsOn.map(dep => {
+            if (typeof dep !== 'string') return dep;
+            if (dep.startsWith(prefix)) return dep;
+            if (sameRoundIds.has(dep)) return `${prefix}${dep}`;
+            return dep; // cross-round ref preserved
+          });
+        }
+      }
+      return plan;
+    }
+
     const plan = {
       tasks: [
         { id: 'find-data', dependsOn: [] },
         { id: 'analyze', dependsOn: ['find-data'] }
       ]
     };
-    const round = 2;
-    const prefix = `r${round}_`;
-    for (const task of plan.tasks) {
-      if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
-        task.id = `${prefix}${task.id}`;
-      }
-      if (Array.isArray(task?.dependsOn)) {
-        task.dependsOn = task.dependsOn.map(dep =>
-          typeof dep === 'string' && !dep.startsWith(prefix) ? `${prefix}${dep}` : dep
-        );
-      }
-    }
+    applyRoundPrefix(plan, 2);
     check('round-prefix: task ids prefixed', plan.tasks[0].id === 'r2_find-data');
     check('round-prefix: dependsOn rewritten', plan.tasks[1].dependsOn[0] === 'r2_find-data');
+
+    // Cross-round protection: a dep referencing a PRIOR round's task id
+    // (already-prefixed `r1_*`) must survive intact — not get double-prefixed.
+    const planXRound = {
+      tasks: [
+        // Two new tasks plus an existing-round reference.
+        { id: 'followup', dependsOn: ['r1_prior-task'] },
+        { id: 'compose', dependsOn: ['followup'] }
+      ]
+    };
+    applyRoundPrefix(planXRound, 2);
+    check(
+      'cross-round dep: prior-round prefix preserved as-is',
+      planXRound.tasks[0].dependsOn[0] === 'r1_prior-task'
+    );
+    check(
+      'cross-round dep: same-round ref still prefixed',
+      planXRound.tasks[1].dependsOn[0] === 'r2_followup'
+    );
+
     // Idempotence: running the prefix step twice doesn't double-prefix.
-    for (const task of plan.tasks) {
-      if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
-        task.id = `${prefix}${task.id}`;
-      }
-    }
+    applyRoundPrefix(plan, 2);
     check('round-prefix: idempotent (no double prefix)', plan.tasks[0].id === 'r2_find-data');
+    check('round-prefix: idempotent dependsOn', plan.tasks[1].dependsOn[0] === 'r2_find-data');
   }
 
   console.log(`\n${failures === 0 ? '🎉 All tests passed.' : `❌ ${failures} failure(s).`}`);

@@ -79,17 +79,33 @@ The Profile editor lets you pick the underlying shape implicitly:
 Power users can hand-author the workflow in `profile.workflow.definition` and
 mix Verifier, additional Loops, etc.
 
-### Deterministic memory finalize
+### Memory pipeline (`memory-compose` + `memory-finalize`)
 
 When `memory.enabled !== false` (the default), the planner / inbox-worker
-shapes now include a deterministic `memory-finalize` node between
-synthesize and end (or inbox-finalize). The synthesizer's `outputSchema`
-is extended to `{ report, memoryDelta }`; the runtime persists
-`memoryDelta` (if non-null) into `state.data._pendingMemoryUpdates`, and
-the finalize node calls `memoryFile.writeMemory()` directly without LLM
-involvement — so the write cannot be dropped by the Gemini grounding
-swap. The legacy `write_memory` LLM tool is still auto-registered as an
-in-run escape hatch.
+shapes append a two-step memory tail after the synthesizer:
+
+```
+… → synthesize → memory-compose (LLM, toolless) → memory-finalize (deterministic) → [inbox-finalize?] → end
+```
+
+- **`memory-compose`** is an explicit toolless LLM node with its own
+  `outputSchema` of `{ skip, mode, content, summary }`. It sees the brief,
+  the inbox item, every sub-task result + citations, the tools/apps the
+  agent used, and the current memory file. Its job is to decide what
+  (if anything) from this run is worth committing to long-term memory.
+  Splitting this from the synthesizer keeps the report writer focused on
+  the report, avoids cross-provider schema headaches (Gemini's proto
+  schema rejects union types like `["object", "null"]`), and gives
+  operators a dedicated knob (`profile.memory.{modelId, temperature,
+  system, prompt}`) for memory hygiene.
+- **`memory-finalize`** is deterministic — no LLM call. It drains
+  `state.data._pendingMemoryUpdates` (populated by `memory-compose`'s
+  auto-persist branch in `PromptNodeExecutor`) and writes via
+  `memoryFile.writeMemory()`. Because no LLM is involved, the write is
+  immune to the Gemini grounding swap that would otherwise strip the
+  legacy `write_memory` tool. The legacy `write_memory` tool stays
+  auto-registered as an in-run escape hatch for compose flows that want
+  to write mid-run.
 
 ### Plan-and-review loop (`review.enabled`)
 

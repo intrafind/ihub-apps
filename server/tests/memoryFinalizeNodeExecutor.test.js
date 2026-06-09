@@ -10,10 +10,12 @@
  *   - Empty / missing queue → noop success.
  *   - Each pending entry triggers one writeMemory() call with the expected
  *     args. State updates clear _pendingMemoryUpdates afterwards.
- *   - VERSION_CONFLICT is retried once; if the retry succeeds, the entry
- *     counts as written; if the retry also fails, the entry is skipped
- *     (logged) and we continue.
- *   - No-profile case returns a clear noop.
+ *   - Any writeMemory() throw (VERSION_CONFLICT, transport error, etc.) is
+ *     logged and the entry is skipped — the rest of the queue still runs.
+ *     (No automatic retry: the runtime relies on last-write-wins, since
+ *     memory-finalize doesn't pass an expectedVersion. See the executor's
+ *     header comment for the rationale.)
+ *   - No-profile case returns a clear noop, with step log + SSE emitted.
  *
  * Run directly: `node server/tests/memoryFinalizeNodeExecutor.test.js`.
  */
@@ -130,39 +132,39 @@ async function run() {
     }
   }
 
-  // ── Test 3: VERSION_CONFLICT retried once successfully ────────────────
+  // ── Test 3: thrown error skips the entry and lets the rest run ───────
   {
     let attempt = 0;
     const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async () => {
+    memoryFile.writeMemory = async (_profileId, payload) => {
       attempt += 1;
-      if (attempt === 1) {
-        const err = new Error('Memory version mismatch: expected 1, found 2');
-        err.code = 'VERSION_CONFLICT';
-        err.currentVersion = 2;
-        throw err;
+      if (payload.content === 'fails') {
+        throw new Error('transport blew up');
       }
-      return { version: 3 };
+      return { version: 7 };
     };
     try {
       const executor = makeExecutor();
       const state = makeState({
-        _pendingMemoryUpdates: [{ mode: 'append', content: 'retry me' }]
+        _pendingMemoryUpdates: [
+          { mode: 'append', content: 'fails' },
+          { mode: 'append', content: 'after-fail-ok' }
+        ]
       });
       const result = await executor.execute(
         { id: 'memory-finalize', type: 'memory-finalize', config: {} },
         state,
         makeContext('test-agent')
       );
-      check('conflict → completed', result.status === 'completed');
-      check('conflict → 2 attempts', attempt === 2);
-      check('conflict → written count 1', result.output?.written === 1);
+      check('error-then-ok → completed', result.status === 'completed');
+      check('error-then-ok → 2 attempts (no retry)', attempt === 2);
+      check('error-then-ok → only successful entry counted', result.output?.written === 1);
     } finally {
       memoryFile.writeMemory = orig;
     }
   }
 
-  // ── Test 4: VERSION_CONFLICT also fails on retry → entry skipped ──────
+  // ── Test 4: every writeMemory call throws → all entries skipped ───────
   {
     const orig = memoryFile.writeMemory;
     memoryFile.writeMemory = async () => {
@@ -174,15 +176,15 @@ async function run() {
     try {
       const executor = makeExecutor();
       const state = makeState({
-        _pendingMemoryUpdates: [{ mode: 'append', content: 'fails twice' }]
+        _pendingMemoryUpdates: [{ mode: 'append', content: 'always conflicts' }]
       });
       const result = await executor.execute(
         { id: 'memory-finalize', type: 'memory-finalize', config: {} },
         state,
         makeContext('test-agent')
       );
-      check('persistent conflict → completed (best effort)', result.status === 'completed');
-      check('persistent conflict → written count 0', result.output?.written === 0);
+      check('persistent throw → completed (best effort)', result.status === 'completed');
+      check('persistent throw → written count 0', result.output?.written === 0);
     } finally {
       memoryFile.writeMemory = orig;
     }

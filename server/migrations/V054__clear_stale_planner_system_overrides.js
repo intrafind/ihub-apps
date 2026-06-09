@@ -30,20 +30,39 @@ import { serializeProfile } from '../agents/profile/profileWorkflowSerializer.js
 export const version = '054';
 export const description = 'clear_stale_planner_system_overrides';
 
-// Signature of the stale snapshot. The opening sentence is the cheapest
-// reliable marker — it has been the first sentence of the default since
-// the planner shipped, and operators who genuinely customize the prompt
-// virtually always rewrite the opening.
+// Signature of the stale snapshot. We use THREE signals together:
+//   1. Opening sentence matches the legacy default's lead-in.
+//   2. Overall length is short enough that no genuine customization fits.
+//   3. The text DOES NOT contain any of the new default's distinctive
+//      phrases — they live in the post-shipping DEFAULT_PLANNER_SYSTEM
+//      (ONE-ANGLE / ONE-ENTITY / DECOMPOSITION-TEST rules). If an operator
+//      copied the new default as a starting point and trimmed it for
+//      customization, those phrases would survive and protect their
+//      override from being mistaken for a stale snapshot.
 const STALE_OPENING = 'You are a planner. Given a brief, decompose';
 // Any genuine customization adds enough material to exceed this length.
 // The post-V052 stale snapshot is ~430 chars; the current default is ~2700.
 const STALE_MAX_LENGTH = 800;
+// Phrases unique to the new (post-shipping) DEFAULT_PLANNER_SYSTEM. The
+// stale legacy snapshot pre-dates these and contains NONE of them; an
+// operator's hand-customized prompt derived from today's default will
+// contain at least one.
+const NEW_DEFAULT_MARKERS = [
+  'ONE ANGLE PER TASK',
+  'ONE ENTITY PER TASK',
+  'DECOMPOSITION QUALITY BAR',
+  'DECOMPOSITION TEST'
+];
 
 function isStaleSnapshot(value) {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > STALE_MAX_LENGTH) return false;
-  return trimmed.startsWith(STALE_OPENING);
+  if (!trimmed.startsWith(STALE_OPENING)) return false;
+  // If ANY new-default marker is present, this is a customized prompt
+  // derived from the current default — leave it alone.
+  if (NEW_DEFAULT_MARKERS.some(marker => trimmed.includes(marker))) return false;
+  return true;
 }
 
 function clearStaleFromLocalized(localized) {

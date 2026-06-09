@@ -114,10 +114,35 @@ export class SubWorkflowMaterializer {
       // a ledger to cite from, but the task worker's own output should
       // also include source URLs inline so the synthesizer can connect
       // facts to citations cleanly.
-      const inheritedTools = Array.isArray(templateTools) ? templateTools : [];
-      const taskExtraTools = Array.isArray(task.tools) ? task.tools : [];
-      const allTaskTools = [...inheritedTools, ...taskExtraTools];
-      const hasSearchLikeTool = allTaskTools.some(t => {
+      // Planner-driven per-task tool selection (Gemini grounding workaround):
+      // when the planner emits a populated `tools` array on a task, treat that
+      // as authoritative — DO NOT merge with templateTools. The planner is
+      // schema-bound to choose from templateTools, so its choice is always a
+      // subset. Merging would re-add every templateTool and undo the planner's
+      // attempt to split webSearch off from function tools.
+      //   - task.tools undefined / missing → inherit templateTools (legacy)
+      //   - task.tools === []              → no tools for this task
+      //   - task.tools === [...non-empty]  → use exactly these
+      const taskToolsExplicit = Array.isArray(task.tools);
+      const taskAppsExplicit = Array.isArray(task.apps);
+      const taskSourcesExplicit = Array.isArray(task.sources);
+      const effectiveTools = taskToolsExplicit
+        ? dedupeStrings(task.tools)
+        : Array.isArray(templateTools)
+          ? dedupeStrings(templateTools)
+          : [];
+      const effectiveApps = taskAppsExplicit
+        ? dedupeStrings(task.apps)
+        : Array.isArray(templateApps)
+          ? dedupeStrings(templateApps)
+          : [];
+      const effectiveSources = taskSourcesExplicit
+        ? dedupeStrings(task.sources)
+        : Array.isArray(templateSources)
+          ? dedupeStrings(templateSources)
+          : [];
+
+      const hasSearchLikeTool = effectiveTools.some(t => {
         if (typeof t !== 'string') return false;
         const id = t.toLowerCase();
         return id === 'websearch' || id === 'webcontentextractor' || id.startsWith('source_');
@@ -177,16 +202,14 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Research tools / apps / sources come from the profile's task
-          // template — no lifecycle tools layered on. Plan-task-level
-          // entries are additive (planner can spotlight `webSearch` or a
-          // specific app/source for one task) but must already exist in the
-          // respective catalog — the planner's response schema enum-binds
-          // each field to that catalog so unknown ids are rejected at
-          // structured-output time.
-          tools: dedupeStrings([...(task.tools || []), ...(templateTools || [])]),
-          apps: dedupeStrings([...(task.apps || []), ...(templateApps || [])]),
-          sources: dedupeStrings([...(task.sources || []), ...(templateSources || [])])
+          // Per-task tools / apps / sources — planner-authoritative when the
+          // planner emitted the field, falling back to the profile-wide
+          // template otherwise. See semantics block above. The planner's
+          // response schema enum-binds each field to its catalog so unknown
+          // ids are rejected at structured-output time.
+          tools: effectiveTools,
+          apps: effectiveApps,
+          sources: effectiveSources
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
           // PromptNodeExecutor._autoPersistResult. The legacy flat

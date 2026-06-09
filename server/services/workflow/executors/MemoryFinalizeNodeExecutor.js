@@ -1,16 +1,17 @@
 /**
  * Executor for `memory-finalize` nodes — deterministic long-term memory write.
  *
- * Drains `state.data._pendingMemoryUpdates` (populated by the synthesizer's
- * structured output) and writes each entry via `memoryFile.writeMemory()`.
- * NO LLM call is made — this guarantees memory writes happen even on Gemini
- * runs where the grounding swap would otherwise have stripped the
- * `write_memory` LLM tool.
+ * Drains `state.data._pendingMemoryUpdates` (populated by the upstream
+ * `memory-compose` LLM node — see profileWorkflowSerializer) and writes each
+ * entry via `memoryFile.writeMemory()`. NO LLM call is made here — this
+ * guarantees memory writes happen even on Gemini runs where the grounding
+ * swap would otherwise have stripped the legacy `write_memory` LLM tool.
  *
  * Failure modes:
- *   - profileId missing            → log warning, return success with noop
- *   - _pendingMemoryUpdates empty  → return success with noop
- *   - VERSION_CONFLICT             → refetch + retry once, then continue
+ *   - profileId missing            → log warning, emit noop step log + SSE
+ *   - _pendingMemoryUpdates empty  → emit noop step log + SSE (with composer
+ *                                    skip reason when available)
+ *   - writeMemory throws           → log error, skip that entry, continue
  *
  * @module services/workflow/executors/MemoryFinalizeNodeExecutor
  */
@@ -29,7 +30,10 @@ function emit(event, payload, chatId) {
 
 function isUpdateShape(entry) {
   if (!entry || typeof entry !== 'object') return false;
-  if (typeof entry.content !== 'string' || entry.content.length === 0) return false;
+  // Reject whitespace-only content — matches the memory composer's own
+  // skip check in PromptNodeExecutor._autoPersistResult so an entry only
+  // makes it here when content is genuinely non-empty.
+  if (typeof entry.content !== 'string' || entry.content.trim().length === 0) return false;
   if (entry.mode && entry.mode !== 'append' && entry.mode !== 'replace') return false;
   return true;
 }
@@ -50,7 +54,47 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         component: 'MemoryFinalizeNodeExecutor',
         nodeId: node.id
       });
-      return this.createSuccessResult({ ok: true, noop: true, reason: 'no profileId' });
+      // Emit the same step-log + SSE shape as the other noop paths so the
+      // run timeline has a row for this node — otherwise operators see an
+      // unexplained gap between memory-compose and the next step.
+      const completedAtIso = new Date().toISOString();
+      const durationMs = Date.now() - startMs;
+      const noopReason = 'no profileId resolvable';
+      emit(
+        'agent.step.completed',
+        {
+          nodeId: node.id,
+          kind: 'memory-finalize',
+          startedAt: startedAt.toISOString(),
+          completedAt: completedAtIso,
+          durationMs,
+          written: 0,
+          noopReason
+        },
+        chatId
+      );
+      return this.createSuccessResult(
+        { ok: true, noop: true, reason: noopReason, written: 0 },
+        {
+          stateUpdates: {
+            _stepLogs: {
+              ...(state?.data?._stepLogs || {}),
+              [node.id]: {
+                nodeId: node.id,
+                kind: 'memory-finalize',
+                startedAt: startedAt.toISOString(),
+                completedAt: completedAtIso,
+                durationMs,
+                tools: [],
+                toolCalls: [],
+                messages: [],
+                written: 0,
+                noopReason
+              }
+            }
+          }
+        }
+      );
     }
 
     const pending = Array.isArray(state?.data?._pendingMemoryUpdates)
@@ -141,6 +185,12 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
 
       let result;
       try {
+        // Last-write-wins semantics: we deliberately do not pass
+        // `expectedVersion`. memoryFile.writeMemory only throws
+        // VERSION_CONFLICT when an expected version IS passed, so concurrent
+        // writers can't race-fail here. If true race-tolerance is needed in
+        // the future, switch to read-current-version → write-with-expected
+        // → retry on conflict (a sibling helper, not this branch).
         result = await memoryFile.writeMemory(profileId, {
           mode,
           content: entry.content,
@@ -148,51 +198,19 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
           updatedBy: `memory-finalize:${context?.user?.id || 'agent'}`
         });
       } catch (err) {
-        if (err.code === 'VERSION_CONFLICT') {
-          // Race-tolerant: read latest, retry once without expectedVersion.
-          this.logger.warn('memory-finalize: VERSION_CONFLICT, retrying once', {
-            component: 'MemoryFinalizeNodeExecutor',
-            nodeId: node.id,
-            profileId,
-            currentVersion: err.currentVersion
-          });
-          try {
-            result = await memoryFile.writeMemory(profileId, {
-              mode,
-              content: entry.content,
-              summary,
-              updatedBy: `memory-finalize:${context?.user?.id || 'agent'}`
-            });
-          } catch (retryErr) {
-            this.logger.error('memory-finalize: retry also failed, skipping entry', {
-              component: 'MemoryFinalizeNodeExecutor',
-              nodeId: node.id,
-              profileId,
-              error: retryErr.message
-            });
-            toolCalls.push({
-              name: 'memory-file.writeMemory',
-              args: this._previewToolValue(args),
-              result: this._previewToolValue({ ok: false, error: retryErr.message }),
-              durationMs: Date.now() - writeStartMs
-            });
-            continue;
-          }
-        } else {
-          this.logger.error('memory-finalize: writeMemory failed, skipping entry', {
-            component: 'MemoryFinalizeNodeExecutor',
-            nodeId: node.id,
-            profileId,
-            error: err.message
-          });
-          toolCalls.push({
-            name: 'memory-file.writeMemory',
-            args: this._previewToolValue(args),
-            result: this._previewToolValue({ ok: false, error: err.message }),
-            durationMs: Date.now() - writeStartMs
-          });
-          continue;
-        }
+        this.logger.error('memory-finalize: writeMemory failed, skipping entry', {
+          component: 'MemoryFinalizeNodeExecutor',
+          nodeId: node.id,
+          profileId,
+          error: err.message
+        });
+        toolCalls.push({
+          name: 'memory-file.writeMemory',
+          args: this._previewToolValue(args),
+          result: this._previewToolValue({ ok: false, error: err.message }),
+          durationMs: Date.now() - writeStartMs
+        });
+        continue;
       }
 
       writtenCount++;
@@ -268,13 +286,62 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
     );
   }
 
+  /**
+   * Build a JSON-parseable preview of a tool-call value. Mirrors the helper
+   * in PromptNodeExecutor: we truncate long string fields IN PLACE before
+   * stringifying so the resulting preview stays valid JSON. The UI does
+   * JSON.parse on these previews to render details; truncating the JSON
+   * string itself produced an invalid suffix and broke that rendering.
+   * @private
+   */
   _previewToolValue(value) {
-    try {
-      const json = JSON.stringify(value);
-      return json.length > 1024 ? `${json.slice(0, 1024)}…` : json;
-    } catch {
-      return null;
+    const MAX_LEN = 1024;
+    const MAX_FIELD_LEN = 320;
+    if (value == null) return null;
+    if (typeof value === 'string') {
+      return value.length > MAX_LEN
+        ? `${value.slice(0, MAX_LEN)}…[truncated ${value.length - MAX_LEN} chars]`
+        : value;
     }
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    try {
+      const compact = this._compactStringsForPreview(value, MAX_FIELD_LEN, 0);
+      const json = JSON.stringify(compact);
+      return json.length > MAX_LEN
+        ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
+        : json;
+    } catch {
+      return '[unserialisable]';
+    }
+  }
+
+  /** @private — see PromptNodeExecutor._compactStringsForPreview */
+  _compactStringsForPreview(value, maxFieldLen, depth) {
+    const MAX_DEPTH = 6;
+    const MAX_ARRAY_ITEMS = 20;
+    if (depth > MAX_DEPTH) return '[…]';
+    if (typeof value === 'string') {
+      return value.length > maxFieldLen
+        ? `${value.slice(0, maxFieldLen)}…[+${value.length - maxFieldLen}]`
+        : value;
+    }
+    if (Array.isArray(value)) {
+      const limited = value
+        .slice(0, MAX_ARRAY_ITEMS)
+        .map(v => this._compactStringsForPreview(v, maxFieldLen, depth + 1));
+      if (value.length > MAX_ARRAY_ITEMS) {
+        limited.push(`…[+${value.length - MAX_ARRAY_ITEMS} items]`);
+      }
+      return limited;
+    }
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = this._compactStringsForPreview(v, maxFieldLen, depth + 1);
+      }
+      return out;
+    }
+    return value;
   }
 }
 
