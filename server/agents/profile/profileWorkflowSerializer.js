@@ -541,14 +541,30 @@ function buildPlannerWorkflow(profile) {
     // PromptNodeExecutor._autoPersistResult populate _reviewOutput +
     // _reviewRound. PlannerNodeExecutor reads _reviewRound and
     // _lastReviewGaps to namespace task ids and steer the prompt.
+    //
+    // CRITICAL: the loop must carry its OWN execution.timeout. The engine
+    // wraps every node.execute() in a per-node timeout (default 5min), but
+    // LoopNodeExecutor.executeBodyNodes invokes child executors DIRECTLY
+    // — bypassing the engine's timeout wrapper for the body nodes. That
+    // means the inner planner's own execution.timeout (set by
+    // plannerNodeTimeoutMs) is NEVER consulted inside the loop. We have to
+    // raise the loop's own timeout instead, otherwise even a long-running
+    // planner sub-workflow inside the loop fails the whole loop at 5min.
+    //
+    // Budget = planner-style timeout × maxRounds (each iteration can take
+    // up to one full planner timeout), bounded above by the workflow's
+    // wall-time clock which fires first if too generous.
     const reviewerNode = buildReviewerNode(profile);
     const condition =
       '(data._reviewRound === undefined) || (data._reviewOutput && ' +
       'data._reviewOutput.needs_more_work === true && ' +
       `data._reviewRound < ${maxRounds})`;
+    const perRoundTimeoutMs = plannerNodeTimeoutMs(profile);
+    const loopTimeoutMs = Math.max(perRoundTimeoutMs, perRoundTimeoutMs * maxRounds);
     nodes.push({
       id: reviewLoopId,
       type: 'loop',
+      execution: { timeout: loopTimeoutMs },
       config: {
         mode: 'while',
         condition,

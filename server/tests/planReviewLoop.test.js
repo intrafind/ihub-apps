@@ -76,6 +76,10 @@ async function run() {
     );
     check('review-loop maxIterations = maxRounds + 1', loopNode?.config?.maxIterations === 4);
     check(
+      'review-loop carries execution.timeout (so the engine default 5min does not cancel long planner runs)',
+      typeof loopNode?.execution?.timeout === 'number' && loopNode.execution.timeout >= 60_000
+    );
+    check(
       'condition references _reviewRound and needs_more_work',
       typeof loopNode?.config?.condition === 'string' &&
         loopNode.config.condition.includes('_reviewRound') &&
