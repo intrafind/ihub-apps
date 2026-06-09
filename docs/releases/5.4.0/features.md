@@ -19,7 +19,7 @@ POST /api/admin/agents/profiles/<id>/memory/from-tool
 
 This is provider-agnostic. The canonical use case is **iFinder corpus discovery**: a new `iFinder_discover` tool function probes a configured search profile, returns facets and sample titles as ready-to-paste markdown, and the admin stores it under `## iFinder corpus map` so downstream agent runs and workflows can read it via the existing memory auto-include.
 
-- **Access control**: only tools listed under `platform.agents.adminMemoryBuilderTools` are runnable. Defaults to an empty list — operators opt in by adding `iFinder_discover` (or future provider tools) explicitly.
+- **Access control**: gated by `adminAuth` — any registered tool can be invoked with admin context.
 - **Workflow integration**: a new `readAgentMemorySection` transform op lets workflows pull a named section from a configured profile's memory; `stellungnahmen-review-ifinder` uses this to feed the corpus map into its `query-plan` node when an `agentProfileId` is supplied.
 - **`iFinder_discover` is not exposed to agents at runtime** — only the admin endpoint can call it. Operators re-run discovery when the iFinder index changes materially.
 

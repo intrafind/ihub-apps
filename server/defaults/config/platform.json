@@ -206,9 +206,6 @@
     "defaultProfileId": "",
     "timeout": 60000
   },
-  "agents": {
-    "adminMemoryBuilderTools": []
-  },
   "officeIntegration": {
     "enabled": false,
     "oauthClientId": "",

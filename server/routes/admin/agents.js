@@ -291,11 +291,11 @@ export default function registerAdminAgentsRoutes(app) {
   );
 
   // ─── Build memory section from a tool ─────────────────────────────────
-  // Runs any platform-allow-listed tool and stores its (markdown) output as
-  // a named section in the profile's memory file. Used for operator-driven
-  // knowledge ingestion — e.g. running `iFinder_discover` to build a
-  // corpus map that agent runs will see via the existing memory
-  // auto-include.
+  // Runs any registered tool with admin context and stores its (markdown)
+  // output as a named section in the profile's memory file. Used for
+  // operator-driven knowledge ingestion — e.g. running `iFinder_discover`
+  // to build a corpus map that agent runs will see via the existing
+  // memory auto-include.
   app.post(
     buildServerPath('/api/admin/agents/profiles/:profileId/memory/from-tool'),
     adminAuth,
@@ -312,15 +312,6 @@ export default function registerAdminAgentsRoutes(app) {
         }
         if (mode !== 'replace-section' && mode !== 'append') {
           return sendBadRequest(res, 'mode must be replace-section or append');
-        }
-
-        const platform = configCache.getPlatform() || {};
-        const allowed = platform?.agents?.adminMemoryBuilderTools;
-        if (!Array.isArray(allowed) || !allowed.includes(toolId)) {
-          return res.status(403).json({
-            error: 'TOOL_NOT_ALLOWED',
-            message: `Tool ${toolId} is not in platform.agents.adminMemoryBuilderTools`
-          });
         }
 
         // Run the tool with admin context. `runTool` already deduplicates the

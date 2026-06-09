@@ -537,22 +537,12 @@ through the existing memory auto-include; the
 `stellungnahmen-review-ifinder` workflow can also read it when started
 with a non-empty `agentProfileId`.
 
-**Access control**: the endpoint only runs tools listed in
-`platform.json` under `agents.adminMemoryBuilderTools`. Defaults to an
-empty array, so installations opt in explicitly:
-
-```json
-{
-  "agents": {
-    "adminMemoryBuilderTools": ["iFinder_discover"]
-  }
-}
-```
-
-`iFinder_discover` is intentionally NOT added to any default agent
-profile's `tools` array — agents at runtime cannot invoke it; only the
-admin endpoint can. Operators re-run discovery when the underlying
-index changes significantly.
+**Access control**: the endpoint is gated by `adminAuth` — any
+registered tool can be invoked with admin context. `iFinder_discover`
+is intentionally NOT added to any default agent profile's `tools`
+array, so agents at runtime cannot call it; only the admin endpoint
+can. Operators re-run discovery when the underlying index changes
+significantly.
 
 ---
 
