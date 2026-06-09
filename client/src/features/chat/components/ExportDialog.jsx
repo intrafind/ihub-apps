@@ -14,6 +14,11 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
+// Formats whose content can be copied to the clipboard as plain text. Binary
+// formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
+// downloaded, so the Copy button is disabled when one of those is selected.
+const COPYABLE_FORMATS = ['txt', 'markdown', 'json', 'jsonl'];
+
 function ExportDialog({
   isOpen,
   onClose,
@@ -63,6 +68,8 @@ function ExportDialog({
   });
 
   if (!isOpen) return null;
+
+  const canCopySelectedFormat = COPYABLE_FORMATS.includes(selectedFormat);
 
   const buildMeta = () => ({
     model: settings.model,
@@ -133,6 +140,18 @@ function ExportDialog({
     setCopied(false);
     setExportError(null);
 
+    // The Copy button is disabled for non-copyable formats; this guard keeps
+    // the handler safe if it is ever invoked programmatically.
+    if (!canCopySelectedFormat) {
+      setExportError(
+        t(
+          'pages.appChat.export.copyNotSupported',
+          'Copy not supported for this format. Please use download instead.'
+        )
+      );
+      return;
+    }
+
     try {
       const filteredMessages = messages.filter(m => !m.isGreeting);
       const exportSettings = buildMeta();
@@ -152,28 +171,6 @@ function ExportDialog({
         case 'jsonl':
           content = generateJSONLContent(filteredMessages, exportSettings);
           break;
-        case 'html':
-          // For HTML, we need to generate it via the API since it's complex
-          setExportError(
-            t(
-              'pages.appChat.export.copyNotSupported',
-              'Copy not supported for this format. Please use download instead.'
-            )
-          );
-          return;
-        case 'pdf':
-        case 'docx':
-        case 'xlsx':
-        case 'csv':
-        case 'pptx':
-          // Binary formats can't be copied to clipboard
-          setExportError(
-            t(
-              'pages.appChat.export.copyNotSupported',
-              'Copy not supported for this format. Please use download instead.'
-            )
-          );
-          return;
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);
       }
@@ -360,7 +357,7 @@ function ExportDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={e => {
         if (e.target === e.currentTarget) onClose?.();
       }}
@@ -370,10 +367,10 @@ function ExportDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-dialog-title"
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h2
             id="export-dialog-title"
             className="text-xl font-semibold text-gray-900 dark:text-gray-100"
@@ -393,19 +390,19 @@ function ExportDialog({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Format Selection */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               {t('pages.appChat.export.selectFormat', 'Select export format')}
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {exportFormats.map(format => (
                 <button
                   key={format.id}
                   onClick={() => setSelectedFormat(format.id)}
                   disabled={isExporting}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`p-3 sm:p-4 rounded-lg border-2 text-left transition-all ${
                     selectedFormat === format.id
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
@@ -559,18 +556,26 @@ function ExportDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
           <button
             onClick={onClose}
             disabled={isExporting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleCopy}
-            disabled={isExporting || !selectedFormat}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            disabled={isExporting || !selectedFormat || !canCopySelectedFormat}
+            title={
+              !canCopySelectedFormat
+                ? t(
+                    'pages.appChat.export.copyNotSupported',
+                    'Copy not supported for this format. Please use download instead.'
+                  )
+                : undefined
+            }
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {copied ? (
               <>
@@ -587,7 +592,7 @@ function ExportDialog({
           <button
             onClick={handleExport}
             disabled={isExporting || !selectedFormat}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isExporting ? (
               <>
