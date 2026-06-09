@@ -101,6 +101,51 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'could have consulted.'
 };
 
+// Structured-output synthesizer system prompt — used when memory is enabled
+// so the synthesizer also emits a `memoryDelta` that the deterministic
+// `memory-finalize` node persists. Same content rules as
+// DEFAULT_SYNTHESIZER_SYSTEM, plus an explicit instruction to set
+// `memoryDelta: null` when nothing is worth remembering.
+const DEFAULT_SYNTHESIZER_SYSTEM_WITH_MEMORY = {
+  en:
+    'You are a report writer. You receive a brief, the item being processed, ' +
+    'the full results of every planned sub-task, and a citations ledger ' +
+    'listing every URL the agent actually consulted during research. ' +
+    'Produce a JSON object with TWO fields:\n\n' +
+    '  - "report": ONE COMPREHENSIVE markdown report that PRESERVES the ' +
+    'detail the sub-tasks gathered.\n' +
+    '  - "memoryDelta": a single object describing what (if anything) is ' +
+    "worth committing to the agent's long-term memory. Shape: " +
+    '{ "mode": "append"|"replace", "content": "<markdown to add or " +\n' +
+    'replace>", "summary": "<one-line summary>" }. Set "memoryDelta": null ' +
+    'when nothing learned in this run is worth keeping (no durable facts, ' +
+    'preferences, or context that would help future runs).\n\n' +
+    'RULES FOR "report":\n' +
+    '1. Treat the sub-task results as your evidence base. Every concrete ' +
+    'claim, fact, date, name, role, project, publication, or quote that ' +
+    'appears in a sub-task result is grounded and MUST be carried through ' +
+    'into the final report — do not silently drop information.\n' +
+    '2. Do NOT add facts that are not present in the sub-task results. Do ' +
+    'NOT draw on background knowledge or training data. If two sub-tasks ' +
+    'disagree, surface the disagreement explicitly.\n' +
+    '3. Cite inline as [N] when a citations-ledger URL supports a claim. ' +
+    'If a fact appears in a sub-task result but the ledger has no matching ' +
+    'URL, the fact is still GROUNDED — keep it; do not mark it ' +
+    '"[unverified]". Use "[unverified]" ONLY for facts you yourself added ' +
+    'that were not in the sub-tasks (which should be never).\n' +
+    '4. Aim for thorough coverage. The report should be at least as ' +
+    'information-dense as the sub-task results combined.\n' +
+    '5. End with a "## References" section listing every cited URL with ' +
+    'its index.\n' +
+    '6. Do not call tools. Just compose.\n\n' +
+    'RULES FOR "memoryDelta":\n' +
+    '- Use "append" by default — accumulating notes over time is the goal. ' +
+    'Only use "replace" when you need to overwrite an outdated section.\n' +
+    '- Keep "content" focused: durable facts about the subject, stable ' +
+    "preferences, recurring context. NOT a copy of this run's full report.\n" +
+    '- "summary" is a short caption shown in the memory file frontmatter.'
+};
+
 const DEFAULT_SYNTHESIZER_PROMPT = {
   en:
     '## Item being processed\n{{currentInboxItem}}\n\n' +
@@ -266,6 +311,14 @@ function buildDrainOnlyWorkflow(profile) {
 }
 
 function buildSynthesizerNode(profile) {
+  const memoryEnabled = profile.memory?.enabled !== false;
+  // Default system prompt depends on whether the synthesizer also has to emit
+  // a memoryDelta. When memory is off we keep the legacy plain-markdown
+  // prompt; when it's on we ask for the structured {report, memoryDelta}
+  // shape that the deterministic memory-finalize node drains.
+  const defaultSystem = memoryEnabled
+    ? DEFAULT_SYNTHESIZER_SYSTEM_WITH_MEMORY
+    : DEFAULT_SYNTHESIZER_SYSTEM;
   return {
     id: 'synthesize',
     type: 'prompt',
@@ -276,7 +329,7 @@ function buildSynthesizerNode(profile) {
         : {}),
       system: isLocalizedNonEmpty(profile.synthesizer?.system)
         ? profile.synthesizer.system
-        : DEFAULT_SYNTHESIZER_SYSTEM,
+        : defaultSystem,
       prompt: isLocalizedNonEmpty(profile.synthesizer?.prompt)
         ? profile.synthesizer.prompt
         : DEFAULT_SYNTHESIZER_PROMPT,
@@ -292,7 +345,104 @@ function buildSynthesizerNode(profile) {
           ? profile.synthesizer.maxTokens
           : 8000,
       _isSynthesizer: true,
-      outputVariable: '_synthesizerOutput'
+      outputVariable: '_synthesizerOutput',
+      // Structured output is on ONLY when memory is enabled, so legacy
+      // markdown-out behavior is preserved verbatim for profiles that opt
+      // out of memory. PromptNodeExecutor._autoPersistResult inspects this
+      // schema's presence to decide whether to split `report` + `memoryDelta`.
+      ...(memoryEnabled
+        ? {
+            outputSchema: {
+              type: 'object',
+              properties: {
+                report: { type: 'string' },
+                memoryDelta: {
+                  type: ['object', 'null'],
+                  properties: {
+                    mode: { type: 'string', enum: ['append', 'replace'] },
+                    content: { type: 'string' },
+                    summary: { type: 'string' }
+                  },
+                  required: ['mode', 'content']
+                }
+              },
+              required: ['report']
+            }
+          }
+        : {})
+    }
+  };
+}
+
+const DEFAULT_REVIEWER_SYSTEM = {
+  en:
+    'You are a strict reviewer. Your job is to judge whether the planner-driven ' +
+    'agent has gathered ENOUGH evidence and produced ENOUGH analysis to ' +
+    'comprehensively answer the original brief.\n\n' +
+    'You receive:\n' +
+    '- The original brief.\n' +
+    '- Every sub-task result accumulated so far (across one or more rounds).\n' +
+    '- The citations ledger (URLs the agent actually consulted).\n' +
+    '- The current review round number (0 = first review, higher = subsequent).\n' +
+    '- The prior reviewer rationale (when this is round 1+).\n\n' +
+    'Return STRICT JSON with this shape:\n' +
+    '{ "needs_more_work": <boolean>, "rationale": "<one-paragraph explanation>", ' +
+    '  "gaps": ["<short gap description>", ...] }\n\n' +
+    'Rules:\n' +
+    '1. Set needs_more_work=true ONLY if there are MATERIAL gaps the agent ' +
+    'must close (missing facts, unverified critical claims, missing angles ' +
+    'the brief asked for). Minor polish, stylistic tweaks, or "could be ' +
+    'more thorough" are NOT material — return false in those cases.\n' +
+    '2. Each gap should be a concrete actionable description ' +
+    '("Confirm <X> via independent source", "Research <Y> angle missing ' +
+    'from current results"). Avoid vague gaps like "needs more research".\n' +
+    '3. Cap gaps at 5 per round. If you would list more, prioritize the ' +
+    'most impactful 5.\n' +
+    '4. If the brief is well-answered, return needs_more_work=false with ' +
+    'gaps=[] and a one-sentence rationale.\n' +
+    '5. Do not call tools. Just judge.'
+};
+
+const DEFAULT_REVIEWER_PROMPT = {
+  en:
+    '## Original brief\n${$.data.brief}\n\n' +
+    '## Current review round\n${$.data._reviewRound}\n\n' +
+    '## Sub-task results so far (across all rounds)\n{{previousTaskResults}}\n\n' +
+    '## Citations ledger\n{{citations}}\n\n' +
+    '## Prior reviewer rationale (if any)\n${$.data._reviewOutput.rationale}\n\n' +
+    'Judge whether the agent should run another planning round. Return the ' +
+    'JSON shape specified in the system prompt.'
+};
+
+function buildReviewerNode(profile) {
+  return {
+    id: 'reviewer',
+    type: 'prompt',
+    config: {
+      modelId: profile.review?.modelId || pickModel(profile),
+      ...(profile.preferredTemperature !== undefined
+        ? { temperature: profile.preferredTemperature }
+        : {}),
+      system: isLocalizedNonEmpty(profile.review?.system)
+        ? profile.review.system
+        : DEFAULT_REVIEWER_SYSTEM,
+      prompt: DEFAULT_REVIEWER_PROMPT,
+      tools: [],
+      maxIterations: 1,
+      maxTokens: 2000,
+      outputVariable: '_reviewOutput',
+      outputSchema: {
+        type: 'object',
+        properties: {
+          needs_more_work: { type: 'boolean' },
+          rationale: { type: 'string' },
+          gaps: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['needs_more_work', 'rationale']
+      },
+      // Marker the runtime uses to bump _reviewRound and stash _lastReviewGaps
+      // into state.data so the next planner iteration can read them.
+      _isReviewer: true
     }
   };
 }
@@ -353,9 +503,21 @@ function buildPlannerNode(profile, { hasInbox }) {
 function buildPlannerWorkflow(profile) {
   const useSynth = profile.synthesizer?.enabled !== false;
   const hasInbox = typeof profile.inboxId === 'string' && profile.inboxId.length > 0;
+  const memoryEnabled = profile.memory?.enabled !== false;
+  const useReview = profile.review?.enabled === true;
+  const maxRounds = profile.review?.maxRounds ?? 3;
 
   const nodes = [{ id: 'start', type: 'start' }];
   const edges = [];
+
+  // Plan-and-review loop entry. When review is enabled, the planner runs
+  // inside a `while` loop alongside a toolless reviewer that judges
+  // sufficiency. On the first iteration `_reviewRound` is undefined → enter.
+  // On subsequent iterations enter only if the reviewer flagged gaps AND
+  // we haven't spent the round budget. Hard cap on `maxIterations` is
+  // `maxRounds + 1` defensively (the LoopNodeExecutor enforces it anyway).
+  const reviewLoopId = 'review-loop';
+  const plannerEntryId = useReview ? reviewLoopId : 'planner';
 
   // Entry edges and inbox-load (deterministic).
   if (hasInbox) {
@@ -365,19 +527,55 @@ function buildPlannerWorkflow(profile) {
       config: { inboxId: profile.inboxId }
     });
     edges.push({ source: 'start', target: 'inbox-load' });
-    edges.push({ source: 'inbox-load', target: 'planner' });
+    edges.push({ source: 'inbox-load', target: plannerEntryId });
   } else {
-    edges.push({ source: 'start', target: 'planner' });
+    edges.push({ source: 'start', target: plannerEntryId });
   }
 
-  nodes.push(buildPlannerNode(profile, { hasInbox }));
+  const plannerNode = buildPlannerNode(profile, { hasInbox });
 
-  // Tail: synthesizer (LLM, no tools) + inbox-finalize (deterministic).
-  let lastWorkflowNodeId = 'planner';
+  if (useReview) {
+    // Wrap planner + reviewer in a while-loop. The body is two nodes; the
+    // engine's LoopNodeExecutor.executeBodyNodes runs them sequentially per
+    // iteration. Reviewer's outputSchema and the round-bumping branch in
+    // PromptNodeExecutor._autoPersistResult populate _reviewOutput +
+    // _reviewRound. PlannerNodeExecutor reads _reviewRound and
+    // _lastReviewGaps to namespace task ids and steer the prompt.
+    const reviewerNode = buildReviewerNode(profile);
+    const condition =
+      '(data._reviewRound === undefined) || (data._reviewOutput && ' +
+      'data._reviewOutput.needs_more_work === true && ' +
+      `data._reviewRound < ${maxRounds})`;
+    nodes.push({
+      id: reviewLoopId,
+      type: 'loop',
+      config: {
+        mode: 'while',
+        condition,
+        body: [plannerNode, reviewerNode],
+        maxIterations: maxRounds + 1
+      }
+    });
+  } else {
+    nodes.push(plannerNode);
+  }
+
+  // Tail: synthesizer (LLM, no tools) → memory-finalize (deterministic) →
+  // inbox-finalize (deterministic, only when inbox-bound).
+  let lastWorkflowNodeId = useReview ? reviewLoopId : 'planner';
   if (useSynth) {
     nodes.push(buildSynthesizerNode(profile));
-    edges.push({ source: 'planner', target: 'synthesize' });
+    edges.push({ source: lastWorkflowNodeId, target: 'synthesize' });
     lastWorkflowNodeId = 'synthesize';
+  }
+  if (memoryEnabled) {
+    nodes.push({
+      id: 'memory-finalize',
+      type: 'memory-finalize',
+      config: {}
+    });
+    edges.push({ source: lastWorkflowNodeId, target: 'memory-finalize' });
+    lastWorkflowNodeId = 'memory-finalize';
   }
   if (hasInbox) {
     nodes.push({
@@ -549,6 +747,19 @@ function buildInboxWorkerWorkflow(profile) {
     edges.push({ source: lastId, target: 'synthesize' });
     lastId = 'synthesize';
   }
+  // memory-finalize sits between synthesizer and inbox-finalize so the
+  // synthesizer's emitted memoryDelta (when memory enabled) is persisted
+  // BEFORE the inbox item is marked done — keeps the run's user-visible
+  // closure (inbox marked) honest about the side effects (memory updated).
+  if (profile.memory?.enabled !== false) {
+    nodes.push({
+      id: 'memory-finalize',
+      type: 'memory-finalize',
+      config: {}
+    });
+    edges.push({ source: lastId, target: 'memory-finalize' });
+    lastId = 'memory-finalize';
+  }
   nodes.push({
     id: 'inbox-finalize',
     type: 'inbox-finalize',
@@ -606,9 +817,14 @@ export function serializeProfile(profile) {
     component: 'ProfileWorkflowSerializer',
     profileId: next.id,
     shape: next.planner?.enabled
-      ? 'planner' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+      ? 'planner' +
+        (next.review?.enabled ? '+review-loop' : '') +
+        (next.synthesizer?.enabled !== false ? '+synth' : '') +
+        (next.memory?.enabled !== false ? '+memory-finalize' : '')
       : next.inboxId
-        ? 'inbox-worker' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+        ? 'inbox-worker' +
+          (next.synthesizer?.enabled !== false ? '+synth' : '') +
+          (next.memory?.enabled !== false ? '+memory-finalize' : '')
         : next.dynamicTasks?.enabled
           ? 'drain-only'
           : 'simple'

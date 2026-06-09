@@ -2284,10 +2284,51 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     }
 
     if (isSynthesizer) {
+      // When the synthesizer is configured with an outputSchema (memory-
+      // enabled profiles get { report, memoryDelta }), pull the report text
+      // out of the structured object instead of treating the whole
+      // JSON-stringified object as the report. Also peel off the memoryDelta
+      // so the deterministic memory-finalize node can persist it later.
+      // When no outputSchema is configured, fall back to the legacy plain-
+      // text artifact behavior (output IS the report).
+      let synthesizedReport = textContent;
+      let memoryDelta = null;
+      if (output && typeof output === 'object' && !Array.isArray(output)) {
+        if (typeof output.report === 'string' && output.report.length > 0) {
+          synthesizedReport = output.report;
+        }
+        if (output.memoryDelta && typeof output.memoryDelta === 'object') {
+          // Only forward deltas that have non-empty content. Synthesizers
+          // are told to return null when nothing's worth remembering, but
+          // defensive coercion guards against an empty-string content too.
+          const delta = output.memoryDelta;
+          if (typeof delta.content === 'string' && delta.content.trim().length > 0) {
+            memoryDelta = {
+              mode: delta.mode === 'replace' ? 'replace' : 'append',
+              content: delta.content,
+              ...(typeof delta.summary === 'string' && delta.summary.length > 0
+                ? { summary: delta.summary }
+                : {})
+            };
+          }
+        }
+      }
+
       // Stash the synthesizer text as a state variable for downstream nodes
       // (e.g. inbox-finalize uses it for the completion note).
-      stateUpdates._synthesizerOutput = textContent;
-      stateUpdates._synthesizerSummary = textContent.slice(0, 240);
+      stateUpdates._synthesizerOutput = synthesizedReport;
+      stateUpdates._synthesizerSummary = synthesizedReport.slice(0, 240);
+
+      // Hand the memoryDelta off to the deterministic memory-finalize node
+      // via state. Concatenate with any pending updates (e.g. multi-round
+      // review loops could produce more than one synthesizer pass, though
+      // current shape only runs synthesize once at the tail).
+      if (memoryDelta) {
+        const prior = Array.isArray(state?.data?._pendingMemoryUpdates)
+          ? state.data._pendingMemoryUpdates
+          : [];
+        stateUpdates._pendingMemoryUpdates = [...prior, memoryDelta];
+      }
       // Record synthesizer timing in the same _taskTimings map keyed by
       // node id so the step timeline can display it like any other step.
       const synthCompletedMs = Date.now();
@@ -2326,7 +2367,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           await writeArtifactDirect({
             runId,
             name: primaryName,
-            content: textContent,
+            content: synthesizedReport,
             contentType: 'text/markdown',
             profileId,
             chatId,
@@ -2341,6 +2382,28 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           });
         }
       }
+    }
+
+    // Reviewer branch — bump the review round counter and stash gaps so the
+    // next planner iteration can read them. Loop entry/exit is driven by
+    // LoopNodeExecutor.while reading state.data._reviewRound and
+    // _reviewOutput, both of which we set here.
+    if (config?._isReviewer === true) {
+      const priorRound =
+        typeof state?.data?._reviewRound === 'number' ? state.data._reviewRound : 0;
+      stateUpdates._reviewRound = priorRound + 1;
+      if (output && typeof output === 'object') {
+        stateUpdates._lastReviewGaps = Array.isArray(output.gaps) ? output.gaps : [];
+      } else {
+        stateUpdates._lastReviewGaps = [];
+      }
+      this.logger.info('Review round completed', {
+        component: 'PromptNodeExecutor',
+        nodeId: node.id,
+        round: priorRound + 1,
+        needsMoreWork: output?.needs_more_work === true,
+        gapCount: Array.isArray(output?.gaps) ? output.gaps.length : 0
+      });
     }
 
     // Primary-producer prompts (simple agent, inbox-worker WITHOUT a

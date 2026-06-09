@@ -211,6 +211,33 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         });
       }
 
+      // Plan-and-review namespacing: when this planner call runs INSIDE a
+      // review loop on round 1+, prefix every emitted task id (and
+      // matching dependsOn references) with `r{round}_`. Round 0 (the
+      // initial plan) keeps the LLM's ids as today. The prefix is the
+      // safety net for an LLM that re-uses earlier round ids despite the
+      // round-extension instructions in the system prompt — without it,
+      // _taskResults[task.id] would silently overwrite the prior round's
+      // entry for the same id.
+      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
+        ? state.data._reviewRound
+        : 0;
+      if (activeReviewRound >= 1 && Array.isArray(plan?.tasks)) {
+        const prefix = `r${activeReviewRound}_`;
+        // Re-id every task in place; reuse the materializer's downstream
+        // dependsOn validation by also rewriting references.
+        for (const task of plan.tasks) {
+          if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
+            task.id = `${prefix}${task.id}`;
+          }
+          if (Array.isArray(task?.dependsOn)) {
+            task.dependsOn = task.dependsOn.map(dep =>
+              typeof dep === 'string' && !dep.startsWith(prefix) ? `${prefix}${dep}` : dep
+            );
+          }
+        }
+      }
+
       // Materialize the plan into a runnable workflow definition
       const workflowDef = SubWorkflowMaterializer.materialize(plan, config, currentDepth);
 
@@ -477,6 +504,71 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
 Each task should be independently executable by an AI agent.
 Return a structured JSON plan.`;
 
+    // Per-task tool selection guidance — important on Gemini, harmless on
+    // other providers. On Gemini, the `webSearch` tool (native grounding,
+    // swapped to googleSearch at runtime) is mutually exclusive with all
+    // function tools (memory writes, app calls, create_task, …). If a task
+    // is assigned BOTH on the same step, every function tool is silently
+    // dropped. The planner is the only place we can prevent that — once a
+    // task is materialized, the executor honors whatever `tools` array the
+    // planner chose.
+    const TOOL_SELECTION_GUIDANCE = `
+
+## Tool selection per task
+
+For each task, decide which tools it needs and put them in the task's
+"tools" array. Some tools cannot be combined on the same task — split
+work across separate tasks instead:
+
+  - For research / fact-finding that needs fresh web data, set
+    "tools": ["webSearch"] on that task. Do NOT add memory or app tools
+    to the same task on Gemini models — they will be silently dropped.
+  - For tasks that consult configured apps, write memory, or queue
+    follow-ups, OMIT "webSearch". The runtime will register the function
+    tools normally.
+  - If a single goal genuinely needs BOTH fresh search and function-tool
+    work, decompose it into two tasks with a "dependsOn" link
+    (search task → consume-results task that uses the function tools).
+  - Tasks with no explicit tool needs can leave "tools": [] — they will
+    inherit the agent's default tool template.`;
+
+    // Round-aware extension block — only emitted on round 2+ (i.e. inside a
+    // plan-and-review loop, after the reviewer flagged gaps). Surfaces
+    // prior results and the reviewer's gaps so the next plan is purely
+    // additive.
+    const reviewRound = Number.isFinite(state?.data?._reviewRound) ? state.data._reviewRound : 0;
+    const lastGaps = Array.isArray(state?.data?._lastReviewGaps) ? state.data._lastReviewGaps : [];
+    let roundExtensionBlock = '';
+    if (reviewRound >= 1) {
+      const completedTaskCount = Object.keys(state?.data?._taskResults || {}).length;
+      const gapsRendered =
+        lastGaps.length > 0
+          ? lastGaps.map((g, i) => `  ${i + 1}. ${g}`).join('\n')
+          : '  (none listed — infer gaps from the brief vs. completed work)';
+      roundExtensionBlock = `
+
+## You are EXTENDING a previously planned run (review round ${reviewRound})
+
+A reviewer judged the previous round's work insufficient and asked for more.
+You have already produced ${completedTaskCount} completed sub-task result(s)
+this run — those results are available in state.data._taskResults to the
+runtime. Do NOT recreate tasks for work already done.
+
+Reviewer-identified gaps to close on this round:
+${gapsRendered}
+
+Hard rules for this extension plan:
+  - Emit ONLY new tasks that close the gaps above.
+  - Every task id you emit MUST be NEW (do not reuse ids from prior rounds).
+    The runtime additionally namespaces them with the prefix \`r${reviewRound}_\`
+    for safety.
+  - Keep it tight: typically one task per gap, sometimes two when a gap
+    needs both search and follow-up consumption.
+  - If you genuinely believe nothing more is needed despite the reviewer's
+    request, you may emit a single trivial no-op task that summarizes why
+    no further work is warranted — the reviewer will see your reasoning.`;
+    }
+
     // Build skills context for the planner so it can decide which (if any)
     // skill knowledge applies to this brief. Two outputs influence runtime:
     //   - skills_used:           pre-activate these before tasks run
@@ -528,7 +620,7 @@ Return a structured JSON plan.`;
       });
     }
 
-    const systemPrompt = `${baseSystem}${skillsBlock}${activeSkillsBlock}`;
+    const systemPrompt = `${baseSystem}${TOOL_SELECTION_GUIDANCE}${roundExtensionBlock}${skillsBlock}${activeSkillsBlock}`;
 
     // Build context summary from state data (exclude internal keys)
     const contextData = Object.entries(state.data || {})

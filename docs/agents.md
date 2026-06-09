@@ -74,9 +74,45 @@ The Profile editor lets you pick the underlying shape implicitly:
 - **`simple`** — no Planner, no dynamic tasks. `start → agent → end`.
 - **`drain-only`** — `dynamicTasks.enabled: true`. `start → seed(prompt) → drain(loop) → end`.
 - **`planner+drain`** — `planner.enabled: true` and `dynamicTasks.enabled: true`. Planner emits N tasks; the materialized sub-DAG ends in a drain tail.
+- **`planner+review-loop`** — `planner.enabled: true` and `review.enabled: true`. Planner runs inside a `while` loop with a toolless reviewer that judges sufficiency; on insufficient runs, the planner re-runs with prior task results and reviewer-identified gaps surfaced, emitting only new gap-closing tasks (id-namespaced `r{round}_*`).
 
 Power users can hand-author the workflow in `profile.workflow.definition` and
 mix Verifier, additional Loops, etc.
+
+### Deterministic memory finalize
+
+When `memory.enabled !== false` (the default), the planner / inbox-worker
+shapes now include a deterministic `memory-finalize` node between
+synthesize and end (or inbox-finalize). The synthesizer's `outputSchema`
+is extended to `{ report, memoryDelta }`; the runtime persists
+`memoryDelta` (if non-null) into `state.data._pendingMemoryUpdates`, and
+the finalize node calls `memoryFile.writeMemory()` directly without LLM
+involvement — so the write cannot be dropped by the Gemini grounding
+swap. The legacy `write_memory` LLM tool is still auto-registered as an
+in-run escape hatch.
+
+### Plan-and-review loop (`review.enabled`)
+
+Opt-in via:
+
+```json
+"review": {
+  "enabled": true,
+  "maxRounds": 3,
+  "modelId": "optional",
+  "system": { "en": "optional custom reviewer system prompt" }
+}
+```
+
+The reviewer returns structured JSON
+`{ needs_more_work, rationale, gaps[] }`. The loop re-enters the planner
+when `needs_more_work === true` and the round budget isn't spent; the
+planner sees `state.data._taskResults` (prior rounds' work) and
+`state.data._lastReviewGaps` (reviewer-identified gaps) and emits only
+new gap-closing tasks. Task ids are namespaced `r{round}_*` to keep
+`_taskResults` keyed cleanly across rounds. Hard cap of
+`review.maxRounds + 1` iterations defends against runaway loops; the
+shared planner budget (`_planBudget`) caps total tasks across rounds.
 
 ## HITL approval
 

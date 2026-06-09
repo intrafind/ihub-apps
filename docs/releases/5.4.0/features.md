@@ -227,3 +227,39 @@ Tools whose parameter schemas include standard JSON Schema metadata — most not
 - Gemini's tool format rejects JSON Schema keywords such as `$schema` and `additionalProperties`, which MCP tools routinely emit. These keywords are now stripped from tool parameter schemas before the request is sent to Google.
 - A parameter literally named `additionalProperties` is preserved, so legitimate tool inputs are unaffected.
 - Other providers (OpenAI, Anthropic, Bedrock, Mistral) are unchanged.
+
+## Agent Long-term Memory Now Survives Gemini Grounded Runs
+
+Agents running on Google/Gemini models with web grounding (`webSearch`) configured used to lose every other tool on grounded steps because Gemini's API rejects `google_search` + function tools in the same call. The most damaging consequence: **memory writes never landed**, because `write_memory` was silently dropped on every grounded planner task.
+
+iHub now writes long-term memory at the end of every agent run through a **deterministic memory-finalize step** that calls the memory store directly — no LLM, no tool registration, immune to the grounding swap. The synthesizer is now asked to emit a structured `{ report, memoryDelta }` payload; the finalize step drains `memoryDelta` into the agent's memory file.
+
+- New workflow node type: `memory-finalize` (deterministic).
+- Synthesizer system prompt and `outputSchema` now request a `memoryDelta` field alongside the report (set `memoryDelta: null` when there's nothing worth remembering).
+- The legacy LLM-driven `write_memory` tool stays auto-registered as a fallback for non-Gemini agents and for explicit mid-run writes — the deterministic finalize is additive insurance, not a replacement.
+- Profiles with `memory.enabled: false` are unchanged (no memory-finalize node, no `outputSchema` on the synthesizer).
+
+## Planner Now Splits Grounding and Function-tool Work Across Separate Tasks
+
+The agent planner has been updated to know about Gemini's mutual-exclusion constraint between native grounding (`webSearch` → `googleSearch`) and function tools. On Gemini-targeted runs, the planner now puts `webSearch` on research / fact-finding tasks and OMITS it from tasks that need memory writes, app calls, or `create_task` — so function tools survive on those tasks. When a single goal needs both, the planner is asked to decompose it into two `dependsOn`-linked tasks.
+
+No configuration change is required; the planner's system prompt now contains the guidance. Existing profiles benefit automatically on the next run.
+
+## Plan-and-Review Loop for Agents (Opt-in via `profile.review.enabled`)
+
+Agents can now run their planner inside a **plan-and-review loop**: after the first round of planned tasks completes, a toolless reviewer judges whether the work answers the original brief comprehensively. If material gaps remain, control loops back to the planner, which emits ONLY new gap-closing tasks (with `r{round}_`-namespaced ids to prevent collisions). The cycle repeats until the reviewer is satisfied or the bounded round budget is spent, then the run synthesizes and writes memory once at the end.
+
+New profile block:
+
+```json
+"review": {
+  "enabled": true,
+  "maxRounds": 3,
+  "modelId": "<optional override>",
+  "system": { "en": "<optional custom reviewer system prompt>" }
+}
+```
+
+- The reviewer returns structured `{ needs_more_work, rationale, gaps }`; the engine increments `_reviewRound` and surfaces the gaps and prior task results to the next planner iteration.
+- The shared planner budget caps total tasks across all rounds at 100, so a runaway loop cannot multiply task emission.
+- Defaults to OFF — existing profiles are unchanged in shape. Enable on profiles where extending and re-verifying a plan adds more value than a single planner pass.

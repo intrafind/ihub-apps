@@ -108,6 +108,19 @@ const dynamicTasksSchema = z
   })
   .strict();
 
+// Review block — opt-in plan-and-review loop. When enabled, the planner runs
+// inside a `while` loop with a toolless reviewer node that judges sufficiency.
+// If gaps exist, the loop re-runs the planner with prior work surfaced; the
+// planner emits ONLY new gap-closing tasks (with `r{round}_` id namespacing).
+const reviewSchema = z
+  .object({
+    enabled: z.boolean().optional().default(false),
+    maxRounds: z.number().int().min(1).max(5).optional().default(3),
+    modelId: z.string().optional(),
+    system: optionalLocalizedStringSchema.optional()
+  })
+  .strict();
+
 const budgetsSchema = z
   .object({
     maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600)
@@ -179,6 +192,7 @@ const baseAgentProfileSchema = z.object({
   planner: plannerSchema.optional().default({}),
   synthesizer: synthesizerSchema.optional().default({}),
   dynamicTasks: dynamicTasksSchema.optional().default({}),
+  review: reviewSchema.optional().default({}),
   budgets: budgetsSchema.optional().default({}),
   concurrency: concurrencySchema.optional().default({}),
   artifacts: artifactsSchema.optional().default({}),
