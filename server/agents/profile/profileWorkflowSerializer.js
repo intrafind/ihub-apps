@@ -42,15 +42,40 @@ const DEFAULT_PLANNER_SYSTEM =
   'You are a planner. Given a brief, decompose it into independently-' +
   'executable research or work tasks. Return a structured JSON plan.\n\n' +
   'DECOMPOSITION QUALITY BAR:\n' +
-  '- Each task does ONE substantive piece of work — gathering information ' +
-  'about ONE angle, analyzing ONE dimension, drafting ONE section. Avoid ' +
-  '"research everything" tasks; instead split into multiple angle-specific ' +
-  'tasks (e.g. "professional history", "publications", "open-source ' +
-  'contributions", "public speaking", "current role detail").\n' +
-  '- Prefer 3–6 narrowly-scoped tasks over 1–2 broad ones. Each task should ' +
-  'have a clear, falsifiable deliverable.\n' +
+  '- ONE ANGLE PER TASK. A task addresses ONE question, ONE dimension, ONE ' +
+  'deliverable. When the brief explicitly lists multiple angles for the ' +
+  'SAME subject (e.g. "find out who X is, what they have written, their ' +
+  'views on Y, and collect quotes"), emit a SEPARATE task per angle:\n' +
+  '    * background / biography\n' +
+  '    * publications & body of work\n' +
+  '    * stated views / positions / criticisms\n' +
+  '    * direct quotes & evidence extraction\n' +
+  '  …not one "research everything about X" task. A task worker has ' +
+  'multiple tool calls available, but ONE focused task with 3–5 searches ' +
+  'on a single angle produces deeper, better-cited output than one broad ' +
+  'task that has to context-switch across 4 angles in 25 tool calls.\n' +
+  '- ONE ENTITY PER TASK. When the brief lists multiple distinct subjects ' +
+  '(several people, several products, several companies, several documents), ' +
+  'emit a separate task for EACH ONE. "Research A and B" is two tasks, never ' +
+  'one. "Research products X, Y, Z" is three tasks, never one. Combining ' +
+  'entities forces the worker to context-switch mid-task and dilutes the ' +
+  'output. The only exception is when entities are intrinsically paired ' +
+  '(e.g. compare X to Y) and the comparison itself is the deliverable — ' +
+  'and that case STILL benefits from per-entity research tasks feeding a ' +
+  'separate comparison task via `dependsOn`.\n' +
+  '- DECOMPOSITION TEST. Before emitting a task, read its own title and ' +
+  'description back: if you find the word "and" joining two research ' +
+  'subjects, or a comma-separated list of distinct angles/entities, the ' +
+  'task is too broad — split it. Examples of tasks that MUST be split:\n' +
+  '    × "Research Rowan Curran\'s background, publications, AI views, and quotes" (4 angles → 4 tasks)\n' +
+  '    × "Research Franz and Daniel" (2 people → 2 tasks)\n' +
+  '    × "Research iFinder, iAssistant and iHub" (3 products → 3 tasks)\n' +
+  '- Prefer 3–8 narrowly-scoped tasks over 1–2 broad ones. Each task ' +
+  'should have a clear, falsifiable deliverable.\n' +
   '- Later tasks may build on earlier ones — sequence accordingly. Use the ' +
-  '`dependsOn` array when a task genuinely requires another to complete first.\n' +
+  '`dependsOn` array when a task genuinely requires another to complete ' +
+  'first (e.g. "extract quotes from publications" dependsOn "find ' +
+  'publications").\n' +
   '- DO NOT include workflow plumbing steps (reading the inbox, marking ' +
   'items done, writing artifacts); those are handled outside the plan by ' +
   'the runtime.';
@@ -99,6 +124,65 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'visited; it is NOT the same as the configured knowledge-base sources ' +
     'in the profile. Cite what the agent actually consulted, not what it ' +
     'could have consulted.'
+};
+
+// Memory composer is an explicit toolless LLM step that runs AFTER the
+// synthesizer. It sees the brief, task results, citations, the tools/apps
+// the agent used, and prior memory, and emits an explicit memoryDelta
+// which the deterministic memory-finalize node then drains. Splitting
+// this from the synthesizer keeps the report writer focused on the
+// report, avoids cross-provider schema headaches (Gemini's proto schema
+// rejects union types like ["object", "null"]), and gives operators a
+// dedicated knob for memory hygiene.
+const DEFAULT_MEMORY_COMPOSER_SYSTEM = {
+  en:
+    'You are a memory composer for an autonomous agent. Your job is to ' +
+    'decide what (if anything) from this run is worth committing to the ' +
+    "agent's long-term memory file for future runs.\n\n" +
+    'You receive:\n' +
+    '- The original brief (what was asked).\n' +
+    '- The current item being processed (if any).\n' +
+    '- Every planned sub-task and its result.\n' +
+    '- The citations ledger — every URL the agent actually consulted.\n' +
+    '- A list of tools / apps the agent used (so you can describe HOW ' +
+    'a fact was found, not just WHAT was found).\n' +
+    '- The current contents of the agent memory file (so you can spot ' +
+    'duplicates and decide between append vs. replace).\n\n' +
+    'Return STRICT JSON with these fields:\n' +
+    '  - "skip" (boolean): true when nothing from this run is worth ' +
+    'committing to memory. The other fields are ignored when skip=true.\n' +
+    '  - "mode" ("append"|"replace"): default to "append" — accumulating ' +
+    'notes over time is the goal. Only use "replace" when an existing ' +
+    'memory section needs to be overwritten because it became wrong.\n' +
+    '  - "content" (string): the markdown to add (or replace with). ' +
+    'Be CONCRETE — durable facts, names, identifiers, stable preferences, ' +
+    'recurring context. Include provenance: which tool/app produced the ' +
+    'fact, which URL backs it. Example: "Found via app__intrafind-websites: ' +
+    'X is Y\'s lead engineer (source: https://...)".\n' +
+    '  - "summary" (string): one short caption for the memory frontmatter.\n\n' +
+    'Rules:\n' +
+    '1. Only durable signal goes into memory. Skip ephemeral or task-specific ' +
+    'detail (e.g. "the user asked about X today" is ephemeral; "the user ' +
+    'prefers detailed reports with citations" is durable).\n' +
+    '2. Do NOT copy the full report into memory. Memory accumulates; the ' +
+    'report is per-run.\n' +
+    '3. Cite the tool/source ("found via webSearch", "from app__support-bot") ' +
+    'so future runs can trust and trace the fact.\n' +
+    '4. If memory already contains the same fact, skip=true. Do not duplicate.\n' +
+    '5. When unsure, prefer skip=true over polluting memory with low-value ' +
+    'notes — the user can always re-run with more specific input.\n' +
+    '6. Do NOT call tools. Just compose and return the JSON.'
+};
+
+const DEFAULT_MEMORY_COMPOSER_PROMPT = {
+  en:
+    '## Original brief\n${$.data.brief}\n\n' +
+    '## Current item being processed (if any)\n${$.data.currentInboxItem.text}\n\n' +
+    '## Sub-task results (with the tool / app that produced each)\n{{previousTaskResults}}\n\n' +
+    '## Citations ledger (URLs consulted)\n{{citations}}\n\n' +
+    '## Current memory file contents (verbatim)\n{{currentMemory}}\n\n' +
+    'Decide what (if anything) to commit to memory and return the JSON ' +
+    'specified in the system prompt.'
 };
 
 const DEFAULT_SYNTHESIZER_PROMPT = {
@@ -297,6 +381,120 @@ function buildSynthesizerNode(profile) {
   };
 }
 
+function buildMemoryComposerNode(profile) {
+  return {
+    id: 'memory-compose',
+    type: 'prompt',
+    config: {
+      modelId: profile.memory?.modelId || pickModel(profile),
+      // Memory composition is structured-output and benefits from low
+      // temperature — we want consistent, conservative writes.
+      temperature:
+        typeof profile.memory?.temperature === 'number' ? profile.memory.temperature : 0.2,
+      system: isLocalizedNonEmpty(profile.memory?.system)
+        ? profile.memory.system
+        : DEFAULT_MEMORY_COMPOSER_SYSTEM,
+      prompt: isLocalizedNonEmpty(profile.memory?.prompt)
+        ? profile.memory.prompt
+        : DEFAULT_MEMORY_COMPOSER_PROMPT,
+      tools: [],
+      maxIterations: 1,
+      maxTokens: 2000,
+      outputVariable: '_memoryDelta',
+      // Flat object schema — no union types so Gemini's proto schema is happy.
+      // All fields optional + skip flag lets the composer say "nothing worth
+      // remembering" without violating required-field constraints.
+      outputSchema: {
+        type: 'object',
+        properties: {
+          skip: { type: 'boolean' },
+          mode: { type: 'string', enum: ['append', 'replace'] },
+          content: { type: 'string' },
+          summary: { type: 'string' }
+        }
+      },
+      _isMemoryComposer: true
+    }
+  };
+}
+
+const DEFAULT_REVIEWER_SYSTEM = {
+  en:
+    'You are a strict reviewer. Your job is to judge whether the planner-driven ' +
+    'agent has gathered ENOUGH evidence and produced ENOUGH analysis to ' +
+    'comprehensively answer the original brief.\n\n' +
+    'You receive:\n' +
+    '- The original brief.\n' +
+    '- Every sub-task result accumulated so far (across one or more rounds).\n' +
+    '- The citations ledger (URLs the agent actually consulted).\n' +
+    '- The current review round number (0 = first review, higher = subsequent).\n' +
+    '- The prior reviewer rationale (when this is round 1+).\n\n' +
+    'Return STRICT JSON with this shape:\n' +
+    '{ "needs_more_work": <boolean>, "rationale": "<one-paragraph explanation>", ' +
+    '  "gaps": ["<short gap description>", ...] }\n\n' +
+    'Rules:\n' +
+    '1. Set needs_more_work=true ONLY if there are MATERIAL gaps the agent ' +
+    'must close (missing facts, unverified critical claims, missing angles ' +
+    'the brief asked for). Minor polish, stylistic tweaks, or "could be ' +
+    'more thorough" are NOT material — return false in those cases.\n' +
+    '2. Each gap should be a concrete actionable description ' +
+    '("Confirm <X> via independent source", "Research <Y> angle missing ' +
+    'from current results"). Avoid vague gaps like "needs more research".\n' +
+    '3. Cap gaps at 5 per round. If you would list more, prioritize the ' +
+    'most impactful 5.\n' +
+    '4. If the brief is well-answered, return needs_more_work=false with ' +
+    'gaps=[] and a one-sentence rationale.\n' +
+    '5. Do not call tools. Just judge.'
+};
+
+const DEFAULT_REVIEWER_PROMPT = {
+  en:
+    '## Original brief\n${$.data.brief}\n\n' +
+    '## Current review round\n${$.data._reviewRound}\n\n' +
+    '## Sub-task results so far (across all rounds)\n{{previousTaskResults}}\n\n' +
+    '## Citations ledger\n{{citations}}\n\n' +
+    // Only include the prior rationale block when a prior review actually
+    // ran — otherwise the literal `${$.data._reviewOutput.rationale}`
+    // template string leaks into the prompt on round 0 (the JSONPath
+    // resolver returns the literal match when the path is undefined).
+    '{{#if _reviewOutput}}## Prior reviewer rationale\n${$.data._reviewOutput.rationale}\n\n{{/if}}' +
+    'Judge whether the agent should run another planning round. Return the ' +
+    'JSON shape specified in the system prompt.'
+};
+
+function buildReviewerNode(profile) {
+  return {
+    id: 'reviewer',
+    type: 'prompt',
+    config: {
+      modelId: profile.review?.modelId || pickModel(profile),
+      ...(profile.preferredTemperature !== undefined
+        ? { temperature: profile.preferredTemperature }
+        : {}),
+      system: isLocalizedNonEmpty(profile.review?.system)
+        ? profile.review.system
+        : DEFAULT_REVIEWER_SYSTEM,
+      prompt: DEFAULT_REVIEWER_PROMPT,
+      tools: [],
+      maxIterations: 1,
+      maxTokens: 2000,
+      outputVariable: '_reviewOutput',
+      outputSchema: {
+        type: 'object',
+        properties: {
+          needs_more_work: { type: 'boolean' },
+          rationale: { type: 'string' },
+          gaps: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['needs_more_work', 'rationale']
+      },
+      // Marker the runtime uses to bump _reviewRound and stash _lastReviewGaps
+      // into state.data so the next planner iteration can read them.
+      _isReviewer: true
+    }
+  };
+}
+
 function plannerNodeTimeoutMs(profile) {
   // The planner node blocks awaiting the sub-workflow it spawns (which runs
   // every materialized task LLM call serially or in parallel). The engine
@@ -353,9 +551,21 @@ function buildPlannerNode(profile, { hasInbox }) {
 function buildPlannerWorkflow(profile) {
   const useSynth = profile.synthesizer?.enabled !== false;
   const hasInbox = typeof profile.inboxId === 'string' && profile.inboxId.length > 0;
+  const memoryEnabled = profile.memory?.enabled !== false;
+  const useReview = profile.review?.enabled === true;
+  const maxRounds = profile.review?.maxRounds ?? 3;
 
   const nodes = [{ id: 'start', type: 'start' }];
   const edges = [];
+
+  // Plan-and-review loop entry. When review is enabled, the planner runs
+  // inside a `while` loop alongside a toolless reviewer that judges
+  // sufficiency. On the first iteration `_reviewRound` is undefined → enter.
+  // On subsequent iterations enter only if the reviewer flagged gaps AND
+  // we haven't spent the round budget. Hard cap on `maxIterations` is
+  // `maxRounds + 1` defensively (the LoopNodeExecutor enforces it anyway).
+  const reviewLoopId = 'review-loop';
+  const plannerEntryId = useReview ? reviewLoopId : 'planner';
 
   // Entry edges and inbox-load (deterministic).
   if (hasInbox) {
@@ -365,19 +575,83 @@ function buildPlannerWorkflow(profile) {
       config: { inboxId: profile.inboxId }
     });
     edges.push({ source: 'start', target: 'inbox-load' });
-    edges.push({ source: 'inbox-load', target: 'planner' });
+    edges.push({ source: 'inbox-load', target: plannerEntryId });
   } else {
-    edges.push({ source: 'start', target: 'planner' });
+    edges.push({ source: 'start', target: plannerEntryId });
   }
 
-  nodes.push(buildPlannerNode(profile, { hasInbox }));
+  const plannerNode = buildPlannerNode(profile, { hasInbox });
 
-  // Tail: synthesizer (LLM, no tools) + inbox-finalize (deterministic).
-  let lastWorkflowNodeId = 'planner';
+  if (useReview) {
+    // Wrap planner + reviewer in a while-loop. The body is two nodes; the
+    // engine's LoopNodeExecutor.executeBodyNodes runs them sequentially per
+    // iteration. Reviewer's outputSchema and the round-bumping branch in
+    // PromptNodeExecutor._autoPersistResult populate _reviewOutput +
+    // _reviewRound. PlannerNodeExecutor reads _reviewRound and
+    // _lastReviewGaps to namespace task ids and steer the prompt.
+    //
+    // CRITICAL: the loop must carry its OWN execution.timeout. The engine
+    // wraps every node.execute() in a per-node timeout (default 5min), but
+    // LoopNodeExecutor.executeBodyNodes invokes child executors DIRECTLY
+    // — bypassing the engine's timeout wrapper for the body nodes. That
+    // means the inner planner's own execution.timeout (set by
+    // plannerNodeTimeoutMs) is NEVER consulted inside the loop. We have to
+    // raise the loop's own timeout instead, otherwise even a long-running
+    // planner sub-workflow inside the loop fails the whole loop at 5min.
+    //
+    // Per-round budget = planner timeout + reviewer budget. The reviewer
+    // is a one-shot toolless LLM call so it's much cheaper than the
+    // planner sub-workflow, but on slow / thinking models a single
+    // reviewer call can still take 30-90s and that time was previously
+    // unbudgeted. Total loop budget bounds N rounds. The workflow's
+    // wall-time clock fires first if too generous.
+    const reviewerNode = buildReviewerNode(profile);
+    const condition =
+      '(data._reviewRound === undefined) || (data._reviewOutput && ' +
+      'data._reviewOutput.needs_more_work === true && ' +
+      `data._reviewRound < ${maxRounds})`;
+    const REVIEWER_BUDGET_PER_ROUND_MS = 120_000; // 2 min — generous for slow models
+    const perRoundTimeoutMs = plannerNodeTimeoutMs(profile) + REVIEWER_BUDGET_PER_ROUND_MS;
+    const loopTimeoutMs = Math.max(perRoundTimeoutMs, perRoundTimeoutMs * maxRounds);
+    nodes.push({
+      id: reviewLoopId,
+      type: 'loop',
+      execution: { timeout: loopTimeoutMs },
+      config: {
+        mode: 'while',
+        condition,
+        body: [plannerNode, reviewerNode],
+        maxIterations: maxRounds + 1
+      }
+    });
+  } else {
+    nodes.push(plannerNode);
+  }
+
+  // Tail: synthesizer (LLM, no tools) → memory-finalize (deterministic) →
+  // inbox-finalize (deterministic, only when inbox-bound).
+  let lastWorkflowNodeId = useReview ? reviewLoopId : 'planner';
   if (useSynth) {
     nodes.push(buildSynthesizerNode(profile));
-    edges.push({ source: 'planner', target: 'synthesize' });
+    edges.push({ source: lastWorkflowNodeId, target: 'synthesize' });
     lastWorkflowNodeId = 'synthesize';
+  }
+  if (memoryEnabled) {
+    // memory-compose: explicit LLM step that decides WHAT to remember
+    // from this run, given brief + task results + citations + prior memory.
+    // Its structured output lands in state.data._memoryDelta and a
+    // PromptNodeExecutor branch (config._isMemoryComposer) pushes it onto
+    // _pendingMemoryUpdates for the deterministic finalize step to drain.
+    nodes.push(buildMemoryComposerNode(profile));
+    edges.push({ source: lastWorkflowNodeId, target: 'memory-compose' });
+    lastWorkflowNodeId = 'memory-compose';
+    nodes.push({
+      id: 'memory-finalize',
+      type: 'memory-finalize',
+      config: {}
+    });
+    edges.push({ source: lastWorkflowNodeId, target: 'memory-finalize' });
+    lastWorkflowNodeId = 'memory-finalize';
   }
   if (hasInbox) {
     nodes.push({
@@ -549,6 +823,22 @@ function buildInboxWorkerWorkflow(profile) {
     edges.push({ source: lastId, target: 'synthesize' });
     lastId = 'synthesize';
   }
+  // memory-compose + memory-finalize sit between synthesizer and
+  // inbox-finalize so the memory write happens BEFORE the inbox item is
+  // marked done — keeps the run's user-visible closure (inbox marked)
+  // honest about the side effects (memory updated).
+  if (profile.memory?.enabled !== false) {
+    nodes.push(buildMemoryComposerNode(profile));
+    edges.push({ source: lastId, target: 'memory-compose' });
+    lastId = 'memory-compose';
+    nodes.push({
+      id: 'memory-finalize',
+      type: 'memory-finalize',
+      config: {}
+    });
+    edges.push({ source: lastId, target: 'memory-finalize' });
+    lastId = 'memory-finalize';
+  }
   nodes.push({
     id: 'inbox-finalize',
     type: 'inbox-finalize',
@@ -606,9 +896,14 @@ export function serializeProfile(profile) {
     component: 'ProfileWorkflowSerializer',
     profileId: next.id,
     shape: next.planner?.enabled
-      ? 'planner' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+      ? 'planner' +
+        (next.review?.enabled ? '+review-loop' : '') +
+        (next.synthesizer?.enabled !== false ? '+synth' : '') +
+        (next.memory?.enabled !== false ? '+memory-finalize' : '')
       : next.inboxId
-        ? 'inbox-worker' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+        ? 'inbox-worker' +
+          (next.synthesizer?.enabled !== false ? '+synth' : '') +
+          (next.memory?.enabled !== false ? '+memory-finalize' : '')
         : next.dynamicTasks?.enabled
           ? 'drain-only'
           : 'simple'

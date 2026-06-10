@@ -14,6 +14,10 @@
 
 import logger from '../../utils/logger.js';
 
+function dedupeStrings(arr) {
+  return Array.from(new Set((arr || []).filter(v => typeof v === 'string')));
+}
+
 export class SubWorkflowMaterializer {
   /**
    * Materialize a plan into a runnable workflow definition.
@@ -41,8 +45,17 @@ export class SubWorkflowMaterializer {
     });
 
     // Create agent nodes for each task in the plan.
-    // CRITICAL: Destructure tools from taskTemplate before spreading to prevent overwrite.
-    const { tools: templateTools, ...restTemplate } = parentConfig.taskTemplate || {};
+    // CRITICAL: Destructure tools/apps/sources from taskTemplate before
+    // spreading — each is additive at the task level (the planner may
+    // spotlight a per-task subset on top of the profile-wide template), so
+    // the spread of restTemplate must NOT overwrite the merged arrays we
+    // build below.
+    const {
+      tools: templateTools,
+      apps: templateApps,
+      sources: templateSources,
+      ...restTemplate
+    } = parentConfig.taskTemplate || {};
 
     const taskNodes = plan.tasks.map((task, index) => {
       // The agent's persona system prompt lives on the profile (carried via
@@ -101,10 +114,35 @@ export class SubWorkflowMaterializer {
       // a ledger to cite from, but the task worker's own output should
       // also include source URLs inline so the synthesizer can connect
       // facts to citations cleanly.
-      const inheritedTools = Array.isArray(restTemplate.tools) ? restTemplate.tools : [];
-      const taskExtraTools = Array.isArray(task.tools) ? task.tools : [];
-      const allTaskTools = [...inheritedTools, ...taskExtraTools];
-      const hasSearchLikeTool = allTaskTools.some(t => {
+      // Planner-driven per-task tool selection (Gemini grounding workaround):
+      // when the planner emits a populated `tools` array on a task, treat that
+      // as authoritative — DO NOT merge with templateTools. The planner is
+      // schema-bound to choose from templateTools, so its choice is always a
+      // subset. Merging would re-add every templateTool and undo the planner's
+      // attempt to split webSearch off from function tools.
+      //   - task.tools undefined / missing → inherit templateTools (legacy)
+      //   - task.tools === []              → no tools for this task
+      //   - task.tools === [...non-empty]  → use exactly these
+      const taskToolsExplicit = Array.isArray(task.tools);
+      const taskAppsExplicit = Array.isArray(task.apps);
+      const taskSourcesExplicit = Array.isArray(task.sources);
+      const effectiveTools = taskToolsExplicit
+        ? dedupeStrings(task.tools)
+        : Array.isArray(templateTools)
+          ? dedupeStrings(templateTools)
+          : [];
+      const effectiveApps = taskAppsExplicit
+        ? dedupeStrings(task.apps)
+        : Array.isArray(templateApps)
+          ? dedupeStrings(templateApps)
+          : [];
+      const effectiveSources = taskSourcesExplicit
+        ? dedupeStrings(task.sources)
+        : Array.isArray(templateSources)
+          ? dedupeStrings(templateSources)
+          : [];
+
+      const hasSearchLikeTool = effectiveTools.some(t => {
         if (typeof t !== 'string') return false;
         const id = t.toLowerCase();
         return id === 'websearch' || id === 'webcontentextractor' || id.startsWith('source_');
@@ -164,11 +202,17 @@ export class SubWorkflowMaterializer {
           _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
-          // Research tools come from the profile's task template — no
-          // lifecycle tools layered on. Plan-task-level `tools` are
-          // additive (e.g. the planner can spotlight `webSearch` for a
-          // specific task) but must already exist in the tool catalog.
-          tools: [...(task.tools || []), ...(templateTools || [])]
+          // Per-task tools / apps / sources — planner-authoritative when the
+          // planner emitted the field, falling back to the profile-wide
+          // template otherwise. See `taskToolsExplicit` block above for the
+          // full semantics. The planner's response schema enum-binds each
+          // field (tools/apps/sources) to its catalog when the catalog is
+          // non-empty, so unknown ids are rejected at structured-output
+          // time. Backward-compat for hand-written plans that omit a field
+          // is via the explicit-array check (omit → inherit template).
+          tools: effectiveTools,
+          apps: effectiveApps,
+          sources: effectiveSources
           // No `outputVariable` — the runtime auto-persists planner-task
           // results to state.data._taskResults[<taskId>] via
           // PromptNodeExecutor._autoPersistResult. The legacy flat

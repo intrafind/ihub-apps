@@ -43,6 +43,7 @@ export { HttpNodeExecutor } from './HttpNodeExecutor.js';
 export { CodeNodeExecutor } from './CodeNodeExecutor.js';
 export { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 export { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+export { MemoryFinalizeNodeExecutor } from './MemoryFinalizeNodeExecutor.js';
 export { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
 export { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
 export { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
@@ -67,6 +68,7 @@ import { HttpNodeExecutor } from './HttpNodeExecutor.js';
 import { CodeNodeExecutor } from './CodeNodeExecutor.js';
 import { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
 import { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+import { MemoryFinalizeNodeExecutor } from './MemoryFinalizeNodeExecutor.js';
 import { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
 import { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
 import { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
@@ -95,6 +97,7 @@ const executorRegistry = {
   code: CodeNodeExecutor,
   'inbox-load': InboxLoadNodeExecutor,
   'inbox-finalize': InboxFinalizeNodeExecutor,
+  'memory-finalize': MemoryFinalizeNodeExecutor,
   'structured-record': StructuredRecordNodeExecutor,
   'quote-validator': QuoteValidatorNodeExecutor,
   'template-render': TemplateRenderNodeExecutor,

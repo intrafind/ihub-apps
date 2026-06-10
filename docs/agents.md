@@ -74,9 +74,69 @@ The Profile editor lets you pick the underlying shape implicitly:
 - **`simple`** — no Planner, no dynamic tasks. `start → agent → end`.
 - **`drain-only`** — `dynamicTasks.enabled: true`. `start → seed(prompt) → drain(loop) → end`.
 - **`planner+drain`** — `planner.enabled: true` and `dynamicTasks.enabled: true`. Planner emits N tasks; the materialized sub-DAG ends in a drain tail.
+- **`planner+review-loop`** — `planner.enabled: true` and `review.enabled: true`. Planner runs inside a `while` loop with a toolless reviewer that judges sufficiency; on insufficient runs, the planner re-runs with prior task results and reviewer-identified gaps surfaced, emitting only new gap-closing tasks (id-namespaced `r{round}_*`).
 
 Power users can hand-author the workflow in `profile.workflow.definition` and
 mix Verifier, additional Loops, etc.
+
+### Memory pipeline (`memory-compose` → `memory-finalize`)
+
+When `memory.enabled !== false` (the default), the planner / inbox-worker
+shapes append a two-step memory tail after the synthesizer:
+
+```
+… → synthesize → memory-compose (LLM, toolless) → memory-finalize (deterministic) → [inbox-finalize?] → end
+```
+
+1. **`memory-compose`** is an explicit toolless LLM prompt that sees the
+   brief, the inbox item, every sub-task result, the citations ledger,
+   the tools/apps the agent used, and the current memory file. It
+   returns a flat `{ skip, mode, content, summary }` JSON object
+   describing what (if anything) from this run is worth committing to
+   long-term memory. The composer is instructed to cite the tool/URL
+   behind each fact, skip duplicates already in memory, and prefer
+   `append` over `replace`. Operator-overridable via `memory.modelId`,
+   `memory.temperature` (default 0.2), `memory.system`, and
+   `memory.prompt`. Splitting this from the synthesizer keeps the report
+   writer focused on the report and avoids cross-provider schema
+   headaches (Gemini's proto schema rejects union types like
+   `["object", "null"]`).
+2. **`memory-finalize`** is deterministic — no LLM call. It drains
+   `state.data._pendingMemoryUpdates` (populated by `memory-compose`'s
+   auto-persist branch in `PromptNodeExecutor`) and writes via
+   `memoryFile.writeMemory()`. Because no LLM is involved, the write is
+   immune to the Gemini grounding swap that would otherwise strip the
+   legacy `write_memory` LLM tool.
+
+The synthesizer itself is plain markdown (no `outputSchema`) — keeping
+the report and memory responsibilities split so a structured-output
+failure on one path can never break the other.
+
+The legacy `write_memory` LLM tool stays auto-registered as an in-run
+escape hatch for compose flows that want to write mid-run.
+
+### Plan-and-review loop (`review.enabled`)
+
+Opt-in via:
+
+```json
+"review": {
+  "enabled": true,
+  "maxRounds": 3,
+  "modelId": "optional",
+  "system": { "en": "optional custom reviewer system prompt" }
+}
+```
+
+The reviewer returns structured JSON
+`{ needs_more_work, rationale, gaps[] }`. The loop re-enters the planner
+when `needs_more_work === true` and the round budget isn't spent; the
+planner sees `state.data._taskResults` (prior rounds' work) and
+`state.data._lastReviewGaps` (reviewer-identified gaps) and emits only
+new gap-closing tasks. Task ids are namespaced `r{round}_*` to keep
+`_taskResults` keyed cleanly across rounds. Hard cap of
+`review.maxRounds + 1` iterations defends against runaway loops; the
+shared planner budget (`_planBudget`) caps total tasks across rounds.
 
 ## HITL approval
 

@@ -517,6 +517,22 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           finishReason: response.finishReason,
           maxTokens: response.maxTokens
         });
+        // Surface the parsed structured output on the step log so operators
+        // can see the reviewer's verdict / memory-composer decision / etc in
+        // the timeline. Without this, `output: null` made structured-output
+        // nodes look like they returned nothing.
+        //
+        // The UI does `JSON.parse(stepLog.output)` on this string, so the
+        // value MUST be valid JSON. `_previewToolValue` now produces a
+        // JSON-parseable string for objects (it truncates long string
+        // fields INSIDE the object before JSON.stringify, instead of
+        // chopping the serialised string with a `…[truncated]` suffix
+        // that breaks JSON.parse).
+        try {
+          stepLog.output = this._previewToolValue(output);
+        } catch {
+          // best effort — never fail a node on the preview helper
+        }
       }
 
       this.logger.info('Agent node completed', {
@@ -2285,7 +2301,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     if (isSynthesizer) {
       // Stash the synthesizer text as a state variable for downstream nodes
-      // (e.g. inbox-finalize uses it for the completion note).
+      // (e.g. inbox-finalize uses it for the completion note). The
+      // synthesizer is plain-text now — memory writing is a separate
+      // explicit step (`memory-compose` → `memory-finalize`).
       stateUpdates._synthesizerOutput = textContent;
       stateUpdates._synthesizerSummary = textContent.slice(0, 240);
       // Record synthesizer timing in the same _taskTimings map keyed by
@@ -2341,6 +2359,100 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           });
         }
       }
+    }
+
+    // Memory composer branch — the explicit LLM step that decides what (if
+    // anything) from this run is worth committing to long-term memory.
+    // Pushes a normalized entry onto state.data._pendingMemoryUpdates which
+    // the deterministic memory-finalize node drains on the next hop. A
+    // skip=true response (or empty content) is a no-op.
+    if (config?._isMemoryComposer === true) {
+      if (output && typeof output === 'object' && !Array.isArray(output)) {
+        const skip = output.skip === true;
+        const content = typeof output.content === 'string' ? output.content.trim() : '';
+        if (!skip && content.length > 0) {
+          const entry = {
+            mode: output.mode === 'replace' ? 'replace' : 'append',
+            content,
+            ...(typeof output.summary === 'string' && output.summary.trim().length > 0
+              ? { summary: output.summary.trim() }
+              : {})
+          };
+          const prior = Array.isArray(state?.data?._pendingMemoryUpdates)
+            ? state.data._pendingMemoryUpdates
+            : [];
+          stateUpdates._pendingMemoryUpdates = [...prior, entry];
+          this.logger.info('Memory composer produced a delta', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            mode: entry.mode,
+            contentLength: entry.content.length,
+            hasSummary: !!entry.summary
+          });
+        } else {
+          this.logger.info('Memory composer chose to skip (nothing worth remembering)', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            skipFlag: skip,
+            hadContent: content.length > 0
+          });
+        }
+      }
+    }
+
+    // Reviewer branch — bump the review round counter and stash gaps so the
+    // next planner iteration can read them. Loop entry/exit is driven by
+    // LoopNodeExecutor.while reading state.data._reviewRound and
+    // _reviewOutput, both of which we set here.
+    //
+    // Parse-failure handling: when the reviewer LLM returns a non-object
+    // output (Gemini schema mismatch, truncated JSON, etc.) the auto-persist
+    // path lands here with `output` as null / a string. We MUST still bump
+    // _reviewRound — otherwise the loop would re-enter forever — but we
+    // also synthesize an explicit `_reviewOutput = { needs_more_work: false,
+    // _parseError: true, ... }` so:
+    //   (a) the while-loop condition sees a falsy needs_more_work and exits,
+    //   (b) the operator can SEE the parse failure on the run timeline
+    //       instead of just observing an unexplained early exit.
+    if (config?._isReviewer === true) {
+      const priorRound =
+        typeof state?.data?._reviewRound === 'number' ? state.data._reviewRound : 0;
+      const isValidObject = output && typeof output === 'object' && !Array.isArray(output);
+      stateUpdates._reviewRound = priorRound + 1;
+      if (isValidObject) {
+        stateUpdates._lastReviewGaps = Array.isArray(output.gaps) ? output.gaps : [];
+      } else {
+        // Surface the failure on state so downstream nodes / UI know why
+        // the loop didn't continue. outputVariable=_reviewOutput already
+        // landed `null` (or the malformed string) — replace it with a
+        // well-formed sentinel object so consumers don't have to special-
+        // case typeof checks.
+        stateUpdates._lastReviewGaps = [];
+        stateUpdates._reviewOutput = {
+          needs_more_work: false,
+          rationale:
+            'Reviewer returned malformed output (not a structured object). ' +
+            'Treating as "no more work needed" to allow the run to finish; ' +
+            'see step log for the raw response.',
+          gaps: [],
+          _parseError: true
+        };
+        this.logger.warn('Reviewer output was not a structured object — exiting loop cleanly', {
+          component: 'PromptNodeExecutor',
+          nodeId: node.id,
+          round: priorRound + 1,
+          outputType: typeof output,
+          outputPreview: this._previewToolValue(output)
+        });
+      }
+      this.logger.info('Review round completed', {
+        component: 'PromptNodeExecutor',
+        nodeId: node.id,
+        round: priorRound + 1,
+        parseError: !isValidObject,
+        needsMoreWork: isValidObject && output?.needs_more_work === true,
+        gapCount: isValidObject && Array.isArray(output?.gaps) ? output.gaps.length : 0
+      });
     }
 
     // Primary-producer prompts (simple agent, inbox-worker WITHOUT a
@@ -2440,6 +2552,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
   _previewToolValue(value) {
     const MAX_LEN = 1024;
+    const MAX_FIELD_LEN = 320;
     if (value == null) return null;
     if (typeof value === 'string') {
       return value.length > MAX_LEN
@@ -2447,14 +2560,65 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         : value;
     }
     if (typeof value === 'number' || typeof value === 'boolean') return value;
+    // For objects/arrays we walk the structure and shorten long string fields
+    // IN PLACE, then JSON.stringify. The resulting preview stays parseable
+    // (the UI does JSON.parse on reviewer / memory-compose step output to
+    // render verdict details — a "…[truncated]" suffix appended to the JSON
+    // string itself broke that and showed a generic fallback).
     try {
-      const json = JSON.stringify(value);
+      const compact = this._compactStringsForPreview(value, MAX_FIELD_LEN, 0);
+      const json = JSON.stringify(compact);
+      // Final safety net: if the compacted form is still huge, fall back to
+      // truncating the JSON string (and accept that the UI's JSON.parse will
+      // fail for this row — better than spilling MB of state to disk).
       return json.length > MAX_LEN
         ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
         : json;
     } catch {
       return '[unserialisable]';
     }
+  }
+
+  /**
+   * Recursively shorten long string fields inside an object/array so the
+   * JSON.stringify output stays under ~1KB while remaining VALID JSON.
+   * String fields longer than `maxFieldLen` get a `…[+N]` suffix appended
+   * in the cloned copy. Depth is bounded to keep cyclic / pathological
+   * inputs from blowing the stack; arrays are capped at MAX_ARRAY_ITEMS
+   * with a trailing `…[+N items]` placeholder.
+   *
+   * Used by `_previewToolValue` so step-log previews of tool args/results
+   * AND structured-output rows (reviewer, memory-composer) all produce
+   * JSON the UI can `JSON.parse` to render details.
+   *
+   * @private
+   */
+  _compactStringsForPreview(value, maxFieldLen, depth) {
+    const MAX_DEPTH = 6;
+    const MAX_ARRAY_ITEMS = 20;
+    if (depth > MAX_DEPTH) return '[…]';
+    if (typeof value === 'string') {
+      return value.length > maxFieldLen
+        ? `${value.slice(0, maxFieldLen)}…[+${value.length - maxFieldLen}]`
+        : value;
+    }
+    if (Array.isArray(value)) {
+      const limited = value
+        .slice(0, MAX_ARRAY_ITEMS)
+        .map(v => this._compactStringsForPreview(v, maxFieldLen, depth + 1));
+      if (value.length > MAX_ARRAY_ITEMS) {
+        limited.push(`…[+${value.length - MAX_ARRAY_ITEMS} items]`);
+      }
+      return limited;
+    }
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = this._compactStringsForPreview(v, maxFieldLen, depth + 1);
+      }
+      return out;
+    }
+    return value;
   }
 
   /**
