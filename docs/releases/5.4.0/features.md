@@ -397,3 +397,13 @@ When the brief enumerates multiple distinct angles for the same subject (e.g. "f
 The canonical planner system prompt now carries an explicit **DECOMPOSITION TEST**: read each task's title and description back — if it contains "and" joining research subjects, or a comma-separated list of distinct angles, it must be split. Three worked examples (Rowan Curran's 4 angles, two people, three products) are included so the model has anchors.
 
 Migration **V054** clears stale `planner.system` overrides on agent profiles that were verbatim snapshots of the old default. Operator-customized prompts (longer than the snapshot or with a different opening sentence) are left untouched. Cleared profiles fall back to the canonical default at runtime, so the new decomposition rules take effect immediately on next server restart.
+
+## Security: Workflow HTTP Node SSRF Bypass Fixed
+
+The SSRF guard that protects workflow HTTP-request nodes from reaching internal hosts and cloud metadata endpoints could be bypassed with an IPv4-mapped IPv6 address written in hex form (e.g. `http://[::ffff:a9fe:a9fe]/`, which is `169.254.169.254` — the AWS instance-metadata address). The address-classifier now parses every IPv6 literal to its canonical bytes and blocks it by network range regardless of how it is written, so the mapped-hex, dotted, and NAT64 (`64:ff9b::`) forms of an internal address are all caught.
+
+- Closes the IPv4-mapped-IPv6 hex bypass (GHSA-fp9c-pq7w-vr34).
+- Adds the shared-address / CGNAT range `100.64.0.0/10` to the blocklist.
+- Pins each request to the exact IP addresses validated by the guard, closing a DNS-rebinding window where a hostname could resolve to a public IP during the check and an internal IP at connect time. Pinning applies to direct connections; when an outbound HTTP proxy is configured the proxy remains the egress boundary.
+
+No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
