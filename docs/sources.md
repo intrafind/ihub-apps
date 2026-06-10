@@ -209,8 +209,16 @@ committed). To refresh it manually after editing the docs:
 npm run docs:build:markdown
 ```
 
-Existing installations receive the source automatically via the configuration
-migration system on upgrade.
+Because it is a generated, build-managed file, the server **re-syncs it into
+the contents directory on every startup** whenever the shipped default differs
+(see `syncManagedDefaultFiles()` in `server/utils/setupUtils.js`). This means an
+upgrade with updated documentation refreshes the source automatically on
+restart — unlike ordinary source files, which are only copied from defaults
+when missing. Do not edit `contents/sources/ihub-documentation.md` by hand; your
+changes would be overwritten on the next restart.
+
+Existing installations receive the source entry automatically via the
+configuration migration system on upgrade.
 
 ### Expose Modes
 
