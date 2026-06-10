@@ -10,7 +10,7 @@ A new workflow, **`stellungnahmen-review-ifinder`**, runs the same audit-grade S
 
 ## Admin-driven Corpus Discovery via Generic Memory-Builder Endpoint
 
-A new admin endpoint runs any allow-listed tool and writes the result to an agent profile's long-term memory under a named section:
+A new admin endpoint runs any registered tool with admin context and writes the result to an agent profile's long-term memory under a named section:
 
 ```
 POST /api/admin/agents/profiles/<id>/memory/from-tool
