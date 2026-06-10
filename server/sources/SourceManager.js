@@ -367,8 +367,11 @@ class SourceManager {
       }
     }
 
-    // Generate tool schema in generic format (will be converted by provider adapters)
+    // Generate tool schema in generic format (will be converted by provider adapters).
+    // `id` and `name` both carry the dispatch key so provider formatters that read
+    // `t.id` (Google, Anthropic) and `t.name` (OpenAI fallback) agree on the tool name.
     const tool = {
+      id: toolId,
       name: toolId,
       displayName: displayName,
       description: description,
