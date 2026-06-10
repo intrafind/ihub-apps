@@ -32,7 +32,15 @@ const BLANK_PROFILE = {
   sources: [],
   apps: [],
   skills: [],
-  memory: { enabled: true, autoInclude: true, maxBytes: 8192 },
+  memory: {
+    enabled: true,
+    autoInclude: true,
+    maxBytes: 8192,
+    modelId: '',
+    temperature: 0.2,
+    system: { en: '' },
+    prompt: { en: '' }
+  },
   inboxId: '',
   hitl: { approverGroups: [] },
   planner: {
@@ -49,6 +57,12 @@ const BLANK_PROFILE = {
     modelId: ''
   },
   dynamicTasks: { enabled: false, maxDepth: 3 },
+  review: {
+    enabled: false,
+    maxRounds: 3,
+    modelId: '',
+    system: { en: '' }
+  },
   budgets: { maxWallTimeSec: 600 },
   concurrency: { maxConcurrent: 1 },
   artifacts: { outputDir: 'auto', primary: 'report.md' },
@@ -78,6 +92,7 @@ const TOP_LEVEL_FIELDS = new Set([
   'planner',
   'synthesizer',
   'dynamicTasks',
+  'review',
   'budgets',
   'concurrency',
   'artifacts',
@@ -164,6 +179,9 @@ export default function AdminAgentEditPage() {
   })();
   function handleDynamicTasks(partial) {
     setProfile(prev => ({ ...prev, dynamicTasks: { ...prev.dynamicTasks, ...partial } }));
+  }
+  function handleReview(partial) {
+    setProfile(prev => ({ ...prev, review: { ...prev.review, ...partial } }));
   }
   function handleMemory(partial) {
     setProfile(prev => ({ ...prev, memory: { ...prev.memory, ...partial } }));
@@ -253,6 +271,25 @@ export default function AdminAgentEditPage() {
           !payload.synthesizer.modelId.trim()
         ) {
           delete payload.synthesizer.modelId;
+        }
+      }
+      if (payload.memory && typeof payload.memory === 'object') {
+        const memorySystem = cleanLocalized(payload.memory.system);
+        if (memorySystem) payload.memory.system = memorySystem;
+        else delete payload.memory.system;
+        const memoryPrompt = cleanLocalized(payload.memory.prompt);
+        if (memoryPrompt) payload.memory.prompt = memoryPrompt;
+        else delete payload.memory.prompt;
+        if (typeof payload.memory.modelId === 'string' && !payload.memory.modelId.trim()) {
+          delete payload.memory.modelId;
+        }
+      }
+      if (payload.review && typeof payload.review === 'object') {
+        const reviewSystem = cleanLocalized(payload.review.system);
+        if (reviewSystem) payload.review.system = reviewSystem;
+        else delete payload.review.system;
+        if (typeof payload.review.modelId === 'string' && !payload.review.modelId.trim()) {
+          delete payload.review.modelId;
         }
       }
 
@@ -876,6 +913,114 @@ export default function AdminAgentEditPage() {
               </div>
             </Section>
 
+            {/* Plan-and-review loop — opt-in iterative planner */}
+            <Section
+              title={t('admin.agents.edit.review', 'Plan-and-review loop')}
+              hint={t(
+                'admin.agents.edit.reviewHint',
+                'After the planner finishes a round of tasks, a toolless reviewer judges sufficiency against the brief. If material gaps remain, the loop returns control to the planner with prior task results and reviewer-identified gaps surfaced; the planner emits only new gap-closing tasks (task ids namespaced "r{round}_*"). Bounded by Max rounds. Requires the Planner.'
+              )}
+            >
+              <div className="space-y-4">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!profile.review?.enabled}
+                    onChange={e => handleReview({ enabled: e.target.checked })}
+                    disabled={!profile.planner?.enabled}
+                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      {t('admin.agents.edit.reviewEnabled', 'Enable plan-and-review loop')}
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t(
+                        'admin.agents.edit.reviewEnabledHint',
+                        'Off by default. When on, the planner runs inside a while-loop with a reviewer; the loop terminates when the reviewer reports no material gaps or the Max rounds budget is reached, then the synthesizer runs once over the union of all rounds’ work.'
+                      )}
+                    </p>
+                    {!profile.planner?.enabled && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {t(
+                          'admin.agents.edit.reviewRequiresPlanner',
+                          'Enable the Planner section above to use the review loop.'
+                        )}
+                      </p>
+                    )}
+                  </span>
+                </label>
+
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewMaxRounds', 'Max rounds')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.reviewMaxRoundsHint',
+                      'Hard cap on planner-reviewer iterations (1–5). The first round is the initial plan; subsequent rounds run only if the reviewer flags material gaps. Total tasks across all rounds remain bounded by the shared planner budget (default 100).'
+                    )}
+                  </p>
+                  <input
+                    type="number"
+                    min="1"
+                    max="5"
+                    disabled={!profile.review?.enabled}
+                    value={profile.review?.maxRounds ?? 3}
+                    onChange={e => handleReview({ maxRounds: Number(e.target.value) || 3 })}
+                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewModel', 'Reviewer model (optional)')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.reviewModelHint',
+                      'Pin a specific model for the reviewer node. The reviewer is toolless and produces a short structured JSON verdict, so a cheaper/faster model is usually fine. Falls back to Preferred model when unset.'
+                    )}
+                  </p>
+                  <select
+                    disabled={!profile.review?.enabled}
+                    value={profile.review?.modelId || ''}
+                    onChange={e => handleReview({ modelId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                  >
+                    <option value="">
+                      {t('admin.agents.edit.reviewModelInherit', '(inherit Preferred model)')}
+                    </option>
+                    {models
+                      .filter(m => !m.supportsImageGeneration)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {getLocalizedContent(m.name, currentLanguage) || m.id}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <DynamicLanguageEditor
+                  label={t('admin.agents.edit.reviewSystem', 'Reviewer system prompt (optional)')}
+                  value={profile.review?.system || {}}
+                  onChange={v => handleReview({ system: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: 'You are a strict reviewer. Judge whether the planner gathered enough evidence to comprehensively answer the brief. Return JSON { "needs_more_work": <bool>, "rationale": "...", "gaps": ["..."] }. Set needs_more_work=true ONLY for material gaps. Cap gaps at 5.',
+                    de: 'Du bist ein strenger Reviewer. Beurteile, ob der Planner genügend Belege gesammelt hat, um den Auftrag umfassend zu beantworten. Antworte als JSON { "needs_more_work": <bool>, "rationale": "...", "gaps": ["..."] }. Setze needs_more_work nur bei wesentlichen Lücken auf true.'
+                  }}
+                  name="review-system"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.agents.edit.reviewVariables',
+                    'The default reviewer prompt template surfaces ${$.data.brief}, the current review round, {{previousTaskResults}}, the citations ledger, and prior reviewer rationale.'
+                  )}
+                </p>
+              </div>
+            </Section>
+
             {/* Schedule */}
             <Section
               title={t('admin.agents.edit.schedule', 'Schedule')}
@@ -958,6 +1103,100 @@ export default function AdminAgentEditPage() {
                   {t('admin.agents.edit.editMemoryFile', 'Edit memory file →')}
                 </button>
               )}
+
+              {/* Memory composer — explicit LLM step at end of run */}
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {t('admin.agents.edit.memoryComposer', 'Memory composer (write step)')}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.agents.edit.memoryComposerHint',
+                      'A toolless LLM step that runs at the end of the workflow, sees the brief, task results, citations, tools/apps used, and the current memory file, and decides what (if anything) is worth committing to long-term memory. Its output goes through the deterministic memory-finalize node which performs the actual file write. Only used when Memory is enabled.'
+                    )}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t('admin.agents.edit.memoryComposerModel', 'Composer model (optional)')}
+                    </label>
+                    <select
+                      disabled={profile.memory?.enabled === false}
+                      value={profile.memory?.modelId || ''}
+                      onChange={e => handleMemory({ modelId: e.target.value })}
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    >
+                      <option value="">
+                        {t(
+                          'admin.agents.edit.memoryComposerModelInherit',
+                          '(inherit Preferred model)'
+                        )}
+                      </option>
+                      {models
+                        .filter(m => !m.supportsImageGeneration)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>
+                            {getLocalizedContent(m.name, currentLanguage) || m.id}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t(
+                        'admin.agents.edit.memoryComposerTemperature',
+                        'Composer temperature (default 0.2)'
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      disabled={profile.memory?.enabled === false}
+                      value={profile.memory?.temperature ?? 0.2}
+                      onChange={e =>
+                        handleMemory({
+                          temperature: Number.isFinite(Number(e.target.value))
+                            ? Number(e.target.value)
+                            : 0.2
+                        })
+                      }
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                <DynamicLanguageEditor
+                  label={t(
+                    'admin.agents.edit.memoryComposerSystem',
+                    'Composer system prompt (optional)'
+                  )}
+                  value={profile.memory?.system || {}}
+                  onChange={v => handleMemory({ system: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: 'You are a memory composer. Decide what (if anything) from this run is worth committing to long-term memory. Return JSON { "skip": <bool>, "mode": "append"|"replace", "content": "...", "summary": "..." }. Cite the tool/app/URL that produced each fact. Skip when memory already contains the fact or when nothing durable was learned.',
+                    de: 'Du bist ein Memory-Composer. Entscheide, was (wenn überhaupt) aus diesem Lauf in das Langzeitgedächtnis übernommen werden soll. Antworte als JSON { "skip": <bool>, "mode": "append"|"replace", "content": "...", "summary": "..." }. Nenne die Quelle (Tool / App / URL) zu jedem Fakt.'
+                  }}
+                  name="memory-composer-system"
+                />
+                <DynamicLanguageEditor
+                  label={t(
+                    'admin.agents.edit.memoryComposerPrompt',
+                    'Composer prompt template (optional)'
+                  )}
+                  value={profile.memory?.prompt || {}}
+                  onChange={v => handleMemory({ prompt: v })}
+                  type="textarea"
+                  placeholder={{
+                    en: '## Original brief\n${$.data.brief}\n\n## Sub-task results\n{{previousTaskResults}}\n\n## Citations\n{{citations}}\n\n## Current memory\n{{currentMemory}}\n\nDecide what to commit and return the JSON.',
+                    de: '## Auftrag\n${$.data.brief}\n\n## Teilergebnisse\n{{previousTaskResults}}\n\n## Zitate\n{{citations}}\n\n## Aktuelles Gedächtnis\n{{currentMemory}}\n\nEntscheide und gib das JSON zurück.'
+                  }}
+                  name="memory-composer-prompt"
+                />
+              </div>
             </Section>
 
             {/* Budgets & concurrency */}

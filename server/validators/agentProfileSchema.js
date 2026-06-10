@@ -51,7 +51,13 @@ const memorySchema = z
   .object({
     enabled: z.boolean().optional().default(true),
     autoInclude: z.boolean().optional().default(true),
-    maxBytes: z.number().int().min(0).max(1_000_000).optional().default(8192)
+    maxBytes: z.number().int().min(0).max(1_000_000).optional().default(8192),
+    // Memory composer — explicit LLM step that decides what to commit to
+    // long-term memory at the end of a run. Only used when enabled=true.
+    modelId: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    system: optionalLocalizedStringSchema.optional(),
+    prompt: optionalLocalizedStringSchema.optional()
   })
   .strict();
 
@@ -105,6 +111,19 @@ const dynamicTasksSchema = z
     // decomposed sub-tasks while keeping the orchestrating agent on a
     // stronger model (or vice versa).
     modelId: z.string().optional()
+  })
+  .strict();
+
+// Review block — opt-in plan-and-review loop. When enabled, the planner runs
+// inside a `while` loop with a toolless reviewer node that judges sufficiency.
+// If gaps exist, the loop re-runs the planner with prior work surfaced; the
+// planner emits ONLY new gap-closing tasks (with `r{round}_` id namespacing).
+const reviewSchema = z
+  .object({
+    enabled: z.boolean().optional().default(false),
+    maxRounds: z.number().int().min(1).max(5).optional().default(3),
+    modelId: z.string().optional(),
+    system: optionalLocalizedStringSchema.optional()
   })
   .strict();
 
@@ -179,6 +198,7 @@ const baseAgentProfileSchema = z.object({
   planner: plannerSchema.optional().default({}),
   synthesizer: synthesizerSchema.optional().default({}),
   dynamicTasks: dynamicTasksSchema.optional().default({}),
+  review: reviewSchema.optional().default({}),
   budgets: budgetsSchema.optional().default({}),
   concurrency: concurrencySchema.optional().default({}),
   artifacts: artifactsSchema.optional().default({}),

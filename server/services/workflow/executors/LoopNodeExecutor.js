@@ -22,6 +22,15 @@
 import vm from 'node:vm';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import logger from '../../../utils/logger.js';
+import { actionTracker } from '../../../actionTracker.js';
+
+function emitSse(event, payload, chatId) {
+  try {
+    actionTracker.emit('fire-sse', { event, chatId, ...payload });
+  } catch {
+    // Best effort — never fail a node because of an SSE emit.
+  }
+}
 
 /**
  * Engine-managed state-data keys that must NEVER be propagated back via a
@@ -131,6 +140,25 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     // corpora; default per-node maxIterations stays 50.
     const hardCap = Math.min(maxIterations, 500);
 
+    const chatId = context?.chatId || state?.executionId;
+    const startedAt = new Date();
+    const startMs = startedAt.getTime();
+    const iterationTimings = [];
+    const bodyNodeIds = Array.isArray(body) ? body.map(b => b?.id).filter(Boolean) : [];
+
+    emitSse(
+      'agent.step.started',
+      {
+        nodeId: node.id,
+        kind: 'loop',
+        mode,
+        bodyNodeIds,
+        startedAt: startedAt.toISOString(),
+        hardCap
+      },
+      chatId
+    );
+
     try {
       const results = [];
       let currentState = { ...state, data: { ...state.data } };
@@ -144,8 +172,25 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             currentState.data._loopHuman = i + 1;
             currentState.data._loopTotal = iterCount;
 
-            const bodyResult = await this.executeBodyNodes(body, currentState, context);
+            const bodyResult = await this.executeBodyNodes(body, currentState, context, {
+              loopNodeId: node.id,
+              chatId,
+              iteration: results.length,
+              total:
+                mode === 'for'
+                  ? Math.min(count, hardCap)
+                  : mode === 'forEach'
+                    ? currentState.data._loopTotal
+                    : null
+            });
             results.push(bodyResult.output);
+            iterationTimings.push({
+              iteration: results.length - 1,
+              startedAt: bodyResult.startedAt || null,
+              durationMs: bodyResult.durationMs || null,
+              failed: bodyResult.failed,
+              ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+            });
             currentState = bodyResult.state;
 
             if (bodyResult.failed) break;
@@ -172,8 +217,25 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             currentState.data._loopItem = iterArr[i];
             currentState.data._loopTotal = iterArr.length;
 
-            const bodyResult = await this.executeBodyNodes(body, currentState, context);
+            const bodyResult = await this.executeBodyNodes(body, currentState, context, {
+              loopNodeId: node.id,
+              chatId,
+              iteration: results.length,
+              total:
+                mode === 'for'
+                  ? Math.min(count, hardCap)
+                  : mode === 'forEach'
+                    ? currentState.data._loopTotal
+                    : null
+            });
             results.push(bodyResult.output);
+            iterationTimings.push({
+              iteration: results.length - 1,
+              startedAt: bodyResult.startedAt || null,
+              durationMs: bodyResult.durationMs || null,
+              failed: bodyResult.failed,
+              ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+            });
             currentState = bodyResult.state;
 
             if (bodyResult.failed) break;
@@ -199,8 +261,19 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             currentState.data._loopHuman = i + 1;
             currentState.data._loopTotal = -1; // unknown for while loops
 
-            const bodyResult = await this.executeBodyNodes(body, currentState, context);
+            const bodyResult = await this.executeBodyNodes(body, currentState, context, {
+              loopNodeId: node.id,
+              chatId,
+              iteration: results.length
+            });
             results.push(bodyResult.output);
+            iterationTimings.push({
+              iteration: results.length - 1,
+              startedAt: bodyResult.startedAt || null,
+              durationMs: bodyResult.durationMs || null,
+              failed: bodyResult.failed,
+              ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+            });
             // Use returned state so the next condition evaluation sees updated data
             currentState = bodyResult.state;
 
@@ -246,8 +319,19 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             currentState.data._loopIndex = i;
             currentState.data._loopHuman = i + 1;
 
-            const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context);
+            const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context, {
+              loopNodeId: node.id,
+              chatId,
+              iteration: results.length
+            });
             results.push(bodyResult.output);
+            iterationTimings.push({
+              iteration: results.length - 1,
+              startedAt: bodyResult.startedAt || null,
+              durationMs: bodyResult.durationMs || null,
+              failed: bodyResult.failed,
+              ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+            });
             currentState = bodyResult.state;
 
             // Resolve the task object in the new state (executeBodyNodes
@@ -306,13 +390,62 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         if (ENGINE_INTERNAL_STATE_KEYS.has(k)) continue;
         propagatedData[k] = v;
       }
+      const completedAt = new Date();
+      const durationMs = completedAt.getTime() - startMs;
+      const anyFailed = iterationTimings.some(t => t.failed);
+      const stepLog = {
+        nodeId: node.id,
+        kind: 'loop',
+        mode,
+        bodyNodeIds,
+        startedAt: startedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs,
+        iterations: results.length,
+        ...(typeof hardCap === 'number' ? { hardCap } : {}),
+        iterationTimings,
+        ...(anyFailed ? { failed: true } : {})
+      };
+      emitSse(
+        'agent.step.completed',
+        {
+          nodeId: node.id,
+          kind: 'loop',
+          mode,
+          iterations: results.length,
+          startedAt: startedAt.toISOString(),
+          completedAt: completedAt.toISOString(),
+          durationMs,
+          ...(anyFailed ? { failed: true } : {})
+        },
+        chatId
+      );
+
+      const priorStepLogs =
+        propagatedData._stepLogs && typeof propagatedData._stepLogs === 'object'
+          ? propagatedData._stepLogs
+          : {};
       const stateUpdates = {
         ...(outputVariable ? { [outputVariable]: results } : {}),
-        ...propagatedData
+        ...propagatedData,
+        _stepLogs: { ...priorStepLogs, [node.id]: stepLog }
       };
 
       return this.createSuccessResult({ results, iterations: results.length }, { stateUpdates });
     } catch (error) {
+      emitSse(
+        'agent.step.completed',
+        {
+          nodeId: node.id,
+          kind: 'loop',
+          failed: true,
+          error: error.message,
+          startedAt: startedAt.toISOString(),
+          completedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs
+        },
+        chatId
+      );
       return this.createErrorResult(`Loop execution failed: ${error.message}`, {
         nodeId: node.id,
         error: error.message
@@ -332,13 +465,30 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    * @returns {Promise<{output: *, state: Object, failed: boolean}>} Iteration result with
    *   the final output, updated state, and whether execution failed
    */
-  async executeBodyNodes(bodyNodes, iterationState, context) {
+  async executeBodyNodes(bodyNodes, iterationState, context, meta = {}) {
     // Lazy import to avoid circular dependency with index.js
     const { getExecutor } = await import('./index.js');
 
     let currentState = { ...iterationState, data: { ...iterationState.data } };
     let lastOutput;
+    const iterStartMs = Date.now();
+    const iterStartedAt = new Date(iterStartMs);
+    const { loopNodeId, chatId, iteration, total } = meta;
+    if (loopNodeId) {
+      emitSse(
+        'agent.loop.iteration.started',
+        {
+          nodeId: loopNodeId,
+          iteration,
+          ...(total != null ? { total } : {}),
+          bodyNodeIds: bodyNodes.map(b => b?.id).filter(Boolean),
+          startedAt: iterStartedAt.toISOString()
+        },
+        chatId
+      );
+    }
 
+    let failedAtNodeId = null;
     for (const bodyNode of bodyNodes) {
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
@@ -349,8 +499,43 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       }
 
       if (result.status === 'failed') {
-        return { output: result.output, state: currentState, failed: true };
+        failedAtNodeId = bodyNode.id;
+        if (loopNodeId) {
+          emitSse(
+            'agent.loop.iteration.completed',
+            {
+              nodeId: loopNodeId,
+              iteration,
+              failed: true,
+              failedAtNodeId,
+              durationMs: Date.now() - iterStartMs,
+              completedAt: new Date().toISOString()
+            },
+            chatId
+          );
+        }
+        return {
+          output: result.output,
+          state: currentState,
+          failed: true,
+          failedAtNodeId,
+          startedAt: iterStartedAt.toISOString(),
+          durationMs: Date.now() - iterStartMs
+        };
       }
+    }
+    if (loopNodeId) {
+      emitSse(
+        'agent.loop.iteration.completed',
+        {
+          nodeId: loopNodeId,
+          iteration,
+          failed: false,
+          durationMs: Date.now() - iterStartMs,
+          completedAt: new Date().toISOString()
+        },
+        chatId
+      );
     }
 
     // CRITICAL: must NOT return currentState.data here. currentState.data
@@ -362,7 +547,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     // JSON.stringify chokes inside _validateStateSize and the whole drain
     // fails. Return only the last body node's output (already filtered to
     // safe content/model/tokens fields by createSuccessResult).
-    return { output: lastOutput, state: currentState, failed: false };
+    return {
+      output: lastOutput,
+      state: currentState,
+      failed: false,
+      startedAt: iterStartedAt.toISOString(),
+      durationMs: Date.now() - iterStartMs
+    };
   }
 
   /**

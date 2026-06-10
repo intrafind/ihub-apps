@@ -227,15 +227,49 @@ export default function AgentRunDetailPage() {
   const wfSummaryNodes = Array.isArray(run?.data?._workflowSummary?.nodes)
     ? run.data._workflowSummary.nodes
     : [];
+  // A review-loop in the workflow summary implies a planner+reviewer pair
+  // inside its body (built by profileWorkflowSerializer.buildPlannerWorkflow).
+  // Use that fact so the Planning row appears even when the planner LLM call
+  // failed before producing any tasks — operators can then click the row
+  // and see the persisted planner failure step log instead of wondering why
+  // the timeline jumped straight from inbox-load to synthesize.
+  const hasReviewLoopWrapper = wfSummaryNodes.some(
+    n => n?.id === 'review-loop' && n?.type === 'loop'
+  );
   const hasPlanner =
     wfSummaryNodes.some(n => n?.type === 'planner') ||
+    hasReviewLoopWrapper ||
     taskStatusByNodeId.planner ||
     completedNodes.has('planner') ||
+    !!run?.data?._stepLogs?.planner ||
     planTasks.length > 0;
   const hasSynthesizer =
     wfSummaryNodes.some(n => n?._isSynthesizer === true || n?.id === 'synthesize') ||
     taskStatusByNodeId.synthesize ||
     completedNodes.has('synthesize');
+  // Plan-and-review loop: surface the reviewer's verdict as its own step so
+  // operators can see if/why the loop closed (or replanned). The reviewer
+  // node lives inside the loop body, so we detect it by step-log presence
+  // or by the round counter being set — both only happen AFTER the reviewer
+  // actually ran. Previously this row appeared the moment the workflow had
+  // a review-loop in its summary, which made it show even before the
+  // planner had produced any tasks (the planner runs first inside the body,
+  // and only on success does the reviewer fire).
+  const hasReviewer =
+    completedNodes.has('reviewer') ||
+    !!run?.data?._stepLogs?.reviewer ||
+    typeof run?.data?._reviewRound === 'number';
+  // Memory pipeline: composer (LLM decides what to remember) → finalize
+  // (deterministic write). Both nodes have step logs that carry skip/write
+  // decisions and write counts; we want each visible as its own row.
+  const hasMemoryCompose =
+    wfSummaryNodes.some(n => n?.id === 'memory-compose') ||
+    completedNodes.has('memory-compose') ||
+    !!run?.data?._stepLogs?.['memory-compose'];
+  const hasMemoryFinalize =
+    wfSummaryNodes.some(n => n?.type === 'memory-finalize' || n?.id === 'memory-finalize') ||
+    completedNodes.has('memory-finalize') ||
+    !!run?.data?._stepLogs?.['memory-finalize'];
 
   // Per-step timings populated by every executor (planner records its LLM
   // call only, NOT the sub-workflow wait; planner-tasks bubble up from the
@@ -263,11 +297,20 @@ export default function AgentRunDetailPage() {
   // even when there's no planner to materialize tasks. Fall back to type-
   // based detection for runs whose summary was written before the
   // `_persistAsArtifact` marker existed — any top-level prompt node that
-  // isn't the synthesizer is treated as an agent step.
+  // isn't the synthesizer / memory-composer / reviewer is treated as an
+  // agent step. Without the explicit exclusions, the memory-composer (a
+  // prompt node by type) showed up as a duplicate "Running memory-compose"
+  // row alongside its own orchestrator-kind "Composing memory" row.
+  const NON_PRODUCER_PROMPT_IDS = new Set(['memory-compose', 'reviewer']);
   const primaryProducerNodes = wfSummaryNodes.filter(
     n =>
       n?._persistAsArtifact === true ||
-      (n?.type === 'prompt' && n?._isSynthesizer !== true && n?.id !== 'synthesize')
+      (n?.type === 'prompt' &&
+        n?._isSynthesizer !== true &&
+        n?.id !== 'synthesize' &&
+        !NON_PRODUCER_PROMPT_IDS.has(n?.id) &&
+        n?._isMemoryComposer !== true &&
+        n?._isReviewer !== true)
   );
   // When a drain loop is present, the agent prompt node is a DECOMPOSER —
   // its job is to enqueue sub-tasks via create_task, not produce the final
@@ -345,6 +388,43 @@ export default function AgentRunDetailPage() {
         depth: 0
       };
     }),
+    ...(hasReviewer
+      ? (() => {
+          const reviewerLog = logFor('reviewer');
+          const loopLog = logFor('review-loop');
+          const verdict =
+            reviewerLog && typeof reviewerLog.output === 'string'
+              ? (() => {
+                  try {
+                    return JSON.parse(reviewerLog.output);
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+          const rounds = Number.isFinite(run?.data?._reviewRound) ? run.data._reviewRound : null;
+          const description = verdict
+            ? verdict.needs_more_work
+              ? `Round ${rounds || 1}: more work needed — ${(verdict.gaps || []).length} gap(s)`
+              : `Round ${rounds || 1}: complete — no material gaps`
+            : 'Judging whether the agent gathered enough evidence';
+          return [
+            {
+              key: 'orch:reviewer',
+              nodeId: 'reviewer',
+              kind: 'orchestrator',
+              title: 'Reviewing',
+              description,
+              status: orchestratorStatus('reviewer'),
+              timing: timingFor('reviewer'),
+              // Prefer the reviewer's own step log (with verdict output); fall
+              // back to the loop log so the row at least shows iteration count.
+              log: reviewerLog || loopLog,
+              depth: 0
+            }
+          ];
+        })()
+      : []),
     ...(hasSynthesizer
       ? [
           {
@@ -359,6 +439,73 @@ export default function AgentRunDetailPage() {
             depth: 0
           }
         ]
+      : []),
+    ...(hasMemoryCompose
+      ? (() => {
+          const composeLog = logFor('memory-compose');
+          const composerOut =
+            composeLog && typeof composeLog.output === 'string'
+              ? (() => {
+                  try {
+                    return JSON.parse(composeLog.output);
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+          const description = composerOut
+            ? composerOut.skip
+              ? `Composer chose to skip${composerOut.summary ? ` — ${composerOut.summary}` : ''}`
+              : `Composer ${composerOut.mode || 'append'}${composerOut.summary ? ` — ${composerOut.summary}` : ''}`
+            : 'Deciding what (if anything) to commit to long-term memory';
+          return [
+            {
+              key: 'orch:memory-compose',
+              nodeId: 'memory-compose',
+              kind: 'orchestrator',
+              title: 'Composing memory',
+              description,
+              status: orchestratorStatus('memory-compose'),
+              timing: timingFor('memory-compose'),
+              log: composeLog,
+              depth: 0
+            }
+          ];
+        })()
+      : []),
+    ...(hasMemoryFinalize
+      ? (() => {
+          const finalizeLog = logFor('memory-finalize');
+          const written =
+            finalizeLog && typeof finalizeLog.written === 'number' ? finalizeLog.written : null;
+          const noopReason = finalizeLog?.noopReason;
+          const composerSummary = finalizeLog?.composerSummary;
+          let description;
+          if (written === null) {
+            description = 'Writing memory to the agent profile file';
+          } else if (written === 0) {
+            description = noopReason
+              ? composerSummary
+                ? `Skipped — ${noopReason} (${composerSummary})`
+                : `Skipped — ${noopReason}`
+              : 'Skipped — no pending memory updates';
+          } else {
+            description = `Wrote ${written} memory update${written === 1 ? '' : 's'}`;
+          }
+          return [
+            {
+              key: 'orch:memory-finalize',
+              nodeId: 'memory-finalize',
+              kind: 'orchestrator',
+              title: written === 0 ? 'Memory skipped' : 'Memory written',
+              description,
+              status: orchestratorStatus('memory-finalize'),
+              timing: timingFor('memory-finalize'),
+              log: finalizeLog,
+              depth: 0
+            }
+          ];
+        })()
       : []),
     ...dynamicTasks.map(t => ({
       key: `dyn:${t.id}`,
