@@ -12,6 +12,11 @@ const docsDir = join(rootDir, 'docs');
 const outputDir = join(docsDir, 'book');
 const outputFile = join(outputDir, 'iHub-Apps-Documentation.md');
 
+// Also emit the consolidated docs as the bundled "iHub Documentation" source so
+// fresh installs ship with it (server/defaults → contents on first run). This
+// file is generated at build time and is intentionally not committed.
+const sourceOutputFile = join(rootDir, 'server', 'defaults', 'sources', 'ihub-documentation.md');
+
 /**
  * Parse SUMMARY.md to get ordered list of markdown files
  */
@@ -115,6 +120,12 @@ async function exportMarkdown() {
     // Write output
     console.log(`Writing to ${outputFile}...`);
     await writeFile(outputFile, output, 'utf-8');
+
+    // Mirror the export into server/defaults/sources so it ships as the
+    // bundled "iHub Documentation" knowledge source.
+    await mkdir(dirname(sourceOutputFile), { recursive: true });
+    console.log(`Writing to ${sourceOutputFile}...`);
+    await writeFile(sourceOutputFile, output, 'utf-8');
 
     // Calculate stats
     const lines = output.split('\n').length;

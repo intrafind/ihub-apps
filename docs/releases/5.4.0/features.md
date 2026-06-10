@@ -252,4 +252,4 @@ iHub now ships with a built-in **iHub Documentation** source so apps can answer 
 - The source bundles the complete product documentation (consolidated from the `docs/` folder) into a single knowledge source.
 - It is exposed **as a tool**, so an app's model retrieves the documentation on demand instead of inflating every prompt. Add it under an app's **Sources** to build a self-service help or onboarding assistant.
 - Available out of the box on new installations; existing installations receive it automatically on upgrade.
-- Maintainers can refresh the bundled content after documentation changes by running `node scripts/build-documentation-source.js`.
+- The bundled content is generated automatically at build time (and on `npm run setup:dev`) from the docs, so it stays in sync without manual maintenance.

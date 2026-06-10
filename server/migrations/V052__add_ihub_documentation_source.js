@@ -2,10 +2,15 @@
  * Migration V052 — Add the standard "iHub Documentation" source
  *
  * Adds a filesystem source that exposes the full, consolidated iHub Apps
- * documentation (generated from the docs/ folder) so apps can use it as a
- * knowledge source. The content file is copied from
- * server/defaults/sources/ihub-documentation.md into contents/sources/ if it
- * is not already present.
+ * documentation so apps can use it as a knowledge source. The content file is
+ * copied from server/defaults/sources/ihub-documentation.md into
+ * contents/sources/ if it is not already present.
+ *
+ * The content file is generated at build time (and on `npm run setup:dev`) by
+ * scripts/export-docs-markdown.js from the docs/ folder — it is not committed.
+ * If it is missing (e.g. a dev checkout where docs were never exported), the
+ * copy step is skipped with a warning and the source entry is still added;
+ * the file appears on the next docs export / build.
  *
  * Fresh installs receive both the source entry and the content file
  * automatically via server/defaults during performInitialSetup().

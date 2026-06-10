@@ -198,11 +198,15 @@ source and is exposed as a tool (`exposeAs: "tool"`), so the model retrieves it
 on demand rather than inflating every prompt. Add it to an app's `sources` list
 to build a self-service help or onboarding assistant.
 
-The bundled content lives at `contents/sources/ihub-documentation.md`. After
-changing the documentation, regenerate it with:
+The bundled content is generated from the `docs/` folder by
+`scripts/export-docs-markdown.js` — the same export that produces the standalone
+documentation Markdown. It runs automatically during `npm run build` and
+`npm run setup:dev`, writing both `docs/book/iHub-Apps-Documentation.md` and
+`server/defaults/sources/ihub-documentation.md` (the latter is generated, not
+committed). To refresh it manually after editing the docs:
 
 ```bash
-node scripts/build-documentation-source.js
+npm run docs:build:markdown
 ```
 
 Existing installations receive the source automatically via the configuration
