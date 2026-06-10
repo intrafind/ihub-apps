@@ -189,6 +189,37 @@ Sources are configured in `/contents/config/sources.json` as a JSON array:
 ]
 ```
 
+### Built-in Sources
+
+Fresh installations ship with a standard **iHub Documentation** source
+(`id: ihub-documentation`). It bundles the complete iHub Apps documentation —
+consolidated from the repository's `docs/` folder — into a single knowledge
+source and is exposed as a tool (`exposeAs: "tool"`), so the model retrieves it
+on demand rather than inflating every prompt. Add it to an app's `sources` list
+to build a self-service help or onboarding assistant.
+
+The bundled content is generated from the `docs/` folder by
+`scripts/export-docs-markdown.js` — the same export that produces the standalone
+documentation Markdown. It runs automatically during `npm run build` and
+`npm run setup:dev`, writing both `docs/book/iHub-Apps-Documentation.md` and
+`server/defaults/sources/ihub-documentation.md` (the latter is generated, not
+committed). To refresh it manually after editing the docs:
+
+```bash
+npm run docs:build:markdown
+```
+
+Because it is a generated, build-managed file, the server **re-syncs it into
+the contents directory on every startup** whenever the shipped default differs
+(see `syncManagedDefaultFiles()` in `server/utils/setupUtils.js`). This means an
+upgrade with updated documentation refreshes the source automatically on
+restart — unlike ordinary source files, which are only copied from defaults
+when missing. Do not edit `contents/sources/ihub-documentation.md` by hand; your
+changes would be overwritten on the next restart.
+
+Existing installations receive the source entry automatically via the
+configuration migration system on upgrade.
+
 ### Expose Modes
 
 Sources can be exposed in two ways:

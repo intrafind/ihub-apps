@@ -90,3 +90,5 @@ contents*/
 
 # Nextcloud plugin tarball built by `make -C nextcloud-app package`
 ihub_chat.tar.gz
+# Generated at build time by scripts/export-docs-markdown.js
+server/defaults/sources/ihub-documentation.md

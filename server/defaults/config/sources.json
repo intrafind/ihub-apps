@@ -39,6 +39,31 @@
     }
   },
   {
+    "id": "ihub-documentation",
+    "name": {
+      "en": "iHub Documentation",
+      "de": "iHub-Dokumentation"
+    },
+    "description": {
+      "en": "Full iHub Apps documentation (consolidated from the docs/ folder): configuration, authentication, features, and operations. Use as a knowledge source for apps that answer questions about the iHub platform.",
+      "de": "Vollständige iHub-Apps-Dokumentation (zusammengeführt aus dem Ordner docs/): Konfiguration, Authentifizierung, Funktionen und Betrieb. Als Wissensquelle für Apps, die Fragen zur iHub-Plattform beantworten."
+    },
+    "type": "filesystem",
+    "enabled": true,
+    "exposeAs": "tool",
+    "category": "documentation",
+    "tags": ["documentation", "ihub", "help"],
+    "config": {
+      "path": "sources/ihub-documentation.md",
+      "encoding": "utf-8"
+    },
+    "caching": {
+      "ttl": 3600,
+      "strategy": "static",
+      "enabled": true
+    }
+  },
+  {
     "id": "intrafind-website-home",
     "name": {
       "en": "IntraFind.com"
