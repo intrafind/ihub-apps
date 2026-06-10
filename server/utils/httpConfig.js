@@ -315,7 +315,12 @@ export function matchesProxyPattern(url, patterns) {
  */
 function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
   const options = {};
-  if (shouldIgnoreSSL) options.rejectUnauthorized = false;
+  // Admin opt-in only: reached solely when shouldIgnoreSSL is true, which
+  // requires ssl.ignoreInvalidCertificates=true AND an explicit per-domain
+  // whitelist match (see shouldIgnoreSSLForURL / isDomainWhitelisted). This is
+  // pre-existing, intentional behavior consolidated here from three prior call
+  // sites; it is not introduced by this change.
+  if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
   if (typeof lookup === 'function') options.lookup = lookup;
 
   if (Object.keys(options).length === 0 && !isHttps) {
