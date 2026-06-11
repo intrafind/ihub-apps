@@ -12,8 +12,8 @@ export const description = 'expose_ifinder_discover_function';
 
 const DISCOVER_FN = {
   description: {
-    en: "Probe an iFinder search profile and return a corpus map: totals, top facet values, and sample document titles. Use this to learn what data is available and which fields can be filtered before issuing a real search.",
-    de: "Ein iFinder-Suchprofil sondieren und eine Korpus-Karte zurückgeben: Gesamtzahlen, häufigste Facettenwerte und Beispieltitel. Verwende dies, um zu lernen, welche Daten verfügbar sind und welche Felder gefiltert werden können, bevor eine echte Suche ausgeführt wird."
+    en: 'Probe an iFinder search profile and return a corpus map: totals, top facet values, and sample document titles. Use this to learn what data is available and which fields can be filtered before issuing a real search.',
+    de: 'Ein iFinder-Suchprofil sondieren und eine Korpus-Karte zurückgeben: Gesamtzahlen, häufigste Facettenwerte und Beispieltitel. Verwende dies, um zu lernen, welche Daten verfügbar sind und welche Felder gefiltert werden können, bevor eine echte Suche ausgeführt wird.'
   },
   parameters: {
     type: 'object',

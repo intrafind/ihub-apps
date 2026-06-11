@@ -114,18 +114,16 @@ function fillToolResultPlaceholder(promptTemplate, toolResult) {
 }
 
 async function shapeToolResultWithLLM(toolResult, { promptTemplate, modelId }) {
-  const userPrompt = fillToolResultPlaceholder(
-    promptTemplate || DEFAULT_SHAPER_PROMPT,
-    toolResult
-  );
+  const userPrompt = fillToolResultPlaceholder(promptTemplate || DEFAULT_SHAPER_PROMPT, toolResult);
   const resolvedModel = resolveModelId(modelId || null, 'memoryShaper');
   if (!resolvedModel) {
     throw new Error('No model available to shape tool result for memory.');
   }
-  const { content } = await simpleCompletion(
-    [{ role: 'user', content: userPrompt }],
-    { modelId: resolvedModel, temperature: 0.2, maxTokens: 4096 }
-  );
+  const { content } = await simpleCompletion([{ role: 'user', content: userPrompt }], {
+    modelId: resolvedModel,
+    temperature: 0.2,
+    maxTokens: 4096
+  });
   return (content || '').trim();
 }
 

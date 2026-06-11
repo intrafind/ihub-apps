@@ -535,10 +535,7 @@ export class StateManager {
       failedResult.details = error.details;
       // Hoist resolvedInputs to the top level so the UI finds it at the
       // same path it does for completed results.
-      if (
-        error.details.resolvedInputs &&
-        typeof error.details.resolvedInputs === 'object'
-      ) {
+      if (error.details.resolvedInputs && typeof error.details.resolvedInputs === 'object') {
         failedResult.resolvedInputs = error.details.resolvedInputs;
       }
     }

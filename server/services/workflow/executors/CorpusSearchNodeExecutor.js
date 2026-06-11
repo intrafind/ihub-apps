@@ -142,15 +142,13 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
     // textarea inputVariables arrive as a single newline-separated string,
     // tool-call args arrive as an array — accept both shapes here.
     const stateFiltersRaw = this.resolveVariable(filterPath, state);
-    const stateFilters = typeof stateFiltersRaw === 'string'
-      ? stateFiltersRaw.split(/\r?\n/)
-      : Array.isArray(stateFiltersRaw)
-        ? stateFiltersRaw
-        : [];
-    const mergedFilters = [
-      ...(Array.isArray(configFilter) ? configFilter : []),
-      ...stateFilters
-    ]
+    const stateFilters =
+      typeof stateFiltersRaw === 'string'
+        ? stateFiltersRaw.split(/\r?\n/)
+        : Array.isArray(stateFiltersRaw)
+          ? stateFiltersRaw
+          : [];
+    const mergedFilters = [...(Array.isArray(configFilter) ? configFilter : []), ...stateFilters]
       .filter(f => typeof f === 'string' && f.trim())
       .map(f => f.trim());
     const filters = Array.from(new Set(mergedFilters));
@@ -198,9 +196,7 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
     const executedKey = q => `${q}||${filters.join(',')}`;
     const priorExecutedRaw = this.resolveVariable('$.data._executedQueries', state);
     const executedQueries = new Set(
-      Array.isArray(priorExecutedRaw)
-        ? priorExecutedRaw.filter(k => typeof k === 'string')
-        : []
+      Array.isArray(priorExecutedRaw) ? priorExecutedRaw.filter(k => typeof k === 'string') : []
     );
 
     // Restore prior-run corpus and merge in this iteration's fresh hits so
@@ -275,11 +271,7 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       let pages = 0;
       let queryFailed = false;
 
-      while (
-        hitsThisQuery < maxPerTopic &&
-        dedup.size < maxTotalDocs &&
-        !isCancelled()
-      ) {
+      while (hitsThisQuery < maxPerTopic && dedup.size < maxTotalDocs && !isCancelled()) {
         const remainingForQuery = maxPerTopic - hitsThisQuery;
         const remainingForCorpus = maxTotalDocs - dedup.size;
         const pageSize = Math.min(remainingForQuery, remainingForCorpus, IFINDER_MAX_PAGE);

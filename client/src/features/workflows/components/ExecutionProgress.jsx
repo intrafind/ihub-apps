@@ -85,9 +85,7 @@ function ParameterRow({ name, value }) {
   return (
     <div className="px-3 py-2 text-xs">
       <div className="flex items-start gap-2">
-        <span className="font-mono text-gray-500 dark:text-gray-400 min-w-0 shrink-0">
-          {name}
-        </span>
+        <span className="font-mono text-gray-500 dark:text-gray-400 min-w-0 shrink-0">{name}</span>
         <span className="text-gray-900 dark:text-gray-100 break-words flex-1 min-w-0">
           {inlineDisplay}
         </span>

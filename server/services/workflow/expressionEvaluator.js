@@ -216,9 +216,7 @@ class Parser {
   consume(type) {
     const t = this.tokens[this.pos];
     if (!t || t.type !== type) {
-      throw new ExpressionError(
-        `Expected ${type} but got ${t ? t.type : 'end-of-input'}`
-      );
+      throw new ExpressionError(`Expected ${type} but got ${t ? t.type : 'end-of-input'}`);
     }
     this.pos++;
     return t;
@@ -364,10 +362,8 @@ function evaluateNode(node, state) {
         case '!==':
           return l !== r;
         case '==':
-          // eslint-disable-next-line eqeqeq
           return l == r;
         case '!=':
-          // eslint-disable-next-line eqeqeq
           return l != r;
         case '>':
           return l > r;
