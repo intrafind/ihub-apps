@@ -50,14 +50,31 @@ export async function writeAgentMemory(profileId, payload) {
  * section in the agent profile's long-term memory. Used for operator-driven
  * knowledge ingestion (e.g. running iFinder_discover to build a corpus map).
  *
+ * When `shape` is true, the raw tool result is passed through an LLM call with
+ * `shapePrompt` (`{TOOL_RESULT}` placeholder is substituted) and the LLM's
+ * output is written to memory instead of the raw JSON dump. Use this to turn
+ * verbose payloads into a compact, filterable index the agent can read.
+ *
  * @param {string} profileId
- * @param {{ toolId: string, params?: object, section: string, mode?: 'replace-section'|'append' }} payload
+ * @param {{
+ *   toolId: string,
+ *   params?: object,
+ *   section: string,
+ *   mode?: 'replace-section'|'append',
+ *   shape?: boolean,
+ *   shapePrompt?: string,
+ *   shapeModel?: string
+ * }} payload
  */
 export async function buildMemoryFromTool(profileId, payload) {
   return await makeAdminApiCall(`/admin/agents/profiles/${profileId}/memory/from-tool`, {
     method: 'POST',
     body: payload
   });
+}
+
+export async function fetchMemoryShaperPrompt() {
+  return await makeAdminApiCall('/admin/agents/memory/shaper-prompt');
 }
 
 export async function fetchInboxes() {

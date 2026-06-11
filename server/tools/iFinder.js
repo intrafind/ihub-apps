@@ -34,10 +34,10 @@ export async function getMetadata(params) {
 }
 
 /**
- * Probe a search profile and produce a markdown corpus map.
- * Intended to be invoked by the admin "build memory from tool" endpoint,
- * not by agent runs at runtime. See `agents.adminMemoryBuilderTools` in
- * platform config for the allow-list.
+ * Probe a search profile and produce a corpus map: totals, top facet values,
+ * available filterable fields, and sample document titles. Used by agents and
+ * workflows to learn what data is available before issuing a real search,
+ * and by the admin "build memory from tool" endpoint to seed long-term memory.
  *
  * @param {Object} params
  * @returns {Promise<Object>} Discovery result including `markdown` field

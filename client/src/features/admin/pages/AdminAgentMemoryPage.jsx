@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   buildMemoryFromTool,
   fetchAgentMemory,
+  fetchMemoryShaperPrompt,
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
 import { fetchAdminTools } from '../../../api/adminApi';
@@ -29,6 +30,9 @@ export default function AdminAgentMemoryPage() {
   const [builderParams, setBuilderParams] = useState('{\n  "searchProfile": ""\n}');
   const [building, setBuilding] = useState(false);
   const [builderStatus, setBuilderStatus] = useState(null);
+  const [shape, setShape] = useState(true);
+  const [shapePrompt, setShapePrompt] = useState('');
+  const [showShapePrompt, setShowShapePrompt] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,6 +74,21 @@ export default function AdminAgentMemoryPage() {
         setTools(expanded);
       } catch {
         setTools([]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetchMemoryShaperPrompt();
+        const prompt = res?.data?.prompt;
+        if (typeof prompt === 'string' && prompt.length > 0) {
+          setShapePrompt(prompt);
+        }
+      } catch {
+        // non-fatal: textarea will start empty and the server falls back
+        // to its built-in default if shapePrompt is missing.
       }
     })();
   }, []);
@@ -116,7 +135,9 @@ export default function AdminAgentMemoryPage() {
         toolId: builderToolId,
         params,
         section: builderSection.trim(),
-        mode: builderMode
+        mode: builderMode,
+        shape,
+        shapePrompt: shape ? shapePrompt : undefined
       });
       const newVersion = res?.data?.version;
       setBuilderStatus({
@@ -292,6 +313,53 @@ export default function AdminAgentMemoryPage() {
                   onChange={e => setBuilderParams(e.target.value)}
                 />
               </div>
+
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={shape}
+                    onChange={e => setShape(e.target.checked)}
+                  />
+                  <span>
+                    {t(
+                      'admin.agents.memory.builder.shapeLabel',
+                      'Format result with LLM before writing (recommended)'
+                    )}
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.agents.memory.builder.shapeHelp',
+                    "When on, the raw tool output is passed through an LLM call using the prompt below. The LLM's reply is written to memory instead of the raw JSON, so the agent sees a compact, filterable index rather than a verbose payload."
+                  )}
+                </p>
+                {shape && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowShapePrompt(s => !s)}
+                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      {showShapePrompt
+                        ? t('admin.agents.memory.builder.hideShapePrompt', 'Hide shaper prompt')
+                        : t('admin.agents.memory.builder.showShapePrompt', 'Edit shaper prompt')}
+                    </button>
+                    {showShapePrompt && (
+                      <textarea
+                        className="mt-2 w-full h-48 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        value={shapePrompt}
+                        onChange={e => setShapePrompt(e.target.value)}
+                        placeholder={t(
+                          'admin.agents.memory.builder.shapePromptPlaceholder',
+                          'Prompt used to format the tool result. Use {TOOL_RESULT} where the raw output should be inserted.'
+                        )}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end items-center gap-2">
                 {builderStatus && (
                   <div

@@ -1,4 +1,5 @@
 import logger from '../../utils/logger.js';
+import { evaluateBooleanExpression } from './expressionEvaluator.js';
 
 /**
  * DAGScheduler handles dependency resolution and execution ordering for workflow graphs.
@@ -381,7 +382,9 @@ export class DAGScheduler {
    * @param {Object} edge - The edge to evaluate
    * @param {Object} [edge.condition] - Condition configuration
    * @param {string} [edge.condition.type='always'] - Condition type
-   * @param {string} [edge.condition.value] - Condition expression or value
+   * @param {string} [edge.condition.expression] - Boolean expression for type='expression'
+   * @param {string} [edge.condition.field] - Path for type='equals'/'contains'/'exists'
+   * @param {*} [edge.condition.value] - Comparand for type='equals'/'contains'
    * @param {*} result - The result from the source node
    * @param {Object} state - Current execution state
    * @param {Object} state.data - Workflow data/context
@@ -418,7 +421,7 @@ export class DAGScheduler {
         return false;
 
       case 'expression':
-        return this._evaluateExpression(condition.value, result, state);
+        return this._evaluateExpression(condition.expression, result, state);
 
       case 'equals':
         return this._evaluateEquals(condition, result, state);
@@ -457,34 +460,19 @@ export class DAGScheduler {
    * @private
    */
   _evaluateExpression(expression, result, state) {
-    if (!expression) {
-      return true;
+    const { value, error } = evaluateBooleanExpression(expression, state);
+    if (error && error !== 'empty-expression') {
+      logger.warn('Edge expression evaluation failed', {
+        component: 'DAGScheduler',
+        expression,
+        error
+      });
+    } else if (error === 'empty-expression') {
+      logger.warn('Empty expression on edge condition — treating as false', {
+        component: 'DAGScheduler'
+      });
     }
-
-    try {
-      // Create a safe evaluation context with result and state data
-      const context = {
-        result,
-        data: state?.data || {},
-        nodeResults: state?.data?.nodeResults || {}
-      };
-
-      // Simple expression evaluation (safe subset)
-      // Supports: result.field, result.field === value, result.field !== value
-      // Supports: data.field, nodeResults.nodeId.field
-
-      // Handle direct property access checks
-      if (expression.includes('===') || expression.includes('!==')) {
-        return this._evaluateComparison(expression, context);
-      }
-
-      // Handle boolean property access (e.g., "result.success")
-      const value = this._getValueFromPath(expression, context);
-      return Boolean(value);
-    } catch (error) {
-      logger.warn('Expression evaluation failed', { component: 'DAGScheduler', expression, error });
-      return false;
-    }
+    return value;
   }
 
   /**
@@ -551,61 +539,6 @@ export class DAGScheduler {
 
     const value = this._getValueFromPath(condition.field, context);
     return value !== undefined && value !== null;
-  }
-
-  /**
-   * Evaluates a comparison expression (=== or !==)
-   * @param {string} expression - The comparison expression
-   * @param {Object} context - The evaluation context
-   * @returns {boolean} Comparison result
-   * @private
-   */
-  _evaluateComparison(expression, context) {
-    let operator;
-    let parts;
-
-    if (expression.includes('!==')) {
-      operator = '!==';
-      parts = expression.split('!==').map(p => p.trim());
-    } else if (expression.includes('===')) {
-      operator = '===';
-      parts = expression.split('===').map(p => p.trim());
-    } else {
-      return false;
-    }
-
-    if (parts.length !== 2) {
-      return false;
-    }
-
-    const [leftPath, rightValue] = parts;
-    const leftActual = this._getValueFromPath(leftPath, context);
-
-    // Parse the right value (handle strings, numbers, booleans)
-    let rightActual;
-    if (rightValue === 'true') {
-      rightActual = true;
-    } else if (rightValue === 'false') {
-      rightActual = false;
-    } else if (rightValue === 'null') {
-      rightActual = null;
-    } else if (rightValue === 'undefined') {
-      rightActual = undefined;
-    } else if (/^['"].*['"]$/.test(rightValue)) {
-      // String literal
-      rightActual = rightValue.slice(1, -1);
-    } else if (!isNaN(Number(rightValue))) {
-      rightActual = Number(rightValue);
-    } else {
-      // Treat as a path reference
-      rightActual = this._getValueFromPath(rightValue, context);
-    }
-
-    if (operator === '===') {
-      return leftActual === rightActual;
-    } else {
-      return leftActual !== rightActual;
-    }
   }
 
   /**

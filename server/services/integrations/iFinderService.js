@@ -87,21 +87,59 @@ class IFinderService {
     chatId,
     user,
     maxResults = 10,
+    from = 0,
     searchProfile,
     returnFields = [
       'id',
-      'mediaType',
-      'sourceName',
-      'title',
-      'navigationTree',
+      'accessInfo.deepLink',
+      'accessInfo.download.itemId',
+      'accessInfo.download.itemType',
+      'accessInfo.download.subItemExtractionPath',
+      'accessInfo.lastModifiedDate',
+      'accessInfo.source',
+      'agentTags',
+      'agentType',
+      'agentVersion',
       'application',
-      'url',
-      'language',
+      'attachment.parent.id',
+      'attachment.parent.mediaType',
+      'attachment.parent.title',
+      'contentHash',
+      'contentLength',
+      'context',
+      'creationDate',
+      'creators',
       'file.name',
-      'contentLength'
+      'file.size',
+      'idHash',
+      'indexingDate',
+      'language',
+      'languages',
+      'links',
+      'mediaType',
+      'navigationTree',
+      'navigationTreeDepth',
+      'owners',
+      'significantTerms_hint',
+      'sourceLocations.label',
+      'sourceLocations.url',
+      'sourceName',
+      'sourceType',
+      'title',
+      'url'
     ],
-    returnFacets,
-    sort
+    returnFacets = [
+      'sourceType.keyword',
+      'application.keyword',
+      'navigationTree',
+      'creators.keyword',
+      'language.keyword',
+      'modificationDate'
+    ],
+    sort,
+    filter,
+    queryLogging = true,
+    signal
   }) {
     if (!query) {
       throw new Error('Query parameter is required');
@@ -146,10 +184,15 @@ class IFinderService {
       );
       const baseUrl = `${config.baseUrl.replace(/\/+$/, '')}${searchEndpoint}`;
 
-      // Build query parameters
+      // Build URL query parameters — paging, projection, sorting, logging.
+      // The query string itself and filters move to the JSON body below
+      // (the GET endpoint doesn't support filters, only POST does).
+      // iFinder caps `size` at 100; pagination through larger result sets
+      // is the caller's responsibility (vary `from` across calls).
       const params = new URLSearchParams();
-      if (query) params.append('query', query);
-      params.append('size', Math.min(maxResults, 100).toString());
+      const pageSize = Math.min(Math.max(maxResults, 0), 100);
+      params.append('size', pageSize.toString());
+      if (from > 0) params.append('from', String(from));
 
       if (returnFields && returnFields.length > 0) {
         returnFields.forEach(field => params.append('return_fields', field));
@@ -163,16 +206,42 @@ class IFinderService {
         sort.forEach(sortCriteria => params.append('sort', sortCriteria));
       }
 
+      if (queryLogging) {
+        params.append('query_logging', 'enable');
+      }
+
+      // Build request body. iFinder POST search expects:
+      //   { "query":   { "query": "<q>",       "query_type": "QueryStringQuery" },
+      //     "filters": [{ "query": "field:val", "query_type": "QueryStringQuery" }, …] }
+      const requestBody = {
+        query: {
+          query,
+          query_type: 'QueryStringQuery'
+        }
+      };
+      if (Array.isArray(filter) && filter.length > 0) {
+        requestBody.filters = filter
+          .filter(f => typeof f === 'string' && f.trim())
+          .map(f => ({ query: f.trim(), query_type: 'QueryStringQuery' }));
+      }
+
       const searchUrl = `${baseUrl}?${params.toString()}`;
-      logger.debug('Sending search request to profile', { component: 'IFinderService', profileId });
-      // Make API request
+      logger.debug('Sending search request to profile', {
+        component: 'IFinderService',
+        profileId,
+        filterCount: requestBody.filters?.length || 0
+      });
+      // Make API request — POST with JSON body so we can apply filters.
       const response = await throttledFetch('iFinderSearch', searchUrl, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           Authorization: authHeader,
-          Accept: 'application/json'
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
         },
-        timeout: config.timeout
+        body: JSON.stringify(requestBody),
+        timeout: config.timeout,
+        signal
       });
 
       if (!response.ok) {
@@ -330,7 +399,7 @@ class IFinderService {
    * @param {Object} params - Content fetch parameters
    * @returns {Object} Document content and metadata
    */
-  async getContent({ documentId, chatId, user, searchProfile, maxLength = 50000 }) {
+  async getContent({ documentId, chatId, user, searchProfile, maxLength = 50000, signal }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
     }
@@ -371,7 +440,8 @@ class IFinderService {
           Authorization: authHeader,
           Accept: 'application/json'
         },
-        timeout: config.timeout + 30000 // Longer timeout for content fetch
+        timeout: config.timeout + 30000, // Longer timeout for content fetch
+        signal
       });
 
       if (!response.ok) {

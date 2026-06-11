@@ -19,8 +19,34 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { deepMerge } from '../../../utils/deepMerge.js';
 import memoryFile from '../../../agents/memory/memoryFile.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../../validators/agentProfileSchema.js';
+import { evaluateBooleanExpression } from '../expressionEvaluator.js';
 
 const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/;
+
+/**
+ * Compact debug-friendly representation of a value for log lines.
+ * Primitives pass through; objects/arrays are JSON-stringified and
+ * truncated to keep log lines readable without hiding the value entirely.
+ * Avoids the old `'[object]'` placeholder that revealed nothing.
+ */
+function debugValue(value, maxLen = 300) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean') return value;
+  try {
+    const json = JSON.stringify(value);
+    if (typeof json !== 'string') return String(value);
+    if (json.length <= maxLen) return json;
+    const head = json.slice(0, maxLen);
+    const suffix = Array.isArray(value)
+      ? ` …+${value.length - (head.match(/,/g)?.length ?? 0) - 1} more items]`
+      : ' …}';
+    return `${head}${suffix}`;
+  } catch {
+    return Array.isArray(value) ? `[${value.length} items]` : '[unserialisable]';
+  }
+}
 
 function sliceMemorySection(body, section) {
   if (!body) return '';
@@ -151,9 +177,26 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         updatedVariables: Object.keys(stateUpdates)
       });
 
+      // Surface what the transform actually did so the execution UI's
+      // Parameters section is useful for transforms (which were previously
+      // invisible). `operations` describes intent (the JSON config of each
+      // op); `updatedValues` shows the outcome (variable → final value,
+      // truncated). Together you can answer "did the corpus map load?" or
+      // "what did pick-doc actually pick?" from the UI alone.
+      const updatedValues = {};
+      for (const key of Object.keys(stateUpdates)) {
+        updatedValues[key] = debugValue(stateUpdates[key], 800);
+      }
+
       return this.createSuccessResult(
         { transformedVariables: Object.keys(stateUpdates) },
-        { stateUpdates }
+        {
+          stateUpdates,
+          resolvedInputs: {
+            operations,
+            updatedValues
+          }
+        }
       );
     } catch (error) {
       this.logger.error('Transform node failed', {
@@ -199,7 +242,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       this.logger.debug('SET operation', {
         component: 'TransformNodeExecutor',
         variableName,
-        value: typeof value === 'object' ? '[object]' : value
+        value: debugValue(value)
       });
     }
 
@@ -224,7 +267,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           component: 'TransformNodeExecutor',
           sourcePath,
           targetPath,
-          value: typeof clonedValue === 'object' ? '[object]' : clonedValue
+          value: debugValue(clonedValue)
         });
       } else {
         this.logger.warn('COPY source not found', {
@@ -232,6 +275,34 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           sourcePath
         });
       }
+    }
+
+    // EVALUATE operation: run a boolean expression and store its result.
+    // Uses the same evaluator the DAG scheduler and decision nodes use, so
+    // operators / paths / helper functions are consistent across the
+    // engine. Example:
+    //   { "evaluate": "$.data._currentDoc.contentLength > $.data.maxFulltextChars",
+    //     "to": "_currentDoc.truncated" }
+    if ('evaluate' in operation && 'to' in operation) {
+      const expression = operation.evaluate;
+      const targetPath = operation.to;
+
+      const mergedData = deepMerge(state.data, stateUpdates);
+      const { value, error } = evaluateBooleanExpression(expression, { data: mergedData });
+      if (error && error !== 'empty-expression') {
+        this.logger.warn('EVALUATE op failed', {
+          component: 'TransformNodeExecutor',
+          expression,
+          error
+        });
+      }
+      this.setNestedValue(targetPath, value, stateUpdates);
+      this.logger.debug('EVALUATE operation', {
+        component: 'TransformNodeExecutor',
+        expression,
+        targetPath,
+        value
+      });
     }
 
     // INCREMENT operation: add to a numeric variable
@@ -346,7 +417,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           arrayPath,
           index,
           targetPath,
-          value: typeof clonedValue === 'object' ? '[object]' : clonedValue
+          value: debugValue(clonedValue)
         });
       } else {
         // Set empty string if out of bounds
@@ -459,7 +530,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         conditionExpr,
         targetPath,
         conditionResult,
-        value: typeof finalValue === 'object' ? '[object]' : finalValue
+        value: debugValue(finalValue)
       });
     }
   }

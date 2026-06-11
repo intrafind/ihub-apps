@@ -519,6 +519,37 @@ export class StateManager {
       stack: error.stack
     });
 
+    // Record a failed nodeResults entry so the execution UI can render the
+    // node with its resolved inputs and error. Mirrors markNodeCompleted's
+    // nodeResults write so failed and succeeded nodes look symmetric in
+    // the UI. The error may carry `details` (from createErrorResult) or
+    // additional fields the executor attached when throwing.
+    state.data.nodeResults = state.data.nodeResults || {};
+    const failedResult = {
+      status: 'failed',
+      output: null,
+      error: error.message || String(error)
+    };
+    if (error.code) failedResult.code = error.code;
+    if (error.details && typeof error.details === 'object') {
+      failedResult.details = error.details;
+      // Hoist resolvedInputs to the top level so the UI finds it at the
+      // same path it does for completed results.
+      if (
+        error.details.resolvedInputs &&
+        typeof error.details.resolvedInputs === 'object'
+      ) {
+        failedResult.resolvedInputs = error.details.resolvedInputs;
+      }
+    }
+    // Don't clobber an existing successful result for this node (e.g.
+    // a prior loop iteration that succeeded). Only write if absent or
+    // also-failed.
+    const prior = state.data.nodeResults[nodeId];
+    if (!prior || prior.status !== 'completed') {
+      state.data.nodeResults[nodeId] = failedResult;
+    }
+
     state.updatedAt = new Date().toISOString();
   }
 
