@@ -18,6 +18,16 @@ export default function LoginPage() {
     }
   }, []); // eslint-disable-line @eslint-react/exhaustive-deps
 
+  // Open the auth gate — the single login dialog for the whole app — full-page
+  // for the dedicated /login route. After a successful gate login the gate
+  // dispatches `authGateSuccess`, AuthContext refreshes, and the effect below
+  // redirects to the stored returnUrl.
+  useEffect(() => {
+    if (!isLoading && !user && window.__authGate) {
+      window.__authGate.show();
+    }
+  }, [isLoading, user]);
+
   // Redirect authenticated users immediately (handles NTLM return and already-logged-in users)
   useEffect(() => {
     if (!isLoading && user) {
@@ -45,6 +55,17 @@ export default function LoginPage() {
   // If user is authenticated we'll redirect — don't flash the form
   if (user) {
     return null;
+  }
+
+  // The auth gate (full-page overlay) renders the login UI on top of this page.
+  // Show a spinner underneath while it loads. Fall back to the in-page form only
+  // if the gate is somehow unavailable (it is inlined on every index.html entry).
+  if (window.__authGate) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
   return (
