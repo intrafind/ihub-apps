@@ -27,6 +27,84 @@ const summarizeValue = (value, maxLength = 150) => {
 };
 
 /**
+ * Renders one resolved parameter as a labeled key/value row.
+ * Inline preview for small values; collapsible expander with full content
+ * for arrays, objects, and long strings. The expander is always available
+ * (not gated by the technical-details toggle) because these ARE the user's
+ * data — they should never need to flip a setting to see their queries or
+ * the docs the workflow loaded.
+ */
+function ParameterRow({ name, value }) {
+  const isObject = value !== null && typeof value === 'object';
+  const isLongString = typeof value === 'string' && value.length > 200;
+  const collapsible = isObject || isLongString;
+
+  const inlineDisplay = (() => {
+    if (value === null || value === undefined) return <em className="text-gray-400">empty</em>;
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') {
+      if (value.length > 200) return value.substring(0, 200) + '…';
+      return value;
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <em className="text-gray-400">[]</em>;
+      const allPrimitive = value.every(
+        v => v === null || ['string', 'number', 'boolean'].includes(typeof v)
+      );
+      if (allPrimitive) {
+        // Try to inline as many elements as fit in ~200 chars — independent
+        // of total count. With 11 short strings (the user's case) this
+        // produces the full list inline; with 200 long strings it shows the
+        // first few + a "(N total)" suffix and leaves the rest in the
+        // expander.
+        const formatted = value.map(v => (typeof v === 'string' ? `"${v}"` : String(v)));
+        let acc = '';
+        let included = 0;
+        for (const piece of formatted) {
+          const candidate = acc ? `${acc}, ${piece}` : piece;
+          if (candidate.length > 200) break;
+          acc = candidate;
+          included++;
+        }
+        if (included === value.length) return `[${acc}]`;
+        if (included > 0) return `[${acc}, … +${value.length - included} more]`;
+      }
+      // Object arrays or long primitives: show a count summary inline,
+      // full content is in the expander below.
+      return `[${value.length} items]`;
+    }
+    if (typeof value === 'object') {
+      const keys = Object.keys(value);
+      if (keys.length === 0) return <em className="text-gray-400">{'{}'}</em>;
+      return `{${keys.slice(0, 4).join(', ')}${keys.length > 4 ? ', …' : ''}}`;
+    }
+    return String(value);
+  })();
+
+  return (
+    <div className="px-3 py-2 text-xs">
+      <div className="flex items-start gap-2">
+        <span className="font-mono text-gray-500 dark:text-gray-400 min-w-0 shrink-0">{name}</span>
+        <span className="text-gray-900 dark:text-gray-100 break-words flex-1 min-w-0">
+          {inlineDisplay}
+        </span>
+      </div>
+      {collapsible && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            show full
+          </summary>
+          <pre className="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-96 whitespace-pre-wrap break-words">
+            {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/**
  * Status indicator for a node
  */
 function NodeStatus({ status }) {
@@ -56,8 +134,40 @@ function NodeStatus({ status }) {
  * the user has opted into "Show technical details".
  */
 function ItemDetails({ item, t, showTechnical }) {
+  const resolvedInputs = item.rawResult?.resolvedInputs;
+  const inputEntries =
+    resolvedInputs && typeof resolvedInputs === 'object' ? Object.entries(resolvedInputs) : null;
+
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+      {/* Resolved parameters — what this node was actually run with.
+          Useful for debugging "why did this fail" and verifying that a
+          $.data.X reference resolved to the value you expected. */}
+      {inputEntries && inputEntries.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            {t('workflows.progress.parameters', 'Parameters')}
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+            {inputEntries.map(([key, value]) => (
+              <ParameterRow key={key} name={key} value={value} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Error detail — failures should be impossible to miss */}
+      {item.status === 'failed' && item.rawResult?.error && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
+            {t('workflows.progress.error', 'Error')}
+          </div>
+          <div className="text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-900 dark:text-red-200 rounded px-3 py-2 whitespace-pre-wrap break-words">
+            {item.rawResult.error}
+          </div>
+        </div>
+      )}
+
       {/* Output variable and value — technical only */}
       {showTechnical && item.outputVariable && item.outputValue && (
         <div className="mb-3">

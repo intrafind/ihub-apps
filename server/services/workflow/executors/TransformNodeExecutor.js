@@ -17,6 +17,59 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { deepMerge } from '../../../utils/deepMerge.js';
+import memoryFile from '../../../agents/memory/memoryFile.js';
+import { AGENT_PROFILE_ID_PATTERN } from '../../../validators/agentProfileSchema.js';
+import { evaluateBooleanExpression } from '../expressionEvaluator.js';
+
+const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/;
+
+/**
+ * Compact debug-friendly representation of a value for log lines.
+ * Primitives pass through; objects/arrays are JSON-stringified and
+ * truncated to keep log lines readable without hiding the value entirely.
+ * Avoids the old `'[object]'` placeholder that revealed nothing.
+ */
+function debugValue(value, maxLen = 300) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean') return value;
+  try {
+    const json = JSON.stringify(value);
+    if (typeof json !== 'string') return String(value);
+    if (json.length <= maxLen) return json;
+    const head = json.slice(0, maxLen);
+    const suffix = Array.isArray(value)
+      ? ` …+${value.length - (head.match(/,/g)?.length ?? 0) - 1} more items]`
+      : ' …}';
+    return `${head}${suffix}`;
+  } catch {
+    return Array.isArray(value) ? `[${value.length} items]` : '[unserialisable]';
+  }
+}
+
+function sliceMemorySection(body, section) {
+  if (!body) return '';
+  const target = section.trim();
+  const lines = body.split('\n');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(SECTION_HEADING_RE);
+    if (m && m[1].trim() === target) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start === -1) return '';
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (SECTION_HEADING_RE.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n').trim();
+}
 
 /**
  * Transform node configuration
@@ -115,7 +168,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       const stateUpdates = {};
 
       for (const operation of operations) {
-        this.processOperation(operation, state, stateUpdates, context);
+        await this.processOperation(operation, state, stateUpdates, context);
       }
 
       this.logger.info('Transform node completed', {
@@ -124,9 +177,26 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         updatedVariables: Object.keys(stateUpdates)
       });
 
+      // Surface what the transform actually did so the execution UI's
+      // Parameters section is useful for transforms (which were previously
+      // invisible). `operations` describes intent (the JSON config of each
+      // op); `updatedValues` shows the outcome (variable → final value,
+      // truncated). Together you can answer "did the corpus map load?" or
+      // "what did pick-doc actually pick?" from the UI alone.
+      const updatedValues = {};
+      for (const key of Object.keys(stateUpdates)) {
+        updatedValues[key] = debugValue(stateUpdates[key], 800);
+      }
+
       return this.createSuccessResult(
         { transformedVariables: Object.keys(stateUpdates) },
-        { stateUpdates }
+        {
+          stateUpdates,
+          resolvedInputs: {
+            operations,
+            updatedValues
+          }
+        }
       );
     } catch (error) {
       this.logger.error('Transform node failed', {
@@ -151,7 +221,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
    * @param {Object} context - Execution context
    * @private
    */
-  processOperation(operation, state, stateUpdates, _context) {
+  async processOperation(operation, state, stateUpdates, _context) {
     // SET operation: set a variable to a literal value
     if ('set' in operation) {
       const variableName = operation.set;
@@ -172,7 +242,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       this.logger.debug('SET operation', {
         component: 'TransformNodeExecutor',
         variableName,
-        value: typeof value === 'object' ? '[object]' : value
+        value: debugValue(value)
       });
     }
 
@@ -197,7 +267,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           component: 'TransformNodeExecutor',
           sourcePath,
           targetPath,
-          value: typeof clonedValue === 'object' ? '[object]' : clonedValue
+          value: debugValue(clonedValue)
         });
       } else {
         this.logger.warn('COPY source not found', {
@@ -205,6 +275,34 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           sourcePath
         });
       }
+    }
+
+    // EVALUATE operation: run a boolean expression and store its result.
+    // Uses the same evaluator the DAG scheduler and decision nodes use, so
+    // operators / paths / helper functions are consistent across the
+    // engine. Example:
+    //   { "evaluate": "$.data._currentDoc.contentLength > $.data.maxFulltextChars",
+    //     "to": "_currentDoc.truncated" }
+    if ('evaluate' in operation && 'to' in operation) {
+      const expression = operation.evaluate;
+      const targetPath = operation.to;
+
+      const mergedData = deepMerge(state.data, stateUpdates);
+      const { value, error } = evaluateBooleanExpression(expression, { data: mergedData });
+      if (error && error !== 'empty-expression') {
+        this.logger.warn('EVALUATE op failed', {
+          component: 'TransformNodeExecutor',
+          expression,
+          error
+        });
+      }
+      this.setNestedValue(targetPath, value, stateUpdates);
+      this.logger.debug('EVALUATE operation', {
+        component: 'TransformNodeExecutor',
+        expression,
+        targetPath,
+        value
+      });
     }
 
     // INCREMENT operation: add to a numeric variable
@@ -319,7 +417,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           arrayPath,
           index,
           targetPath,
-          value: typeof clonedValue === 'object' ? '[object]' : clonedValue
+          value: debugValue(clonedValue)
         });
       } else {
         // Set empty string if out of bounds
@@ -329,6 +427,62 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
           arrayPath,
           index
         });
+      }
+    }
+
+    // READ_AGENT_MEMORY_SECTION: load a section of an agent profile's
+    // long-term memory file. Used by workflows whose `start` collects an
+    // agentProfileId so the planner can read the corpus map that admin
+    // discovery populated. Validates profileId against the agent schema
+    // pattern; reads file via the same memoryFile module that other code
+    // paths use. The section is sliced between `## <heading>` and the next
+    // `## ` heading.
+    if (
+      'readAgentMemorySection' in operation &&
+      'to' in operation &&
+      typeof operation.readAgentMemorySection === 'object' &&
+      operation.readAgentMemorySection !== null
+    ) {
+      const { profileId: rawProfileId, profileIdPath, section } = operation.readAgentMemorySection;
+      const targetPath = operation.to;
+
+      const mergedData = deepMerge(state.data, stateUpdates);
+      const profileId = profileIdPath
+        ? this.getNestedValue(profileIdPath, mergedData)
+        : rawProfileId;
+
+      if (typeof profileId !== 'string' || !AGENT_PROFILE_ID_PATTERN.test(profileId)) {
+        this.logger.warn('READ_AGENT_MEMORY_SECTION skipped — invalid profileId', {
+          component: 'TransformNodeExecutor',
+          profileId
+        });
+        this.setNestedValue(targetPath, '', stateUpdates);
+      } else if (typeof section !== 'string' || !section.trim()) {
+        this.logger.warn('READ_AGENT_MEMORY_SECTION skipped — section is required', {
+          component: 'TransformNodeExecutor'
+        });
+        this.setNestedValue(targetPath, '', stateUpdates);
+      } else {
+        try {
+          const mem = await memoryFile.readMemory(profileId);
+          const slice = sliceMemorySection(mem.body, section);
+          this.setNestedValue(targetPath, slice, stateUpdates);
+          this.logger.debug('READ_AGENT_MEMORY_SECTION operation', {
+            component: 'TransformNodeExecutor',
+            profileId,
+            section,
+            targetPath,
+            bytes: slice.length
+          });
+        } catch (err) {
+          this.logger.warn('READ_AGENT_MEMORY_SECTION failed', {
+            component: 'TransformNodeExecutor',
+            profileId,
+            section,
+            error: err.message
+          });
+          this.setNestedValue(targetPath, '', stateUpdates);
+        }
       }
     }
 
@@ -376,7 +530,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         conditionExpr,
         targetPath,
         conditionResult,
-        value: typeof finalValue === 'object' ? '[object]' : finalValue
+        value: debugValue(finalValue)
       });
     }
   }

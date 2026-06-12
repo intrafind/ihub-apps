@@ -623,6 +623,27 @@
     }
   },
   "admin": {
+    "agents": {
+      "memory": {
+        "builder": {
+          "title": "Memory-Abschnitt aus Tool aufbauen",
+          "help": "Führt ein registriertes Tool mit Admin-Kontext aus und schreibt die (Markdown-)Ausgabe in einen benannten Abschnitt des Profil-Memorys. Beispiel: iFinder_discover mit searchProfile erzeugt eine Korpusübersicht.",
+          "toolLabel": "Tool",
+          "pickToolPlaceholder": "— Tool auswählen —",
+          "sectionLabel": "Abschnittsüberschrift",
+          "modeLabel": "Modus",
+          "modeReplace": "Abschnitt ersetzen",
+          "modeAppend": "Anhängen",
+          "paramsLabel": "Tool-Parameter (JSON)",
+          "run": "Ausführen und ins Memory schreiben",
+          "running": "Wird ausgeführt…",
+          "pickTool": "Bitte zuerst ein Tool auswählen.",
+          "sectionRequired": "Abschnittsüberschrift ist erforderlich.",
+          "invalidJson": "Parameter müssen gültiges JSON sein: {{msg}}",
+          "success": "Abschnitt \"{{section}}\" geschrieben (Memory v{{version}}). Die Textarea unten zeigt jetzt das aktuelle Memory — bei Bedarf bearbeiten und Speichern."
+        }
+      }
+    },
     "providers": {
       "title": "Anbieter-Zugangsdaten",
       "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",

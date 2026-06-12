@@ -62,7 +62,14 @@ export class TemplateRenderNodeExecutor extends BaseNodeExecutor {
       extra: {
         runId: runId || '',
         workflowId: state?.metadata?.workflowId || '',
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        // Expose the full workflow state.data under `data` so templates can
+        // pull any state field — e.g. `{{data.searchProfile}}`,
+        // `{{data._corpus.length}}`, `{{data._searchIterations}}` — without
+        // the executor having to know which keys the template will use.
+        // `records`, `coverage`, `synthesis` keep their top-level aliases
+        // (no breaking change to existing templates).
+        data: state?.data || {}
       }
     });
 

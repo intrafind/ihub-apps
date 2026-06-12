@@ -50,6 +50,8 @@ function useAppChat({
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
+    appendToAssistantMessage,
+    appendWorkflowStep,
     deleteMessage,
     editMessage,
     addSystemMessage,
@@ -183,9 +185,6 @@ function useAppChat({
           break;
         case 'workflow.step': {
           if (lastMessageIdRef.current && data) {
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const prevSteps = currentMessage?.workflowSteps || [];
-
             const newStep = {
               nodeName: data.nodeName,
               nodeType: data.nodeType,
@@ -194,23 +193,12 @@ function useAppChat({
               chatVisible: data.chatVisible
             };
 
-            let updatedSteps;
-            if (data.status === 'running') {
-              // Mark any previous "running" step as "completed", then add the new one
-              updatedSteps = prevSteps.map(s =>
-                s.status === 'running' ? { ...s, status: 'completed' } : s
-              );
-              updatedSteps = [...updatedSteps, newStep];
-            } else {
-              // Update existing step status (completed/error)
-              const exists = prevSteps.some(s => s.nodeName === data.nodeName);
-              updatedSteps = exists
-                ? prevSteps.map(s => (s.nodeName === data.nodeName ? newStep : s))
-                : [...prevSteps, newStep];
-            }
-
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              workflowSteps: updatedSteps,
+            // Functional update — reads prev steps from the LIVE state, not
+            // from `messagesRef.current` which lags one render. The old
+            // read-then-write pattern dropped events when many fired in
+            // rapid succession (e.g. a long string of "Skipped (already
+            // searched): …" emissions or a fast iFinder paging loop).
+            appendWorkflowStep(lastMessageIdRef.current, newStep, {
               workflowStep: data.status === 'running' ? newStep : null
             });
           }
@@ -548,12 +536,17 @@ function useAppChat({
     cleanupEventSource();
 
     if (lastMessageIdRef.current) {
-      const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-      updateAssistantMessage(
+      // Append the cancellation note via a functional setState updater so it
+      // always concatenates onto the LATEST content — never an out-of-date
+      // snapshot from messagesRef. Previously this read content from
+      // messagesRef and passed `read + note` to updateAssistantMessage,
+      // which wholesale-replaced the message. Any chunks that arrived
+      // between the read and the write were lost, and if the read happened
+      // before the first chunk landed the entire streamed body was erased.
+      appendToAssistantMessage(
         lastMessageIdRef.current,
-        (currentMessage?.content || '') +
-          t('message.generationCancelled', ' [Generation cancelled]'),
-        false
+        t('message.generationCancelled', ' [Generation cancelled]'),
+        { loading: false, cancelled: true }
       );
     }
 
@@ -565,7 +558,7 @@ function useAppChat({
     setTimeout(() => {
       isCancellingRef.current = false;
     }, 100);
-  }, [cleanupEventSource, updateAssistantMessage, t, messagesRef]);
+  }, [cleanupEventSource, appendToAssistantMessage, t]);
 
   /**
    * Submit a response to a clarification question.

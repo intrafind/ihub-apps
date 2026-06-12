@@ -36,9 +36,29 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
       outputVar = '_queryPlan',
       modelId,
       maxTopics = 8,
-      maxSynonymsPerTopic = 5
+      maxSynonymsPerTopic = 5,
+      queryLanguage: configQueryLanguage,
+      queryLanguagePath = '$.data.queryLanguage'
     } = config;
     const language = context?.language || 'en';
+    // The corpus language can differ from the chat locale (e.g. user types
+    // English but the iFinder profile is German). Precedence: workflow state
+    // (input variable) > node config literal > chat locale.
+    const stateQueryLanguage = this.resolveVariable(queryLanguagePath, state);
+    const queryLanguage =
+      (typeof stateQueryLanguage === 'string' && stateQueryLanguage.trim()) ||
+      (typeof configQueryLanguage === 'string' && configQueryLanguage.trim()) ||
+      language;
+    const languageNames = {
+      en: 'English',
+      de: 'German',
+      fr: 'French',
+      es: 'Spanish',
+      it: 'Italian',
+      nl: 'Dutch',
+      pt: 'Portuguese'
+    };
+    const queryLanguageName = languageNames[queryLanguage] || queryLanguage;
 
     const question = this.resolveVariable(questionPath, state);
     if (!question || typeof question !== 'string') {
@@ -66,7 +86,11 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
     const system =
       `You build search-query plans for an enterprise document index (iFinder, Elasticsearch-style query DSL). ` +
       `Given a user question and optional topic seeds, produce a plan that maximises recall over a permitted, indexed corpus. ` +
-      `Return ONLY JSON of this shape (no prose, no markdown fences): ` +
+      `\n\nCORPUS LANGUAGE: ${queryLanguageName}. Generate ALL topics, synonyms, entities, and expansions in ${queryLanguageName}, ` +
+      `even if the user question is in a different language. Do not translate proper nouns, legal citations, paragraph identifiers ` +
+      `(e.g. "§ 48 SGB V") or product names. Preserve the indexed corpus's terminology — e.g. for German legal corpora use ` +
+      `German legal terms and full word forms, not English equivalents.` +
+      `\n\nReturn ONLY JSON of this shape (no prose, no markdown fences): ` +
       `{"topics":[<string>],"synonyms":{"<topic>":[<string>]},"entities":[<string>],"filters":{},"expansions":[<string>]}. ` +
       `topics: ${maxTopics} or fewer focused search queries (each is a complete query string, not a single keyword). ` +
       `synonyms: per-topic alternate phrasings/word families/acronyms (≤ ${maxSynonymsPerTopic} per topic). ` +
@@ -117,7 +141,15 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
     });
 
     return this.createSuccessResult(plan, {
-      stateUpdates: { [outputVar]: plan }
+      stateUpdates: { [outputVar]: plan },
+      resolvedInputs: {
+        question,
+        queryLanguage,
+        seeds: seeds || null,
+        modelId: model.id,
+        maxTopics,
+        maxSynonymsPerTopic
+      }
     });
   }
 }

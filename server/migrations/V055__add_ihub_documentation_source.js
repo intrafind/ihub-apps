@@ -13,7 +13,7 @@
  * Fresh installs receive the source entry automatically via
  * server/defaults/config/sources.json during performInitialSetup().
  */
-export const version = '052';
+export const version = '055';
 export const description = 'add_ihub_documentation_source';
 
 const SOURCE_ID = 'ihub-documentation';

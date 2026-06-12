@@ -1,5 +1,28 @@
 # Features — 5.4.0
 
+## Stellungnahmen Review from iFinder — Lazy Per-Document Corpus
+
+A new workflow, **`stellungnahmen-review-ifinder`**, runs the same audit-grade Stellungnahmen evidence extraction as the upload variant, but pulls candidates from iFinder by topic and loads each document's fulltext one at a time inside the iteration loop. Useful for ministry-scale consultations (200+ documents) that exceed the chat upload ceiling.
+
+- **Lazy fetch**: `corpus-search` runs in metadata-only mode (`fetchFulltext: false`); the per-doc `iFinder_getContent` call happens just before extraction and is cleared between iterations.
+- **Refinement loop**: an LLM decision node inspects the candidate list after each search round and can request additional topics, capped at 3 rounds. One search is rarely enough on broad consultations.
+- **Same audit guarantees**: the extract prompt and JSON schema are identical to the upload variant — `quote-validator` and downstream consumers work unchanged.
+
+## Admin-driven Corpus Discovery via Generic Memory-Builder Endpoint
+
+A new admin endpoint runs any registered tool with admin context and writes the result to an agent profile's long-term memory under a named section:
+
+```
+POST /api/admin/agents/profiles/<id>/memory/from-tool
+  { toolId, params, section, mode }
+```
+
+This is provider-agnostic. The canonical use case is **iFinder corpus discovery**: a new `iFinder_discover` tool function probes a configured search profile, returns facets and sample titles as ready-to-paste markdown, and the admin stores it under `## iFinder corpus map` so downstream agent runs and workflows can read it via the existing memory auto-include.
+
+- **Access control**: gated by `adminAuth` — any registered tool can be invoked with admin context.
+- **Workflow integration**: a new `readAgentMemorySection` transform op lets workflows pull a named section from a configured profile's memory; `stellungnahmen-review-ifinder` uses this to feed the corpus map into its `query-plan` node when an `agentProfileId` is supplied.
+- **`iFinder_discover` is not exposed to agents at runtime** — only the admin endpoint can call it. Operators re-run discovery when the iFinder index changes materially.
+
 ## Completeness Analysis Workflows — Audit-grade Stellungnahmen Review
 
 iHub now ships a reusable set of workflow primitives for **audit-grade corpus-completeness analysis**, plus a working reference workflow and agent profile for the German government law-consultation use case (Stellungnahmen review).

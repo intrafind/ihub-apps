@@ -671,6 +671,51 @@
           "required": ["documentId"]
         }
       },
+      "discover": {
+        "description": {
+          "en": "Probe an iFinder search profile and return a corpus map: totals, top facet values, and sample document titles. Use this to learn what data is available and which fields can be filtered before issuing a real search.",
+          "de": "Ein iFinder-Suchprofil sondieren und eine Korpus-Karte zurückgeben: Gesamtzahlen, häufigste Facettenwerte und Beispieltitel. Verwende dies, um zu lernen, welche Daten verfügbar sind und welche Felder gefiltert werden können, bevor eine echte Suche ausgeführt wird."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "searchProfile": {
+              "type": "string",
+              "description": {
+                "en": "Search profile ID to probe.",
+                "de": "Suchprofil-ID zum Sondieren."
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": {
+                "en": "Optional scope query. Defaults to '*:*' (everything).",
+                "de": "Optionale Bereichsabfrage. Standard ist '*:*' (alles)."
+              },
+              "default": "*:*"
+            },
+            "facets": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": {
+                "en": "Facet fields to probe (defaults to a sensible set).",
+                "de": "Zu sondierende Facettenfelder (Standardwerte werden verwendet)."
+              }
+            },
+            "sampleSize": {
+              "type": "integer",
+              "description": {
+                "en": "Max sample documents to include (default: 10).",
+                "de": "Max. Anzahl der einzuschließenden Beispieldokumente (Standard: 10)."
+              },
+              "default": 10,
+              "minimum": 0,
+              "maximum": 50
+            }
+          },
+          "required": ["searchProfile"]
+        }
+      },
       "getMetadata": {
         "description": {
           "en": "Fetch detailed metadata for a specific document from iFinder using search endpoint",
@@ -718,6 +763,58 @@
             }
           },
           "required": ["documentId"]
+        }
+      },
+      "discover": {
+        "description": {
+          "en": "Probe an iFinder search profile and return a markdown corpus map (facets, sources, sample titles). Intended for admin-driven memory population — NOT for agent runtime use.",
+          "de": "Ein iFinder-Suchprofil untersuchen und eine Markdown-Korpusübersicht zurückgeben (Facetten, Quellen, Beispieltitel). Für admin-gesteuerten Memory-Aufbau gedacht — NICHT für Agent-Laufzeit."
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "searchProfile": {
+              "type": "string",
+              "description": {
+                "en": "iFinder search profile ID to probe (required)",
+                "de": "Zu untersuchende iFinder-Suchprofil-ID (erforderlich)"
+              }
+            },
+            "query": {
+              "type": "string",
+              "description": {
+                "en": "Optional query to scope the probe. Defaults to '*:*'.",
+                "de": "Optionale Anfrage zur Eingrenzung der Untersuchung. Standard: '*:*'."
+              },
+              "default": "*:*"
+            },
+            "facets": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": {
+                "en": "Facet fields to request from iFinder. iFinder typically requires `.keyword` suffixes on string fields.",
+                "de": "Von iFinder anzufordernde Facetten-Felder. iFinder erwartet üblicherweise `.keyword`-Suffixe für String-Felder."
+              },
+              "default": [
+                "sourceName.keyword",
+                "application.keyword",
+                "language.keyword",
+                "creators.keyword",
+                "navigationTree"
+              ]
+            },
+            "sampleSize": {
+              "type": "integer",
+              "description": {
+                "en": "Maximum number of sample documents to list in the markdown output.",
+                "de": "Maximale Anzahl Beispiel-Dokumente in der Markdown-Ausgabe."
+              },
+              "default": 10,
+              "minimum": 0,
+              "maximum": 50
+            }
+          },
+          "required": ["searchProfile"]
         }
       }
     }

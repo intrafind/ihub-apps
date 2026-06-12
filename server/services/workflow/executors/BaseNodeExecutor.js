@@ -269,12 +269,20 @@ export class BaseNodeExecutor {
   createErrorResult(message, details = {}) {
     this.logger.error(message, { component: this.constructor.name, ...details });
 
-    return {
+    const result = {
       status: 'failed',
       output: null,
       error: message,
       details
     };
+
+    // Hoist resolvedInputs out of details so the UI/StateManager can find
+    // it at a stable, top-level path on both success and error results.
+    if (details && details.resolvedInputs && typeof details.resolvedInputs === 'object') {
+      result.resolvedInputs = details.resolvedInputs;
+    }
+
+    return result;
   }
 
   /**
@@ -309,6 +317,13 @@ export class BaseNodeExecutor {
 
     if (options.branch) {
       result.branch = options.branch;
+    }
+
+    // Persisted alongside the result so the execution UI can show what
+    // parameters/inputs the node was actually run with. Optional — only
+    // executors that explicitly populate this surface it.
+    if (options.resolvedInputs && typeof options.resolvedInputs === 'object') {
+      result.resolvedInputs = options.resolvedInputs;
     }
 
     return result;
