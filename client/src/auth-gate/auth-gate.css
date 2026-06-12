@@ -1,19 +1,23 @@
 /* Auth Gate — Standalone styles (no Tailwind dependency) */
 
 :root {
-  --ag-primary: #3b82f6;
-  --ag-primary-hover: #2563eb;
+  /* Primary is blue-600 (not blue-500) so white button text meets WCAG AA
+     contrast (4.5:1) — blue-500 (#3b82f6) only reaches 3.67:1. */
+  --ag-primary: #2563eb;
+  --ag-primary-hover: #1d4ed8;
   --ag-primary-light: #eff6ff;
   --ag-bg: #f9fafb;
   --ag-card-bg: #ffffff;
   --ag-text: #111827;
   --ag-text-secondary: #6b7280;
-  --ag-text-muted: #9ca3af;
+  /* Muted is gray-500 (not gray-400) so small hint text meets WCAG AA on the
+     white card — gray-400 (#9ca3af) only reaches 2.53:1. */
+  --ag-text-muted: #6b7280;
   --ag-error-bg: #fef2f2;
   --ag-error-border: #fca5a5;
   --ag-error-text: #dc2626;
   --ag-border: #d1d5db;
-  --ag-border-focus: #3b82f6;
+  --ag-border-focus: #2563eb;
   --ag-radius: 8px;
   --ag-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
   --ag-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
