@@ -1335,7 +1335,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   async executeLLMWithTools({ model, messages, tools, config, context, nodeId }) {
     const maxIterations = config.maxIterations || this.maxIterations;
     const temperature = config.temperature ?? 0.7;
-    const maxTokens = config.maxTokens || model.tokenLimit || 4096;
+    const maxTokens = config.maxTokens || model.maxOutputTokens || 4096;
     const language = context.language || 'en';
 
     let currentMessages = [...messages];

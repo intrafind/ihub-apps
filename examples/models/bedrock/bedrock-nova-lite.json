@@ -10,7 +10,8 @@
     "de": "Amazon Nova Lite über AWS Bedrock — schnelles multimodales Modell mit Vision, Dokumenten und Tool-Aufrufen."
   },
   "provider": "bedrock",
-  "tokenLimit": 300000,
+  "contextWindow": 300000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

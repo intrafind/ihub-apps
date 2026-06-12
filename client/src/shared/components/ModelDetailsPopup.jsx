@@ -176,11 +176,21 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
               </div>
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {t('admin.models.details.tokenLimit', 'Token Limit')}
+                  {t('admin.models.details.contextWindow', 'Context Window')}
                 </div>
                 <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                  {model.tokenLimit
-                    ? model.tokenLimit.toLocaleString()
+                  {model.contextWindow
+                    ? model.contextWindow.toLocaleString()
+                    : t('common.notSet', 'Not set')}
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  {t('admin.models.details.maxOutputTokens', 'Max Output Tokens')}
+                </div>
+                <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                  {model.maxOutputTokens
+                    ? model.maxOutputTokens.toLocaleString()
                     : t('common.notSet', 'Not set')}
                 </div>
               </div>

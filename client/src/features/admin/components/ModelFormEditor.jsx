@@ -265,7 +265,8 @@ function ModelFormEditor({
     provider: t('admin.models.fields.provider', 'Provider'),
     modelId: t('admin.models.fields.modelId', 'Model'),
     url: t('admin.models.fields.url', 'URL'),
-    tokenLimit: t('admin.models.fields.tokenLimit', 'Token Limit')
+    contextWindow: t('admin.models.fields.contextWindow', 'Context Window'),
+    maxOutputTokens: t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')
   };
 
   return (
@@ -500,29 +501,57 @@ function ModelFormEditor({
               <div className="grid grid-cols-6 gap-6">
                 <div className="col-span-6 sm:col-span-2">
                   <label
-                    htmlFor="tokenLimit"
+                    htmlFor="contextWindow"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.models.fields.tokenLimit')}
-                    {isFieldRequired('tokenLimit', jsonSchema) && (
+                    {t('admin.models.fields.contextWindow', 'Context Window')}
+                    {isFieldRequired('contextWindow', jsonSchema) && (
                       <span className="text-red-500"> *</span>
                     )}
                   </label>
                   <input
                     type="number"
-                    name="tokenLimit"
-                    id="tokenLimit"
-                    value={data.tokenLimit || ''}
+                    name="contextWindow"
+                    id="contextWindow"
+                    value={data.contextWindow || ''}
                     onChange={handleInputChange}
                     min="1"
                     className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.tokenLimit ? 'border-red-300 text-red-900' : ''
+                      errors.contextWindow ? 'border-red-300 text-red-900' : ''
                     }`}
-                    required={isFieldRequired('tokenLimit', jsonSchema)}
+                    required={isFieldRequired('contextWindow', jsonSchema)}
                   />
-                  {errors.tokenLimit && (
+                  {errors.contextWindow && (
                     <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {errors.tokenLimit}
+                      {errors.contextWindow}
+                    </p>
+                  )}
+                </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="maxOutputTokens"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
+                    {isFieldRequired('maxOutputTokens', jsonSchema) && (
+                      <span className="text-red-500"> *</span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    name="maxOutputTokens"
+                    id="maxOutputTokens"
+                    value={data.maxOutputTokens || ''}
+                    onChange={handleInputChange}
+                    min="1"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
+                    }`}
+                    required={isFieldRequired('maxOutputTokens', jsonSchema)}
+                  />
+                  {errors.maxOutputTokens && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.maxOutputTokens}
                     </p>
                   )}
                 </div>

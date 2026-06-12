@@ -24,6 +24,7 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { estimateTokens } from '../../../../../shared/tokenEstimator.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import CompareModeView from '../../chat/components/CompareModeView';
@@ -127,7 +128,6 @@ function AppChat({ preloadedApp = null }) {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [, setMaxTokens] = useState(4096);
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 
   // Compare mode state
@@ -286,7 +286,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     const currentModel = models?.find(m => m.id === selectedModel);
-    if (!currentModel?.tokenLimit) {
+    if (!currentModel?.contextWindow) {
       setFileTokenWarning(null);
       return;
     }
@@ -302,23 +302,24 @@ function AppChat({ preloadedApp = null }) {
       return;
     }
 
-    // Estimate token count per file using chars/4 approximation (standard heuristic for English
-    // text; token-to-character ratios vary for other languages and scripts)
+    // Estimate token count per file using the shared tokenizer (gpt-tokenizer).
+    // This is a cross-provider approximation; the provider-reported count after
+    // the turn is authoritative.
     const perFile = documentFiles.map((f, index) => ({
       fileName:
         f.fileName ||
         f.name ||
         t('common.untitledFile', 'Document {{index}}', { index: index + 1 }),
-      estimatedTokens: Math.ceil((f.content?.length || 0) / 4)
+      estimatedTokens: estimateTokens(f.content || '')
     }));
     const totalEstimatedTokens = perFile.reduce((sum, f) => sum + f.estimatedTokens, 0);
 
-    // Warn when document content alone would exceed 80% of the model's context window.
-    // The estimate is the combined total across ALL attached documents, not per file.
-    if (totalEstimatedTokens > currentModel.tokenLimit * 0.8) {
+    // Warn when document content alone would exceed 80% of the model's context
+    // window. The estimate is the combined total across ALL attached documents.
+    if (totalEstimatedTokens > currentModel.contextWindow * 0.8) {
       setFileTokenWarning({
         estimatedTokens: totalEstimatedTokens,
-        tokenLimit: currentModel.tokenLimit,
+        contextWindow: currentModel.contextWindow,
         files: perFile
       });
     } else {
@@ -808,9 +809,6 @@ function AppChat({ preloadedApp = null }) {
 
         console.log('Fetching app data for:', appId);
         const appData = await fetchAppDetails(appId);
-        if (isMounted) {
-          setMaxTokens(appData.tokenLimit || 4096);
-        }
 
         // Safety check for component unmounting during async operations
         if (!isMounted) return;

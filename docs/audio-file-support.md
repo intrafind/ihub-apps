@@ -292,7 +292,6 @@ Both adapters:
       "supportedFormats": ["audio/mpeg", "audio/wav", "audio/flac", "audio/ogg"]
     }
   },
-  "tokenLimit": 16384,
   "preferredModel": "gemini-flash-latest"
 }
 ```

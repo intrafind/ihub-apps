@@ -407,7 +407,6 @@ Create `contents/apps/enterprise-knowledge-chat.json`:
     "en": "You are an enterprise knowledge assistant with access to company documents, policies, and procedures through iFinder. Provide accurate, helpful responses based on retrieved information. Always cite sources.",
     "de": "Sie sind ein Unternehmenswissensassistent mit Zugang zu Firmendokumenten, Richtlinien und Verfahren über iFinder. Geben Sie genaue, hilfreiche Antworten basierend auf abgerufenen Informationen. Zitieren Sie immer Quellen."
   },
-  "tokenLimit": 32000,
   "preferredModel": "gpt-4o",
   "tools": [
     "iFinder.search",
@@ -466,7 +465,6 @@ Create `contents/apps/research-assistant.json`:
     "en": "You are a comprehensive research assistant with access to both web search and enterprise knowledge via iFinder. Always distinguish between internal and external sources.",
     "de": "Sie sind ein umfassender Recherche-Assistent mit Zugang zu Websuche und Unternehmenswissen über iFinder. Unterscheiden Sie immer zwischen internen und externen Quellen."
   },
-  "tokenLimit": 32000,
   "preferredModel": "gpt-4o",
   "tools": [
     "iFinder.search",

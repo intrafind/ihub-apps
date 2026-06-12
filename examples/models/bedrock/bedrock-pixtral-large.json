@@ -10,7 +10,8 @@
     "de": "Mistral Pixtral Large über AWS Bedrock — multimodales Modell mit Vision und Tool-Aufrufen."
   },
   "provider": "bedrock",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

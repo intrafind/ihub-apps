@@ -10,7 +10,8 @@
     "de": "Anthropic Claude 3.5 Haiku über AWS Bedrock — schnell, kostengünstig, mit Vision und Tool-Aufrufen."
   },
   "provider": "bedrock",
-  "tokenLimit": 200000,
+  "contextWindow": 200000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

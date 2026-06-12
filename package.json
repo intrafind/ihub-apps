@@ -126,6 +126,7 @@
     "croner": "^10.0.1",
     "dotenv": "^17.4.2",
     "file-saver": "^2.0.5",
+    "gpt-tokenizer": "^3.4.0",
     "gray-matter": "^4.0.3",
     "html-to-image": "^1.11.13",
     "http-proxy-agent": "^9.0.0",

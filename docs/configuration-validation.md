@@ -59,7 +59,6 @@ Validates AI application definitions including prompts, variables, and settings.
   "system": {
     "en": "You are a helpful AI assistant."
   },
-  "tokenLimit": 4000,
   "variables": [
     {
       "name": "context",
@@ -97,7 +96,8 @@ Validates LLM model definitions and connection parameters.
   },
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 32000,
   "supportsTools": true,
   "enabled": true
 }
@@ -501,7 +501,6 @@ export function validateNewConfig(config) {
   "system": {
     "en": "You are a data analysis expert."
   },
-  "tokenLimit": 8000,
   "variables": [
     {
       "name": "dataType",
@@ -575,10 +574,10 @@ export function validateNewConfig(config) {
   ]
 }
 
-// ❌ Invalid token limit
+// ❌ Invalid context window (model config)
 {
   "id": "test",
-  "tokenLimit": 2000000,  // Exceeds maximum of 1,000,000
+  "contextWindow": 20000000,  // Exceeds maximum of 10,000,000
   "name": { "en": "Test" }
 }
 ```
@@ -598,7 +597,8 @@ export function validateNewConfig(config) {
   },
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
-  "tokenLimit": 200000,
+  "contextWindow": 200000,
+  "maxOutputTokens": 16000,
   "supportsTools": true,
   "concurrency": 5,
   "requestDelayMs": 1000,
@@ -613,7 +613,7 @@ export function validateNewConfig(config) {
 {
   "id": "test-model",
   "provider": "invalid-provider",  // Must be: openai, anthropic, google, mistral, local
-  "tokenLimit": 4000
+  "contextWindow": 4000
 }
 
 // ❌ Invalid URL format
@@ -623,10 +623,10 @@ export function validateNewConfig(config) {
   "provider": "openai"
 }
 
-// ❌ Token limit out of range
+// ❌ Output token limit out of range
 {
   "id": "test-model",
-  "tokenLimit": 0,  // Must be at least 1
+  "maxOutputTokens": 0,  // Must be at least 1
   "provider": "openai"
 }
 ```

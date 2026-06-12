@@ -10,7 +10,8 @@
     "de": "Amazon Nova Micro über AWS Bedrock — nur Text, optimiert für latenzarme Tool-Aufrufe."
   },
   "provider": "bedrock",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": false,
   "enabled": false,

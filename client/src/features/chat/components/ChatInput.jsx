@@ -13,6 +13,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import { estimateTokens, computeContextUsage } from '../../../../../shared/tokenEstimator.js';
 
 /**
  * Chat input component following Claude's design
@@ -119,6 +120,27 @@ function ChatInput({
     if (!selectedFile) return [];
     return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
   }, [selectedFile]);
+
+  // Estimate how much of the model's context window the pending input (typed
+  // message + attached document content) would consume. This is a live,
+  // client-side estimate using the shared tokenizer; the provider-reported
+  // count after each turn is authoritative. Only shown when the model exposes
+  // a context window and the user has actually entered/attached something.
+  const contextUsage = useMemo(() => {
+    const contextWindow = selectedModelData?.contextWindow;
+    if (!contextWindow) return null;
+    const fileTokens = normalizedFiles.reduce(
+      (sum, f) => sum + estimateTokens(f?.content || ''),
+      0
+    );
+    const inputTokens = estimateTokens(value || '') + fileTokens;
+    if (inputTokens === 0) return null;
+    return computeContextUsage({
+      contextWindow,
+      inputTokens,
+      maxOutputTokens: selectedModelData?.maxOutputTokens || 0
+    });
+  }, [selectedModelData, normalizedFiles, value]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -385,12 +407,12 @@ function ChatInput({
                 ? t('errors.documentTooLargeCombined', {
                     fileCount: fileTokenWarning.files.length,
                     estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
                   })
                 : t('errors.documentTooLarge', {
                     fileName: fileTokenWarning.files?.[0]?.fileName || '',
                     estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
                   })}
             </span>
             {(fileTokenWarning.files?.length || 0) > 1 && (
@@ -406,6 +428,16 @@ function ChatInput({
               </ul>
             )}
           </div>
+        </div>
+      )}
+
+      {contextUsage && !fileTokenWarning && (
+        <div className="mx-2 mb-1 text-xs text-gray-400 dark:text-gray-500 text-right">
+          {t('chat.contextUsage', {
+            used: contextUsage.inputTokens.toLocaleString(i18n.language),
+            total: contextUsage.contextWindow.toLocaleString(i18n.language),
+            defaultValue: '~{{used}} / {{total}} context tokens'
+          })}
         </div>
       )}
 

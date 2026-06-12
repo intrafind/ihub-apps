@@ -45,8 +45,7 @@ const schemaMetadata = {
         description: { en: 'An example application', de: 'Eine Beispielanwendung' },
         color: '#4F46E5',
         icon: 'chat-bubbles',
-        system: { en: 'You are a helpful assistant.', de: 'Du bist ein hilfreicher Assistent.' },
-        tokenLimit: 4096
+        system: { en: 'You are a helpful assistant.', de: 'Du bist ein hilfreicher Assistent.' }
       }
     ]
   },
@@ -61,7 +60,8 @@ const schemaMetadata = {
         description: { en: 'Most capable GPT-4 model', de: 'Leistungsfähigstes GPT-4-Modell' },
         url: 'https://api.openai.com/v1',
         provider: 'openai',
-        tokenLimit: 128000,
+        contextWindow: 128000,
+        maxOutputTokens: 4096,
         supportsTools: true,
         enabled: true
       }

@@ -794,7 +794,6 @@ const AppConfigSchema = z.object({
   name: z.record(z.string(), z.string()),
   description: z.record(z.string(), z.string()),
   system: z.record(z.string(), z.string()),
-  tokenLimit: z.number().positive(),
   variables: z.array(VariableSchema).optional(),
   permissions: z.array(z.string()).optional()
 });

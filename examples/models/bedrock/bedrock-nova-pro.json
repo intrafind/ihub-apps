@@ -10,7 +10,8 @@
     "de": "Amazon Nova Pro über AWS Bedrock — multimodal (Text, Bild, Video), Dokumente und Tool-Aufrufe. PDF/DOCX-Größenlimit aufgehoben."
   },
   "provider": "bedrock",
-  "tokenLimit": 300000,
+  "contextWindow": 300000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

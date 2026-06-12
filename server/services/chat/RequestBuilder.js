@@ -326,17 +326,17 @@ class RequestBuilder {
         useMaxTokens
       });
 
-      // Determine model token limit (default to 8192 if not specified)
-      const modelTokenLimit = model.tokenLimit || 8192;
-      logger.info('Model token limit', { component: 'RequestBuilder', modelTokenLimit });
-
-      // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
-      const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
-      logger.info('App token limit', { component: 'RequestBuilder', appTokenLimit });
-
-      // Use max tokens if requested, otherwise use the minimum of app and model limits
-      const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
-      logger.info('Final token limit for request', { component: 'RequestBuilder', finalTokens });
+      // Output cap sent to the provider (max_tokens / maxOutputTokens). This is
+      // the model's response limit — NOT the context window. Apps no longer
+      // configure token limits; they inherit the output cap from the model.
+      const DEFAULT_MAX_OUTPUT = 4096;
+      const finalTokens = model.maxOutputTokens || DEFAULT_MAX_OUTPUT;
+      logger.info('Max output tokens for request', {
+        component: 'RequestBuilder',
+        finalTokens,
+        useMaxTokens,
+        contextWindow: model.contextWindow || null
+      });
 
       const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
       if (!apiKeyResult.success) {

@@ -25,7 +25,6 @@ function AppCreationWizard({ onClose, templateApp = null }) {
     color: '#4F46E5',
     icon: 'chat-bubbles',
     system: { en: '' },
-    tokenLimit: 4096,
     preferredModel: undefined,
     preferredOutputFormat: 'markdown',
     preferredStyle: 'normal',
@@ -256,8 +255,7 @@ function AppCreationWizard({ onClose, templateApp = null }) {
         ),
         color: t('admin.apps.wizard.error.colorRequired', 'App color is required'),
         icon: t('admin.apps.wizard.error.iconRequired', 'App icon is required'),
-        system: t('admin.apps.wizard.error.systemRequired', 'System instructions are required'),
-        tokenLimit: t('admin.apps.wizard.error.tokenLimitRequired', 'Token limit is required')
+        system: t('admin.apps.wizard.error.systemRequired', 'System instructions are required')
       };
 
       // Check required fields

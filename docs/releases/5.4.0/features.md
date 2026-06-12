@@ -374,3 +374,18 @@ When the brief enumerates multiple distinct angles for the same subject (e.g. "f
 The canonical planner system prompt now carries an explicit **DECOMPOSITION TEST**: read each task's title and description back — if it contains "and" joining research subjects, or a comma-separated list of distinct angles, it must be split. Three worked examples (Rowan Curran's 4 angles, two people, three products) are included so the model has anchors.
 
 Migration **V054** clears stale `planner.system` overrides on agent profiles that were verbatim snapshots of the old default. Operator-customized prompts (longer than the snapshot or with a different opening sentence) are left untouched. Cleared profiles fall back to the canonical default at runtime, so the new decomposition rules take effect immediately on next server restart.
+
+## Clearer Model Limits — Context Window vs. Output Tokens
+
+Model configuration now separates two distinct concepts that were previously conflated under a single `tokenLimit` field:
+
+- **`contextWindow`** — the model's total input+output capacity. Used to estimate how much of a model's context an upload or conversation consumes, and to warn users before they exceed it.
+- **`maxOutputTokens`** — the cap on what the model may generate in a single response, sent to the provider as `max_tokens`.
+
+Highlights:
+
+- Document-size warnings in the chat input are now measured against the model's **context window** (the correct frame of reference) and use an accurate tokenizer instead of a rough character estimate.
+- Model details now display **Context Window** and **Max Output Tokens** as separate values.
+- Fixes a latent bug where large-context models (e.g. Claude Opus) requested their full context window as the output cap, which could cause provider errors.
+
+Admins editing models will see two fields (Context Window, Max Output Tokens) instead of one Token Limit.

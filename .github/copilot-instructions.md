@@ -309,13 +309,15 @@ Key `ctx` methods: `readJson`, `writeJson`, `fileExists`, `readDefaultJson`, `se
 
 **Apps (`contents/apps/*.json`):**
 - Follow Zod schema in `server/validators/appConfigSchema.js`
-- Required fields: `id`, `name`, `description`, `color`, `icon`, `system`, `tokenLimit`
+- Required fields: `id`, `name`, `description`, `color`, `icon`, `system`
+- Apps do NOT configure token limits; context window and output cap come from the selected model
 - Maintain localized strings for all user-facing text
 - Test with multiple LLM providers if using `tools` or `outputSchema`
 
 **Models (`contents/models/*.json`):**
 - Each model is a separate JSON file (not an array)
-- Required: `id`, `modelId`, `name`, `provider`, `tokenLimit`
+- Required: `id`, `modelId`, `name`, `provider`
+- Set `contextWindow` (total context) and `maxOutputTokens` (response cap) per model
 - Set `enabled: true` to make model available
 - Configure `url` for custom endpoints (e.g., local LLM providers)
 
