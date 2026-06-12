@@ -11,11 +11,10 @@
  * @module services/workflow/executors/HttpNodeExecutor
  */
 
-import dns from 'node:dns/promises';
-import net from 'node:net';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
+import { assertPublicTarget, createPinnedLookup } from './ssrfGuard.js';
 
 /**
  * HTTP node configuration
@@ -41,107 +40,6 @@ import logger from '../../../utils/logger.js';
  * @property {string} [key] - API key value (for type 'apikey')
  * @property {string} [headerName='X-API-Key'] - Header name for API key
  */
-
-/**
- * Check whether a single IP address (v4 or v6 in normalized form) belongs
- * to a private or otherwise sensitive network range.
- *
- * Blocks:
- * - IPv4 loopback (127/8) and unspecified (0/8)
- * - RFC 1918 private ranges (10/8, 172.16/12, 192.168/16)
- * - Link-local (169.254/16) -- includes AWS IMDS
- * - IPv4 multicast/reserved (224/4, 240/4)
- * - IPv4-mapped IPv6 (::ffff:0:0/96), checked via inner IPv4
- * - IPv6 loopback (::1), link-local (fe80::/10), ULA (fc00::/7), unspecified (::)
- *
- * @param {string} ip - The IP address to check
- * @returns {boolean} True if the IP is in a blocked range
- */
-function isPrivateIP(ip) {
-  if (!ip) return true; // be safe: unknown is blocked
-  const family = net.isIP(ip);
-
-  if (family === 4) {
-    const parts = ip.split('.').map(Number);
-    const [a, b] = parts;
-    if (a === 10) return true;
-    if (a === 127) return true;
-    if (a === 0) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a >= 224) return true; // multicast + reserved
-    return false;
-  }
-
-  if (family === 6) {
-    const lower = ip.toLowerCase();
-    if (lower === '::1' || lower === '::') return true;
-    if (lower.startsWith('fe80:') || lower.startsWith('fe80::')) return true;
-    // ULA: fc00::/7 -> first byte 0xfc or 0xfd
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-    // IPv4-mapped IPv6 (::ffff:a.b.c.d) -> check inner IPv4
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateIP(mapped[1]);
-    // IPv4-compatible IPv6 (::a.b.c.d) is deprecated but check anyway
-    const compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
-    if (compat) return isPrivateIP(compat[1]);
-    return false;
-  }
-
-  // Not a valid IP -- callers should resolve DNS first
-  return false;
-}
-
-/**
- * SSRF guard: resolve the URL's hostname to one or more IP addresses and
- * verify every resolved IP is in a public range. Catches DNS-based
- * bypasses where an external hostname resolves to a private IP.
- *
- * @param {URL} parsedUrl - The parsed request URL
- * @returns {Promise<{ok: boolean, reason?: string}>}
- */
-async function assertPublicTarget(parsedUrl) {
-  // Strip IPv6 brackets that URL parsing leaves on the hostname.
-  let host = parsedUrl.hostname;
-  if (host.startsWith('[') && host.endsWith(']')) {
-    host = host.slice(1, -1);
-  }
-
-  // Block obvious magic hostnames before DNS even runs.
-  const lowerHost = host.toLowerCase();
-  if (lowerHost === 'localhost' || lowerHost.endsWith('.localhost')) {
-    return { ok: false, reason: 'localhost is blocked' };
-  }
-
-  // If the hostname is already an IP, check it directly.
-  if (net.isIP(host)) {
-    return isPrivateIP(host) ? { ok: false, reason: `IP ${host} is private` } : { ok: true };
-  }
-
-  // Resolve A and AAAA. If both fail we'll reject; if either resolves to a
-  // private IP we reject. Any unresolved family is ignored (not all hosts
-  // have both records).
-  let addrs = [];
-  try {
-    const [v4, v6] = await Promise.allSettled([dns.resolve4(host), dns.resolve6(host)]);
-    if (v4.status === 'fulfilled') addrs.push(...v4.value);
-    if (v6.status === 'fulfilled') addrs.push(...v6.value);
-  } catch (err) {
-    return { ok: false, reason: `DNS resolution failed: ${err.message}` };
-  }
-
-  if (addrs.length === 0) {
-    return { ok: false, reason: 'host did not resolve to any IP' };
-  }
-
-  for (const addr of addrs) {
-    if (isPrivateIP(addr)) {
-      return { ok: false, reason: `host resolves to private IP ${addr}` };
-    }
-  }
-  return { ok: true };
-}
 
 /**
  * Interpolate {{variable}} placeholders in a template string using workflow state data.
@@ -294,6 +192,11 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
         );
       }
 
+      // Pin the connection to the addresses we just validated so the fetch
+      // cannot re-resolve to a private IP (DNS rebinding). Applied for direct
+      // connections only; under a proxy the proxy is the egress boundary.
+      const pinnedLookup = createPinnedLookup(ssrfCheck.addresses);
+
       // Safe logging - only hostname and path, no query params that might contain secrets
       logger.info({
         component: 'HttpNodeExecutor',
@@ -338,7 +241,8 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
           headers: fetchHeaders,
           body,
           signal: controller.signal,
-          redirect: 'manual'
+          redirect: 'manual',
+          lookup: pinnedLookup
         });
 
         clearTimeout(timeoutId);

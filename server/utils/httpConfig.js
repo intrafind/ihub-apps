@@ -3,6 +3,7 @@
  * Provides centralized configuration for HTTP clients including SSL and proxy settings.
  * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
+import http from 'http';
 import https from 'https';
 import nodeFetch from 'node-fetch';
 import { HttpProxyAgent } from 'http-proxy-agent';
@@ -299,12 +300,47 @@ export function matchesProxyPattern(url, patterns) {
 }
 
 /**
+ * Build an agent for a direct (non-proxied) connection.
+ *
+ * Returns `undefined` (letting the fetch library use its default agent) when
+ * no SSL bypass and no pinned DNS lookup are required, preserving prior
+ * behavior. When a `lookup` is supplied it is attached to a concrete agent so
+ * the connection resolves only to the caller-validated addresses (SSRF DNS
+ * pinning); the lookup is intentionally never attached to proxy agents.
+ *
+ * @param {boolean} isHttps - Whether the request is HTTPS
+ * @param {boolean} shouldIgnoreSSL - Whether to disable certificate validation
+ * @param {Function|null} lookup - Optional dns.lookup-compatible function to pin DNS
+ * @returns {http.Agent|https.Agent|undefined}
+ */
+function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
+  const options = {};
+  // Admin opt-in only: reached solely when shouldIgnoreSSL is true, which
+  // requires ssl.ignoreInvalidCertificates=true AND an explicit per-domain
+  // whitelist match (see shouldIgnoreSSLForURL / isDomainWhitelisted). This is
+  // pre-existing, intentional behavior consolidated here from three prior call
+  // sites; it is not introduced by this change.
+  if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+  if (typeof lookup === 'function') options.lookup = lookup;
+
+  if (Object.keys(options).length === 0 && !isHttps) {
+    return undefined; // nothing to customize for plain HTTP -> default agent
+  }
+  if (Object.keys(options).length === 0) {
+    return undefined; // plain HTTPS with default settings -> default agent
+  }
+  return isHttps ? new https.Agent(options) : new http.Agent(options);
+}
+
+/**
  * Create HTTP/HTTPS agent with global SSL and proxy configuration
  * @param {string} url - Request URL (used to determine protocol and proxy bypass)
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
+ * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
+ *   for direct connections (used by the SSRF guard). Ignored for proxied requests.
  * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined} Agent with appropriate configuration
  */
-export function createAgent(url = '', forceIgnoreSSL = null) {
+export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
   // Always call getSSLConfig() to ensure configuration is loaded
   const sslConfig = getSSLConfig();
   const proxyConfig = getProxyConfig();
@@ -323,11 +359,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Check if proxy should be bypassed for this URL
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
     logger.info('Bypassing proxy for URL', { component: 'HttpConfig', url });
-    // Return standard agent with SSL configuration if needed
-    if (isHttps && shouldIgnoreSSL) {
-      return new https.Agent({ rejectUnauthorized: false });
-    }
-    return undefined;
+    // Direct connection: apply SSL bypass and/or DNS pinning as needed.
+    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Check if URL matches selective proxy patterns
@@ -338,11 +371,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     !matchesProxyPattern(url, proxyConfig.urlPatterns)
   ) {
     logger.info('URL does not match proxy patterns', { component: 'HttpConfig', url });
-    // Return standard agent with SSL configuration if needed
-    if (isHttps && shouldIgnoreSSL) {
-      return new https.Agent({ rejectUnauthorized: false });
-    }
-    return undefined;
+    // Direct connection: apply SSL bypass and/or DNS pinning as needed.
+    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Apply proxy configuration
@@ -370,25 +400,22 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
   }
 
-  // No proxy path: optionally bypass SSL via plain https.Agent.
+  // No proxy path: optionally bypass SSL and/or pin DNS via a direct agent.
   if (isHttps && shouldIgnoreSSL) {
     logger.info('SSL certificate verification disabled for direct HTTPS request', {
       component: 'HttpConfig',
       url
     });
-    return new https.Agent({ rejectUnauthorized: false });
-  }
-
-  // No agent applied. If the request later fails with a TLS error, the operator can
-  // look at the preceding shouldIgnoreSSLForURL log to see why bypass was skipped.
-  if (isHttps) {
+  } else if (isHttps && typeof lookup !== 'function') {
+    // No agent applied. If the request later fails with a TLS error, the operator can
+    // look at the preceding shouldIgnoreSSLForURL log to see why bypass was skipped.
     logger.debug('No SSL bypass agent applied for HTTPS request', {
       component: 'HttpConfig',
       url,
       proxyConfigured: Boolean(proxyConfig.https)
     });
   }
-  return undefined;
+  return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
 }
 
 /**
@@ -396,14 +423,15 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
  * @param {Object} options - Existing fetch options
  * @param {string} url - Request URL
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
+ * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  * @returns {Object} Enhanced fetch options
  */
-export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null) {
+export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null, lookup = null) {
   const enhancedOptions = { ...options };
 
   // Only add agent if not already specified
   if (!enhancedOptions.agent) {
-    const agent = createAgent(url, forceIgnoreSSL);
+    const agent = createAgent(url, forceIgnoreSSL, lookup);
     if (agent) {
       enhancedOptions.agent = agent;
     }
@@ -420,7 +448,9 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
  * All outbound HTTP calls in the server should use this function.
  *
  * @param {string} url - The URL to fetch
- * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.)
+ * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
+ *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
+ *   direct connections and is not forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
@@ -432,6 +462,9 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
       throw new Error(`Unsupported URL scheme: ${scheme}`);
     }
   }
-  const enhanced = enhanceFetchOptions(options, url, forceIgnoreSSL);
+  // `lookup` is not a node-fetch option; pull it out and apply it to the agent
+  // (used by the workflow SSRF guard to pin connections to validated IPs).
+  const { lookup = null, ...fetchOptions } = options;
+  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
   return nodeFetch(url, enhanced);
 }
