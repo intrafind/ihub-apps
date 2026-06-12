@@ -121,7 +121,7 @@
   ],
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "axios": "^1.16.1",
     "croner": "^10.0.1",
     "dotenv": "^17.4.2",
