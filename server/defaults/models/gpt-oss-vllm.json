@@ -11,8 +11,8 @@
   },
   "url": "http://hal9000:1897/v1/chat/completions",
   "provider": "openai",
-  "contextWindow": 16000,
-  "maxOutputTokens": 4096,
+  "contextWindow": 32000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "enabled": true,
   "default": false
