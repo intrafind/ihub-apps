@@ -13,7 +13,8 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
-import { estimateTokens, computeContextUsage } from '../../../../../shared/tokenEstimator.js';
+import { computeContextUsage } from '../../../shared/utils/tokenEstimatorClient.js';
+import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 
 /**
  * Chat input component following Claude's design
@@ -122,11 +123,16 @@ function ChatInput({
   }, [selectedFile]);
 
   // Tokenize attached document content separately so large files are only
-  // re-tokenized when the attachments change — not on every keystroke.
-  const fileTokens = useMemo(
-    () => normalizedFiles.reduce((sum, f) => sum + estimateTokens(f?.content || ''), 0),
+  // re-tokenized when the attachments change — not on every keystroke. The
+  // tokenizer chunk is loaded lazily; counts refine once it resolves.
+  const fileContent = useMemo(
+    () => normalizedFiles.map(f => f?.content || '').join('\n'),
     [normalizedFiles]
   );
+  const fileTokens = useEstimatedTokenCount(fileContent);
+  // Debounce the typed-message estimate so we don't run the tokenizer on every
+  // keystroke (matters for large pasted text).
+  const valueTokens = useEstimatedTokenCount(value || '', { debounceMs: 300 });
 
   // Estimate how much of the model's context window the pending input (typed
   // message + attached document content) would consume. This is a live,
@@ -136,14 +142,14 @@ function ChatInput({
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
-    const inputTokens = estimateTokens(value || '') + fileTokens;
+    const inputTokens = valueTokens + fileTokens;
     if (inputTokens === 0) return null;
     return computeContextUsage({
       contextWindow,
       inputTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, fileTokens, value]);
+  }, [selectedModelData, fileTokens, valueTokens]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;

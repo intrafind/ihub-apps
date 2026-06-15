@@ -12,6 +12,7 @@
  * capacity indicator) import this single helper so estimates stay consistent.
  */
 import { countTokens } from 'gpt-tokenizer';
+import { computeContextUsage } from './contextUsage.js';
 
 /**
  * Estimate the number of tokens in a piece of text.
@@ -40,25 +41,6 @@ export function estimateTokensForFragments(fragments = []) {
   return fragments.reduce((sum, fragment) => sum + estimateTokens(fragment), 0);
 }
 
-/**
- * Compute remaining context-window capacity for a request.
- * @param {object} params
- * @param {number} params.contextWindow - model's total context window
- * @param {number} params.inputTokens - estimated input tokens
- * @param {number} params.maxOutputTokens - reserved output cap
- * @returns {{ contextWindow: number, inputTokens: number, maxOutputTokens: number, remaining: number, usedRatio: number }}
- */
-export function computeContextUsage({ contextWindow, inputTokens, maxOutputTokens = 0 }) {
-  const total = Number(contextWindow) || 0;
-  const input = Number(inputTokens) || 0;
-  const reserve = Number(maxOutputTokens) || 0;
-  const remaining = total > 0 ? total - input - reserve : 0;
-  const usedRatio = total > 0 ? (input + reserve) / total : 0;
-  return {
-    contextWindow: total,
-    inputTokens: input,
-    maxOutputTokens: reserve,
-    remaining,
-    usedRatio
-  };
-}
+// Re-exported from the dependency-free helper so existing server/test imports
+// (`import { computeContextUsage } from 'shared/tokenEstimator.js'`) keep working.
+export { computeContextUsage };
