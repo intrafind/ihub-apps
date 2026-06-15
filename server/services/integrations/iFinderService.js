@@ -87,21 +87,59 @@ class IFinderService {
     chatId,
     user,
     maxResults = 10,
+    from = 0,
     searchProfile,
     returnFields = [
       'id',
-      'mediaType',
-      'sourceName',
-      'title',
-      'navigationTree',
+      'accessInfo.deepLink',
+      'accessInfo.download.itemId',
+      'accessInfo.download.itemType',
+      'accessInfo.download.subItemExtractionPath',
+      'accessInfo.lastModifiedDate',
+      'accessInfo.source',
+      'agentTags',
+      'agentType',
+      'agentVersion',
       'application',
-      'url',
-      'language',
+      'attachment.parent.id',
+      'attachment.parent.mediaType',
+      'attachment.parent.title',
+      'contentHash',
+      'contentLength',
+      'context',
+      'creationDate',
+      'creators',
       'file.name',
-      'contentLength'
+      'file.size',
+      'idHash',
+      'indexingDate',
+      'language',
+      'languages',
+      'links',
+      'mediaType',
+      'navigationTree',
+      'navigationTreeDepth',
+      'owners',
+      'significantTerms_hint',
+      'sourceLocations.label',
+      'sourceLocations.url',
+      'sourceName',
+      'sourceType',
+      'title',
+      'url'
     ],
-    returnFacets,
-    sort
+    returnFacets = [
+      'sourceType.keyword',
+      'application.keyword',
+      'navigationTree',
+      'creators.keyword',
+      'language.keyword',
+      'modificationDate'
+    ],
+    sort,
+    filter,
+    queryLogging = true,
+    signal
   }) {
     if (!query) {
       throw new Error('Query parameter is required');
@@ -146,10 +184,15 @@ class IFinderService {
       );
       const baseUrl = `${config.baseUrl.replace(/\/+$/, '')}${searchEndpoint}`;
 
-      // Build query parameters
+      // Build URL query parameters — paging, projection, sorting, logging.
+      // The query string itself and filters move to the JSON body below
+      // (the GET endpoint doesn't support filters, only POST does).
+      // iFinder caps `size` at 100; pagination through larger result sets
+      // is the caller's responsibility (vary `from` across calls).
       const params = new URLSearchParams();
-      if (query) params.append('query', query);
-      params.append('size', Math.min(maxResults, 100).toString());
+      const pageSize = Math.min(Math.max(maxResults, 0), 100);
+      params.append('size', pageSize.toString());
+      if (from > 0) params.append('from', String(from));
 
       if (returnFields && returnFields.length > 0) {
         returnFields.forEach(field => params.append('return_fields', field));
@@ -163,16 +206,42 @@ class IFinderService {
         sort.forEach(sortCriteria => params.append('sort', sortCriteria));
       }
 
+      if (queryLogging) {
+        params.append('query_logging', 'enable');
+      }
+
+      // Build request body. iFinder POST search expects:
+      //   { "query":   { "query": "<q>",       "query_type": "QueryStringQuery" },
+      //     "filters": [{ "query": "field:val", "query_type": "QueryStringQuery" }, …] }
+      const requestBody = {
+        query: {
+          query,
+          query_type: 'QueryStringQuery'
+        }
+      };
+      if (Array.isArray(filter) && filter.length > 0) {
+        requestBody.filters = filter
+          .filter(f => typeof f === 'string' && f.trim())
+          .map(f => ({ query: f.trim(), query_type: 'QueryStringQuery' }));
+      }
+
       const searchUrl = `${baseUrl}?${params.toString()}`;
-      logger.debug('Sending search request to profile', { component: 'IFinderService', profileId });
-      // Make API request
+      logger.debug('Sending search request to profile', {
+        component: 'IFinderService',
+        profileId,
+        filterCount: requestBody.filters?.length || 0
+      });
+      // Make API request — POST with JSON body so we can apply filters.
       const response = await throttledFetch('iFinderSearch', searchUrl, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           Authorization: authHeader,
-          Accept: 'application/json'
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
         },
-        timeout: config.timeout
+        body: JSON.stringify(requestBody),
+        timeout: config.timeout,
+        signal
       });
 
       if (!response.ok) {
@@ -330,7 +399,7 @@ class IFinderService {
    * @param {Object} params - Content fetch parameters
    * @returns {Object} Document content and metadata
    */
-  async getContent({ documentId, chatId, user, searchProfile, maxLength = 50000 }) {
+  async getContent({ documentId, chatId, user, searchProfile, maxLength = 50000, signal }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
     }
@@ -371,7 +440,8 @@ class IFinderService {
           Authorization: authHeader,
           Accept: 'application/json'
         },
-        timeout: config.timeout + 30000 // Longer timeout for content fetch
+        timeout: config.timeout + 30000, // Longer timeout for content fetch
+        signal
       });
 
       if (!response.ok) {
@@ -542,6 +612,150 @@ class IFinderService {
     });
 
     return metadata;
+  }
+
+  /**
+   * Probe a search profile to surface what is queryable.
+   *
+   * Runs one search() call with `return_facets` and a small sample size and
+   * normalises the result into both a structured payload AND a ready-to-paste
+   * markdown body — designed to be appended into an agent's long-term memory
+   * under a heading like `## iFinder corpus map`. The intent is operator-driven
+   * discovery: an admin triggers this once per search profile, the output
+   * lands in memory, and agent runs auto-include it via the existing memory
+   * plumbing.
+   *
+   * @param {Object} params
+   * @param {string} params.searchProfile  Required iFinder search profile id.
+   * @param {string} [params.query]        Optional scope query. Defaults to `*:*`.
+   * @param {Array<string>} [params.facets] Facet fields to probe.
+   * @param {number} [params.sampleSize]   Max sample documents to list.
+   * @returns {Object} { searchProfile, query, totalFound, facets, sampleDocs, markdown }
+   */
+  async discover({
+    searchProfile,
+    query = '*:*',
+    chatId,
+    user,
+    facets = [
+      'sourceName.keyword',
+      'application.keyword',
+      'language.keyword',
+      'creators.keyword',
+      'navigationTree'
+    ],
+    sampleSize = 10
+  }) {
+    if (!searchProfile || typeof searchProfile !== 'string') {
+      throw new Error('searchProfile is required for discovery');
+    }
+    this.validateCommon(user, chatId);
+
+    logger.info('Running iFinder discovery', {
+      component: 'IFinderService',
+      searchProfile,
+      query,
+      facets,
+      sampleSize
+    });
+
+    const searchResult = await this.search({
+      query,
+      chatId,
+      user,
+      searchProfile,
+      maxResults: Math.max(0, sampleSize),
+      returnFacets: facets,
+      returnFields: ['id', 'title', 'sourceName', 'mediaType', 'language', 'navigationTree']
+    });
+
+    const sampleDocs = (searchResult.results || []).map(hit => ({
+      docId: hit.id,
+      title: hit.title,
+      sourceName: hit.sourceName,
+      mediaType: hit.mediaType,
+      language: hit.language
+    }));
+
+    const markdown = this._buildDiscoveryMarkdown({
+      searchProfile,
+      query,
+      totalFound: searchResult.totalFound,
+      facets: searchResult.facets,
+      sampleDocs
+    });
+
+    return {
+      searchProfile,
+      query,
+      totalFound: searchResult.totalFound,
+      facets: searchResult.facets || null,
+      sampleDocs,
+      probedAt: new Date().toISOString(),
+      markdown
+    };
+  }
+
+  _buildDiscoveryMarkdown({ searchProfile, query, totalFound, facets, sampleDocs }) {
+    const lines = [];
+    lines.push(`_Profile_: \`${searchProfile}\`  •  _Probed_: ${new Date().toISOString()}`);
+    lines.push(`_Query_: \`${query}\`  •  _Hits_: ${totalFound ?? 0}`);
+    lines.push('');
+
+    const facetBlocks = this._normaliseFacets(facets);
+    for (const block of facetBlocks) {
+      lines.push(`**${block.field}**`);
+      for (const entry of block.values.slice(0, 8)) {
+        lines.push(`- ${entry.value} — ${entry.count} docs`);
+      }
+      lines.push('');
+    }
+
+    if (sampleDocs.length > 0) {
+      lines.push('**Sample titles**');
+      for (const doc of sampleDocs) {
+        const id = doc.docId ? ` (\`${doc.docId}\`)` : '';
+        lines.push(`- ${doc.title || '(untitled)'}${id}`);
+      }
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  _normaliseFacets(facets) {
+    if (!facets) return [];
+    if (Array.isArray(facets)) {
+      return facets
+        .filter(f => f && typeof f === 'object')
+        .map(f => ({
+          field: f.field || f.name || f.id || 'facet',
+          values: this._normaliseFacetValues(f.values || f.buckets || [])
+        }));
+    }
+    if (typeof facets === 'object') {
+      return Object.entries(facets).map(([field, values]) => ({
+        field,
+        values: this._normaliseFacetValues(values)
+      }));
+    }
+    return [];
+  }
+
+  _normaliseFacetValues(values) {
+    if (!Array.isArray(values)) return [];
+    return values
+      .map(v => {
+        if (typeof v === 'string') return { value: v, count: 0 };
+        if (v && typeof v === 'object') {
+          return {
+            value: v.value ?? v.key ?? v.label ?? '(unknown)',
+            count: v.count ?? v.doc_count ?? 0
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
   }
 
   /**

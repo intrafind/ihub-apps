@@ -33,9 +33,23 @@ export async function getMetadata(params) {
   return iFinderService.getMetadata(params);
 }
 
+/**
+ * Probe a search profile and produce a corpus map: totals, top facet values,
+ * available filterable fields, and sample document titles. Used by agents and
+ * workflows to learn what data is available before issuing a real search,
+ * and by the admin "build memory from tool" endpoint to seed long-term memory.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>} Discovery result including `markdown` field
+ */
+export async function discover(params) {
+  return iFinderService.discover(params);
+}
+
 // Export default with all methods
 export default {
   search,
   getContent,
-  getMetadata
+  getMetadata,
+  discover
 };

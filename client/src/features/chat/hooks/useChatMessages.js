@@ -271,6 +271,82 @@ function useChatMessages(chatId = 'default') {
   }, []);
 
   /**
+   * Append text to an assistant message's content using a functional state
+   * update, guaranteeing the suffix lands on the LATEST content even if more
+   * chunks arrived between the caller's read of `messagesRef` and this write.
+   * Used by cancellation so an in-flight chunk never gets overwritten by a
+   * stale-snapshot-based concat.
+   *
+   * @param {string} id - The message id
+   * @param {string} suffix - Text to append (the caller is responsible for any leading separator)
+   * @param {Object} [extra] - Extra fields to merge (e.g. `loading: false`)
+   */
+  const appendToAssistantMessage = useCallback((id, suffix, extra = {}) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === id
+          ? {
+              ...msg,
+              content: (msg.content || '') + suffix,
+              ...extra,
+              _timestamp: Date.now(),
+              _contentLength: ((msg.content || '') + suffix).length
+            }
+          : msg
+      )
+    );
+  }, []);
+
+  /**
+   * Append (or update) a workflow step on a message using a functional
+   * state update.
+   *
+   * The previous implementation read `prevSteps` from a ref and passed
+   * `[...prevSteps, newStep]` into `updateAssistantMessage`. When multiple
+   * step events fire within the same React render tick (e.g. an executor
+   * emits ten "Skipped (already searched): …" events back-to-back), every
+   * event after the first sees the same stale snapshot and overwrites the
+   * prior accumulation — dropping steps silently. Moving the merge inside
+   * `setMessages(prev => …)` guarantees each event reads the latest live
+   * state, so no step is lost regardless of how fast they arrive.
+   *
+   * Semantics match the old in-line handler:
+   *   - status:'running'   → mark any other running step as completed, append new
+   *   - status:'completed'/'error' → if a step with the same nodeName exists,
+   *                                  replace it; otherwise append.
+   *
+   * @param {string} id - Message id to mutate
+   * @param {Object} step - The step to append/update (nodeName, status, etc.)
+   * @param {Object} [extra] - Additional message fields to merge (e.g. workflowStep)
+   */
+  const appendWorkflowStep = useCallback((id, step, extra = {}) => {
+    setMessages(prev =>
+      prev.map(msg => {
+        if (msg.id !== id) return msg;
+        const prevSteps = msg.workflowSteps || [];
+        let updatedSteps;
+        if (step?.status === 'running') {
+          updatedSteps = prevSteps.map(s =>
+            s.status === 'running' ? { ...s, status: 'completed' } : s
+          );
+          updatedSteps = [...updatedSteps, step];
+        } else {
+          const exists = prevSteps.some(s => s.nodeName === step.nodeName);
+          updatedSteps = exists
+            ? prevSteps.map(s => (s.nodeName === step.nodeName ? step : s))
+            : [...prevSteps, step];
+        }
+        return {
+          ...msg,
+          workflowSteps: updatedSteps,
+          ...extra,
+          _timestamp: Date.now()
+        };
+      })
+    );
+  }, []);
+
+  /**
    * Set an error on a message
    * @param {string} id - The ID of the message to update
    * @param {string} errorMessage - The error message
@@ -451,6 +527,8 @@ function useChatMessages(chatId = 'default') {
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
+    appendToAssistantMessage,
+    appendWorkflowStep,
     setMessageError,
     deleteMessage,
     editMessage,

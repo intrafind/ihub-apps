@@ -125,7 +125,11 @@ function buildInputPreview(initialData) {
     } else if (Array.isArray(value)) {
       preview[key] = `[${value.length} items]`;
     } else if (typeof value === 'object') {
-      preview[key] = '[object]';
+      const keys = Object.keys(value);
+      preview[key] =
+        keys.length === 0
+          ? '{}'
+          : `{${keys.slice(0, 4).join(', ')}${keys.length > 4 ? ', …' : ''}}`;
     } else {
       preview[key] = String(value);
     }
@@ -274,7 +278,7 @@ function validateWorkflow(workflow) {
       success: false,
       errors: result.error.errors.map(err => ({
         path: err.path.join('.'),
-        message: error.message
+        message: err.message
       }))
     };
   } catch (error) {

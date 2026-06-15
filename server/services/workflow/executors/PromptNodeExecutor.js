@@ -573,6 +573,29 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       const hasStateUpdates = Object.keys(stateUpdates).length > 0;
 
+      // Capture what we sent so the execution UI can show resolved
+      // parameters. We truncate the rendered prompt content to keep the
+      // persisted state from ballooning when a single prompt is hundreds
+      // of KB (long contexts, embedded source documents, etc.).
+      const renderedUserMessage = (() => {
+        const userMsg = messages?.find?.(m => m?.role === 'user');
+        if (!userMsg) return null;
+        if (typeof userMsg.content === 'string') {
+          return userMsg.content.length > 4000
+            ? userMsg.content.slice(0, 4000) + '\n…[truncated]'
+            : userMsg.content;
+        }
+        return userMsg.content;
+      })();
+      const resolvedInputs = {
+        modelId: model.id,
+        modelName: model.name,
+        temperature: config.temperature ?? null,
+        maxTokens: config.maxTokens ?? null,
+        outputVariable: config.outputVariable ?? null,
+        renderedPrompt: renderedUserMessage
+      };
+
       // Build result with model info and token usage for UI display
       const result = this.createSuccessResult(
         {
@@ -582,7 +605,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           iterations: response.iterations,
           tokens: response.tokens
         },
-        { stateUpdates: hasStateUpdates ? stateUpdates : undefined }
+        { stateUpdates: hasStateUpdates ? stateUpdates : undefined, resolvedInputs }
       );
 
       // Promote model + token info to the top of the result so the persisted
