@@ -15,11 +15,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * - Result: unauthenticated users never download the React bundle
  *
  * In development:
- * - No-op by default (preserves HMR)
- * - Set VITE_AUTH_GATE=true to test the gate in dev mode
+ * - Enabled by default so the auth gate is the single login UI in dev too
+ *   (module scripts are preserved, so HMR keeps working)
+ * - Set VITE_AUTH_GATE=false to disable the gate in dev mode
  */
 export default function authGatePlugin() {
-  const isDevGateEnabled = process.env.VITE_AUTH_GATE === 'true';
+  const isDevGateEnabled = process.env.VITE_AUTH_GATE !== 'false';
   let isBuild = false;
 
   return {
