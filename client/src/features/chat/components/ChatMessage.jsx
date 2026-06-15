@@ -333,9 +333,9 @@ function ChatMessage({
     setEditedContent(getEditableContent());
   };
 
-  const handleResend = (useMaxTokens = false) => {
+  const handleResend = () => {
     if (onResend) {
-      onResend(message.id, undefined, useMaxTokens);
+      onResend(message.id);
     }
   };
 
@@ -945,14 +945,6 @@ function ChatMessage({
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
-          {message.finishReason === 'length' && (
-            <>
-              <Icon name="information-circle" size="sm" className="text-blue-500" />
-              <button onClick={() => handleResend(true)} className="underline">
-                {t('chatMessage.retryMoreTokens', 'Retry with more tokens')}
-              </button>
-            </>
-          )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
             <>
               <Icon name="exclamation-circle" size="sm" className="text-red-500" />

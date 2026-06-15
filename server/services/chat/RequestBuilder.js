@@ -120,7 +120,6 @@ class RequestBuilder {
     style,
     outputFormat,
     language,
-    useMaxTokens = false,
     bypassAppPrompts = false,
     thinkingEnabled,
     thinkingBudget,
@@ -322,8 +321,7 @@ class RequestBuilder {
       logger.info('Preparing chat request', {
         component: 'RequestBuilder',
         appId: app.id,
-        modelId: model.id,
-        useMaxTokens
+        modelId: model.id
       });
 
       // Output cap sent to the provider (max_tokens / maxOutputTokens). This is
@@ -334,7 +332,6 @@ class RequestBuilder {
       logger.info('Max output tokens for request', {
         component: 'RequestBuilder',
         finalTokens,
-        useMaxTokens,
         contextWindow: model.contextWindow || null
       });
 

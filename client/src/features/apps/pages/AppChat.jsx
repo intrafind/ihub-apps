@@ -254,8 +254,6 @@ function AppChat({ preloadedApp = null }) {
     setTemperature
   ]);
 
-  const [useMaxTokens, setUseMaxTokens] = useState(false);
-
   // State for managing parameter changes on mobile
   const [tempVariables, setTempVariables] = useState({});
 
@@ -1027,9 +1025,7 @@ function AppChat({ preloadedApp = null }) {
     editMessage(messageId, newContent);
   };
 
-  const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
-    console.log('🔄 handleResendMessage called with useMaxTokens:', useMaxTokens);
-
+  const handleResendMessage = (messageId, editedContent) => {
     const resendData = prepareResend(messageId, editedContent);
     const {
       content: contentToResend,
@@ -1101,10 +1097,6 @@ function AppChat({ preloadedApp = null }) {
         fileUploadHandler.setSelectedFile(filesToRestore);
       }
     }
-
-    // Always set the useMaxTokens state based on the parameter
-    console.log(`Setting useMaxTokens to: ${useMaxTokens}`);
-    setUseMaxTokens(useMaxTokens);
 
     setTimeout(() => {
       const form = document.querySelector('form');
@@ -1382,7 +1374,6 @@ function AppChat({ preloadedApp = null }) {
       temperature,
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
-      ...(useMaxTokens ? { useMaxTokens: true } : {}),
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
@@ -1396,7 +1387,6 @@ function AppChat({ preloadedApp = null }) {
     };
 
     console.log('📤 Sending message with params:', params);
-    console.log('🔢 useMaxTokens state:', useMaxTokens);
 
     // Validate variables: fall back to defaults if empty or whitespace-only
     const validatedVariables = {};
@@ -1496,7 +1486,6 @@ function AppChat({ preloadedApp = null }) {
     }
 
     setInput('');
-    setUseMaxTokens(false); // Reset to use app token limit for next message
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();

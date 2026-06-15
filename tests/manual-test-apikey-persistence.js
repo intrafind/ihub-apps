@@ -82,7 +82,9 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
   if (finalModel.apiKey === encryptedKey && finalModel.description.en === 'Updated description') {
     console.log('   ✅ API key correctly preserved!');
     console.log('   ✅ Other fields were updated correctly');
-    console.log(`   ✅ Context window: ${initialModel.contextWindow} → ${finalModel.contextWindow}`);
+    console.log(
+      `   ✅ Context window: ${initialModel.contextWindow} → ${finalModel.contextWindow}`
+    );
     return true;
   } else {
     console.log('   ❌ Test failed!');

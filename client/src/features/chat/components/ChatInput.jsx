@@ -121,6 +121,13 @@ function ChatInput({
     return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
   }, [selectedFile]);
 
+  // Tokenize attached document content separately so large files are only
+  // re-tokenized when the attachments change — not on every keystroke.
+  const fileTokens = useMemo(
+    () => normalizedFiles.reduce((sum, f) => sum + estimateTokens(f?.content || ''), 0),
+    [normalizedFiles]
+  );
+
   // Estimate how much of the model's context window the pending input (typed
   // message + attached document content) would consume. This is a live,
   // client-side estimate using the shared tokenizer; the provider-reported
@@ -129,10 +136,6 @@ function ChatInput({
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
-    const fileTokens = normalizedFiles.reduce(
-      (sum, f) => sum + estimateTokens(f?.content || ''),
-      0
-    );
     const inputTokens = estimateTokens(value || '') + fileTokens;
     if (inputTokens === 0) return null;
     return computeContextUsage({
@@ -140,7 +143,7 @@ function ChatInput({
       inputTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, normalizedFiles, value]);
+  }, [selectedModelData, fileTokens, value]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
