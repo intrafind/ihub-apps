@@ -407,3 +407,11 @@ The SSRF guard that protects workflow HTTP-request nodes from reaching internal 
 - Pins each request to the exact IP addresses validated by the guard, closing a DNS-rebinding window where a hostname could resolve to a public IP during the check and an internal IP at connect time. Pinning applies to direct connections; when an outbound HTTP proxy is configured the proxy remains the egress boundary.
 
 No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
+
+## Admin-Configurable Favicon (Branding)
+
+The browser tab icon (favicon) can now be set from the admin panel instead of patching `index.html`. This completes the corporate-design / white-labeling branding set alongside the existing logo, theme colors, custom CSS, and live theme preview.
+
+- A new **Favicon URL** field under **UI Customization › Header** accepts a path or an uploaded asset (e.g. `/favicon.ico` or `/uploads/assets/brand-icon.png`).
+- The favicon is applied live in the browser without rebuilding or editing HTML; leave it empty to keep the built-in default.
+- Stored as `header.favicon` in `ui.json`. Existing installations receive the default automatically via migration `V057__add_header_favicon`; no manual action required.

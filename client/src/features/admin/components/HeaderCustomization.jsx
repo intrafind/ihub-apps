@@ -22,6 +22,10 @@ function HeaderCustomization({ config, onUpdate, t }) {
     });
   };
 
+  const handleFaviconChange = favicon => {
+    onUpdate({ favicon });
+  };
+
   const addNavigationLink = () => {
     const newLink = {
       text: { en: 'New Link' },
@@ -145,6 +149,26 @@ function HeaderCustomization({ config, onUpdate, t }) {
             {t(
               'admin.ui.header.logoUrlHint',
               'Enter the path to your logo file (e.g., /header_company_logo.svg)'
+            )}
+          </p>
+        </div>
+
+        {/* Favicon Configuration */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {t('admin.ui.header.favicon', 'Favicon URL')}
+          </label>
+          <input
+            type="text"
+            value={config.favicon || ''}
+            onChange={e => handleFaviconChange(e.target.value)}
+            placeholder="/favicon.ico"
+            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          />
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.ui.header.faviconHint',
+              'Path to the browser tab icon (e.g., /favicon.ico or an uploaded asset). Leave empty to use the default.'
             )}
           </p>
         </div>

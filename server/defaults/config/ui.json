@@ -13,6 +13,7 @@
       "de": " Apps"
     },
     "defaultColor": "rgb(0, 53, 87)",
+    "favicon": "/favicon.ico",
     "logo": {
       "url": "/icons/apps-svg-logo.svg",
       "alt": {
