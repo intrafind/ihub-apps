@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import { logAudit } from '../services/AuditLogService.js';
+import { getContext } from '../utils/requestContext.js';
 
 /**
  * Global audit middleware — a blanket safety net that records mutating HTTP
@@ -29,7 +30,8 @@ const EXCLUDED_SEGMENTS = [
   'pages'
 ];
 
-const SENSITIVE_KEY_RE = /pass(word)?|secret|token|api[-_]?key|clientsecret|credential/i;
+const SENSITIVE_KEY_RE =
+  /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer/i;
 
 function getAuditConfig() {
   try {
@@ -45,7 +47,7 @@ function getAuditConfig() {
  * e.g. /api/admin/apps/my-app -> { resource: 'apps', resourceId: 'my-app' }
  *      /api/integrations/jira  -> { resource: 'integrations', resourceId: 'jira' }
  */
-function deriveResource(req) {
+export function deriveResource(req) {
   const path = (req.originalUrl || req.url || '').split('?')[0];
   const segments = path.split('/').filter(Boolean);
   const apiIdx = segments.indexOf('api');
@@ -61,11 +63,14 @@ function deriveResource(req) {
 
 function isExcluded(req) {
   const path = (req.originalUrl || req.url || '').split('?')[0];
+  // Admin mutations are always audit-worthy; never exclude them (otherwise a
+  // shared segment like 'pages' would silently skip /api/admin/pages CRUD).
+  if (path.includes('/api/admin/')) return false;
   const segments = path.split('/').filter(Boolean);
   return segments.some(s => EXCLUDED_SEGMENTS.includes(s));
 }
 
-function redact(value) {
+export function redact(value) {
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === 'object') {
     const out = {};
@@ -85,6 +90,15 @@ export function auditLogger() {
     const path = req.originalUrl || req.url || '';
     if (!path.includes('/api/')) return next();
     if (isExcluded(req)) return next();
+
+    // Only the safety net for AUTHENTICATED actors. Unauthenticated requests
+    // would let anyone flood the audit log with attacker-chosen paths; the
+    // security-relevant anonymous events (login attempts) have explicit hooks.
+    if (!req.user || req.user.id === 'anonymous') return next();
+
+    // Capture the requestId synchronously while we're still inside the request's
+    // async context — the res 'finish' callback may run on a later tick.
+    const requestId = getContext()?.requestId;
 
     res.on('finish', () => {
       try {
@@ -109,7 +123,7 @@ export function auditLogger() {
           }
         }
 
-        logAudit({ req, action, resource, resourceId, summary, result });
+        logAudit({ req, action, resource, resourceId, summary, result, requestId });
       } catch {
         // Never let audit logging affect the response lifecycle.
       }

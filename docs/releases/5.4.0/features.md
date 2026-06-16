@@ -200,7 +200,7 @@ The audit log now captures the security-relevant events that compliance reviews 
 - **Global safety net**: any other mutating admin request (POST/PUT/PATCH/DELETE) is recorded automatically, so new endpoints are covered without extra wiring.
 - **Richer entries**: each entry now records an `actor` (id, username, groups, authenticated), a `result` (`success`/`failure`), and a `source` (`web`/`admin`/`api`/`mcp`). The Audit Log page adds **Result** and **Source** columns and filters.
 - **CSV export**: an **Export CSV** button (and `GET /api/admin/audit-log/export`) downloads the currently filtered entries.
-- **Privacy & SIEM options** (`platform.json` → `audit`, added by migration `V057__add_audit_options`): `includeEmail` (default `false`) masks email-shaped identifiers; `verbosity` (`metadata`/`request`/`full`) controls how much request detail the safety net records; `winstonMirror` (default `false`) also emits entries to the structured logger (`component: audit`) for SIEM forwarding.
+- **Privacy & SIEM options** (`platform.json` → `audit`, added by migration `V059__add_audit_options`): `includeEmail` (default `false`) masks email-shaped identifiers; `verbosity` (`metadata`/`request`/`full`) controls how much request detail the safety net records; `winstonMirror` (default `false`) also emits entries to the structured logger (`component: audit`) for SIEM forwarding.
 
 ## Recent Activity Feed on Overview Dashboard
 

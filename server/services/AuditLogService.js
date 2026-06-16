@@ -11,6 +11,9 @@ const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 365;
 const FLUSH_INTERVAL_MS = 5000;
+// Hard cap so a failing disk + high write volume can't exhaust memory. When
+// exceeded we drop the oldest entries and emit a single overflow warning.
+const MAX_QUEUE = 10000;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,6 +22,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // request. queryAuditLog() flushes first so reads stay consistent.
 let queue = [];
 let flushTimer = null;
+let overflowed = false;
 
 function getAuditConfig() {
   try {
@@ -45,9 +49,14 @@ function maskEmail(value) {
 function buildActor(req, explicitActor) {
   const includeEmail = getAuditConfig().includeEmail === true;
   const src = explicitActor || req?.user || {};
-  const id = src.id ?? 'unknown';
+  let id = src.id ?? 'unknown';
   let username = src.username ?? src.name ?? src.id ?? 'unknown';
-  if (!includeEmail) username = maskEmail(username);
+  // Mask email-shaped identifiers in BOTH id and username so includeEmail:false
+  // actually prevents email storage (login actors set id = the attempted email).
+  if (!includeEmail) {
+    id = maskEmail(id);
+    username = maskEmail(username);
+  }
   const authenticated =
     typeof src.authenticated === 'boolean'
       ? src.authenticated
@@ -86,6 +95,22 @@ function scheduleFlush() {
   if (typeof flushTimer.unref === 'function') flushTimer.unref();
 }
 
+// Periodic safety-net flush. The one-shot scheduleFlush() timer clears itself
+// before running, so if a flush throws and re-buffers, nothing re-arms it —
+// this interval guarantees re-buffered entries eventually drain even with no
+// further audit activity. Mirrors UsageEventLog. unref so it never blocks exit.
+const periodicFlush = setInterval(() => {
+  if (queue.length > 0) {
+    flushAuditLog().catch(error =>
+      logger.error('Audit periodic flush error', {
+        component: 'AuditLogService',
+        error: error.message
+      })
+    );
+  }
+}, FLUSH_INTERVAL_MS);
+if (typeof periodicFlush.unref === 'function') periodicFlush.unref();
+
 /**
  * Flush the buffered audit entries to their daily JSONL files. Entries are
  * grouped by date so a flush spanning midnight lands in the correct files.
@@ -105,19 +130,24 @@ export async function flushAuditLog() {
   }
 
   let count = 0;
-  try {
-    for (const [date, entries] of byDate) {
+  let firstError = null;
+  // Write each date independently and only re-buffer the dates that failed, so
+  // a partial failure (e.g. a flush spanning midnight) can't re-write — and
+  // thereby duplicate — entries that already landed on disk.
+  for (const [date, entries] of byDate) {
+    try {
       const filePath = join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${date}.jsonl`);
       await fs.mkdir(dirname(filePath), { recursive: true });
       const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
       await fs.appendFile(filePath, lines, 'utf8');
       count += entries.length;
+    } catch (error) {
+      firstError = firstError || error;
+      // Re-buffer only this date's entries so the next flush retries just them.
+      queue = entries.concat(queue);
     }
-  } catch (error) {
-    // Re-buffer the entries we failed to write so they aren't lost.
-    queue = pending.concat(queue);
-    throw error;
   }
+  if (firstError) throw firstError;
   return count;
 }
 
@@ -135,6 +165,8 @@ export async function flushAuditLog() {
  * @param {'success'|'failure'} [options.result='success'] - Outcome of the action
  * @param {string} [options.source] - 'web' | 'mcp' | 'api' | 'admin' (derived from req when omitted)
  * @param {Object} [options.actor] - Explicit actor for pre-auth events (e.g. failed login)
+ * @param {string} [options.requestId] - Explicit request id (used by the middleware,
+ *   whose res 'finish' callback may run outside the request's async context)
  * @returns {Object|null} the buffered entry, or null on failure
  */
 export function logAudit({
@@ -145,20 +177,25 @@ export function logAudit({
   summary,
   result = 'success',
   source,
-  actor
+  actor,
+  requestId
 } = {}) {
   try {
+    const includeEmail = getAuditConfig().includeEmail === true;
+    // resourceId can carry the attempted identifier (e.g. a login id that is an
+    // email), so honor the same masking as the actor.
+    const safeResourceId = includeEmail ? resourceId || '' : maskEmail(resourceId || '');
     const entry = {
       id: randomUUID(),
       ts: new Date().toISOString(),
       actor: buildActor(req, actor),
       action,
       resource,
-      resourceId: resourceId || '',
+      resourceId: safeResourceId,
       summary: summary || '',
       result,
       source: source || deriveSource(req),
-      requestId: getContext()?.requestId || randomUUID(),
+      requestId: requestId || getContext()?.requestId || randomUUID(),
       ip: req?.ip
     };
 
@@ -171,6 +208,20 @@ export function logAudit({
     }
 
     queue.push(entry);
+    // Bound memory: if the buffer is overflowing (e.g. disk wedged), drop the
+    // oldest entries rather than grow without limit. Warn once per overflow.
+    if (queue.length > MAX_QUEUE) {
+      queue.splice(0, queue.length - MAX_QUEUE);
+      if (!overflowed) {
+        overflowed = true;
+        logger.error('Audit log buffer overflow — dropping oldest entries', {
+          component: 'AuditLogService',
+          max: MAX_QUEUE
+        });
+      }
+    } else {
+      overflowed = false;
+    }
     scheduleFlush();
 
     // Mark the request so the global audit middleware doesn't emit a duplicate

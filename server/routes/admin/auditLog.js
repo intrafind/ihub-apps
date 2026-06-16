@@ -9,6 +9,9 @@ import { sendInternalError } from '../../utils/responseHelpers.js';
 import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 
+// Upper bound on rows returned by the CSV export to keep memory bounded.
+const MAX_EXPORT_ROWS = 100000;
+
 function getRetentionSettings() {
   const platform = configCache.getPlatform ? configCache.getPlatform() : {};
   const cfg = platform?.auditLog || {};
@@ -65,7 +68,9 @@ export default function registerAdminAuditLogRoutes(app) {
     try {
       const { from, to, actor, resource, action, result: outcome, source } = req.query;
 
-      const { entries } = await queryAuditLog({
+      // Cap the export so a wide date range can't build an unbounded CSV string
+      // in memory. Admins can narrow the date range to export more granularly.
+      const { entries, total } = await queryAuditLog({
         from,
         to,
         actor,
@@ -73,9 +78,12 @@ export default function registerAdminAuditLogRoutes(app) {
         action,
         result: outcome,
         source,
-        limit: Number.MAX_SAFE_INTEGER,
+        limit: MAX_EXPORT_ROWS,
         offset: 0
       });
+      if (total > MAX_EXPORT_ROWS) {
+        res.setHeader('X-Audit-Export-Truncated', `${total - MAX_EXPORT_ROWS}`);
+      }
 
       const headers = [
         'ts',

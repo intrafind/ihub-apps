@@ -48,10 +48,30 @@ describe('AuditLogService.logAudit', () => {
     expect(entry.actor.groups).toEqual(['admin']);
   });
 
-  test('masks email-shaped usernames when includeEmail is false', () => {
-    const req = { user: { id: 'u2', username: 'bob@example.com', authenticated: true } };
-    const entry = logAudit({ req, action: 'login', resource: 'auth' });
+  test('masks email-shaped id and username (and resourceId) when includeEmail is false', () => {
+    const req = {
+      user: { id: 'bob@example.com', username: 'bob@example.com', authenticated: true }
+    };
+    const entry = logAudit({
+      req,
+      action: 'login',
+      resource: 'auth',
+      resourceId: 'bob@example.com'
+    });
     expect(entry.actor.username).toBe('bob');
+    expect(entry.actor.id).toBe('bob'); // id must be masked too, not just username
+    expect(entry.resourceId).toBe('bob');
+  });
+
+  test('masks the explicit failed-login actor (attacker-supplied email)', () => {
+    const entry = logAudit({
+      action: 'login',
+      resource: 'auth',
+      result: 'failure',
+      actor: { id: 'attacker@evil.com', username: 'attacker@evil.com', authenticated: false }
+    });
+    expect(entry.actor.id).toBe('attacker');
+    expect(entry.actor.username).toBe('attacker');
   });
 
   test('keeps full email when includeEmail is true', () => {
@@ -102,6 +122,27 @@ describe('AuditLogService.logAudit', () => {
     expect(content).toContain('"resourceId":"foo"');
 
     // A second flush with an empty queue is a no-op.
+    expect(await flushAuditLog()).toBe(0);
+  });
+
+  test('re-buffers entries on flush failure and writes them exactly once on retry', async () => {
+    appendSpy.mockRejectedValueOnce(new Error('ENOSPC'));
+    logAudit({
+      req: { user: { id: 'u1', username: 'alice', authenticated: true } },
+      action: 'create',
+      resource: 'app',
+      resourceId: 'foo'
+    });
+
+    // First flush fails — entry must be retained, not lost.
+    await expect(flushAuditLog()).rejects.toThrow('ENOSPC');
+
+    // Retry succeeds and writes the entry exactly once.
+    const count = await flushAuditLog();
+    expect(count).toBe(1);
+
+    // Queue is now empty — the re-buffered entry was not duplicated, so a
+    // subsequent flush is a no-op.
     expect(await flushAuditLog()).toBe(0);
   });
 
