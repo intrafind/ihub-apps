@@ -41,7 +41,6 @@ Add a `websearch` object to your app configuration:
   "id": "research-assistant",
   "name": { "en": "Research Assistant" },
   "system": { "en": "You are a research assistant with web search capabilities." },
-  "tokenLimit": 8000,
   "websearch": {
     "enabled": true,
     "provider": "auto",
@@ -351,7 +350,6 @@ Here is a complete app configuration with web search enabled:
     "en": "You are a helpful AI assistant with access to web search. When the user asks a question that requires current information, use the web search tool to find relevant content. Always cite your sources with URLs.",
     "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf Websuche. Wenn der Benutzer eine Frage stellt, die aktuelle Informationen erfordert, nutze das Websuch-Tool. Zitiere immer deine Quellen mit URLs."
   },
-  "tokenLimit": 8000,
   "preferredModel": "gemini-2.5-flash-preview-05-20",
   "preferredOutputFormat": "markdown",
   "websearch": {

@@ -385,7 +385,7 @@ class StreamingHandler {
           logger.warn('Context window exceeded in streaming', {
             component: 'StreamingHandler',
             modelId: model.id,
-            tokenLimit: model.tokenLimit,
+            contextWindow: model.contextWindow,
             httpStatus: errorInfo.httpStatus,
             errorCode: errorInfo.code
           });

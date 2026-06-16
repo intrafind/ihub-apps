@@ -11,7 +11,7 @@
     "de": "iAssistant Mehrfach-Konversation mit Zitaten und Dokumentenreferenzen"
   },
   "provider": "iassistant-conversation",
-  "tokenLimit": null,
+  "contextWindow": null,
   "supportsTools": false,
   "supportsImages": false,
   "default": false,

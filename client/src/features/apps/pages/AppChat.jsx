@@ -24,6 +24,7 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import CompareModeView from '../../chat/components/CompareModeView';
@@ -127,7 +128,6 @@ function AppChat({ preloadedApp = null }) {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [, setMaxTokens] = useState(4096);
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 
   // Compare mode state
@@ -254,8 +254,6 @@ function AppChat({ preloadedApp = null }) {
     setTemperature
   ]);
 
-  const [useMaxTokens, setUseMaxTokens] = useState(false);
-
   // State for managing parameter changes on mobile
   const [tempVariables, setTempVariables] = useState({});
 
@@ -286,7 +284,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     const currentModel = models?.find(m => m.id === selectedModel);
-    if (!currentModel?.tokenLimit) {
+    if (!currentModel?.contextWindow) {
       setFileTokenWarning(null);
       return;
     }
@@ -302,28 +300,38 @@ function AppChat({ preloadedApp = null }) {
       return;
     }
 
-    // Estimate token count per file using chars/4 approximation (standard heuristic for English
-    // text; token-to-character ratios vary for other languages and scripts)
-    const perFile = documentFiles.map((f, index) => ({
-      fileName:
-        f.fileName ||
-        f.name ||
-        t('common.untitledFile', 'Document {{index}}', { index: index + 1 }),
-      estimatedTokens: Math.ceil((f.content?.length || 0) / 4)
-    }));
-    const totalEstimatedTokens = perFile.reduce((sum, f) => sum + f.estimatedTokens, 0);
+    // Estimate token count per file using the shared tokenizer (gpt-tokenizer),
+    // loaded lazily so it stays out of the eager bundle. This is a
+    // cross-provider approximation; the provider-reported count after the turn
+    // is authoritative.
+    let cancelled = false;
+    ensureTokenizer().then(() => {
+      if (cancelled) return;
+      const perFile = documentFiles.map((f, index) => ({
+        fileName:
+          f.fileName ||
+          f.name ||
+          t('common.untitledFile', 'Document {{index}}', { index: index + 1 }),
+        estimatedTokens: estimateTokensSync(f.content || '')
+      }));
+      const totalEstimatedTokens = perFile.reduce((sum, f) => sum + f.estimatedTokens, 0);
 
-    // Warn when document content alone would exceed 80% of the model's context window.
-    // The estimate is the combined total across ALL attached documents, not per file.
-    if (totalEstimatedTokens > currentModel.tokenLimit * 0.8) {
-      setFileTokenWarning({
-        estimatedTokens: totalEstimatedTokens,
-        tokenLimit: currentModel.tokenLimit,
-        files: perFile
-      });
-    } else {
-      setFileTokenWarning(null);
-    }
+      // Warn when document content alone would exceed 80% of the model's context
+      // window. The estimate is the combined total across ALL attached documents.
+      if (totalEstimatedTokens > currentModel.contextWindow * 0.8) {
+        setFileTokenWarning({
+          estimatedTokens: totalEstimatedTokens,
+          contextWindow: currentModel.contextWindow,
+          files: perFile
+        });
+      } else {
+        setFileTokenWarning(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
 
   // Integration authentication detection
@@ -808,9 +816,6 @@ function AppChat({ preloadedApp = null }) {
 
         console.log('Fetching app data for:', appId);
         const appData = await fetchAppDetails(appId);
-        if (isMounted) {
-          setMaxTokens(appData.tokenLimit || 4096);
-        }
 
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
@@ -1029,9 +1034,7 @@ function AppChat({ preloadedApp = null }) {
     editMessage(messageId, newContent);
   };
 
-  const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
-    console.log('🔄 handleResendMessage called with useMaxTokens:', useMaxTokens);
-
+  const handleResendMessage = (messageId, editedContent) => {
     const resendData = prepareResend(messageId, editedContent);
     const {
       content: contentToResend,
@@ -1103,10 +1106,6 @@ function AppChat({ preloadedApp = null }) {
         fileUploadHandler.setSelectedFile(filesToRestore);
       }
     }
-
-    // Always set the useMaxTokens state based on the parameter
-    console.log(`Setting useMaxTokens to: ${useMaxTokens}`);
-    setUseMaxTokens(useMaxTokens);
 
     setTimeout(() => {
       const form = document.querySelector('form');
@@ -1384,7 +1383,6 @@ function AppChat({ preloadedApp = null }) {
       temperature,
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
-      ...(useMaxTokens ? { useMaxTokens: true } : {}),
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
@@ -1398,7 +1396,6 @@ function AppChat({ preloadedApp = null }) {
     };
 
     console.log('📤 Sending message with params:', params);
-    console.log('🔢 useMaxTokens state:', useMaxTokens);
 
     // Validate variables: fall back to defaults if empty or whitespace-only
     const validatedVariables = {};
@@ -1498,7 +1495,6 @@ function AppChat({ preloadedApp = null }) {
     }
 
     setInput('');
-    setUseMaxTokens(false); // Reset to use app token limit for next message
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();

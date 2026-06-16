@@ -236,8 +236,7 @@ Example response:
     "description": { "en": "General-purpose AI assistant" },
     "color": "#4F46E5",
     "icon": "chat",
-    "preferredModel": "gpt-4o",
-    "tokenLimit": 4000
+    "preferredModel": "gpt-4o"
   },
   {
     "id": "summarizer",
@@ -245,8 +244,7 @@ Example response:
     "description": { "en": "Summarize documents and text" },
     "color": "#059669",
     "icon": "document",
-    "preferredModel": "gpt-4o",
-    "tokenLimit": 8000
+    "preferredModel": "gpt-4o"
   }
 ]
 ```

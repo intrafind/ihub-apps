@@ -269,7 +269,7 @@ class ErrorHandler {
           {
             provider: model.provider,
             modelId: model.id,
-            tokenLimit: model.tokenLimit || 'unknown'
+            contextWindow: model.contextWindow || 'unknown'
           },
           language
         );
@@ -298,7 +298,7 @@ class ErrorHandler {
           {
             provider: model.provider,
             modelId: model.id,
-            tokenLimit: model.tokenLimit || 'unknown'
+            contextWindow: model.contextWindow || 'unknown'
           },
           language
         );

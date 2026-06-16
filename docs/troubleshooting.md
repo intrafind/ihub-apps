@@ -160,7 +160,7 @@ jq . contents/config/platform.json
 // ❌ Missing required fields
 {
   "id": "my-app"
-  // Missing name, description, color, icon, system, tokenLimit
+  // Missing name, description, color, icon, system
 }
 
 // ✅ Minimum valid configuration
@@ -170,8 +170,7 @@ jq . contents/config/platform.json
   "description": {"en": "App description"},
   "color": "#3B82F6",
   "icon": "MessageSquare",
-  "system": {"en": "You are a helpful assistant"},
-  "tokenLimit": 4000
+  "system": {"en": "You are a helpful assistant"}
 }
 ```
 

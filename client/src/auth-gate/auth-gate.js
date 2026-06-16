@@ -23,6 +23,11 @@
   var DATA_ID = 'auth-gate-data';
   var IS_DEV = !!window.__AUTH_GATE_DEV_MODE__;
 
+  // localStorage key for the last successfully logged-in username, used to
+  // pre-fill the field when the user opted into "Remember me". Shared with the
+  // React LoginForm so the preference carries across both surfaces.
+  var REMEMBERED_USERNAME_KEY = 'ihub_rememberedUsername';
+
   // --- State ---
   var authConfig = null;
   var gateUI = null;
@@ -629,6 +634,11 @@
         usernameInput.placeholder = t('usernamePlaceholder');
         usernameInput.required = true;
         usernameInput.autocomplete = 'username';
+        // Pre-fill from the remembered username when "Remember me" was used.
+        var rememberedUsername = getRememberedUsername();
+        if (rememberedUsername) {
+          usernameInput.value = rememberedUsername;
+        }
         usernameGroup.appendChild(usernameInput);
         form.appendChild(usernameGroup);
 
@@ -649,6 +659,21 @@
         passwordInput.autocomplete = 'current-password';
         passwordGroup.appendChild(passwordInput);
         form.appendChild(passwordGroup);
+
+        // Remember me — pre-fills the username on the next visit (checked by default)
+        var rememberGroup = createElement('div', 'ag-checkbox-row');
+        var rememberInput = document.createElement('input');
+        rememberInput.className = 'ag-checkbox';
+        rememberInput.type = 'checkbox';
+        rememberInput.id = 'ag-remember';
+        rememberInput.name = 'rememberMe';
+        rememberInput.checked = true;
+        var rememberLabel = createElement('label', 'ag-checkbox-label');
+        rememberLabel.setAttribute('for', 'ag-remember');
+        rememberLabel.textContent = t('rememberMe');
+        rememberGroup.appendChild(rememberInput);
+        rememberGroup.appendChild(rememberLabel);
+        form.appendChild(rememberGroup);
 
         // Submit button
         var submitBtn = createElement('button', 'ag-btn ag-btn-primary');
@@ -679,9 +704,14 @@
           card.appendChild(demo);
         }
 
-        // Auto-focus username after render
+        // Auto-focus: jump to the password when the username was pre-filled
+        // from "Remember me", otherwise focus the username field.
         setTimeout(function () {
-          usernameInput.focus();
+          if (usernameInput.value && passwordInput) {
+            passwordInput.focus();
+          } else {
+            usernameInput.focus();
+          }
         }, 50);
       }
     }
@@ -729,10 +759,14 @@
     var usernameEl = root.querySelector('#ag-username');
     var passwordEl = root.querySelector('#ag-password');
     var providerEl = root.querySelector('#ag-provider');
+    var rememberEl = root.querySelector('#ag-remember');
 
     var username = usernameEl ? usernameEl.value.trim() : '';
     var password = passwordEl ? passwordEl.value : '';
     var provider = providerEl ? providerEl.value : '';
+    // Default to remembering when the checkbox isn't rendered (mirrors the
+    // checked-by-default behavior of the form).
+    var rememberMe = rememberEl ? rememberEl.checked : true;
 
     if (!username || !password) return;
 
@@ -772,6 +806,9 @@
             storeToken(data.token);
           }
           currentError = null;
+
+          // Persist (or clear) the remembered username per the checkbox.
+          saveRememberedUsername(rememberMe ? username : '');
 
           // Clean ?logout=true from URL so the app doesn't think we just logged out
           cleanUrlParams(['logout']);
@@ -898,6 +935,26 @@
     }
   }
 
+  function getRememberedUsername() {
+    try {
+      return localStorage.getItem(REMEMBERED_USERNAME_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function saveRememberedUsername(username) {
+    try {
+      if (username) {
+        localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+      } else {
+        localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+      }
+    } catch (e) {
+      // Storage may be unavailable (e.g. privacy mode); silently degrade.
+    }
+  }
+
   // =========================================================================
   // Utilities
   // =========================================================================
@@ -912,7 +969,7 @@
   }
 
   function setFormDisabled(root, disabled) {
-    var inputs = root.querySelectorAll('.ag-input, .ag-select, .ag-btn');
+    var inputs = root.querySelectorAll('.ag-input, .ag-select, .ag-btn, .ag-checkbox');
     inputs.forEach(function (el) {
       el.disabled = disabled;
     });

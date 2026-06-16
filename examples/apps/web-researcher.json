@@ -19,7 +19,6 @@
     "en": "What would you like me to research? (e.g., 'Compare renewable energy technologies', 'Latest AI breakthrough analysis', 'Market trends in electric vehicles')",
     "de": "Was soll ich für Sie recherchieren? (z.B. 'Vergleiche von erneuerbaren Energietechnologien', 'Analyse der neuesten KI-Durchbrüche', 'Markttrends bei Elektrofahrzeugen')"
   },
-  "tokenLimit": 12000,
   "preferredModel": "gemini-2.5-flash-preview-05-20",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",

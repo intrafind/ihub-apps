@@ -20,7 +20,6 @@
     "en": "Ready to summarize your content! Paste your text and choose an action.",
     "de": "Bereit, Ihren Inhalt zusammenzufassen! Fügen Sie Ihren Text ein und wählen Sie eine Aktion."
   },
-  "tokenLimit": 8000,
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",

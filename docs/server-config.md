@@ -124,6 +124,8 @@ The server exposes configured models via an OpenAI compatible API. It reuses the
 
 Authenticated requests can call `/api/inference/v1/chat/completions` and `/api/inference/v1/models` using any OpenAI compatible client. Model access is filtered based on the user's permissions.
 
+For a complete walkthrough — setup, credential issuance, and client/SDK examples (curl, Python, JavaScript, LangChain) — see [OpenAI-Compatible API](openai-compatible-api.md).
+
 ## SSL Configuration
 
 To enable HTTPS you must provide certificate files via environment variables:

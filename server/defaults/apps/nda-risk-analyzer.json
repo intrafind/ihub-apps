@@ -20,7 +20,6 @@
     "en": "**Policy Preferences to Apply:**\n{{custom_rules}}\n\n**NDA Document to Analyze:**\n{{content}}",
     "de": "**Anzuwendende Richtlinien-Präferenzen:**\n{{custom_rules}}\n\n**Zu analysierendes NDA-Dokument:**\n{{content}}"
   },
-  "tokenLimit": 16000,
   "preferredModel": "gpt-oss-vllm",
   "preferredOutputFormat": "json",
   "preferredStyle": "professional",

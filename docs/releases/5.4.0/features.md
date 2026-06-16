@@ -418,3 +418,35 @@ The SSRF guard that protects workflow HTTP-request nodes from reaching internal 
 - Pins each request to the exact IP addresses validated by the guard, closing a DNS-rebinding window where a hostname could resolve to a public IP during the check and an internal IP at connect time. Pinning applies to direct connections; when an outbound HTTP proxy is configured the proxy remains the egress boundary.
 
 No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
+
+## Admin-Configurable Favicon (Branding)
+
+The browser tab icon (favicon) can now be set from the admin panel instead of patching `index.html`. This completes the corporate-design / white-labeling branding set alongside the existing logo, theme colors, custom CSS, and live theme preview.
+
+- A new **Favicon URL** field under **UI Customization › Header** accepts a path or an uploaded asset (e.g. `/favicon.ico` or `/uploads/assets/brand-icon.png`).
+- The favicon is applied live in the browser without rebuilding or editing HTML; leave it empty to keep the built-in default.
+- Stored as `header.favicon` in `ui.json`. Existing installations receive the default automatically via migration `V057__add_header_favicon`; no manual action required.
+
+## Unified Login Dialog (Auth Gate Everywhere)
+
+The app now uses a single login dialog — the auth gate — for every sign-in entry point. Clicking **Login** in the header, visiting the `/login` page, and being prompted after a session expires all open the same gate, which supports every configured method (local, LDAP, OIDC/SSO, Windows/NTLM).
+
+- **One consistent dialog**: the separate in-app login modal has been retired, so the look, behavior, and available methods no longer differ between the startup screen and the in-app login.
+- **Remember me**: the gate now offers a "Remember me" option (checked by default) that pre-fills your username on the next visit, matching the previous in-app form.
+- **Login button always available**: the header always shows a **Login** button when sign-in is possible, regardless of how you entered the app — no more missing or empty user menu.
+- Logout and post-login redirect behavior are unchanged.
+
+## Clearer Model Limits — Context Window vs. Output Tokens
+
+Model configuration now separates two distinct concepts that were previously conflated under a single `tokenLimit` field:
+
+- **`contextWindow`** — the model's total input+output capacity. Used to estimate how much of a model's context an upload or conversation consumes, and to warn users before they exceed it.
+- **`maxOutputTokens`** — the cap on what the model may generate in a single response, sent to the provider as `max_tokens`.
+
+Highlights:
+
+- Document-size warnings in the chat input are now measured against the model's **context window** (the correct frame of reference) and use an accurate tokenizer instead of a rough character estimate.
+- Model details now display **Context Window** and **Max Output Tokens** as separate values.
+- Fixes a latent bug where large-context models (e.g. Claude Opus) requested their full context window as the output cap, which could cause provider errors.
+
+Admins editing models will see two fields (Context Window, Max Output Tokens) instead of one Token Limit.

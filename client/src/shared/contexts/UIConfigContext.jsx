@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { fetchUIConfig } from '../../api/api';
-import { buildPath } from '../../utils/runtimeBasePath';
+import { buildPath, buildAssetUrl } from '../../utils/runtimeBasePath';
 
 // Default header color as a fallback if config is not loaded
 const FALLBACK_COLOR = '#4f46e5'; // indigo-600
@@ -125,6 +125,20 @@ export function UIConfigProvider({ children }) {
       document.head.appendChild(styleElement);
     }
   }, [uiConfig?.customStyles?.css]);
+
+  // Inject configured favicon into the document head
+  useEffect(() => {
+    const favicon = uiConfig?.header?.favicon;
+    if (!favicon) return;
+
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = buildAssetUrl(favicon);
+  }, [uiConfig?.header?.favicon]);
 
   // Inject theme CSS link for CSS custom properties
   useEffect(() => {

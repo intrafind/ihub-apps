@@ -8,6 +8,7 @@ import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
 import logger from './utils/logger.js';
+import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
@@ -223,8 +224,7 @@ function incFeedback(map, key, rating) {
 }
 
 export function estimateTokens(text) {
-  if (!text) return 0;
-  return Math.ceil(text.length / 4);
+  return estimateTokensShared(text);
 }
 
 export async function recordChatRequest({

@@ -53,6 +53,7 @@ The `header` section controls the appearance and content of the application head
 ```json
 "header": {
   "defaultColor": "rgb(0, 53, 87)",
+  "favicon": "/favicon.ico",
   "logo": {
     "url": "/logo-custom-2.png",
     "alt": {
@@ -91,6 +92,7 @@ The `header` section controls the appearance and content of the application head
 | `titleBold`                | Object  | Localized text for the bold part of the header title (e.g., `" Apps"`) |
 | `tagline`                  | Object  | Localized tagline displayed beneath the title (e.g., `"by IntraFind"`) |
 | `defaultColor`             | String  | Background color for the header              |
+| `favicon`                  | String  | Path to the browser tab icon (favicon). Leave empty to use the built-in default. Configurable from the admin **UI Customization > Header** tab |
 | `logo.url`                 | String  | Path to the logo image                       |
 | `logo.alt`                 | Object  | Localized alt text for the logo              |
 | `logo.containerStyle`      | Object  | Optional inline style for the logo container |

@@ -64,7 +64,6 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
     style: undefined,
     outputFormat: undefined,
     language: language || configCache.getPlatform()?.defaultLanguage || 'en',
-    useMaxTokens: false,
     bypassAppPrompts: false,
     processMessageTemplates,
     // No res/clientRes — RequestBuilder treats this as non-streaming.
