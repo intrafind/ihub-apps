@@ -10,7 +10,8 @@
     "de": "Cohere Command R+ über AWS Bedrock — RAG-optimiert mit starken Tool-Aufrufen."
   },
   "provider": "bedrock",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": false,
   "enabled": false,

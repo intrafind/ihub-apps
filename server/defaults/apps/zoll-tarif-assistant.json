@@ -21,7 +21,6 @@
     "en": "Ready to find the right customs tariff number? Briefly describe the product you want to export.",
     "de": "Bereit, die passende Zolltarifnummer zu finden? Beschreiben Sie kurz das Produkt, das Sie exportieren möchten."
   },
-  "tokenLimit": 8192,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
   "preferredTemperature": 0.7,

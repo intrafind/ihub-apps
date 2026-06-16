@@ -424,3 +424,18 @@ The app now uses a single login dialog — the auth gate — for every sign-in e
 - **Remember me**: the gate now offers a "Remember me" option (checked by default) that pre-fills your username on the next visit, matching the previous in-app form.
 - **Login button always available**: the header always shows a **Login** button when sign-in is possible, regardless of how you entered the app — no more missing or empty user menu.
 - Logout and post-login redirect behavior are unchanged.
+
+## Clearer Model Limits — Context Window vs. Output Tokens
+
+Model configuration now separates two distinct concepts that were previously conflated under a single `tokenLimit` field:
+
+- **`contextWindow`** — the model's total input+output capacity. Used to estimate how much of a model's context an upload or conversation consumes, and to warn users before they exceed it.
+- **`maxOutputTokens`** — the cap on what the model may generate in a single response, sent to the provider as `max_tokens`.
+
+Highlights:
+
+- Document-size warnings in the chat input are now measured against the model's **context window** (the correct frame of reference) and use an accurate tokenizer instead of a rough character estimate.
+- Model details now display **Context Window** and **Max Output Tokens** as separate values.
+- Fixes a latent bug where large-context models (e.g. Claude Opus) requested their full context window as the output cap, which could cause provider errors.
+
+Admins editing models will see two fields (Context Window, Max Output Tokens) instead of one Token Limit.

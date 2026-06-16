@@ -40,7 +40,8 @@ function AdminModelEditPage() {
     description: { [DEFAULT_LANGUAGE]: '' },
     url: '',
     provider: '',
-    tokenLimit: '',
+    contextWindow: '',
+    maxOutputTokens: '',
     supportsTools: false,
     supportsImageGeneration: false,
     enabled: true,
@@ -91,7 +92,8 @@ function AdminModelEditPage() {
         description: { [DEFAULT_LANGUAGE]: '' },
         url: '',
         provider: '',
-        tokenLimit: '',
+        contextWindow: '',
+        maxOutputTokens: '',
         supportsTools: false,
         supportsImageGeneration: false,
         enabled: true,
@@ -127,7 +129,8 @@ function AdminModelEditPage() {
         description: ensureLocalizedObject(model.description),
         url: model.url || '',
         provider: model.provider || '',
-        tokenLimit: model.tokenLimit || '',
+        contextWindow: model.contextWindow || '',
+        maxOutputTokens: model.maxOutputTokens || '',
         supportsTools: model.supportsTools || false,
         enabled: model.enabled !== undefined ? model.enabled : true,
         default: model.default || false
@@ -209,7 +212,8 @@ function AdminModelEditPage() {
       // Prepare the data to send
       const dataToSend = {
         ...data,
-        tokenLimit: data.tokenLimit ? parseInt(data.tokenLimit) : undefined,
+        contextWindow: data.contextWindow ? parseInt(data.contextWindow) : undefined,
+        maxOutputTokens: data.maxOutputTokens ? parseInt(data.maxOutputTokens) : undefined,
         concurrency: data.concurrency ? parseInt(data.concurrency) : undefined,
         requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined
       };

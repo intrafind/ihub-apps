@@ -10,7 +10,8 @@
     "de": "Meta Llama 3.3 70B über AWS Bedrock mit regionsübergreifender Inferenz. Tool-Aufrufe, keine Vision."
   },
   "provider": "bedrock",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": false,
   "enabled": false,

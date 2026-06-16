@@ -295,8 +295,7 @@ function AppFormEditor({
     description: t('admin.apps.edit.description', 'Description'),
     color: t('admin.apps.edit.color', 'Color'),
     icon: t('admin.apps.edit.icon', 'Icon'),
-    system: t('admin.apps.edit.systemPrompt', 'System Prompt'),
-    tokenLimit: t('admin.apps.edit.tokenLimit', 'Token Limit')
+    system: t('admin.apps.edit.systemPrompt', 'System Prompt')
   };
 
   return (
@@ -524,37 +523,6 @@ function AppFormEditor({
                     }
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
-                </div>
-
-                <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.apps.edit.tokenLimit', 'Token Limit')}
-                    {isFieldRequired('tokenLimit', jsonSchema) && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
-                  </label>
-                  <input
-                    id="tokenLimit"
-                    type="number"
-                    min="1"
-                    value={app.tokenLimit || 4096}
-                    onChange={e => handleInputChange('tokenLimit', parseInt(e.target.value))}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                      validationErrors.tokenLimit ? 'border-red-300' : ''
-                    }`}
-                    required={isFieldRequired('tokenLimit', jsonSchema)}
-                    aria-invalid={!!validationErrors.tokenLimit || undefined}
-                    aria-describedby={validationErrors.tokenLimit ? 'tokenLimit-error' : undefined}
-                  />
-                  {validationErrors.tokenLimit && (
-                    <p
-                      id="tokenLimit-error"
-                      role="alert"
-                      className="mt-1 text-sm text-red-600 dark:text-red-400"
-                    >
-                      {validationErrors.tokenLimit}
-                    </p>
-                  )}
                 </div>
 
                 <div className="col-span-6 sm:col-span-3">

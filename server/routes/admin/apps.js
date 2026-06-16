@@ -82,7 +82,6 @@ async function findAppFile(appId, appsDir) {
  *         - color
  *         - icon
  *         - system
- *         - tokenLimit
  *       properties:
  *         id:
  *           type: string
@@ -112,10 +111,6 @@ async function findAppFile(appId, appsDir) {
  *           type: object
  *           description: Localized system prompts
  *           example: { "en": "You are a helpful AI assistant..." }
- *         tokenLimit:
- *           type: number
- *           description: Maximum tokens per request
- *           example: 4000
  *         preferredModel:
  *           type: string
  *           description: Default model selection
@@ -289,7 +284,6 @@ export default function registerAdminAppsRoutes(app) {
    *                 icon: "chat"
    *                 system:
    *                   en: "You are a helpful AI assistant..."
-   *                 tokenLimit: 4000
    *                 preferredModel: "gpt-4"
    *                 category: "productivity"
    *                 enabled: true
@@ -564,7 +558,6 @@ export default function registerAdminAppsRoutes(app) {
    *             icon: "chat"
    *             system:
    *               en: "You are an enhanced AI assistant..."
-   *             tokenLimit: 8000
    *             preferredModel: "gpt-4-turbo"
    *             enabled: true
    *     responses:
@@ -692,7 +685,6 @@ export default function registerAdminAppsRoutes(app) {
    *             icon: "assistant"
    *             system:
    *               en: "You are a helpful new assistant..."
-   *             tokenLimit: 4000
    *             preferredModel: "gpt-4"
    *             category: "productivity"
    *             enabled: true

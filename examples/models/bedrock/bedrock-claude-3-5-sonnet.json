@@ -10,7 +10,8 @@
     "de": "Anthropic Claude 3.5 Sonnet über AWS Bedrock — Vision, Dokumente und Tool-Aufrufe."
   },
   "provider": "bedrock",
-  "tokenLimit": 200000,
+  "contextWindow": 200000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

@@ -19,7 +19,6 @@
     "en": "Ask a question about our websites...",
     "de": "Stelle eine Frage zu unseren Websites..."
   },
-  "tokenLimit": 8000,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.3,

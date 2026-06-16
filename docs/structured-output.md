@@ -34,7 +34,6 @@ Add an `outputSchema` property to your app configuration:
     "en": "Extract key information from user input and return it in the specified JSON format.",
     "de": "Extrahiere wichtige Informationen aus Benutzereingaben und gib sie im angegebenen JSON-Format zurück."
   },
-  "tokenLimit": 4000,
   "preferredOutputFormat": "json",
   "outputSchema": {
     "type": "object",
@@ -478,7 +477,6 @@ Complete app configuration with structured output:
     "en": "You are a document analysis expert. Extract key information from the provided document and structure it according to the specified schema. Be thorough and accurate in your analysis.",
     "de": "Du bist ein Experte für Dokumentenanalyse. Extrahiere wichtige Informationen aus dem bereitgestellten Dokument und strukturiere sie nach dem angegebenen Schema. Sei gründlich und genau in deiner Analyse."
   },
-  "tokenLimit": 8000,
   "preferredModel": "gpt-4",
   "preferredOutputFormat": "json",
   "sendChatHistory": false,
@@ -566,7 +564,7 @@ ValidationError: Expected string but got number
 **Token Usage**
 - Structured output typically uses 10-20% more tokens than free-form text
 - Complex schemas increase token usage significantly
-- Use appropriate `tokenLimit` settings
+- Use a model with an appropriate `maxOutputTokens` setting
 
 **Provider Performance Comparison**
 | Provider | Simple Schema | Complex Schema | Validation Quality |

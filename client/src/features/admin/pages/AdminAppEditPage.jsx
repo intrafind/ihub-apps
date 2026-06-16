@@ -77,7 +77,6 @@ function AdminAppEditPage() {
         color: '#4F46E5',
         icon: 'chat-bubbles',
         system: { en: '' },
-        tokenLimit: 4096,
         preferredModel: undefined,
         preferredOutputFormat: 'markdown',
         preferredStyle: 'keep',
