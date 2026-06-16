@@ -80,7 +80,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          cd client && npm ci && npm install uuid && cd ..
+          cd client && npm ci && cd ..
           cd server && npm ci && cd ..
 
       - name: Set version
