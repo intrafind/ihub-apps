@@ -380,7 +380,7 @@ if (cluster.isPrimary && workerCount > 1) {
   try {
     const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
     const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-    startAuditCleanupScheduler(platform?.auditLog || {});
+    startAuditCleanupScheduler(platform?.audit || {});
   } catch (error) {
     logger.warn('Failed to start audit log cleanup scheduler', { component: 'Server', error });
   }

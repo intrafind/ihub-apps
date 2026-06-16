@@ -15,7 +15,20 @@ const FLUSH_INTERVAL_MS = 5000;
 // exceeded we drop the oldest entries and emit a single overflow warning.
 const MAX_QUEUE = 10000;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Linear-time email-shape detection. A regex like /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// backtracks polynomially on attacker-supplied login usernames (CodeQL ReDoS),
+// so we use string scanning instead.
+function isEmailShaped(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (/\s/.test(value)) return false; // single linear test, no backtracking
+  const at = value.indexOf('@');
+  if (at <= 0) return false; // need a non-empty local part
+  if (value.indexOf('@', at + 1) !== -1) return false; // exactly one '@'
+  const domain = value.slice(at + 1);
+  const dot = domain.indexOf('.');
+  // dot must be present and neither leading nor trailing in the domain
+  return dot > 0 && dot < domain.length - 1;
+}
 
 // In-memory write buffer. High-volume middleware writes are batched and
 // flushed on an interval (and on shutdown) so we don't hit the disk on every
@@ -34,8 +47,8 @@ function getAuditConfig() {
 }
 
 function maskEmail(value) {
-  if (typeof value === 'string' && EMAIL_RE.test(value)) {
-    return value.split('@')[0];
+  if (isEmailShaped(value)) {
+    return value.slice(0, value.indexOf('@'));
   }
   return value;
 }

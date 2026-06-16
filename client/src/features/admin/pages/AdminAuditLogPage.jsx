@@ -146,7 +146,7 @@ function AuditLogRetentionBadge({ t }) {
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
         title={t(
           'admin.auditLog.retentionHint',
-          'Configured in platform.json → auditLog. Edit under Platform → Advanced.'
+          'Configured in platform.json → audit. Edit under Platform → Advanced.'
         )}
       >
         <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

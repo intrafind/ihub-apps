@@ -185,8 +185,8 @@ The Integrations page now shows each integration's status as a colored pill (**C
 
 The audit log now supports a configurable retention policy.
 
-- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `auditLog.retentionDays`. Set `cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
-- **Default**: 365 days. New installations get this via migration `V049__add_audit_log_retention`.
+- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `audit.retentionDays`. Set `audit.cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
+- **Default**: 365 days. Retention now lives in the unified `audit` config block (migrated automatically from the former `auditLog` block by `V059`).
 - **Audit Log page** shows a retention badge in the header (`Retain 365 days`) and a "Run cleanup now" link to trigger the job manually.
 - **New endpoints**: `GET /api/admin/audit-log/retention`, `POST /api/admin/audit-log/retention/run`.
 

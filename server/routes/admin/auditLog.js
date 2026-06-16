@@ -14,7 +14,7 @@ const MAX_EXPORT_ROWS = 100000;
 
 function getRetentionSettings() {
   const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-  const cfg = platform?.auditLog || {};
+  const cfg = platform?.audit || {};
   return {
     retentionDays: Number.isFinite(cfg.retentionDays)
       ? cfg.retentionDays
