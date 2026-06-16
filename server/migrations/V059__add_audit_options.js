@@ -1,5 +1,5 @@
 /**
- * Migration V057 — Add audit logging options to platform.json
+ * Migration V059 — Add audit logging options to platform.json
  *
  * Introduces the `audit` configuration block that controls the expanded audit
  * logging system (auth events, OAuth clients, users, and the global HTTP audit
@@ -14,7 +14,7 @@
  *
  * Existing admin-configured values are preserved; only missing keys get defaults.
  */
-export const version = '057';
+export const version = '059';
 export const description = 'add_audit_options';
 
 export async function precondition(ctx) {
