@@ -2392,11 +2392,22 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (config?._isMemoryComposer === true) {
       if (output && typeof output === 'object' && !Array.isArray(output)) {
         const skip = output.skip === true;
-        const content = typeof output.content === 'string' ? output.content.trim() : '';
-        if (!skip && content.length > 0) {
+        // Collect per-section content. Falls back to the legacy flat `content`
+        // field (routed to Semantic by normalizeDelta) for older composer
+        // schemas / external producers.
+        const sections = {};
+        for (const key of ['semantic', 'episodic', 'procedural']) {
+          if (typeof output[key] === 'string' && output[key].trim().length > 0) {
+            const canonical = key.charAt(0).toUpperCase() + key.slice(1);
+            sections[canonical] = output[key].trim();
+          }
+        }
+        const legacyContent = typeof output.content === 'string' ? output.content.trim() : '';
+        const hasContent = Object.keys(sections).length > 0 || legacyContent.length > 0;
+        if (!skip && hasContent) {
           const entry = {
             mode: output.mode === 'replace' ? 'replace' : 'append',
-            content,
+            ...(Object.keys(sections).length > 0 ? { sections } : { content: legacyContent }),
             ...(typeof output.summary === 'string' && output.summary.trim().length > 0
               ? { summary: output.summary.trim() }
               : {})
@@ -2409,7 +2420,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             component: 'PromptNodeExecutor',
             nodeId: node.id,
             mode: entry.mode,
-            contentLength: entry.content.length,
+            sections: Object.keys(sections),
             hasSummary: !!entry.summary
           });
         } else {
@@ -2417,7 +2428,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             component: 'PromptNodeExecutor',
             nodeId: node.id,
             skipFlag: skip,
-            hadContent: content.length > 0
+            hadContent: hasContent
           });
         }
       }

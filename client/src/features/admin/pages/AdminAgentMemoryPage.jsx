@@ -5,6 +5,8 @@ import {
   buildMemoryFromTool,
   fetchAgentMemory,
   fetchMemoryShaperPrompt,
+  fetchMemorySnapshots,
+  restoreMemorySnapshot,
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
 import { fetchAdminTools } from '../../../api/adminApi';
@@ -33,6 +35,11 @@ export default function AdminAgentMemoryPage() {
   const [shape, setShape] = useState(true);
   const [shapePrompt, setShapePrompt] = useState('');
   const [showShapePrompt, setShowShapePrompt] = useState(false);
+
+  // Version history (snapshots) state
+  const [snapshots, setSnapshots] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [restoringVersion, setRestoringVersion] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -99,6 +106,43 @@ export default function AdminAgentMemoryPage() {
     setBody(data.body || '');
     setVersion(data.version || 0);
     setUpdatedAt(data.updatedAt || null);
+  }
+
+  // Refresh snapshots on mount and after every write (version bump). Snapshots
+  // are written for the version BEFORE each save, so the list grows by one each
+  // time the current version advances.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetchMemorySnapshots(profileId);
+        setSnapshots(res?.data?.snapshots || []);
+      } catch {
+        setSnapshots([]);
+      }
+    })();
+  }, [profileId, version]);
+
+  async function handleRestore(snapshotVersion) {
+    setError(null);
+    setRestoringVersion(snapshotVersion);
+    try {
+      await restoreMemorySnapshot(profileId, snapshotVersion, version);
+      await reloadMemory();
+    } catch (err) {
+      const code = err?.response?.data?.error;
+      if (code === 'VERSION_CONFLICT') {
+        setError(
+          t(
+            'admin.agents.memory.versionConflict',
+            'Conflict: memory was modified elsewhere. Reload to see the latest.'
+          )
+        );
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setRestoringVersion(null);
+    }
   }
 
   async function handleBuild() {
@@ -233,6 +277,65 @@ export default function AdminAgentMemoryPage() {
             {error}
           </div>
         )}
+
+        <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800">
+          <button
+            type="button"
+            onClick={() => setShowHistory(s => !s)}
+            className="w-full px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t flex justify-between items-center"
+          >
+            <span>
+              {t('admin.agents.memory.history.title', 'Version history')}
+              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                {t('admin.agents.memory.history.count', '({{count}} snapshots)', {
+                  count: snapshots.length
+                })}
+              </span>
+            </span>
+            <span className="text-gray-400">{showHistory ? '▾' : '▸'}</span>
+          </button>
+          {showHistory && (
+            <div className="px-3 py-3 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                {t(
+                  'admin.agents.memory.history.help',
+                  'Each save snapshots the prior version (newest 10 kept). Restoring snapshots the current version first, so it is reversible.'
+                )}
+              </p>
+              {snapshots.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('admin.agents.memory.history.empty', 'No snapshots yet.')}
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {snapshots.map(snap => (
+                    <li key={snap.version} className="flex items-center justify-between py-2">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {t('admin.agents.memory.history.entry', 'v{{version}}', {
+                          version: snap.version
+                        })}
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                          {snap.updatedAt || ''}
+                          {snap.updatedBy ? ` · ${snap.updatedBy}` : ''}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRestore(snap.version)}
+                        disabled={restoringVersion != null}
+                        className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded disabled:opacity-50"
+                      >
+                        {restoringVersion === snap.version
+                          ? t('admin.agents.memory.history.restoring', 'Restoring…')
+                          : t('admin.agents.memory.history.restore', 'Restore')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800">
           <button

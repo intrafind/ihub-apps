@@ -77,6 +77,28 @@ export async function fetchMemoryShaperPrompt() {
   return await makeAdminApiCall('/admin/agents/memory/shaper-prompt');
 }
 
+/**
+ * List retained memory snapshots for a profile (newest first). Each write
+ * snapshots the prior version; the newest 10 are kept for rollback.
+ */
+export async function fetchMemorySnapshots(profileId) {
+  return await makeAdminApiCall(`/admin/agents/profiles/${profileId}/memory/snapshots`);
+}
+
+/**
+ * Restore a memory snapshot as the new current version. The current memory is
+ * itself snapshotted first, so a restore is reversible.
+ */
+export async function restoreMemorySnapshot(profileId, version, expectedVersion) {
+  return await makeAdminApiCall(
+    `/admin/agents/profiles/${profileId}/memory/snapshots/${version}/restore`,
+    {
+      method: 'POST',
+      body: { expectedVersion }
+    }
+  );
+}
+
 export async function fetchInboxes() {
   return await makeAdminApiCall('/admin/agents/inboxes');
 }

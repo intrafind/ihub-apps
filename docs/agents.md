@@ -14,7 +14,7 @@ leave durable artifacts behind.
 |---|---|
 | **AgentProfile** | One JSON file per agent at `contents/agents/profiles/<id>.json`. Owns an embedded workflow definition, memory config, inbox binding, HITL approver groups, concurrency limits, and budget settings. |
 | **AgentRun** | A `WorkflowExecution` enriched with an `_agent` envelope. Lives in `contents/data/workflow-state/<execId>/`. |
-| **Memory file** | Plain markdown at `contents/agents/memory/<profileId>.md`, optionally auto-included into every agent prompt up to `memory.maxBytes`. Optimistic-version writes. |
+| **Memory file** | Markdown at `contents/agents/memory/<profileId>.md`, organised into `## Semantic` / `## Episodic` / `## Procedural` sections with per-entry `<!-- src:agent -->` markers (human entries are immutable to the agent). Auto-included into every agent prompt up to `memory.maxBytes`. Optimistic-version writes; every write snapshots the prior version for rollback. |
 | **Inbox** | Markdown checklist at `contents/data/agent-inboxes/<id>.md`. Users add work; agents read/mark-done via `read_inbox`/`write_inbox`. |
 | **Service-account identity** | Agent runs execute as `agent:<profileId>` principals. Groups in `profile.serviceAccount.groups` determine what apps/tools/models the agent can use. `isAdmin` is forced false. |
 | **Dynamic tasks** | Agents may call `create_task` to enqueue work onto `state.data._taskQueue`. A drain-mode loop processes the queue until empty (bounded by `dynamicTasks.maxDepth` and the existing 200-iteration cap). |
@@ -91,22 +91,48 @@ shapes append a two-step memory tail after the synthesizer:
 1. **`memory-compose`** is an explicit toolless LLM prompt that sees the
    brief, the inbox item, every sub-task result, the citations ledger,
    the tools/apps the agent used, and the current memory file. It
-   returns a flat `{ skip, mode, content, summary }` JSON object
-   describing what (if anything) from this run is worth committing to
-   long-term memory. The composer is instructed to cite the tool/URL
-   behind each fact, skip duplicates already in memory, and prefer
-   `append` over `replace`. Operator-overridable via `memory.modelId`,
-   `memory.temperature` (default 0.2), `memory.system`, and
-   `memory.prompt`. Splitting this from the synthesizer keeps the report
-   writer focused on the report and avoids cross-provider schema
+   returns a flat `{ skip, mode, semantic, episodic, procedural, summary }`
+   JSON object — one string per memory section — describing what (if
+   anything) from this run is worth committing to long-term memory. The
+   composer is instructed to sort each note into the right section, cite
+   the tool/URL behind each fact, skip duplicates already in memory, and
+   prefer `append` over `replace`. Operator-overridable via
+   `memory.modelId`, `memory.temperature` (default 0.2), `memory.system`,
+   and `memory.prompt`. Splitting this from the synthesizer keeps the
+   report writer focused on the report and avoids cross-provider schema
    headaches (Gemini's proto schema rejects union types like
    `["object", "null"]`).
 2. **`memory-finalize`** is deterministic — no LLM call. It drains
    `state.data._pendingMemoryUpdates` (populated by `memory-compose`'s
    auto-persist branch in `PromptNodeExecutor`) and writes via
-   `memoryFile.writeMemory()`. Because no LLM is involved, the write is
-   immune to the Gemini grounding swap that would otherwise strip the
+   `memoryFile.applyMemoryDelta()`. Because no LLM is involved, the write
+   is immune to the Gemini grounding swap that would otherwise strip the
    legacy `write_memory` LLM tool.
+
+#### Tripartite memory & source markers
+
+The memory body is organised into three canonical `## ` sections —
+**Semantic** (durable facts), **Episodic** (what happened on a run), and
+**Procedural** (reusable how-to knowledge). `applyMemoryDelta` sorts each
+composer section into the matching heading, creating it on demand, and
+leaves any operator-authored sections (e.g. a corpus map built via "build
+memory from tool") untouched.
+
+Every entry the agent writes carries a trailing `<!-- src:agent -->`
+marker. Entries without that marker — anything a human hand-edited — are
+**immutable to the agent**: even a `replace` only drops the agent's own
+entries and always keeps human entries and prose. Markers are stripped
+before memory is injected into a prompt.
+
+#### Version snapshots & rollback
+
+Every write (agent delta, admin edit, or tool-build) first snapshots the
+prior file to `contents/agents/memory/.snapshots/<profileId>/v<N>.md`,
+keeping the newest 10. Operators can browse and restore these from the
+**Version history** panel on the agent Memory page; a restore snapshots
+the current version first, so it is reversible. Endpoints:
+`GET …/memory/snapshots`, `GET …/memory/snapshots/:version`, and
+`POST …/memory/snapshots/:version/restore`.
 
 The synthesizer itself is plain markdown (no `outputSchema`) — keeping
 the report and memory responsibilities split so a structured-output

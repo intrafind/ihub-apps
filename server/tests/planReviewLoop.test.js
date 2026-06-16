@@ -97,11 +97,13 @@ async function run() {
         memComposeNode.config.tools.length === 0
     );
     check(
-      'memory-compose outputSchema has flat fields (Gemini-compatible)',
+      'memory-compose outputSchema has flat tripartite fields (Gemini-compatible)',
       memComposeNode?.config?.outputSchema?.type === 'object' &&
         memComposeNode.config.outputSchema.properties?.skip?.type === 'boolean' &&
         memComposeNode.config.outputSchema.properties?.mode?.type === 'string' &&
-        memComposeNode.config.outputSchema.properties?.content?.type === 'string'
+        memComposeNode.config.outputSchema.properties?.semantic?.type === 'string' &&
+        memComposeNode.config.outputSchema.properties?.episodic?.type === 'string' &&
+        memComposeNode.config.outputSchema.properties?.procedural?.type === 'string'
     );
     check('memory-finalize node inserted when memory enabled', !!memFinalizeNode);
     check('memory-finalize type is memory-finalize', memFinalizeNode?.type === 'memory-finalize');

@@ -2,10 +2,12 @@
  * Executor for `memory-finalize` nodes — deterministic long-term memory write.
  *
  * Drains `state.data._pendingMemoryUpdates` and writes each entry via
- * `memoryFile.writeMemory()`. Entries are populated by the upstream
+ * `memoryFile.applyMemoryDelta()`, which merges the delta into the tripartite
+ * memory sections (Semantic / Episodic / Procedural) while keeping
+ * human-authored entries immutable. Entries are populated by the upstream
  * `memory-compose` node — an explicit toolless LLM step whose
  * `_isMemoryComposer` branch in `PromptNodeExecutor._autoPersistResult`
- * pushes the composer's `{mode, content, summary}` delta onto the queue.
+ * pushes the composer's `{mode, sections, summary}` delta onto the queue.
  *
  * NO LLM call is made here — this guarantees memory writes happen even
  * on Gemini runs where the grounding swap would otherwise have stripped
@@ -26,6 +28,7 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import memoryFile from '../../../agents/memory/memoryFile.js';
+import { normalizeDelta } from '../../../agents/memory/memorySections.js';
 import { actionTracker } from '../../../actionTracker.js';
 
 function emit(event, payload, chatId) {
@@ -38,14 +41,13 @@ function emit(event, payload, chatId) {
 
 function isUpdateShape(entry) {
   if (!entry || typeof entry !== 'object') return false;
-  // Trim before checking length so whitespace-only content (e.g. "  ", "\n")
-  // doesn't slip through and produce blank memory writes. The composer's
-  // own auto-persist branch already does this — apply the same guard here
-  // so the deterministic writer is safe for any other producer that
-  // pushes onto `_pendingMemoryUpdates`.
-  if (typeof entry.content !== 'string' || entry.content.trim().length === 0) return false;
   if (entry.mode && entry.mode !== 'append' && entry.mode !== 'replace') return false;
-  return true;
+  // The entry must normalise to at least one non-empty section. normalizeDelta
+  // handles both the tripartite `{ sections: {...} }` shape and the legacy flat
+  // `{ content }` shape, trimming whitespace-only values so blanks never slip
+  // through and produce empty memory writes.
+  const normalized = normalizeDelta(entry);
+  return Object.keys(normalized.sections).length > 0;
 }
 
 export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
@@ -124,10 +126,7 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
       if (composerDelta && typeof composerDelta === 'object') {
         if (composerDelta.skip === true) {
           noopReason = 'composer chose to skip';
-        } else if (
-          typeof composerDelta.content === 'string' &&
-          composerDelta.content.trim() === ''
-        ) {
+        } else if (Object.keys(normalizeDelta(composerDelta).sections).length === 0) {
           noopReason = 'composer emitted empty content';
         }
         if (typeof composerDelta.summary === 'string' && composerDelta.summary.trim().length > 0) {
@@ -189,34 +188,33 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
 
     for (const entry of valid) {
       const writeStartMs = Date.now();
-      const mode = entry.mode || 'append';
+      const normalized = normalizeDelta(entry);
+      const mode = normalized.mode;
       const summary = typeof entry.summary === 'string' ? entry.summary : undefined;
+      const sections = Object.keys(normalized.sections);
 
-      const args = { mode, content: entry.content, summary };
+      const args = { mode, sections: normalized.sections, summary };
 
       let result;
       try {
         // Last-write-wins semantics: we deliberately do not pass
-        // `expectedVersion`. memoryFile.writeMemory only throws
+        // `expectedVersion`. memoryFile.applyMemoryDelta only throws
         // VERSION_CONFLICT when an expected version IS passed, so concurrent
-        // writers can't race-fail here. If true race-tolerance is needed in
-        // the future, switch to read-current-version → write-with-expected
-        // → retry on conflict (a sibling helper, not this branch).
-        result = await memoryFile.writeMemory(profileId, {
-          mode,
-          content: entry.content,
-          summary,
+        // writers can't race-fail here. The structured merge also keeps
+        // human-authored entries immune even under a `replace`, so a clobber
+        // of hand-edited memory is structurally impossible.
+        result = await memoryFile.applyMemoryDelta(profileId, entry, {
           updatedBy: `memory-finalize:${context?.user?.id || 'agent'}`
         });
       } catch (err) {
-        this.logger.error('memory-finalize: writeMemory failed, skipping entry', {
+        this.logger.error('memory-finalize: applyMemoryDelta failed, skipping entry', {
           component: 'MemoryFinalizeNodeExecutor',
           nodeId: node.id,
           profileId,
           error: err.message
         });
         toolCalls.push({
-          name: 'memory-file.writeMemory',
+          name: 'memory-file.applyMemoryDelta',
           args: this._previewToolValue(args),
           result: this._previewToolValue({ ok: false, error: err.message }),
           durationMs: Date.now() - writeStartMs
@@ -228,13 +226,13 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
       lastVersion = result?.version || lastVersion;
       emit(
         'agent.memory.write',
-        { profileId, version: result.version, mode, summary, deterministic: true },
+        { profileId, version: result.version, mode, sections, summary, deterministic: true },
         chatId
       );
       toolCalls.push({
-        name: 'memory-file.writeMemory',
+        name: 'memory-file.applyMemoryDelta',
         args: this._previewToolValue(args),
-        result: this._previewToolValue({ ok: true, version: result.version }),
+        result: this._previewToolValue({ ok: true, version: result.version, sections }),
         durationMs: Date.now() - writeStartMs
       });
     }
@@ -267,7 +265,12 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
       startedAt: startedAt.toISOString(),
       completedAt: completedAtIso,
       durationMs,
-      tools: [{ id: 'memory-file.writeMemory', description: 'Deterministic memory write' }],
+      tools: [
+        {
+          id: 'memory-file.applyMemoryDelta',
+          description: 'Deterministic tripartite memory write'
+        }
+      ],
       toolCalls,
       messages: [],
       written: writtenCount,

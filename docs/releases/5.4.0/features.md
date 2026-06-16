@@ -1,5 +1,16 @@
 # Features — 5.4.0
 
+## Tripartite Agent Memory — Structured Sections, Source Markers & Rollback
+
+Agent long-term memory is now structured and safe to auto-curate across runs. The end-of-run memory composer sorts what it learned into three canonical sections — **Semantic** (durable facts), **Episodic** (what happened on a run), and **Procedural** (reusable how-to knowledge) — instead of appending to one flat blob.
+
+- **Human edits are immutable to the agent.** Every entry the agent writes carries a `<!-- src:agent -->` marker. Anything a person hand-edits has no marker and is preserved verbatim — even when the agent runs a `replace`, it only rewrites its own prior entries. Operator-authored sections (e.g. an `## iFinder corpus map`) are left untouched.
+- **Per-section composer output.** `memory-compose` now emits a flat `{ skip, mode, semantic, episodic, procedural, summary }` object (still Gemini-schema-safe); the deterministic `memory-finalize` step merges each section into the memory file via `applyMemoryDelta`.
+- **Version snapshots & one-click rollback.** Every memory write (agent, admin edit, or tool-build) snapshots the prior version under `contents/agents/memory/.snapshots/<profileId>/` (newest 10 kept). Admins can browse and restore them from the new **Version history** panel on the agent Memory page; a restore snapshots the current version first, so it is reversible.
+- **Cleaner prompts.** Source markers are stripped before memory is injected into an agent prompt.
+
+Existing memory files are left as-is on upgrade (treated as human-authored and immutable); new runs add marked agent entries under the canonical sections. Migration **V057** rebuilds embedded agent workflows so existing profiles pick up the new composer schema.
+
 ## Stellungnahmen Review from iFinder — Lazy Per-Document Corpus
 
 A new workflow, **`stellungnahmen-review-ifinder`**, runs the same audit-grade Stellungnahmen evidence extraction as the upload variant, but pulls candidates from iFinder by topic and loads each document's fulltext one at a time inside the iteration loop. Useful for ministry-scale consultations (200+ documents) that exceed the chat upload ceiling.

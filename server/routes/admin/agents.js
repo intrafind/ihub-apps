@@ -464,4 +464,85 @@ export default function registerAdminAgentsRoutes(app) {
       }
     }
   );
+
+  // ── Memory snapshots (rollback) ────────────────────────────────────────────
+  // Every memory write snapshots the prior version (newest 10 retained). These
+  // endpoints let operators inspect and restore those snapshots from the UI
+  // without dropping to git.
+  app.get(
+    buildServerPath('/api/admin/agents/profiles/:profileId/memory/snapshots'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { profileId } = req.params;
+        if (!validateIdForPath(profileId, 'profile', res)) return;
+        const snapshots = await memoryFile.listSnapshots(profileId);
+        res.json({ snapshots });
+      } catch (error) {
+        sendFailedOperationError(res, 'list agent memory snapshots', error);
+      }
+    }
+  );
+
+  app.get(
+    buildServerPath('/api/admin/agents/profiles/:profileId/memory/snapshots/:version'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { profileId, version } = req.params;
+        if (!validateIdForPath(profileId, 'profile', res)) return;
+        const parsed = Number.parseInt(version, 10);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+          return sendBadRequest(res, 'version must be a non-negative integer');
+        }
+        const snapshot = await memoryFile.readSnapshot(profileId, parsed);
+        res.json(snapshot);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({ error: 'NOT_FOUND', message: 'Snapshot not found' });
+        }
+        sendFailedOperationError(res, 'read agent memory snapshot', error);
+      }
+    }
+  );
+
+  app.post(
+    buildServerPath('/api/admin/agents/profiles/:profileId/memory/snapshots/:version/restore'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { profileId, version } = req.params;
+        if (!validateIdForPath(profileId, 'profile', res)) return;
+        const parsed = Number.parseInt(version, 10);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+          return sendBadRequest(res, 'version must be a non-negative integer');
+        }
+        const { expectedVersion } = req.body || {};
+        const result = await memoryFile.restoreSnapshot(profileId, parsed, {
+          expectedVersion,
+          updatedBy: req.user?.id || 'admin'
+        });
+        logger.info('Restored agent memory from snapshot', {
+          component: 'AdminAgents',
+          profileId,
+          restoredFrom: parsed,
+          newVersion: result.version,
+          actor: req.user?.id
+        });
+        res.json({ ok: true, version: result.version, restoredFrom: parsed });
+      } catch (error) {
+        if (error.code === 'VERSION_CONFLICT') {
+          return res.status(409).json({
+            error: 'VERSION_CONFLICT',
+            message: error.message,
+            currentVersion: error.currentVersion
+          });
+        }
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({ error: 'NOT_FOUND', message: 'Snapshot not found' });
+        }
+        sendFailedOperationError(res, 'restore agent memory snapshot', error);
+      }
+    }
+  );
 }
