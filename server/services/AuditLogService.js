@@ -3,48 +3,205 @@ import { join, dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
+import configCache from '../configCache.js';
+import { getContext } from '../utils/requestContext.js';
+import { validateAuditEntry } from '../validators/auditEntrySchema.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 365;
+const FLUSH_INTERVAL_MS = 5000;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// In-memory write buffer. High-volume middleware writes are batched and
+// flushed on an interval (and on shutdown) so we don't hit the disk on every
+// request. queryAuditLog() flushes first so reads stay consistent.
+let queue = [];
+let flushTimer = null;
+
+function getAuditConfig() {
+  try {
+    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+    return platform?.audit || {};
+  } catch {
+    return {};
+  }
+}
+
+function maskEmail(value) {
+  if (typeof value === 'string' && EMAIL_RE.test(value)) {
+    return value.split('@')[0];
+  }
+  return value;
+}
 
 /**
- * Log an admin action to the append-only audit log.
- * Each day gets its own JSONL file at contents/data/audit-log/YYYY-MM-DD.jsonl.
+ * Build the actor object for an audit entry. Prefers an explicit actor (used
+ * for pre-auth events such as a failed login) and otherwise reads from
+ * req.user. Honors audit.includeEmail (default false) by masking email-shaped
+ * identifiers.
+ */
+function buildActor(req, explicitActor) {
+  const includeEmail = getAuditConfig().includeEmail === true;
+  const src = explicitActor || req?.user || {};
+  const id = src.id ?? 'unknown';
+  let username = src.username ?? src.name ?? src.id ?? 'unknown';
+  if (!includeEmail) username = maskEmail(username);
+  const authenticated =
+    typeof src.authenticated === 'boolean'
+      ? src.authenticated
+      : Boolean(src.id && src.id !== 'anonymous');
+  return {
+    id,
+    username,
+    groups: Array.isArray(src.groups) ? src.groups : [],
+    authenticated
+  };
+}
+
+/**
+ * Derive the audit source from the request when not provided explicitly.
+ */
+function deriveSource(req) {
+  if (!req) return 'web';
+  if (req.user?.isOAuthClient || req.user?.authMethod === 'oauth') return 'api';
+  const url = req.originalUrl || req.baseUrl || req.url || '';
+  if (url.includes('/api/admin/')) return 'admin';
+  return 'web';
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushAuditLog().catch(error =>
+      logger.error('Failed to flush audit log', {
+        component: 'AuditLogService',
+        error: error.message
+      })
+    );
+  }, FLUSH_INTERVAL_MS);
+  // Don't let a pending flush keep the process alive on shutdown.
+  if (typeof flushTimer.unref === 'function') flushTimer.unref();
+}
+
+/**
+ * Flush the buffered audit entries to their daily JSONL files. Entries are
+ * grouped by date so a flush spanning midnight lands in the correct files.
+ *
+ * @returns {Promise<number>} number of entries written
+ */
+export async function flushAuditLog() {
+  if (queue.length === 0) return 0;
+  const pending = queue;
+  queue = [];
+
+  const byDate = new Map();
+  for (const entry of pending) {
+    const date = entry.ts.slice(0, 10);
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(entry);
+  }
+
+  let count = 0;
+  try {
+    for (const [date, entries] of byDate) {
+      const filePath = join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${date}.jsonl`);
+      await fs.mkdir(dirname(filePath), { recursive: true });
+      const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
+      await fs.appendFile(filePath, lines, 'utf8');
+      count += entries.length;
+    }
+  } catch (error) {
+    // Re-buffer the entries we failed to write so they aren't lost.
+    queue = pending.concat(queue);
+    throw error;
+  }
+  return count;
+}
+
+/**
+ * Log an audit event to the append-only audit log. Entries are buffered and
+ * flushed every few seconds (and on shutdown). Each day gets its own JSONL
+ * file at contents/data/audit-log/YYYY-MM-DD.jsonl.
  *
  * @param {Object} options
- * @param {Object} options.req - Express request object
- * @param {string} options.action - 'create' | 'update' | 'delete' | 'toggle' | 'import' | 'export'
- * @param {string} options.resource - 'app' | 'group' | 'model' | 'prompt' | 'platform' | 'backup' | 'source' | 'feature' | 'provider'
- * @param {string} options.resourceId - ID of the affected resource
- * @param {string} options.summary - Human-readable summary of the action
+ * @param {Object} [options.req] - Express request object
+ * @param {string} options.action - 'create' | 'update' | 'delete' | 'toggle' | 'import' | 'export' | 'login' | 'logout'
+ * @param {string} options.resource - Affected resource type (e.g. 'app', 'auth', 'user', 'oauthClient')
+ * @param {string} [options.resourceId] - ID of the affected resource
+ * @param {string} [options.summary] - Human-readable summary of the action
+ * @param {'success'|'failure'} [options.result='success'] - Outcome of the action
+ * @param {string} [options.source] - 'web' | 'mcp' | 'api' | 'admin' (derived from req when omitted)
+ * @param {Object} [options.actor] - Explicit actor for pre-auth events (e.g. failed login)
+ * @returns {Object|null} the buffered entry, or null on failure
  */
-export async function logAdminAction({ req, action, resource, resourceId, summary }) {
+export function logAudit({
+  req,
+  action,
+  resource,
+  resourceId,
+  summary,
+  result = 'success',
+  source,
+  actor
+} = {}) {
   try {
     const entry = {
       id: randomUUID(),
       ts: new Date().toISOString(),
-      admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown',
+      actor: buildActor(req, actor),
       action,
       resource,
       resourceId: resourceId || '',
-      summary,
-      ip: req.ip
+      summary: summary || '',
+      result,
+      source: source || deriveSource(req),
+      requestId: getContext()?.requestId || randomUUID(),
+      ip: req?.ip
     };
 
-    const date = entry.ts.slice(0, 10);
-    const filePath = join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${date}.jsonl`);
-    await fs.mkdir(dirname(filePath), { recursive: true });
-    await fs.appendFile(filePath, JSON.stringify(entry) + '\n', 'utf8');
+    const validation = validateAuditEntry(entry);
+    if (!validation.success) {
+      logger.warn('Audit entry failed validation; writing anyway', {
+        component: 'AuditLogService',
+        error: validation.error
+      });
+    }
+
+    queue.push(entry);
+    scheduleFlush();
+
+    // Mark the request so the global audit middleware doesn't emit a duplicate
+    // coarse entry for the same request — explicit calls are authoritative.
+    if (req) req._auditLogged = true;
+
+    if (getAuditConfig().winstonMirror === true) {
+      logger.info('audit', {
+        component: 'audit',
+        audit: true,
+        action: entry.action,
+        resource: entry.resource,
+        resourceId: entry.resourceId,
+        result: entry.result,
+        source: entry.source,
+        actor: { id: entry.actor.id, authenticated: entry.actor.authenticated },
+        requestId: entry.requestId
+      });
+    }
+
+    return entry;
   } catch (error) {
     // Audit logging should never break the request
-    logger.error('Failed to write audit log entry', {
+    logger.error('Failed to record audit log entry', {
       component: 'AuditLogService',
       action,
       resource,
       resourceId,
       error: error.message
     });
+    return null;
   }
 }
 
@@ -54,9 +211,11 @@ export async function logAdminAction({ req, action, resource, resourceId, summar
  * @param {Object} options
  * @param {string} [options.from] - Start date (YYYY-MM-DD), defaults to 7 days ago
  * @param {string} [options.to] - End date (YYYY-MM-DD), defaults to today
- * @param {string} [options.admin] - Filter by admin username
+ * @param {string} [options.actor] - Filter by actor username
  * @param {string} [options.resource] - Filter by resource type
  * @param {string} [options.action] - Filter by action type
+ * @param {string} [options.result] - Filter by outcome ('success' | 'failure')
+ * @param {string} [options.source] - Filter by source ('web' | 'mcp' | 'api' | 'admin')
  * @param {number} [options.limit=50] - Max entries to return
  * @param {number} [options.offset=0] - Number of entries to skip
  * @returns {Promise<{entries: Array, total: number}>}
@@ -64,12 +223,21 @@ export async function logAdminAction({ req, action, resource, resourceId, summar
 export async function queryAuditLog({
   from,
   to,
-  admin,
+  actor,
   resource,
   action,
+  result,
+  source,
   limit = 50,
   offset = 0
 } = {}) {
+  // Flush buffered entries so reads reflect everything logged so far.
+  try {
+    await flushAuditLog();
+  } catch {
+    // A flush failure is logged elsewhere; continue with what's on disk.
+  }
+
   const now = new Date();
   const toDate = to || now.toISOString().slice(0, 10);
   const fromDate =
@@ -115,16 +283,23 @@ export async function queryAuditLog({
   // Sort newest first
   allEntries.sort((a, b) => b.ts.localeCompare(a.ts));
 
-  // Apply filters
+  // Apply filters. Entries written before the actor migration carry a legacy
+  // `admin` string instead of `actor`, so match both when filtering by actor.
   let filtered = allEntries;
-  if (admin) {
-    filtered = filtered.filter(e => e.admin === admin);
+  if (actor) {
+    filtered = filtered.filter(e => (e.actor?.username ?? e.admin) === actor);
   }
   if (resource) {
     filtered = filtered.filter(e => e.resource === resource);
   }
   if (action) {
     filtered = filtered.filter(e => e.action === action);
+  }
+  if (result) {
+    filtered = filtered.filter(e => (e.result ?? 'success') === result);
+  }
+  if (source) {
+    filtered = filtered.filter(e => e.source === source);
   }
 
   const total = filtered.length;

@@ -439,7 +439,7 @@ function RecentActivityCard({ entries }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-gray-900 dark:text-gray-100 truncate">{e.summary}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    <span className="font-medium">{e.admin}</span>
+                    <span className="font-medium">{e.actor?.username ?? e.admin}</span>
                     <span className="mx-1.5">·</span>
                     {e.resource}
                     <span className="mx-1.5">·</span>

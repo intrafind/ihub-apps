@@ -10,6 +10,7 @@ import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
 import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { escapeCsvField } from '../../utils/csv.js';
 
 function parseRange(range) {
   if (!range) return { startDate: null, endDate: null, granularity: 'daily' };
@@ -37,14 +38,6 @@ function parseRange(range) {
       granularity: 'monthly'
     };
   }
-}
-
-function escapeCsvField(value) {
-  const str = String(value ?? '');
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
 }
 
 export default function registerAdminUsageRoutes(app) {

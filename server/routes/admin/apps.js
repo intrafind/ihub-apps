@@ -16,7 +16,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
@@ -631,7 +631,7 @@ export default function registerAdminAppsRoutes(app) {
           admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
         });
       }
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'app',
@@ -745,7 +745,7 @@ export default function registerAdminAppsRoutes(app) {
       await fs.mkdir(appsDir, { recursive: true });
       await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
       await configCache.refreshAppsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'create',
         resource: 'app',
@@ -837,7 +837,7 @@ export default function registerAdminAppsRoutes(app) {
       const appFilePath = join(appsDir, filename);
       await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
       await configCache.refreshAppsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'toggle',
         resource: 'app',
@@ -963,7 +963,7 @@ export default function registerAdminAppsRoutes(app) {
         }
 
         await configCache.refreshAppsCache();
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'toggle',
           resource: 'app',
@@ -1065,7 +1065,7 @@ export default function registerAdminAppsRoutes(app) {
       await fs.unlink(appFilePath);
       await configCache.refreshAppsCache();
       await removeMarketplaceInstallation('app', appId);
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'delete',
         resource: 'app',

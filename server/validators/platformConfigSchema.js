@@ -171,7 +171,22 @@ export const platformConfigSchema = z
           )
       })
       .default({}),
-    cloudStorage: cloudStorageConfigSchema.default({})
+    cloudStorage: cloudStorageConfigSchema.default({}),
+    auditLog: z
+      .object({
+        retentionDays: z.number().default(365),
+        cleanupEnabled: z.boolean().default(true)
+      })
+      .passthrough()
+      .default({}),
+    audit: z
+      .object({
+        includeEmail: z.boolean().default(false),
+        verbosity: z.enum(['metadata', 'request', 'full']).default('metadata'),
+        winstonMirror: z.boolean().default(false)
+      })
+      .passthrough()
+      .default({})
   })
   .passthrough();
 

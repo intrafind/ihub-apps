@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export {
+  auditEntrySchema,
+  validateAuditEntry,
+  auditActions,
+  auditResults,
+  auditSources
+} from './auditEntrySchema.js';
+
 export const startSessionSchema = {
   body: z.object({
     sessionId: z.string().min(1),

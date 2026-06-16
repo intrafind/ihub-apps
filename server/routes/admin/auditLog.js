@@ -6,6 +6,7 @@ import {
   getAuditLogRetentionDefault
 } from '../../services/AuditLogService.js';
 import { sendInternalError } from '../../utils/responseHelpers.js';
+import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 
 function getRetentionSettings() {
@@ -26,14 +27,26 @@ export default function registerAdminAuditLogRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/audit-log'), adminAuth, async (req, res) => {
     try {
-      const { from, to, admin, resource, action, limit, offset } = req.query;
+      const {
+        from,
+        to,
+        actor,
+        resource,
+        action,
+        result: outcome,
+        source,
+        limit,
+        offset
+      } = req.query;
 
       const result = await queryAuditLog({
         from,
         to,
-        admin,
+        actor,
         resource,
         action,
+        result: outcome,
+        source,
         limit: limit ? parseInt(limit, 10) : 50,
         offset: offset ? parseInt(offset, 10) : 0
       });
@@ -41,6 +54,61 @@ export default function registerAdminAuditLogRoutes(app) {
       res.json(result);
     } catch (error) {
       return sendInternalError(res, error, 'query audit log');
+    }
+  });
+
+  /**
+   * GET /api/admin/audit-log/export
+   * Export audit log entries as CSV using the current filters.
+   */
+  app.get(buildServerPath('/api/admin/audit-log/export'), adminAuth, async (req, res) => {
+    try {
+      const { from, to, actor, resource, action, result: outcome, source } = req.query;
+
+      const { entries } = await queryAuditLog({
+        from,
+        to,
+        actor,
+        resource,
+        action,
+        result: outcome,
+        source,
+        limit: Number.MAX_SAFE_INTEGER,
+        offset: 0
+      });
+
+      const headers = [
+        'ts',
+        'actor',
+        'authenticated',
+        'action',
+        'resource',
+        'resourceId',
+        'result',
+        'source',
+        'ip',
+        'requestId',
+        'summary'
+      ];
+      const rows = entries.map(e => [
+        e.ts,
+        e.actor?.username ?? e.admin ?? '',
+        e.actor?.authenticated ?? '',
+        e.action,
+        e.resource,
+        e.resourceId,
+        e.result ?? 'success',
+        e.source ?? '',
+        e.ip ?? '',
+        e.requestId ?? '',
+        e.summary ?? ''
+      ]);
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
+      res.send(buildCsv(headers, rows));
+    } catch (error) {
+      return sendInternalError(res, error, 'export audit log');
     }
   });
 

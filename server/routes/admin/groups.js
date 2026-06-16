@@ -13,7 +13,7 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
@@ -588,7 +588,7 @@ export default function registerAdminGroupRoutes(app) {
 
       logger.info('Created new group', { component: 'AdminGroups', name, id });
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'create',
         resource: 'group',
@@ -738,7 +738,7 @@ export default function registerAdminGroupRoutes(app) {
         after: group,
         admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
       });
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'group',
@@ -873,7 +873,7 @@ export default function registerAdminGroupRoutes(app) {
 
       logger.info('Deleted group', { component: 'AdminGroups', groupName, groupId });
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'delete',
         resource: 'group',

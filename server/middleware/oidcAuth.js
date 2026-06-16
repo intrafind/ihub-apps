@@ -10,6 +10,7 @@ import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
+import { logAudit } from '../services/AuditLogService.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -737,6 +738,21 @@ export function createOidcCallbackHandler(providerName) {
           },
           sessionId
         );
+
+        logAudit({
+          req,
+          action: 'login',
+          resource: 'auth',
+          resourceId: user.id,
+          summary: `OIDC login succeeded (provider: ${providerName})`,
+          source: 'web',
+          actor: {
+            id: user.id,
+            username: user.username ?? user.name ?? user.email ?? user.id,
+            groups: user.groups || [],
+            authenticated: true
+          }
+        });
 
         // Check if there's an OAuth authorization flow in progress
         // If so, redirect back to the OAuth authorize endpoint to complete the flow
