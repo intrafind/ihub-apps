@@ -31,12 +31,12 @@
 
 ### Decision gates (must be answered by a human)
 
-| Gate | Question | Blocks |
+| Gate | Question | Status |
 | --- | --- | --- |
-| **G0 — Licensing** | Buy a Tiptap subscription incl. AI Agent + AI Toolkit add-on? Confirm private-registry token works in CI/Docker/binary/**air-gapped** builds, and whether Pro AI phones home at runtime. | Phase 4 (Pro path) |
-| **G1 — Routing** | Resolver reuses the app-chat endpoint (Path A) vs. a dedicated agent route (Path B). Plan defaults to **A**. | Phase 4 |
-| **G2 — Agentic fallback** | If G0 is "no", build the OSS agentic layer on the MIT core (Path B-OSS) instead. | Phase 4 scope |
-| **G3 — Persistence** | Keep `sessionStorage`-only, or add backend document persistence (separate effort)? | Out of scope here; flagged as follow-up |
+| **G0 — Licensing** | Buy a Tiptap subscription incl. AI Agent + AI Toolkit add-on? | **DECIDED: no.** Build the AI layer OSS on the MIT core. |
+| **G1 — Routing** | Resolver reuses the app-chat endpoint vs. a dedicated agent route. | Reuse `/api/apps/:appId/chat/:chatId` (default A). |
+| **G2 — Agentic design** | How to build the OSS agentic layer (G0=no). | **DECIDED: OSS.** See [OSS Agentic AI Layer doc](./2026-06-16%20Tiptap%20OSS%20Agentic%20AI%20Layer.md) — Option A (4a) then Option C (4b). |
+| **G3 — Persistence** | Keep `sessionStorage`-only, or add backend document persistence? | Open follow-up (may be pulled forward for true agentic editing). |
 
 ---
 
@@ -197,18 +197,30 @@ bundle delta measured.
 - **Acceptance:** Ctrl/Cmd+M toggles dictation; transcript inserts at cursor;
   manual/automatic modes match Canvas behavior.
 
-### Phase 4 — AI Agent / Toolkit  *(GATED on G0; or Path B-OSS)*
-- **Path A (Pro, default if G0=yes):** add `@tiptap-pro/extension-ai-agent`
-  (+ `-ai-changes`); implement a **resolver** that POSTs to the app-chat
-  endpoint (`/api/apps/{editorAppId}/chat/{chatId}`, SSE) and maps agent
-  messages ↔ `ChatRequest`; map tool calls to read/write/patch; surface
-  accept/reject via the changes extension; gate by group permissions; record
-  token usage like normal chat.
-- **Path B-OSS (if G0=no):** build read/write/patch as custom Tiptap commands +
-  a lightweight diff/accept-reject UI over the MIT core; reuse the existing
-  `handleEditAction` prompt set; no Tiptap cost, more code.
-- **Acceptance:** agent can read the doc, propose ranged edits, user accepts/
-  rejects; all LLM calls visible in iHub usage; no data leaves iHub.
+### Phase 4 — Agentic AI layer  *(OSS — decided: no Tiptap Pro license)*
+**Decision recorded:** we will **not** buy Tiptap Pro. Phase 4 is built entirely
+on the MIT core + iHub's own backend. Full design in
+[`2026-06-16 Tiptap OSS Agentic AI Layer.md`](./2026-06-16%20Tiptap%20OSS%20Agentic%20AI%20Layer.md).
+
+- **4a (ship first):** single-shot **structured edit ops** via iHub `outputSchema`
+  → client maps to ProseMirror transactions → **accept/reject suggestion UI**.
+  No server code changes (config only). Upgrades the existing FloatingToolbox/
+  chat-insert actions from "insert blob" to "diff + accept/reject".
+- **Suggestion layer (shared):** custom ProseMirror insert/delete marks +
+  optional `prosemirror-changeset` diffing; review/accept-reject UI (replaces
+  Pro's AI Changes).
+- **4b (faithful agent):** generalize the `ask_user` clarification pause/resume
+  into a **client-executed tool protocol** (new `tool.client.request` event +
+  `clientExecuted` tool flag in `ToolExecutor`), so document read/search/replace/
+  insert/delete tools run in the browser inside iHub's existing agentic loop
+  (`continueWithToolExecution`). Replaces Pro's AI Agent + AI Toolkit.
+- **Fallback (Option B):** server-side agent loop over a document mirror, if the
+  client-tool protocol proves too costly.
+- Gate by group permissions (existing `chatAuthRequired` + app `tools`); record
+  usage like normal chat.
+- **Acceptance:** agent reads the doc and proposes ranged edits; user accepts/
+  rejects per change; all LLM calls visible in iHub usage; **no data leaves iHub**
+  and only MIT packages are used (air-gapped-safe).
 
 ### Phase 5 — Cutover & cleanup — *after parity sign-off*
 - Point `app.features.canvas` apps at the new editor (or migrate the flag);
