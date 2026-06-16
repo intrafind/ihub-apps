@@ -1,4 +1,4 @@
-export const version = '055';
+export const version = '058';
 export const description = 'split_token_limits';
 
 // Per-provider default output cap (max_tokens). These are NOT the old
