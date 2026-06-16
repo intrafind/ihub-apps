@@ -4,13 +4,13 @@
  * Unit tests for MemoryFinalizeNodeExecutor.
  *
  * The deterministic memory-finalize node drains state.data._pendingMemoryUpdates
- * by calling memoryFile.writeMemory() directly — no LLM involvement, so the
+ * by calling memoryFile.applyMemoryDelta() directly — no LLM involvement, so the
  * grounding swap can never strip it. Verifies:
  *
  *   - Empty / missing queue → noop success.
- *   - Each pending entry triggers one writeMemory() call with the expected
+ *   - Each pending entry triggers one applyMemoryDelta() call with the expected
  *     args. State updates clear _pendingMemoryUpdates afterwards.
- *   - Any writeMemory() throw (VERSION_CONFLICT, transport error, etc.) is
+ *   - Any applyMemoryDelta() throw (VERSION_CONFLICT, transport error, etc.) is
  *     logged and the entry is skipped — the rest of the queue still runs.
  *     (No automatic retry: the runtime relies on last-write-wins, since
  *     memory-finalize doesn't pass an expectedVersion. See the executor's
@@ -62,8 +62,8 @@ async function run() {
   // ── Test 1: empty queue → noop success ────────────────────────────────
   {
     const calls = [];
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async (...args) => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async (...args) => {
       calls.push(args);
       return { version: 1 };
     };
@@ -76,17 +76,17 @@ async function run() {
       );
       check('empty queue → completed', result.status === 'completed');
       check('empty queue → noop flag', result.output?.noop === true);
-      check('empty queue → no writeMemory call', calls.length === 0);
+      check('empty queue → no applyMemoryDelta call', calls.length === 0);
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 
   // ── Test 2: writes each pending entry, drains queue ───────────────────
   {
     const calls = [];
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async (profileId, payload) => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async (profileId, payload) => {
       calls.push({ profileId, payload });
       return { version: 2 };
     };
@@ -128,15 +128,15 @@ async function run() {
           result.stateUpdates._stepLogs['memory-finalize'].written === 2
       );
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 
   // ── Test 3: thrown error skips the entry and lets the rest run ───────
   {
     let attempt = 0;
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async (_profileId, payload) => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async (_profileId, payload) => {
       attempt += 1;
       if (payload.content === 'fails') {
         throw new Error('transport blew up');
@@ -160,14 +160,14 @@ async function run() {
       check('error-then-ok → 2 attempts (no retry)', attempt === 2);
       check('error-then-ok → only successful entry counted', result.output?.written === 1);
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 
-  // ── Test 4: every writeMemory call throws → all entries skipped ───────
+  // ── Test 4: every applyMemoryDelta call throws → all entries skipped ───────
   {
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async () => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async () => {
       const err = new Error('Memory version mismatch: expected 1, found 2');
       err.code = 'VERSION_CONFLICT';
       err.currentVersion = 2;
@@ -186,15 +186,15 @@ async function run() {
       check('persistent throw → completed (best effort)', result.status === 'completed');
       check('persistent throw → written count 0', result.output?.written === 0);
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 
   // ── Test 5: missing profileId → noop ──────────────────────────────────
   {
     const calls = [];
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async (...args) => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async (...args) => {
       calls.push(args);
       return { version: 1 };
     };
@@ -213,22 +213,22 @@ async function run() {
         'no profile → completed noop',
         result.status === 'completed' && result.output?.noop === true
       );
-      check('no profile → no writeMemory call', calls.length === 0);
+      check('no profile → no applyMemoryDelta call', calls.length === 0);
       check(
         'no profile → emits a step log for the timeline',
         !!result.stateUpdates?._stepLogs?.['memory-finalize'] &&
           result.stateUpdates._stepLogs['memory-finalize'].noopReason === 'no profileId resolvable'
       );
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 
   // ── Test 6: invalid entries are filtered out ──────────────────────────
   {
     const calls = [];
-    const orig = memoryFile.writeMemory;
-    memoryFile.writeMemory = async (profileId, payload) => {
+    const orig = memoryFile.applyMemoryDelta;
+    memoryFile.applyMemoryDelta = async (profileId, payload) => {
       calls.push({ profileId, payload });
       return { version: 4 };
     };
@@ -250,7 +250,7 @@ async function run() {
       check('filter invalid → calls 1', calls.length === 1);
       check('filter invalid → only good one persisted', calls[0]?.payload?.content === 'good');
     } finally {
-      memoryFile.writeMemory = orig;
+      memoryFile.applyMemoryDelta = orig;
     }
   }
 

@@ -148,27 +148,37 @@ const DEFAULT_MEMORY_COMPOSER_SYSTEM = {
     'a fact was found, not just WHAT was found).\n' +
     '- The current contents of the agent memory file (so you can spot ' +
     'duplicates and decide between append vs. replace).\n\n' +
+    'Memory is organised into three sections. Sort each note into the right ' +
+    'one:\n' +
+    '  - SEMANTIC — durable facts, identifiers, stable preferences (e.g. ' +
+    '"X is Y\'s lead engineer", "the user prefers cited reports").\n' +
+    '  - EPISODIC — what happened on THIS run worth recalling later (e.g. ' +
+    '"2026-06-16: searched for Z, the official site was offline").\n' +
+    '  - PROCEDURAL — reusable how-to knowledge: steps, queries, or ' +
+    'playbooks that worked (e.g. "to find org charts, query iFinder with ' +
+    'facet=department").\n\n' +
     'Return STRICT JSON with these fields:\n' +
     '  - "skip" (boolean): true when nothing from this run is worth ' +
     'committing to memory. The other fields are ignored when skip=true.\n' +
     '  - "mode" ("append"|"replace"): default to "append" — accumulating ' +
-    'notes over time is the goal. Only use "replace" when an existing ' +
-    'memory section needs to be overwritten because it became wrong.\n' +
-    '  - "content" (string): the markdown to add (or replace with). ' +
-    'Be CONCRETE — durable facts, names, identifiers, stable preferences, ' +
-    'recurring context. Include provenance: which tool/app produced the ' +
-    'fact, which URL backs it. Example: "Found via app__intrafind-websites: ' +
-    'X is Y\'s lead engineer (source: https://...)".\n' +
+    'notes over time is the goal. Use "replace" only to overwrite the ' +
+    "agent's OWN prior notes in a section that became wrong; human-edited " +
+    'notes are always preserved regardless of mode.\n' +
+    '  - "semantic" (string): newline-separated bullet entries for the ' +
+    'Semantic section. Empty string when nothing applies.\n' +
+    '  - "episodic" (string): newline-separated bullet entries for the ' +
+    'Episodic section. Empty string when nothing applies.\n' +
+    '  - "procedural" (string): newline-separated bullet entries for the ' +
+    'Procedural section. Empty string when nothing applies.\n' +
     '  - "summary" (string): one short caption for the memory frontmatter.\n\n' +
     'Rules:\n' +
     '1. Only durable signal goes into memory. Skip ephemeral or task-specific ' +
-    'detail (e.g. "the user asked about X today" is ephemeral; "the user ' +
-    'prefers detailed reports with citations" is durable).\n' +
+    'detail that has no value to a FUTURE run.\n' +
     '2. Do NOT copy the full report into memory. Memory accumulates; the ' +
-    'report is per-run.\n' +
+    'report is per-run. Keep each entry to one concise line.\n' +
     '3. Cite the tool/source ("found via webSearch", "from app__support-bot") ' +
     'so future runs can trust and trace the fact.\n' +
-    '4. If memory already contains the same fact, skip=true. Do not duplicate.\n' +
+    '4. If memory already contains the same fact, leave it out. Do not duplicate.\n' +
     '5. When unsure, prefer skip=true over polluting memory with low-value ' +
     'notes — the user can always re-run with more specific input.\n' +
     '6. Do NOT call tools. Just compose and return the JSON.'
@@ -401,15 +411,19 @@ function buildMemoryComposerNode(profile) {
       maxIterations: 1,
       maxTokens: 2000,
       outputVariable: '_memoryDelta',
-      // Flat object schema — no union types so Gemini's proto schema is happy.
-      // All fields optional + skip flag lets the composer say "nothing worth
-      // remembering" without violating required-field constraints.
+      // Flat object schema — no union types or nested objects so Gemini's proto
+      // schema is happy. One string per memory section; the `skip` flag lets the
+      // composer say "nothing worth remembering" without violating required-field
+      // constraints. memory-finalize sorts each section's bullets into the
+      // tripartite memory file with per-entry source markers.
       outputSchema: {
         type: 'object',
         properties: {
           skip: { type: 'boolean' },
           mode: { type: 'string', enum: ['append', 'replace'] },
-          content: { type: 'string' },
+          semantic: { type: 'string' },
+          episodic: { type: 'string' },
+          procedural: { type: 'string' },
           summary: { type: 'string' }
         }
       },
