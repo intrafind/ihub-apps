@@ -185,10 +185,22 @@ The Integrations page now shows each integration's status as a colored pill (**C
 
 The audit log now supports a configurable retention policy.
 
-- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `auditLog.retentionDays`. Set `cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
-- **Default**: 365 days. New installations get this via migration `V049__add_audit_log_retention`.
+- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `audit.retentionDays`. Set `audit.cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
+- **Default**: 365 days. Retention now lives in the unified `audit` config block (migrated automatically from the former `auditLog` block by `V059`).
 - **Audit Log page** shows a retention badge in the header (`Retain 365 days`) and a "Run cleanup now" link to trigger the job manually.
 - **New endpoints**: `GET /api/admin/audit-log/retention`, `POST /api/admin/audit-log/retention/run`.
+
+## Audit Log — Authentication, OAuth, and User Events + CSV Export
+
+The audit log now captures the security-relevant events that compliance reviews (SOC 2, ISO 27001, EU AI Act) expect, not just configuration changes:
+
+- **Authentication events**: successful and failed logins (local, LDAP, NTLM, OIDC) and logouts are recorded with the actor, outcome, and source. Failed logins capture the attempted username even though no session exists.
+- **OAuth clients & API keys**: creating, updating, deleting, and rotating client secrets, plus generating static API keys. Secrets and keys are never written to the log.
+- **User management**: creating, updating, and deleting user accounts. Passwords are never written to the log.
+- **Global safety net**: any other mutating admin request (POST/PUT/PATCH/DELETE) is recorded automatically, so new endpoints are covered without extra wiring.
+- **Richer entries**: each entry now records an `actor` (id, username, groups, authenticated), a `result` (`success`/`failure`), and a `source` (`web`/`admin`/`api`/`mcp`). The Audit Log page adds **Result** and **Source** columns and filters.
+- **CSV export**: an **Export CSV** button (and `GET /api/admin/audit-log/export`) downloads the currently filtered entries.
+- **Privacy & SIEM options** (`platform.json` → `audit`, added by migration `V059__add_audit_options`): `includeEmail` (default `false`) masks email-shaped identifiers; `verbosity` (`metadata`/`request`/`full`) controls how much request detail the safety net records; `winstonMirror` (default `false`) also emits entries to the structured logger (`component: audit`) for SIEM forwarding.
 
 ## Recent Activity Feed on Overview Dashboard
 

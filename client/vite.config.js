@@ -53,21 +53,33 @@ export default defineConfig({
         'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
       },
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
-          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
+        // Function form (object form is rejected by the rolldown-based Vite 8).
+        // Maps a module id to its vendor chunk by package name; anything not
+        // listed falls through to the default chunking.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          const chunkMap = {
+            // Vendor chunks
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
+            'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
+            'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
 
-          // Heavy dependencies that should be separate
-          mermaid: ['mermaid'],
-          monaco: ['@monaco-editor/react'],
-          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-          pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone'],
-          office: ['react-markdown'],
-          xlsx: ['xlsx']
+            // Heavy dependencies that should be separate
+            mermaid: ['mermaid'],
+            monaco: ['@monaco-editor/react'],
+            teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
+            pdf: ['pdfjs-dist'],
+            babel: ['@babel/standalone'],
+            office: ['react-markdown'],
+            xlsx: ['xlsx']
+          };
+          for (const [chunk, pkgs] of Object.entries(chunkMap)) {
+            if (pkgs.some(pkg => id.includes(`node_modules/${pkg}/`))) {
+              return chunk;
+            }
+          }
+          return undefined;
         }
       }
     },

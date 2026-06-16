@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 
 const VALID_RESOURCES = [
@@ -145,7 +145,7 @@ export default function registerAdminChangesRoutes(app) {
             return sendBadRequest(res, `Rollback not supported for: ${resource}`);
         }
 
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'update',
           resource,

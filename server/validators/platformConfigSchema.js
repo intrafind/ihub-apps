@@ -171,7 +171,19 @@ export const platformConfigSchema = z
           )
       })
       .default({}),
-    cloudStorage: cloudStorageConfigSchema.default({})
+    cloudStorage: cloudStorageConfigSchema.default({}),
+    // Single source of truth for audit logging: retention + behavior + privacy.
+    // (The legacy top-level `auditLog` block is migrated into here by V059.)
+    audit: z
+      .object({
+        retentionDays: z.number().default(365),
+        cleanupEnabled: z.boolean().default(true),
+        includeEmail: z.boolean().default(false),
+        verbosity: z.enum(['metadata', 'request', 'full']).default('metadata'),
+        winstonMirror: z.boolean().default(false)
+      })
+      .passthrough()
+      .default({})
   })
   .passthrough();
 
