@@ -150,8 +150,8 @@ export default function registerAuthRoutes(app) {
           summary: 'Local login failed',
           source: 'web',
           actor: {
-            id: sanitizedUsername || 'unknown',
-            username: sanitizedUsername || 'unknown',
+            id: sanitizedUsername,
+            username: sanitizedUsername,
             authenticated: false
           }
         });
@@ -277,8 +277,8 @@ export default function registerAuthRoutes(app) {
             summary: `LDAP login failed (provider: ${sanitizedProvider})`,
             source: 'web',
             actor: {
-              id: sanitizedUsername || 'unknown',
-              username: sanitizedUsername || 'unknown',
+              id: sanitizedUsername,
+              username: sanitizedUsername,
               authenticated: false
             }
           });
@@ -320,8 +320,8 @@ export default function registerAuthRoutes(app) {
             summary: 'LDAP login failed',
             source: 'web',
             actor: {
-              id: sanitizedUsername || 'unknown',
-              username: sanitizedUsername || 'unknown',
+              id: sanitizedUsername,
+              username: sanitizedUsername,
               authenticated: false
             }
           });
