@@ -1,5 +1,5 @@
 /**
- * Migration V057 — Rebuild embedded agent workflows for tripartite memory
+ * Migration V059 — Rebuild embedded agent workflows for tripartite memory
  *
  * The memory composer node changed shape:
  *   - Its outputSchema replaced the single flat `content` field with one string
@@ -26,7 +26,7 @@
 
 import { serializeProfile } from '../agents/profile/profileWorkflowSerializer.js';
 
-export const version = '057';
+export const version = '059';
 export const description = 'rebuild_agent_workflows_tripartite_memory';
 
 export async function precondition(ctx) {

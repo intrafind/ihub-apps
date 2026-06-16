@@ -9,7 +9,7 @@ Agent long-term memory is now structured and safe to auto-curate across runs. Th
 - **Version snapshots & one-click rollback.** Every memory write (agent, admin edit, or tool-build) snapshots the prior version under `contents/agents/memory/.snapshots/<profileId>/` (newest 10 kept). Admins can browse and restore them from the new **Version history** panel on the agent Memory page; a restore snapshots the current version first, so it is reversible.
 - **Cleaner prompts.** Source markers are stripped before memory is injected into an agent prompt.
 
-Existing memory files are left as-is on upgrade (treated as human-authored and immutable); new runs add marked agent entries under the canonical sections. Migration **V057** rebuilds embedded agent workflows so existing profiles pick up the new composer schema.
+Existing memory files are left as-is on upgrade (treated as human-authored and immutable); new runs add marked agent entries under the canonical sections. Migration **V059** rebuilds embedded agent workflows so existing profiles pick up the new composer schema.
 
 ## Stellungnahmen Review from iFinder — Lazy Per-Document Corpus
 

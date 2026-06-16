@@ -53,21 +53,35 @@ export default defineConfig({
         'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
       },
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
-          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
+        // Function form (required by Vite 8 / rolldown — the object form is
+        // rejected with "manualChunks is not a function"). Maps each vendored
+        // package to a named chunk by matching its node_modules path; anything
+        // unmatched falls through to Vite's default chunking.
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/');
+          if (!normalized.includes('/node_modules/')) return undefined;
+          const chunkGroups = {
+            // Vendor chunks
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
+            'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
+            'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
 
-          // Heavy dependencies that should be separate
-          mermaid: ['mermaid'],
-          monaco: ['@monaco-editor/react'],
-          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-          pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone'],
-          office: ['react-markdown'],
-          xlsx: ['xlsx']
+            // Heavy dependencies that should be separate
+            mermaid: ['mermaid'],
+            monaco: ['@monaco-editor/react'],
+            teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
+            pdf: ['pdfjs-dist'],
+            babel: ['@babel/standalone'],
+            office: ['react-markdown'],
+            xlsx: ['xlsx']
+          };
+          for (const [chunk, pkgs] of Object.entries(chunkGroups)) {
+            if (pkgs.some(pkg => normalized.includes(`/node_modules/${pkg}/`))) {
+              return chunk;
+            }
+          }
+          return undefined;
         }
       }
     },
