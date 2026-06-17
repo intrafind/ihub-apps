@@ -174,7 +174,11 @@ function CloudStorageConfig({ filterType } = {}) {
     }
 
     if (providerToSave.type === 'nextcloud') {
-      if (!providerToSave.serverUrl || !providerToSave.clientId || !providerToSave.clientSecretRef) {
+      if (
+        !providerToSave.serverUrl ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecretRef
+      ) {
         setMessage({
           type: 'error',
           text: t(

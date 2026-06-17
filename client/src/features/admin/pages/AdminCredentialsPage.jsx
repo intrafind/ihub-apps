@@ -513,9 +513,7 @@ function AdminCredentialsPage() {
                     <div className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">
                       {c.id}
                     </div>
-                    {(typeof c.description === 'string'
-                      ? c.description
-                      : c.description?.en) && (
+                    {(typeof c.description === 'string' ? c.description : c.description?.en) && (
                       <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {typeof c.description === 'string' ? c.description : c.description.en}
                       </div>

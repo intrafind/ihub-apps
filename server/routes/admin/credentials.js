@@ -8,16 +8,9 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendBadRequest,
-  sendNotFound
-} from '../../utils/responseHelpers.js';
+import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 import { logAdminAction } from '../../services/AuditLogService.js';
-import {
-  validateCredential,
-  SECRET_FIELDS_BY_TYPE
-} from '../../validators/credentialSchema.js';
+import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
 
 /**
  * Admin CRUD routes for the central credential store

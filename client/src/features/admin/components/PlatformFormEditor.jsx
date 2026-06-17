@@ -1379,14 +1379,9 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
             <div>
               <CredentialRefSelect
                 value={config.ntlmAuth?.domainControllerPasswordRef || ''}
-                onChange={id =>
-                  updateNestedConfig('ntlmAuth', 'domainControllerPasswordRef', id)
-                }
+                onChange={id => updateNestedConfig('ntlmAuth', 'domainControllerPasswordRef', id)}
                 types={['secret', 'basic']}
-                label={t(
-                  'admin.auth.ntlm.domainControllerPassword',
-                  'Domain Controller Password'
-                )}
+                label={t('admin.auth.ntlm.domainControllerPassword', 'Domain Controller Password')}
                 help={t(
                   'admin.auth.ntlm.domainControllerPasswordHelp',
                   'Select a stored credential profile holding the domain controller password.'

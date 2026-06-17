@@ -196,7 +196,9 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
     }
   };
 
-  const selectedOperation = parseResult?.operations?.find(op => op.operationId === form.operationId);
+  const selectedOperation = parseResult?.operations?.find(
+    op => op.operationId === form.operationId
+  );
 
   /** Build the tool definition and delegate persistence to the parent. */
   const handleSave = () => {
@@ -239,8 +241,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
   const addHeaderRow = () => update({ headers: [...form.headers, { key: '', value: '' }] });
   const updateHeaderRow = (idx, patch) =>
     update({ headers: form.headers.map((row, i) => (i === idx ? { ...row, ...patch } : row)) });
-  const removeHeaderRow = idx =>
-    update({ headers: form.headers.filter((_, i) => i !== idx) });
+  const removeHeaderRow = idx => update({ headers: form.headers.filter((_, i) => i !== idx) });
 
   return (
     <div className="space-y-6">
