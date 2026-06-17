@@ -65,7 +65,11 @@ export async function up(ctx) {
   const platform = await ctx.readJson('config/platform.json');
 
   if (platform.jira?.clientSecret) {
-    platform.jira.clientSecretRef = addSecret('jira', platform.jira.clientSecret, 'Jira Client Secret');
+    platform.jira.clientSecretRef = addSecret(
+      'jira',
+      platform.jira.clientSecret,
+      'Jira Client Secret'
+    );
     delete platform.jira.clientSecret;
   }
 
@@ -73,7 +77,11 @@ export async function up(ctx) {
     platform.cloudStorage.providers.forEach((p, i) => {
       const base = `cloudstorage_${sanitizeId(p.id || p.name || i)}`;
       if (p.clientSecret) {
-        p.clientSecretRef = addSecret(base, p.clientSecret, `Cloud Storage Client Secret (${p.id || i})`);
+        p.clientSecretRef = addSecret(
+          base,
+          p.clientSecret,
+          `Cloud Storage Client Secret (${p.id || i})`
+        );
         delete p.clientSecret;
       }
       if (p.type === 'office365' && p.tenantId) {
@@ -86,7 +94,11 @@ export async function up(ctx) {
   if (Array.isArray(platform.oidcAuth?.providers)) {
     platform.oidcAuth.providers.forEach((p, i) => {
       if (p.clientSecret) {
-        p.clientSecretRef = addSecret(`oidc_${sanitizeId(p.name || p.id || i)}`, p.clientSecret, `OIDC Client Secret (${p.name || i})`);
+        p.clientSecretRef = addSecret(
+          `oidc_${sanitizeId(p.name || p.id || i)}`,
+          p.clientSecret,
+          `OIDC Client Secret (${p.name || i})`
+        );
         delete p.clientSecret;
       }
     });
@@ -95,7 +107,11 @@ export async function up(ctx) {
   if (Array.isArray(platform.ldapAuth?.providers)) {
     platform.ldapAuth.providers.forEach((p, i) => {
       if (p.adminPassword) {
-        p.adminPasswordRef = addSecret(`ldap_${sanitizeId(p.name || p.id || i)}`, p.adminPassword, `LDAP Admin Password (${p.name || i})`);
+        p.adminPasswordRef = addSecret(
+          `ldap_${sanitizeId(p.name || p.id || i)}`,
+          p.adminPassword,
+          `LDAP Admin Password (${p.name || i})`
+        );
         delete p.adminPassword;
       }
     });
@@ -111,7 +127,11 @@ export async function up(ctx) {
   }
 
   if (platform.iFinder?.privateKey) {
-    platform.iFinder.privateKeyRef = addSecret('ifinder', platform.iFinder.privateKey, 'iFinder Private Key');
+    platform.iFinder.privateKeyRef = addSecret(
+      'ifinder',
+      platform.iFinder.privateKey,
+      'iFinder Private Key'
+    );
     delete platform.iFinder.privateKey;
   }
 
@@ -125,7 +145,11 @@ export async function up(ctx) {
         const base = `mcp_${sanitizeId(server.id)}`;
         for (const field of ['token', 'password', 'clientSecret']) {
           if (auth[field]) {
-            auth[`${field}Ref`] = addSecret(`${base}_${field}`, auth[field], `MCP ${server.id} ${field}`);
+            auth[`${field}Ref`] = addSecret(
+              `${base}_${field}`,
+              auth[field],
+              `MCP ${server.id} ${field}`
+            );
             delete auth[field];
           }
         }
