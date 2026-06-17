@@ -3,6 +3,42 @@
 import { isOutlookMailItemAvailable } from './outlookMailContext';
 import { marked } from 'marked';
 
+/**
+ * Helper to extract sender email address from the current mail item.
+ * Returns the sender's email address or null if unavailable.
+ */
+function getSenderEmailAddress(item) {
+  try {
+    // In read mode, sender is available directly
+    if (item.from && item.from.emailAddress) {
+      return item.from.emailAddress;
+    }
+    // Fallback to sender property if from is not available
+    if (item.sender && item.sender.emailAddress) {
+      return item.sender.emailAddress;
+    }
+  } catch (e) {
+    console.warn('[iHub] Could not extract sender email:', e);
+  }
+  return null;
+}
+
+/**
+ * Helper to get the subject from the current mail item.
+ * Returns subject string or null if unavailable.
+ */
+function getSubject(item) {
+  try {
+    // In read mode, subject is directly available as a string
+    if (typeof item.subject === 'string') {
+      return item.subject;
+    }
+  } catch (e) {
+    console.warn('[iHub] Could not extract subject:', e);
+  }
+  return null;
+}
+
 export function displayReplyFormWithAssistantResponse(assistantMarkdownText) {
   if (!isOutlookMailItemAvailable()) {
     window.alert('Insert is only available when you open this add-in from an email in Outlook.');
@@ -33,7 +69,26 @@ export function displayReplyFormWithAssistantResponse(assistantMarkdownText) {
 
   // Read mode: open a reply form pre-filled with the response
   if (typeof item.displayReplyFormAsync === 'function') {
-    item.displayReplyFormAsync({ htmlBody: html }, result => {
+    // Build the form data object with body, recipient, and subject
+    const formData = { htmlBody: html };
+
+    // Extract sender email to set as recipient
+    const senderEmail = getSenderEmailAddress(item);
+    if (senderEmail) {
+      formData.toRecipients = [senderEmail];
+    }
+
+    // Extract subject and prefix with "Re: " if not already present
+    const originalSubject = getSubject(item);
+    if (originalSubject) {
+      // Add "Re: " prefix if it's not already there
+      const subjectPrefix = 'Re: ';
+      formData.subject = originalSubject.startsWith(subjectPrefix)
+        ? originalSubject
+        : subjectPrefix + originalSubject;
+    }
+
+    item.displayReplyFormAsync(formData, result => {
       if (result.status === Office.AsyncResultStatus.Failed) {
         console.error('[iHub] displayReplyFormAsync failed:', result.error);
         window.alert('Could not open reply form. ' + (result.error?.message || ''));
