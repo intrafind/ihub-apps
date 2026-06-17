@@ -193,7 +193,31 @@ export async function loadConfiguredTools(language = null) {
   // are converted to strings. Use provided language or fall back to platform default.
   const platformConfig = configCache.getPlatform() || {};
   const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
-  return localizeTools(tools, effectiveLanguage);
+  const localized = localizeTools(tools, effectiveLanguage);
+
+  // Derive LLM-facing parameters for OpenAPI tools from the referenced operation
+  // so the model sees the correct argument schema. A broken/unreachable spec
+  // disables the tool rather than crashing tool discovery.
+  const openApiTools = localized.filter(t => t.type === 'openapi' && !t.parameters);
+  if (openApiTools.length > 0) {
+    const { getOpenApiToolParameters } = await import('./services/tools/OpenApiToolRunner.js');
+    await Promise.all(
+      openApiTools.map(async t => {
+        try {
+          t.parameters = await getOpenApiToolParameters(t);
+        } catch (error) {
+          logger.error('Failed to derive OpenAPI tool parameters; disabling tool', {
+            component: 'ToolLoader',
+            toolId: t.id,
+            error: error?.message
+          });
+          t.enabled = false;
+        }
+      })
+    );
+  }
+
+  return localized;
 }
 
 /**
@@ -576,6 +600,14 @@ export async function runTool(toolId, params = {}) {
       serverId: tool._mcp.serverId
     });
     return await mcpClientManager.callTool(toolId, params);
+  }
+
+  // OpenAPI tools are dispatched through the OpenApiToolRunner.
+  if (tool.type === 'openapi') {
+    logger.info('Dispatching OpenAPI tool call', { component: 'ToolLoader', toolId });
+    const { runOpenApiTool } = await import('./services/tools/OpenApiToolRunner.js');
+    const { chatId, user, appConfig, ...args } = params;
+    return await runOpenApiTool(tool, args, { chatId, user, appConfig });
   }
 
   // Check if this is a special tool (like Google Search) that doesn't have a script

@@ -14,7 +14,7 @@ import { jest } from '@jest/globals';
 // place; CredentialService.list() pulls it fresh on every call.
 const store = { credentials: {} };
 
-jest.unstable_mockModule('../../configCache.js', () => ({
+jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getCredentials: () => store
   }
@@ -22,7 +22,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
 
 // logger is imported by CredentialService for dangling-ref errors — stub it so
 // the test output stays clean.
-jest.unstable_mockModule('../../utils/logger.js', () => ({
+jest.unstable_mockModule('../utils/logger.js', () => ({
   default: {
     error: () => {},
     warn: () => {},
@@ -31,7 +31,7 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
   }
 }));
 
-const { default: credentialService } = await import('../../services/CredentialService.js');
+const { default: credentialService } = await import('../services/CredentialService.js');
 
 /** Seed the mocked store with a fresh set of profiles for a test. */
 function setProfiles(profiles) {
@@ -85,10 +85,13 @@ describe('CredentialService.resolveSecret', () => {
     { type: 'apiKeyQuery', profile: { paramName: 'key', key: 'xyz' }, expected: 'xyz' }
   ];
 
-  it.each(cases)('returns the primary secret for a $type profile', ({ type, profile, expected }) => {
-    setProfiles({ cred: { id: 'cred', type, ...profile } });
-    expect(credentialService.resolveSecret('cred')).toBe(expected);
-  });
+  it.each(cases)(
+    'returns the primary secret for a $type profile',
+    ({ type, profile, expected }) => {
+      setProfiles({ cred: { id: 'cred', type, ...profile } });
+      expect(credentialService.resolveSecret('cred')).toBe(expected);
+    }
+  );
 
   it('throws on a dangling ref', () => {
     expect(() => credentialService.resolveSecret('missing')).toThrow(/Unknown credentialRef/);
