@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import { join, normalize } from 'path';
 import SwaggerParser from '@apidevtools/swagger-parser';
@@ -32,8 +31,10 @@ const oauthCache = new Map();
 function sourceKey(source) {
   if (source.type === 'url') return `url:${source.url}`;
   if (source.type === 'file') return `file:${source.path}`;
+  // Key inline specs by their content directly. (No crypto hash: the spec is
+  // not a secret and a content-addressed Map key needs no digest.)
   const raw = typeof source.spec === 'string' ? source.spec : JSON.stringify(source.spec);
-  return `inline:${createHash('sha1').update(raw).digest('hex')}`;
+  return `inline:${raw}`;
 }
 
 /**
