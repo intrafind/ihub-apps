@@ -354,6 +354,57 @@ export OPENAI_API_KEY="vllm-local"
 export VLLM_ENDPOINT="http://localhost:8000"
 ```
 
+### Reasoning / Thinking Output
+
+Reasoning models served by vLLM (DeepSeek-R1, Qwen3, gpt-oss, etc.) can return their
+chain-of-thought in a field separate from the final answer. iHub surfaces this as a
+dedicated "thinking" stream in the chat UI, just like Gemini's extended thinking.
+
+**1. Start vLLM with a reasoning parser** so the reasoning is emitted separately:
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3-8B \
+    --host 0.0.0.0 --port 8000 \
+    --enable-auto-tool-choice \
+    --reasoning-parser qwen3        # e.g. qwen3, deepseek_r1 — match your model
+```
+
+**2. Enable thinking in the model config.** Both the dedicated vLLM provider
+(`"provider": "local"`) and the OpenAI-compatible provider (`"provider": "openai"`)
+support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_content`
+(legacy / DeepSeek) from the response either way.
+
+```json
+{
+  "id": "qwen3-vllm",
+  "modelId": "Qwen/Qwen3-8B",
+  "name": { "en": "Qwen3 (vLLM, reasoning)" },
+  "description": { "en": "Qwen3 served by vLLM with reasoning enabled" },
+  "url": "http://localhost:8000/v1/chat/completions",
+  "provider": "local",
+  "tokenLimit": 32768,
+  "supportsTools": true,
+  "thinking": {
+    "enabled": true,
+    "chatTemplateKwargs": { "enable_thinking": true }
+  },
+  "enabled": true
+}
+```
+
+- `thinking.enabled` turns reasoning support on for the model.
+- `thinking.chatTemplateKwargs` is the per-request knob vLLM passes into the chat
+  template. It is **model-specific**: Qwen3 uses `enable_thinking`, Granite uses
+  `thinking`. When omitted, iHub defaults to `{ "enable_thinking": <toggle> }`, where the
+  toggle follows the app/user thinking setting.
+- For models that honor `reasoning_effort` (e.g. gpt-oss), add `"level": "low"|"medium"|
+  "high"` and iHub will also send `reasoning_effort`.
+
+> Note: the `reasoning` field only appears when vLLM was started with a matching
+> `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal
+> content and no separate thinking stream is shown.
+
 ---
 
 ## Troubleshooting

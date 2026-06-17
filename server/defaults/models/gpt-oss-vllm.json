@@ -13,6 +13,10 @@
   "provider": "openai",
   "tokenLimit": 16000,
   "supportsTools": true,
+  "thinking": {
+    "enabled": true,
+    "level": "medium"
+  },
   "enabled": true,
   "default": false
 }

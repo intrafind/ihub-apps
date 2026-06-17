@@ -98,6 +98,27 @@ class VLLMAdapterClass extends BaseAdapter {
       body.stream_options = { include_usage: true };
     }
 
+    // Thinking/reasoning support. vLLM emits reasoning in a separate field when
+    // the server is started with a `--reasoning-parser`. Per-request enable/
+    // disable is model-specific via `chat_template_kwargs` (Qwen3:
+    // `enable_thinking`, Granite: `thinking`), so models that use a different
+    // key can declare `thinking.chatTemplateKwargs` explicitly. Some models
+    // (e.g. gpt-oss) also honor `reasoning_effort`.
+    if (model.thinking?.enabled) {
+      const thinkingEnabled = options.thinkingEnabled ?? true;
+      const chatTemplateKwargs =
+        model.thinking.chatTemplateKwargs !== undefined
+          ? { ...model.thinking.chatTemplateKwargs }
+          : { enable_thinking: thinkingEnabled };
+      if (Object.keys(chatTemplateKwargs).length > 0) {
+        body.chat_template_kwargs = chatTemplateKwargs;
+      }
+      const level = options.thinkingLevel ?? model.thinking.level;
+      if (thinkingEnabled && level) {
+        body.reasoning_effort = this.resolveReasoningEffort(options, model);
+      }
+    }
+
     // Use vLLM-specific tool conversion with schema sanitization
     if (tools && tools.length > 0) {
       body.tools = convertToolsFromGeneric(tools, 'local');
@@ -170,6 +191,7 @@ class VLLMAdapterClass extends BaseAdapter {
     const result = {
       content: [],
       tool_calls: [],
+      thinking: [],
       complete: false,
       error: false,
       errorMessage: null,
@@ -205,8 +227,14 @@ class VLLMAdapterClass extends BaseAdapter {
 
       // Handle full response object (non-streaming)
       if (parsed.choices && parsed.choices[0]?.message) {
-        if (parsed.choices[0].message.content) {
-          result.content.push(parsed.choices[0].message.content);
+        const message = parsed.choices[0].message;
+        if (message.content) {
+          result.content.push(message.content);
+        }
+        // vLLM reasoning text: `reasoning` (current) or `reasoning_content` (legacy)
+        const reasoning = message.reasoning_content ?? message.reasoning;
+        if (reasoning) {
+          result.thinking.push(reasoning);
         }
         if (parsed.choices[0].message.tool_calls) {
           result.tool_calls.push(...parsed.choices[0].message.tool_calls);
@@ -221,6 +249,10 @@ class VLLMAdapterClass extends BaseAdapter {
         const delta = parsed.choices[0].delta;
         if (delta.content) {
           result.content.push(delta.content);
+        }
+        const reasoning = delta.reasoning_content ?? delta.reasoning;
+        if (reasoning) {
+          result.thinking.push(reasoning);
         }
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {

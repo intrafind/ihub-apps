@@ -1,0 +1,24 @@
+{
+  "id": "qwen3-vllm-reasoning",
+  "modelId": "Qwen/Qwen3-8B",
+  "name": {
+    "en": "Qwen3 (vLLM, reasoning)",
+    "de": "Qwen3 (vLLM, Reasoning)"
+  },
+  "description": {
+    "en": "Qwen3 served by vLLM with reasoning enabled. Start vLLM with a matching --reasoning-parser (e.g. qwen3 / deepseek_r1) so the reasoning is returned in a separate field.",
+    "de": "Qwen3 über vLLM mit aktiviertem Reasoning. vLLM mit passendem --reasoning-parser starten (z. B. qwen3 / deepseek_r1), damit das Reasoning in einem separaten Feld zurückgegeben wird."
+  },
+  "url": "http://localhost:8000/v1/chat/completions",
+  "provider": "local",
+  "tokenLimit": 32768,
+  "supportsTools": true,
+  "thinking": {
+    "enabled": true,
+    "chatTemplateKwargs": {
+      "enable_thinking": true
+    }
+  },
+  "enabled": false,
+  "default": false
+}

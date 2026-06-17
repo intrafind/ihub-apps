@@ -47,6 +47,35 @@ export class BaseAdapter {
   }
 
   /**
+   * Resolve a reasoning "effort" level for OpenAI-compatible providers.
+   *
+   * Shared mapping so the budget/level → effort translation stays in one place,
+   * while the decision of whether/how to send it remains provider-specific in
+   * each adapter. Prefers an explicit level (Gemini-3 style `minimal|low|medium|
+   * high`), otherwise falls back to the legacy thinking-budget mapping used by
+   * the OpenAI Responses adapter.
+   *
+   * @param {Object} options - Request options (thinkingLevel, thinkingBudget)
+   * @param {Object} model - Model config (model.thinking.level / .budget)
+   * @returns {'minimal'|'low'|'medium'|'high'} Reasoning effort
+   */
+  resolveReasoningEffort(options = {}, model = {}) {
+    const level = options.thinkingLevel ?? model.thinking?.level;
+    if (level) {
+      const allowed = new Set(['minimal', 'low', 'medium', 'high']);
+      const lower = String(level).toLowerCase();
+      return allowed.has(lower) ? lower : 'medium';
+    }
+
+    const budget = options.thinkingBudget ?? model.thinking?.budget ?? -1;
+    if (budget === 0) return 'minimal';
+    if (budget === -1) return 'medium'; // dynamic budget
+    if (budget > 0 && budget <= 100) return 'low';
+    if (budget > 100 && budget <= 500) return 'medium';
+    return 'high';
+  }
+
+  /**
    * Create base request headers
    * @param {string} apiKey - API key
    * @param {Object} additionalHeaders - Additional headers
