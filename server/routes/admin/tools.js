@@ -986,7 +986,12 @@ export default function registerAdminToolsRoutes(app) {
           return sendBadRequest(res, 'Only http(s) OpenAPI URLs are supported');
         }
         const { safeFetch } = await import('../../services/mcp/safeFetch.js');
-        const fetchRes = await safeFetch(source.url, { method: 'GET' }, { blockPrivateIps: true });
+        // SSRF is mitigated by safeFetch: it resolves DNS once, rejects
+        // private/internal IPs (blockPrivateIps), and pins the socket to the
+        // validated address to defeat DNS rebinding. This admin-only endpoint
+        // must fetch an operator-supplied OpenAPI URL, so the host cannot be
+        // allow-listed. CodeQL cannot see the guard across the call boundary.
+        const fetchRes = await safeFetch(source.url, { method: 'GET' }, { blockPrivateIps: true }); // codeql[js/request-forgery]
         if (!fetchRes.ok) {
           return sendBadRequest(res, `Failed to fetch OpenAPI doc: ${fetchRes.status}`);
         }
