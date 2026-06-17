@@ -185,10 +185,22 @@ The Integrations page now shows each integration's status as a colored pill (**C
 
 The audit log now supports a configurable retention policy.
 
-- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `auditLog.retentionDays`. Set `cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
-- **Default**: 365 days. New installations get this via migration `V049__add_audit_log_retention`.
+- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `audit.retentionDays`. Set `audit.cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
+- **Default**: 365 days. Retention now lives in the unified `audit` config block (migrated automatically from the former `auditLog` block by `V059`).
 - **Audit Log page** shows a retention badge in the header (`Retain 365 days`) and a "Run cleanup now" link to trigger the job manually.
 - **New endpoints**: `GET /api/admin/audit-log/retention`, `POST /api/admin/audit-log/retention/run`.
+
+## Audit Log — Authentication, OAuth, and User Events + CSV Export
+
+The audit log now captures the security-relevant events that compliance reviews (SOC 2, ISO 27001, EU AI Act) expect, not just configuration changes:
+
+- **Authentication events**: successful and failed logins (local, LDAP, NTLM, OIDC) and logouts are recorded with the actor, outcome, and source. Failed logins capture the attempted username even though no session exists.
+- **OAuth clients & API keys**: creating, updating, deleting, and rotating client secrets, plus generating static API keys. Secrets and keys are never written to the log.
+- **User management**: creating, updating, and deleting user accounts. Passwords are never written to the log.
+- **Global safety net**: any other mutating admin request (POST/PUT/PATCH/DELETE) is recorded automatically, so new endpoints are covered without extra wiring.
+- **Richer entries**: each entry now records an `actor` (id, username, groups, authenticated), a `result` (`success`/`failure`), and a `source` (`web`/`admin`/`api`/`mcp`). The Audit Log page adds **Result** and **Source** columns and filters.
+- **CSV export**: an **Export CSV** button (and `GET /api/admin/audit-log/export`) downloads the currently filtered entries.
+- **Privacy & SIEM options** (`platform.json` → `audit`, added by migration `V059__add_audit_options`): `includeEmail` (default `false`) masks email-shaped identifiers; `verbosity` (`metadata`/`request`/`full`) controls how much request detail the safety net records; `winstonMirror` (default `false`) also emits entries to the structured logger (`component: audit`) for SIEM forwarding.
 
 ## Recent Activity Feed on Overview Dashboard
 
@@ -425,3 +437,35 @@ gpt-oss), and vLLM-served models like Qwen3 and DeepSeek-R1.
 
 The OpenAI adapter stays conservative: it adds `reasoning_effort` only and does not change
 `max_tokens` or `temperature`, so existing OpenAI-compatible endpoints are unaffected.
+
+## Admin-Configurable Favicon (Branding)
+
+The browser tab icon (favicon) can now be set from the admin panel instead of patching `index.html`. This completes the corporate-design / white-labeling branding set alongside the existing logo, theme colors, custom CSS, and live theme preview.
+
+- A new **Favicon URL** field under **UI Customization › Header** accepts a path or an uploaded asset (e.g. `/favicon.ico` or `/uploads/assets/brand-icon.png`).
+- The favicon is applied live in the browser without rebuilding or editing HTML; leave it empty to keep the built-in default.
+- Stored as `header.favicon` in `ui.json`. Existing installations receive the default automatically via migration `V057__add_header_favicon`; no manual action required.
+
+## Unified Login Dialog (Auth Gate Everywhere)
+
+The app now uses a single login dialog — the auth gate — for every sign-in entry point. Clicking **Login** in the header, visiting the `/login` page, and being prompted after a session expires all open the same gate, which supports every configured method (local, LDAP, OIDC/SSO, Windows/NTLM).
+
+- **One consistent dialog**: the separate in-app login modal has been retired, so the look, behavior, and available methods no longer differ between the startup screen and the in-app login.
+- **Remember me**: the gate now offers a "Remember me" option (checked by default) that pre-fills your username on the next visit, matching the previous in-app form.
+- **Login button always available**: the header always shows a **Login** button when sign-in is possible, regardless of how you entered the app — no more missing or empty user menu.
+- Logout and post-login redirect behavior are unchanged.
+
+## Clearer Model Limits — Context Window vs. Output Tokens
+
+Model configuration now separates two distinct concepts that were previously conflated under a single `tokenLimit` field:
+
+- **`contextWindow`** — the model's total input+output capacity. Used to estimate how much of a model's context an upload or conversation consumes, and to warn users before they exceed it.
+- **`maxOutputTokens`** — the cap on what the model may generate in a single response, sent to the provider as `max_tokens`.
+
+Highlights:
+
+- Document-size warnings in the chat input are now measured against the model's **context window** (the correct frame of reference) and use an accurate tokenizer instead of a rough character estimate.
+- Model details now display **Context Window** and **Max Output Tokens** as separate values.
+- Fixes a latent bug where large-context models (e.g. Claude Opus) requested their full context window as the output cap, which could cause provider errors.
+
+Admins editing models will see two fields (Context Window, Max Output Tokens) instead of one Token Limit.

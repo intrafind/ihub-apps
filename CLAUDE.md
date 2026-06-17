@@ -292,7 +292,9 @@ Apps must conform to the Zod schema defined in `server/validators/appConfigSchem
   color: string,                        // Required: Hex color code (e.g., #4F46E5)
   icon: string,                         // Required: Icon identifier
   system: object,                       // Required: Localized system prompts
-  tokenLimit: number,                   // Required: Maximum tokens (1-1,000,000)
+
+  // Note: apps no longer configure token limits. The context window and output
+  // cap come from the selected model (contextWindow / maxOutputTokens).
 
   // Optional fields
   order: number,                        // Optional: Display order
@@ -440,7 +442,8 @@ iHub Apps supports local LLM providers for privacy-focused, offline AI capabilit
   "name": { "en": "GPT-OSS (LM Studio)" },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }

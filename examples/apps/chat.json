@@ -26,7 +26,6 @@
       "subtitle": "Wie kann ich Ihnen heute helfen?"
     }
   },
-  "tokenLimit": 8192,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.7,

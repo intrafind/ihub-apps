@@ -13,6 +13,8 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import { computeContextUsage } from '../../../shared/utils/tokenEstimatorClient.js';
+import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 
 /**
  * Chat input component following Claude's design
@@ -119,6 +121,35 @@ function ChatInput({
     if (!selectedFile) return [];
     return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
   }, [selectedFile]);
+
+  // Tokenize attached document content separately so large files are only
+  // re-tokenized when the attachments change — not on every keystroke. The
+  // tokenizer chunk is loaded lazily; counts refine once it resolves.
+  const fileContent = useMemo(
+    () => normalizedFiles.map(f => f?.content || '').join('\n'),
+    [normalizedFiles]
+  );
+  const fileTokens = useEstimatedTokenCount(fileContent);
+  // Debounce the typed-message estimate so we don't run the tokenizer on every
+  // keystroke (matters for large pasted text).
+  const valueTokens = useEstimatedTokenCount(value || '', { debounceMs: 300 });
+
+  // Estimate how much of the model's context window the pending input (typed
+  // message + attached document content) would consume. This is a live,
+  // client-side estimate using the shared tokenizer; the provider-reported
+  // count after each turn is authoritative. Only shown when the model exposes
+  // a context window and the user has actually entered/attached something.
+  const contextUsage = useMemo(() => {
+    const contextWindow = selectedModelData?.contextWindow;
+    if (!contextWindow) return null;
+    const inputTokens = valueTokens + fileTokens;
+    if (inputTokens === 0) return null;
+    return computeContextUsage({
+      contextWindow,
+      inputTokens,
+      maxOutputTokens: selectedModelData?.maxOutputTokens || 0
+    });
+  }, [selectedModelData, fileTokens, valueTokens]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -385,12 +416,12 @@ function ChatInput({
                 ? t('errors.documentTooLargeCombined', {
                     fileCount: fileTokenWarning.files.length,
                     estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
                   })
                 : t('errors.documentTooLarge', {
                     fileName: fileTokenWarning.files?.[0]?.fileName || '',
                     estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-                    tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
                   })}
             </span>
             {(fileTokenWarning.files?.length || 0) > 1 && (
@@ -406,6 +437,16 @@ function ChatInput({
               </ul>
             )}
           </div>
+        </div>
+      )}
+
+      {contextUsage && !fileTokenWarning && (
+        <div className="mx-2 mb-1 text-xs text-gray-400 dark:text-gray-500 text-right">
+          {t('chat.contextUsage', {
+            used: contextUsage.inputTokens.toLocaleString(i18n.language),
+            total: contextUsage.contextWindow.toLocaleString(i18n.language),
+            defaultValue: '~{{used}} / {{total}} context tokens'
+          })}
         </div>
       )}
 

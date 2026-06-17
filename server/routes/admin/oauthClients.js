@@ -12,6 +12,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -265,6 +266,14 @@ export default function registerAdminOAuthRoutes(app) {
 
       const newClient = await createOAuthClient(clientData, clientsFilePath, createdBy);
 
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'oauthClient',
+        resourceId: newClient.clientId,
+        summary: `Created OAuth client "${newClient.name}"`
+      });
+
       // Return client with plain text secret (only time it's shown)
       res.status(201).json({
         success: true,
@@ -365,6 +374,14 @@ export default function registerAdminOAuthRoutes(app) {
 
       const updatedClient = await updateOAuthClient(clientId, updates, clientsFilePath, updatedBy);
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'oauthClient',
+        resourceId: clientId,
+        summary: `Updated OAuth client "${updatedClient.name || clientId}"`
+      });
+
       res.json({
         success: true,
         message: 'OAuth client updated successfully',
@@ -429,6 +446,14 @@ export default function registerAdminOAuthRoutes(app) {
       const deletedBy = req.user?.id || 'admin';
 
       await deleteOAuthClient(clientId, clientsFilePath, deletedBy);
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'oauthClient',
+        resourceId: clientId,
+        summary: `Deleted OAuth client ${clientId}`
+      });
 
       res.json({
         success: true,
@@ -496,6 +521,14 @@ export default function registerAdminOAuthRoutes(app) {
         const rotatedBy = req.user?.id || 'admin';
 
         const result = await rotateClientSecret(clientId, clientsFilePath, rotatedBy);
+
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'oauthClient',
+          resourceId: clientId,
+          summary: `Rotated client secret for ${clientId}`
+        });
 
         res.json({
           success: true,
@@ -601,6 +634,14 @@ export default function registerAdminOAuthRoutes(app) {
         }
 
         const apiKeyResult = generateStaticApiKey(client, expirationDays);
+
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'oauthToken',
+          resourceId: clientId,
+          summary: `Generated static API key for ${clientId} (expires in ${expirationDays} days)`
+        });
 
         res.json({
           success: true,

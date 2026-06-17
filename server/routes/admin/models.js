@@ -16,7 +16,7 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 export default function registerAdminModelsRoutes(app) {
@@ -211,7 +211,7 @@ export default function registerAdminModelsRoutes(app) {
           admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
         });
       }
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'model',
@@ -280,7 +280,7 @@ export default function registerAdminModelsRoutes(app) {
       }
       await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
       await configCache.refreshModelsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'create',
         resource: 'model',
@@ -327,7 +327,7 @@ export default function registerAdminModelsRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
       await configCache.refreshModelsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'toggle',
         resource: 'model',
@@ -382,7 +382,7 @@ export default function registerAdminModelsRoutes(app) {
       }
 
       await configCache.refreshModelsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'toggle',
         resource: 'model',
@@ -443,7 +443,7 @@ export default function registerAdminModelsRoutes(app) {
           admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
         });
       }
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'delete',
         resource: 'model',

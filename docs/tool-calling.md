@@ -37,7 +37,6 @@ Add a `tools` property to your app configuration:
     "en": "You are a helpful research assistant. Use web search to find current information when needed.",
     "de": "Du bist ein hilfreicher Recherche-Assistent. Nutze die Websuche, um aktuelle Informationen zu finden."
   },
-  "tokenLimit": 8000,
   "websearch": {
     "enabled": true,
     "provider": "auto",

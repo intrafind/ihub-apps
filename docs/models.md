@@ -14,7 +14,8 @@ Each model is defined with the following properties:
   "description": { "en": "Fast and efficient model for most everyday tasks and conversations" },
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 4096
+  "contextWindow": 16385,
+  "maxOutputTokens": 4096
 }
 ```
 
@@ -28,7 +29,8 @@ Each model is defined with the following properties:
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`      |
-| `tokenLimit`                   | Number  | -        | Maximum token capacity of the model's context window (nullable)                                |
+| `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
+| `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 4096 at runtime if unset |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
 | `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
 | `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
@@ -255,7 +257,8 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
       "description": "Google's versatile model optimized for text and code tasks",
       "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
       "provider": "google",
-      "tokenLimit": 32768,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 8192,
       "default": true,
       "supportsTools": true
     }
@@ -297,7 +300,8 @@ To add a new model:
   },
   "url": "https://api.openai.com/v1/responses",
   "provider": "openai-responses",
-  "tokenLimit": 128000,
+  "contextWindow": 400000,
+  "maxOutputTokens": 32000,
   "supportsTools": true,
   "enabled": true,
   "default": false

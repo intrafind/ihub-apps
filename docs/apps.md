@@ -45,8 +45,7 @@ Add this to your `contents/apps/my-first-app.json`:
   "icon": "chat",
   "system": {
     "en": "You are a helpful assistant. Answer questions clearly and concisely."
-  },
-  "tokenLimit": 4000
+  }
 }
 ```
 
@@ -65,7 +64,6 @@ That's it! Your app will:
   "name": { "en": "Support Assistant" },
   "description": { "en": "24/7 customer support" },
   "system": { "en": "You are a friendly customer support agent. Help users with their questions professionally." },
-  "tokenLimit": 4000,
   "preferredStyle": "professional",
   "websearch": { "enabled": true, "enabledByDefault": true }
 }
@@ -78,7 +76,6 @@ That's it! Your app will:
   "name": { "en": "Document Analyzer" },
   "description": { "en": "Extract insights from documents" },
   "system": { "en": "Analyze uploaded documents and extract key information." },
-  "tokenLimit": 8000,
   "upload": {
     "enabled": true,
     "fileUpload": {
@@ -96,7 +93,6 @@ That's it! Your app will:
   "name": { "en": "Data Extractor" },
   "description": { "en": "Extract structured data from text" },
   "system": { "en": "Extract information and return it in JSON format." },
-  "tokenLimit": 4000,
   "preferredOutputFormat": "json",
   "outputSchema": {
     "type": "object",
@@ -134,7 +130,6 @@ Standard AI-powered chat interfaces with customizable prompts and settings. This
   "name": { "en": "My Chat Assistant" },
   "description": { "en": "AI assistant for general questions" },
   "system": { "en": "You are a helpful assistant." },
-  "tokenLimit": 4000,
   "color": "#4F46E5",
   "icon": "chat"
 }
@@ -448,7 +443,6 @@ Chat apps require these additional fields:
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
 | `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
-| `tokenLimit` | Number | Max tokens (1-1,000,000) | `4000` |
 
 Optional fields include: `preferredModel`, `preferredStyle`, `preferredTemperature`, `tools`, `variables`, `settings`, etc.
 
@@ -485,7 +479,7 @@ These optional fields work for all app types:
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
 The following fields are specific to chat apps and are not used for redirect or iframe types:
-- `system`, `tokenLimit`, `preferredModel`, `preferredOutputFormat`
+- `system`, `preferredModel`, `preferredOutputFormat`
 - `preferredStyle`, `preferredTemperature`, `sendChatHistory`
 - `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
 - `settings`, `inputMode`, `upload`, `features`
@@ -515,7 +509,6 @@ Each app is defined with the following essential properties:
     "en": "System instructions in English",
     "de": "System instructions in German"
   },
-  "tokenLimit": 4096,
   "preferredModel": "gpt-3.5-turbo",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
@@ -534,7 +527,6 @@ Each app is defined with the following essential properties:
 | `color`                 | String  | **Required.** Hex color code for app theming                                                                             |
 | `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
 | `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
-| `tokenLimit`            | Number  | **Required for chat type.** Maximum token limit for context window (1-1,000,000)                                        |
 | `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
 | `order`                 | Number  | Optional. Display order in the app list                                                                                  |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |

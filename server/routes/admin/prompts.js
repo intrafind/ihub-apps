@@ -6,7 +6,7 @@ import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import {
   validateIdForPath,
@@ -554,7 +554,7 @@ export default function registerAdminPromptsRoutes(app) {
           admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
         });
       }
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'prompt',
@@ -686,7 +686,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
       await configCache.refreshPromptsCache();
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'create',
         resource: 'prompt',
@@ -798,7 +798,7 @@ export default function registerAdminPromptsRoutes(app) {
         const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
         await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
         await configCache.refreshPromptsCache();
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'toggle',
           resource: 'prompt',
@@ -953,7 +953,7 @@ export default function registerAdminPromptsRoutes(app) {
         }
 
         await configCache.refreshPromptsCache();
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'toggle',
           resource: 'prompt',
@@ -1084,7 +1084,7 @@ export default function registerAdminPromptsRoutes(app) {
             admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
           });
         }
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'delete',
           resource: 'prompt',

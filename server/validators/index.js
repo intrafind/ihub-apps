@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export {
+  auditEntrySchema,
+  validateAuditEntry,
+  auditActions,
+  auditResults,
+  auditSources
+} from './auditEntrySchema.js';
+
 export const startSessionSchema = {
   body: z.object({
     sessionId: z.string().min(1),
@@ -64,7 +72,6 @@ export const chatPostSchema = {
     style: z.string().optional(),
     outputFormat: z.string().optional(),
     language: z.string().optional(),
-    useMaxTokens: z.any().optional(),
     bypassAppPrompts: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
     thinkingBudget: z.number().optional(),

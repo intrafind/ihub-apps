@@ -18,7 +18,6 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
   "preferredTemperature": 0.7,
-  "tokenLimit": 32768,
   "upload": {
     "enabled": true,
     "imageUpload": {

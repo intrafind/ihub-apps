@@ -17,6 +17,7 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
+import { logAudit } from '../../services/AuditLogService.js';
 
 /**
  * @swagger
@@ -430,6 +431,14 @@ export default function registerAdminAuthRoutes(app) {
         authMethods: authMethods.join(', ')
       });
 
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Created user "${username}"`
+      });
+
       // Return user without password hash
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
@@ -561,6 +570,14 @@ export default function registerAdminAuthRoutes(app) {
 
       logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Updated user "${user.username}"`
+      });
+
       // Return user without password hash
       // eslint-disable-next-line no-unused-vars
       const { passwordHash, ...userResponse } = user;
@@ -660,6 +677,14 @@ export default function registerAdminAuthRoutes(app) {
       await configCache.refreshCacheEntry('config/users.json');
 
       logger.info('Deleted user', { component: 'AdminAuth', username, userId });
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Deleted user "${username}"`
+      });
 
       res.json({ message: 'User deleted successfully' });
     } catch (error) {

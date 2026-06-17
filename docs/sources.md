@@ -437,8 +437,7 @@ POST   /api/admin/sources/:id/preview # Preview content
   "system": {
     "en": "You are a support assistant. Use these sources to help users:\n\n{{sources}}\n\nAlways cite your sources and provide accurate information."
   },
-  "tools": [],
-  "tokenLimit": 8000
+  "tools": []
 }
 ```
 

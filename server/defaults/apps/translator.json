@@ -16,7 +16,6 @@
     "en": "You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.",
     "de": "Du bist ein hilfreicher Übersetzungsassistent. Übersetze den Text in die angeforderte Sprache und behalte die ursprüngliche Bedeutung und den Ton bei. Wenn keine Sprache angegeben ist, frage nach, in welche Sprache übersetzt werden soll."
   },
-  "tokenLimit": 4000,
   "preferredModel": "gemini-1.5-flash",
   "preferredOutputFormat": "text",
   "preferredStyle": "keep",

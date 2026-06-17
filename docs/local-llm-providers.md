@@ -92,7 +92,8 @@ Create model configuration file `contents/models/lm-studio.json`:
   },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": true,
   "enabled": true,
@@ -122,7 +123,8 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "name": { "en": "GPT-OSS (LM Studio)" },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true
 }
 
@@ -133,7 +135,8 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "name": { "en": "Mistral Small 3.2 (LM Studio)" },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true
 }
 ```
@@ -207,7 +210,8 @@ Create model configuration `contents/models/jan-ai.json`:
   },
   "url": "http://localhost:1337/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": false,
   "enabled": true,
@@ -336,7 +340,8 @@ Create model configuration `contents/models/vllm-local.json`:
   },
   "url": "http://localhost:8000/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": false,
   "enabled": true,
@@ -383,7 +388,8 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   "description": { "en": "Qwen3 served by vLLM with reasoning enabled" },
   "url": "http://localhost:8000/v1/chat/completions",
   "provider": "local",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 8192,
   "supportsTools": true,
   "thinking": {
     "enabled": true,
@@ -539,7 +545,8 @@ services:
   "description": { "en": "Multiple local providers for high availability" },
   "url": "http://localhost:8080/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -577,7 +584,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "lm-studio-premium-key",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -590,7 +598,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://localhost:1337/v1/chat/completions",
   "provider": "openai",
   "apiKey": "jan-enterprise-auth-token",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -603,7 +612,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://production-server:8000/v1/chat/completions", 
   "provider": "openai",
   "apiKey": "production-vllm-secure-key",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -633,7 +643,8 @@ Then reference these in your model configurations:
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "${LM_STUDIO_GPT_OSS_KEY}",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -652,7 +663,8 @@ For completely separate provider instances with different authentication:
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "dev-environment-key",
-  "tokenLimit": 4096,
+  "contextWindow": 4096,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -665,7 +677,8 @@ For completely separate provider instances with different authentication:
   "url": "http://staging-host:1337/v1/chat/completions", 
   "provider": "openai",
   "apiKey": "staging-environment-key",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -678,7 +691,8 @@ For completely separate provider instances with different authentication:
   "url": "http://prod-cluster:8000/v1/chat/completions",
   "provider": "openai", 
   "apiKey": "production-secure-token",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }

@@ -19,7 +19,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
@@ -722,7 +722,7 @@ export default function registerAdminSourcesRoutes(app) {
         // Refresh cache
         await configCache.refreshSourcesCache();
 
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'create',
           resource: 'source',
@@ -877,7 +877,7 @@ export default function registerAdminSourcesRoutes(app) {
         await saveSourcesConfig(updatedSources);
         await configCache.refreshSourcesCache();
 
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'update',
           resource: 'source',
@@ -1015,7 +1015,7 @@ export default function registerAdminSourcesRoutes(app) {
         await saveSourcesConfig(updatedSources);
         await configCache.refreshSourcesCache();
 
-        await logAdminAction({
+        await logAudit({
           req,
           action: 'delete',
           resource: 'source',

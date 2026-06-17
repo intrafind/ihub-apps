@@ -8,7 +8,7 @@ import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 
 export default function registerAdminFeaturesRoutes(app) {
   /**
@@ -110,7 +110,7 @@ export default function registerAdminFeaturesRoutes(app) {
         updates
       });
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'feature',

@@ -11,7 +11,8 @@
   },
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
-  "tokenLimit": 64000,
+  "contextWindow": 1000000,
+  "maxOutputTokens": 16000,
   "supportsTools": true,
   "enabled": false,
   "default": false

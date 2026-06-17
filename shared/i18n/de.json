@@ -126,6 +126,7 @@
   },
   "chat": {
     "messageList": "Chat-Nachrichten",
+    "contextUsage": "~{{used}} / {{total}} Kontext-Tokens",
     "inputLabel": "Nachricht eingeben",
     "clearInput": "Eingabe löschen",
     "compareMode": {
@@ -517,7 +518,7 @@
     "rateLimitExceeded": "Ratelimit überschritten für {provider} API. Bitte versuchen Sie es später erneut.",
     "serviceError": "{provider} API-Dienstfehler. Der Dienst könnte Probleme haben.",
     "serviceUnavailable": "{provider} API ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in wenigen Augenblicken erneut.",
-    "contextWindowExceeded": "Die Eingabe ist zu lang für Modell {modelId}. Bitte reduzieren Sie die Nachrichtengröße oder verwenden Sie ein Modell mit größerem Kontextfenster. Aktuelles Limit: {tokenLimit} Tokens.",
+    "contextWindowExceeded": "Die Eingabe ist zu lang für Modell {modelId}. Bitte reduzieren Sie die Nachrichtengröße oder verwenden Sie ein Modell mit größerem Kontextfenster. Aktuelles Limit: {contextWindow} Tokens.",
     "invalidRequest": "Ungültige Anfrage an {provider} API gesendet. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.",
     "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
     "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
@@ -782,7 +783,8 @@
         "modelId": "API-Modell-ID",
         "url": "API-URL",
         "apiKey": "API-Schlüssel",
-        "tokenLimit": "Token-Limit",
+        "contextWindow": "Kontextfenster",
+        "maxOutputTokens": "Maximale Ausgabe-Tokens",
         "concurrency": "Gleichzeitigkeit",
         "requestDelay": "Anfrageverzögerung (ms)",
         "supportsTools": "Unterstützt Tools",

@@ -11,7 +11,8 @@
   },
   "url": "http://localhost:8000/v1/chat/completions",
   "provider": "local",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 8192,
   "supportsTools": true,
   "thinking": {
     "enabled": true,
