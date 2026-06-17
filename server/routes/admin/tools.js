@@ -1007,7 +1007,9 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const SwaggerParser = (await import('@apidevtools/swagger-parser')).default;
-      const spec = await SwaggerParser.dereference(raw);
+      // external:false prevents dereferencing from following external $refs
+      // (remote URLs / local files), which would bypass the SSRF guard above.
+      const spec = await SwaggerParser.dereference(raw, { resolve: { external: false } });
 
       const methods = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'];
       const operations = [];

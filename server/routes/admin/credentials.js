@@ -9,7 +9,7 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
 
 /**
@@ -170,7 +170,7 @@ export default function registerAdminCredentialsRoutes(app) {
       store.credentials = { ...(store.credentials || {}), [profile.id]: profile };
       await writeStore(store);
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'create',
         resource: 'credential',
@@ -231,7 +231,7 @@ export default function registerAdminCredentialsRoutes(app) {
       store.credentials[id] = profile;
       await writeStore(store);
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'credential',
@@ -264,7 +264,7 @@ export default function registerAdminCredentialsRoutes(app) {
       delete store.credentials[id];
       await writeStore(store);
 
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'delete',
         resource: 'credential',

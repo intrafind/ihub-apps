@@ -11,7 +11,7 @@ The redirect is permanent — no action required for normal usage.
 
 All integration secrets are now stored in the central credential store (`contents/config/credentials.json`) and referenced by a credential profile, instead of being held inline in `platform.json` / `mcpServers.json`. This affects Jira, OIDC, LDAP, NTLM, cloud storage, iFinder, and MCP server auth. There is no backward-compatible inline path.
 
-**Before upgrading:** None required — migration **V057** runs automatically on startup. It moves every existing inline secret into a credential profile (reusing the existing encryption, so values are not re-encrypted) and rewrites each section to reference it. After upgrading, manage these secrets under **Admin → Credentials**; the per-integration forms now show a credential selector instead of a secret field.
+**Before upgrading:** None required — migration **V060** runs automatically on startup. It moves every existing inline secret into a credential profile (reusing the existing encryption, so values are not re-encrypted) and rewrites each section to reference it. After upgrading, manage these secrets under **Admin → Credentials**; the per-integration forms now show a credential selector instead of a secret field.
 
 ## App `tokenLimit` removed; models split into `contextWindow` + `maxOutputTokens`
 

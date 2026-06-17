@@ -124,6 +124,29 @@ export function CredentialRefSelect({ value, onChange, types, label, help, requi
 }
 
 /**
+ * The schema stores `openapi.source` as a structured object
+ * (`{ type: 'url'|'inline'|'file', url|spec|path }`), but the editor exposes it
+ * as a single textarea. These helpers convert between the two representations.
+ */
+function sourceToString(source) {
+  if (!source) return '';
+  if (typeof source === 'string') return source; // legacy / hand-edited
+  if (source.type === 'url') return source.url || '';
+  if (source.type === 'file') return source.path || '';
+  if (source.type === 'inline') {
+    return typeof source.spec === 'string' ? source.spec : JSON.stringify(source.spec, null, 2);
+  }
+  return '';
+}
+
+function stringToSource(str) {
+  const trimmed = (str || '').trim();
+  if (/^https?:\/\//i.test(trimmed)) return { type: 'url', url: trimmed };
+  // Anything else is treated as an inline spec document (JSON/YAML string).
+  return { type: 'inline', spec: str };
+}
+
+/**
  * Build a default OpenAPI tool definition skeleton.
  * @param {object} [tool] - Existing tool to seed the form from
  * @returns {object}
@@ -135,7 +158,7 @@ function toFormState(tool) {
     name: typeof tool?.name === 'string' ? tool.name : tool?.name?.en || '',
     description:
       typeof tool?.description === 'string' ? tool.description : tool?.description?.en || '',
-    source: openapi.source || '',
+    source: sourceToString(openapi.source),
     operationId: openapi.operationId || '',
     baseUrl: openapi.baseUrl || '',
     credentialRef: openapi.auth?.credentialRef || '',
@@ -183,7 +206,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
     setParseError(null);
     setParseResult(null);
     try {
-      const result = await parseOpenApiSpec(form.source);
+      const result = await parseOpenApiSpec(stringToSource(form.source));
       setParseResult(result);
       // Default baseUrl from the first server entry when none set yet.
       if (!form.baseUrl && Array.isArray(result.servers) && result.servers[0]?.url) {
@@ -212,7 +235,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
       .filter(Boolean);
 
     const openapi = {
-      source: form.source,
+      source: stringToSource(form.source),
       operationId: form.operationId,
       auth: { credentialRef: form.credentialRef || undefined }
     };

@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { join, normalize } from 'path';
+import { join, normalize, sep } from 'path';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { getRootDir } from '../../pathUtils.js';
 import { safeFetch } from '../mcp/safeFetch.js';
@@ -56,7 +56,9 @@ async function _parseSource(source, ssrfOpts) {
     const root = getRootDir();
     const contentsDir = normalize(join(root, 'contents'));
     const resolved = normalize(join(contentsDir, source.path));
-    if (!resolved.startsWith(contentsDir)) {
+    // Confine to contentsDir. The trailing-separator check prevents a sibling
+    // like `/.../contents2` from passing a naive startsWith(`/.../contents`).
+    if (resolved !== contentsDir && !resolved.startsWith(contentsDir + sep)) {
       throw new Error('OpenAPI file path escapes the contents directory');
     }
     const text = await fs.readFile(resolved, 'utf8');
@@ -71,9 +73,10 @@ async function _parseSource(source, ssrfOpts) {
  */
 async function _parseSpec(source, ssrfOpts) {
   const raw = await _parseSource(source, ssrfOpts);
-  // Dereference the in-memory object. Self-contained specs resolve internal
-  // $refs without any network access.
-  return await SwaggerParser.dereference(raw);
+  // Dereference the in-memory object. external:false disables resolution of
+  // external $refs (remote URLs / local files), so dereferencing cannot trigger
+  // unguarded outbound fetches or file reads — only internal $refs are resolved.
+  return await SwaggerParser.dereference(raw, { resolve: { external: false } });
 }
 
 /**
@@ -405,13 +408,15 @@ function postProcess(tool, data, params) {
     }
   }
 
-  // Size cap with truncation.
+  // Size cap with truncation. Truncate by BYTES (cap is a byte budget): slice
+  // the UTF-8 buffer so the result is guaranteed ≤ cap bytes even for
+  // multi-byte content.
   const serialized = JSON.stringify(data);
   if (serialized && Buffer.byteLength(serialized) > cap) {
     return {
       truncated: true,
       note: `Response truncated at ${cap} bytes`,
-      data: serialized.slice(0, cap)
+      data: Buffer.from(serialized, 'utf8').subarray(0, cap).toString('utf8')
     };
   }
   return data;
