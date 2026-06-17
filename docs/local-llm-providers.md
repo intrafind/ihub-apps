@@ -92,7 +92,8 @@ Create model configuration file `contents/models/lm-studio.json`:
   },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": true,
   "enabled": true,
@@ -122,7 +123,8 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "name": { "en": "GPT-OSS (LM Studio)" },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true
 }
 
@@ -133,7 +135,8 @@ export LM_STUDIO_ENDPOINT="http://localhost:1234"
   "name": { "en": "Mistral Small 3.2 (LM Studio)" },
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true
 }
 ```
@@ -207,7 +210,8 @@ Create model configuration `contents/models/jan-ai.json`:
   },
   "url": "http://localhost:1337/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": false,
   "enabled": true,
@@ -336,7 +340,8 @@ Create model configuration `contents/models/vllm-local.json`:
   },
   "url": "http://localhost:8000/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "supportsImages": false,
   "enabled": true,
@@ -353,6 +358,60 @@ export OPENAI_API_KEY="vllm-local"
 # Custom endpoint if needed
 export VLLM_ENDPOINT="http://localhost:8000"
 ```
+
+### Reasoning / Thinking Output
+
+Reasoning models served by vLLM (DeepSeek-R1, Qwen3, gpt-oss, etc.) can return their
+chain-of-thought in a field separate from the final answer. iHub surfaces this as a
+dedicated "thinking" stream in the chat UI, just like Gemini's extended thinking.
+
+**1. Start vLLM with a reasoning parser** so the reasoning is emitted separately:
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3-8B \
+    --host 0.0.0.0 --port 8000 \
+    --enable-auto-tool-choice \
+    --reasoning-parser qwen3        # e.g. qwen3, deepseek_r1 — match your model
+```
+
+**2. Enable thinking in the model config.** Both the dedicated vLLM provider
+(`"provider": "local"`) and the OpenAI-compatible provider (`"provider": "openai"`)
+support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_content`
+(legacy / DeepSeek) from the response either way.
+
+```json
+{
+  "id": "qwen3-vllm",
+  "modelId": "Qwen/Qwen3-8B",
+  "name": { "en": "Qwen3 (vLLM, reasoning)" },
+  "description": { "en": "Qwen3 served by vLLM with reasoning enabled" },
+  "url": "http://localhost:8000/v1/chat/completions",
+  "provider": "local",
+  "contextWindow": 32768,
+  "maxOutputTokens": 8192,
+  "supportsTools": true,
+  "thinking": {
+    "enabled": true,
+    "chatTemplateKwargs": { "enable_thinking": true }
+  },
+  "enabled": true
+}
+```
+
+- `thinking.enabled` turns reasoning support on for the model.
+- `thinking.chatTemplateKwargs` is the per-request knob vLLM passes into the chat
+  template. It is **model-specific**: Qwen3 uses `enable_thinking`, Granite uses
+  `thinking`. When omitted, iHub defaults to `{ "enable_thinking": <toggle> }`. When the
+  override is a single boolean toggle, its value is the default and the app/user thinking
+  setting still overrides it (so reasoning can be turned off even for a non-`enable_thinking`
+  key). Multi-key overrides are passed through verbatim for advanced setups.
+- For models that honor `reasoning_effort` (e.g. gpt-oss), add `"level": "low"|"medium"|
+  "high"` and iHub will also send `reasoning_effort`.
+
+> Note: the `reasoning` field only appears when vLLM was started with a matching
+> `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal
+> content and no separate thinking stream is shown.
 
 ---
 
@@ -488,7 +547,8 @@ services:
   "description": { "en": "Multiple local providers for high availability" },
   "url": "http://localhost:8080/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -526,7 +586,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "lm-studio-premium-key",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -539,7 +600,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://localhost:1337/v1/chat/completions",
   "provider": "openai",
   "apiKey": "jan-enterprise-auth-token",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -552,7 +614,8 @@ Instead of using provider-level environment variables, you can specify API keys 
   "url": "http://production-server:8000/v1/chat/completions", 
   "provider": "openai",
   "apiKey": "production-vllm-secure-key",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -582,7 +645,8 @@ Then reference these in your model configurations:
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "${LM_STUDIO_GPT_OSS_KEY}",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -601,7 +665,8 @@ For completely separate provider instances with different authentication:
   "url": "http://localhost:1234/v1/chat/completions",
   "provider": "openai",
   "apiKey": "dev-environment-key",
-  "tokenLimit": 4096,
+  "contextWindow": 4096,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -614,7 +679,8 @@ For completely separate provider instances with different authentication:
   "url": "http://staging-host:1337/v1/chat/completions", 
   "provider": "openai",
   "apiKey": "staging-environment-key",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }
@@ -627,7 +693,8 @@ For completely separate provider instances with different authentication:
   "url": "http://prod-cluster:8000/v1/chat/completions",
   "provider": "openai", 
   "apiKey": "production-secure-token",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 4096,
   "supportsTools": true,
   "enabled": true
 }

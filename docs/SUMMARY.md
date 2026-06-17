@@ -72,6 +72,7 @@
     - [OCR Feature](ocr-feature.md)
     - [React Component Feature](react-component-feature.md)
     - [Agent Factory (V1)](agents.md)
+    - [OpenAI-Compatible API](openai-compatible-api.md)
     - [Server Configuration](server-config.md)
     - [Environment Variables](environment-variables.md)
     - [Electron Desktop Application](electron-app.md)

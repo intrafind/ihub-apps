@@ -4,8 +4,6 @@ import {
   APP_ID_MAX_LENGTH,
   HEX_COLOR_PATTERN,
   LANGUAGE_CODE_PATTERN,
-  TOKEN_LIMIT_MIN,
-  TOKEN_LIMIT_MAX,
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
 
@@ -319,12 +317,6 @@ const baseAppConfigSchema = z.object({
 
   // Chat-specific fields (optional to support non-chat types)
   system: localizedStringSchema.optional(),
-  tokenLimit: z
-    .number()
-    .int()
-    .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
-    .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
-    .optional(),
 
   // Optional fields with validation
   order: z.number().int().min(0).optional(),
@@ -381,18 +373,6 @@ export const knownAppKeys = Object.keys(baseAppConfigSchema.shape);
 // Add validation refinements and export the final schema
 export const appConfigSchema = baseAppConfigSchema
   .strict() // Use strict instead of passthrough for better validation
-  .refine(
-    data => {
-      // For chat type apps, tokenLimit is required (system prompt is optional)
-      if (data.type === 'chat' || !data.type) {
-        return data.tokenLimit !== undefined;
-      }
-      return true;
-    },
-    {
-      message: 'Chat type apps require tokenLimit field'
-    }
-  )
   .refine(
     data => {
       // For redirect type apps, redirectConfig is required

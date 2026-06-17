@@ -13,6 +13,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
+import { logAudit } from '../services/AuditLogService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 
 /**
@@ -124,9 +125,36 @@ export default function registerAuthRoutes(app) {
         result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
         logger.info('[Auth] Local authentication succeeded', { component: 'Auth' });
         recordAuthEvent('local', 'login_success');
+        logAudit({
+          req,
+          action: 'login',
+          resource: 'auth',
+          resourceId: result.user?.id,
+          summary: 'Local login succeeded',
+          source: 'web',
+          actor: {
+            id: result.user?.id ?? 'unknown',
+            username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+            groups: result.user?.groups || [],
+            authenticated: true
+          }
+        });
       } catch (error) {
         logger.warn('Local authentication failed', { component: 'Auth', error });
         recordAuthEvent('local', 'login_failure');
+        logAudit({
+          req,
+          action: 'login',
+          resource: 'auth',
+          result: 'failure',
+          summary: 'Local login failed',
+          source: 'web',
+          actor: {
+            id: sanitizedUsername,
+            username: sanitizedUsername,
+            authenticated: false
+          }
+        });
         return sendErrorResponse(
           res,
           401,
@@ -241,6 +269,19 @@ export default function registerAuthRoutes(app) {
             error: error.message
           });
           recordAuthEvent('ldap', 'login_failure');
+          logAudit({
+            req,
+            action: 'login',
+            resource: 'auth',
+            result: 'failure',
+            summary: `LDAP login failed (provider: ${sanitizedProvider})`,
+            source: 'web',
+            actor: {
+              id: sanitizedUsername,
+              username: sanitizedUsername,
+              authenticated: false
+            }
+          });
           return sendErrorResponse(res, 401, 'Invalid credentials');
         }
       } else {
@@ -270,9 +311,38 @@ export default function registerAuthRoutes(app) {
         }
 
         if (!result) {
+          recordAuthEvent('ldap', 'login_failure');
+          logAudit({
+            req,
+            action: 'login',
+            resource: 'auth',
+            result: 'failure',
+            summary: 'LDAP login failed',
+            source: 'web',
+            actor: {
+              id: sanitizedUsername,
+              username: sanitizedUsername,
+              authenticated: false
+            }
+          });
           return sendErrorResponse(res, 401, 'Invalid credentials');
         }
       }
+
+      logAudit({
+        req,
+        action: 'login',
+        resource: 'auth',
+        resourceId: result.user?.id,
+        summary: 'LDAP login succeeded',
+        source: 'web',
+        actor: {
+          id: result.user?.id ?? 'unknown',
+          username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+          groups: result.user?.groups || [],
+          authenticated: true
+        }
+      });
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
@@ -411,6 +481,21 @@ export default function registerAuthRoutes(app) {
 
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
+      logAudit({
+        req,
+        action: 'login',
+        resource: 'auth',
+        resourceId: result.user?.id,
+        summary: 'NTLM login succeeded',
+        source: 'web',
+        actor: {
+          id: result.user?.id ?? 'unknown',
+          username: result.user?.username ?? result.user?.name ?? result.user?.id ?? 'unknown',
+          groups: result.user?.groups || [],
+          authenticated: true
+        }
+      });
+
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
 
@@ -456,6 +541,16 @@ export default function registerAuthRoutes(app) {
     // Clear the authentication cookie
     res.clearCookie('authToken', getClearAuthCookieOptions(req));
     recordAuthEvent(req.user?.authMode || 'unknown', 'logout');
+    if (req.user && req.user.id !== 'anonymous') {
+      logAudit({
+        req,
+        action: 'logout',
+        resource: 'auth',
+        resourceId: req.user.id,
+        summary: 'Logout',
+        source: 'web'
+      });
+    }
 
     // Clear NTLM session flag to prevent auto-relogin
     if (req.session) {

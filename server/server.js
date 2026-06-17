@@ -380,7 +380,7 @@ if (cluster.isPrimary && workerCount > 1) {
   try {
     const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
     const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-    startAuditCleanupScheduler(platform?.auditLog || {});
+    startAuditCleanupScheduler(platform?.audit || {});
   } catch (error) {
     logger.warn('Failed to start audit log cleanup scheduler', { component: 'Server', error });
   }
@@ -645,6 +645,13 @@ if (cluster.isPrimary && workerCount > 1) {
       resetTriggerManager();
     } catch {
       // Triggers may not have been initialized
+    }
+    // Flush any buffered audit entries so we don't lose them on shutdown.
+    try {
+      const { flushAuditLog } = await import('./services/AuditLogService.js');
+      await flushAuditLog();
+    } catch {
+      // Audit flush failures are logged within the service
     }
     await shutdownTelemetry();
     process.exit(0);

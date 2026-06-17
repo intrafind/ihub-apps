@@ -10,7 +10,8 @@
     "de": "Anthropic Claude Sonnet 4.6 über AWS Bedrock mit regionsübergreifender Inferenz (global). PDF-Größenlimit aufgehoben."
   },
   "provider": "bedrock",
-  "tokenLimit": 200000,
+  "contextWindow": 200000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": true,
   "enabled": false,

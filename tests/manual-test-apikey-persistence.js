@@ -42,7 +42,7 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
     name: { en: 'Test Model' },
     description: { en: 'Original description' },
     provider: 'openai',
-    tokenLimit: 8192,
+    contextWindow: 8192,
     enabled: true,
     apiKey: encryptedKey
   };
@@ -55,7 +55,7 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
   const updatedModel = {
     ...initialModel,
     description: { en: 'Updated description' },
-    tokenLimit: 16384,
+    contextWindow: 16384,
     apiKey: '••••••••' // Masked placeholder from UI
   };
 
@@ -82,7 +82,9 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
   if (finalModel.apiKey === encryptedKey && finalModel.description.en === 'Updated description') {
     console.log('   ✅ API key correctly preserved!');
     console.log('   ✅ Other fields were updated correctly');
-    console.log(`   ✅ Token limit: ${initialModel.tokenLimit} → ${finalModel.tokenLimit}`);
+    console.log(
+      `   ✅ Context window: ${initialModel.contextWindow} → ${finalModel.contextWindow}`
+    );
     return true;
   } else {
     console.log('   ❌ Test failed!');
@@ -105,7 +107,7 @@ async function test2_RemovePlaceholderWhenNoKey() {
     name: { en: 'Test Model' },
     description: { en: 'No API key' },
     provider: 'openai',
-    tokenLimit: 8192,
+    contextWindow: 8192,
     enabled: true
   };
 
@@ -159,7 +161,7 @@ async function test3_MultipleUpdates() {
     name: { en: 'Test Model' },
     description: { en: 'Initial' },
     provider: 'openai',
-    tokenLimit: 4096,
+    contextWindow: 4096,
     enabled: true,
     apiKey: encryptedKey
   };
@@ -172,7 +174,7 @@ async function test3_MultipleUpdates() {
     const updateData = {
       ...initialModel,
       description: { en: `Update ${i}` },
-      tokenLimit: 4096 * (i + 1),
+      contextWindow: 4096 * (i + 1),
       apiKey: '••••••••'
     };
 

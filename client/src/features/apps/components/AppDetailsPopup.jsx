@@ -101,14 +101,6 @@ function AppDetailsPopup({ app, isOpen, onClose }) {
               </div>
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {t('admin.apps.details.tokenLimit', 'Token Limit')}
-                </div>
-                <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                  {app.tokenLimit || t('common.default', 'Default')}
-                </div>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   {t('admin.apps.details.temperature', 'Temperature')}
                 </div>
                 <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">

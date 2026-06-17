@@ -8,7 +8,7 @@ import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
-import { logAdminAction } from '../../services/AuditLogService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
@@ -397,7 +397,7 @@ export default function registerAdminConfigRoutes(app) {
         after: mergedConfig,
         admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
       });
-      await logAdminAction({
+      await logAudit({
         req,
         action: 'update',
         resource: 'platform',

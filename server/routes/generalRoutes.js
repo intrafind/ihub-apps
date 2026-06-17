@@ -50,10 +50,6 @@ import {
  *         system:
  *           type: object
  *           description: Localized system prompts
- *         tokenLimit:
- *           type: number
- *           description: Maximum tokens per request
- *           example: 4000
  *         preferredModel:
  *           type: string
  *           description: Default model selection
@@ -123,7 +119,6 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *                     category: "productivity"
    *                     enabled: true
    *                     order: 1
-   *                     tokenLimit: 4000
    *                     preferredModel: "gpt-4"
    *                   - id: "code-reviewer"
    *                     name: { "en": "Code Reviewer" }
@@ -250,7 +245,6 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *               system:
    *                 en: "You are a helpful AI assistant..."
    *                 de: "Du bist ein hilfreicher KI-Assistent..."
-   *               tokenLimit: 4000
    *               preferredModel: "gpt-4"
    *               variables:
    *                 - name: "context"

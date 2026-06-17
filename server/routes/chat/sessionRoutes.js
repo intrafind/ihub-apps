@@ -97,9 +97,6 @@ export default function registerSessionRoutes(
    *           type: string
    *           description: BCP 47 language code for the response
    *           example: "en"
-   *         useMaxTokens:
-   *           type: boolean
-   *           description: Whether to use the model's maximum token limit
    *         bypassAppPrompts:
    *           type: boolean
    *           description: Skip the app system prompt (advanced usage)
@@ -487,9 +484,6 @@ export default function registerSessionRoutes(
 
     // Log the request
     const requestLog = buildLogData(streaming);
-    if (!streaming) {
-      requestLog.options.useMaxTokens = requestLog.options.useMaxTokens || false;
-    }
     await logInteraction('chat_request', requestLog);
 
     // Handle requests with tools
@@ -648,7 +642,6 @@ export default function registerSessionRoutes(
           style,
           outputFormat,
           language,
-          useMaxTokens,
           bypassAppPrompts,
           thinkingEnabled,
           thinkingBudget,
@@ -813,7 +806,6 @@ export default function registerSessionRoutes(
             style,
             outputFormat,
             language: clientLanguage,
-            useMaxTokens,
             bypassAppPrompts,
             thinkingEnabled,
             thinkingBudget,
@@ -880,7 +872,6 @@ export default function registerSessionRoutes(
             style,
             outputFormat,
             language: clientLanguage,
-            useMaxTokens,
             bypassAppPrompts,
             thinkingEnabled,
             thinkingBudget,

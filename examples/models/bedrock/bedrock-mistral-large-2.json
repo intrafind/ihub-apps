@@ -10,7 +10,8 @@
     "de": "Mistral Large 2 über AWS Bedrock — starkes Reasoning und Tool-Aufrufe, nur Text."
   },
   "provider": "bedrock",
-  "tokenLimit": 128000,
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
   "supportsTools": true,
   "supportsVision": false,
   "enabled": false,

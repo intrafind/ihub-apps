@@ -19,6 +19,8 @@ import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
 import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
+import { auditLogger } from './auditLogger.js';
+import { randomUUID } from 'crypto';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -409,7 +411,8 @@ export function setupMiddleware(app, platformConfig = {}) {
       {
         ip: req.ip,
         userId: undefined,
-        oauthClientId: undefined
+        oauthClientId: undefined,
+        requestId: randomUUID()
       },
       () => next()
     );
@@ -652,4 +655,9 @@ export function setupMiddleware(app, platformConfig = {}) {
     }
     next();
   });
+
+  // Global audit safety net. Registered after authentication so req.user is
+  // available; records mutating HTTP requests not covered by an explicit
+  // logAudit() call (which sets req._auditLogged to suppress duplicates).
+  app.use(auditLogger());
 }

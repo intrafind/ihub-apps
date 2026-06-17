@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  CONTEXT_WINDOW_MIN,
+  CONTEXT_WINDOW_MAX,
+  MAX_OUTPUT_TOKENS_MIN,
+  MAX_OUTPUT_TOKENS_MAX
+} from '../../shared/validationPatterns.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -29,7 +35,12 @@ const thinkingSchema = z
       .optional(),
     // Gemini 2.5 (legacy)
     budget: z.number().int().optional(),
-    thoughts: z.boolean().optional()
+    thoughts: z.boolean().optional(),
+    // vLLM (provider: "local", or "openai" pointed at a vLLM server): per-request
+    // chat-template knobs that toggle reasoning. Model-specific keys, e.g.
+    // { "enable_thinking": false } (Qwen3) or { "thinking": true } (Granite).
+    // When omitted, the vLLM adapter defaults to { enable_thinking: <toggle> }.
+    chatTemplateKwargs: z.record(z.any()).optional()
   })
   .strict();
 
@@ -93,11 +104,27 @@ export const modelConfigSchema = z
         })
       }
     ),
-    tokenLimit: z
+    // Total input+output tokens the model supports. Used for fitting documents
+    // and showing remaining capacity to the user — NOT sent to the provider.
+    contextWindow: z
       .number()
       .int()
-      .min(1, 'Token limit must be at least 1')
-      .max(1000000, 'Token limit cannot exceed 1,000,000')
+      .min(CONTEXT_WINDOW_MIN, `Context window must be at least ${CONTEXT_WINDOW_MIN}`)
+      .max(
+        CONTEXT_WINDOW_MAX,
+        `Context window cannot exceed ${CONTEXT_WINDOW_MAX.toLocaleString()}`
+      )
+      .nullable()
+      .optional(),
+    // Provider response cap, sent as max_tokens / maxOutputTokens.
+    maxOutputTokens: z
+      .number()
+      .int()
+      .min(MAX_OUTPUT_TOKENS_MIN, `Max output tokens must be at least ${MAX_OUTPUT_TOKENS_MIN}`)
+      .max(
+        MAX_OUTPUT_TOKENS_MAX,
+        `Max output tokens cannot exceed ${MAX_OUTPUT_TOKENS_MAX.toLocaleString()}`
+      )
       .nullable()
       .optional(),
 

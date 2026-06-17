@@ -19,7 +19,6 @@
     "en": "Ask a question about our FAQ...",
     "de": "Stelle eine Frage zu unseren häufig gestellten Fragen..."
   },
-  "tokenLimit": 8000,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.3,

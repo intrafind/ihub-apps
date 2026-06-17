@@ -14,7 +14,8 @@ Each model is defined with the following properties:
   "description": { "en": "Fast and efficient model for most everyday tasks and conversations" },
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 4096
+  "contextWindow": 16385,
+  "maxOutputTokens": 4096
 }
 ```
 
@@ -28,7 +29,8 @@ Each model is defined with the following properties:
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`      |
-| `tokenLimit`                   | Number  | -        | Maximum token capacity of the model's context window (nullable)                                |
+| `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
+| `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 4096 at runtime if unset |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
 | `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
 | `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
@@ -209,8 +211,29 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
 | `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget |
 | `thinking.thoughts`| Boolean | When `true`, the model's internal thinking steps are returned and shown in the response                                     |
+| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Used by OpenAI/vLLM `reasoning_effort` and Gemini 3 `thinkingLevel` |
+| `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
 App-level `thinking` settings override these model defaults for a specific app.
+
+#### Provider-specific behavior
+
+Each adapter keeps its own provider-specific request/response handling, but they all
+surface reasoning the same way in the UI (a separate "thinking" stream):
+
+- **Google (Gemini):** `thinkingConfig` (Gemini 3 `thinkingLevel`, or Gemini 2.5
+  `thinkingBudget`/`includeThoughts`). Reasoning returned in dedicated `thought` parts.
+- **OpenAI (`openai`) and OpenAI Responses (`openai-responses`):** map thinking to
+  `reasoning_effort` (`minimal`/`low`/`medium`/`high`). True OpenAI reasoning models hide
+  their reasoning text, but OpenAI-compatible endpoints (vLLM, DeepSeek, OpenRouter) reached
+  via the `openai` provider return it in a `reasoning`/`reasoning_content` field, which iHub
+  surfaces as thinking. The `openai` adapter is conservative — it adds `reasoning_effort`
+  only and leaves `max_tokens`/`temperature` untouched so non-reasoning compatible endpoints
+  keep working.
+- **vLLM (`local`):** sends `chat_template_kwargs` to enable/disable reasoning and reads
+  reasoning text from the response's `reasoning` (current) or `reasoning_content` (legacy)
+  field. Requires the vLLM server to be started with a matching `--reasoning-parser`.
+  See [Local LLM Providers](local-llm-providers.md#reasoning-thinking-output).
 
 ### Model Selection in Apps
 
@@ -234,7 +257,8 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
       "description": "Google's versatile model optimized for text and code tasks",
       "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
       "provider": "google",
-      "tokenLimit": 32768,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 8192,
       "default": true,
       "supportsTools": true
     }
@@ -276,7 +300,8 @@ To add a new model:
   },
   "url": "https://api.openai.com/v1/responses",
   "provider": "openai-responses",
-  "tokenLimit": 128000,
+  "contextWindow": 400000,
+  "maxOutputTokens": 32000,
   "supportsTools": true,
   "enabled": true,
   "default": false

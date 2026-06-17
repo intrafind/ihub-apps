@@ -495,7 +495,6 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
     "en": "You are a helpful assistant that...",
     "de": "Du bist ein hilfreicher Assistent, der..."
   },
-  "tokenLimit": 4000,
   "color": "blue",
   "icon": "lightbulb"
 }

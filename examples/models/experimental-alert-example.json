@@ -11,7 +11,8 @@
   },
   "url": "https://api.example.com/v1/chat/completions",
   "provider": "local",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": false,
   "enabled": false,
   "hint": {

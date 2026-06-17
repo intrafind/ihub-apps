@@ -1,12 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
-import LoginForm from './LoginForm';
 import Icon from '../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
 
@@ -23,31 +20,9 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
   const dropdownRef = useRef(null);
   const menuRef = useRef(null);
-  const loginDialogRef = useRef(null);
-
-  useFocusTrap(loginDialogRef, {
-    isActive: showLoginModal
-  });
-
-  /** Closes the login modal when the Escape key is pressed */
-  const handleLoginModalKeyDown = useCallback(
-    event => {
-      if (event.key === 'Escape') {
-        setShowLoginModal(false);
-      }
-    },
-    [setShowLoginModal]
-  );
-
-  useEffect(() => {
-    if (!showLoginModal) return;
-    window.addEventListener('keydown', handleLoginModalKeyDown);
-    return () => window.removeEventListener('keydown', handleLoginModalKeyDown);
-  }, [showLoginModal, handleLoginModalKeyDown]);
 
   /** Handles selecting a menu item via keyboard (Enter/Space) */
   const handleMenuSelect = useCallback(index => {
@@ -120,23 +95,19 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
     return null;
   }
 
-  // If anonymous access is not allowed and user is not authenticated,
-  // delegate to the auth gate (which handles all login flows).
-  if (!allowAnonymous && !isAuthenticated) {
-    if (window.__authGate && !window.__authGate.isVisible()) {
-      window.__authGate.show();
-    }
-    return null;
-  }
-
   const handleLoginClick = () => {
     setShowDropdown(false);
     setShowAllGroups(false);
-    // Delegate to auth gate when available (supports all auth methods)
+    // The auth gate is the single login dialog for the whole app (it handles
+    // every auth method). Open it as a dismissible overlay when anonymous
+    // access is allowed; otherwise open the non-dismissible full-page gate so
+    // closing it can't reveal an app the user isn't permitted to use.
     if (window.__authGate) {
-      window.__authGate.show({ overlay: true });
+      window.__authGate.show({ overlay: allowAnonymous });
     } else {
-      setShowLoginModal(true);
+      // The gate is inlined on every index.html entry, so this should not
+      // happen where UserAuthMenu renders. Warn instead of failing silently.
+      console.warn('Auth gate is unavailable; cannot open the login dialog.');
     }
   };
 
@@ -363,36 +334,6 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
           )}
         </div>
       )}
-
-      {/* Login modal */}
-      {showLoginModal &&
-        createPortal(
-          <div
-            ref={loginDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="login-dialog-title"
-            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
-            style={{ zIndex: 2147483647 }}
-          >
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 id="login-dialog-title" className="text-lg font-medium text-gray-900">
-                  {t('auth.menu.signIn', 'Sign In')}
-                </h3>
-                <button
-                  onClick={() => setShowLoginModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label={t('auth.menu.closeLogin', 'Close login dialog')}
-                >
-                  <Icon name="x" size="md" />
-                </button>
-              </div>
-              <LoginForm onSuccess={() => setShowLoginModal(false)} />
-            </div>
-          </div>,
-          document.body
-        )}
     </div>
   );
 }

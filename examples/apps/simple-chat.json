@@ -15,7 +15,6 @@
     "en": "You are a helpful AI assistant.",
     "de": "Du bist ein hilfreicher KI-Assistent."
   },
-  "tokenLimit": 4096,
   "preferredModel": "gpt-3.5-turbo",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
