@@ -402,8 +402,10 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
 - `thinking.enabled` turns reasoning support on for the model.
 - `thinking.chatTemplateKwargs` is the per-request knob vLLM passes into the chat
   template. It is **model-specific**: Qwen3 uses `enable_thinking`, Granite uses
-  `thinking`. When omitted, iHub defaults to `{ "enable_thinking": <toggle> }`, where the
-  toggle follows the app/user thinking setting.
+  `thinking`. When omitted, iHub defaults to `{ "enable_thinking": <toggle> }`. When the
+  override is a single boolean toggle, its value is the default and the app/user thinking
+  setting still overrides it (so reasoning can be turned off even for a non-`enable_thinking`
+  key). Multi-key overrides are passed through verbatim for advanced setups.
 - For models that honor `reasoning_effort` (e.g. gpt-oss), add `"level": "low"|"medium"|
   "high"` and iHub will also send `reasoning_effort`.
 

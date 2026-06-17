@@ -106,10 +106,22 @@ class VLLMAdapterClass extends BaseAdapter {
     // (e.g. gpt-oss) also honor `reasoning_effort`.
     if (model.thinking?.enabled) {
       const thinkingEnabled = options.thinkingEnabled ?? true;
-      const chatTemplateKwargs =
-        model.thinking.chatTemplateKwargs !== undefined
-          ? { ...model.thinking.chatTemplateKwargs }
-          : { enable_thinking: thinkingEnabled };
+      let chatTemplateKwargs;
+      if (model.thinking.chatTemplateKwargs !== undefined) {
+        chatTemplateKwargs = { ...model.thinking.chatTemplateKwargs };
+        // When the override is a single boolean toggle (e.g. Qwen3
+        // `{ enable_thinking: true }` or Granite `{ thinking: true }`), apply the
+        // per-request thinking toggle so app/user settings can still turn
+        // reasoning off — the configured value acts as the default. Multi-key or
+        // non-boolean overrides are treated as explicit operator config and passed
+        // through unchanged.
+        const keys = Object.keys(chatTemplateKwargs);
+        if (keys.length === 1 && typeof chatTemplateKwargs[keys[0]] === 'boolean') {
+          chatTemplateKwargs[keys[0]] = thinkingEnabled;
+        }
+      } else {
+        chatTemplateKwargs = { enable_thinking: thinkingEnabled };
+      }
       if (Object.keys(chatTemplateKwargs).length > 0) {
         body.chat_template_kwargs = chatTemplateKwargs;
       }
