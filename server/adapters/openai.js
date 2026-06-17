@@ -136,6 +136,17 @@ class OpenAIAdapterClass extends BaseAdapter {
       body.stream_options = { include_usage: true };
     }
 
+    // Reasoning/thinking support. Gated on model.thinking.enabled so plain chat
+    // models are unaffected. OpenAI reasoning models — and OpenAI-compatible
+    // endpoints reached via this adapter (vLLM/DeepSeek/OpenRouter) — accept the
+    // `reasoning_effort` parameter on /chat/completions. We deliberately keep
+    // this conservative: max_tokens and temperature are left untouched so the
+    // many OpenAI-compatible endpoints that don't impose reasoning-model
+    // constraints keep working.
+    if (model.thinking?.enabled && (options.thinkingEnabled ?? true)) {
+      body.reasoning_effort = this.resolveReasoningEffort(options, model);
+    }
+
     if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
     if (responseSchema) {
@@ -193,6 +204,7 @@ class OpenAIAdapterClass extends BaseAdapter {
     const result = {
       content: [],
       tool_calls: [],
+      thinking: [],
       complete: false,
       error: false,
       errorMessage: null,
@@ -220,8 +232,15 @@ class OpenAIAdapterClass extends BaseAdapter {
 
       // Handle full response object (non-streaming)
       if (parsed.choices && parsed.choices[0]?.message) {
-        if (parsed.choices[0].message.content) {
-          result.content.push(parsed.choices[0].message.content);
+        const message = parsed.choices[0].message;
+        if (message.content) {
+          result.content.push(message.content);
+        }
+        // Reasoning text (OpenAI-compatible endpoints: `reasoning_content` on
+        // DeepSeek/legacy vLLM, `reasoning` on current vLLM)
+        const reasoning = message.reasoning_content ?? message.reasoning;
+        if (reasoning) {
+          result.thinking.push(reasoning);
         }
         if (parsed.choices[0].message.tool_calls) {
           result.tool_calls.push(...parsed.choices[0].message.tool_calls);
@@ -236,6 +255,10 @@ class OpenAIAdapterClass extends BaseAdapter {
         const delta = parsed.choices[0].delta;
         if (delta.content) {
           result.content.push(delta.content);
+        }
+        const reasoning = delta.reasoning_content ?? delta.reasoning;
+        if (reasoning) {
+          result.thinking.push(reasoning);
         }
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {

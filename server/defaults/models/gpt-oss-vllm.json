@@ -14,6 +14,10 @@
   "contextWindow": 32000,
   "maxOutputTokens": 8000,
   "supportsTools": true,
+  "thinking": {
+    "enabled": true,
+    "level": "medium"
+  },
   "enabled": true,
   "default": false
 }

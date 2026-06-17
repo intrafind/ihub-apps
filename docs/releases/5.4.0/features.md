@@ -420,6 +420,24 @@ The SSRF guard that protects workflow HTTP-request nodes from reaching internal 
 
 No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
 
+## Thinking / Reasoning for OpenAI and vLLM Models
+
+Reasoning models served via the OpenAI and vLLM providers now show their thinking in the
+same dedicated "thinking" stream already used for Gemini — separate from the final answer.
+This covers true OpenAI reasoning models, OpenAI-compatible endpoints (DeepSeek, OpenRouter,
+gpt-oss), and vLLM-served models like Qwen3 and DeepSeek-R1.
+
+- Add `"thinking": { "enabled": true }` to a model config to turn it on. Optionally set
+  `"level": "minimal" | "low" | "medium" | "high"` to control reasoning effort.
+- For vLLM, start the server with a matching `--reasoning-parser` and (if needed) set
+  `thinking.chatTemplateKwargs` to the model's toggle, e.g. `{ "enable_thinking": false }`
+  for Qwen3 or `{ "thinking": true }` for Granite.
+- App-level and per-user thinking toggles continue to override the model defaults, the same
+  way they do for Gemini.
+
+The OpenAI adapter stays conservative: it adds `reasoning_effort` only and does not change
+`max_tokens` or `temperature`, so existing OpenAI-compatible endpoints are unaffected.
+
 ## Admin-Configurable Favicon (Branding)
 
 The browser tab icon (favicon) can now be set from the admin panel instead of patching `index.html`. This completes the corporate-design / white-labeling branding set alongside the existing logo, theme colors, custom CSS, and live theme preview.

@@ -35,7 +35,12 @@ const thinkingSchema = z
       .optional(),
     // Gemini 2.5 (legacy)
     budget: z.number().int().optional(),
-    thoughts: z.boolean().optional()
+    thoughts: z.boolean().optional(),
+    // vLLM (provider: "local", or "openai" pointed at a vLLM server): per-request
+    // chat-template knobs that toggle reasoning. Model-specific keys, e.g.
+    // { "enable_thinking": false } (Qwen3) or { "thinking": true } (Granite).
+    // When omitted, the vLLM adapter defaults to { enable_thinking: <toggle> }.
+    chatTemplateKwargs: z.record(z.any()).optional()
   })
   .strict();
 
