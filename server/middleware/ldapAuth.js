@@ -1,5 +1,6 @@
 import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
+import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
@@ -100,10 +101,11 @@ async function authenticateLdapUser(username, password, ldapConfig) {
         ...(ldapConfig.timeout && { timeout: ldapConfig.timeout }),
         ...(ldapConfig.reconnect && { reconnect: ldapConfig.reconnect })
       },
-      // Admin credentials for user search (if required)
+      // Admin credentials for user search (if required). The admin password is
+      // resolved from the central credential store via adminPasswordRef.
       ...(ldapConfig.adminDn && {
         adminDn: ldapConfig.adminDn,
-        adminPassword: ldapConfig.adminPassword
+        adminPassword: credentialService.resolveSecret(ldapConfig.adminPasswordRef)
       }),
       // User search configuration
       userDn: ldapConfig.userDn || 'uid={{username}},ou=people,dc=example,dc=org',
@@ -386,15 +388,18 @@ export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
     throw new Error('Username is required for LDAP group lookup');
   }
 
-  if (!ldapProviderConfig.adminDn || !ldapProviderConfig.adminPassword) {
+  if (!ldapProviderConfig.adminDn || !ldapProviderConfig.adminPasswordRef) {
     throw new Error(
-      'LDAP provider must have adminDn and adminPassword configured for group lookup'
+      'LDAP provider must have adminDn and adminPasswordRef configured for group lookup'
     );
   }
 
   if (!ldapProviderConfig.url || !ldapProviderConfig.userSearchBase) {
     throw new Error('LDAP provider must have url and userSearchBase configured');
   }
+
+  // Resolve the admin bind password from the central credential store
+  const adminPassword = credentialService.resolveSecret(ldapProviderConfig.adminPasswordRef);
 
   // Escape username for safe use in LDAP search filters (RFC 4515)
   const safeUsername = escapeLdapFilterValue(username);
@@ -407,7 +412,7 @@ export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
       ...(ldapProviderConfig.reconnect && { reconnect: ldapProviderConfig.reconnect })
     },
     adminDn: ldapProviderConfig.adminDn,
-    adminPassword: ldapProviderConfig.adminPassword,
+    adminPassword,
     userSearchBase: ldapProviderConfig.userSearchBase,
     usernameAttribute: ldapProviderConfig.usernameAttribute || 'uid',
     username: safeUsername,

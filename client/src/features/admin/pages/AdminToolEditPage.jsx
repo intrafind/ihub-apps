@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ToolFormEditor from '../components/ToolFormEditor';
+import OpenApiToolEditor from '../components/OpenApiToolEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -99,6 +100,11 @@ function AdminToolEditPage() {
       setToolData(loadedToolData);
       setInitialData(loadedToolData);
 
+      // OpenAPI tools use the dedicated editor pane by default.
+      if (loadedToolData.type === 'openapi') {
+        setActiveTab('openapi');
+      }
+
       // Load script if available
       if (tool.script) {
         try {
@@ -184,6 +190,42 @@ function AdminToolEditPage() {
 
   const handleToolDataChange = newData => {
     setToolData(newData);
+  };
+
+  // Whether the current tool is an OpenAPI-backed tool. OpenAPI tools use a
+  // dedicated editor pane (spec parsing, operation picker, credentialRef auth)
+  // instead of the generic script/function form.
+  const isOpenApiTool = toolData.type === 'openapi';
+
+  // Persist an OpenAPI tool definition built by OpenApiToolEditor. The editor
+  // owns the full tool shape, so we save it directly via the tools API.
+  const handleSaveOpenApiTool = async toolDef => {
+    try {
+      setSaving(true);
+      setError(null);
+      if (!toolDef.id) {
+        throw new Error('Please provide a tool ID');
+      }
+      if (isNewTool) {
+        await createTool(toolDef);
+      } else {
+        await updateTool(toolId, toolDef);
+      }
+      clearApiCache('admin_tools');
+      markSaved();
+      navigate('/admin/tools');
+    } catch (err) {
+      console.error('Error saving OpenAPI tool:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save OpenAPI tool');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Switch a brand-new tool into OpenAPI mode (sets type + activates the pane).
+  const startOpenApiTool = () => {
+    setToolData(prev => ({ ...prev, type: 'openapi' }));
+    setActiveTab('openapi');
   };
 
   if (loading) {
@@ -279,11 +321,56 @@ function AdminToolEditPage() {
                 {t('admin.tools.scriptTab', 'Script Editor')}
               </button>
             )}
+            {isOpenApiTool && (
+              <button
+                onClick={() => setActiveTab('openapi')}
+                className={`${
+                  activeTab === 'openapi'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                <Icon name="globe" className="h-4 w-4 inline mr-2" />
+                {t('admin.tools.openApiTab', 'OpenAPI')}
+              </button>
+            )}
           </nav>
         </div>
 
+        {/* Offer creating an OpenAPI-type tool from the config tab. */}
+        {activeTab === 'config' && isNewTool && !isOpenApiTool && (
+          <div className="mb-6 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                {t('admin.tools.openApiPromptTitle', 'Building an OpenAPI-backed tool?')}
+              </p>
+              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-0.5">
+                {t(
+                  'admin.tools.openApiPromptBody',
+                  'Parse an OpenAPI spec, pick an operation, and reference a stored credential — no script required.'
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startOpenApiTool}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+            >
+              <Icon name="globe" className="h-4 w-4 mr-2" />
+              {t('admin.tools.useOpenApi', 'Use OpenAPI editor')}
+            </button>
+          </div>
+        )}
+
+        {/* OpenAPI Tab */}
+        {activeTab === 'openapi' && isOpenApiTool && (
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <OpenApiToolEditor tool={toolData} onSave={handleSaveOpenApiTool} saving={saving} />
+          </div>
+        )}
+
         {/* Configuration Tab */}
-        {activeTab === 'config' && (
+        {activeTab === 'config' && !isOpenApiTool && (
           <DualModeEditor
             value={toolData}
             onChange={handleToolDataChange}
@@ -311,7 +398,7 @@ function AdminToolEditPage() {
         )}
 
         {/* Save button for configuration */}
-        {activeTab === 'config' && (
+        {activeTab === 'config' && !isOpenApiTool && (
           <div className="mt-6 flex justify-end space-x-3">
             <button
               onClick={() => navigate('/admin/tools')}

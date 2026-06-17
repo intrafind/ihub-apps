@@ -19,22 +19,23 @@ const authSchema = z
     z.object({ type: z.literal('none') }),
     z.object({
       type: z.literal('bearer'),
-      // Plaintext value (`secret`), env-var placeholder (`${VAR}`), or
-      // ENC[...] ciphertext. mcpServers.json secrets are NOT decrypted by
-      // configCache; McpServerConnection._decryptAuth() decrypts them at
-      // connect time, so persisted values may be ENC[...] on disk.
-      token: z.string().min(1)
+      // credentialRef (profile id) pointing at the secret in the central
+      // credential store. The actual token is resolved at connect time via
+      // CredentialService; no secret material lives in mcpServers.json.
+      tokenRef: z.string().min(1)
     }),
     z.object({
       type: z.literal('basic'),
       username: z.string().min(1),
-      password: z.string().min(1)
+      // credentialRef to the password secret in the central credential store.
+      passwordRef: z.string().min(1)
     }),
     z.object({
       type: z.literal('oauth'),
       tokenUrl: z.string().url(),
       clientId: z.string().min(1),
-      clientSecret: z.string().min(1),
+      // credentialRef to the client secret in the central credential store.
+      clientSecretRef: z.string().min(1),
       scope: z.string().optional()
     })
   ])

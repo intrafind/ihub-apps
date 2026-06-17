@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
+import credentialService from '../services/CredentialService.js';
 import logger from './logger.js';
 
 /**
@@ -84,17 +85,14 @@ function getIFinderPrivateKey(iFinderConfig) {
   // Try environment variable first
   if (config.IFINDER_PRIVATE_KEY) {
     privateKey = config.IFINDER_PRIVATE_KEY;
-  } else {
-    // Try platform configuration
-    const platform = configCache.getPlatform() || {};
-    if (platform.iFinder?.privateKey) {
-      privateKey = platform.iFinder.privateKey;
-    }
+  } else if (iFinderConfig.privateKeyRef) {
+    // Resolve the private key from the central credential store
+    privateKey = credentialService.tryResolveSecret(iFinderConfig.privateKeyRef);
   }
 
   if (!privateKey) {
     throw new Error(
-      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure in platform.json'
+      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure the iFinder private key credential in platform.json (iFinder.privateKeyRef)'
     );
   }
 

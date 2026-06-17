@@ -2,6 +2,7 @@ import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import { httpFetch } from '../utils/httpConfig.js';
 import configCache from '../configCache.js';
+import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
@@ -42,7 +43,7 @@ export function configureOidcProviders() {
     if (
       !provider.name ||
       !provider.clientId ||
-      !provider.clientSecret ||
+      !provider.clientSecretRef ||
       !provider.authorizationURL ||
       !provider.tokenURL ||
       !provider.userInfoURL
@@ -54,6 +55,9 @@ export function configureOidcProviders() {
       continue;
     }
 
+    // Resolve the client secret from the central credential store
+    const clientSecret = credentialService.resolveSecret(provider.clientSecretRef);
+
     try {
       // Create OAuth2 strategy for this provider
       const strategy = new OAuth2Strategy(
@@ -61,7 +65,7 @@ export function configureOidcProviders() {
           authorizationURL: provider.authorizationURL,
           tokenURL: provider.tokenURL,
           clientID: provider.clientId,
-          clientSecret: provider.clientSecret,
+          clientSecret,
           callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
           scope: provider.scope || ['openid', 'profile', 'email'],
           state: true,

@@ -144,6 +144,9 @@ const AdminMcpServersPage = lazyWithRetry(
 const AdminMcpGatewayPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMcpGatewayPage')
 );
+const AdminCredentialsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminCredentialsPage')
+);
 const IntegrationsPage = lazyWithRetry(() => import('./features/settings/pages/IntegrationsPage'));
 const OcrPage = lazyWithRetry(() => import('./features/tools/pages/OcrPage'));
 const JobListPage = lazyWithRetry(() => import('./features/tools/pages/JobListPage'));
@@ -573,6 +576,10 @@ function App() {
             <Route
               path="mcp/gateway"
               element={<LazyAdminRoute component={AdminMcpGatewayPage} />}
+            />
+            <Route
+              path="credentials"
+              element={<LazyAdminRoute component={AdminCredentialsPage} />}
             />
 
             {/* Integrations */}

@@ -462,6 +462,96 @@ export const updateToolScript = async (toolId, content) => {
   return response.data;
 };
 
+// Credential store API functions
+
+/**
+ * Fetches all credential profiles from the central credential store.
+ * Secret fields are redacted to '***REDACTED***' by the server.
+ *
+ * @returns {Promise<Array>} Array of credential profile objects (with id)
+ */
+export const listCredentials = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/credentials');
+    const data = response.data;
+    const credentials = data?.credentials ?? data;
+    return Array.isArray(credentials) ? credentials : [];
+  } catch (error) {
+    console.error('Error in listCredentials:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches a single credential profile by id (secrets redacted).
+ *
+ * @param {string} id - The credential profile id
+ * @returns {Promise<Object>} The credential profile object
+ */
+export const getCredential = async id => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`);
+  return response.data;
+};
+
+/**
+ * Creates a new credential profile.
+ *
+ * @param {Object} data - Credential profile data (id, type, and type-specific fields)
+ * @returns {Promise<Object>} The created credential profile (secrets redacted)
+ */
+export const createCredential = async data => {
+  const response = await makeAdminApiCall('/admin/credentials', {
+    method: 'POST',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Updates an existing credential profile. Secret fields left as '***REDACTED***'
+ * preserve the stored value on the server.
+ *
+ * @param {string} id - The credential profile id
+ * @param {Object} data - Updated credential profile data
+ * @returns {Promise<Object>} The updated credential profile (secrets redacted)
+ */
+export const updateCredential = async (id, data) => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Deletes a credential profile by id.
+ *
+ * @param {string} id - The credential profile id
+ * @returns {Promise<void>}
+ */
+export const deleteCredential = async id => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+/**
+ * Parses an OpenAPI specification from a URL, inline text, or uploaded content.
+ * Returns the spec info, servers, and a flattened list of operations for the
+ * OpenAPI tool editor.
+ *
+ * @param {string} source - OpenAPI source (URL or inline JSON/YAML text)
+ * @returns {Promise<{info: Object, servers: Array, operations: Array}>}
+ */
+export const parseOpenApiSpec = async source => {
+  const response = await makeAdminApiCall('/admin/tools/openapi/parse', {
+    method: 'POST',
+    body: { source }
+  });
+  return response.data;
+};
+
 // Workflow Execution Admin API functions
 
 /**
@@ -913,6 +1003,14 @@ export const adminApi = {
   toggleTool,
   fetchToolScript,
   updateToolScript,
+  parseOpenApiSpec,
+
+  // Credential store functions
+  listCredentials,
+  getCredential,
+  createCredential,
+  updateCredential,
+  deleteCredential,
 
   // Skills functions
   fetchAdminSkills,

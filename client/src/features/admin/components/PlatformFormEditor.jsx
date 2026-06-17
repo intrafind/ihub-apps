@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 // OIDC Provider Templates
 const OIDC_PROVIDER_TEMPLATES = {
@@ -867,15 +868,15 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Client Secret
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="${GOOGLE_CLIENT_SECRET}"
-                        value={provider.clientSecret || ''}
-                        onChange={e => updateOidcProvider(index, 'clientSecret', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      <CredentialRefSelect
+                        value={provider.clientSecretRef || ''}
+                        onChange={id => updateOidcProvider(index, 'clientSecretRef', id)}
+                        types={['secret', 'oauth2']}
+                        label={t('admin.auth.oidc.clientSecret', 'Client Secret')}
+                        help={t(
+                          'admin.auth.oidc.clientSecretHelp',
+                          'Select a stored credential profile holding the OIDC client secret.'
+                        )}
                       />
                     </div>
                     <div>
@@ -1151,19 +1152,16 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Admin Password
-                  </label>
-                  <input
-                    type="password"
-                    value={provider.adminPassword || ''}
-                    onChange={e => updateLdapProvider(index, 'adminPassword', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="${LDAP_ADMIN_PASSWORD}"
+                  <CredentialRefSelect
+                    value={provider.adminPasswordRef || ''}
+                    onChange={id => updateLdapProvider(index, 'adminPasswordRef', id)}
+                    types={['secret', 'basic']}
+                    label={t('admin.auth.ldap.adminPassword', 'Admin Password')}
+                    help={t(
+                      'admin.auth.ldap.adminPasswordHelp',
+                      'Select a stored credential profile holding the bind password.'
+                    )}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Password for admin DN (use env vars for security)
-                  </p>
                 </div>
 
                 <div>
@@ -1379,22 +1377,21 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Domain Controller Password
-              </label>
-              <input
-                type="password"
-                value={config.ntlmAuth?.domainControllerPassword || ''}
-                onChange={e =>
-                  updateNestedConfig('ntlmAuth', 'domainControllerPassword', e.target.value)
+              <CredentialRefSelect
+                value={config.ntlmAuth?.domainControllerPasswordRef || ''}
+                onChange={id =>
+                  updateNestedConfig('ntlmAuth', 'domainControllerPasswordRef', id)
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="${NTLM_DC_PASSWORD}"
+                types={['secret', 'basic']}
+                label={t(
+                  'admin.auth.ntlm.domainControllerPassword',
+                  'Domain Controller Password'
+                )}
+                help={t(
+                  'admin.auth.ntlm.domainControllerPasswordHelp',
+                  'Select a stored credential profile holding the domain controller password.'
+                )}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Password for domain controller user (encrypted automatically, use env vars for
-                security)
-              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

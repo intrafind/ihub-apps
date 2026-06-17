@@ -1,5 +1,6 @@
 import expressNtlm from 'express-ntlm';
 import configCache from '../configCache.js';
+import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
@@ -21,9 +22,14 @@ let ntlmMiddlewareConfig = null;
  * @returns {Function} Express middleware
  */
 function createNtlmMiddleware(ntlmConfig = {}) {
-  // Support environment variables for LDAP credentials (more secure)
+  // Support environment variables for LDAP credentials (more secure).
+  // The domain controller password is an optional secret resolved from the
+  // central credential store via domainControllerPasswordRef, falling back to
+  // the NTLM_LDAP_PASSWORD environment variable.
   const ldapUser = ntlmConfig.domainControllerUser || process.env.NTLM_LDAP_USER;
-  const ldapPassword = ntlmConfig.domainControllerPassword || process.env.NTLM_LDAP_PASSWORD;
+  const ldapPassword =
+    credentialService.tryResolveSecret(ntlmConfig.domainControllerPasswordRef) ||
+    process.env.NTLM_LDAP_PASSWORD;
 
   // express-ntlm calls this for every internal step (negotiate, bind, parse).
   // When ntlmConfig.debug is true, forward each line to our logger so admins can
@@ -352,9 +358,9 @@ async function enhanceUserWithLdapGroups(user, ntlmConfig) {
       return user;
     }
 
-    if (!ldapProvider.adminDn || !ldapProvider.adminPassword) {
+    if (!ldapProvider.adminDn || !ldapProvider.adminPasswordRef) {
       logger.error(
-        'NTLM Auth: LDAP provider for group lookup is missing adminDn or adminPassword',
+        'NTLM Auth: LDAP provider for group lookup is missing adminDn or adminPasswordRef',
         {
           component: 'NtlmAuth',
           ldapProvider: ntlmConfig.ldapGroupLookupProvider

@@ -6,20 +6,17 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
-import { encryptPlatformSecrets } from '../../utils/platformSecrets.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 async function savePlatformConfig(updates) {
   const rootDir = getRootDir();
   const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-  // `configCache.getPlatform()` returns secrets in their *decrypted* form. We
-  // must re-encrypt before writing back to disk so unrelated sections
-  // (Jira / OIDC / LDAP / cloud storage providers) keep their at-rest
-  // encryption — otherwise enabling/disabling the Nextcloud embed silently
-  // downgrades every secret in platform.json to plaintext.
+  // platform.json no longer stores any at-rest secrets — all integration
+  // secrets live in the central credential store (contents/config/credentials.json)
+  // referenced by `*Ref` fields — so a plain merge is safe here.
   const existing = configCache.getPlatform() || {};
-  const merged = encryptPlatformSecrets({ ...existing, ...updates });
+  const merged = { ...existing, ...updates };
   await atomicWriteJSON(platformConfigPath, merged);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;

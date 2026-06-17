@@ -4,6 +4,7 @@ import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import credentialService from '../CredentialService.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 
 /**
@@ -88,13 +89,18 @@ class GoogleDriveService {
       throw new Error(`Google Drive provider '${providerId}' not found or not enabled`);
     }
 
-    if (!provider.clientId || !provider.clientSecret) {
+    if (!provider.clientId || !provider.clientSecretRef) {
       throw new Error(
-        `Google Drive provider '${providerId}' missing required configuration (clientId, clientSecret)`
+        `Google Drive provider '${providerId}' missing required configuration (clientId, clientSecretRef)`
       );
     }
 
-    return provider;
+    // Resolve the client secret from the central credential store so
+    // downstream code works with the plaintext value inline on the provider.
+    return {
+      ...provider,
+      clientSecret: credentialService.resolveSecret(provider.clientSecretRef)
+    };
   }
 
   /**

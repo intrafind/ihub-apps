@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 function JiraConfig() {
   const { t } = useTranslation();
@@ -9,7 +10,7 @@ function JiraConfig() {
     enabled: false,
     baseUrl: '',
     clientId: '',
-    clientSecret: '',
+    clientSecretRef: '',
     redirectUri: ''
   });
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,7 @@ function JiraConfig() {
           enabled: false,
           baseUrl: '',
           clientId: '',
-          clientSecret: '',
+          clientSecretRef: '',
           redirectUri: ''
         };
         setConfig(jira);
@@ -193,18 +194,16 @@ function JiraConfig() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('admin.jira.clientSecret', 'Client Secret')} *
-                </label>
-                <input
-                  type="password"
-                  value={config.clientSecret}
-                  onChange={e => handleFieldChange('clientSecret', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  placeholder="your-oauth-client-secret"
-                />
-              </div>
+              <CredentialRefSelect
+                value={config.clientSecretRef}
+                onChange={id => handleFieldChange('clientSecretRef', id)}
+                types={['secret', 'oauth2']}
+                label={`${t('admin.jira.clientSecret', 'Client Secret')} *`}
+                help={t(
+                  'admin.jira.clientSecretHelp',
+                  'Select a stored credential profile holding the OAuth client secret.'
+                )}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
