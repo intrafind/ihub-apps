@@ -19,9 +19,12 @@ const METHOD_ACTION = {
 };
 
 // Read/streaming/high-volume paths that should never be audited as mutations.
+// 'session' (POST /api/session/start) fires on every app load — auditing it
+// floods the log with noise. Login/logout have explicit logAudit() hooks.
 const EXCLUDED_SEGMENTS = [
   'chat',
   'inference',
+  'session',
   'sessions',
   'magic-prompts',
   'short-links',

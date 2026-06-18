@@ -63,6 +63,13 @@ describe('auditLogger gating', () => {
     expect(onSpy).not.toHaveBeenCalled();
   });
 
+  test('excludes session start (fires on every app load)', () => {
+    const { req, res } = makeReqRes({ url: '/api/session/start' });
+    const onSpy = jest.spyOn(res, 'on');
+    mw(req, res, jest.fn());
+    expect(onSpy).not.toHaveBeenCalled();
+  });
+
   test('skips non-api paths', () => {
     const { req, res } = makeReqRes({ url: '/healthz' });
     const onSpy = jest.spyOn(res, 'on');

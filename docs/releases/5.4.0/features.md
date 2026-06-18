@@ -524,3 +524,10 @@ Open chat conversations no longer keep the GPU busy while idle. Every rendered a
 
 - The GPU-acceleration hint is now applied only to the single message that is actively streaming, where it actually helps smooth incremental rendering, and is dropped once the response completes.
 - Measured effect: an idle chat now promotes **zero** extra compositor layers regardless of length (previously up to the browser's layer cap). No configuration change required.
+
+## Fix — Audit Log No Longer Spammed by Session Starts
+
+The audit log no longer records a `POST /api/session/start -> 200` entry every time an app loads. These high-frequency, low-value entries were drowning out the events admins actually care about (logins and logouts).
+
+- Session-start requests are now excluded from the generic audit safety-net, matching how chat, inference, and page reads are already treated.
+- Login and logout continue to be audited via their own explicit hooks — no change to security-relevant events.
