@@ -199,9 +199,10 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
                 // floats upward instead of pushing the layout (which would happen
                 // if it opened downward off-screen). When the rail is collapsed it
                 // gets a fixed width and floats over the content to the right.
-                `absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50 ${
-                  collapsed ? 'left-0 w-64' : 'left-0 right-0'
-                }`
+                // Use a comfortable fixed width anchored to the left so the menu
+                // floats over the page content instead of being squeezed into
+                // the (now narrower) account row.
+                `absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50`
               : 'absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50'
           }
         >

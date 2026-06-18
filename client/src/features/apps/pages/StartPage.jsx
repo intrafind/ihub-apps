@@ -4,15 +4,17 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import Icon from '../../../shared/components/Icon';
-import { fetchApps, fetchAppDetails } from '../../../api/api';
+import { fetchApps, fetchAppDetails, fetchModels } from '../../../api/api';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../chat/data/mockChats';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import ChatInput from '../../chat/components/ChatInput';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
 
 const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('ihub_favorite_apps');
@@ -59,12 +61,25 @@ export default function StartPage() {
   const [favoriteAppIds, setFavoriteAppIds] = useState(() => getFavoriteApps());
   const [draft, setDraft] = useState('');
   const [defaultAppDetails, setDefaultAppDetails] = useState(null);
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState(null);
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const fileUploadHandler = useFileUploadHandler();
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
+
+  // Admins can hide the start-page chat input entirely.
+  const showDefaultApp = uiConfig?.startPage?.showDefaultApp !== false;
+
+  // Voice dictation handler — writes the transcript into the draft, mirroring
+  // the in-app chat behaviour.
+  const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
+    setInput: setDraft,
+    currentText: draft,
+    sendMessage: () => formRef.current?.requestSubmit?.()
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -131,6 +146,44 @@ export default function StartPage() {
     };
   }, [defaultApp?.id]);
 
+  // Load models so the start-page input can offer the model selector when the
+  // app allows it (mirrors the in-app chat).
+  useEffect(() => {
+    let mounted = true;
+    fetchModels()
+      .then(data => {
+        if (mounted && Array.isArray(data)) setModels(data);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Models the default app is actually allowed to use.
+  const compatibleModels = useMemo(
+    () => (defaultAppDetails ? filterModelsForApp(models, defaultAppDetails) : []),
+    [models, defaultAppDetails]
+  );
+
+  // Pick an initial model once the app + models are available.
+  useEffect(() => {
+    if (!defaultAppDetails || compatibleModels.length === 0) return;
+    setSelectedModel(prev => {
+      if (prev && compatibleModels.some(m => m.id === prev)) return prev;
+      return pickInitialModelForApp(compatibleModels, defaultAppDetails) || compatibleModels[0].id;
+    });
+  }, [defaultAppDetails, compatibleModels]);
+
+  const showModelSelector =
+    defaultAppDetails?.disallowModelSelection !== true &&
+    defaultAppDetails?.settings?.model?.enabled !== false &&
+    compatibleModels.length > 0;
+
+  const micEnabled =
+    (defaultAppDetails?.inputMode?.microphone?.enabled ??
+      defaultAppDetails?.microphone?.enabled) !== false;
+
   // Featured apps: favorites first, then by order, max 4
   const featuredApps = useMemo(() => {
     const sorted = [...apps].sort((a, b) => {
@@ -172,10 +225,14 @@ export default function StartPage() {
         params.set('prefill', text);
         params.set('send', 'true');
       }
+      // Carry the chosen model so the app starts with the same selection.
+      if (selectedModel && selectedModel !== defaultAppDetails?.preferredModel) {
+        params.set('model', selectedModel);
+      }
       const qs = params.toString();
       navigate(`/apps/${defaultApp.id}${qs ? `?${qs}` : ''}`);
     },
-    [draft, defaultApp, defaultAppDetails, fileUploadHandler, navigate]
+    [draft, defaultApp, defaultAppDetails, fileUploadHandler, navigate, selectedModel]
   );
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
@@ -202,7 +259,7 @@ export default function StartPage() {
 
         {/* Default chat input — renders the real app input (uploads, prompts,
             placeholder, input mode) and starts the chat on submit. */}
-        {defaultApp && (
+        {showDefaultApp && defaultApp && (
           <div className="mb-8">
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -242,7 +299,12 @@ export default function StartPage() {
                 allowEmptySubmit={
                   defaultAppDetails?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                 }
-                showModelSelector={false}
+                onVoiceInput={micEnabled ? handleVoiceInput : undefined}
+                onVoiceCommand={micEnabled ? handleVoiceCommand : undefined}
+                models={compatibleModels}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                showModelSelector={showModelSelector}
                 currentLanguage={currentLanguage}
               />
             ) : (

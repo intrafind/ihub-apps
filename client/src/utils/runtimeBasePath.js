@@ -40,6 +40,7 @@ export const detectBasePath = () => {
     'chat', // Direct chat routes
     'pages', // Dynamic pages
     'prompts', // Prompts listing
+    'chats', // Chat history overview
     'settings', // Settings pages (integrations, etc.)
     'teams', // Microsoft Teams routes
     'workflows', // Workflow management and execution
@@ -115,6 +116,7 @@ export const getBasePath = () => {
       'chat',
       'pages',
       'prompts',
+      'chats',
       'settings',
       'teams',
       'workflows',
