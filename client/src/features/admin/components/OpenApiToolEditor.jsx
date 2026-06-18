@@ -327,39 +327,39 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
 
   return (
     <div className="space-y-6">
-      {/* Identity */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('admin.tools.openapi.form.id', 'Tool ID')}
-            <span className="text-red-500 ml-0.5">*</span>
-          </label>
-          <input
-            type="text"
-            value={form.id}
-            disabled={!isNew}
-            onChange={e => update({ id: e.target.value })}
-            className={MONO_INPUT_CLASS}
-            placeholder="my-openapi-tool"
-          />
-        </div>
-        <div>
-          {/* Multilingual name editor — same component as the generic tool
-              form, so values entered here round-trip cleanly with the JSON
-              editor and other tool types. */}
-          <DynamicLanguageEditor
-            label={
-              <>
-                {t('admin.tools.openapi.form.name', 'Name')}
-                <span className="text-red-500 ml-0.5">*</span>
-              </>
-            }
-            value={form.name}
-            onChange={val => update({ name: val })}
-            required
-            placeholder={{ en: 'My OpenAPI tool', de: 'Mein OpenAPI-Tool' }}
-          />
-        </div>
+      {/* Identity — stacked because DynamicLanguageEditor adds a language tab
+          row above its input, which made the side-by-side layout look misaligned
+          against the single-row ID field. */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {t('admin.tools.openapi.form.id', 'Tool ID')}
+          <span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <input
+          type="text"
+          value={form.id}
+          disabled={!isNew}
+          onChange={e => update({ id: e.target.value })}
+          className={MONO_INPUT_CLASS}
+          placeholder="my-openapi-tool"
+        />
+      </div>
+      <div>
+        {/* Multilingual name editor — same component as the generic tool form,
+            so values entered here round-trip cleanly with the JSON editor and
+            other tool types. */}
+        <DynamicLanguageEditor
+          label={
+            <>
+              {t('admin.tools.openapi.form.name', 'Name')}
+              <span className="text-red-500 ml-0.5">*</span>
+            </>
+          }
+          value={form.name}
+          onChange={val => update({ name: val })}
+          required
+          placeholder={{ en: 'My OpenAPI tool', de: 'Mein OpenAPI-Tool' }}
+        />
       </div>
       <div>
         <DynamicLanguageEditor
