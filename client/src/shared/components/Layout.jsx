@@ -141,11 +141,17 @@ function Layout() {
               <div className="relative flex items-stretch h-16">
                 <div className="container mx-auto px-4 flex justify-between items-center">
                   <div className="flex items-center h-full">
-                    <Link to="/" onClick={resetHeaderColor} className="flex items-center gap-2.5 py-2">
+                    <Link
+                      to="/"
+                      onClick={resetHeaderColor}
+                      className="flex items-center gap-2.5 py-2"
+                    >
                       {uiConfig?.header?.logo?.url && (
                         <img
                           src={buildAssetUrl(uiConfig.header.logo.url)}
-                          alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'}
+                          alt={
+                            getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'
+                          }
                           className="h-7 w-7 flex-shrink-0"
                         />
                       )}

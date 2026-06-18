@@ -474,7 +474,6 @@ function AppsList() {
     <div ref={containerRef} className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
       <NextcloudSelectionBanner />
       <div className="max-w-5xl mx-auto">
-
         {/* Page header */}
         <div className="flex flex-col items-center text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
@@ -559,7 +558,10 @@ function AppsList() {
 
         {displayedApps.length === 0 ? (
           <div className="text-center py-16">
-            <Icon name="search" className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <Icon
+              name="search"
+              className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3"
+            />
             <p className="text-gray-500 dark:text-gray-400">{t('pages.appsList.noApps')}</p>
             {searchConfig.enabled && apps.length > 3 && searchTerm && (
               <button

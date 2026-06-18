@@ -26,7 +26,14 @@ function IHubLogo({ size = 44 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
       <defs>
-        <linearGradient id="sp-ihub-lg" x1="6" y1="34" x2="34" y2="6" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id="sp-ihub-lg"
+          x1="6"
+          y1="34"
+          x2="34"
+          y2="6"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#16a34a" />
           <stop offset="1" stopColor="#0ea5b7" />
         </linearGradient>

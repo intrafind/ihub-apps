@@ -132,7 +132,11 @@ export default function ChatHistoryPage() {
         {/* Chat list */}
         {filteredChats.length === 0 ? (
           <div className="text-center py-16">
-            <Icon name="chat-bubble" size="xl" className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <Icon
+              name="chat-bubble"
+              size="xl"
+              className="text-gray-300 dark:text-gray-600 mx-auto mb-3"
+            />
             <p className="text-gray-500 dark:text-gray-400">
               {t('chatHistory.noResults', 'No chats match your search')}
             </p>

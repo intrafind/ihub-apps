@@ -21,7 +21,7 @@ export const MOCK_CHATS = [
     appIcon: 'chat-bubble',
     group: 'Today',
     snippet:
-      'For a round trip of roughly 1,020 km at the German mileage rate of €0.30/km you\'d claim about €306…'
+      "For a round trip of roughly 1,020 km at the German mileage rate of €0.30/km you'd claim about €306…"
   },
   {
     id: 'c3',
@@ -52,7 +52,8 @@ export const MOCK_CHATS = [
     appColor: '#4f46e5',
     appIcon: 'cog',
     group: 'Yesterday',
-    snippet: "Let's start with the basics: Hold the power button for 15 seconds to force a full shutdown…"
+    snippet:
+      "Let's start with the basics: Hold the power button for 15 seconds to force a full shutdown…"
   },
   {
     id: 'c6',
@@ -62,7 +63,8 @@ export const MOCK_CHATS = [
     appColor: '#4f46e5',
     appIcon: 'document',
     group: 'Yesterday',
-    snippet: 'Q: Can external contractors get VPN access? A: Yes, with a sponsored account and manager approval…'
+    snippet:
+      'Q: Can external contractors get VPN access? A: Yes, with a sponsored account and manager approval…'
   },
   {
     id: 'c7',
@@ -72,8 +74,7 @@ export const MOCK_CHATS = [
     appColor: '#0891b2',
     appIcon: 'globe-alt',
     group: 'Last 7 days',
-    snippet:
-      'Gerne. Senden Sie mir den Text des Datenblatts, und ich übersetze ihn ins Deutsche…'
+    snippet: 'Gerne. Senden Sie mir den Text des Datenblatts, und ich übersetze ihn ins Deutsche…'
   },
   {
     id: 'c8',

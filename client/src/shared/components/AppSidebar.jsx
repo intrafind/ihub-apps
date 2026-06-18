@@ -41,7 +41,13 @@ function NavButton({ icon, label, onClick, active }) {
           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
       }`}
     >
-      <Icon name={icon} size="sm" className={active ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'} />
+      <Icon
+        name={icon}
+        size="sm"
+        className={
+          active ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'
+        }
+      />
       {label}
     </button>
   );
@@ -59,9 +65,7 @@ function SectionHeader({ label, open, onToggle }) {
         size="sm"
         className={`text-gray-400 transition-transform duration-150 ${open ? '' : '-rotate-90'}`}
       />
-      <span className="text-[11px] font-bold tracking-widest uppercase text-gray-400">
-        {label}
-      </span>
+      <span className="text-[11px] font-bold tracking-widest uppercase text-gray-400">{label}</span>
     </button>
   );
 }
@@ -117,17 +121,12 @@ export default function AppSidebar() {
     }
   }, [collapsed]);
 
-  const handleToggleFav = useCallback(
-    (e, appId) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const newStatus = toggleFavoriteApp(appId);
-      setFavoriteAppIds(prev =>
-        newStatus ? [...prev, appId] : prev.filter(id => id !== appId)
-      );
-    },
-    []
-  );
+  const handleToggleFav = useCallback((e, appId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newStatus = toggleFavoriteApp(appId);
+    setFavoriteAppIds(prev => (newStatus ? [...prev, appId] : prev.filter(id => id !== appId)));
+  }, []);
 
   const sidebarApps = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -393,7 +392,9 @@ export default function AppSidebar() {
                 <div
                   key={app.id}
                   className={`flex items-center rounded-lg transition-colors ${
-                    isActive ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    isActive
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
                   <button
@@ -411,7 +412,9 @@ export default function AppSidebar() {
                   </button>
                   <button
                     onClick={e => handleToggleFav(e, app.id)}
-                    title={app.isFav ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+                    title={
+                      app.isFav ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')
+                    }
                     className="w-8 h-8 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Icon
