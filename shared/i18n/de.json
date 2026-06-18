@@ -1828,6 +1828,24 @@
           "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         }
       }
+    },
+    "sidebar": {
+      "backToApp": "Zurück zu iHub",
+      "adminPanel": "Admin-Bereich"
+    },
+    "ui": {
+      "tabs": {
+        "startPage": "Startseite"
+      },
+      "startPage": {
+        "title": "Startseiten-Konfiguration",
+        "description": "Konfiguriere die personalisierte Startseite für Nutzer.",
+        "defaultApp": "Standard-Chat-App",
+        "defaultAppHelp": "Die App, deren Chat-Eingabe auf der Startseite angezeigt wird. Ohne Auswahl wird die erste zugängliche App verwendet.",
+        "firstAvailable": "Erste verfügbare App (automatisch)",
+        "showDefaultApp": "Standard-Chat-App anzeigen",
+        "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe."
+      }
     }
   },
   "cloudStorage": {
@@ -2359,5 +2377,44 @@
     "showMore": "Mehr anzeigen",
     "showLess": "Weniger anzeigen",
     "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."
+  },
+  "startPage": {
+    "greetingMorning": "Guten Morgen",
+    "greetingAfternoon": "Guten Tag",
+    "greetingEvening": "Guten Abend",
+    "subtitle": "Wie kann ich dir heute helfen?",
+    "openApp": "App vollständig öffnen",
+    "jumpIntoApp": "In eine App springen",
+    "browseAllApps": "Alle Apps durchsuchen",
+    "pickUpWhereYouLeftOff": "Mach dort weiter, wo du aufgehört hast"
+  },
+  "sidebar": {
+    "navigation": "Navigation",
+    "newChat": "Neuer Chat",
+    "prompts": "Prompts",
+    "browseApps": "Alle Apps durchsuchen",
+    "apps": "Apps",
+    "recents": "Letzte",
+    "allApps": "Alle Apps",
+    "allChats": "Alle Chats",
+    "search": "Suche",
+    "searchPlaceholder": "Chats & Apps durchsuchen",
+    "searchChatsApps": "Chats & Apps durchsuchen",
+    "collapse": "Seitenleiste einklappen",
+    "expand": "Seitenleiste ausklappen",
+    "home": "Startseite",
+    "loadingApps": "Lädt…",
+    "noAppsMatch": "Keine passenden Apps",
+    "openMenu": "Navigation öffnen",
+    "closeMenu": "Navigation schließen"
+  },
+  "chatHistory": {
+    "title": "Deine Chats",
+    "subtitle": "{{count}} Unterhaltungen über deine Apps",
+    "searchPlaceholder": "Chats durchsuchen…",
+    "groupRecent": "Aktuell",
+    "groupByApp": "Nach App",
+    "groupByDate": "Nach Datum",
+    "noResults": "Keine passenden Chats gefunden"
   }
 }

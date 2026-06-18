@@ -1579,6 +1579,24 @@
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
         }
       }
+    },
+    "sidebar": {
+      "backToApp": "Back to iHub",
+      "adminPanel": "Admin Panel"
+    },
+    "ui": {
+      "tabs": {
+        "startPage": "Start Page"
+      },
+      "startPage": {
+        "title": "Start Page Configuration",
+        "description": "Configure the personalized start page shown to users.",
+        "defaultApp": "Default chat app",
+        "defaultAppHelp": "The app whose chat input is shown on the start page. When unset, the first app the user can access is used.",
+        "firstAvailable": "First available app (automatic)",
+        "showDefaultApp": "Show default chat app",
+        "showDefaultAppHelp": "When off, the start page shows the greeting and apps but no chat input."
+      }
     }
   },
   "cloudStorage": {
@@ -2394,5 +2412,44 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."
+  },
+  "startPage": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "subtitle": "How can I help you today?",
+    "openApp": "Open full app",
+    "jumpIntoApp": "Jump into an app",
+    "browseAllApps": "Browse all apps",
+    "pickUpWhereYouLeftOff": "Pick up where you left off"
+  },
+  "sidebar": {
+    "navigation": "Navigation",
+    "newChat": "New chat",
+    "prompts": "Prompts",
+    "browseApps": "Browse all apps",
+    "apps": "Apps",
+    "recents": "Recents",
+    "allApps": "All apps",
+    "allChats": "All chats",
+    "search": "Search",
+    "searchPlaceholder": "Search chats & apps",
+    "searchChatsApps": "Search chats & apps",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "home": "Home",
+    "loadingApps": "Loading…",
+    "noAppsMatch": "No apps match",
+    "openMenu": "Open navigation",
+    "closeMenu": "Close navigation"
+  },
+  "chatHistory": {
+    "title": "Your chats",
+    "subtitle": "{{count}} conversations across your apps",
+    "searchPlaceholder": "Search your chats…",
+    "groupRecent": "Recent",
+    "groupByApp": "By app",
+    "groupByDate": "By date",
+    "noResults": "No chats match your search"
   }
 }

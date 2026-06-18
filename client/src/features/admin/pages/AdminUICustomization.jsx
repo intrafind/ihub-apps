@@ -6,6 +6,7 @@ import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
 import ContentEditor from '../components/ContentEditor';
 import PwaCustomization from '../components/PwaCustomization';
+import StartPageCustomization from '../components/StartPageCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -112,6 +113,7 @@ function AdminUICustomization() {
 
   const tabs = [
     { id: 'header', label: t('admin.ui.tabs.header', 'Header'), icon: '🎨' },
+    { id: 'startPage', label: t('admin.ui.tabs.startPage', 'Start Page'), icon: '🏠' },
     { id: 'footer', label: t('admin.ui.tabs.footer', 'Footer'), icon: '📄' },
     { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
     { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
@@ -279,6 +281,13 @@ function AdminUICustomization() {
             <HeaderCustomization
               config={config.header || {}}
               onUpdate={updates => updateConfig('header', updates)}
+              t={t}
+            />
+          )}
+          {activeTab === 'startPage' && (
+            <StartPageCustomization
+              config={config.startPage || {}}
+              onUpdate={updates => updateConfig('startPage', updates)}
               t={t}
             />
           )}
