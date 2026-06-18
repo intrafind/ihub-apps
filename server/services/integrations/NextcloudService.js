@@ -4,6 +4,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import credentialService from '../CredentialService.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 
 /**
@@ -73,13 +74,19 @@ class NextcloudService {
       throw new Error(`Nextcloud provider '${providerId}' not found or not enabled`);
     }
 
-    if (!provider.serverUrl || !provider.clientId || !provider.clientSecret) {
+    if (!provider.serverUrl || !provider.clientId || !provider.clientSecretRef) {
       throw new Error(
-        `Nextcloud provider '${providerId}' missing required configuration (serverUrl, clientId, clientSecret)`
+        `Nextcloud provider '${providerId}' missing required configuration (serverUrl, clientId, clientSecretRef)`
       );
     }
 
-    return { ...provider, serverUrl: this._normalizeServerUrl(provider.serverUrl) };
+    // Resolve the client secret from the central credential store so
+    // downstream code works with the plaintext value inline on the provider.
+    return {
+      ...provider,
+      serverUrl: this._normalizeServerUrl(provider.serverUrl),
+      clientSecret: credentialService.resolveSecret(provider.clientSecretRef)
+    };
   }
 
   _resolveRedirectUri(provider, providerId, req) {

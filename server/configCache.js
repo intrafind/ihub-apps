@@ -15,6 +15,7 @@ import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
+import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 
 /**
@@ -116,59 +117,20 @@ function decryptIfEncrypted(value) {
 }
 
 /**
- * Decrypt known secret fields in platform configuration so runtime consumers
- * (OIDC middleware, LDAP auth, JiraService, etc.) receive plaintext secrets
+ * Decrypt secret fields in the central credential store so CredentialService
+ * consumers receive plaintext. Operates in-place on the credentials map.
  */
-function decryptPlatformSecrets(config) {
-  if (!config || typeof config !== 'object') return config;
-
-  // Jira
-  if (config.jira?.clientSecret) {
-    config.jira.clientSecret = decryptIfEncrypted(config.jira.clientSecret);
-  }
-
-  // Cloud storage providers
-  if (config.cloudStorage?.providers) {
-    for (const provider of config.cloudStorage.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = decryptIfEncrypted(provider.clientSecret);
-      }
-      if (provider.type === 'office365' && provider.tenantId) {
-        provider.tenantId = decryptIfEncrypted(provider.tenantId);
+function decryptCredentials(config) {
+  if (!config || typeof config !== 'object' || !config.credentials) return config;
+  for (const profile of Object.values(config.credentials)) {
+    if (!profile || typeof profile !== 'object') continue;
+    const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
+    for (const field of secretFields) {
+      if (profile[field]) {
+        profile[field] = decryptIfEncrypted(profile[field]);
       }
     }
   }
-
-  // OIDC providers
-  if (config.oidcAuth?.providers) {
-    for (const provider of config.oidcAuth.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = decryptIfEncrypted(provider.clientSecret);
-      }
-    }
-  }
-
-  // LDAP providers
-  if (config.ldapAuth?.providers) {
-    for (const provider of config.ldapAuth.providers) {
-      if (provider.adminPassword) {
-        provider.adminPassword = decryptIfEncrypted(provider.adminPassword);
-      }
-    }
-  }
-
-  // NTLM
-  if (config.ntlmAuth?.domainControllerPassword) {
-    config.ntlmAuth.domainControllerPassword = decryptIfEncrypted(
-      config.ntlmAuth.domainControllerPassword
-    );
-  }
-
-  // iFinder
-  if (config.iFinder?.privateKey) {
-    config.iFinder.privateKey = decryptIfEncrypted(config.iFinder.privateKey);
-  }
-
   return config;
 }
 
@@ -347,6 +309,7 @@ class ConfigCache {
       'config/registries.json',
       'config/installations.json',
       'config/mcpServers.json',
+      'config/credentials.json',
       'config/agents.json'
     ];
 
@@ -452,15 +415,32 @@ class ConfigCache {
           return;
         }
 
-        // Special handling for platform.json - decrypt secrets after loading
+        // Special handling for platform.json
         if (configPath === 'config/platform.json') {
           const platformData = await loadJson(configPath);
           if (platformData !== null) {
-            decryptPlatformSecrets(platformData);
             this.setCacheEntry(configPath, platformData);
             logger.info('Cached platform config', { component: 'ConfigCache', configPath });
           } else {
             logger.warn('Failed to load platform config', { component: 'ConfigCache', configPath });
+          }
+          return;
+        }
+
+        // Special handling for credentials.json - decrypt secrets after loading
+        if (configPath === 'config/credentials.json') {
+          const credentialsData = await loadJson(configPath);
+          if (credentialsData !== null) {
+            decryptCredentials(credentialsData);
+            this.setCacheEntry(configPath, credentialsData);
+            logger.info('Cached credential store', {
+              component: 'ConfigCache',
+              configPath,
+              count: Object.keys(credentialsData.credentials || {}).length
+            });
+          } else {
+            // Missing/empty store is valid — treat as no credentials.
+            this.setCacheEntry(configPath, { credentials: {} });
           }
           return;
         }
@@ -706,16 +686,28 @@ class ConfigCache {
         return;
       }
 
-      // Special handling for platform.json - decrypt secrets after loading
+      // Special handling for platform.json
       if (key === 'config/platform.json') {
         const platformData = await loadJson(key, { useCache: false });
         if (platformData !== null) {
-          decryptPlatformSecrets(platformData);
           const newEtag = this.generateETag(platformData);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
           }
+        }
+        return;
+      }
+
+      // Special handling for credentials.json - decrypt secrets after loading
+      if (key === 'config/credentials.json') {
+        const credentialsData = await loadJson(key, { useCache: false });
+        const resolved = credentialsData !== null ? credentialsData : { credentials: {} };
+        decryptCredentials(resolved);
+        const newEtag = this.generateETag(resolved);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, resolved);
         }
         return;
       }
@@ -1066,6 +1058,20 @@ class ConfigCache {
    */
   getPlatform() {
     return this.get('config/platform.json').data;
+  }
+
+  /**
+   * Get the decrypted central credential store ({ credentials: { id: profile } }).
+   */
+  getCredentials() {
+    return this.get('config/credentials.json').data || { credentials: {} };
+  }
+
+  /**
+   * Refresh the credential store cache entry (after admin writes).
+   */
+  async refreshCredentialsCache() {
+    await this.refreshCacheEntry('config/credentials.json');
   }
 
   /**

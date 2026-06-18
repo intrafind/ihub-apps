@@ -94,8 +94,10 @@ export default function registerIntegrationTestRoutes(app) {
             });
           }
         } else {
-          // When using dedicated iFinder private key, verify it's configured
-          if (!iFinderConfig.privateKey) {
+          // When using dedicated iFinder private key, verify it's configured.
+          // The key now lives in the central credential store (referenced by
+          // privateKeyRef) or the IFINDER_PRIVATE_KEY env var.
+          if (!iFinderConfig.privateKeyRef && !process.env.IFINDER_PRIVATE_KEY) {
             return res.json({
               success: false,
               message: 'iFinder private key is not configured',

@@ -4,7 +4,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/websocket.js';
 import { URL } from 'url';
-import tokenStorageService from '../TokenStorageService.js';
+import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
 import logger from '../../utils/logger.js';
 
@@ -37,23 +37,32 @@ export class McpServerConnection {
   }
 
   /**
-   * Decrypt secrets pulled from auth config. configCache already decrypts
-   * platform secrets, but mcpServers.json has its own encryption envelope.
+   * Resolve auth secrets from the central credential store. The auth block in
+   * mcpServers.json carries only credentialRef pointers (`tokenRef`,
+   * `passwordRef`, `clientSecretRef`); the plaintext secret is fetched here at
+   * connect time and inlined onto the returned auth object as the field name
+   * the header builders expect (`token` / `password` / `clientSecret`).
    */
-  _decryptAuth(auth) {
+  _resolveAuth(auth) {
     if (!auth) return { type: 'none' };
     const out = { ...auth };
-    for (const key of ['token', 'password', 'clientSecret']) {
-      if (typeof out[key] === 'string' && tokenStorageService.isEncrypted(out[key])) {
+    const refFields = {
+      tokenRef: 'token',
+      passwordRef: 'password',
+      clientSecretRef: 'clientSecret'
+    };
+    for (const [refField, plainField] of Object.entries(refFields)) {
+      if (typeof out[refField] === 'string' && out[refField]) {
         try {
-          out[key] = tokenStorageService.decryptString(out[key]);
+          out[plainField] = credentialService.resolveSecret(out[refField]);
         } catch (err) {
-          logger.error('Failed to decrypt MCP server auth secret', {
+          logger.error('Failed to resolve MCP server auth secret from credential store', {
             component: 'McpServerConnection',
             serverId: this.config.id,
-            field: key,
+            field: refField,
             error: err.message
           });
+          throw err;
         }
       }
     }
@@ -122,7 +131,7 @@ export class McpServerConnection {
 
   async _buildTransport() {
     const t = this.config.transport;
-    const auth = this._decryptAuth(this.config.auth);
+    const auth = this._resolveAuth(this.config.auth);
 
     const blockPrivateIps = this.security.blockPrivateIps !== false;
 

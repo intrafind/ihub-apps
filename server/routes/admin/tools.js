@@ -404,6 +404,15 @@ export default function registerAdminToolsRoutes(app) {
         return sendBadRequest(res, 'Tool ID cannot be changed');
       }
 
+      // Validate OpenAPI tool definitions against their schema
+      if (updatedTool.type === 'openapi') {
+        const { validateOpenApiToolDef } = await import('../../validators/openApiToolDefSchema.js');
+        const result = validateOpenApiToolDef(updatedTool);
+        if (!result.success) {
+          return sendBadRequest(res, 'Invalid OpenAPI tool definition', result.errors);
+        }
+      }
+
       const rootDir = getRootDir();
       const contentsDir = process.env.CONTENTS_DIR || 'contents';
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
@@ -501,6 +510,15 @@ export default function registerAdminToolsRoutes(app) {
       // Validate toolId for security
       if (!validateIdForPath(newTool.id, 'tool', res)) {
         return;
+      }
+
+      // Validate OpenAPI tool definitions against their schema
+      if (newTool.type === 'openapi') {
+        const { validateOpenApiToolDef } = await import('../../validators/openApiToolDefSchema.js');
+        const result = validateOpenApiToolDef(newTool);
+        if (!result.success) {
+          return sendBadRequest(res, 'Invalid OpenAPI tool definition', result.errors);
+        }
       }
 
       const rootDir = getRootDir();
@@ -937,6 +955,92 @@ export default function registerAdminToolsRoutes(app) {
       res.json({ message: 'Script updated successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'update tool script');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/tools/openapi/parse:
+   *   post:
+   *     summary: Parse an OpenAPI document and list its operations
+   *     description: |
+   *       Fetches (SSRF-guarded) and parses an OpenAPI 3.x document, returning
+   *       its operations so the admin UI can present an operation picker for
+   *       building a `type: "openapi"` tool.
+   *     tags:
+   *       - Admin - Tools
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   */
+  app.post(buildServerPath('/api/admin/tools/openapi/parse'), adminAuth, async (req, res) => {
+    try {
+      const { source } = req.body || {};
+      if (!source || !source.type) {
+        return sendBadRequest(res, 'Missing OpenAPI source ({ type, url|path|spec })');
+      }
+
+      let raw;
+      if (source.type === 'url') {
+        if (!/^https?:\/\//i.test(source.url || '')) {
+          return sendBadRequest(res, 'Only http(s) OpenAPI URLs are supported');
+        }
+        const { safeFetch } = await import('../../services/mcp/safeFetch.js');
+        // SSRF is mitigated by safeFetch: it resolves DNS once, rejects
+        // private/internal IPs (blockPrivateIps), and pins the socket to the
+        // validated address to defeat DNS rebinding. This admin-only endpoint
+        // must fetch an operator-supplied OpenAPI URL, so the host cannot be
+        // allow-listed. CodeQL cannot see the guard across the call boundary.
+        const fetchRes = await safeFetch(source.url, { method: 'GET' }, { blockPrivateIps: true }); // codeql[js/request-forgery]
+        if (!fetchRes.ok) {
+          return sendBadRequest(res, `Failed to fetch OpenAPI doc: ${fetchRes.status}`);
+        }
+        const text = await fetchRes.text();
+        if (Buffer.byteLength(text) > 2 * 1024 * 1024) {
+          return sendBadRequest(res, 'OpenAPI document exceeds the 2MB limit');
+        }
+        raw = JSON.parse(text);
+      } else if (source.type === 'inline') {
+        raw = typeof source.spec === 'string' ? JSON.parse(source.spec) : source.spec;
+      } else {
+        return sendBadRequest(res, 'Unsupported source type for parsing (use url or inline)');
+      }
+
+      const SwaggerParser = (await import('@apidevtools/swagger-parser')).default;
+      // external:false prevents dereferencing from following external $refs
+      // (remote URLs / local files), which would bypass the SSRF guard above.
+      const spec = await SwaggerParser.dereference(raw, { resolve: { external: false } });
+
+      const methods = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'];
+      const operations = [];
+      for (const [path, pathItem] of Object.entries(spec.paths || {})) {
+        if (!pathItem || typeof pathItem !== 'object') continue;
+        const shared = Array.isArray(pathItem.parameters) ? pathItem.parameters : [];
+        for (const method of methods) {
+          const op = pathItem[method];
+          if (!op || typeof op !== 'object') continue;
+          operations.push({
+            operationId: op.operationId,
+            method,
+            path,
+            summary: op.summary || op.description || '',
+            parameters: [...shared, ...(op.parameters || [])].map(p => ({
+              name: p.name,
+              in: p.in,
+              required: Boolean(p.required)
+            })),
+            hasRequestBody: Boolean(op.requestBody)
+          });
+        }
+      }
+
+      res.json({
+        info: { title: spec.info?.title, version: spec.info?.version },
+        servers: (spec.servers || []).map(s => ({ url: s.url })),
+        operations
+      });
+    } catch (error) {
+      return sendBadRequest(res, `Failed to parse OpenAPI document: ${error.message}`);
     }
   });
 }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { CredentialRefSelect } from '../components/OpenApiToolEditor';
 
 const BLANK_FORM = {
   id: '',
@@ -100,10 +101,10 @@ function authFields(auth, onChange, t) {
           onChange={e => {
             const v = e.target.value;
             if (v === 'none') return onChange({ type: 'none' });
-            if (v === 'bearer') return onChange({ type: 'bearer', token: '' });
-            if (v === 'basic') return onChange({ type: 'basic', username: '', password: '' });
+            if (v === 'bearer') return onChange({ type: 'bearer', tokenRef: '' });
+            if (v === 'basic') return onChange({ type: 'basic', username: '', passwordRef: '' });
             if (v === 'oauth')
-              return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecret: '' });
+              return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecretRef: '' });
           }}
           className={INPUT_CLASS}
         >
@@ -116,24 +117,16 @@ function authFields(auth, onChange, t) {
         </select>
       </div>
       {auth?.type === 'bearer' && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('admin.mcp.servers.form.token', 'Token')}
-          </label>
-          <input
-            type="password"
-            value={auth.token || ''}
-            onChange={e => onChange({ ...auth, token: e.target.value })}
-            className={MONO_INPUT_CLASS}
-            placeholder="ghp_..."
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {t(
-              'admin.mcp.servers.form.tokenHint',
-              'Encrypted at rest. Submitted plaintext is encrypted before saving.'
-            )}
-          </p>
-        </div>
+        <CredentialRefSelect
+          value={auth.tokenRef || ''}
+          onChange={id => onChange({ ...auth, tokenRef: id })}
+          types={['secret', 'bearer']}
+          label={t('admin.mcp.servers.form.token', 'Token')}
+          help={t(
+            'admin.mcp.servers.form.tokenRefHint',
+            'Select a stored credential profile holding the bearer token.'
+          )}
+        />
       )}
       {auth?.type === 'basic' && (
         <>
@@ -148,17 +141,64 @@ function authFields(auth, onChange, t) {
               className={INPUT_CLASS}
             />
           </div>
+          <CredentialRefSelect
+            value={auth.passwordRef || ''}
+            onChange={id => onChange({ ...auth, passwordRef: id })}
+            types={['secret', 'basic']}
+            label={t('admin.mcp.servers.form.password', 'Password')}
+            help={t(
+              'admin.mcp.servers.form.passwordRefHint',
+              'Select a stored credential profile holding the password.'
+            )}
+          />
+        </>
+      )}
+      {auth?.type === 'oauth' && (
+        <>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('admin.mcp.servers.form.password', 'Password')}
+              {t('admin.mcp.servers.form.tokenUrl', 'Token URL')}
             </label>
             <input
-              type="password"
-              value={auth.password || ''}
-              onChange={e => onChange({ ...auth, password: e.target.value })}
+              type="url"
+              value={auth.tokenUrl || ''}
+              onChange={e => onChange({ ...auth, tokenUrl: e.target.value })}
+              className={MONO_INPUT_CLASS}
+              placeholder="https://auth.example.com/oauth/token"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.mcp.servers.form.clientId', 'Client ID')}
+            </label>
+            <input
+              type="text"
+              value={auth.clientId || ''}
+              onChange={e => onChange({ ...auth, clientId: e.target.value })}
+              className={MONO_INPUT_CLASS}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.mcp.servers.form.scope', 'Scope (optional)')}
+            </label>
+            <input
+              type="text"
+              value={auth.scope || ''}
+              onChange={e => onChange({ ...auth, scope: e.target.value })}
               className={INPUT_CLASS}
             />
           </div>
+          <CredentialRefSelect
+            value={auth.clientSecretRef || ''}
+            onChange={id => onChange({ ...auth, clientSecretRef: id })}
+            types={['secret', 'oauth2']}
+            label={t('admin.mcp.servers.form.clientSecret', 'Client secret')}
+            help={t(
+              'admin.mcp.servers.form.clientSecretRefHint',
+              'Select a stored credential profile holding the OAuth client secret.'
+            )}
+          />
         </>
       )}
     </div>

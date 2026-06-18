@@ -6,7 +6,6 @@ import {
   mcpServersFileSchema,
   mcpServerConfigSchema
 } from '../../validators/mcpServerConfigSchema.js';
-import tokenStorageService from '../../services/TokenStorageService.js';
 import mcpClientManager from '../../services/mcp/McpClientManager.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
@@ -17,39 +16,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const MCP_FILE_PATH = path.join(__dirname, '../../../contents/config/mcpServers.json');
-
-function encryptSecrets(server) {
-  const out = { ...server };
-  if (out.auth) out.auth = { ...out.auth };
-  if (out.auth && typeof out.auth === 'object') {
-    for (const field of ['token', 'password', 'clientSecret']) {
-      const v = out.auth[field];
-      if (typeof v !== 'string' || !v) continue;
-      if (tokenStorageService.isEncrypted(v)) continue;
-      if (/^\$\{[^}]+\}$/.test(v)) continue; // env-var placeholder
-      try {
-        out.auth[field] = tokenStorageService.encryptString(v);
-      } catch (err) {
-        logger.warn('Could not encrypt MCP secret', {
-          component: 'AdminMcp',
-          field,
-          error: err.message
-        });
-      }
-    }
-  }
-  return out;
-}
-
-function redactSecrets(server) {
-  const out = JSON.parse(JSON.stringify(server));
-  if (out.auth && typeof out.auth === 'object') {
-    for (const field of ['token', 'password', 'clientSecret']) {
-      if (out.auth[field]) out.auth[field] = '***REDACTED***';
-    }
-  }
-  return out;
-}
 
 async function readConfig() {
   const { data } = configCache.getMcpServers();
@@ -63,12 +29,9 @@ async function writeConfig(updated) {
     err.zod = parsed.error.errors;
     throw err;
   }
-  // Encrypt secrets on write.
-  const encrypted = {
-    ...parsed.data,
-    servers: parsed.data.servers.map(encryptSecrets)
-  };
-  await atomicWriteJSON(MCP_FILE_PATH, encrypted);
+  // Secrets live in the central credential store (referenced by *Ref fields);
+  // the auth block is persisted verbatim.
+  await atomicWriteJSON(MCP_FILE_PATH, parsed.data);
   // Refresh in-memory cache + reload manager.
   await configCache.refreshCacheEntry?.('config/mcpServers.json');
   const { data: fresh } = configCache.getMcpServers();
@@ -77,7 +40,8 @@ async function writeConfig(updated) {
 }
 
 export default function registerAdminMcpServersRoutes(app) {
-  // List all configured outbound MCP servers (secrets redacted).
+  // List all configured outbound MCP servers. Secrets live in the central
+  // credential store; the auth block here only carries credentialRef pointers.
   app.get(buildServerPath('/api/admin/mcp/servers'), adminAuth, async (req, res) => {
     try {
       const cfg = await readConfig();
@@ -85,7 +49,7 @@ export default function registerAdminMcpServersRoutes(app) {
       res.json({
         success: true,
         servers: (cfg.servers || []).map(s => ({
-          ...redactSecrets(s),
+          ...s,
           status: statuses.get(s.id) || null
         })),
         security: cfg.security
@@ -113,7 +77,7 @@ export default function registerAdminMcpServersRoutes(app) {
       }
       const updated = { ...cfg, servers: [...(cfg.servers || []), parsed.data] };
       await writeConfig(updated);
-      res.status(201).json({ success: true, server: redactSecrets(parsed.data) });
+      res.status(201).json({ success: true, server: parsed.data });
     } catch (error) {
       logger.error('[MCP Admin] Create error', { component: 'AdminMcp', error });
       res.status(500).json({ success: false, error: error.message || 'Failed to create server' });
@@ -138,22 +102,15 @@ export default function registerAdminMcpServersRoutes(app) {
       if (idx === -1) {
         return res.status(404).json({ success: false, error: 'Server not found' });
       }
-      // Preserve existing encrypted secrets when the admin submits the redacted placeholder.
-      const existing = cfg.servers[idx];
+      // Secrets are referenced by *Ref pointers into the credential store, so
+      // the incoming auth block is persisted as-is.
       const incoming = parsed.data;
-      if (incoming.auth && existing.auth) {
-        for (const f of ['token', 'password', 'clientSecret']) {
-          if (incoming.auth[f] === '***REDACTED***' && existing.auth[f]) {
-            incoming.auth[f] = existing.auth[f];
-          }
-        }
-      }
       const updated = {
         ...cfg,
         servers: cfg.servers.map((s, i) => (i === idx ? incoming : s))
       };
       await writeConfig(updated);
-      res.json({ success: true, server: redactSecrets(incoming) });
+      res.json({ success: true, server: incoming });
     } catch (error) {
       logger.error('[MCP Admin] Update error', { component: 'AdminMcp', error });
       res.status(500).json({ success: false, error: error.message || 'Failed to update server' });
@@ -196,22 +153,12 @@ export default function registerAdminMcpServersRoutes(app) {
 
   // Probe an arbitrary (possibly unsaved) server config. Used by the create /
   // edit dialog so the admin can validate a connection and preview the tools
-  // before persisting. Redacted secrets submitted for an existing server are
-  // restored from the stored (encrypted) config so editing without retyping a
-  // token still tests correctly.
+  // before persisting. Auth secrets are referenced by *Ref pointers into the
+  // central credential store and resolved at connect time, so the incoming
+  // config is tested as submitted.
   app.post(buildServerPath('/api/admin/mcp/test'), adminAuth, async (req, res) => {
     try {
       const incoming = { ...req.body };
-      const cfg = await readConfig();
-      const existing = (cfg.servers || []).find(s => s.id === incoming.id);
-      if (incoming.auth && existing?.auth) {
-        incoming.auth = { ...incoming.auth };
-        for (const f of ['token', 'password', 'clientSecret']) {
-          if (incoming.auth[f] === '***REDACTED***' && existing.auth[f]) {
-            incoming.auth[f] = existing.auth[f];
-          }
-        }
-      }
       const { status, tools } = await mcpClientManager.testConfig(incoming);
       res.json({ success: true, status, tools });
     } catch (error) {

@@ -203,6 +203,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/mcp/gateway',
           icon: LinkIcon,
           visible: true
+        },
+        {
+          key: 'credentials',
+          label: t('admin.nav.credentials', 'Credentials'),
+          href: '/admin/credentials',
+          icon: KeyIcon,
+          visible: true
         }
       ]
     },

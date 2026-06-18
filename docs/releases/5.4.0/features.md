@@ -420,6 +420,23 @@ The SSRF guard that protects workflow HTTP-request nodes from reaching internal 
 
 No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
 
+## OpenAPI Tools — Zero-Code Third-Party Integrations
+
+Admins can now turn any OpenAPI-described API into a callable agent tool without writing code. Add a tool of type **OpenAPI**, paste the OpenAPI document URL, pick an operation, and choose a credential — iHub validates the model's arguments against the operation schema, performs the call, and returns the result to the agent.
+
+- Supports OpenAPI 3.0 and 3.1 (operations, parameters, request bodies).
+- Auth via the credential store: bearer, basic, API key (header or query), and OAuth2 (client-credentials with automatic token refresh).
+- Outbound calls run through the SSRF guard (private IPs blocked unless explicitly allow-listed) and per-tool rate limiting.
+- Responses can hide sensitive fields (`x-display` hide list), are capped at 256 KB, and large arrays are paginated automatically.
+- A new admin "OpenAPI" editor parses the document and lists operations to pick from.
+
+## Central Credential Store
+
+Integration secrets now live in one place: **Admin → Credentials**. Create named, encrypted credential profiles (OAuth2, bearer, basic, API key, or opaque secret) and reference them from integrations and OpenAPI tools instead of pasting secrets into each section.
+
+- Secrets are encrypted at rest and never returned to the browser (shown as `***REDACTED***`).
+- Jira, OIDC, LDAP, NTLM, cloud storage, iFinder, and MCP servers now reference a credential profile instead of holding an inline secret.
+
 ## Thinking / Reasoning for OpenAI and vLLM Models
 
 Reasoning models served via the OpenAI and vLLM providers now show their thinking in the

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 /**
  * @param {Object} props
@@ -74,9 +75,9 @@ function CloudStorageConfig({ filterType } = {}) {
       displayName: '',
       type,
       enabled: true,
-      tenantId: '',
+      tenantIdRef: '',
       clientId: '',
-      clientSecret: '',
+      clientSecretRef: '',
       siteUrl: '',
       driveId: '',
       serverUrl: '',
@@ -126,9 +127,9 @@ function CloudStorageConfig({ filterType } = {}) {
     // source toggles (see schema) and including it globally would
     // persist an empty `sources` object for Nextcloud providers.
     const fieldsByType = {
-      office365: ['tenantId', 'clientId', 'clientSecret', 'siteUrl', 'driveId', 'sources'],
-      googledrive: ['clientId', 'clientSecret', 'sources'],
-      nextcloud: ['serverUrl', 'clientId', 'clientSecret']
+      office365: ['tenantIdRef', 'clientId', 'clientSecretRef', 'siteUrl', 'driveId', 'sources'],
+      googledrive: ['clientId', 'clientSecretRef', 'sources'],
+      nextcloud: ['serverUrl', 'clientId', 'clientSecretRef']
     };
     const allowed = new Set([
       'id',
@@ -146,7 +147,11 @@ function CloudStorageConfig({ filterType } = {}) {
     providerToSave.name = providerToSave.name || providerToSave.id;
 
     if (providerToSave.type === 'office365') {
-      if (!providerToSave.tenantId || !providerToSave.clientId || !providerToSave.clientSecret) {
+      if (
+        !providerToSave.tenantIdRef ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecretRef
+      ) {
         setMessage({
           type: 'error',
           text: t('admin.cloudStorage.validation.clientSecretRequired')
@@ -156,7 +161,7 @@ function CloudStorageConfig({ filterType } = {}) {
     }
 
     if (providerToSave.type === 'googledrive') {
-      if (!providerToSave.clientId || !providerToSave.clientSecret) {
+      if (!providerToSave.clientId || !providerToSave.clientSecretRef) {
         setMessage({
           type: 'error',
           text: t(
@@ -169,7 +174,11 @@ function CloudStorageConfig({ filterType } = {}) {
     }
 
     if (providerToSave.type === 'nextcloud') {
-      if (!providerToSave.serverUrl || !providerToSave.clientId || !providerToSave.clientSecret) {
+      if (
+        !providerToSave.serverUrl ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecretRef
+      ) {
         setMessage({
           type: 'error',
           text: t(
@@ -499,20 +508,18 @@ function CloudStorageConfig({ filterType } = {}) {
                     {/* Office 365-specific fields */}
                     {editingProvider.type === 'office365' && (
                       <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.tenantId')} *
-                          </label>
-                          <input
-                            type="text"
-                            value={editingProvider.tenantId}
-                            onChange={e =>
-                              setEditingProvider({ ...editingProvider, tenantId: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-tenant-id"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.tenantIdRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, tenantIdRef: id })
+                          }
+                          types={['secret']}
+                          label={`${t('admin.cloudStorage.tenantId')} *`}
+                          help={t(
+                            'admin.cloudStorage.tenantIdRefHelp',
+                            'Select a stored credential profile holding the tenant id.'
+                          )}
+                        />
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -529,23 +536,18 @@ function CloudStorageConfig({ filterType } = {}) {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.clientSecret')} *
-                          </label>
-                          <input
-                            type="password"
-                            value={editingProvider.clientSecret}
-                            onChange={e =>
-                              setEditingProvider({
-                                ...editingProvider,
-                                clientSecret: e.target.value
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-client-secret"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -666,23 +668,18 @@ function CloudStorageConfig({ filterType } = {}) {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.clientSecret')} *
-                          </label>
-                          <input
-                            type="password"
-                            value={editingProvider.clientSecret}
-                            onChange={e =>
-                              setEditingProvider({
-                                ...editingProvider,
-                                clientSecret: e.target.value
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-client-secret"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
 
                         {/* Google Drive Sources configuration */}
                         <div>
@@ -794,23 +791,18 @@ function CloudStorageConfig({ filterType } = {}) {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.clientSecret')} *
-                          </label>
-                          <input
-                            type="password"
-                            value={editingProvider.clientSecret}
-                            onChange={e =>
-                              setEditingProvider({
-                                ...editingProvider,
-                                clientSecret: e.target.value
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-client-secret"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
 
                         {/* Nextcloud has a single per-user source (the
                             files root) so no Sources toggle is exposed

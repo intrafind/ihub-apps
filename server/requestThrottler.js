@@ -40,12 +40,20 @@ function getDelay(id = 'default') {
   return typeof platform.requestDelayMs === 'number' ? platform.requestDelayMs : 0;
 }
 
-export function throttledFetch(id, url, options = {}) {
-  if (typeof url === 'undefined') {
-    // called as throttledFetch(url)
-    url = id;
-    id = 'default';
-  }
+/**
+ * Run an arbitrary async function through the per-id concurrency + delay queue.
+ * This is the throttling primitive; `throttledFetch` is a thin wrapper around it.
+ *
+ * Use this (instead of `throttledFetch`) when the outbound call must go through
+ * a different transport than `httpFetch` — e.g. the SSRF-guarded `safeFetch`
+ * used by the OpenAPI tool runner — while still honoring per-tool
+ * concurrency/requestDelayMs limits.
+ *
+ * @param {string} id - Resource identifier (model id, tool id, or 'default')
+ * @param {() => Promise<any>} fn - Work to run inside the throttle slot
+ * @returns {Promise<any>} Resolves/rejects with fn's result
+ */
+export function throttledRun(id = 'default', fn) {
   if (!queues.has(id)) {
     queues.set(id, []);
     actives.set(id, 0);
@@ -64,7 +72,7 @@ export function throttledFetch(id, url, options = {}) {
           await new Promise(r => setTimeout(r, wait));
         }
 
-        const res = await httpFetch(url, options);
+        const res = await fn();
         resolve(res);
       } catch (error) {
         reject(error);
@@ -88,4 +96,13 @@ export function throttledFetch(id, url, options = {}) {
       queue.push(execute);
     }
   });
+}
+
+export function throttledFetch(id, url, options = {}) {
+  if (typeof url === 'undefined') {
+    // called as throttledFetch(url)
+    url = id;
+    id = 'default';
+  }
+  return throttledRun(id, () => httpFetch(url, options));
 }
