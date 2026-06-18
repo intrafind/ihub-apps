@@ -342,9 +342,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           title={t('sidebar.home', 'Home')}
           className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
         >
-          <span className="flex-none">
-            {renderBrandMark(30)}
-          </span>
+          <span className="flex-none">{renderBrandMark(30)}</span>
           <span className="flex-1 min-w-0 leading-tight">
             <span className="block text-base text-gray-900 dark:text-gray-100 truncate">
               {headerTitle}
@@ -603,7 +601,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50" onClick={onMobileClose} aria-hidden="true" />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
           <aside
             className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
             aria-label={t('sidebar.navigation', 'Navigation')}

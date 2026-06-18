@@ -136,9 +136,7 @@ function Layout() {
                 {uiConfig?.header?.logo?.url ? (
                   <img
                     src={buildAssetUrl(uiConfig.header.logo.url)}
-                    alt={
-                      getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'iHub'
-                    }
+                    alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'iHub'}
                     className="h-6 w-6 object-contain flex-none"
                   />
                 ) : (

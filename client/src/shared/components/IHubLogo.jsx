@@ -17,7 +17,14 @@ export default function IHubLogo({ size = 28, className = '' }) {
       className={className}
     >
       <defs>
-        <linearGradient id={gradientId} x1="6" y1="34" x2="34" y2="6" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id={gradientId}
+          x1="6"
+          y1="34"
+          x2="34"
+          y2="6"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#16a34a" />
           <stop offset="1" stopColor="#0ea5b7" />
         </linearGradient>

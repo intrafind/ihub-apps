@@ -20,7 +20,11 @@ function AppsList() {
   const { user, isAuthenticated } = useAuth();
 
   // Favorite apps (kept in sync across components + tabs by the hook)
-  const { favorites: favoriteApps, isFavorite, toggleFavorite } = useFavorites('ihub_favorite_apps');
+  const {
+    favorites: favoriteApps,
+    isFavorite,
+    toggleFavorite
+  } = useFavorites('ihub_favorite_apps');
 
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {
