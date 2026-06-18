@@ -7,6 +7,7 @@ import Icon from './Icon';
 import { fetchApps } from '../../api/api';
 import { createFavoriteItemHelpers } from '../../utils/favoriteItems';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { isActivePath } from '../../utils/pathUtils';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../features/chat/data/mockChats';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
@@ -107,6 +108,16 @@ export default function AppSidebar() {
     };
   }, []);
 
+  // Keep favorites in sync when toggled elsewhere (e.g. on the apps overview)
+  useEffect(() => {
+    const handleFavoritesChanged = e => {
+      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
+      setFavoriteAppIds(getFavoriteApps());
+    };
+    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
+    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
+  }, []);
+
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
       const next = !prev;
@@ -160,7 +171,52 @@ export default function AppSidebar() {
 
   const isOnApps = location.pathname === '/apps' || location.pathname === '/';
   const isOnPrompts = location.pathname.startsWith('/prompts');
-  const isOnChats = location.pathname.startsWith('/chats');
+
+  // Configured navigation links (CMS pages + header links) mirror what used to
+  // live in the top header. Feature-gated routes and page access rules apply.
+  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
+
+  const canAccessLink = useCallback(
+    link => {
+      if (!link.url.startsWith('/pages/') || !uiConfig?.pages) return true;
+      const pageId = link.url.replace('/pages/', '');
+      const page = uiConfig.pages[pageId];
+      if (!page) return true;
+      if (page.authRequired && !isAuthenticated) return false;
+      if (Array.isArray(page.allowedGroups)) {
+        if (page.allowedGroups.includes('*')) return true;
+        if (page.allowedGroups.length > 0) {
+          const groups = user?.groups || [];
+          return groups.some(g => page.allowedGroups.includes(g));
+        }
+      }
+      return true;
+    },
+    [uiConfig, isAuthenticated, user]
+  );
+
+  const linkIconFor = url => {
+    if (/^https?:\/\//.test(url)) return 'external-link';
+    if (url.startsWith('mailto:')) return 'mail';
+    if (url.startsWith('/prompts')) return 'sparkles';
+    if (url.startsWith('/pages/')) return 'document';
+    if (url === '/') return 'home';
+    return 'link';
+  };
+
+  // Header links from config, excluding entries already represented by the
+  // dedicated buttons (start page "/" and the apps overview "/apps").
+  const configuredLinks = useMemo(() => {
+    const links = uiConfig?.header?.links;
+    if (!Array.isArray(links)) return [];
+    return links.filter(link => {
+      if (!link?.url) return false;
+      if (link.url === '/' || link.url === '/apps') return false;
+      const featureId = featureRoutes[link.url];
+      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+      return canAccessLink(link);
+    });
+  }, [uiConfig, featureFlags, canAccessLink]);
 
   const headerTitle = useMemo(() => {
     if (uiConfig?.header?.titleLight || uiConfig?.header?.titleBold) {
@@ -358,14 +414,25 @@ export default function AppSidebar() {
             onClick={() => navigate('/apps')}
             active={location.pathname === '/apps'}
           />
-          {featureFlags.isEnabled('promptsLibrary', true) && (
-            <NavButton
-              icon="sparkles"
-              label={t('sidebar.prompts', 'Prompts')}
-              onClick={() => navigate('/prompts')}
-              active={isOnPrompts}
-            />
-          )}
+          {configuredLinks.map((link, index) => {
+            const label = getLocalizedContent(link.name, currentLanguage) || link.url;
+            const isExternal = /^https?:\/\//.test(link.url) || link.url.startsWith('mailto:');
+            return (
+              <NavButton
+                key={`${link.url}-${index}`}
+                icon={linkIconFor(link.url)}
+                label={label}
+                active={!isExternal && isActivePath(location.pathname, link.url)}
+                onClick={() => {
+                  if (isExternal) {
+                    window.open(link.url, '_blank', 'noopener,noreferrer');
+                  } else {
+                    navigate(link.url);
+                  }
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* Apps section */}

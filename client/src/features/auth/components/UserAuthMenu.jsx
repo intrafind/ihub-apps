@@ -185,7 +185,14 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
           ref={menuRef}
           role="menu"
           aria-label={t('auth.userMenu', 'User menu')}
-          className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+          className={
+            variant === 'sidebar'
+              ? // In the sidebar the trigger sits at the very bottom, so the menu
+                // floats upward and spans the sidebar width instead of pushing
+                // the layout (which would happen if it opened downward off-screen).
+                'absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50'
+              : 'absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50'
+          }
         >
           {isAuthenticated ? (
             <>

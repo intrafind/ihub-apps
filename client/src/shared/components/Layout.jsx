@@ -34,7 +34,12 @@ function Layout() {
   const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
 
   // Update integration settings from URL parameters and retrieve current settings
-  const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);
+  const {
+    showHeader,
+    showFooter,
+    language,
+    showSidebar: sidebarSetting
+  } = updateSettingsFromUrl(searchParams);
 
   // Apply language from URL if specified
   useEffect(() => {
@@ -63,12 +68,13 @@ function Layout() {
     !isTeamsRoute &&
     !isOfficeRoute &&
     !isNextcloudRoute &&
-    showHeader; // respect showHeader=false for embedded contexts
+    showHeader && // respect showHeader=false for embedded contexts
+    sidebarSetting !== false; // respect sidebar=false to disable the left bar
 
   // Store integration settings in localStorage for use by other components
   useEffect(() => {
-    saveIntegrationSettings({ showHeader, showFooter, language });
-  }, [showHeader, showFooter, language]);
+    saveIntegrationSettings({ showHeader, showFooter, showSidebar: sidebarSetting, language });
+  }, [showHeader, showFooter, sidebarSetting, language]);
 
   const headerColorStyle = {
     backgroundColor: headerColor || '#4f46e5',
@@ -122,6 +128,49 @@ function Layout() {
             <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto">
               <Outlet />
             </main>
+            {/* Slim footer — links shown at the bottom of content pages (not on
+                the app chat, which needs the full height). Disable with
+                footer=false or via UI config. */}
+            {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
+              <footer className="flex-none border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="truncate">
+                    {uiConfig?.footer?.text
+                      ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
+                      : t('footer.copyright')}
+                  </span>
+                  {uiConfig?.footer?.links && (
+                    <nav
+                      aria-label={t('footer.navigation', 'Footer navigation')}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-1"
+                    >
+                      {uiConfig.footer.links
+                        .filter(link => {
+                          const featureId = featureRoutes[link.url];
+                          if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                          return canAccessLink(link);
+                        })
+                        .map((link, index) => (
+                          <Link
+                            key={index}
+                            to={link.url}
+                            onClick={resetHeaderColor}
+                            className="hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                            target={
+                              link.url.startsWith('http') || link.url.startsWith('mailto:')
+                                ? '_blank'
+                                : undefined
+                            }
+                            rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                          >
+                            {getLocalizedContent(link.name, currentLanguage)}
+                          </Link>
+                        ))}
+                    </nav>
+                  )}
+                </div>
+              </footer>
+            )}
           </div>
         </div>
       ) : isAdminRoute ? (

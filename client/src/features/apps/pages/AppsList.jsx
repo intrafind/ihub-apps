@@ -100,9 +100,10 @@ function AppsList() {
   const gridRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Calculate how many apps can fit in the viewport
+  // Calculate how many apps can fit in the viewport. The compact row layout is
+  // much denser than the old banner cards, so we can show far more at once.
   const calculateVisibleAppCount = useCallback(() => {
-    if (!gridRef.current || !containerRef.current) return 9; // Default fallback
+    if (!gridRef.current || !containerRef.current) return 24; // Default fallback
 
     const gridRect = gridRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
@@ -112,17 +113,16 @@ function AppsList() {
     const headerHeight = gridRect.top - containerRect.top;
     const availableHeight = window.innerHeight - headerHeight - 120; // 120px for load more button and padding
 
-    // Approximate height of each app card (you may need to adjust this)
-    const appCardHeight = 250; // Typical height in pixels including margins
+    // Approximate height of each compact app row (including the 12px grid gap).
+    const appCardHeight = 78;
 
-    // Calculate visible rows based on available height
-    const visibleRows = Math.max(1, Math.floor(availableHeight / appCardHeight));
+    // Calculate visible rows based on available height (with a little buffer).
+    const visibleRows = Math.max(1, Math.floor(availableHeight / appCardHeight) + 1);
 
-    // Calculate columns based on screen width (matches the grid-cols classes)
-    let columns = 1;
-    if (window.innerWidth >= 1024)
-      columns = 3; // lg breakpoint
-    else if (window.innerWidth >= 640) columns = 2; // sm breakpoint
+    // Columns follow the auto-fill grid (min 320px per column) within the
+    // available grid width, so the count matches what's actually rendered.
+    const gridWidth = gridRect.width || containerRect.width;
+    const columns = Math.max(1, Math.floor(gridWidth / 320));
 
     return visibleRows * columns;
   }, []);
@@ -239,6 +239,16 @@ function AppsList() {
   useEffect(() => {
     resetHeaderColor();
   }, [resetHeaderColor]);
+
+  // Keep favorites in sync when toggled elsewhere (e.g. from the sidebar)
+  useEffect(() => {
+    const handleFavoritesChanged = e => {
+      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
+      setFavoriteApps(getFavoriteApps());
+    };
+    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
+    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
+  }, []); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Direct search handler without debounce
   const handleSearchChange = useCallback(e => {
@@ -473,7 +483,7 @@ function AppsList() {
   return (
     <div ref={containerRef} className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
       <NextcloudSelectionBanner />
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Page header */}
         <div className="flex flex-col items-center text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">

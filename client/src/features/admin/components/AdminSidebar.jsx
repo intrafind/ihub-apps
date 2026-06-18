@@ -7,7 +7,8 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   MagnifyingGlassIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import { useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
@@ -233,6 +234,35 @@ export default function AdminSidebar({ onMobileToggle }) {
 
   const sidebarBody = (
     <>
+      {/* Back to the main app */}
+      <div className={`${isCollapsed ? 'px-2' : 'px-3'} pt-3 pb-2`}>
+        {isCollapsed ? (
+          <div className="relative group">
+            <Link
+              to="/"
+              aria-label={t('admin.sidebar.backToApp', 'Back to iHub')}
+              className="flex items-center justify-center h-9 w-9 mx-auto rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+            >
+              <ArrowLeftIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
+            </Link>
+            <div
+              className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
+              role="tooltip"
+            >
+              {t('admin.sidebar.backToApp', 'Back to iHub')}
+            </div>
+          </div>
+        ) : (
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+          >
+            <ArrowLeftIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>{t('admin.sidebar.backToApp', 'Back to iHub')}</span>
+          </Link>
+        )}
+      </div>
+
       {/* Search stub */}
       {!isCollapsed && (
         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
@@ -321,6 +351,17 @@ export default function AdminSidebar({ onMobileToggle }) {
         </div>
 
         <nav className="flex flex-col flex-1 overflow-hidden">
+          {/* Back to the main app */}
+          <div className="px-3 pt-3 pb-1">
+            <Link
+              to="/"
+              onClick={closeMobile}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+            >
+              <ArrowLeftIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>{t('admin.sidebar.backToApp', 'Back to iHub')}</span>
+            </Link>
+          </div>
           {/* Search stub (always expanded in mobile) */}
           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <button

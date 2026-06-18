@@ -4,13 +4,16 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import Icon from '../../../shared/components/Icon';
-import { fetchApps } from '../../../api/api';
+import { fetchApps, fetchAppDetails } from '../../../api/api';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../chat/data/mockChats';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
+import ChatInput from '../../chat/components/ChatInput';
+import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import { setPendingChatStart } from '../../chat/startChatHandoff';
 
 const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('ihub_favorite_apps');
 
@@ -55,7 +58,11 @@ export default function StartPage() {
   const [appsLoading, setAppsLoading] = useState(true);
   const [favoriteAppIds, setFavoriteAppIds] = useState(() => getFavoriteApps());
   const [draft, setDraft] = useState('');
-  const textareaRef = useRef(null);
+  const [defaultAppDetails, setDefaultAppDetails] = useState(null);
+
+  const inputRef = useRef(null);
+  const formRef = useRef(null);
+  const fileUploadHandler = useFileUploadHandler();
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
 
@@ -78,6 +85,16 @@ export default function StartPage() {
     };
   }, []);
 
+  // Keep favorites fresh when toggled elsewhere
+  useEffect(() => {
+    const handleFavoritesChanged = e => {
+      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
+      setFavoriteAppIds(getFavoriteApps());
+    };
+    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
+    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
+  }, []);
+
   const greeting = useMemo(() => {
     const base = timeBasedGreeting(t);
     const name = user?.name || user?.email?.split('@')[0] || '';
@@ -93,6 +110,24 @@ export default function StartPage() {
     }
     return apps[0] || null;
   }, [apps, uiConfig]);
+
+  // Load the full default-app config so the chat input renders exactly what the
+  // app is configured for (uploads, input mode, placeholder, etc.).
+  useEffect(() => {
+    if (!defaultApp?.id) {
+      setDefaultAppDetails(null);
+      return;
+    }
+    let mounted = true;
+    fetchAppDetails(defaultApp.id)
+      .then(details => {
+        if (mounted && details) setDefaultAppDetails(details);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [defaultApp?.id]);
 
   // Featured apps: favorites first, then by order, max 4
   const featuredApps = useMemo(() => {
@@ -110,20 +145,35 @@ export default function StartPage() {
 
   const recentChats = chatHistoryEnabled ? MOCK_CHATS.slice(0, 3) : [];
 
-  const handleSend = useCallback(() => {
-    const text = draft.trim();
-    if (!text || !defaultApp) return;
-    navigate(`/apps/${defaultApp.id}?prefill=${encodeURIComponent(text)}`);
-  }, [draft, defaultApp, navigate]);
+  const uploadConfig = useMemo(
+    () =>
+      defaultAppDetails ? fileUploadHandler.createUploadConfig(defaultAppDetails, null) : undefined,
+    [defaultAppDetails, fileUploadHandler]
+  );
 
-  const handleKeyDown = useCallback(
+  // Start the chat: carry the message via prefill+send (so refresh/shared links
+  // work) and hand off any attachment payload through the in-memory bridge.
+  const handleSubmit = useCallback(
     e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
+      if (e?.preventDefault) e.preventDefault();
+      if (!defaultApp) return;
+      const text = draft.trim();
+      const hasFile = fileUploadHandler.selectedFile != null;
+      if (!text && !hasFile && !defaultAppDetails?.allowEmptyContent) return;
+
+      if (hasFile) {
+        setPendingChatStart({ appId: defaultApp.id, files: fileUploadHandler.selectedFile });
       }
+
+      const params = new URLSearchParams();
+      if (text) {
+        params.set('prefill', text);
+        params.set('send', 'true');
+      }
+      const qs = params.toString();
+      navigate(`/apps/${defaultApp.id}${qs ? `?${qs}` : ''}`);
     },
-    [handleSend]
+    [draft, defaultApp, defaultAppDetails, fileUploadHandler, navigate]
   );
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
@@ -148,64 +198,56 @@ export default function StartPage() {
           </p>
         </div>
 
-        {/* Default chat input */}
+        {/* Default chat input — renders the real app input (uploads, prompts,
+            placeholder, input mode) and starts the chat on submit. */}
         {defaultApp && (
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs flex-none"
-                style={{ backgroundColor: defaultApp.color || '#4f46e5' }}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs flex-none"
+                  style={{ backgroundColor: defaultApp.color || '#4f46e5' }}
+                >
+                  <Icon name={defaultApp.icon} size="sm" className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                  {getLocalizedContent(defaultApp.name, currentLanguage)}
+                </span>
+              </div>
+              <button
+                onClick={() => navigate(`/apps/${defaultApp.id}`)}
+                className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline flex-none"
               >
-                <Icon name={defaultApp.icon} size="sm" className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {getLocalizedContent(defaultApp.name, currentLanguage)}
-              </span>
+                {t('startPage.openApp', 'Open full app')} →
+              </button>
             </div>
-            <div className="border-2 border-indigo-500 dark:border-indigo-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm shadow-indigo-100 dark:shadow-none">
-              <textarea
-                ref={textareaRef}
+
+            {defaultAppDetails ? (
+              <ChatInput
+                app={defaultAppDetails}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={t('startPage.inputPlaceholder', 'Type your message here…')}
-                rows={2}
-                className="block w-full border-none outline-none resize-none px-5 py-4 text-[15px] leading-relaxed bg-transparent text-gray-900 dark:text-gray-100 placeholder-gray-400"
-                style={{ minHeight: '64px' }}
+                onSubmit={handleSubmit}
+                isProcessing={false}
+                onCancel={() => {}}
+                inputRef={inputRef}
+                formRef={formRef}
+                uploadConfig={uploadConfig}
+                onFileSelect={fileUploadHandler.handleFileSelect}
+                selectedFile={fileUploadHandler.selectedFile}
+                showUploader={fileUploadHandler.showUploader}
+                onToggleUploader={fileUploadHandler.toggleUploader}
+                allowEmptySubmit={
+                  defaultAppDetails?.allowEmptyContent || fileUploadHandler.selectedFile !== null
+                }
+                showModelSelector={false}
+                currentLanguage={currentLanguage}
               />
-              <div className="flex items-center gap-1 px-4 pb-3">
-                <button
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  title={t('chat.attachFile', 'Attach')}
-                  onClick={() => navigate(`/apps/${defaultApp.id}`)}
-                >
-                  <Icon name="paperclip" size="sm" />
-                </button>
-                <button
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  title={t('sidebar.prompts', 'Prompts')}
-                  onClick={() => navigate('/prompts')}
-                >
-                  <Icon name="sparkles" size="sm" />
-                </button>
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    onClick={() => navigate(`/apps/${defaultApp.id}`)}
-                    className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline px-2 py-1"
-                  >
-                    {t('startPage.openApp', 'Open full app')}
-                  </button>
-                  <button
-                    onClick={handleSend}
-                    disabled={!draft.trim()}
-                    title={t('common.send', 'Send')}
-                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
-                  >
-                    <Icon name="arrowUp" size="sm" />
-                  </button>
-                </div>
+            ) : (
+              <div className="flex justify-center py-6 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800">
+                <LoadingSpinner message={t('app.loading')} />
               </div>
-            </div>
+            )}
           </div>
         )}
 
