@@ -1668,7 +1668,7 @@ function AppChat({ preloadedApp = null }) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] min-h-0 overflow-hidden pt-4 pb-2">
+    <div className="flex flex-col h-full max-h-full min-h-0 overflow-hidden pt-4 pb-2">
       {/* Shared App Header */}
       <SharedAppHeader
         app={app}

@@ -471,65 +471,58 @@ function AppsList() {
   }
 
   return (
-    <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col">
+    <div ref={containerRef} className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
       <NextcloudSelectionBanner />
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
-          <Icon
-            name={uiConfig?.icons?.appsListLogo || 'apps-svg-logo'}
-            className="text-indigo-600 w-[4rem] h-[4rem] mr-2"
-          />
-          {/* Use title from UI config if available, otherwise use translation */}
-          {uiConfig?.appsList?.title
-            ? getLocalizedContent(uiConfig.appsList.title, currentLanguage)
-            : t('pages.appsList.title')}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          {uiConfig?.appsList?.subtitle
-            ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage)
-            : t('pages.appsList.subtitle')}
-        </p>
-      </div>
+      <div className="max-w-5xl mx-auto">
 
-      {/* Conditional rendering of search based on configuration and app count */}
-      {searchConfig.enabled && apps.length > 3 && (
-        <div
-          className={`flex flex-col sm:flex-row items-stretch gap-4 mb-4 mx-auto ${
-            searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'
-          }`}
-        >
-          <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Icon name="search" className="h-5 w-5 text-gray-400" />
+        {/* Page header */}
+        <div className="flex flex-col items-center text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+            {uiConfig?.appsList?.title
+              ? getLocalizedContent(uiConfig.appsList.title, currentLanguage)
+              : t('pages.appsList.title')}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {uiConfig?.appsList?.subtitle
+              ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage)
+              : t('pages.appsList.subtitle')}
+          </p>
+        </div>
+
+        {/* Search + sort */}
+        {searchConfig.enabled && apps.length > 3 && (
+          <div className="flex flex-col sm:flex-row items-stretch gap-3 mb-5 justify-center">
+            <div className="relative" style={{ minWidth: 0, flex: '0 1 440px' }}>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                <Icon name="search" className="h-5 w-5" />
+              </span>
+              <input
+                type="text"
+                placeholder={
+                  getLocalizedContent(searchConfig.placeholder, currentLanguage) ||
+                  t('pages.appsList.searchPlaceholder')
+                }
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="block w-full pl-12 pr-10 py-3 border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 bg-white"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                aria-label={t('apps.searchApps', 'Search apps')}
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label={t('common.clearSearch', 'Clear search')}
+                >
+                  <Icon name="x" className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder={
-                getLocalizedContent(searchConfig.placeholder, currentLanguage) ||
-                t('pages.appsList.searchPlaceholder')
-              }
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              autoComplete="off"
-              data-lpignore="true"
-              data-1p-ignore="true"
-              aria-label={t('apps.searchApps', 'Search apps')}
-            />
-            {searchTerm && (
-              <button
-                onClick={clearSearch}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                aria-label={t('common.clearSearch', 'Clear search')}
-              >
-                <Icon name="x" className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-          {sortConfig.enabled && (
-            <div className="flex-shrink-0">
+            {sortConfig.enabled && (
               <select
-                className="h-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
+                className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-xl py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer outline-none bg-white"
                 value={sortMethod}
                 onChange={e => setSortMethod(e.target.value)}
                 aria-label={t('apps.sortBy', 'Sort by')}
@@ -538,97 +531,119 @@ function AppsList() {
                 <option value="nameAsc">{t('pages.appsList.sort.nameAsc', 'Name A-Z')}</option>
                 <option value="nameDesc">{t('pages.appsList.sort.nameDesc', 'Name Z-A')}</option>
               </select>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Category filter */}
-      {categoriesConfig.enabled && (
-        <div className="flex flex-wrap gap-2 mb-6 justify-center">
-          {availableCategories.map(category => (
-            <button
-              key={category.id}
-              onClick={() => handleCategorySelect(category.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === category.id
-                  ? 'text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-              style={{
-                backgroundColor: selectedCategory === category.id ? category.color : undefined
-              }}
-            >
-              {getLocalizedContent(category.name, currentLanguage)}
-            </button>
-          ))}
-        </div>
-      )}
+        {/* Category filter pills */}
+        {categoriesConfig.enabled && availableCategories.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-7 justify-center">
+            {availableCategories.map(category => (
+              <button
+                key={category.id}
+                onClick={() => handleCategorySelect(category.id)}
+                className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                  selectedCategory === category.id
+                    ? 'text-white'
+                    : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+                style={{
+                  backgroundColor: selectedCategory === category.id ? '#3a3f47' : undefined
+                }}
+              >
+                {getLocalizedContent(category.name, currentLanguage)}
+              </button>
+            ))}
+          </div>
+        )}
 
-      {displayedApps.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400">{t('pages.appsList.noApps')}</p>
-          {searchConfig.enabled && apps.length > 3 && searchTerm ? (
-            <button
-              onClick={() => {
-                clearSearch();
-              }}
-              className="mt-4 px-4 py-2 text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
-            >
-              {t('pages.appsList.clearFilters')}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <div className="flex justify-center w-full">
+        {displayedApps.length === 0 ? (
+          <div className="text-center py-16">
+            <Icon name="search" className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400">{t('pages.appsList.noApps')}</p>
+            {searchConfig.enabled && apps.length > 3 && searchTerm && (
+              <button
+                onClick={clearSearch}
+                className="mt-4 px-4 py-2 text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 text-sm"
+              >
+                {t('pages.appsList.clearFilters')}
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Compact app rows grid */}
             <div
               ref={gridRef}
-              className={`grid gap-6 ${
-                displayedApps.length === 1
-                  ? 'grid-cols-1 max-w-md mx-auto'
-                  : displayedApps.length === 2
-                    ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto'
-                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-              }`}
+              className="grid gap-3"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
               role="list"
-              aria-label="Apps list"
+              aria-label={t('apps.appsList', 'Apps list')}
             >
-              {displayedApps.map(app => (
-                <AppCard
-                  key={app.id}
-                  app={app}
-                  variant="full"
-                  href={`/apps/${app.id}`}
-                  language={currentLanguage}
-                  isFavorite={favoriteApps.includes(app.id)}
-                  isRecent={recentAppIds.includes(app.id)}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              ))}
+              {displayedApps.map(app => {
+                const name = getLocalizedContent(app.name, currentLanguage) || app.id;
+                const desc = getLocalizedContent(app.description, currentLanguage) || '';
+                const isFav = favoriteApps.includes(app.id);
+                return (
+                  <button
+                    key={app.id}
+                    onClick={() => (window.location.href = `/apps/${app.id}`)}
+                    role="listitem"
+                    className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-left hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md transition-all group"
+                  >
+                    <span
+                      className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
+                      style={{ backgroundColor: app.color || '#4f46e5' }}
+                    >
+                      <Icon name={app.icon} size="md" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-bold text-[15px] text-gray-900 dark:text-gray-100 truncate">
+                        {name}
+                      </span>
+                      <span className="block text-[13px] text-gray-500 dark:text-gray-400 truncate leading-snug">
+                        {desc}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={e => handleToggleFavorite(e, app.id)}
+                      title={isFav ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+                      className="w-8 h-8 flex-none flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                    >
+                      <Icon
+                        name="star"
+                        size="sm"
+                        className={isFav ? 'text-yellow-400' : 'text-gray-300'}
+                        solid={isFav}
+                      />
+                    </button>
+                  </button>
+                );
+              })}
             </div>
-          </div>
 
-          {/* Load More Button */}
-          {hasMoreApps && (
-            <div className="text-center mt-6">
-              <button
-                onClick={handleLoadMore}
-                className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2 px-4 border border-indigo-500 rounded shadow-sm transition-colors"
-              >
-                {t('pages.appsList.loadMore', 'Load More')}
-              </button>
-              <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
-                {t('pages.appsList.showingCountOfTotal', {
-                  defaultValue: 'Showing {{displayed}} of {{total}} apps',
-                  displayed: displayedApps.length,
-                  total: sortedApps.length
-                })}
-              </p>
-            </div>
-          )}
-        </>
-      )}
+            {/* Load More */}
+            {hasMoreApps && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={handleLoadMore}
+                  className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2.5 px-6 border border-indigo-500 rounded-xl shadow-sm transition-colors text-sm"
+                >
+                  {t('pages.appsList.loadMore', 'Load More')}
+                </button>
+                <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">
+                  {t('pages.appsList.showingCountOfTotal', {
+                    defaultValue: 'Showing {{displayed}} of {{total}} apps',
+                    displayed: displayedApps.length,
+                    total: sortedApps.length
+                  })}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

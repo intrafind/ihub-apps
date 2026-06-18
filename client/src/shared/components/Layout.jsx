@@ -15,6 +15,7 @@ import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
+import AppSidebar from './AppSidebar';
 
 function Layout() {
   const { t, i18n } = useTranslation();
@@ -48,6 +49,22 @@ function Layout() {
     return pathnameStartsWith(location.pathname, '/apps/');
   }, [location.pathname]);
 
+  // Show the sidebar on all non-admin, non-special pages
+  const isAdminRoute = pathnameStartsWith(location.pathname, '/admin');
+  const isSetupRoute = pathnameStartsWith(location.pathname, '/setup');
+  const isLoginRoute = location.pathname === '/login';
+  const isTeamsRoute = pathnameStartsWith(location.pathname, '/teams');
+  const isOfficeRoute = pathnameStartsWith(location.pathname, '/office');
+  const isNextcloudRoute = pathnameStartsWith(location.pathname, '/nextcloud');
+  const showSidebar =
+    !isAdminRoute &&
+    !isSetupRoute &&
+    !isLoginRoute &&
+    !isTeamsRoute &&
+    !isOfficeRoute &&
+    !isNextcloudRoute &&
+    showHeader; // respect showHeader=false for embedded contexts
+
   // Store integration settings in localStorage for use by other components
   useEffect(() => {
     saveIntegrationSettings({ showHeader, showFooter, language });
@@ -80,7 +97,7 @@ function Layout() {
 
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${pathnameStartsWith(location.pathname, '/admin') ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
     >
       <a
         href="#main-content"
@@ -89,133 +106,26 @@ function Layout() {
         {t('accessibility.skipToContent', 'Skip to main content')}
       </a>
 
-      {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
+      {/* Disclaimer Popup */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
       )}
 
-      {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
-      {!pathnameStartsWith(location.pathname, '/admin') && <SmartSearch />}
+      {/* Global smart search overlay — not shown on admin routes */}
+      {!isAdminRoute && <SmartSearch />}
 
-      {showHeader && (
-        <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
-          <div className="relative flex items-stretch h-16">
-            <div className="container mx-auto px-4 flex justify-between items-center">
-              <div className="flex items-center h-full">
-                <Link to="/" onClick={resetHeaderColor} className="flex items-center gap-2.5 py-2">
-                  {uiConfig?.header?.logo?.url && (
-                    <img
-                      src={buildAssetUrl(uiConfig.header.logo.url)}
-                      alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'}
-                      className="h-7 w-7 flex-shrink-0"
-                    />
-                  )}
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-lg tracking-tight">
-                      {uiConfig?.header?.titleLight && (
-                        <span className="font-light">
-                          {getLocalizedContent(uiConfig.header.titleLight, currentLanguage)}
-                        </span>
-                      )}
-                      {uiConfig?.header?.titleBold && (
-                        <span className="font-bold">
-                          {getLocalizedContent(uiConfig.header.titleBold, currentLanguage)}
-                        </span>
-                      )}
-                      {!uiConfig?.header?.titleLight && !uiConfig?.header?.titleBold && (
-                        <span className="font-semibold">
-                          {uiConfig?.header?.title
-                            ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                            : 'iHub Apps'}
-                        </span>
-                      )}
-                    </span>
-                    {uiConfig?.header?.tagline && (
-                      <span className="text-[9px] text-white/60 font-normal">
-                        {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-              </div>
-
-              <nav
-                className="hidden md:flex items-center space-x-6"
-                aria-label={t('common.mainNavigation', 'Main navigation')}
-              >
-                {uiConfig?.header?.links &&
-                  uiConfig.header.links
-                    .filter(link => {
-                      const featureId = featureRoutes[link.url];
-                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
-                      return canAccessLink(link);
-                    })
-                    .map((link, index) => (
-                      <Link
-                        key={index}
-                        to={link.url}
-                        onClick={resetHeaderColor}
-                        className={`hover:text-white/80 ${isActivePath(location.pathname, link.url) ? 'underline font-medium' : ''}`}
-                        target={link.url.startsWith('http') ? '_blank' : undefined}
-                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                      >
-                        {getLocalizedContent(link.name, currentLanguage)}
-                      </Link>
-                    ))}
-              </nav>
-
-              <div className="flex items-center space-x-2">
-                <DarkModeToggle />
-                {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
-                <UserAuthMenu />
-                <button
-                  className="md:hidden text-white"
-                  onClick={toggleMobileMenu}
-                  aria-label={t('common.toggleMenu', 'Toggle menu')}
-                >
-                  <Icon name="menu" size="lg" className="text-white" />
-                </button>
-              </div>
-            </div>
+      {/* Sidebar layout (non-admin, non-embedded pages) */}
+      {showSidebar ? (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <AppSidebar />
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto">
+              <Outlet />
+            </main>
           </div>
-
-          {/* Mobile Menu */}
-          {mobileMenuOpen && (
-            <div className="md:hidden bg-indigo-800 shadow-lg" style={headerColorStyle}>
-              <nav
-                className="container mx-auto px-4 py-3 flex flex-col"
-                aria-label={t('common.mobileNavigation', 'Mobile navigation')}
-              >
-                {uiConfig?.header?.links &&
-                  uiConfig.header.links
-                    .filter(link => {
-                      const featureId = featureRoutes[link.url];
-                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
-                      return canAccessLink(link);
-                    })
-                    .map((link, index) => (
-                      <Link
-                        key={index}
-                        to={link.url}
-                        className={`block py-2 ${isActivePath(location.pathname, link.url) ? 'font-medium' : ''}`}
-                        target={link.url.startsWith('http') ? '_blank' : undefined}
-                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                        onClick={() => {
-                          setMobileMenuOpen(false);
-                          resetHeaderColor();
-                        }}
-                      >
-                        {getLocalizedContent(link.name, currentLanguage)}
-                      </Link>
-                    ))}
-              </nav>
-            </div>
-          )}
-        </header>
-      )}
-
-      {/* Admin routes handle their own layout (sidebar + content); other routes use container */}
-      {pathnameStartsWith(location.pathname, '/admin') ? (
+        </div>
+      ) : isAdminRoute ? (
+        /* Admin routes handle their own layout */
         <main
           id="main-content"
           tabIndex={-1}
@@ -224,57 +134,174 @@ function Layout() {
           <Outlet />
         </main>
       ) : (
-        <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
-          <div className="container mx-auto px-4">
-            <Outlet />
-          </div>
-        </main>
-      )}
+        /* Embedded / legacy contexts: keep original header + container layout */
+        <>
+          {showHeader && (
+            <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
+              <div className="relative flex items-stretch h-16">
+                <div className="container mx-auto px-4 flex justify-between items-center">
+                  <div className="flex items-center h-full">
+                    <Link to="/" onClick={resetHeaderColor} className="flex items-center gap-2.5 py-2">
+                      {uiConfig?.header?.logo?.url && (
+                        <img
+                          src={buildAssetUrl(uiConfig.header.logo.url)}
+                          alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'}
+                          className="h-7 w-7 flex-shrink-0"
+                        />
+                      )}
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-lg tracking-tight">
+                          {uiConfig?.header?.titleLight && (
+                            <span className="font-light">
+                              {getLocalizedContent(uiConfig.header.titleLight, currentLanguage)}
+                            </span>
+                          )}
+                          {uiConfig?.header?.titleBold && (
+                            <span className="font-bold">
+                              {getLocalizedContent(uiConfig.header.titleBold, currentLanguage)}
+                            </span>
+                          )}
+                          {!uiConfig?.header?.titleLight && !uiConfig?.header?.titleBold && (
+                            <span className="font-semibold">
+                              {uiConfig?.header?.title
+                                ? getLocalizedContent(uiConfig.header.title, currentLanguage)
+                                : 'iHub Apps'}
+                            </span>
+                          )}
+                        </span>
+                        {uiConfig?.header?.tagline && (
+                          <span className="text-[9px] text-white/60 font-normal">
+                            {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  </div>
 
-      {/* Footer - Only render if enabled (defaults to true) and not on an app page */}
-      {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
-        <footer className="bg-gray-800 dark:bg-gray-950 text-white py-4">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="mb-4 md:mb-0">
-                <p>
-                  {uiConfig?.footer?.text
-                    ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                    : t('footer.copyright')}
-                </p>
+                  <nav
+                    className="hidden md:flex items-center space-x-6"
+                    aria-label={t('common.mainNavigation', 'Main navigation')}
+                  >
+                    {uiConfig?.header?.links &&
+                      uiConfig.header.links
+                        .filter(link => {
+                          const featureId = featureRoutes[link.url];
+                          if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                          return canAccessLink(link);
+                        })
+                        .map((link, index) => (
+                          <Link
+                            key={index}
+                            to={link.url}
+                            onClick={resetHeaderColor}
+                            className={`hover:text-white/80 ${isActivePath(location.pathname, link.url) ? 'underline font-medium' : ''}`}
+                            target={link.url.startsWith('http') ? '_blank' : undefined}
+                            rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                          >
+                            {getLocalizedContent(link.name, currentLanguage)}
+                          </Link>
+                        ))}
+                  </nav>
+
+                  <div className="flex items-center space-x-2">
+                    <DarkModeToggle />
+                    {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
+                    <UserAuthMenu />
+                    <button
+                      className="md:hidden text-white"
+                      onClick={toggleMobileMenu}
+                      aria-label={t('common.toggleMenu', 'Toggle menu')}
+                    >
+                      <Icon name="menu" size="lg" className="text-white" />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <nav
-                aria-label={t('footer.navigation', 'Footer navigation')}
-                className="flex flex-wrap justify-center gap-4 md:gap-6"
-              >
-                {uiConfig?.footer?.links &&
-                  uiConfig.footer.links
-                    .filter(link => {
-                      const featureId = featureRoutes[link.url];
-                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
-                      return canAccessLink(link);
-                    })
-                    .map((link, index) => (
-                      <Link
-                        key={index}
-                        to={link.url}
-                        onClick={resetHeaderColor}
-                        className="hover:text-gray-300"
-                        target={
-                          link.url.startsWith('http') || link.url.startsWith('mailto:')
-                            ? '_blank'
-                            : undefined
-                        }
-                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                      >
-                        {getLocalizedContent(link.name, currentLanguage)}
-                      </Link>
-                    ))}
-              </nav>
+
+              {mobileMenuOpen && (
+                <div className="md:hidden bg-indigo-800 shadow-lg" style={headerColorStyle}>
+                  <nav
+                    className="container mx-auto px-4 py-3 flex flex-col"
+                    aria-label={t('common.mobileNavigation', 'Mobile navigation')}
+                  >
+                    {uiConfig?.header?.links &&
+                      uiConfig.header.links
+                        .filter(link => {
+                          const featureId = featureRoutes[link.url];
+                          if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                          return canAccessLink(link);
+                        })
+                        .map((link, index) => (
+                          <Link
+                            key={index}
+                            to={link.url}
+                            className={`block py-2 ${isActivePath(location.pathname, link.url) ? 'font-medium' : ''}`}
+                            target={link.url.startsWith('http') ? '_blank' : undefined}
+                            rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              resetHeaderColor();
+                            }}
+                          >
+                            {getLocalizedContent(link.name, currentLanguage)}
+                          </Link>
+                        ))}
+                  </nav>
+                </div>
+              )}
+            </header>
+          )}
+
+          <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
+            <div className="container mx-auto px-4">
+              <Outlet />
             </div>
-            {/* Disclaimer removed from footer - now shown as a popup */}
-          </div>
-        </footer>
+          </main>
+
+          {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
+            <footer className="bg-gray-800 dark:bg-gray-950 text-white py-4">
+              <div className="container mx-auto px-4">
+                <div className="flex flex-col md:flex-row justify-between items-center">
+                  <div className="mb-4 md:mb-0">
+                    <p>
+                      {uiConfig?.footer?.text
+                        ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
+                        : t('footer.copyright')}
+                    </p>
+                  </div>
+                  <nav
+                    aria-label={t('footer.navigation', 'Footer navigation')}
+                    className="flex flex-wrap justify-center gap-4 md:gap-6"
+                  >
+                    {uiConfig?.footer?.links &&
+                      uiConfig.footer.links
+                        .filter(link => {
+                          const featureId = featureRoutes[link.url];
+                          if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                          return canAccessLink(link);
+                        })
+                        .map((link, index) => (
+                          <Link
+                            key={index}
+                            to={link.url}
+                            onClick={resetHeaderColor}
+                            className="hover:text-gray-300"
+                            target={
+                              link.url.startsWith('http') || link.url.startsWith('mailto:')
+                                ? '_blank'
+                                : undefined
+                            }
+                            rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                          >
+                            {getLocalizedContent(link.name, currentLanguage)}
+                          </Link>
+                        ))}
+                  </nav>
+                </div>
+              </div>
+            </footer>
+          )}
+        </>
       )}
     </div>
   );
