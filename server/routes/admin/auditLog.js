@@ -3,25 +3,48 @@ import { buildServerPath } from '../../utils/basePath.js';
 import {
   queryAuditLog,
   cleanupAuditLog,
-  getAuditLogRetentionDefault
+  getAuditLogRetentionDefault,
+  logAudit
 } from '../../services/AuditLogService.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
+import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
+import logger from '../../utils/logger.js';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import { getRootDir } from '../../pathUtils.js';
+import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+
+// Accept the platform.json shape exactly: false (off), true (mask),
+// or one of 'off' | 'mask' | 'drop'. Anything else is a 400 — we don't
+// want the UI accidentally writing something the runtime would ignore.
+const VALID_ANONYMIZE_IP = new Set([false, true, 'off', 'mask', 'drop']);
+
+function normalizeAnonymizeIp(value) {
+  // Legacy aliases: treat `true` and `false` as their string equivalents so
+  // the UI only has to deal with one shape.
+  if (value === false) return 'off';
+  if (value === true) return 'mask';
+  return value;
+}
 
 // Upper bound on rows returned by the CSV export to keep memory bounded.
 const MAX_EXPORT_ROWS = 100000;
 
-function getRetentionSettings() {
+function getAuditSettings() {
   const platform = configCache.getPlatform ? configCache.getPlatform() : {};
   const cfg = platform?.audit || {};
   return {
     retentionDays: Number.isFinite(cfg.retentionDays)
       ? cfg.retentionDays
       : getAuditLogRetentionDefault(),
-    cleanupEnabled: cfg.cleanupEnabled !== false
+    cleanupEnabled: cfg.cleanupEnabled !== false,
+    anonymizeIp: normalizeAnonymizeIp(cfg.anonymizeIp ?? false)
   };
 }
+
+// Backward-compat alias — the retention badge in AdminAuditLogPage reads this.
+const getRetentionSettings = getAuditSettings;
 
 export default function registerAdminAuditLogRoutes(app) {
   /**
@@ -144,6 +167,69 @@ export default function registerAdminAuditLogRoutes(app) {
       res.json({ ok: true, ...result });
     } catch (error) {
       return sendInternalError(res, error, 'run audit log cleanup');
+    }
+  });
+
+  /**
+   * GET /api/admin/audit-log/settings
+   * Return the editable audit-log policy (retention + privacy). Combined into
+   * a single read so the admin UI can prefill the form with one round-trip.
+   */
+  app.get(buildServerPath('/api/admin/audit-log/settings'), adminAuth, async (_req, res) => {
+    try {
+      res.json(getAuditSettings());
+    } catch (error) {
+      return sendInternalError(res, error, 'read audit log settings');
+    }
+  });
+
+  /**
+   * PUT /api/admin/audit-log/settings
+   * Update audit policy fields in platform.json. Currently scoped to the
+   * `anonymizeIp` toggle; retention/email/verbosity continue to be edited
+   * through the platform config form. Only fields explicitly provided in the
+   * body are written — `undefined` keys leave the existing value alone.
+   */
+  app.put(buildServerPath('/api/admin/audit-log/settings'), adminAuth, async (req, res) => {
+    try {
+      const { anonymizeIp } = req.body || {};
+      if (anonymizeIp !== undefined && !VALID_ANONYMIZE_IP.has(anonymizeIp)) {
+        return sendBadRequest(
+          res,
+          "Invalid anonymizeIp value; expected one of 'off' | 'mask' | 'drop' (or boolean)"
+        );
+      }
+
+      const rootDir = getRootDir();
+      const contentsDir = process.env.CONTENTS_DIR || 'contents';
+      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
+
+      const platformContent = await fs.readFile(platformPath, 'utf8');
+      const platformConfig = JSON.parse(platformContent);
+
+      if (!platformConfig.audit) platformConfig.audit = {};
+      if (anonymizeIp !== undefined) {
+        platformConfig.audit.anonymizeIp = anonymizeIp;
+      }
+
+      await atomicWriteJSON(platformPath, platformConfig);
+      await configCache.refreshCacheEntry('config/platform.json');
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'audit',
+        summary: `audit.anonymizeIp -> ${anonymizeIp}`
+      });
+      logger.info('Audit log settings updated', {
+        component: 'AdminAuditLog',
+        anonymizeIp
+      });
+
+      res.json({ ok: true, settings: getAuditSettings() });
+    } catch (error) {
+      return sendInternalError(res, error, 'update audit log settings');
     }
   });
 }

@@ -159,8 +159,9 @@ sit behind two opt-in flags: `telemetry.events.includePrompts` and
 
 ## Privacy controls
 
-All of the following live in `contents/config/platform.json` (or the admin UI
-at **Admin → Platform → Configuration**). The first three are new in 5.4.0.
+All of the following live in `contents/config/platform.json`. The first three
+are new in 5.4.0; the two `anonymizeIp` toggles can also be edited from the
+admin UI at **Admin → Observability → Logging → PII & Privacy**.
 
 ### `audit.anonymizeIp` (new)
 
