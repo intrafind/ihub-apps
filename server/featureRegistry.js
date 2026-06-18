@@ -104,6 +104,17 @@ export const featureRegistry = [
     default: false
   },
   {
+    id: 'chatHistory',
+    name: { en: 'Chat History', de: 'Chat-Verlauf' },
+    description: {
+      en: 'Show recent chats in the sidebar and a dedicated chat history page (currently uses sample data)',
+      de: 'Zeigt letzte Chats in der Seitenleiste und eine eigene Chat-Verlaufsseite (nutzt derzeit Beispieldaten)'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {

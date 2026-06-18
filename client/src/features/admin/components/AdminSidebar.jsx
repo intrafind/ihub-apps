@@ -13,13 +13,38 @@ import {
 import { useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 
 // Sections visible to content-admin-only users
 const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
 // Items within aiWorkspace visible to content-admin-only users
 const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'sources']);
+
+// iHub gradient logo SVG — matches the user-facing sidebar branding.
+function IHubLogo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient
+          id="admin-ihub-lg"
+          x1="6"
+          y1="34"
+          x2="34"
+          y2="6"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#16a34a" />
+          <stop offset="1" stopColor="#0ea5b7" />
+        </linearGradient>
+      </defs>
+      <path d="M20 5L34 33H27.2L20 17.5L12.8 33H6L20 5Z" fill="url(#admin-ihub-lg)" />
+    </svg>
+  );
+}
 
 function NavItem({ item, isCollapsed }) {
   const location = useLocation();
@@ -190,12 +215,32 @@ function SidebarContent({ sections }) {
 }
 
 export default function AdminSidebar({ onMobileToggle }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const { platformConfig } = usePlatformConfig();
+  const { uiConfig } = useUIConfig();
   const { user } = useAuth();
   const featureFlags = useFeatureFlags();
   const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebar();
   const drawerRef = useRef(null);
+
+  const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
+  const brandTitle =
+    uiConfig?.header?.titleLight || uiConfig?.header?.titleBold ? (
+      <>
+        <span className="font-light">
+          {getLocalizedContent(uiConfig.header.titleLight, currentLanguage)}
+        </span>
+        <span className="font-extrabold">
+          {getLocalizedContent(uiConfig.header.titleBold, currentLanguage)}
+        </span>
+      </>
+    ) : (
+      <>
+        <span className="font-light">iHub </span>
+        <span className="font-extrabold">Apps</span>
+      </>
+    );
 
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
@@ -234,8 +279,63 @@ export default function AdminSidebar({ onMobileToggle }) {
 
   const sidebarBody = (
     <>
+      {/* Branded header — mirrors the user-facing sidebar */}
+      {isCollapsed ? (
+        <div className="flex flex-col items-center gap-1.5 pt-4 pb-2">
+          <Link
+            to="/"
+            title={t('admin.sidebar.backToApp', 'Back to iHub')}
+            className="rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            {logoSrc ? (
+              <img src={logoSrc} alt="Logo" className="w-7 h-7 object-contain" />
+            ) : (
+              <IHubLogo size={28} />
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={t('admin.sidebar.expand', 'Expand sidebar')}
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ChevronDoubleRightIcon className="w-5 h-5" aria-hidden="true" />
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 pt-4 pb-2 flex items-center gap-2.5">
+          <Link
+            to="/"
+            title={t('admin.sidebar.backToApp', 'Back to iHub')}
+            className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            {logoSrc ? (
+              <img src={logoSrc} alt="Logo" className="w-8 h-8 object-contain flex-none" />
+            ) : (
+              <div className="flex-none">
+                <IHubLogo size={30} />
+              </div>
+            )}
+            <div className="flex-1 min-w-0 leading-tight">
+              <div className="text-base text-gray-900 dark:text-gray-100 truncate">{brandTitle}</div>
+              <div className="text-[10px] text-gray-400 tracking-wide uppercase">
+                {t('admin.sidebar.adminPanel', 'Admin Panel')}
+              </div>
+            </div>
+          </Link>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={t('admin.sidebar.collapse', 'Collapse sidebar')}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
+          >
+            <ChevronDoubleLeftIcon className="w-5 h-5" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {/* Back to the main app */}
-      <div className={`${isCollapsed ? 'px-2' : 'px-3'} pt-3 pb-2`}>
+      <div className={`${isCollapsed ? 'px-2' : 'px-3'} pb-2`}>
         {isCollapsed ? (
           <div className="relative group">
             <Link
@@ -281,26 +381,6 @@ export default function AdminSidebar({ onMobileToggle }) {
       )}
 
       <SidebarContent sections={sections} />
-
-      {/* Collapse toggle */}
-      <div className="border-t border-gray-200 dark:border-gray-700 p-2">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={
-            isCollapsed
-              ? t('admin.sidebar.expand', 'Expand sidebar')
-              : t('admin.sidebar.collapse', 'Collapse sidebar')
-          }
-          className="flex items-center justify-center w-full h-9 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-        >
-          {isCollapsed ? (
-            <ChevronDoubleRightIcon className="w-5 h-5" aria-hidden="true" />
-          ) : (
-            <ChevronDoubleLeftIcon className="w-5 h-5" aria-hidden="true" />
-          )}
-        </button>
-      </div>
     </>
   );
 
@@ -309,7 +389,7 @@ export default function AdminSidebar({ onMobileToggle }) {
       {/* Desktop sidebar */}
       <aside
         className={`hidden md:flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-200 shrink-0 ${
-          isCollapsed ? 'w-16' : 'w-64'
+          isCollapsed ? 'w-[72px]' : 'w-[284px]'
         }`}
       >
         <nav

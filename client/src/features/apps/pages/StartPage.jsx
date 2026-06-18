@@ -49,7 +49,7 @@ function IHubLogo({ size = 44 }) {
 export default function StartPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
@@ -83,7 +83,9 @@ export default function StartPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+    // Reload when the authenticated user changes so apps reflect the new
+    // permissions right after login/logout (no manual refresh needed).
+  }, [isAuthenticated, user?.id]);
 
   // Keep favorites fresh when toggled elsewhere
   useEffect(() => {

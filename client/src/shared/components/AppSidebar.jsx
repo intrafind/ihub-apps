@@ -11,6 +11,7 @@ import { isActivePath } from '../../utils/pathUtils';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../features/chat/data/mockChats';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
+import LanguageSelector from './LanguageSelector';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
@@ -96,6 +97,9 @@ export default function AppSidebar() {
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
 
+  // Reload apps on mount and whenever the authenticated user changes, so the
+  // list reflects the new user's permissions immediately after login/logout
+  // (otherwise it stays empty until a manual refresh).
   useEffect(() => {
     let mounted = true;
     fetchApps()
@@ -106,7 +110,7 @@ export default function AppSidebar() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isAuthenticated, user?.id]);
 
   // Keep favorites in sync when toggled elsewhere (e.g. on the apps overview)
   useEffect(() => {
@@ -247,13 +251,17 @@ export default function AppSidebar() {
         className="w-[72px] flex-none flex flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
         aria-label={t('sidebar.navigation', 'Navigation')}
       >
-        <div className="mb-1">
+        <button
+          onClick={() => navigate('/')}
+          title={t('sidebar.home', 'Home')}
+          className="mb-1 rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
           {logoSrc ? (
             <img src={logoSrc} alt="Logo" className="w-7 h-7 object-contain" />
           ) : (
             <IHubLogo size={28} />
           )}
-        </div>
+        </button>
 
         <button
           title={t('sidebar.expand', 'Expand sidebar')}
@@ -330,7 +338,7 @@ export default function AppSidebar() {
 
         <div className="flex-1" />
 
-        <UserAuthMenu variant="sidebar" className="w-full flex justify-center" />
+        <UserAuthMenu variant="sidebar" collapsed className="flex justify-center" />
       </aside>
     );
   }
@@ -342,17 +350,23 @@ export default function AppSidebar() {
     >
       {/* Header */}
       <div className="px-4 pt-4 pb-0 flex items-center gap-2.5">
-        {logoSrc ? (
-          <img src={logoSrc} alt="Logo" className="w-8 h-8 object-contain flex-none" />
-        ) : (
-          <div className="flex-none">
-            <IHubLogo size={30} />
+        <button
+          onClick={() => navigate('/')}
+          title={t('sidebar.home', 'Home')}
+          className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+        >
+          {logoSrc ? (
+            <img src={logoSrc} alt="Logo" className="w-8 h-8 object-contain flex-none" />
+          ) : (
+            <div className="flex-none">
+              <IHubLogo size={30} />
+            </div>
+          )}
+          <div className="flex-1 min-w-0 leading-tight">
+            <div className="text-base text-gray-900 dark:text-gray-100 truncate">{headerTitle}</div>
+            <div className="text-[10px] text-gray-400 tracking-wide">by IntraFind</div>
           </div>
-        )}
-        <div className="flex-1 min-w-0 leading-tight">
-          <div className="text-base text-gray-900 dark:text-gray-100">{headerTitle}</div>
-          <div className="text-[10px] text-gray-400 tracking-wide">by IntraFind</div>
-        </div>
+        </button>
         <button
           title={t('sidebar.collapse', 'Collapse sidebar')}
           onClick={toggleCollapsed}
@@ -561,8 +575,11 @@ export default function AppSidebar() {
       </div>
 
       {/* Account section */}
-      <div className="border-t border-gray-100 dark:border-gray-800">
-        <UserAuthMenu variant="sidebar" />
+      <div className="border-t border-gray-100 dark:border-gray-800 px-2 py-2 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <UserAuthMenu variant="sidebar" />
+        </div>
+        <LanguageSelector variant="sidebar" />
       </div>
     </aside>
   );
