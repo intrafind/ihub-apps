@@ -3,6 +3,15 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
+// Accepts the platform.json shape (boolean | 'off' | 'mask' | 'drop') and
+// produces the string form used by the <select>. Older configs that pre-date
+// the string enum stored `true`/`false`, so map those to the closest mode.
+function normalizeAnonymizeIp(value) {
+  if (value === true || value === 'mask') return 'mask';
+  if (value === 'drop') return 'drop';
+  return 'off';
+}
+
 function AdminLoggingPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -40,6 +49,13 @@ function AdminLoggingPage() {
       ldap: { enabled: true },
       ntlm: { enabled: true }
     }
+  });
+  // Both anonymizeIp settings accept boolean | 'off' | 'mask' | 'drop' on the
+  // server. The UI normalises everything to the string form so the <select>
+  // always has a single source of truth.
+  const [privacyConfig, setPrivacyConfig] = useState({
+    loggingAnonymizeIp: 'off',
+    auditAnonymizeIp: 'off'
   });
 
   const availableLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
@@ -204,6 +220,7 @@ function AdminLoggingPage() {
       setLoggingConfig({
         level: loadedConfig.level || 'info',
         format: loadedConfig.format || 'json',
+        anonymizeIp: loadedConfig.anonymizeIp ?? false,
         file: loadedConfig.file || {
           enabled: false,
           path: 'logs/app.log',
@@ -228,6 +245,17 @@ function AdminLoggingPage() {
       if (platformResponse.data?.authDebug) {
         setAuthDebugConfig(platformResponse.data.authDebug);
       }
+
+      // Load audit-log settings (anonymizeIp lives under `audit.*`, the
+      // logging variant under `logging.*`). The server normalises both to a
+      // string mode so the <select> stays simple.
+      const auditResponse = await makeAdminApiCall('/admin/audit-log/settings', {
+        method: 'GET'
+      });
+      setPrivacyConfig({
+        loggingAnonymizeIp: normalizeAnonymizeIp(loadedConfig.anonymizeIp),
+        auditAnonymizeIp: normalizeAnonymizeIp(auditResponse.data?.anonymizeIp)
+      });
 
       setMessage('');
     } catch (error) {
@@ -297,6 +325,43 @@ function AdminLoggingPage() {
         text:
           error.message ||
           t('admin.logging.authDebugSaveError', 'Failed to save authentication debug configuration')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePrivacyConfig = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+
+      // logging.anonymizeIp rides the existing logging-config PUT (shallow
+      // merge of the body into platform.json's logging block). audit.* goes
+      // through its dedicated settings endpoint to avoid coupling the two
+      // blocks server-side.
+      await makeAdminApiCall('/admin/logging/config', {
+        method: 'PUT',
+        data: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
+      });
+      await makeAdminApiCall('/admin/audit-log/settings', {
+        method: 'PUT',
+        data: { anonymizeIp: privacyConfig.auditAnonymizeIp }
+      });
+
+      // Reflect the saved values in `loggingConfig` so a subsequent
+      // "Save Logging Configuration" click doesn't drop them again.
+      setLoggingConfig(prev => ({ ...prev, anonymizeIp: privacyConfig.loggingAnonymizeIp }));
+
+      setMessage({
+        type: 'success',
+        text: t('admin.logging.privacySaveSuccess', 'Privacy settings saved successfully')
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text:
+          error.message || t('admin.logging.privacySaveError', 'Failed to save privacy settings')
       });
     } finally {
       setSaving(false);
@@ -564,6 +629,100 @@ function AdminLoggingPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* PII & Privacy */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
+            <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.privacySection', 'PII & Privacy')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.privacyDescription',
+              "Anonymize client IP addresses before they're persisted to logs or the audit log."
+            )}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="logging-anonymize-ip"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.logging.loggingAnonymizeIp', 'Anonymize IP in structured logs')}
+              </label>
+              <select
+                id="logging-anonymize-ip"
+                value={privacyConfig.loggingAnonymizeIp}
+                onChange={e =>
+                  setPrivacyConfig(prev => ({ ...prev, loggingAnonymizeIp: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="off">
+                  {t('admin.logging.anonymizeIpOff', 'Off — store IP verbatim')}
+                </option>
+                <option value="mask">
+                  {t('admin.logging.anonymizeIpMask', 'Mask — /24 (IPv4) or /48 (IPv6)')}
+                </option>
+                <option value="drop">
+                  {t('admin.logging.anonymizeIpDrop', 'Drop — omit the field entirely')}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.loggingAnonymizeIpHelp',
+                  'Applies to the IP merged into every log line from the per-request context.'
+                )}
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="audit-anonymize-ip"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.logging.auditAnonymizeIp', 'Anonymize IP in audit log')}
+              </label>
+              <select
+                id="audit-anonymize-ip"
+                value={privacyConfig.auditAnonymizeIp}
+                onChange={e =>
+                  setPrivacyConfig(prev => ({ ...prev, auditAnonymizeIp: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="off">
+                  {t('admin.logging.anonymizeIpOff', 'Off — store IP verbatim')}
+                </option>
+                <option value="mask">
+                  {t('admin.logging.anonymizeIpMask', 'Mask — /24 (IPv4) or /48 (IPv6)')}
+                </option>
+                <option value="drop">
+                  {t('admin.logging.anonymizeIpDrop', 'Drop — omit the field entirely')}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.auditAnonymizeIpHelp',
+                  'Applies to the `ip` field on each audit entry.'
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <button
+              onClick={handleSavePrivacyConfig}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+            >
+              {saving
+                ? t('common.saving', 'Saving...')
+                : t('admin.logging.savePrivacy', 'Save Privacy Settings')}
+            </button>
+          </div>
         </div>
 
         {/* File Logging */}

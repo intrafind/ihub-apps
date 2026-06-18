@@ -40,7 +40,10 @@ export const auditEntrySchema = z.object({
   result: z.enum(auditResults).default('success'),
   source: z.enum(auditSources).default('web'),
   requestId: z.string().optional(),
-  ip: z.string().optional()
+  // `null` is a valid value: when `audit.anonymizeIp: "drop"` the recorder
+  // explicitly drops the IP to null so the field is preserved for log shape
+  // consistency but contains no PII.
+  ip: z.string().nullable().optional()
 });
 
 /**

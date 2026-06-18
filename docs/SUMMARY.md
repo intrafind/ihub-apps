@@ -41,6 +41,7 @@
     - [Security Guide](security.md)
     - [SSL Certificates](ssl-certificates.md)
     - [Logging](logging.md)
+    - [PII Data Handling](pii-data-handling.md)
   - [Features]()
     - [Tool Calling](tool-calling.md)
     - [MCP Integration](mcp-integration.md)

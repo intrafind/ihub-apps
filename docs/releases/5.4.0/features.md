@@ -1,5 +1,28 @@
 # Features — 5.4.0
 
+## Privacy: IP anonymization, rollup & feedback retention
+
+Three new `platform.json` settings give admins finer control over what PII iHub
+keeps on disk:
+
+- **`audit.anonymizeIp`** — set to `true`/`"mask"` to truncate the client IP on
+  every audit-log entry (`/24` for IPv4, `/48` for IPv6), or `"drop"` to omit
+  the field entirely. Default `false` preserves existing behaviour.
+- **`logging.anonymizeIp`** — same shape, applied to the IP merged into every
+  structured log line by the per-request `AsyncLocalStorage` context.
+- **`usageTracking.feedbackRetentionDays`** — drop `feedback.jsonl` entries
+  older than N days on the existing hourly rollup cycle. Default `-1` keeps
+  history forever (pre-5.4.0 behaviour).
+
+The previously-unwired `usageTracking.dailyRetentionDays` and
+`usageTracking.monthlyRetentionDays` are now honoured — daily and monthly
+rollup files past the configured retention are deleted alongside the existing
+event-log cleanup. Defaults (365 d / -1) are unchanged.
+
+A new doc at `docs/pii-data-handling.md` catalogues every PII category iHub
+captures, the retention default, and which switch disables or anonymizes it,
+plus a recommended privacy-first configuration block.
+
 ## Stellungnahmen Review from iFinder — Lazy Per-Document Corpus
 
 A new workflow, **`stellungnahmen-review-ifinder`**, runs the same audit-grade Stellungnahmen evidence extraction as the upload variant, but pulls candidates from iFinder by topic and loads each document's fulltext one at a time inside the iteration loop. Useful for ministry-scale consultations (200+ documents) that exceed the chat upload ceiling.

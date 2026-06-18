@@ -1,5 +1,6 @@
 import winston from 'winston';
 import { getContext } from './requestContext.js';
+import { anonymizeIp } from './ipAnonymizer.js';
 
 // Default log level and format (fallback if not configured)
 const DEFAULT_LOG_LEVEL = 'info';
@@ -316,9 +317,35 @@ function mergeRequestContext(logData) {
     merged.oauthClientId = ctx.oauthClientId;
   }
   if (ctx.ip !== undefined && merged.ip === undefined) {
-    merged.ip = ctx.ip;
+    const mode = getIpAnonymizationMode();
+    if (mode === 'drop') {
+      // omit the field entirely
+    } else if (mode === 'mask') {
+      merged.ip = anonymizeIp(ctx.ip);
+    } else {
+      merged.ip = ctx.ip;
+    }
   }
   return merged;
+}
+
+/**
+ * Read logging.anonymizeIp from platform config and normalize it to
+ * 'off' | 'mask' | 'drop'. Accepts boolean (true => mask) for ergonomics.
+ * Returns 'off' when config is unavailable so we never accidentally hide IPs
+ * before config has loaded.
+ */
+function getIpAnonymizationMode() {
+  try {
+    if (!configCacheRef) return 'off';
+    const platformConfig = configCacheRef.getPlatform();
+    const v = platformConfig?.logging?.anonymizeIp;
+    if (v === 'drop') return 'drop';
+    if (v === true || v === 'mask') return 'mask';
+    return 'off';
+  } catch {
+    return 'off';
+  }
 }
 
 /**

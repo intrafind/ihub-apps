@@ -146,6 +146,37 @@ describe('AuditLogService.logAudit', () => {
     expect(await flushAuditLog()).toBe(0);
   });
 
+  test('stores IP verbatim by default', () => {
+    const entry = logAudit({
+      req: { ip: '203.0.113.42', user: { id: 'u1', username: 'alice', authenticated: true } },
+      action: 'update',
+      resource: 'app'
+    });
+    expect(entry.ip).toBe('203.0.113.42');
+  });
+
+  test('masks IPv4 IP when audit.anonymizeIp is true', () => {
+    auditConfig.anonymizeIp = true;
+    const entry = logAudit({
+      req: { ip: '203.0.113.42', user: { id: 'u1', username: 'alice', authenticated: true } },
+      action: 'update',
+      resource: 'app'
+    });
+    expect(entry.ip).toBe('203.0.113.0');
+  });
+
+  test('drops IP when audit.anonymizeIp is "drop"', () => {
+    auditConfig.anonymizeIp = 'drop';
+    const entry = logAudit({
+      req: { ip: '203.0.113.42', user: { id: 'u1', username: 'alice', authenticated: true } },
+      action: 'update',
+      resource: 'app'
+    });
+    // 'drop' truly omits the field — the entry has no `ip` property at all,
+    // so JSON serialization won't even emit the key.
+    expect(entry).not.toHaveProperty('ip');
+  });
+
   test('marks the request so the middleware can de-dupe', () => {
     const req = { user: { id: 'u1', username: 'alice', authenticated: true } };
     logAudit({ req, action: 'update', resource: 'app' });
