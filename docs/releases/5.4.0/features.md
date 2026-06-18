@@ -469,3 +469,10 @@ Highlights:
 - Fixes a latent bug where large-context models (e.g. Claude Opus) requested their full context window as the output cap, which could cause provider errors.
 
 Admins editing models will see two fields (Context Window, Max Output Tokens) instead of one Token Limit.
+
+## Fix — High GPU Usage When Viewing Long Chats
+
+Open chat conversations no longer keep the GPU busy while idle. Every rendered assistant message was permanently promoted to its own GPU compositor layer, so a long or old conversation parked dozens of layers in video memory and saturated the browser's compositing budget even when nothing was happening on screen.
+
+- The GPU-acceleration hint is now applied only to the single message that is actively streaming, where it actually helps smooth incremental rendering, and is dropped once the response completes.
+- Measured effect: an idle chat now promotes **zero** extra compositor layers regardless of length (previously up to the browser's layer cap). No configuration change required.
