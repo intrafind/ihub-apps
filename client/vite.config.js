@@ -53,21 +53,39 @@ export default defineConfig({
         'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
       },
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
-          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
-
-          // Heavy dependencies that should be separate
-          mermaid: ['mermaid'],
-          monaco: ['@monaco-editor/react'],
-          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-          pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone'],
-          office: ['react-markdown'],
-          xlsx: ['xlsx']
+        // Vite 8 (rolldown) requires `manualChunks` to be a function rather
+        // than the object form Rollup accepted. We map each package to its
+        // chunk by matching the `node_modules/<pkg>/` path segment (trailing
+        // slash so `react` does not also capture `react-dom`/`react-icons`).
+        manualChunks: id => {
+          if (!id.includes('node_modules')) return undefined;
+          const path = id.replace(/\\/g, '/');
+          // Order matters: list longer/more specific package names first so a
+          // prefix match never steals a more specific package's modules.
+          const chunkGroups = [
+            // Heavy dependencies that should be separate
+            ['mermaid', ['mermaid']],
+            ['monaco', ['@monaco-editor/react']],
+            ['teams', ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk']],
+            ['pdf', ['pdfjs-dist']],
+            ['babel', ['@babel/standalone']],
+            ['office', ['react-markdown']],
+            ['xlsx', ['xlsx']],
+            // Vendor chunks
+            ['vendor-ui', ['@heroicons/react', 'react-icons', 'tailwindcss']],
+            ['vendor-forms', ['react-quill', 'ajv-formats', 'ajv']],
+            [
+              'vendor-utils',
+              ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown']
+            ],
+            ['vendor-react', ['react-router-dom', 'react-dom', 'react']]
+          ];
+          for (const [chunk, pkgs] of chunkGroups) {
+            for (const pkg of pkgs) {
+              if (path.includes(`node_modules/${pkg}/`)) return chunk;
+            }
+          }
+          return undefined;
         }
       }
     },
