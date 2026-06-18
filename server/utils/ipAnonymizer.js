@@ -20,24 +20,44 @@
 export function anonymizeIp(ip) {
   if (!ip || typeof ip !== 'string') return ip;
 
-  const ipv4Mapped = ip.match(/^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/i);
-  if (ipv4Mapped) {
-    return `::ffff:${ipv4Mapped[1]}.${ipv4Mapped[2]}.${ipv4Mapped[3]}.0`;
+  const ipv4Mapped = parseIpv4(ip.replace(/^::ffff:/i, ''));
+  if (ipv4Mapped && /^::ffff:/i.test(ip)) {
+    return `::ffff:${ipv4Mapped[0]}.${ipv4Mapped[1]}.${ipv4Mapped[2]}.0`;
   }
 
-  const ipv4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
+  const ipv4 = parseIpv4(ip);
   if (ipv4) {
-    return `${ipv4[1]}.${ipv4[2]}.${ipv4[3]}.0`;
+    return `${ipv4[0]}.${ipv4[1]}.${ipv4[2]}.0`;
   }
 
   if (ip.includes(':')) {
     const groups = expandIpv6(ip);
-    if (groups && groups.length === 8) {
+    if (groups && groups.length === 8 && groups.every(isHexGroup)) {
       return `${groups[0]}:${groups[1]}:${groups[2]}::`;
     }
   }
 
   return null;
+}
+
+// Parse a dotted-quad into [a,b,c,d] only if every octet is a decimal in
+// 0-255. Returns null on anything else so we never mask garbage like
+// "999.999.999.999".
+function parseIpv4(ip) {
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const octets = [m[1], m[2], m[3], m[4]];
+  for (const o of octets) {
+    // Reject leading zeros ("01") and out-of-range octets.
+    if (o.length > 1 && o[0] === '0') return null;
+    const n = Number(o);
+    if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+  }
+  return octets;
+}
+
+function isHexGroup(group) {
+  return /^[0-9a-fA-F]{1,4}$/.test(group);
 }
 
 function expandIpv6(ip) {

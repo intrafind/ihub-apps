@@ -170,7 +170,7 @@ Controls how the client IP is stored on audit log entries.
 | --- | --- |
 | `false` (default) | IP is stored verbatim (e.g. `203.0.113.42`) |
 | `true` or `"mask"` | IP is masked: last octet for IPv4 (`203.0.113.0`), last 80 bits for IPv6 (`2001:db8:abcd::`) |
-| `"drop"` | IP is set to `null` in the audit entry |
+| `"drop"` | The `ip` property is omitted from the audit entry entirely |
 
 ### `logging.anonymizeIp` (new)
 

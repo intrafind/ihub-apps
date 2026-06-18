@@ -200,16 +200,11 @@ export function logAudit({
     // resourceId can carry the attempted identifier (e.g. a login id that is an
     // email), so honor the same masking as the actor.
     const safeResourceId = includeEmail ? resourceId || '' : maskEmail(resourceId || '');
-    // Honor audit.anonymizeIp: when true, the client IP is masked (last
-    // octet / last 80 bits) before being persisted. Set to a string like
-    // 'drop' to omit the field entirely.
+    // Honor audit.anonymizeIp:
+    //   true / 'mask' -> mask the host bits (/24 IPv4, /48 IPv6)
+    //   'drop'        -> omit the `ip` property from the entry entirely
+    //   anything else -> store verbatim
     const rawIp = req?.ip;
-    let safeIp = rawIp;
-    if (auditCfg.anonymizeIp === 'drop') {
-      safeIp = null;
-    } else if (auditCfg.anonymizeIp === true || auditCfg.anonymizeIp === 'mask') {
-      safeIp = anonymizeIp(rawIp);
-    }
     const entry = {
       id: randomUUID(),
       ts: new Date().toISOString(),
@@ -220,9 +215,14 @@ export function logAudit({
       summary: summary || '',
       result,
       source: source || deriveSource(req),
-      requestId: requestId || getContext()?.requestId || randomUUID(),
-      ip: safeIp
+      requestId: requestId || getContext()?.requestId || randomUUID()
     };
+    if (auditCfg.anonymizeIp !== 'drop') {
+      entry.ip =
+        auditCfg.anonymizeIp === true || auditCfg.anonymizeIp === 'mask'
+          ? anonymizeIp(rawIp)
+          : rawIp;
+    }
 
     const validation = validateAuditEntry(entry);
     if (!validation.success) {

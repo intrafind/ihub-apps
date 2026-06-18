@@ -28,6 +28,27 @@ describe('anonymizeIp', () => {
     expect(anonymizeIp('1.2.3')).toBeNull();
   });
 
+  it('returns null for out-of-range IPv4 octets', () => {
+    expect(anonymizeIp('999.999.999.999')).toBeNull();
+    expect(anonymizeIp('256.0.0.1')).toBeNull();
+    expect(anonymizeIp('1.2.3.300')).toBeNull();
+  });
+
+  it('returns null for IPv4 octets with leading zeros (ambiguous notation)', () => {
+    expect(anonymizeIp('01.2.3.4')).toBeNull();
+    expect(anonymizeIp('1.02.3.4')).toBeNull();
+  });
+
+  it('returns null for IPv4-mapped IPv6 with out-of-range octets', () => {
+    expect(anonymizeIp('::ffff:999.999.999.999')).toBeNull();
+    expect(anonymizeIp('::ffff:256.0.0.1')).toBeNull();
+  });
+
+  it('returns null for IPv6 with non-hex group characters', () => {
+    expect(anonymizeIp('zzzz:db8::1')).toBeNull();
+    expect(anonymizeIp('2001:db8:xxxx:1234:5678:9abc:def0:1234')).toBeNull();
+  });
+
   it('passes through falsy values unchanged', () => {
     expect(anonymizeIp('')).toBe('');
     expect(anonymizeIp(null)).toBeNull();

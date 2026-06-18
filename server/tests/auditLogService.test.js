@@ -172,7 +172,9 @@ describe('AuditLogService.logAudit', () => {
       action: 'update',
       resource: 'app'
     });
-    expect(entry.ip).toBeNull();
+    // 'drop' truly omits the field — the entry has no `ip` property at all,
+    // so JSON serialization won't even emit the key.
+    expect(entry).not.toHaveProperty('ip');
   });
 
   test('marks the request so the middleware can de-dupe', () => {
