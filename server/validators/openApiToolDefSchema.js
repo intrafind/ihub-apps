@@ -30,7 +30,10 @@ export const openApiBlockSchema = z.object({
   operationId: z.string().min(1),
   // Override the spec's servers[0].url when set.
   baseUrl: z.string().url().optional(),
-  auth: z.object({ credentialRef: z.string().min(1) }),
+  // Authentication is optional — public OpenAPI endpoints are valid.
+  // When set, `credentialRef` must point at an entry in the central credential
+  // store; the runner resolves the profile and applies the matching auth scheme.
+  auth: z.object({ credentialRef: z.string().min(1) }).optional(),
   // Static extra request headers merged into every call.
   headers: z.record(z.string()).default({}),
   // Mirror astron's x-display: dot-paths (supporting `items[].field` wildcards)

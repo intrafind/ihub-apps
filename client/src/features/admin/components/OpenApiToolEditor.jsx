@@ -153,6 +153,7 @@ function stringToSource(str) {
  */
 function toFormState(tool) {
   const openapi = tool?.openapi || {};
+  const credentialRef = openapi.auth?.credentialRef || '';
   return {
     id: tool?.id || '',
     name: typeof tool?.name === 'string' ? tool.name : tool?.name?.en || '',
@@ -161,7 +162,9 @@ function toFormState(tool) {
     source: sourceToString(openapi.source),
     operationId: openapi.operationId || '',
     baseUrl: openapi.baseUrl || '',
-    credentialRef: openapi.auth?.credentialRef || '',
+    // Existing tools with no credentialRef are treated as public.
+    authMode: credentialRef ? 'credential' : 'none',
+    credentialRef,
     headers: openapi.headers
       ? Object.entries(openapi.headers).map(([key, val]) => ({ key, value: val }))
       : [],
@@ -169,6 +172,29 @@ function toFormState(tool) {
     maxResponseBytes: openapi.maxResponseBytes ?? '',
     timeoutMs: openapi.timeoutMs ?? ''
   };
+}
+
+/**
+ * Resolve a `servers[].url` entry against the URL the OpenAPI spec was fetched
+ * from. OpenAPI 3 allows server URLs to be relative — the convention is to
+ * resolve them against the document's URL. For inline / file sources we can't
+ * derive an origin, so a relative server URL stays unresolved and the admin
+ * must enter the absolute Base URL by hand.
+ *
+ * @param {string} serverUrl - The `servers[0].url` value from the parsed spec
+ * @param {string} sourceText - The raw source field (spec URL when type='url')
+ * @returns {string|null} An absolute URL, or null when one can't be derived
+ */
+function resolveServerUrl(serverUrl, sourceText) {
+  if (!serverUrl) return null;
+  if (/^https?:\/\//i.test(serverUrl)) return serverUrl;
+  const specUrl = (sourceText || '').trim();
+  if (!/^https?:\/\//i.test(specUrl)) return null;
+  try {
+    return new URL(serverUrl, specUrl).toString();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -208,9 +234,14 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
     try {
       const result = await parseOpenApiSpec(stringToSource(form.source));
       setParseResult(result);
-      // Default baseUrl from the first server entry when none set yet.
+      // Default baseUrl from the first server entry. The spec is allowed to
+      // declare a relative server URL (e.g. `/administration-api`), which
+      // we resolve against the spec URL's origin per OpenAPI convention.
+      // When that's impossible (inline spec, no http source), leave baseUrl
+      // empty so the admin enters it explicitly.
       if (!form.baseUrl && Array.isArray(result.servers) && result.servers[0]?.url) {
-        update({ baseUrl: result.servers[0].url });
+        const resolved = resolveServerUrl(result.servers[0].url, form.source);
+        if (resolved) update({ baseUrl: resolved });
       }
     } catch (err) {
       setParseError(err.response?.data?.error || err.message);
@@ -236,9 +267,11 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
 
     const openapi = {
       source: stringToSource(form.source),
-      operationId: form.operationId,
-      auth: { credentialRef: form.credentialRef || undefined }
+      operationId: form.operationId
     };
+    if (form.authMode === 'credential' && form.credentialRef) {
+      openapi.auth = { credentialRef: form.credentialRef };
+    }
     if (form.baseUrl) openapi.baseUrl = form.baseUrl;
     if (Object.keys(headers).length > 0) openapi.headers = headers;
     if (hideFields.length > 0) openapi.xDisplay = { hideFields };
@@ -287,12 +320,14 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.tools.openapi.form.name', 'Name')}
+            <span className="text-red-500 ml-0.5">*</span>
           </label>
           <input
             type="text"
             value={form.name}
             onChange={e => update({ name: e.target.value })}
             className={INPUT_CLASS}
+            required
           />
         </div>
       </div>
@@ -408,20 +443,69 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
         </div>
       )}
 
-      {/* Auth */}
-      <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-4">
+      {/* Base URL — required when the spec declares no absolute server, and
+          surfaced as a primary field (not buried under Advanced) so admins
+          don't miss it for specs whose servers[0].url is relative. */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {t('admin.tools.openapi.form.baseUrl', 'Base URL')}
+          <span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <input
+          type="url"
+          value={form.baseUrl}
+          onChange={e => update({ baseUrl: e.target.value })}
+          className={MONO_INPUT_CLASS}
+          placeholder="https://api.example.com"
+          required
+        />
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {t(
+            'admin.tools.openapi.form.baseUrlHelp',
+            'Absolute URL the operation paths are appended to. Defaults to servers[0] from the spec; resolved against the spec URL when relative.'
+          )}
+        </p>
+      </div>
+
+      {/* Auth — supports public (no-auth) APIs as well as credential profiles. */}
+      <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-4 space-y-3">
         <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
           {t('admin.tools.openapi.form.auth', 'Authentication')}
         </legend>
-        <CredentialRefSelect
-          value={form.credentialRef}
-          onChange={id => update({ credentialRef: id })}
-          label={t('admin.tools.openapi.form.credentialRef', 'Credential')}
-          help={t(
-            'admin.tools.openapi.form.credentialRefHelp',
-            'Auth profile applied to requests. OpenAPI supports bearer, basic, API key, and OAuth2 credentials.'
-          )}
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="radio"
+              name="openapi-auth-mode"
+              value="credential"
+              checked={form.authMode === 'credential'}
+              onChange={() => update({ authMode: 'credential' })}
+            />
+            {t('admin.tools.openapi.form.authMode.credential', 'Use credential profile')}
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="radio"
+              name="openapi-auth-mode"
+              value="none"
+              checked={form.authMode === 'none'}
+              onChange={() => update({ authMode: 'none', credentialRef: '' })}
+            />
+            {t('admin.tools.openapi.form.authMode.none', 'No authentication (public API)')}
+          </label>
+        </div>
+        {form.authMode === 'credential' && (
+          <CredentialRefSelect
+            value={form.credentialRef}
+            onChange={id => update({ credentialRef: id })}
+            label={t('admin.tools.openapi.form.credentialRef', 'Credential')}
+            required
+            help={t(
+              'admin.tools.openapi.form.credentialRefHelp',
+              'Auth profile applied to requests. OpenAPI supports bearer, basic, API key, and OAuth2 credentials.'
+            )}
+          />
+        )}
       </fieldset>
 
       {/* Optional overrides */}
@@ -429,19 +513,6 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
         <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
           {t('admin.tools.openapi.form.advanced', 'Advanced (optional)')}
         </legend>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('admin.tools.openapi.form.baseUrl', 'Base URL override')}
-          </label>
-          <input
-            type="text"
-            value={form.baseUrl}
-            onChange={e => update({ baseUrl: e.target.value })}
-            className={MONO_INPUT_CLASS}
-            placeholder="https://api.example.com"
-          />
-        </div>
-
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -527,7 +598,14 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || !form.id || !form.operationId}
+          disabled={
+            saving ||
+            !form.id ||
+            !form.name ||
+            !form.operationId ||
+            !/^https?:\/\//i.test(form.baseUrl) ||
+            (form.authMode === 'credential' && !form.credentialRef)
+          }
           className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
         >
           {saving

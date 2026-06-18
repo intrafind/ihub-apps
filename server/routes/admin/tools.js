@@ -395,9 +395,10 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      // Validate required fields
-      if (!updatedTool.id || !updatedTool.name || !updatedTool.description) {
-        return sendBadRequest(res, 'Missing required fields: id, name, description');
+      // Validate required fields. Description is optional — per-tool schemas
+      // (e.g. openApiToolDefSchema) decide what else is mandatory.
+      if (!updatedTool.id || !updatedTool.name) {
+        return sendBadRequest(res, 'Missing required fields: id, name');
       }
 
       if (updatedTool.id !== toolId) {
@@ -502,9 +503,10 @@ export default function registerAdminToolsRoutes(app) {
     try {
       const newTool = req.body;
 
-      // Validate required fields
-      if (!newTool.id || !newTool.name || !newTool.description) {
-        return sendBadRequest(res, 'Missing required fields: id, name, description');
+      // Validate required fields. Description is optional — per-tool schemas
+      // (e.g. openApiToolDefSchema) decide what else is mandatory.
+      if (!newTool.id || !newTool.name) {
+        return sendBadRequest(res, 'Missing required fields: id, name');
       }
 
       // Validate toolId for security

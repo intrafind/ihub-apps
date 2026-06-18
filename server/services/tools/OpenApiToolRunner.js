@@ -220,6 +220,8 @@ async function getParamMap(tool) {
  */
 async function resolveAuth(tool) {
   const ref = tool.openapi.auth?.credentialRef;
+  // Public APIs have no credentialRef; skip auth resolution entirely.
+  if (!ref) return { headers: {}, queryParam: null };
   const profile = credentialService.resolve(ref);
   const headers = {};
   let queryParam = null;
