@@ -297,17 +297,24 @@ function AdminToolEditPage() {
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setActiveTab('config')}
-              className={`${
-                activeTab === 'config'
-                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-            >
-              <Icon name="cog" className="h-4 w-4 inline mr-2" />
-              {t('admin.tools.configTab', 'Configuration')}
-            </button>
+            {/* The generic Configuration tab is meaningless for OpenAPI tools —
+                its content/save button already guard on `!isOpenApiTool` and
+                the OpenAPI editor owns the entire tool shape. Keep the tab
+                visible only for non-OpenAPI tools, so the "Use OpenAPI editor"
+                prompt still has a home when creating a brand-new tool. */}
+            {!isOpenApiTool && (
+              <button
+                onClick={() => setActiveTab('config')}
+                className={`${
+                  activeTab === 'config'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                <Icon name="cog" className="h-4 w-4 inline mr-2" />
+                {t('admin.tools.configTab', 'Configuration')}
+              </button>
+            )}
             {!isNewTool && toolData.script && (
               <button
                 onClick={() => setActiveTab('script')}
