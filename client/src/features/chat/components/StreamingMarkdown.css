@@ -1,7 +1,4 @@
 .streaming-markdown {
-  /* Use hardware acceleration for rendering */
-  will-change: transform;
-  transform: translateZ(0);
   white-space: normal;
   display: inline-block;
   box-sizing: content-box;
@@ -161,6 +158,18 @@
     background-color: rgb(209, 250, 229);
     color: rgb(4, 120, 87);
   }
+}
+
+/*
+ * GPU-accelerate rendering ONLY while a message is actively streaming. Applying
+ * this to every .streaming-markdown permanently promoted each finished message to
+ * its own compositor layer, so an old chat parked dozens of layers in GPU memory
+ * and saturated the compositor budget at idle. Only one message streams at a time,
+ * so scoping the hint to .is-streaming keeps the streaming benefit with no idle cost.
+ */
+.streaming-markdown.is-streaming {
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 /* Hide interactive UI elements when printing */
