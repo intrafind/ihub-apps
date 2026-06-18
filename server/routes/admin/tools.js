@@ -999,9 +999,11 @@ export default function registerAdminToolsRoutes(app) {
         if (Buffer.byteLength(text) > 2 * 1024 * 1024) {
           return sendBadRequest(res, 'OpenAPI document exceeds the 2MB limit');
         }
-        raw = JSON.parse(text);
+        const { parseOpenApiText } = await import('../../services/tools/OpenApiToolRunner.js');
+        raw = parseOpenApiText(text);
       } else if (source.type === 'inline') {
-        raw = typeof source.spec === 'string' ? JSON.parse(source.spec) : source.spec;
+        const { parseOpenApiText } = await import('../../services/tools/OpenApiToolRunner.js');
+        raw = typeof source.spec === 'string' ? parseOpenApiText(source.spec) : source.spec;
       } else {
         return sendBadRequest(res, 'Unsupported source type for parsing (use url or inline)');
       }

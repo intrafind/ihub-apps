@@ -1,11 +1,28 @@
 import { promises as fs } from 'fs';
 import { join, normalize, sep } from 'path';
 import SwaggerParser from '@apidevtools/swagger-parser';
+import yaml from 'js-yaml';
 import { getRootDir } from '../../pathUtils.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { throttledRun } from '../../requestThrottler.js';
 import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
+
+/**
+ * Parse an OpenAPI document body that may be JSON or YAML. Probes for the
+ * leading `{`/`[` to choose JSON, otherwise falls back to YAML. Uses
+ * `JSON_SCHEMA` so only JSON-compatible types (strings, numbers, booleans,
+ * null, arrays, objects) are constructed — no custom YAML tags can produce
+ * unexpected types from operator-supplied input. `json: true` makes duplicate
+ * keys take the last value (matches JSON semantics).
+ */
+export function parseOpenApiText(text) {
+  const trimmed = (text || '').trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return JSON.parse(text);
+  }
+  return yaml.load(text, { schema: yaml.JSON_SCHEMA, json: true });
+}
 
 /**
  * Generic OpenAPI HTTP tool runner (issue #1462).
@@ -50,7 +67,7 @@ async function _parseSource(source, ssrfOpts) {
     if (Buffer.byteLength(text) > MAX_SPEC_BYTES) {
       throw new Error('OpenAPI document exceeds the 2MB size limit');
     }
-    return JSON.parse(text);
+    return parseOpenApiText(text);
   }
   if (source.type === 'file') {
     const root = getRootDir();
@@ -62,10 +79,10 @@ async function _parseSource(source, ssrfOpts) {
       throw new Error('OpenAPI file path escapes the contents directory');
     }
     const text = await fs.readFile(resolved, 'utf8');
-    return JSON.parse(text);
+    return parseOpenApiText(text);
   }
   // inline
-  return typeof source.spec === 'string' ? JSON.parse(source.spec) : source.spec;
+  return typeof source.spec === 'string' ? parseOpenApiText(source.spec) : source.spec;
 }
 
 /**

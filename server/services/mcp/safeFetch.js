@@ -108,18 +108,32 @@ async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
 }
 
 /**
+ * Build a constant `dns.lookup`-shaped function that always resolves to the
+ * pre-validated `(address, family)` tuple. Honors `options.all` because Node's
+ * net stack (v20+) calls lookup with `{ all: true }` and expects an array of
+ * `{ address, family }` objects — returning the legacy 3-arg form there yields
+ * `ERR_INVALID_IP_ADDRESS: Invalid IP address: undefined`.
+ */
+function makePinnedLookup(pinnedAddress, family) {
+  return (_hostname, opts, cb) => {
+    if (opts && opts.all) {
+      cb(null, [{ address: pinnedAddress, family }]);
+    } else {
+      cb(null, pinnedAddress, family);
+    }
+  };
+}
+
+/**
  * Build an https/http Agent that pins the socket to the IP we already vetted,
  * so the actual TCP connection cannot land on a different host (DNS rebinding).
  */
 function makePinnedAgent(pinnedAddress, family, isHttps) {
   const AgentClass = isHttps ? https.Agent : http.Agent;
-  // Setting `lookup` to a constant function defeats re-resolution.
   return new AgentClass({
     keepAlive: true,
     maxSockets: 8,
-    lookup: (_hostname, _opts, cb) => {
-      cb(null, pinnedAddress, family);
-    }
+    lookup: makePinnedLookup(pinnedAddress, family)
   });
 }
 
@@ -154,7 +168,7 @@ export async function safeFetch(input, init = {}, opts = {}) {
   try {
     const undici = await import('undici');
     const dispatcher = new undici.Agent({
-      connect: { lookup: (_h, _o, cb) => cb(null, address, family) }
+      connect: { lookup: makePinnedLookup(address, family) }
     });
     return await globalThis.fetch(url, { ...init, dispatcher });
   } catch {
