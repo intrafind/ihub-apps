@@ -1303,6 +1303,21 @@
         "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
         "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen."
       },
+      "ssrf": {
+        "title": "SSRF-Allowlist",
+        "description": "Erlaubt ausgehende HTTP-Aufrufe (OpenAPI-Tools, MCP-Server, Web-Tools) zu absichtlich internen Diensten, auch wenn deren Hostname zu einer privaten IP auflöst.",
+        "addHost": "Host hinzufügen",
+        "removeHost": "Entfernen",
+        "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
+        "patternHelp": "Unterstützte Muster: exakter Hostname (api.example.com), Wildcard (*.example.com), Subdomain (.example.com).",
+        "noHosts": "Keine Hosts erlaubt. Ausgehende Aufrufe zu privaten/internen IPs werden blockiert.",
+        "saveConfig": "Allowlist speichern",
+        "savingConfig": "Wird gespeichert…",
+        "configSaved": "SSRF-Allowlist erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der SSRF-Konfiguration",
+        "securityWarning": "Sicherheitswarnung",
+        "securityWarningDesc": "Jeder hier hinzugefügte Hostname kann von Tools und MCP-Servern erreicht werden, auch wenn er zu einer internen IP auflöst. Fügen Sie nur Hosts hinzu, die Sie kontrollieren und denen Sie vertrauen. Muster wie *.example.com treffen auf jede Subdomain zu."
+      },
       "cookieSettings": {
         "title": "Cookie-Sicherheitskonfiguration",
         "description": "Konfigurieren Sie Cookie-Sicherheitseinstellungen für die Authentifizierung",

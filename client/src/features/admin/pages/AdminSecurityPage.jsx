@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import SSLConfig from '../components/SSLConfig';
 import CorsConfig from '../components/CorsConfig';
+import SsrfConfig from '../components/SsrfConfig';
 import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -278,6 +279,11 @@ function AdminSecurityPage() {
           id: 'cors',
           label: t('admin.security.sections.cors', 'CORS'),
           children: <CorsConfig />
+        },
+        {
+          id: 'ssrf',
+          label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
+          children: <SsrfConfig />
         },
         {
           id: 'encryption',

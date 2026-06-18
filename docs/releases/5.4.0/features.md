@@ -420,6 +420,14 @@ The SSRF guard that protects workflow HTTP-request nodes from reaching internal 
 
 No configuration change is required. This affects any deployment whose workflows feed request-controlled input into an HTTP node's URL (including the public webhook trigger and chat `@mention` / MCP run triggers).
 
+## Admin: Global SSRF Allowlist for Internal Services
+
+Admins can now permit outbound HTTP calls to intentionally internal hostnames from a single place: **Admin → Security → SSRF Allowlist**. Entries support the same patterns as the SSL whitelist — exact (`api.internal.company.com`), wildcard (`*.intrafind.io`), and subdomain (`.example.com`). Patterns matching a hostname bypass the private-IP veto for OpenAPI tool spec fetches, OpenAPI tool runtime calls, MCP server connections, and any other path that goes through `safeFetch`.
+
+- Previously the allowlist was per-tool (`openapi.security.allowedHosts`) or per-MCP server, and the OpenAPI builder's "Fetch & parse" button had no override at all — so internal OpenAPI specs could only be onboarded by hand-editing `tools.json` or by pasting the spec inline.
+- DNS pinning, IPv4-mapped-IPv6 hex coverage, and CGNAT blocking remain unchanged; the allowlist only suppresses the private-IP rejection for matched hostnames.
+- Configured via `platform.json` under `ssrf.allowedHosts: []` (migration V061 seeds the empty default).
+
 ## OpenAPI Tools — Zero-Code Third-Party Integrations
 
 Admins can now turn any OpenAPI-described API into a callable agent tool without writing code. Add a tool of type **OpenAPI**, paste the OpenAPI document URL, pick an operation, and choose a credential — iHub validates the model's arguments against the operation schema, performs the call, and returns the result to the agent.

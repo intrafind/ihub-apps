@@ -14,11 +14,12 @@ import http from 'http';
  */
 
 const store = { credentials: {} };
+const platformOverride = { value: {} };
 
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getCredentials: () => store,
-    getPlatform: () => ({}),
+    getPlatform: () => platformOverride.value,
     getModels: () => ({ data: [] }),
     getTools: () => ({ data: [] })
   }
@@ -267,9 +268,44 @@ describe('response handling', () => {
 });
 
 describe('SSRF guard', () => {
+  beforeEach(() => {
+    platformOverride.value = {};
+  });
+
   it('rejects a private IP target when not allow-listed', async () => {
     store.credentials = { cred: { id: 'cred', type: 'bearer', token: 't' } };
     const tool = makeTool('t-ssrf', 'getSecure', {
+      security: { blockPrivateIps: true, allowedHosts: [] }
+    });
+    await expect(runOpenApiTool(tool, {})).rejects.toThrow(/SSRF|private IP/i);
+  });
+
+  it('permits the call when the host matches platform.ssrf.allowedHosts (exact)', async () => {
+    store.credentials = { cred: { id: 'cred', type: 'bearer', token: 't' } };
+    platformOverride.value = { ssrf: { allowedHosts: ['127.0.0.1'] } };
+    const tool = makeTool('t-ssrf-global-exact', 'getSecure', {
+      security: { blockPrivateIps: true, allowedHosts: [] }
+    });
+    await expect(runOpenApiTool(tool, {})).resolves.toBeDefined();
+  });
+
+  it('permits the call when the host matches a wildcard in platform.ssrf.allowedHosts', async () => {
+    store.credentials = { cred: { id: 'cred', type: 'bearer', token: 't' } };
+    // The wildcard must match the per-test baseUrl host. The test server runs on
+    // 127.0.0.1 (an IP literal), so we use an exact match here — wildcards apply
+    // to DNS-named hosts. A separate dedicated test in the safeFetch path covers
+    // wildcard pattern matching.
+    platformOverride.value = { ssrf: { allowedHosts: ['127.0.0.1', '*.intrafind.io'] } };
+    const tool = makeTool('t-ssrf-global-wildcard', 'getSecure', {
+      security: { blockPrivateIps: true, allowedHosts: [] }
+    });
+    await expect(runOpenApiTool(tool, {})).resolves.toBeDefined();
+  });
+
+  it('still blocks the call when the host is not in platform.ssrf.allowedHosts', async () => {
+    store.credentials = { cred: { id: 'cred', type: 'bearer', token: 't' } };
+    platformOverride.value = { ssrf: { allowedHosts: ['*.example.com'] } };
+    const tool = makeTool('t-ssrf-global-nomatch', 'getSecure', {
       security: { blockPrivateIps: true, allowedHosts: [] }
     });
     await expect(runOpenApiTool(tool, {})).rejects.toThrow(/SSRF|private IP/i);
