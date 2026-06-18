@@ -24,7 +24,7 @@ function SsrfConfig() {
           type: 'error',
           text:
             error.message ||
-            t('admin.system.ssrf.configSaveError', 'Failed to load SSRF configuration')
+            t('admin.system.ssrf.configLoadError', 'Failed to load SSRF configuration')
         });
       } finally {
         setLoading(false);

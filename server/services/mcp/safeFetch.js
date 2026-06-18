@@ -9,14 +9,17 @@ const dnsLookupAsync = dns.promises.lookup;
 /**
  * Match a hostname against a single allowlist pattern. Mirrors the pattern
  * semantics used by `ssl.domainWhitelist` (see `utils/httpConfig.js`):
- *   - `*.example.com` matches any subdomain but NOT `example.com` itself
- *   - `.example.com` matches `example.com` and any subdomain
- *   - everything else is an exact-match hostname
+ *   - `*.example.com` matches any subdomain (e.g. `api.example.com`) but NOT
+ *     `example.com` itself
+ *   - `.example.com` is an alias for `*.example.com` — subdomains only, NOT
+ *     `example.com` itself
+ *   - everything else is an exact-match hostname (case-insensitive)
  *
  * Kept inline (rather than imported from httpConfig) so this security-critical
  * module stays dependency-light and the matcher can be tested in isolation.
+ * Exported for direct unit testing of the matching semantics.
  */
-function hostMatchesPattern(hostname, pattern) {
+export function hostMatchesPattern(hostname, pattern) {
   if (!hostname || !pattern) return false;
   const h = hostname.toLowerCase();
   const p = pattern.toLowerCase().trim();
@@ -26,8 +29,9 @@ function hostMatchesPattern(hostname, pattern) {
     return Boolean(base) && h.endsWith('.' + base);
   }
   if (p.startsWith('.')) {
+    // Subdomain pattern — bare domain must NOT match (per repo convention)
     const base = p.slice(1);
-    return Boolean(base) && (h === base || h.endsWith(p));
+    return Boolean(base) && h.endsWith(p);
   }
   return h === p;
 }
@@ -74,12 +78,16 @@ async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
   // The private-IP veto is skipped when:
   //   - the operator has disabled the check on this call (blockPrivateIps:false),
   //   - the hostname is on the per-caller exact-match allow list (e.g. a
-  //     per-tool/per-MCP-server `allowedHosts`),
+  //     per-tool/per-MCP-server `allowedHosts`) — case-insensitive, trimmed,
   //   - OR the hostname matches a platform-wide pattern in
   //     `platform.ssrf.allowedHosts` (admin-managed, supports wildcards).
   // DNS is still resolved once so the socket can be pinned either way.
+  const lowerHost = hostname.toLowerCase();
+  const inCallerAllowList =
+    Array.isArray(allowList) &&
+    allowList.some(h => typeof h === 'string' && h.trim().toLowerCase() === lowerHost);
   const skipPrivateVeto =
-    !blockPrivateIps || allowList?.includes(hostname) || isInGlobalSsrfAllowlist(hostname);
+    !blockPrivateIps || inCallerAllowList || isInGlobalSsrfAllowlist(hostname);
 
   let result;
   try {

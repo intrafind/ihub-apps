@@ -1314,6 +1314,7 @@
         "saveConfig": "Allowlist speichern",
         "savingConfig": "Wird gespeichert…",
         "configSaved": "SSRF-Allowlist erfolgreich gespeichert",
+        "configLoadError": "Fehler beim Laden der SSRF-Konfiguration",
         "configSaveError": "Fehler beim Speichern der SSRF-Konfiguration",
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Jeder hier hinzugefügte Hostname kann von Tools und MCP-Servern erreicht werden, auch wenn er zu einer internen IP auflöst. Fügen Sie nur Hosts hinzu, die Sie kontrollieren und denen Sie vertrauen. Muster wie *.example.com treffen auf jede Subdomain zu."

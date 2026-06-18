@@ -1065,6 +1065,7 @@
         "saveConfig": "Save allowlist",
         "savingConfig": "Saving…",
         "configSaved": "SSRF allowlist saved successfully",
+        "configLoadError": "Failed to load SSRF configuration",
         "configSaveError": "Failed to save SSRF configuration",
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Every hostname added here can be reached by tools and MCP servers even if it resolves to an internal IP. Only add hosts you control and trust. Patterns like *.example.com match every subdomain."
