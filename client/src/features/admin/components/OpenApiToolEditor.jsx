@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { listCredentials, parseOpenApiSpec } from '../../../api/adminApi';
 
 /**
@@ -151,14 +152,27 @@ function stringToSource(str) {
  * @param {object} [tool] - Existing tool to seed the form from
  * @returns {object}
  */
+/**
+ * Normalize a localized field to `{ [lang]: string }`. Accepts the legacy
+ * plain-string shape that older OpenAPI tool saves produced and lifts it into
+ * the canonical map keyed by language code.
+ */
+function toLocalized(value) {
+  if (!value) return { en: '' };
+  if (typeof value === 'string') return { en: value };
+  if (typeof value === 'object') return value;
+  return { en: '' };
+}
+
 function toFormState(tool) {
   const openapi = tool?.openapi || {};
   const credentialRef = openapi.auth?.credentialRef || '';
   return {
     id: tool?.id || '',
-    name: typeof tool?.name === 'string' ? tool.name : tool?.name?.en || '',
-    description:
-      typeof tool?.description === 'string' ? tool.description : tool?.description?.en || '',
+    // Preserve the full localized object so multilingual values entered via
+    // the JSON editor (or by the generic ToolFormEditor) round-trip cleanly.
+    name: toLocalized(tool?.name),
+    description: toLocalized(tool?.description),
     source: sourceToString(openapi.source),
     operationId: openapi.operationId || '',
     baseUrl: openapi.baseUrl || '',
@@ -172,6 +186,15 @@ function toFormState(tool) {
     maxResponseBytes: openapi.maxResponseBytes ?? '',
     timeoutMs: openapi.timeoutMs ?? ''
   };
+}
+
+/**
+ * True when a localized map contains at least one non-empty string. Empty
+ * objects and `{ en: '' }` both count as missing.
+ */
+function hasLocalizedContent(map) {
+  if (!map || typeof map !== 'object') return false;
+  return Object.values(map).some(v => typeof v === 'string' && v.trim().length > 0);
 }
 
 /**
@@ -284,8 +307,11 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
 
     const toolDef = {
       id: form.id,
-      name: form.name ? { en: form.name } : { en: form.id },
-      description: form.description ? { en: form.description } : undefined,
+      // Persist the full localized map. Fall back to `{ en: form.id }` when
+      // the admin hasn't typed anything yet so the server's `name` requirement
+      // is satisfied. Description is optional — omit when empty.
+      name: hasLocalizedContent(form.name) ? form.name : { en: form.id },
+      description: hasLocalizedContent(form.description) ? form.description : undefined,
       type: 'openapi',
       enabled: tool?.enabled ?? true,
       openapi
@@ -318,28 +344,33 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('admin.tools.openapi.form.name', 'Name')}
-            <span className="text-red-500 ml-0.5">*</span>
-          </label>
-          <input
-            type="text"
+          {/* Multilingual name editor — same component as the generic tool
+              form, so values entered here round-trip cleanly with the JSON
+              editor and other tool types. */}
+          <DynamicLanguageEditor
+            label={
+              <>
+                {t('admin.tools.openapi.form.name', 'Name')}
+                <span className="text-red-500 ml-0.5">*</span>
+              </>
+            }
             value={form.name}
-            onChange={e => update({ name: e.target.value })}
-            className={INPUT_CLASS}
+            onChange={val => update({ name: val })}
             required
+            placeholder={{ en: 'My OpenAPI tool', de: 'Mein OpenAPI-Tool' }}
           />
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {t('admin.tools.openapi.form.description', 'Description')}
-        </label>
-        <textarea
-          rows={2}
+        <DynamicLanguageEditor
+          label={t('admin.tools.openapi.form.description', 'Description')}
           value={form.description}
-          onChange={e => update({ description: e.target.value })}
-          className={INPUT_CLASS}
+          onChange={val => update({ description: val })}
+          type="textarea"
+          placeholder={{
+            en: 'What the operation does, shown to the LLM for tool selection',
+            de: 'Was die Operation tut, dem LLM zur Tool-Auswahl gezeigt'
+          }}
         />
       </div>
 
@@ -601,7 +632,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
           disabled={
             saving ||
             !form.id ||
-            !form.name ||
+            !hasLocalizedContent(form.name) ||
             !form.operationId ||
             !/^https?:\/\//i.test(form.baseUrl) ||
             (form.authMode === 'credential' && !form.credentialRef)
