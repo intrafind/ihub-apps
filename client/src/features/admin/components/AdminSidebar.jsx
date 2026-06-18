@@ -18,33 +18,12 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
+import IHubLogo from '../../../shared/components/IHubLogo';
 
 // Sections visible to content-admin-only users
 const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
 // Items within aiWorkspace visible to content-admin-only users
 const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'sources']);
-
-// iHub gradient logo SVG — matches the user-facing sidebar branding.
-function IHubLogo({ size = 28 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient
-          id="admin-ihub-lg"
-          x1="6"
-          y1="34"
-          x2="34"
-          y2="6"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#16a34a" />
-          <stop offset="1" stopColor="#0ea5b7" />
-        </linearGradient>
-      </defs>
-      <path d="M20 5L34 33H27.2L20 17.5L12.8 33H6L20 5Z" fill="url(#admin-ihub-lg)" />
-    </svg>
-  );
-}
 
 function NavItem({ item, isCollapsed }) {
   const location = useLocation();
@@ -225,6 +204,7 @@ export default function AdminSidebar({ onMobileToggle }) {
   const drawerRef = useRef(null);
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
+  const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
   const brandTitle =
     uiConfig?.header?.titleLight || uiConfig?.header?.titleBold ? (
       <>
@@ -288,7 +268,7 @@ export default function AdminSidebar({ onMobileToggle }) {
             className="rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             {logoSrc ? (
-              <img src={logoSrc} alt="Logo" className="w-7 h-7 object-contain" />
+              <img src={logoSrc} alt={logoAlt} className="w-7 h-7 object-contain" />
             ) : (
               <IHubLogo size={28} />
             )}
@@ -310,7 +290,7 @@ export default function AdminSidebar({ onMobileToggle }) {
             className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             {logoSrc ? (
-              <img src={logoSrc} alt="Logo" className="w-8 h-8 object-contain flex-none" />
+              <img src={logoSrc} alt={logoAlt} className="w-8 h-8 object-contain flex-none" />
             ) : (
               <div className="flex-none">
                 <IHubLogo size={30} />

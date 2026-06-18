@@ -90,7 +90,7 @@ function LanguageSelector({ variant = 'header' }) {
           type="button"
           onClick={() => setOpen(o => !o)}
           disabled={isChanging}
-          aria-haspopup="listbox"
+          aria-haspopup="menu"
           aria-expanded={open}
           aria-label={t('common.selectLanguage', 'Select language')}
           className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
@@ -104,15 +104,15 @@ function LanguageSelector({ variant = 'header' }) {
         </button>
         {open && (
           <ul
-            role="listbox"
+            role="menu"
             className="absolute bottom-full right-0 mb-2 min-w-[8rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
           >
             {availableLanguages.map(lang => (
               <li key={lang.code}>
                 <button
                   type="button"
-                  role="option"
-                  aria-selected={i18n.language === lang.code}
+                  role="menuitemradio"
+                  aria-checked={i18n.language === lang.code}
                   onClick={() => {
                     changeLanguage(lang.code);
                     setOpen(false);

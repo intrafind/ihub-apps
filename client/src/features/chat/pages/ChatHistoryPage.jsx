@@ -76,7 +76,7 @@ export default function ChatHistoryPage() {
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {t('chatHistory.subtitle', '{{count}} conversations across your apps', {
-                count: MOCK_CHATS.length
+                count: filteredChats.length
               })}
             </p>
           </div>
@@ -161,7 +161,7 @@ export default function ChatHistoryPage() {
                 {group.items.map(chat => (
                   <button
                     key={chat.id}
-                    onClick={() => navigate('/')}
+                    onClick={() => navigate(`/apps/${chat.appId}`)}
                     className="flex items-center gap-4 px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-left hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md transition-all"
                   >
                     <span

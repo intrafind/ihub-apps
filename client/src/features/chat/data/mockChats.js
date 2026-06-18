@@ -72,7 +72,7 @@ export const MOCK_CHATS = [
     appId: 'translator',
     appName: 'Translator',
     appColor: '#0891b2',
-    appIcon: 'globe-alt',
+    appIcon: 'globe',
     group: 'Last 7 days',
     snippet: 'Gerne. Senden Sie mir den Text des Datenblatts, und ich übersetze ihn ins Deutsche…'
   },

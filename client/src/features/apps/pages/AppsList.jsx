@@ -1,26 +1,26 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchApps } from '../../../api/api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
+import useFavorites from '../../../shared/hooks/useFavorites';
 import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
-import AppCard from '../../../shared/components/AppCard';
 import NextcloudSelectionBanner from '../../nextcloud-embed/components/NextcloudSelectionBanner';
 
 // Instead of fixed values, we'll calculate based on viewport
 function AppsList() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const navigate = useNavigate();
   const { resetHeaderColor, uiConfig } = useUIConfig();
   const { user, isAuthenticated } = useAuth();
 
-  // Create favorite apps helpers
-  const { getFavorites: getFavoriteApps, toggleFavorite: toggleFavoriteApp } =
-    createFavoriteItemHelpers('ihub_favorite_apps');
+  // Favorite apps (kept in sync across components + tabs by the hook)
+  const { favorites: favoriteApps, isFavorite, toggleFavorite } = useFavorites('ihub_favorite_apps');
 
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {
@@ -58,7 +58,6 @@ function AppsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const recentAppIds = useMemo(() => getRecentAppIds(), []);
@@ -177,13 +176,9 @@ function AppsList() {
           return;
         }
 
-        // Load favorite apps from localStorage
-        const favorites = getFavoriteApps();
-
         // Batch our state updates to prevent multiple renders
         if (isMounted) {
           setApps(appsData);
-          setFavoriteApps(favorites);
           setError(null);
 
           // Calculate visible app count after data is loaded
@@ -240,16 +235,6 @@ function AppsList() {
     resetHeaderColor();
   }, [resetHeaderColor]);
 
-  // Keep favorites in sync when toggled elsewhere (e.g. from the sidebar)
-  useEffect(() => {
-    const handleFavoritesChanged = e => {
-      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
-      setFavoriteApps(getFavoriteApps());
-    };
-    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
-    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
-  }, []); // eslint-disable-line @eslint-react/exhaustive-deps
-
   // Direct search handler without debounce
   const handleSearchChange = useCallback(e => {
     const value = e.target.value;
@@ -264,16 +249,9 @@ function AppsList() {
     (e, appId) => {
       e.preventDefault(); // Stop event propagation to avoid navigating to the app
       e.stopPropagation();
-
-      const newStatus = toggleFavoriteApp(appId);
-      // Update the favorite apps list in state
-      if (newStatus) {
-        setFavoriteApps(prev => [...prev, appId]);
-      } else {
-        setFavoriteApps(prev => prev.filter(id => id !== appId));
-      }
+      toggleFavorite(appId);
     },
-    [toggleFavoriteApp]
+    [toggleFavorite]
   );
 
   // Load more apps handler
@@ -595,21 +573,31 @@ function AppsList() {
               {displayedApps.map(app => {
                 const name = getLocalizedContent(app.name, currentLanguage) || app.id;
                 const desc = getLocalizedContent(app.description, currentLanguage) || '';
-                const isFav = favoriteApps.includes(app.id);
+                const isFav = isFavorite(app.id);
+                const favLabel = isFav
+                  ? t('pages.appsList.unfavorite', 'Remove from favorites')
+                  : t('pages.appsList.favorite', 'Add to favorites');
                 return (
-                  <button
+                  // Stretched-link pattern: a single full-row nav button plus a
+                  // separate favorite button — no nested interactive elements.
+                  <div
                     key={app.id}
-                    onClick={() => (window.location.href = `/apps/${app.id}`)}
                     role="listitem"
-                    className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-left hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md transition-all group"
+                    className="relative flex items-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md transition-all group"
                   >
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/apps/${app.id}`)}
+                      aria-label={name}
+                      className="absolute inset-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
                     <span
-                      className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
+                      className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white pointer-events-none"
                       style={{ backgroundColor: app.color || '#4f46e5' }}
                     >
                       <Icon name={app.icon} size="md" />
                     </span>
-                    <span className="flex-1 min-w-0">
+                    <span className="flex-1 min-w-0 pointer-events-none">
                       <span className="block font-bold text-[15px] text-gray-900 dark:text-gray-100 truncate">
                         {name}
                       </span>
@@ -620,8 +608,10 @@ function AppsList() {
                     <button
                       type="button"
                       onClick={e => handleToggleFavorite(e, app.id)}
-                      title={isFav ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
-                      className="w-8 h-8 flex-none flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                      aria-pressed={isFav}
+                      aria-label={favLabel}
+                      title={favLabel}
+                      className="relative z-10 w-8 h-8 flex-none flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
                     >
                       <Icon
                         name="star"
@@ -630,7 +620,7 @@ function AppsList() {
                         solid={isFav}
                       />
                     </button>
-                  </button>
+                  </div>
                 );
               })}
             </div>

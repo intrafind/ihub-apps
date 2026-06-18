@@ -15,7 +15,9 @@ import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
+import { canAccessLink as canAccessLinkShared, FEATURE_ROUTES } from '../../utils/pageAccess';
 import AppSidebar from './AppSidebar';
+import IHubLogo from './IHubLogo';
 
 function Layout() {
   const { t, i18n } = useTranslation();
@@ -23,6 +25,7 @@ function Layout() {
   const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const featureFlags = useFeatureFlags();
@@ -31,7 +34,7 @@ function Layout() {
   useOAuthCallbackCleanup();
 
   // Map navigation URLs to feature IDs for gating
-  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
+  const featureRoutes = FEATURE_ROUTES;
 
   // Update integration settings from URL parameters and retrieve current settings
   const {
@@ -85,21 +88,12 @@ function Layout() {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  const canAccessLink = link => {
-    if (!link.url.startsWith('/pages/') || !uiConfig?.pages) return true;
-    const pageId = link.url.replace('/pages/', '');
-    const page = uiConfig.pages[pageId];
-    if (!page) return true;
-    if (page.authRequired && !isAuthenticated) return false;
-    if (Array.isArray(page.allowedGroups)) {
-      if (page.allowedGroups.includes('*')) return true;
-      if (page.allowedGroups.length > 0) {
-        const groups = user?.groups || [];
-        return groups.some(g => page.allowedGroups.includes(g));
-      }
-    }
-    return true;
-  };
+  // Close the mobile sidebar drawer whenever the route changes.
+  useEffect(() => {
+    setSidebarMobileOpen(false);
+  }, [location.pathname]);
+
+  const canAccessLink = link => canAccessLinkShared(link, { uiConfig, isAuthenticated, user });
 
   return (
     <div
@@ -123,8 +117,40 @@ function Layout() {
       {/* Sidebar layout (non-admin, non-embedded pages) */}
       {showSidebar ? (
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <AppSidebar />
+          <AppSidebar
+            mobileOpen={sidebarMobileOpen}
+            onMobileClose={() => setSidebarMobileOpen(false)}
+          />
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            {/* Mobile top bar — the only way to reach navigation on small screens */}
+            <div className="md:hidden flex items-center gap-2 h-12 px-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-none">
+              <button
+                type="button"
+                onClick={() => setSidebarMobileOpen(true)}
+                aria-label={t('sidebar.openMenu', 'Open navigation')}
+                className="p-1.5 -ml-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <Icon name="menu" size="md" />
+              </button>
+              <Link to="/" onClick={resetHeaderColor} className="flex items-center gap-2 min-w-0">
+                {uiConfig?.header?.logo?.url ? (
+                  <img
+                    src={buildAssetUrl(uiConfig.header.logo.url)}
+                    alt={
+                      getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'iHub'
+                    }
+                    className="h-6 w-6 object-contain flex-none"
+                  />
+                ) : (
+                  <IHubLogo size={24} />
+                )}
+                <span className="text-sm font-semibold truncate">
+                  {uiConfig?.header?.title
+                    ? getLocalizedContent(uiConfig.header.title, currentLanguage)
+                    : 'iHub Apps'}
+                </span>
+              </Link>
+            </div>
             <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto">
               <Outlet />
             </main>

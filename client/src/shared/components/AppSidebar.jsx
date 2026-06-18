@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import useFeatureFlags from '../hooks/useFeatureFlags';
+import useApps from '../hooks/useApps';
+import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
-import { fetchApps } from '../../api/api';
-import { createFavoriteItemHelpers } from '../../utils/favoriteItems';
+import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { isActivePath } from '../../utils/pathUtils';
+import { canAccessLink, FEATURE_ROUTES } from '../../utils/pageAccess';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../features/chat/data/mockChats';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
@@ -15,28 +17,13 @@ import LanguageSelector from './LanguageSelector';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
-const { getFavorites: getFavoriteApps, toggleFavorite: toggleFavoriteApp } =
-  createFavoriteItemHelpers('ihub_favorite_apps');
-
-// iHub gradient logo SVG
-function IHubLogo({ size = 28 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="ihub-lg" x1="6" y1="34" x2="34" y2="6" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#16a34a" />
-          <stop offset="1" stopColor="#0ea5b7" />
-        </linearGradient>
-      </defs>
-      <path d="M20 5L34 33H27.2L20 17.5L12.8 33H6L20 5Z" fill="url(#ihub-lg)" />
-    </svg>
-  );
-}
+const FAVORITE_APPS_KEY = 'ihub_favorite_apps';
 
 function NavButton({ icon, label, onClick, active }) {
   return (
     <button
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
         active
           ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
@@ -72,7 +59,7 @@ function SectionHeader({ label, open, onToggle }) {
   );
 }
 
-export default function AppSidebar() {
+export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {} }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { user, isAuthenticated } = useAuth();
@@ -80,6 +67,9 @@ export default function AppSidebar() {
   const featureFlags = useFeatureFlags();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const { apps } = useApps();
+  const { favorites: favoriteAppIds, isFavorite, toggleFavorite } = useFavorites(FAVORITE_APPS_KEY);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -92,56 +82,50 @@ export default function AppSidebar() {
   const [search, setSearch] = useState('');
   const [appsOpen, setAppsOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
-  const [apps, setApps] = useState([]);
-  const [favoriteAppIds, setFavoriteAppIds] = useState(() => getFavoriteApps());
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
 
-  // Reload apps on mount and whenever the authenticated user changes, so the
-  // list reflects the new user's permissions immediately after login/logout
-  // (otherwise it stays empty until a manual refresh).
-  useEffect(() => {
-    let mounted = true;
-    fetchApps()
-      .then(data => {
-        if (mounted && data && Array.isArray(data)) setApps(data);
-      })
-      .catch(() => {});
-    return () => {
-      mounted = false;
-    };
-  }, [isAuthenticated, user?.id]);
+  // Navigate and close the mobile drawer (no-op on desktop).
+  const go = useCallback(
+    to => {
+      navigate(to);
+      onMobileClose();
+    },
+    [navigate, onMobileClose]
+  );
 
-  // Keep favorites in sync when toggled elsewhere (e.g. on the apps overview)
+  // Close the mobile drawer on Escape.
   useEffect(() => {
-    const handleFavoritesChanged = e => {
-      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
-      setFavoriteAppIds(getFavoriteApps());
+    if (!mobileOpen) return;
+    const onKey = e => {
+      if (e.key === 'Escape') onMobileClose();
     };
-    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
-    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
-  }, []);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [mobileOpen, onMobileClose]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
       const next = !prev;
       try {
         localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      } catch {}
+      } catch {
+        // ignore storage failures (private mode, etc.)
+      }
       return next;
     });
-    if (!collapsed) {
-      setSearchOpen(false);
-      setSearch('');
-    }
-  }, [collapsed]);
-
-  const handleToggleFav = useCallback((e, appId) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const newStatus = toggleFavoriteApp(appId);
-    setFavoriteAppIds(prev => (newStatus ? [...prev, appId] : prev.filter(id => id !== appId)));
+    setSearchOpen(false);
+    setSearch('');
   }, []);
+
+  const handleToggleFav = useCallback(
+    (e, appId) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFavorite(appId);
+    },
+    [toggleFavorite]
+  );
 
   const sidebarApps = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -173,31 +157,9 @@ export default function AppSidebar() {
     ).slice(0, 5);
   }, [chatHistoryEnabled, search]);
 
-  const isOnApps = location.pathname === '/apps' || location.pathname === '/';
   const isOnPrompts = location.pathname.startsWith('/prompts');
-
-  // Configured navigation links (CMS pages + header links) mirror what used to
-  // live in the top header. Feature-gated routes and page access rules apply.
-  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
-
-  const canAccessLink = useCallback(
-    link => {
-      if (!link.url.startsWith('/pages/') || !uiConfig?.pages) return true;
-      const pageId = link.url.replace('/pages/', '');
-      const page = uiConfig.pages[pageId];
-      if (!page) return true;
-      if (page.authRequired && !isAuthenticated) return false;
-      if (Array.isArray(page.allowedGroups)) {
-        if (page.allowedGroups.includes('*')) return true;
-        if (page.allowedGroups.length > 0) {
-          const groups = user?.groups || [];
-          return groups.some(g => page.allowedGroups.includes(g));
-        }
-      }
-      return true;
-    },
-    [uiConfig, isAuthenticated, user]
-  );
+  const isOnChats = location.pathname.startsWith('/chats');
+  const isOnApps = location.pathname === '/apps';
 
   const linkIconFor = url => {
     if (/^https?:\/\//.test(url)) return 'external-link';
@@ -208,19 +170,19 @@ export default function AppSidebar() {
     return 'link';
   };
 
-  // Header links from config, excluding entries already represented by the
-  // dedicated buttons (start page "/" and the apps overview "/apps").
+  // Header links from config (CMS pages, prompts, external), excluding entries
+  // already represented by dedicated buttons. Feature gating + page access apply.
   const configuredLinks = useMemo(() => {
     const links = uiConfig?.header?.links;
     if (!Array.isArray(links)) return [];
     return links.filter(link => {
       if (!link?.url) return false;
       if (link.url === '/' || link.url === '/apps') return false;
-      const featureId = featureRoutes[link.url];
+      const featureId = FEATURE_ROUTES[link.url];
       if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
-      return canAccessLink(link);
+      return canAccessLink(link, { uiConfig, isAuthenticated, user });
     });
-  }, [uiConfig, featureFlags, canAccessLink]);
+  }, [uiConfig, featureFlags, isAuthenticated, user]);
 
   const headerTitle = useMemo(() => {
     if (uiConfig?.header?.titleLight || uiConfig?.header?.titleBold) {
@@ -244,142 +206,174 @@ export default function AppSidebar() {
   }, [uiConfig, currentLanguage]);
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
+  const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
+  // Vendor tagline is only shown when configured (no hard-coded vendor name).
+  const tagline = uiConfig?.header?.tagline
+    ? getLocalizedContent(uiConfig.header.tagline, currentLanguage)
+    : null;
 
-  if (collapsed) {
-    return (
-      <aside
-        className="w-[72px] flex-none flex flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
-        aria-label={t('sidebar.navigation', 'Navigation')}
+  // Plain render helper (not a nested component) to avoid remounting on render.
+  const renderBrandMark = size =>
+    logoSrc ? (
+      <img
+        src={logoSrc}
+        alt={logoAlt}
+        className="object-contain"
+        style={{ width: size, height: size }}
+      />
+    ) : (
+      <IHubLogo size={size} />
+    );
+
+  // ---- Collapsed rail (desktop only) ----
+  const rail = (
+    <aside
+      className="hidden md:flex w-[72px] flex-none flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
+      aria-label={t('sidebar.navigation', 'Navigation')}
+    >
+      <button
+        onClick={() => go('/')}
+        title={t('sidebar.home', 'Home')}
+        aria-label={t('sidebar.home', 'Home')}
+        className="mb-1 rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
       >
-        <button
-          onClick={() => navigate('/')}
-          title={t('sidebar.home', 'Home')}
-          className="mb-1 rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          {logoSrc ? (
-            <img src={logoSrc} alt="Logo" className="w-7 h-7 object-contain" />
-          ) : (
-            <IHubLogo size={28} />
-          )}
-        </button>
+        {renderBrandMark(28)}
+      </button>
 
-        <button
-          title={t('sidebar.expand', 'Expand sidebar')}
-          onClick={toggleCollapsed}
-          className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          <Icon name="chevron-right" size="md" />
-        </button>
+      <button
+        title={t('sidebar.expand', 'Expand sidebar')}
+        aria-label={t('sidebar.expand', 'Expand sidebar')}
+        onClick={toggleCollapsed}
+        className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      >
+        <Icon name="chevron-right" size="md" />
+      </button>
 
-        <button
-          title={t('sidebar.newChat', 'New chat')}
-          onClick={() => navigate('/')}
-          className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >
-          <Icon name="plus" size="md" />
-        </button>
+      <button
+        title={t('sidebar.newChat', 'New chat')}
+        aria-label={t('sidebar.newChat', 'New chat')}
+        onClick={() => go('/')}
+        className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+      >
+        <Icon name="plus" size="md" />
+      </button>
 
-        <button
-          title={t('common.search', 'Search')}
-          onClick={() => {
-            setCollapsed(false);
-            try {
-              localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
-            } catch {}
-            setSearchOpen(true);
-          }}
-          className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          <Icon name="search" size="md" />
-        </button>
+      <button
+        title={t('sidebar.search', 'Search')}
+        aria-label={t('sidebar.search', 'Search')}
+        onClick={() => {
+          setCollapsed(false);
+          try {
+            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
+          } catch {
+            // ignore
+          }
+          setSearchOpen(true);
+        }}
+        className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      >
+        <Icon name="search" size="md" />
+      </button>
 
+      <button
+        title={t('sidebar.browseApps', 'Browse all apps')}
+        aria-label={t('sidebar.browseApps', 'Browse all apps')}
+        aria-current={isOnApps ? 'page' : undefined}
+        onClick={() => go('/apps')}
+        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+          isOnApps
+            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+        }`}
+      >
+        <Icon name="home" size="md" />
+      </button>
+
+      {featureFlags.isEnabled('promptsLibrary', true) && (
         <button
-          title={t('sidebar.browseApps', 'Browse all apps')}
-          onClick={() => navigate('/apps')}
+          title={t('sidebar.prompts', 'Prompts')}
+          aria-label={t('sidebar.prompts', 'Prompts')}
+          aria-current={isOnPrompts ? 'page' : undefined}
+          onClick={() => go('/prompts')}
           className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
-            isOnApps
+            isOnPrompts
               ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
               : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
-          <Icon name="home" size="md" />
+          <Icon name="sparkles" size="md" />
         </button>
+      )}
 
-        {featureFlags.isEnabled('promptsLibrary', true) && (
-          <button
-            title={t('sidebar.prompts', 'Prompts')}
-            onClick={() => navigate('/prompts')}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
-              isOnPrompts
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
-          >
-            <Icon name="sparkles" size="md" />
-          </button>
-        )}
+      <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" />
 
-        <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" />
-
-        {apps
-          .filter(a => favoriteAppIds.includes(a.id))
-          .slice(0, 4)
-          .map(app => (
+      {apps
+        .filter(a => favoriteAppIds.includes(a.id))
+        .slice(0, 4)
+        .map(app => {
+          const name = getLocalizedContent(app.name, currentLanguage) || app.id;
+          return (
             <button
               key={app.id}
-              title={getLocalizedContent(app.name, currentLanguage) || app.id}
-              onClick={() => navigate(`/apps/${app.id}`)}
+              title={name}
+              aria-label={name}
+              onClick={() => go(`/apps/${app.id}`)}
               className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
               style={{ backgroundColor: app.color || '#4f46e5' }}
             >
               <Icon name={app.icon} size="md" />
             </button>
-          ))}
+          );
+        })}
 
-        <div className="flex-1" />
+      <div className="flex-1" />
 
-        <UserAuthMenu variant="sidebar" collapsed className="flex justify-center" />
-      </aside>
-    );
-  }
+      <UserAuthMenu variant="sidebar" collapsed className="flex justify-center" />
+    </aside>
+  );
 
-  return (
-    <aside
-      className="w-[284px] flex-none flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
-      aria-label={t('sidebar.navigation', 'Navigation')}
-    >
+  // ---- Expanded content (shared by desktop-expanded and mobile drawer) ----
+  const expandedContent = (
+    <>
       {/* Header */}
       <div className="px-4 pt-4 pb-0 flex items-center gap-2.5">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => go('/')}
           title={t('sidebar.home', 'Home')}
           className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
         >
-          {logoSrc ? (
-            <img src={logoSrc} alt="Logo" className="w-8 h-8 object-contain flex-none" />
-          ) : (
-            <div className="flex-none">
-              <IHubLogo size={30} />
-            </div>
-          )}
-          <div className="flex-1 min-w-0 leading-tight">
-            <div className="text-base text-gray-900 dark:text-gray-100 truncate">{headerTitle}</div>
-            <div className="text-[10px] text-gray-400 tracking-wide">by IntraFind</div>
-          </div>
+          <span className="flex-none">
+            {renderBrandMark(30)}
+          </span>
+          <span className="flex-1 min-w-0 leading-tight">
+            <span className="block text-base text-gray-900 dark:text-gray-100 truncate">
+              {headerTitle}
+            </span>
+            {tagline && (
+              <span className="block text-[10px] text-gray-400 tracking-wide truncate">
+                {tagline}
+              </span>
+            )}
+          </span>
         </button>
+        {/* Collapse on desktop, close on mobile */}
         <button
           title={t('sidebar.collapse', 'Collapse sidebar')}
-          onClick={toggleCollapsed}
+          aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+          onClick={() => {
+            if (mobileOpen) onMobileClose();
+            else toggleCollapsed();
+          }}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-none"
         >
-          <Icon name="chevron-left" size="sm" />
+          <Icon name={mobileOpen ? 'x' : 'chevron-left'} size="sm" />
         </button>
       </div>
 
       {/* New chat + search */}
       <div className="px-4 pt-3.5 pb-1 flex gap-2">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => go('/')}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
         >
           <Icon name="plus" size="sm" />
@@ -391,6 +385,8 @@ export default function AppSidebar() {
             if (searchOpen) setSearch('');
           }}
           title={t('sidebar.searchChatsApps', 'Search chats & apps')}
+          aria-label={t('sidebar.searchChatsApps', 'Search chats & apps')}
+          aria-expanded={searchOpen}
           className={`w-11 flex items-center justify-center rounded-xl border transition-colors ${
             searchOpen
               ? 'border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600'
@@ -411,6 +407,7 @@ export default function AppSidebar() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={t('sidebar.searchPlaceholder', 'Search chats & apps')}
+              aria-label={t('sidebar.searchChatsApps', 'Search chats & apps')}
               autoFocus
               className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-gray-50 dark:bg-gray-800 text-sm outline-none focus:border-indigo-400 dark:text-gray-100"
             />
@@ -421,12 +418,12 @@ export default function AppSidebar() {
       {/* Scrollable middle */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
         {/* Nav items */}
-        <div className="px-2 pt-2 pb-1">
+        <nav className="px-2 pt-2 pb-1" aria-label={t('sidebar.navigation', 'Navigation')}>
           <NavButton
             icon="home"
             label={t('sidebar.browseApps', 'Browse all apps')}
-            onClick={() => navigate('/apps')}
-            active={location.pathname === '/apps'}
+            onClick={() => go('/apps')}
+            active={isOnApps}
           />
           {configuredLinks.map((link, index) => {
             const label = getLocalizedContent(link.name, currentLanguage) || link.url;
@@ -440,14 +437,15 @@ export default function AppSidebar() {
                 onClick={() => {
                   if (isExternal) {
                     window.open(link.url, '_blank', 'noopener,noreferrer');
+                    onMobileClose();
                   } else {
-                    navigate(link.url);
+                    go(link.url);
                   }
                 }}
               />
             );
           })}
-        </div>
+        </nav>
 
         {/* Apps section */}
         <SectionHeader
@@ -466,6 +464,7 @@ export default function AppSidebar() {
             )}
             {sidebarApps.map(app => {
               const name = getLocalizedContent(app.name, currentLanguage) || app.id;
+              const fav = isFavorite(app.id);
               const isActive =
                 location.pathname === `/apps/${app.id}` ||
                 location.pathname.startsWith(`/apps/${app.id}/`);
@@ -479,8 +478,9 @@ export default function AppSidebar() {
                   }`}
                 >
                   <button
-                    onClick={() => navigate(`/apps/${app.id}`)}
+                    onClick={() => go(`/apps/${app.id}`)}
                     title={name}
+                    aria-current={isActive ? 'page' : undefined}
                     className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 text-left min-w-0"
                   >
                     <span
@@ -493,23 +493,31 @@ export default function AppSidebar() {
                   </button>
                   <button
                     onClick={e => handleToggleFav(e, app.id)}
+                    aria-pressed={fav}
+                    aria-label={
+                      fav
+                        ? t('pages.appsList.unfavorite', 'Remove from favorites')
+                        : t('pages.appsList.favorite', 'Add to favorites')
+                    }
                     title={
-                      app.isFav ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')
+                      fav
+                        ? t('pages.appsList.unfavorite', 'Remove from favorites')
+                        : t('pages.appsList.favorite', 'Add to favorites')
                     }
                     className="w-8 h-8 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Icon
                       name="star"
                       size="sm"
-                      className={app.isFav ? 'text-yellow-400' : 'text-gray-300'}
-                      solid={app.isFav}
+                      className={fav ? 'text-yellow-400' : 'text-gray-300'}
+                      solid={fav}
                     />
                   </button>
                 </div>
               );
             })}
             <button
-              onClick={() => navigate('/apps')}
+              onClick={() => go('/apps')}
               className="flex items-center gap-2.5 w-full px-3 py-1.5 mt-1 rounded-lg text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               <span className="w-6 h-6 flex items-center justify-center flex-none">
@@ -533,31 +541,25 @@ export default function AppSidebar() {
             />
             {recentsOpen && (
               <div className="px-2 pb-2">
-                {recentChats.map(chat => {
-                  const isActive = location.pathname === `/chats/${chat.id}`;
-                  return (
-                    <button
-                      key={chat.id}
-                      onClick={() => navigate(`/chats`)}
-                      title={chat.title}
-                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 text-left transition-colors ${
-                        isActive
-                          ? 'bg-indigo-50 dark:bg-indigo-900/30'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
+                {recentChats.map(chat => (
+                  <button
+                    key={chat.id}
+                    onClick={() => go('/chats')}
+                    title={chat.title}
+                    className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <span
+                      className="w-5 h-5 rounded-md flex items-center justify-center flex-none text-white"
+                      style={{ backgroundColor: chat.appColor || '#4f46e5' }}
                     >
-                      <span
-                        className="w-5 h-5 rounded-md flex items-center justify-center flex-none text-white"
-                        style={{ backgroundColor: chat.appColor || '#4f46e5' }}
-                      >
-                        <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
-                      </span>
-                      <span className="flex-1 truncate text-[13px]">{chat.title}</span>
-                    </button>
-                  );
-                })}
+                      <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
+                    </span>
+                    <span className="flex-1 truncate text-[13px]">{chat.title}</span>
+                  </button>
+                ))}
                 <button
-                  onClick={() => navigate('/chats')}
+                  onClick={() => go('/chats')}
+                  aria-current={isOnChats ? 'page' : undefined}
                   className="flex items-center gap-2.5 w-full px-3 py-1.5 mt-1 rounded-lg text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <span className="w-5 h-5 flex items-center justify-center flex-none">
@@ -581,6 +583,35 @@ export default function AppSidebar() {
         </div>
         <LanguageSelector variant="sidebar" />
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      {collapsed ? (
+        rail
+      ) : (
+        <aside
+          className="hidden md:flex w-[284px] flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
+          aria-label={t('sidebar.navigation', 'Navigation')}
+        >
+          {expandedContent}
+        </aside>
+      )}
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50" onClick={onMobileClose} aria-hidden="true" />
+          <aside
+            className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
+            aria-label={t('sidebar.navigation', 'Navigation')}
+          >
+            {expandedContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

@@ -4,8 +4,10 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import Icon from '../../../shared/components/Icon';
-import { fetchApps, fetchAppDetails, fetchModels } from '../../../api/api';
-import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
+import { fetchAppDetails, fetchModels } from '../../../api/api';
+import useApps from '../../../shared/hooks/useApps';
+import useFavorites from '../../../shared/hooks/useFavorites';
+import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +19,6 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
 
-const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('ihub_favorite_apps');
-
 function timeBasedGreeting(t) {
   const h = new Date().getHours();
   if (h < 12) return t('startPage.greetingMorning', 'Good morning');
@@ -26,39 +26,16 @@ function timeBasedGreeting(t) {
   return t('startPage.greetingEvening', 'Good evening');
 }
 
-// iHub gradient logo
-function IHubLogo({ size = 44 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient
-          id="sp-ihub-lg"
-          x1="6"
-          y1="34"
-          x2="34"
-          y2="6"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#16a34a" />
-          <stop offset="1" stopColor="#0ea5b7" />
-        </linearGradient>
-      </defs>
-      <path d="M20 5L34 33H27.2L20 17.5L12.8 33H6L20 5Z" fill="url(#sp-ihub-lg)" />
-    </svg>
-  );
-}
-
 export default function StartPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
-  const [apps, setApps] = useState([]);
-  const [appsLoading, setAppsLoading] = useState(true);
-  const [favoriteAppIds, setFavoriteAppIds] = useState(() => getFavoriteApps());
+  const { apps, loading: appsLoading } = useApps();
+  const { favorites: favoriteAppIds } = useFavorites('ihub_favorite_apps');
   const [draft, setDraft] = useState('');
   const [defaultAppDetails, setDefaultAppDetails] = useState(null);
   const [models, setModels] = useState([]);
@@ -80,37 +57,6 @@ export default function StartPage() {
     currentText: draft,
     sendMessage: () => formRef.current?.requestSubmit?.()
   });
-
-  useEffect(() => {
-    let mounted = true;
-    setAppsLoading(true);
-    fetchApps()
-      .then(data => {
-        if (mounted && data && Array.isArray(data)) {
-          setApps(data);
-          setFavoriteAppIds(getFavoriteApps());
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setAppsLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-    // Reload when the authenticated user changes so apps reflect the new
-    // permissions right after login/logout (no manual refresh needed).
-  }, [isAuthenticated, user?.id]);
-
-  // Keep favorites fresh when toggled elsewhere
-  useEffect(() => {
-    const handleFavoritesChanged = e => {
-      if (e?.detail?.storageKey && e.detail.storageKey !== 'ihub_favorite_apps') return;
-      setFavoriteAppIds(getFavoriteApps());
-    };
-    window.addEventListener('ihub:favorites-changed', handleFavoritesChanged);
-    return () => window.removeEventListener('ihub:favorites-changed', handleFavoritesChanged);
-  }, []);
 
   const greeting = useMemo(() => {
     const base = timeBasedGreeting(t);
@@ -236,6 +182,7 @@ export default function StartPage() {
   );
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
+  const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
 
   return (
     <div className="min-h-full flex flex-col items-center justify-center px-6 py-12 bg-gray-50 dark:bg-gray-900">
@@ -243,7 +190,7 @@ export default function StartPage() {
         {/* Logo + greeting */}
         <div className="flex flex-col items-center text-center mb-8">
           {logoSrc ? (
-            <img src={logoSrc} alt="Logo" className="w-12 h-12 object-contain mb-4" />
+            <img src={logoSrc} alt={logoAlt} className="w-12 h-12 object-contain mb-4" />
           ) : (
             <div className="mb-4">
               <IHubLogo size={46} />
@@ -308,8 +255,16 @@ export default function StartPage() {
                 currentLanguage={currentLanguage}
               />
             ) : (
-              <div className="flex justify-center py-6 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800">
-                <LoadingSpinner message={t('app.loading')} />
+              // Skeleton shaped like the chat input so the hero doesn't flash a spinner.
+              <div
+                className="border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 px-5 py-4 animate-pulse"
+                aria-hidden="true"
+              >
+                <div className="h-4 w-2/3 bg-gray-100 dark:bg-gray-700 rounded mb-3" />
+                <div className="flex items-center justify-between">
+                  <div className="h-7 w-7 bg-gray-100 dark:bg-gray-700 rounded-lg" />
+                  <div className="h-9 w-9 bg-gray-100 dark:bg-gray-700 rounded-xl" />
+                </div>
               </div>
             )}
           </div>
