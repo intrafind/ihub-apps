@@ -7,6 +7,7 @@ import {
   cleanupEvents,
   flushQueue
 } from './UsageEventLog.js';
+import { cleanupFeedback } from '../feedbackStorage.js';
 import logger from '../utils/logger.js';
 
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -261,6 +262,70 @@ export async function getMonthlyRollups(startMonth, endMonth) {
 }
 
 /**
+ * Delete rollup files older than `retentionDays` in the given directory.
+ *
+ * Files are expected to be named `<key>.json` where `<key>` is a
+ * lexicographically-sortable date prefix (e.g. `YYYY-MM-DD` for daily,
+ * `YYYY-MM` for monthly). A non-positive `retentionDays` (e.g. `-1`)
+ * disables cleanup entirely so admins can keep history forever.
+ *
+ * @param {string} dir - Absolute path to the rollup directory.
+ * @param {number} retentionDays
+ * @param {number} keyLength - Length of the lexicographic date prefix
+ *   (`10` for `YYYY-MM-DD`, `7` for `YYYY-MM`).
+ * @returns {Promise<string[]>} list of deleted file names
+ */
+async function cleanupRollupDir(dir, retentionDays, keyLength) {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) return [];
+  let files;
+  try {
+    files = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  // Format the cutoff to match the file key length so string comparison works.
+  const cutoffKey =
+    keyLength === 7 ? cutoff.toISOString().slice(0, 7) : cutoff.toISOString().slice(0, 10);
+
+  const deleted = [];
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const key = file.replace('.json', '');
+    if (key.length !== keyLength) continue;
+    if (key < cutoffKey) {
+      try {
+        await fs.unlink(path.join(dir, file));
+        deleted.push(file);
+      } catch (err) {
+        logger.warn('Failed to delete rollup file', {
+          component: 'UsageAggregator',
+          file,
+          error: err.message
+        });
+      }
+    }
+  }
+  return deleted;
+}
+
+/**
+ * Clean up daily rollup files past the configured retention. Returns the
+ * list of deleted file names so callers can log a summary.
+ */
+export async function cleanupDailyRollups(retentionDays) {
+  return cleanupRollupDir(getDailyDir(), retentionDays, 10);
+}
+
+/**
+ * Clean up monthly rollup files past the configured retention.
+ */
+export async function cleanupMonthlyRollups(retentionDays) {
+  return cleanupRollupDir(getMonthlyDir(), retentionDays, 7);
+}
+
+/**
  * Run all rollup generation and cleanup tasks.
  */
 export async function runRollups(retentionConfig = {}) {
@@ -270,7 +335,47 @@ export async function runRollups(retentionConfig = {}) {
   if (retentionConfig.eventRetentionDays != null) {
     await cleanupEvents(retentionConfig.eventRetentionDays);
   }
-  return { eventsFlushed, eventsProcessed, daysGenerated, monthsGenerated };
+  let dailyDeleted = [];
+  let monthlyDeleted = [];
+  if (retentionConfig.dailyRetentionDays != null) {
+    dailyDeleted = await cleanupDailyRollups(retentionConfig.dailyRetentionDays);
+    if (dailyDeleted.length > 0) {
+      logger.info('Daily rollup cleanup removed expired files', {
+        component: 'UsageAggregator',
+        removed: dailyDeleted.length
+      });
+    }
+  }
+  if (retentionConfig.monthlyRetentionDays != null) {
+    monthlyDeleted = await cleanupMonthlyRollups(retentionConfig.monthlyRetentionDays);
+    if (monthlyDeleted.length > 0) {
+      logger.info('Monthly rollup cleanup removed expired files', {
+        component: 'UsageAggregator',
+        removed: monthlyDeleted.length
+      });
+    }
+  }
+  let feedbackRemoved = 0;
+  if (retentionConfig.feedbackRetentionDays != null) {
+    try {
+      const result = await cleanupFeedback(retentionConfig.feedbackRetentionDays);
+      feedbackRemoved = result?.removed || 0;
+    } catch (err) {
+      logger.warn('Feedback cleanup failed', {
+        component: 'UsageAggregator',
+        error: err.message
+      });
+    }
+  }
+  return {
+    eventsFlushed,
+    eventsProcessed,
+    daysGenerated,
+    monthsGenerated,
+    dailyDeleted: dailyDeleted.length,
+    monthlyDeleted: monthlyDeleted.length,
+    feedbackRemoved
+  };
 }
 
 // Schedule periodic rollup generation

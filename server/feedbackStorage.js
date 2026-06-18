@@ -87,6 +87,66 @@ export async function reloadConfig() {
   await loadConfig();
 }
 
+/**
+ * Drop feedback entries older than `retentionDays`. A non-positive value
+ * (e.g. the default `-1`) disables cleanup entirely so admins can keep
+ * feedback history forever.
+ *
+ * Entries are filtered by their ISO `timestamp` field; malformed lines are
+ * preserved (we don't know their age) but never rewritten so they stay
+ * append-safe. Flushes the in-memory queue first so newly-buffered entries
+ * are never lost to a cleanup race.
+ *
+ * @param {number} retentionDays
+ * @returns {Promise<{removed: number, kept: number}>}
+ */
+export async function cleanupFeedback(retentionDays) {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return { removed: 0, kept: 0 };
+  }
+  try {
+    await flushQueue();
+  } catch {
+    // A flush failure is logged elsewhere; continue with what's on disk.
+  }
+
+  let content;
+  try {
+    content = await fs.readFile(dataFile, 'utf8');
+  } catch {
+    return { removed: 0, kept: 0 };
+  }
+
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const lines = content.split('\n').filter(Boolean);
+  const retained = [];
+  let removed = 0;
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry?.timestamp && entry.timestamp < cutoff) {
+        removed += 1;
+        continue;
+      }
+      retained.push(line);
+    } catch {
+      // Preserve malformed lines — we can't reason about their age safely.
+      retained.push(line);
+    }
+  }
+
+  if (removed > 0) {
+    const out = retained.length > 0 ? retained.join('\n') + '\n' : '';
+    await fs.writeFile(dataFile, out, 'utf8');
+    logger.info('Feedback cleanup removed expired entries', {
+      component: 'FeedbackStorage',
+      removed,
+      kept: retained.length
+    });
+  }
+  return { removed, kept: retained.length };
+}
+
 // Start periodic flush interval
 setInterval(() => {
   if (queue.length > 0) {

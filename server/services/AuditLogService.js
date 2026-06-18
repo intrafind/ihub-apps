@@ -5,6 +5,7 @@ import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';
 import { getContext } from '../utils/requestContext.js';
+import { anonymizeIp } from '../utils/ipAnonymizer.js';
 import { validateAuditEntry } from '../validators/auditEntrySchema.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
@@ -194,10 +195,21 @@ export function logAudit({
   requestId
 } = {}) {
   try {
-    const includeEmail = getAuditConfig().includeEmail === true;
+    const auditCfg = getAuditConfig();
+    const includeEmail = auditCfg.includeEmail === true;
     // resourceId can carry the attempted identifier (e.g. a login id that is an
     // email), so honor the same masking as the actor.
     const safeResourceId = includeEmail ? resourceId || '' : maskEmail(resourceId || '');
+    // Honor audit.anonymizeIp: when true, the client IP is masked (last
+    // octet / last 80 bits) before being persisted. Set to a string like
+    // 'drop' to omit the field entirely.
+    const rawIp = req?.ip;
+    let safeIp = rawIp;
+    if (auditCfg.anonymizeIp === 'drop') {
+      safeIp = null;
+    } else if (auditCfg.anonymizeIp === true || auditCfg.anonymizeIp === 'mask') {
+      safeIp = anonymizeIp(rawIp);
+    }
     const entry = {
       id: randomUUID(),
       ts: new Date().toISOString(),
@@ -209,7 +221,7 @@ export function logAudit({
       result,
       source: source || deriveSource(req),
       requestId: requestId || getContext()?.requestId || randomUUID(),
-      ip: req?.ip
+      ip: safeIp
     };
 
     const validation = validateAuditEntry(entry);

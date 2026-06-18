@@ -65,6 +65,13 @@ const rateLimitSchema = z.object({
   inferenceApi: rateLimitConfigSchema.partial().default({})
 });
 
+// Accept either a boolean (true => mask) or a string mode ('off' | 'mask' |
+// 'drop') so admins can be explicit about whether the IP should be truncated
+// or omitted entirely.
+const ipAnonymizationSchema = z
+  .union([z.boolean(), z.enum(['off', 'mask', 'drop'])])
+  .default(false);
+
 const loggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   format: z.enum(['json', 'text']).default('json'),
@@ -75,8 +82,18 @@ const loggingSchema = z.object({
       maxSize: z.number().default(10485760), // 10MB
       maxFiles: z.number().default(5)
     })
-    .default({})
+    .default({}),
+  anonymizeIp: ipAnonymizationSchema
 });
+
+const usageTrackingRetentionSchema = z
+  .object({
+    eventRetentionDays: z.number().default(90),
+    dailyRetentionDays: z.number().default(365),
+    monthlyRetentionDays: z.number().default(-1),
+    feedbackRetentionDays: z.number().default(-1)
+  })
+  .passthrough();
 
 export const platformConfigSchema = z
   .object({
@@ -190,10 +207,12 @@ export const platformConfigSchema = z
         cleanupEnabled: z.boolean().default(true),
         includeEmail: z.boolean().default(false),
         verbosity: z.enum(['metadata', 'request', 'full']).default('metadata'),
-        winstonMirror: z.boolean().default(false)
+        winstonMirror: z.boolean().default(false),
+        anonymizeIp: ipAnonymizationSchema
       })
       .passthrough()
-      .default({})
+      .default({}),
+    usageTracking: usageTrackingRetentionSchema.default({})
   })
   .passthrough();
 

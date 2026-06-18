@@ -182,7 +182,22 @@
       "path": "logs/app.log",
       "maxSize": 10485760,
       "maxFiles": 5
-    }
+    },
+    "anonymizeIp": false
+  },
+  "audit": {
+    "retentionDays": 365,
+    "cleanupEnabled": true,
+    "includeEmail": false,
+    "verbosity": "metadata",
+    "winstonMirror": false,
+    "anonymizeIp": false
+  },
+  "usageTracking": {
+    "eventRetentionDays": 90,
+    "dailyRetentionDays": 365,
+    "monthlyRetentionDays": -1,
+    "feedbackRetentionDays": -1
   },
   "jwt": {
     "algorithm": "RS256"
