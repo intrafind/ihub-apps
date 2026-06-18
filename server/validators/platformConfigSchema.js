@@ -171,6 +171,16 @@ export const platformConfigSchema = z
           )
       })
       .default({}),
+    ssrf: z
+      .object({
+        allowedHosts: z
+          .array(z.string())
+          .default([])
+          .describe(
+            'Hostnames or patterns that bypass the SSRF private-IP guard for outbound HTTP calls (OpenAPI tools, MCP servers, web tools). Use this to reach intentionally internal services. Supports wildcards (*.example.com), exact domains (api.example.com), and subdomain (.example.com) patterns.'
+          )
+      })
+      .default({}),
     cloudStorage: cloudStorageConfigSchema.default({}),
     // Single source of truth for audit logging: retention + behavior + privacy.
     // (The legacy top-level `auditLog` block is migrated into here by V059.)

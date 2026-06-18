@@ -20,6 +20,7 @@ import registerAdminMarketplaceRoutes from './admin/marketplace.js';
 import registerAdminLoggingRoutes from './admin/logging.js';
 import registerAdminSSLRoutes from './admin/ssl.js';
 import registerAdminCorsRoutes from './admin/cors.js';
+import registerAdminSsrfRoutes from './admin/ssrf.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
@@ -60,6 +61,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminLoggingRoutes(app);
   registerAdminSSLRoutes(app);
   registerAdminCorsRoutes(app);
+  registerAdminSsrfRoutes(app);
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);

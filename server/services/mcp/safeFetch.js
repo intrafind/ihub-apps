@@ -2,8 +2,51 @@ import dns from 'dns';
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import configCache from '../../configCache.js';
 
 const dnsLookupAsync = dns.promises.lookup;
+
+/**
+ * Match a hostname against a single allowlist pattern. Mirrors the pattern
+ * semantics used by `ssl.domainWhitelist` (see `utils/httpConfig.js`):
+ *   - `*.example.com` matches any subdomain (e.g. `api.example.com`) but NOT
+ *     `example.com` itself
+ *   - `.example.com` is an alias for `*.example.com` — subdomains only, NOT
+ *     `example.com` itself
+ *   - everything else is an exact-match hostname (case-insensitive)
+ *
+ * Kept inline (rather than imported from httpConfig) so this security-critical
+ * module stays dependency-light and the matcher can be tested in isolation.
+ * Exported for direct unit testing of the matching semantics.
+ */
+export function hostMatchesPattern(hostname, pattern) {
+  if (!hostname || !pattern) return false;
+  const h = hostname.toLowerCase();
+  const p = pattern.toLowerCase().trim();
+  if (!p) return false;
+  if (p.startsWith('*.')) {
+    const base = p.slice(2);
+    return Boolean(base) && h.endsWith('.' + base);
+  }
+  if (p.startsWith('.')) {
+    // Subdomain pattern — bare domain must NOT match (per repo convention)
+    const base = p.slice(1);
+    return Boolean(base) && h.endsWith(p);
+  }
+  return h === p;
+}
+
+/**
+ * Look up the admin-configured global SSRF allowlist from platform.json and
+ * test the hostname against it. Returns false if configCache is not hydrated
+ * or no patterns are defined.
+ */
+function isInGlobalSsrfAllowlist(hostname) {
+  const platform = configCache.getPlatform?.() || {};
+  const list = platform.ssrf?.allowedHosts;
+  if (!Array.isArray(list) || list.length === 0) return false;
+  return list.some(pattern => hostMatchesPattern(hostname, pattern));
+}
 
 const PRIVATE_IP_RE = [
   /^127\./,
@@ -32,11 +75,19 @@ function isPrivateIp(ip) {
  * by a public DNS record pointing at 127.0.0.1.
  */
 async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
-  // The private-IP veto is skipped when the hostname is explicitly
-  // allow-listed OR when the operator has globally disabled the check
-  // (security.blockPrivateIps: false). DNS is still resolved once so the
-  // socket can be pinned to the resolved address either way.
-  const skipPrivateVeto = !blockPrivateIps || allowList?.includes(hostname);
+  // The private-IP veto is skipped when:
+  //   - the operator has disabled the check on this call (blockPrivateIps:false),
+  //   - the hostname is on the per-caller exact-match allow list (e.g. a
+  //     per-tool/per-MCP-server `allowedHosts`) — case-insensitive, trimmed,
+  //   - OR the hostname matches a platform-wide pattern in
+  //     `platform.ssrf.allowedHosts` (admin-managed, supports wildcards).
+  // DNS is still resolved once so the socket can be pinned either way.
+  const lowerHost = hostname.toLowerCase();
+  const inCallerAllowList =
+    Array.isArray(allowList) &&
+    allowList.some(h => typeof h === 'string' && h.trim().toLowerCase() === lowerHost);
+  const skipPrivateVeto =
+    !blockPrivateIps || inCallerAllowList || isInGlobalSsrfAllowlist(hostname);
 
   let result;
   try {

@@ -1054,6 +1054,22 @@
         "securityWarningDesc": "Disabling SSL certificate validation makes your application vulnerable to man-in-the-middle attacks. Only use this feature in secure, trusted network environments.",
         "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only."
       },
+      "ssrf": {
+        "title": "SSRF Allowlist",
+        "description": "Allow outbound HTTP calls (OpenAPI tools, MCP servers, web tools) to reach intentionally internal services even when their hostname resolves to a private IP.",
+        "addHost": "Add host",
+        "removeHost": "Remove",
+        "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
+        "patternHelp": "Supported patterns: exact hostname (api.example.com), wildcard (*.example.com), subdomain (.example.com).",
+        "noHosts": "No hosts allowed. Outbound calls to private/internal IPs are blocked.",
+        "saveConfig": "Save allowlist",
+        "savingConfig": "Saving…",
+        "configSaved": "SSRF allowlist saved successfully",
+        "configLoadError": "Failed to load SSRF configuration",
+        "configSaveError": "Failed to save SSRF configuration",
+        "securityWarning": "Security Warning",
+        "securityWarningDesc": "Every hostname added here can be reached by tools and MCP servers even if it resolves to an internal IP. Only add hosts you control and trust. Patterns like *.example.com match every subdomain."
+      },
       "cookieSettings": {
         "title": "Cookie Security Configuration",
         "description": "Configure cookie security settings for authentication",
