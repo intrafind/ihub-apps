@@ -923,9 +923,6 @@ function AppFormEditor({
                           <option value="brave">
                             {t('admin.apps.edit.websearchProviderBrave', 'Brave')}
                           </option>
-                          <option value="tavily">
-                            {t('admin.apps.edit.websearchProviderTavily', 'Tavily')}
-                          </option>
                         </select>
                       </div>
 
@@ -1236,7 +1233,6 @@ function AppFormEditor({
                     excludeToolIds={[
                       'braveSearch',
                       'enhancedWebSearch',
-                      'tavilySearch',
                       'googleSearch',
                       'webSearch',
                       'webContentExtractor',

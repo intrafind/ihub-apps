@@ -393,7 +393,7 @@ class ToolExecutor {
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
     // Track knowledge sources based on tool type
-    // Use case-insensitive matching for search tools (braveSearch, tavilySearch, googleSearch, webSearch, etc.)
+    // Use case-insensitive matching for search tools (braveSearch, googleSearch, webSearch, etc.)
     const lowerToolId = toolId.toLowerCase();
     if (
       lowerToolId === 'web-search' ||

@@ -1006,51 +1006,6 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 }
 ```
 
-### `tavilySearch`
-
-- **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth and optional content extraction
-- **Type**: Server-side execution
-- **Parameters**:
-  - `query` (string, required): The search query or search terms
-  - `search_depth` (string, optional): Search depth level — `"basic"` (default) or `"advanced"`
-  - `max_results` (integer, optional): Maximum number of results to return (default: configured by app's `websearch.maxResults`, min: `1`, max: `10`)
-  - `extractContent` (boolean, optional): Extract full content from results (default: configured by app's `websearch.extractContent`)
-  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
-- **Authentication**: Configure via **Admin Panel → Providers → Tavily Search** or set `TAVILY_SEARCH_API_KEY` environment variable
-- **Configuration**:
-  - **Admin Panel Method** (Recommended):
-    1. Navigate to Admin → Providers
-    2. Find "Tavily Search" under "Web Search Providers"
-    3. Click "Configure" and enter your API key
-    4. Save changes — no server restart required
-  - **Environment Variable Method**:
-    - Add `TAVILY_SEARCH_API_KEY=your_api_key` to your `config.env` file
-    - Restart the server for changes to take effect
-  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
-- **Returns**: Array of search results with:
-  - `title`: Page title
-  - `url`: Page URL
-  - `description`: Content snippet from the page
-  - `score`: Relevance score (when available)
-  - `content`: Extracted page content (when `extractContent` is enabled)
-- **Defaults**:
-  - `search_depth`: `"basic"`
-  - `max_results`: `5`
-- **Use Cases**: Research-oriented search, AI agent information gathering, comprehensive research with content extraction
-
-**Example Tool Call**:
-```json
-{
-  "tool": "tavilySearch",
-  "parameters": {
-    "query": "quantum computing breakthroughs",
-    "search_depth": "advanced",
-    "max_results": 8
-  }
-}
-```
-
 ### Unified Web Search Configuration
 
 > **Changed in v5.2.11**: Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
@@ -1074,7 +1029,6 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 **How provider resolution works**:
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
-- **`provider: "tavily"`** → Tavily Search
 - **Otherwise** → Brave Search
 
 **Key properties**:
@@ -1082,14 +1036,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, or `"tavily"` |
+| `provider` | String | `"auto"` | Provider: `"auto"` or `"brave"` |
 | `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
 | `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, `tavilySearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
 
 ### `iFinder`
 

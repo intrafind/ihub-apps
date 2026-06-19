@@ -133,7 +133,7 @@ If your proxy requires authentication, include credentials in the proxy URL:
 When proxy is enabled, the following components will route through the proxy:
 
 1. **LLM API Requests**: All requests to OpenAI, Anthropic, Google, Mistral, etc.
-2. **Web Search**: Brave Search and Tavily Search API calls
+2. **Web Search**: Brave Search API calls
 3. **Integrations**: JIRA, Entra, iFinder, and other external integrations
 4. **Tools**: Web content extraction, screenshot tools, etc.
 

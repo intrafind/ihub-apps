@@ -1496,7 +1496,6 @@
         "websearchProvider": "Provider",
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
-        "websearchProviderTavily": "Tavily",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI)",
         "websearchMaxResults": "Max Results",

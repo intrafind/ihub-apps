@@ -142,9 +142,9 @@ const tools4 = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'tavilySearch',
-    name: 'tavilySearch',
-    description: 'Tavily search',
+    id: 'braveSearch',
+    name: 'braveSearch',
+    description: 'Brave search',
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
@@ -158,12 +158,12 @@ const tools4 = [
 const result4 = convertGenericToolsToOpenaiResponses(tools4);
 const hasWebSearch4 = result4.some(t => t.type === 'web_search');
 const hasEnhanced4 = result4.some(t => t.name === 'enhancedWebSearch');
-const hasTavily4 = result4.some(t => t.name === 'tavilySearch');
+const hasBrave4 = result4.some(t => t.name === 'braveSearch');
 const hasExtractor4 = result4.some(t => t.name === 'webContentExtractor');
 
 assert.ok(hasWebSearch4, 'Should include webSearch');
 assert.ok(!hasEnhanced4, 'Should NOT include enhancedWebSearch when webSearch is present');
-assert.ok(!hasTavily4, 'Should NOT include tavilySearch when webSearch is present');
+assert.ok(!hasBrave4, 'Should NOT include braveSearch when webSearch is present');
 assert.ok(hasExtractor4, 'Should include webContentExtractor (not a search tool)');
 console.log('✓ Test 4 passed\n');
 
@@ -177,19 +177,19 @@ const tools5 = [
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   },
   {
-    id: 'tavilySearch',
-    name: 'tavilySearch',
-    description: 'Tavily search',
+    id: 'braveSearch',
+    name: 'braveSearch',
+    description: 'Brave search',
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   }
 ];
 
 const result5 = convertGenericToolsToOpenaiResponses(tools5);
 const hasEnhanced5 = result5.some(t => t.name === 'enhancedWebSearch');
-const hasTavily5 = result5.some(t => t.name === 'tavilySearch');
+const hasBrave5 = result5.some(t => t.name === 'braveSearch');
 
 assert.ok(hasEnhanced5, 'Should include enhancedWebSearch when webSearch is NOT present');
-assert.ok(hasTavily5, 'Should include tavilySearch when webSearch is NOT present');
+assert.ok(hasBrave5, 'Should include braveSearch when webSearch is NOT present');
 console.log('✓ Test 5 passed\n');
 
 console.log('✅ All tests passed! OpenAI converters correctly filter web search tools.\n');

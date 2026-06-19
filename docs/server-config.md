@@ -68,8 +68,6 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
-| `TAVILY_SEARCH_API_KEY`    | API key for the Tavily Search tool                                | –                                                |
-| `TAVILY_ENDPOINT`          | Custom Tavily API endpoint                                        | `https://api.tavily.com/search`                  |
 
 For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.md). The legacy `MCP_SERVER_URL` env var was removed in favour of multi-server config at `contents/config/mcpServers.json`; existing installs are auto-migrated by V042.
 | `HTTP_PROXY`               | HTTP proxy URL for external requests                              | –                                                |
@@ -228,7 +226,7 @@ When enabled, the proxy configuration applies to:
 - **LLM Providers**: OpenAI, Anthropic, Google, Mistral, custom endpoints
 - **Authentication**: OIDC, OAuth2, Azure AD, LDAP
 - **Integrations**: Jira, Microsoft Graph (Entra ID)
-- **Tools**: Web search (Brave, Tavily), web content extraction
+- **Tools**: Web search (Brave), web content extraction
 - **Sources**: External URL sources, iFinder integrations
 
 ### Troubleshooting

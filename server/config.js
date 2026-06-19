@@ -27,8 +27,6 @@ const env = cleanEnv(
       default: 'https://api.search.brave.com/res/v1/web/search',
       optional: true
     }),
-    TAVILY_SEARCH_API_KEY: str({ optional: true }),
-    TAVILY_ENDPOINT: str({ default: 'https://api.tavily.com/search', optional: true }),
     OPENAI_API_KEY: str({ optional: true }),
     ANTHROPIC_API_KEY: str({ optional: true }),
     MISTRAL_API_KEY: str({ optional: true }),
@@ -65,8 +63,6 @@ const config = Object.freeze({
   APP_ROOT_DIR: env.APP_ROOT_DIR,
   BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
   BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
-  TAVILY_SEARCH_API_KEY: env.TAVILY_SEARCH_API_KEY,
-  TAVILY_ENDPOINT: env.TAVILY_ENDPOINT,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
   ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
   MISTRAL_API_KEY: env.MISTRAL_API_KEY,

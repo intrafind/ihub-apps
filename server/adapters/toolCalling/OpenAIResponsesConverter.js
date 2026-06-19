@@ -94,7 +94,7 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
 
   // Check if webSearch is present
   const hasWebSearch = genericTools.some(t => t.id === 'webSearch');
-  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'tavilySearch', 'googleSearch'];
+  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'googleSearch'];
 
   // Single pass to separate web search from regular tools
   for (const tool of genericTools) {

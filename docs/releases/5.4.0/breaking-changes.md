@@ -1,5 +1,14 @@
 # Breaking Changes — 5.4.0
 
+## Tavily Web Search Removed
+
+The Tavily web search provider and its `tavilySearch` tool have been removed. Brave Search remains the server-side web search provider, alongside the native Google and OpenAI web search options. Apps that selected `"provider": "tavily"` in their web search configuration are automatically switched to `"brave"`.
+
+- The `tavily` provider no longer appears under **Admin → Providers**, and "Tavily" is removed from the per-app web search provider dropdown.
+- The `TAVILY_SEARCH_API_KEY` and `TAVILY_ENDPOINT` environment variables are no longer used.
+
+**Before upgrading:** None required — migration **V062** runs automatically on startup. It removes the `tavilySearch` tool and `tavily` provider from your configuration and rewrites any app using the Tavily provider to use Brave. If you relied on Tavily for web search, configure a Brave Search API key under **Admin → Providers → Brave Search**.
+
 ## /admin/system URL Removed
 
 The `/admin/system` route no longer exists. It redirects to `/admin/security`.

@@ -74,19 +74,6 @@
       "category": "llm"
     },
     {
-      "id": "tavily",
-      "name": {
-        "en": "Tavily Search",
-        "de": "Tavily Suche"
-      },
-      "description": {
-        "en": "Tavily web search API for real-time information retrieval",
-        "de": "Tavily Websuche-API für Echtzeit-Informationsabruf"
-      },
-      "enabled": true,
-      "category": "websearch"
-    },
-    {
       "id": "brave",
       "name": {
         "en": "Brave Search",
