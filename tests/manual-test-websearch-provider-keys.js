@@ -157,11 +157,7 @@ async function runTests() {
     logTest('Custom has name.en', !!customInFile?.name?.en);
     logTest('Custom has name.de', !!customInFile?.name?.de);
 
-    const test5Passed =
-      braveInFile &&
-      customInFile &&
-      braveInFile.name?.en &&
-      braveInFile.name?.de;
+    const test5Passed = braveInFile && customInFile && braveInFile.name?.en && braveInFile.name?.de;
     if (test5Passed) passedTests++;
 
     // Summary
