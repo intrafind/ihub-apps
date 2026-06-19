@@ -252,6 +252,11 @@ For multi-device access:
 
 vLLM is a high-performance inference server optimized for serving large language models at scale.
 
+> **Tool calling, image, or audio not working with vLLM?** See the dedicated
+> [vLLM Server Start Parameters](vllm-server-parameters.md) guide — these capabilities must be
+> enabled with the correct vLLM start flags (`--enable-auto-tool-choice`, `--tool-call-parser`,
+> `--limit-mm-per-prompt`), and the iHub model config flags must match.
+
 ### Installation
 
 #### Docker Setup (Recommended)
