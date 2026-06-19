@@ -1,11 +1,11 @@
 /**
  * Manual Test: Websearch Provider API Key Configuration
  *
- * This test verifies that websearch providers (Tavily and Brave) can use API keys
+ * This test verifies that websearch providers (Brave) can use API keys
  * from the provider configuration with fallback to environment variables.
  *
  * Test Scenarios:
- * 1. Verify Tavily and Brave providers are loaded from config
+ * 1. Verify Brave provider is loaded from config
  * 2. Test API key resolution from provider config
  * 3. Test fallback to environment variables
  * 4. Verify error messages when no API key is available
@@ -61,28 +61,17 @@ async function runTests() {
     await configCache.initialize();
     log('✓ Config cache initialized\n', 'green');
 
-    // Test 1: Verify Tavily and Brave providers are loaded
+    // Test 1: Verify Brave provider is loaded
     totalTests++;
     log('\nTest 1: Verify Websearch Providers in Config', 'yellow');
     const { data: providers } = configCache.getProviders(true);
 
-    const tavilyProvider = providers.find(p => p.id === 'tavily');
     const braveProvider = providers.find(p => p.id === 'brave');
     const customProvider = providers.find(p => p.id === 'custom');
 
-    const test1Passed = tavilyProvider && braveProvider && customProvider;
-    logTest('Tavily provider exists in config', !!tavilyProvider);
+    const test1Passed = braveProvider && customProvider;
     logTest('Brave provider exists in config', !!braveProvider);
     logTest('Custom provider exists in config', !!customProvider);
-
-    if (tavilyProvider) {
-      logTest(
-        `Tavily has category: ${tavilyProvider.category}`,
-        tavilyProvider.category === 'websearch'
-      );
-      log(`  Name (EN): ${tavilyProvider.name?.en || 'N/A'}`, 'reset');
-      log(`  Description (EN): ${tavilyProvider.description?.en || 'N/A'}`, 'reset');
-    }
 
     if (braveProvider) {
       logTest(
@@ -104,28 +93,24 @@ async function runTests() {
 
     if (test1Passed) passedTests++;
 
-    // Test 2: Check WebSearchService has Tavily and Brave providers registered
+    // Test 2: Check WebSearchService has Brave provider registered
     totalTests++;
     log('\nTest 2: Verify WebSearchService Provider Registration', 'yellow');
     const availableProviders = webSearchService.getAvailableProviders();
-    const hasTavily = availableProviders.includes('tavily');
     const hasBrave = availableProviders.includes('brave');
 
-    logTest('Tavily provider registered in WebSearchService', hasTavily);
     logTest('Brave provider registered in WebSearchService', hasBrave);
     log(`  Available providers: ${availableProviders.join(', ')}`, 'reset');
 
-    const test2Passed = hasTavily && hasBrave;
+    const test2Passed = hasBrave;
     if (test2Passed) passedTests++;
 
     // Test 3: Test API key resolution without provider config (should use ENV)
     totalTests++;
     log('\nTest 3: Test ENV Variable Fallback', 'yellow');
 
-    const tavilyEnvKey = config.TAVILY_SEARCH_API_KEY;
     const braveEnvKey = config.BRAVE_SEARCH_API_KEY;
 
-    log(`  TAVILY_SEARCH_API_KEY env: ${tavilyEnvKey ? '(set)' : '(not set)'}`, 'reset');
     log(`  BRAVE_SEARCH_API_KEY env: ${braveEnvKey ? '(set)' : '(not set)'}`, 'reset');
 
     // Note: This test checks if ENV variables are accessible (can be undefined)
@@ -138,22 +123,7 @@ async function runTests() {
     totalTests++;
     log('\nTest 4: Test Error Messages Without API Keys', 'yellow');
 
-    // Temporarily clear ENV variables for testing (just for the test)
-    const originalTavilyKey = config.TAVILY_SEARCH_API_KEY;
-    const originalBraveKey = config.BRAVE_SEARCH_API_KEY;
-
     try {
-      // This will test the error message
-      log('  Testing Tavily error message...', 'reset');
-      try {
-        await webSearchService.search('test query', { provider: 'tavily' });
-        logTest('Tavily error message test', false);
-      } catch (error) {
-        const hasGoodErrorMessage =
-          error.message.includes('admin panel') || error.message.includes('environment variable');
-        logTest(`Tavily shows helpful error: "${error.message}"`, hasGoodErrorMessage);
-      }
-
       log('  Testing Brave error message...', 'reset');
       try {
         await webSearchService.search('test query', { provider: 'brave' });
@@ -177,26 +147,19 @@ async function runTests() {
     const providersContent = await fs.readFile(providersPath, 'utf8');
     const providersJson = JSON.parse(providersContent);
 
-    const tavilyInFile = providersJson.providers.find(p => p.id === 'tavily');
     const braveInFile = providersJson.providers.find(p => p.id === 'brave');
     const customInFile = providersJson.providers.find(p => p.id === 'custom');
 
-    logTest('Tavily provider in providers.json', !!tavilyInFile);
     logTest('Brave provider in providers.json', !!braveInFile);
     logTest('Custom provider in providers.json', !!customInFile);
-    logTest('Tavily has name.en', !!tavilyInFile?.name?.en);
-    logTest('Tavily has name.de', !!tavilyInFile?.name?.de);
     logTest('Brave has name.en', !!braveInFile?.name?.en);
     logTest('Brave has name.de', !!braveInFile?.name?.de);
     logTest('Custom has name.en', !!customInFile?.name?.en);
     logTest('Custom has name.de', !!customInFile?.name?.de);
 
     const test5Passed =
-      tavilyInFile &&
       braveInFile &&
       customInFile &&
-      tavilyInFile.name?.en &&
-      tavilyInFile.name?.de &&
       braveInFile.name?.en &&
       braveInFile.name?.de;
     if (test5Passed) passedTests++;

@@ -264,7 +264,6 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
 
   const {
     enabledByDefault = false,
-    provider = 'auto',
     useNativeSearch = true,
     maxResults = 5,
     extractContent = true,
@@ -282,7 +281,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
   } else if (useNativeSearch && modelProvider === 'openai-responses') {
     toolId = 'webSearch';
   } else {
-    toolId = provider === 'tavily' ? 'tavilySearch' : 'braveSearch';
+    toolId = 'braveSearch';
   }
 
   const toolDef = allTools.find(t => t.id === toolId);
@@ -297,7 +296,6 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
 
   // Override parameter defaults with admin-configured websearch values
   if (props.maxResults) props.maxResults.default = maxResults;
-  if (props.max_results) props.max_results.default = maxResults; // tavily uses snake_case
   if (props.extractContent) props.extractContent.default = extractContent;
   if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
 

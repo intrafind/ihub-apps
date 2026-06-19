@@ -159,7 +159,7 @@ Check the logs for:
 
 With proxy enabled, these requests go through the proxy:
 - ✅ LLM API requests (OpenAI, Anthropic, Google, Mistral, etc.)
-- ✅ Web search APIs (Brave, Tavily)
+- ✅ Web search APIs (Brave)
 - ✅ Integration services (JIRA, Entra/Azure AD, iFinder)
 - ✅ Tool requests (web content extraction, screenshot tools)
 

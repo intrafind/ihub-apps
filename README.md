@@ -306,7 +306,7 @@ Best for: customization, contributing, building new apps.
 
 ### 🛠️ Tools & Integrations
 
-- **Web search**: Brave Search, Tavily, DuckDuckGo
+- **Web search**: Brave Search, DuckDuckGo
 - **Web extraction**: Clean content from any webpage
 - **Deep research**: Multi-step iterative research with synthesis
 - **Screenshots**: Playwright and Selenium-based page capture

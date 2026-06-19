@@ -88,69 +88,6 @@
     }
   },
   {
-    "id": "tavilySearch",
-    "name": {
-      "en": "Tavily Web Search",
-      "de": "Tavily Websuche"
-    },
-    "description": {
-      "en": "Search the web using the Tavily API. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
-      "de": "Durchsuchen Sie das Web mit der Tavily API. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
-    },
-    "script": "tavilySearch.js",
-    "concurrency": 5,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": {
-            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
-            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
-          }
-        },
-        "search_depth": {
-          "type": "string",
-          "enum": ["basic", "advanced"],
-          "default": "basic",
-          "description": {
-            "en": "Search depth",
-            "de": "Suchtiefe"
-          }
-        },
-        "max_results": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum number of search results to return",
-            "de": "Maximale Anzahl der zurückzugebenden Suchergebnisse"
-          },
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20
-        },
-        "extractContent": {
-          "type": "boolean",
-          "description": {
-            "en": "Whether to extract full page content from the top search results (default: false)",
-            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
-          },
-          "default": false
-        },
-        "contentMaxLength": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum length of extracted content per page in characters (default: 3000)",
-            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
-          },
-          "default": 3000,
-          "minimum": 500,
-          "maximum": 50000
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
     "id": "deepResearch",
     "name": {
       "en": "Deep Research",

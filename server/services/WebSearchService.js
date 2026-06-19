@@ -164,98 +164,6 @@ class BraveSearchProvider extends SearchProvider {
 }
 
 /**
- * Tavily Search Provider
- */
-class TavilySearchProvider extends SearchProvider {
-  getName() {
-    return 'tavily';
-  }
-
-  /**
-   * Get API key with fallback logic:
-   * 1. Check provider-level API key (from providers.json)
-   * 2. Fallback to environment variable
-   */
-  getApiKey() {
-    try {
-      const { data: providers } = configCache.getProviders(true);
-      const tavilyProvider = providers.find(p => p.id === 'tavily');
-
-      if (tavilyProvider?.apiKey) {
-        try {
-          return tokenStorageService.decryptString(tavilyProvider.apiKey);
-        } catch (error) {
-          logger.error('Failed to decrypt Tavily provider API key', {
-            component: 'WebSearch',
-            error
-          });
-          // Fall through to environment variable
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load Tavily provider configuration', {
-        component: 'WebSearch',
-        error
-      });
-      // Fall through to environment variable
-    }
-
-    // Fallback to environment variable
-    return config.TAVILY_SEARCH_API_KEY;
-  }
-
-  async search(query, options = {}) {
-    const { chatId, search_depth = 'basic', max_results = 5 } = options;
-    const apiKey = this.getApiKey();
-
-    if (!apiKey) {
-      throw new Error(
-        'Tavily Search API key is not configured. Please configure it in the admin panel or set TAVILY_SEARCH_API_KEY environment variable.'
-      );
-    }
-
-    const endpoint = config.TAVILY_ENDPOINT || 'https://api.tavily.com/search';
-
-    if (chatId) {
-      actionTracker.trackAction(chatId, { action: 'search', query, provider: 'tavily' });
-    }
-
-    const res = await throttledFetch('tavilySearch', endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query,
-        search_depth,
-        max_results
-      })
-    });
-
-    if (!res.ok) {
-      throw new Error(`Tavily search failed with status ${res.status}`);
-    }
-
-    const data = await res.json();
-    const results = [];
-
-    if (Array.isArray(data.results)) {
-      for (const item of data.results) {
-        results.push({
-          title: item.title,
-          url: item.url,
-          description: item.content,
-          score: item.score
-        });
-      }
-    }
-
-    return { results };
-  }
-}
-
-/**
  * Web Search Service
  * Unified interface for multiple search providers
  */
@@ -266,7 +174,6 @@ class WebSearchService {
 
     // Register built-in providers
     this.registerProvider(new BraveSearchProvider());
-    this.registerProvider(new TavilySearchProvider());
   }
 
   /**
@@ -349,4 +256,4 @@ class WebSearchService {
 const webSearchService = new WebSearchService();
 
 export default webSearchService;
-export { SearchProvider, BraveSearchProvider, TavilySearchProvider, WebSearchService };
+export { SearchProvider, BraveSearchProvider, WebSearchService };
