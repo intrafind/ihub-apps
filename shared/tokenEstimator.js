@@ -8,11 +8,32 @@
  * provider-reported usage (promptTokens / completionTokens), which the chat
  * pipeline reconciles against after each response.
  *
- * Both the server (usageTracker, RequestBuilder) and the client (chat input
- * capacity indicator) import this single helper so estimates stay consistent.
+ * The server (usageTracker, RequestBuilder) imports this helper. The client
+ * uses its own tokenEstimatorClient.js which dynamically imports gpt-tokenizer.
+ *
+ * The gpt-tokenizer package is loaded lazily so the server can still start
+ * even when the package is not installed (falls back to a chars/4 heuristic).
  */
-import { countTokens } from 'gpt-tokenizer';
+import { createRequire } from 'module';
 import { computeContextUsage } from './contextUsage.js';
+
+/** Chars/4 fallback when the real tokenizer is unavailable. */
+function heuristic(text) {
+  return Math.ceil(text.length / 4);
+}
+
+let countTokensFn = null;
+
+// Attempt to load gpt-tokenizer synchronously using createRequire.
+// If the package is not installed (e.g. missing from node_modules in a
+// production deployment), we silently fall back to the heuristic.
+try {
+  const require = createRequire(import.meta.url);
+  const mod = require('gpt-tokenizer');
+  countTokensFn = mod.countTokens || mod.default?.countTokens || null;
+} catch {
+  // Package not available — heuristic will be used
+}
 
 /**
  * Estimate the number of tokens in a piece of text.
@@ -22,11 +43,11 @@ import { computeContextUsage } from './contextUsage.js';
 export function estimateTokens(text) {
   if (!text || typeof text !== 'string') return 0;
   try {
-    return countTokens(text);
+    return (countTokensFn || heuristic)(text);
   } catch {
     // Fall back to the classic chars/4 heuristic if the tokenizer throws
     // (e.g. on unusual input). Better an approximate number than a crash.
-    return Math.ceil(text.length / 4);
+    return heuristic(text);
   }
 }
 

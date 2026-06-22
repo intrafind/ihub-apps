@@ -41,6 +41,7 @@
     "express-ntlm": "^2.7.0",
     "express-rate-limit": "^8.5.1",
     "express-session": "^1.18.2",
+    "gpt-tokenizer": "^3.4.0",
     "gray-matter": "^4.0.3",
     "html-to-text": "^9.0.5",
     "jose": "^6.1.3",
