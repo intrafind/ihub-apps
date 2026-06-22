@@ -8,8 +8,8 @@
  * provider-reported usage (promptTokens / completionTokens), which the chat
  * pipeline reconciles against after each response.
  *
- * Both the server (usageTracker, RequestBuilder) and the client (chat input
- * capacity indicator) import this single helper so estimates stay consistent.
+ * The server (usageTracker, RequestBuilder) imports this helper. The client
+ * uses its own tokenEstimatorClient.js which dynamically imports gpt-tokenizer.
  *
  * The gpt-tokenizer package is loaded lazily so the server can still start
  * even when the package is not installed (falls back to a chars/4 heuristic).
