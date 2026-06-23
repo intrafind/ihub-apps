@@ -24,8 +24,6 @@ Create or edit `C:\ihub-apps\config.env` to set your API keys and port before th
 
 ```ini
 PORT=3000
-OPENAI_API_KEY=your-key-here
-ANTHROPIC_API_KEY=your-key-here
 ```
 
 ### Step 3 — Run the installer
