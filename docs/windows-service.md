@@ -8,7 +8,7 @@ This feature is available for the **binary (zip) installation** on Windows 10 or
 
 - Windows 10 (1809) or Windows Server 2019 or later
 - Administrator privileges (needed to install/remove a service)
-- Internet access during installation (to download the WinSW service wrapper, ~900 KB; one-time download)
+- No additional downloads required — the WinSW service wrapper is bundled in the zip
 
 ## Installation
 
@@ -32,10 +32,7 @@ ANTHROPIC_API_KEY=your-key-here
 
 Right-click `install-service.cmd` and choose **Run as administrator**.
 
-The script will:
-
-1. Download [WinSW](https://github.com/winsw/winsw) (a lightweight Windows Service wrapper) and save it as `ihub-apps-service.exe` — this is a one-time ~900 KB download.
-2. Register iHub Apps as a Windows Service named **"iHub Apps"**.
+The script will register iHub Apps as a Windows Service named **"iHub Apps"** using the bundled `ihub-apps-service.exe` ([WinSW](https://github.com/winsw/winsw)) that ships in the zip — no internet access is required on the server.
 
 After the installer finishes, start the service:
 
@@ -105,9 +102,9 @@ The script stops and removes the service. Your `contents\` configuration directo
 
 ## Troubleshooting
 
-### The installer says "Failed to download WinSW"
+### The installer says "ihub-apps-service.exe not found"
 
-Your network may block GitHub. Download `WinSW-x64.exe` from [https://github.com/winsw/winsw/releases/tag/v2.12.0](https://github.com/winsw/winsw/releases/tag/v2.12.0), rename it to `ihub-apps-service.exe`, place it alongside `install-service.cmd`, then run the installer again.
+The distribution zip should include this file. Re-download the Windows zip from the releases page and extract it again — the file may have been accidentally deleted or the zip was incomplete.
 
 ### The service appears in Services.msc but fails to start
 

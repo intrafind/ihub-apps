@@ -548,8 +548,8 @@ exit /b %EXIT_CODE%
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
 
     // Windows service files: WinSW XML config + install/uninstall helper scripts.
-    // WinSW (https://github.com/winsw/winsw) is downloaded automatically by
-    // install-service.cmd at install time, so no internet access is needed at build time.
+    // WinSW (https://github.com/winsw/winsw) is downloaded at BUILD time via curl
+    // and bundled in the zip — no internet access is required on the target server.
     const winswXml = `<?xml version="1.0" encoding="UTF-8"?>
 <service>
   <id>ihub-apps</id>
@@ -580,24 +580,20 @@ if %ERRORLEVEL% neq 0 goto NEED_ADMIN
 
 set "DIR=%~dp0"
 set "SERVICE_EXE=%DIR%ihub-apps-service.exe"
-set "WINSW_URL=https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
 
 echo.
 echo  iHub Apps - Windows Service Installer
 echo  =========================================
 echo.
 
-if exist "%SERVICE_EXE%" goto INSTALL_SERVICE
+if not exist "%SERVICE_EXE%" (
+    echo  Error: ihub-apps-service.exe not found in %DIR%
+    echo  This file is bundled in the distribution package.
+    echo  Please re-download the iHub Apps Windows package from the releases page.
+    pause
+    exit /b 1
+)
 
-echo  WinSW service wrapper not found. Downloading...
-echo  URL: %WINSW_URL%
-echo.
-powershell -Command "Invoke-WebRequest -Uri '%WINSW_URL%' -OutFile '%SERVICE_EXE%' -UseBasicParsing"
-if %ERRORLEVEL% neq 0 goto DOWNLOAD_FAILED
-echo  WinSW downloaded successfully.
-echo.
-
-:INSTALL_SERVICE
 echo  Installing iHub Apps as a Windows service...
 "%SERVICE_EXE%" install
 if %ERRORLEVEL% neq 0 goto INSTALL_FAILED
@@ -623,19 +619,6 @@ exit /b 0
 echo.
 echo  Error: Administrator privileges required.
 echo  Right-click install-service.cmd and select "Run as administrator"
-echo.
-pause
-exit /b 1
-
-:DOWNLOAD_FAILED
-echo.
-echo  Error: Failed to download WinSW automatically.
-echo.
-echo  Please manually download WinSW from:
-echo    %WINSW_URL%
-echo  Rename the file to: ihub-apps-service.exe
-echo  Place it in:        %DIR%
-echo  Then re-run this installer.
 echo.
 pause
 exit /b 1
@@ -707,6 +690,28 @@ exit /b 1
     console.log(
       'Created Windows service files (ihub-apps-service.xml, install-service.cmd, uninstall-service.cmd).'
     );
+
+    // Download WinSW at build time so it ships inside the zip.
+    // curl is available on Linux, macOS, and Windows 10+ (1803+).
+    const winswDest = path.join(outputDir, 'ihub-apps-service.exe');
+    const winswUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe';
+    if (fs.existsSync(winswDest)) {
+      console.log('WinSW already present, skipping download.');
+    } else {
+      console.log(`Downloading WinSW from ${winswUrl} ...`);
+      try {
+        execSync(`curl -L -f -o "${winswDest}" "${winswUrl}"`, { stdio: 'inherit' });
+        console.log('WinSW downloaded and bundled as ihub-apps-service.exe');
+      } catch (err) {
+        console.error('Error: Failed to download WinSW service wrapper.');
+        console.error(`URL: ${winswUrl}`);
+        console.error(`Target: ${winswDest}`);
+        console.error(
+          'Download it manually and place it as ihub-apps-service.exe in dist-bin/ to complete the build.'
+        );
+        process.exit(1);
+      }
+    }
   }
 
   // Write the launcher script
