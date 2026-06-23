@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   WindowIcon,
   UsersIcon,
@@ -458,11 +459,16 @@ function RecentActivityCard({ entries }) {
 }
 
 export default function AdminOverview() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData();
 
-  const instanceName = uiConfig?.header?.title ?? 'iHub Apps';
+  const currentLanguage = i18n.language;
+  const { titleLight, titleBold, title } = uiConfig?.header ?? {};
+  const instanceName =
+    titleLight || titleBold
+      ? `${getLocalizedContent(titleLight, currentLanguage)}${getLocalizedContent(titleBold, currentLanguage)}`.trim()
+      : getLocalizedContent(title, currentLanguage) || 'iHub Apps';
 
   const statCards = stats
     ? [
