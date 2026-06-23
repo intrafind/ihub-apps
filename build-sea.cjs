@@ -478,7 +478,7 @@ try {
   }
 
   // Create a simple launcher shell script on Unix platforms
-  if (os.platform() !== 'win32') {
+  if (currentPlatform.platform !== 'windows') {
     const shellLauncher = `#!/bin/bash
 # iHub Apps Launcher
 
@@ -546,6 +546,165 @@ exit /b %EXIT_CODE%
 `;
 
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
+
+    // Windows service files: WinSW XML config + install/uninstall helper scripts.
+    // WinSW (https://github.com/winsw/winsw) is downloaded automatically by
+    // install-service.cmd at install time, so no internet access is needed at build time.
+    const winswXml = `<?xml version="1.0" encoding="UTF-8"?>
+<service>
+  <id>ihub-apps</id>
+  <name>iHub Apps</name>
+  <description>iHub Apps AI Platform - serves AI-powered applications on port 3000</description>
+  <executable>%BASE%\\node.exe</executable>
+  <arguments>"%BASE%\\launcher.cjs"</arguments>
+  <logpath>%BASE%\\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="1 min"/>
+  <resetfailure>1 hour</resetfailure>
+  <startmode>Automatic</startmode>
+</service>
+`;
+
+    const installServiceCmd = `@echo off
+REM iHub Apps - Windows Service Installer
+REM Run this script as Administrator to install iHub Apps as a Windows service.
+REM The service will start automatically with Windows and restart on failure.
+
+net session >nul 2>&1
+if %ERRORLEVEL% neq 0 goto NEED_ADMIN
+
+set "DIR=%~dp0"
+set "SERVICE_EXE=%DIR%ihub-apps-service.exe"
+set "WINSW_URL=https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
+
+echo.
+echo  iHub Apps - Windows Service Installer
+echo  =========================================
+echo.
+
+if exist "%SERVICE_EXE%" goto INSTALL_SERVICE
+
+echo  WinSW service wrapper not found. Downloading...
+echo  URL: %WINSW_URL%
+echo.
+powershell -Command "Invoke-WebRequest -Uri '%WINSW_URL%' -OutFile '%SERVICE_EXE%' -UseBasicParsing"
+if %ERRORLEVEL% neq 0 goto DOWNLOAD_FAILED
+echo  WinSW downloaded successfully.
+echo.
+
+:INSTALL_SERVICE
+echo  Installing iHub Apps as a Windows service...
+"%SERVICE_EXE%" install
+if %ERRORLEVEL% neq 0 goto INSTALL_FAILED
+
+echo.
+echo  =========================================
+echo   Service installed successfully!
+echo  =========================================
+echo.
+echo  Service name  : iHub Apps
+echo  Auto-start    : Yes (starts automatically with Windows)
+echo  Log files     : %DIR%logs
+echo.
+echo  To start the service now, run in an elevated Command Prompt:
+echo    sc start "iHub Apps"
+echo.
+echo  Or open Services (services.msc) and start "iHub Apps" manually.
+echo.
+pause
+exit /b 0
+
+:NEED_ADMIN
+echo.
+echo  Error: Administrator privileges required.
+echo  Right-click install-service.cmd and select "Run as administrator"
+echo.
+pause
+exit /b 1
+
+:DOWNLOAD_FAILED
+echo.
+echo  Error: Failed to download WinSW automatically.
+echo.
+echo  Please manually download WinSW from:
+echo    %WINSW_URL%
+echo  Rename the file to: ihub-apps-service.exe
+echo  Place it in:        %DIR%
+echo  Then re-run this installer.
+echo.
+pause
+exit /b 1
+
+:INSTALL_FAILED
+echo.
+echo  Error: Failed to install the service.
+echo  If "iHub Apps" is already installed, run uninstall-service.cmd first.
+echo.
+pause
+exit /b 1
+`;
+
+    const uninstallServiceCmd = `@echo off
+REM iHub Apps - Windows Service Uninstaller
+REM Run this script as Administrator to remove the iHub Apps Windows service.
+
+net session >nul 2>&1
+if %ERRORLEVEL% neq 0 goto NEED_ADMIN
+
+set "DIR=%~dp0"
+set "SERVICE_EXE=%DIR%ihub-apps-service.exe"
+
+echo.
+echo  iHub Apps - Windows Service Uninstaller
+echo  ===========================================
+echo.
+
+if not exist "%SERVICE_EXE%" goto FALLBACK_SC
+
+echo  Stopping iHub Apps service...
+"%SERVICE_EXE%" stop >nul 2>&1
+
+echo  Removing iHub Apps service...
+"%SERVICE_EXE%" uninstall
+if %ERRORLEVEL% neq 0 goto FALLBACK_SC
+
+echo.
+echo  Service removed successfully.
+echo.
+pause
+exit /b 0
+
+:FALLBACK_SC
+echo  Using sc.exe to remove service...
+sc stop "ihub-apps" >nul 2>&1
+sc delete "ihub-apps"
+if %ERRORLEVEL% equ 0 (
+    echo  Service removed successfully.
+) else (
+    echo  Service not found or already removed.
+)
+echo.
+pause
+exit /b 0
+
+:NEED_ADMIN
+echo.
+echo  Error: Administrator privileges required.
+echo  Right-click uninstall-service.cmd and select "Run as administrator"
+echo.
+pause
+exit /b 1
+`;
+
+    fs.writeFileSync(path.join(outputDir, 'ihub-apps-service.xml'), winswXml);
+    fs.writeFileSync(path.join(outputDir, 'install-service.cmd'), installServiceCmd);
+    fs.writeFileSync(path.join(outputDir, 'uninstall-service.cmd'), uninstallServiceCmd);
+    console.log('Created Windows service files (ihub-apps-service.xml, install-service.cmd, uninstall-service.cmd).');
   }
 
   // Write the launcher script
