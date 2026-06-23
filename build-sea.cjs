@@ -704,7 +704,9 @@ exit /b 1
     fs.writeFileSync(path.join(outputDir, 'ihub-apps-service.xml'), winswXml);
     fs.writeFileSync(path.join(outputDir, 'install-service.cmd'), installServiceCmd);
     fs.writeFileSync(path.join(outputDir, 'uninstall-service.cmd'), uninstallServiceCmd);
-    console.log('Created Windows service files (ihub-apps-service.xml, install-service.cmd, uninstall-service.cmd).');
+    console.log(
+      'Created Windows service files (ihub-apps-service.xml, install-service.cmd, uninstall-service.cmd).'
+    );
   }
 
   // Write the launcher script
