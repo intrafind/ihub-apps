@@ -168,7 +168,7 @@
   },
   "overrides": {
     "glob": "^11.1.0",
-    "dompurify": "^3.4.0",
+    "dompurify": "^3.4.11",
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
     }
