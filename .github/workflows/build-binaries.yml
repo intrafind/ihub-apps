@@ -174,12 +174,14 @@ jobs:
       - name: Set version
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            VERSION="${GITHUB_REF#refs/tags/}"
           else
-            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+            VERSION="${{ github.event.inputs.release_tag }}"
           fi
-          # Set versioned name for binary
-          echo "VERSIONED_NAME=ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          # Set versioned name for binary using shell variable (not ${{ env.VERSION }}
+          # which would be empty because expressions are evaluated before the step runs)
+          echo "VERSIONED_NAME=ihub-apps-$VERSION-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
       - name: Sync package.json version with release tag
@@ -379,6 +381,15 @@ jobs:
         run: ls -R ./artifacts
         shell: bash
 
+      - name: Validate version
+        run: |
+          if [ -z "${{ env.VERSION }}" ]; then
+            echo "❌ Error: VERSION is empty. For workflow_dispatch, provide a release_tag input (e.g. v1.2.3)."
+            exit 1
+          fi
+          echo "✅ Version: ${{ env.VERSION }}"
+        shell: bash
+
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
@@ -389,4 +400,4 @@ jobs:
           draft: false
           prerelease: false
           # This will update the existing release instead of creating a new one
-          overwrite: true
+          overwrite_files: true
