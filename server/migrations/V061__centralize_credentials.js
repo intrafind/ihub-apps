@@ -1,4 +1,4 @@
-export const version = '060';
+export const version = '061';
 export const description = 'centralize_credentials';
 // Numbered V060 (not V057): main already ships V057–V059.
 

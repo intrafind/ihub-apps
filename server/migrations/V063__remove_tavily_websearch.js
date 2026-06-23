@@ -12,7 +12,7 @@
  *      Search API key if they previously relied on Tavily.
  */
 
-export const version = '062';
+export const version = '063';
 export const description = 'remove_tavily_websearch';
 
 export async function up(ctx) {

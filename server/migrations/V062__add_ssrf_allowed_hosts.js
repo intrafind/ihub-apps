@@ -1,4 +1,4 @@
-export const version = '061';
+export const version = '062';
 export const description = 'add_ssrf_allowed_hosts';
 
 export async function precondition(ctx) {
