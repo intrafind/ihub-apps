@@ -101,9 +101,10 @@ jobs:
         run: npm ci
 
       - name: Sync version with release tag
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.event.release.tag_name != ''
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          RELEASE_TAG=${GITHUB_REF#refs/tags/}
           echo "Syncing version with release tag: $RELEASE_TAG"
           node scripts/sync-release-version.js $RELEASE_TAG
         shell: bash
