@@ -39,10 +39,7 @@
           "queryLanguage": "de",
           "agentProfileId": "law-consultation-agent",
           "maxFulltextChars": 50000,
-          "filter": [
-            "sourceLocations.label:bmg",
-            "sourceLocations.label:Public"
-          ]
+          "filter": ["sourceLocations.label:bmg", "sourceLocations.label:Public"]
         },
         "inputVariables": [
           {
@@ -272,10 +269,7 @@
         "maxPerTopic": 25,
         "maxTotalDocs": 200,
         "fetchFulltext": false,
-        "extraQueries": [
-          "$.data.userPrompt",
-          "*"
-        ]
+        "extraQueries": ["$.data.userPrompt", "*"]
       }
     },
     {
@@ -340,9 +334,7 @@
               }
             }
           },
-          "required": [
-            "done"
-          ]
+          "required": ["done"]
         }
       },
       "execution": {
@@ -549,9 +541,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "summary"
-                ]
+                "required": ["summary"]
               }
             },
             "quotes": {
@@ -563,18 +553,11 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "text"
-                ]
+                "required": ["text"]
               }
             }
           },
-          "required": [
-            "organisation",
-            "title",
-            "demandedChanges",
-            "quotes"
-          ]
+          "required": ["organisation", "title", "demandedChanges", "quotes"]
         }
       },
       "execution": {
@@ -620,17 +603,11 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "summary"
-                ]
+                "required": ["summary"]
               }
             }
           },
-          "required": [
-            "organisation",
-            "title",
-            "demandedChanges"
-          ]
+          "required": ["organisation", "title", "demandedChanges"]
         },
         "inputPath": "$.data._extractionOutput",
         "sourcePath": "$.data._currentDoc",
@@ -728,9 +705,7 @@
         "y": 2240
       },
       "config": {
-        "outputVariables": [
-          "finalReport"
-        ]
+        "outputVariables": ["finalReport"]
       }
     }
   ],
