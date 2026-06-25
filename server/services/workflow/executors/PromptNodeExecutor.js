@@ -2332,7 +2332,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         title: taskTitle,
         content: textContent,
         citations: taskCitations.map(c => ({ url: c.url, title: c.title })),
-        model: response?.model || null,
+        // Prefer the model the provider echoes back; fall back to the model we
+        // RESOLVED for this step (stepLog.model). vLLM/Gemini often omit `model`
+        // in their streaming responses, which left _taskResults[*].model null so
+        // the UI couldn't show which model ran each planner sub-task.
+        model: response?.model || stepLog?.model || null,
         startedAt: startedAtIso || completedAt,
         completedAt,
         durationMs
