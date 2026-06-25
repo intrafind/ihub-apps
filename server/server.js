@@ -618,7 +618,10 @@ if (cluster.isPrimary && workerCount > 1) {
     const { serializeProfile } = await import('./agents/profile/profileWorkflowSerializer.js');
     const { buildAgentPrincipal } = await import('./utils/authorization.js');
 
-    const engine = new WorkflowEngine();
+    // 30-minute default node timeout consistent with the agent-run engine in
+    // routes/agents/runs.js — needed so resumed agent runs (including phased
+    // planner nodes) don't hit the 5-minute DEFAULT_NODE_TIMEOUT on recovery.
+    const engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
     const triggerManager = getTriggerManager();
     triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);

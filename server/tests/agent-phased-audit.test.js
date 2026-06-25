@@ -70,7 +70,7 @@ console.log('\n🧪 auditability — round-0 and round-1 ids produce no overlap\
   const overlap = [...ids0].filter(id => ids1.has(id));
   check('round-0 ids and round-1 ids are disjoint', overlap.length === 0,
     `overlap: ${JSON.stringify(overlap)}`);
-  check('round-0 ids are plain (no prefix)', [...ids0].every(id => !id.startsWith('r')),
+  check('round-0 ids have no r{N}_ prefix', [...ids0].every(id => !/^r\d+_/.test(id)),
     `ids0: ${JSON.stringify([...ids0])}`);
   check('round-1 ids are namespaced (r1_ prefix)', [...ids1].every(id => id.startsWith('r1_')),
     `ids1: ${JSON.stringify([...ids1])}`);

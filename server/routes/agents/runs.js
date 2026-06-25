@@ -27,9 +27,13 @@ import logger from '../../utils/logger.js';
 
 // Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
 // so multiple instances see the same executions; we use one per-worker.
+// 30-minute default node timeout: the phased planner node blocks while its
+// entire sub-workflow runs (up to 6 tasks × several minutes each), so the
+// 5-minute DEFAULT_NODE_TIMEOUT would kill it mid-run. 30 min matches
+// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout allows.
 let _engine = null;
 function getEngine() {
-  if (!_engine) _engine = new WorkflowEngine();
+  if (!_engine) _engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
   return _engine;
 }
 
