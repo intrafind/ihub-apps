@@ -22,5 +22,3 @@ export function resolveReviewSettings(review) {
   if (typeof review?.criteria === 'string' && review.criteria.trim()) out.criteria = review.criteria.trim();
   return out;
 }
-
-export default { REVIEW_PRESETS, resolveReviewSettings };
