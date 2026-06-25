@@ -105,7 +105,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // userText so we only get the email blocks (the typed text is already counted
   // separately by ChatInput).
   const emailContextText = useMemo(() => {
-    const currentBodyText = mailSnapshot.includeBody ? (mailSnapshot.ctx?.bodyText || '') : '';
+    const currentBodyText = mailSnapshot.includeBody ? mailSnapshot.ctx?.bodyText || '' : '';
     return combineUserTextWithEmailContext({
       userText: '',
       currentBodyText,
