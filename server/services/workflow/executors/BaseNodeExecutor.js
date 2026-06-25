@@ -330,6 +330,79 @@ export class BaseNodeExecutor {
   }
 
   /**
+   * Build the state updates that record a node's step transcript for auditing,
+   * preserving EVERY iteration instead of overwriting.
+   *
+   * `_stepLogs[logKey]` keeps the latest transcript (back-compat with existing
+   * UI), while `_stepLogHistory[logKey]` accumulates one entry per execution.
+   * In a cyclic workflow (the agent → verify → retry loop) the same node id
+   * runs many times; keying only by node id silently discarded rounds 1..n-1,
+   * which defeated the whole point of an auditable run. Each history entry is
+   * stamped with its `iteration` so the UI can label "Round k".
+   *
+   * @param {Object} state - current execution state (reads prior logs/history)
+   * @param {string} logKey - usually the node id (or per-task key in drain mode)
+   * @param {Object} stepLog - the transcript for this execution
+   * @param {number|null} [iteration] - this node's iteration index
+   * @returns {{_stepLogs: Object, _stepLogHistory: Object}} merge into stateUpdates
+   */
+  buildStepLogUpdates(state, logKey, stepLog, iteration = null) {
+    const prevLogs = state?.data?._stepLogs || {};
+    const prevHistory = state?.data?._stepLogHistory || {};
+    const prior = Array.isArray(prevHistory[logKey]) ? prevHistory[logKey] : [];
+    // History entries are LIGHT summaries — never the full transcript. The
+    // full `messages` array and full `output` would multiply state size by the
+    // number of cyclic rounds and bloat every on-disk checkpoint (a known
+    // past failure mode). Keep exactly one full transcript (the latest) under
+    // `_stepLogs[logKey]`; the per-round history holds only audit metadata.
+    // Hard-cap the history length as a runaway-loop backstop.
+    const HISTORY_CAP = 25;
+    const summary = { ...this._summarizeStepLogForHistory(stepLog), iteration };
+    return {
+      _stepLogs: { ...prevLogs, [logKey]: stepLog },
+      _stepLogHistory: {
+        ...prevHistory,
+        [logKey]: [...prior, summary].slice(-HISTORY_CAP)
+      }
+    };
+  }
+
+  /**
+   * Reduce a full step log to a bounded, audit-only summary for the per-round
+   * history. Drops the heavy fields: the `messages` transcript entirely, the
+   * full tool-call arg/result previews (keeps just names), and the full
+   * `output` (keeps a short excerpt). Everything kept here is small and
+   * bounded so N rounds stay cheap to persist.
+   * @param {Object} stepLog
+   * @returns {Object}
+   */
+  _summarizeStepLogForHistory(stepLog) {
+    if (!stepLog || typeof stepLog !== 'object') return {};
+    const toolCalls = Array.isArray(stepLog.toolCalls) ? stepLog.toolCalls : [];
+    return {
+      nodeId: stepLog.nodeId,
+      kind: stepLog.kind,
+      model: stepLog.model,
+      startedAt: stepLog.startedAt,
+      completedAt: stepLog.completedAt,
+      durationMs: stepLog.durationMs,
+      verdict: stepLog.verdict,
+      conclusive: stepLog.conclusive,
+      toolNames: toolCalls.map(c => c?.name).filter(Boolean),
+      toolCount: toolCalls.length,
+      responseLength:
+        typeof stepLog.responseLength === 'number'
+          ? stepLog.responseLength
+          : typeof stepLog.output === 'string'
+            ? stepLog.output.length
+            : undefined,
+      citationsAdded: stepLog.citationsAdded,
+      planSnapshot: stepLog.planSnapshot,
+      outputExcerpt: typeof stepLog.output === 'string' ? stepLog.output.slice(0, 500) : undefined
+    };
+  }
+
+  /**
    * Get the executor type name for logging purposes.
    * @returns {string} Executor type name
    */

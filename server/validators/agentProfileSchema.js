@@ -129,7 +129,16 @@ const reviewSchema = z
 
 const budgetsSchema = z
   .object({
-    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600)
+    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600),
+    // Per-run token budget across all LLM iterations (input + output). 0 means
+    // unlimited. When the running spend reaches this ceiling, the agent's tool
+    // loop is nudged to wrap up: it answers the current round's tool calls,
+    // then does one final tool-less turn to produce its answer instead of
+    // continuing to call tools. Modeled on Claude Code's token-budget gating.
+    maxTokensPerRun: z.number().int().min(0).max(100_000_000).optional().default(0),
+    // Per-node cap on tool-calling rounds (safety backstop above the budget).
+    // 0 falls back to the node/executor default (10).
+    maxToolRoundsPerNode: z.number().int().min(0).max(200).optional().default(0)
   })
   .strict();
 
@@ -178,6 +187,13 @@ const baseAgentProfileSchema = z.object({
   // who hand-author `workflow.definition` can still override per-node.
   system: optionalLocalizedStringSchema.optional(),
   preferredModel: z.string().optional(),
+  // Per-step model overrides for the run's workflow, keyed by node id
+  // (e.g. { "agent": "gemini-flash-3", "verify": "claude-opus-4-8" }). Applied
+  // at run start onto each matching node's config.modelId. `preferredModel`
+  // remains the run-wide default for any node not listed here. Lets an operator
+  // run, say, a fast model for drafting and a stronger one for verification —
+  // configured on the profile, without editing the workflow definition.
+  nodeModels: z.record(z.string(), z.string()).optional(),
   preferredTemperature: z.number().min(0).max(2).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
   tools: z.array(z.string()).optional().default([]),

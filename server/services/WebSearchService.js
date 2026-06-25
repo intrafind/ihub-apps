@@ -87,7 +87,15 @@ class BraveSearchProvider extends SearchProvider {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
     }
 
+    // Brave's Free plan is rate-limited to ~1 request/second, so an agent that
+    // fires several searches in a turn reliably trips HTTP 429. Retry a bounded
+    // number of times with backoff (honoring Retry-After) so transient
+    // rate-limit / 503 responses recover instead of failing the whole step.
+    const MAX_RETRIES = 2;
     let res;
+    let attempt = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
     try {
       res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
         headers: {
@@ -123,7 +131,27 @@ class BraveSearchProvider extends SearchProvider {
       throw wrapped;
     }
 
-    if (!res.ok) {
+      if (res.ok) break;
+
+      // Retry transient rate-limit (429) and server (503) responses.
+      if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+        const retryAfter = Number(res.headers?.get?.('retry-after'));
+        const waitMs =
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(retryAfter * 1000, 5000)
+            : 1200 * (attempt + 1);
+        logger.warn('Brave search rate-limited; backing off and retrying', {
+          component: 'WebSearch',
+          provider: 'brave',
+          status: res.status,
+          attempt: attempt + 1,
+          waitMs
+        });
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        attempt += 1;
+        continue;
+      }
+
       let bodyPreview = '';
       try {
         bodyPreview = (await res.text()).slice(0, 500);

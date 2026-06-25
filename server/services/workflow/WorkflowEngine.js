@@ -349,6 +349,105 @@ export class WorkflowEngine {
   }
 
   /**
+   * Resume a previously-interrupted execution from its last checkpoint.
+   *
+   * Unlike start(), this does NOT create fresh state — it restores the
+   * persisted `latest.json` for `executionId` (with its `completedNodes` /
+   * `currentNodes` / accumulated `data`) and re-enters the same execution
+   * loop. The scheduler picks up exactly where it left off; any node that was
+   * mid-flight at crash time re-runs (at-least-once semantics — node executors
+   * should be idempotent where it matters).
+   *
+   * Used on boot to recover runs the server was executing when it stopped,
+   * instead of marking them failed. The caller is responsible for supplying
+   * the full `workflowDefinition` (reloaded from disk / re-serialized from the
+   * agent profile) since only a summary is persisted in state.
+   *
+   * Distinct from `resume()` (which un-pauses a HITL-paused run): this recovers
+   * a run that was interrupted by a process crash/restart.
+   *
+   * @param {Object} workflowDefinition - Full workflow definition
+   * @param {string} executionId - The execution to resume
+   * @param {Object} [options] - Execution options (user, etc.)
+   * @returns {Promise<Object|null>} The execution state, or null if not resumable
+   */
+  async resumeFromCheckpoint(workflowDefinition, executionId, options = {}) {
+    let state = null;
+    try {
+      state = await this.stateManager.restore(executionId);
+    } catch {
+      state = null; // restore throws when no checkpoint file exists
+    }
+    if (!state) {
+      logger.warn('Cannot resume execution — no checkpoint found', {
+        component: 'WorkflowEngine',
+        executionId
+      });
+      return null;
+    }
+
+    // Terminal runs are not resumable.
+    const TERMINAL = [
+      WorkflowStatus.COMPLETED,
+      WorkflowStatus.FAILED,
+      WorkflowStatus.CANCELLED
+    ];
+    if (TERMINAL.includes(state.status)) {
+      logger.debug('Skipping resume — execution already terminal', {
+        component: 'WorkflowEngine',
+        executionId,
+        status: state.status
+      });
+      return state;
+    }
+
+    // Re-anchor the execution deadline to now so a run that was interrupted
+    // hours ago doesn't instantly trip MAX_EXECUTION_TIME on resume.
+    const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
+    await this.stateManager.update(executionId, {
+      status: WorkflowStatus.RUNNING,
+      data: {
+        _executionDeadline: Date.now() + maxExecutionTime,
+        _resumedAt: new Date().toISOString()
+      }
+    });
+
+    const abortController = new AbortController();
+    this.abortControllers.set(executionId, abortController);
+
+    logger.info('Resuming workflow execution from checkpoint', {
+      component: 'WorkflowEngine',
+      executionId,
+      workflowId: workflowDefinition.id,
+      completedNodes: state.completedNodes?.length || 0,
+      currentNodes: state.currentNodes
+    });
+
+    this._emitEvent('workflow.resumed', {
+      executionId,
+      workflowId: workflowDefinition.id,
+      completedNodes: state.completedNodes || [],
+      currentNodes: state.currentNodes || []
+    });
+
+    // Re-enter the same loop; it reads currentNodes/completedNodes from state.
+    this._runExecutionLoop(
+      workflowDefinition,
+      executionId,
+      options,
+      abortController.signal
+    ).catch(error => {
+      logger.error('Resumed workflow execution failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error
+      });
+    });
+
+    return this.stateManager.get(executionId);
+  }
+
+  /**
    * Main execution loop (sequential for MVP)
    * @param {Object} workflow - The workflow definition
    * @param {string} executionId - The execution identifier
@@ -942,6 +1041,10 @@ export class WorkflowEngine {
     const shouldFailWorkflow = true;
 
     if (shouldFailWorkflow) {
+      // Same plan reconciliation as the success path: a failed run shouldn't
+      // leave a task spinning at in_progress either.
+      await this._reconcilePlanOnTerminal(executionId);
+
       await this.stateManager.update(executionId, {
         status: WorkflowStatus.FAILED,
         completedAt: new Date().toISOString()
@@ -982,6 +1085,10 @@ export class WorkflowEngine {
       completedNodes: state.completedNodes.length,
       finalStatus
     });
+
+    // Close out any task the agent left in_progress/open before persisting the
+    // terminal status, so the completed run never shows a spinning task.
+    await this._reconcilePlanOnTerminal(executionId, state);
 
     await this.stateManager.update(executionId, {
       status: finalStatus,
@@ -1497,6 +1604,52 @@ export class WorkflowEngine {
    * @param {Object} data - Event data
    * @private
    */
+  /**
+   * Reconcile the living plan (`_taskQueue`) when a run reaches a terminal
+   * state. A workflow's terminal status is driven by the node graph — NOT by
+   * whether the agent finished every task it laid out via set_plan/update_task.
+   * So a run can complete (or fail) while a task is still `in_progress` or
+   * `open`, which renders as a finished run with a perpetually-spinning task.
+   *
+   * On terminal we mark any leftover `in_progress`/`open` task as `cancelled`
+   * (we can't honestly claim it `done`) so the plan reflects reality, and emit
+   * `agent.plan.updated` so a live (non-refetched) view corrects immediately.
+   * Only touches agent runs that actually have a task queue.
+   *
+   * @param {string} executionId
+   * @param {Object} [stateArg] - already-loaded state, to avoid a re-read
+   * @private
+   */
+  async _reconcilePlanOnTerminal(executionId, stateArg) {
+    try {
+      const state = stateArg || (await this.stateManager.get(executionId));
+      const queue = state?.data?._taskQueue;
+      if (!Array.isArray(queue) || queue.length === 0) return;
+      let changed = false;
+      const reconciled = queue.map(t => {
+        if (t && (t.status === 'in_progress' || t.status === 'open')) {
+          changed = true;
+          return { ...t, status: 'cancelled' };
+        }
+        return t;
+      });
+      if (!changed) return;
+      // deepMerge replaces arrays, so this swaps the queue wholesale.
+      await this.stateManager.update(executionId, { data: { _taskQueue: reconciled } });
+      this._emitEvent('agent.plan.updated', {
+        executionId,
+        reason: 'terminal-reconcile',
+        tasks: reconciled
+      });
+    } catch (err) {
+      logger.warn('Plan reconciliation on terminal state failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+  }
+
   _emitEvent(eventType, data) {
     // Use the executionId as the chatId for consistency with actionTracker
     const chatId = data.executionId;

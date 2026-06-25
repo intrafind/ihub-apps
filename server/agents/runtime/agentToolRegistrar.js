@@ -36,8 +36,14 @@
 /** Memory tools — always on for agent prompt nodes. */
 const MEMORY_TOOLS = ['read_memory', 'write_memory'];
 
-/** Dynamic decomposition tools — only on planner-task nodes when enabled. */
-const DYNAMIC_TASK_TOOLS = ['create_task', 'list_tasks'];
+/**
+ * Dynamic decomposition tools — only on planner-task nodes when enabled.
+ * `set_plan` lets the agent declare/replace its whole plan up front
+ * (TodoWrite analog); `update_task` lets it re-title, reprioritize, or mark a
+ * task blocked as it reconsiders. The drain loop still owns the
+ * open→in_progress→done transition during execution.
+ */
+const DYNAMIC_TASK_TOOLS = ['create_task', 'set_plan', 'update_task', 'list_tasks'];
 
 /**
  * Return the list of agent tool IDs to inject for the current run/node.

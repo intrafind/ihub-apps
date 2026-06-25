@@ -38,6 +38,26 @@ function lookupProfile(profileId) {
   return profiles.find(p => p.id === profileId) || null;
 }
 
+/**
+ * Apply a profile's per-step model overrides onto the resolved workflow.
+ * `nodeModels` maps node id → model id; each match sets that node's
+ * `config.modelId`, which the executors honor first (above the run-wide
+ * default). Mutates and returns the workflow. No-op when nodeModels is empty.
+ *
+ * @param {Object} workflow
+ * @param {Object<string,string>} [nodeModels]
+ * @returns {Object} the same workflow
+ */
+export function applyNodeModels(workflow, nodeModels) {
+  if (!workflow || !Array.isArray(workflow.nodes) || !nodeModels) return workflow;
+  for (const node of workflow.nodes) {
+    if (node && typeof node.id === 'string' && nodeModels[node.id]) {
+      node.config = { ...(node.config || {}), modelId: nodeModels[node.id] };
+    }
+  }
+  return workflow;
+}
+
 function countRunningProfileRuns(profileId) {
   try {
     const registry = getExecutionRegistry();
@@ -202,12 +222,22 @@ export default function registerAgentRunRoutes(app) {
           _taskTimings: {}
         };
 
-        // Calculate wall-time deadline via workflow config
+        // Calculate wall-time deadline via workflow config. Also publish the
+        // profile's preferred model as the run's workflow-level default so EVERY
+        // LLM node inherits it (the prompt/agent node via getModel step 3, and
+        // the verifier via the same defaultModelId) — without this, an EXTERNAL
+        // workflow's nodes fall back to the global default model and the
+        // operator has no single place to set the run's model. A node may still
+        // override per-node with its own `config.modelId`.
         const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
         workflow.config = {
           ...(workflow.config || {}),
-          maxExecutionTime: maxWallTimeSec * 1000
+          maxExecutionTime: maxWallTimeSec * 1000,
+          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };
+        // Per-step model overrides (profile.nodeModels) win over the run-wide
+        // default for the listed nodes.
+        applyNodeModels(workflow, profile.nodeModels);
 
         // Persist a checkpoint after every node completes. Agent runs are
         // long-lived (each task is a multi-minute LLM call) and otherwise
@@ -632,8 +662,10 @@ export default function registerAgentRunRoutes(app) {
         const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
         workflow.config = {
           ...(workflow.config || {}),
-          maxExecutionTime: maxWallTimeSec * 1000
+          maxExecutionTime: maxWallTimeSec * 1000,
+          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };
+        applyNodeModels(workflow, profile.nodeModels);
 
         const newState = await getEngine().resumeFromTerminated(runId, {
           user: req.user,

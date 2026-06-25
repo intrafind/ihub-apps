@@ -166,8 +166,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // node WAS configured with makes it visible in the audit.
       const stepSourceMetadata = Array.isArray(sourcesMetadata) ? sourcesMetadata : [];
 
-      // Auto-summarize context if configured and needed
-      if (config.autoSummarize === true && this.contextSummarizer.needsSummarization(state)) {
+      // Auto-summarize accumulated cross-node context (Claude Code autocompact
+      // analog). Opt-in via `config.autoSummarize: true` for plain workflows;
+      // on by default for agent runs (which can accumulate many task results)
+      // unless explicitly disabled with `config.autoSummarize: false`. The
+      // `needsSummarization` threshold means small runs are untouched.
+      const wantSummarize =
+        config.autoSummarize === true ||
+        (!!context._agentProfile && config.autoSummarize !== false);
+      if (wantSummarize && this.contextSummarizer.needsSummarization(state)) {
         state = await this.contextSummarizer.summarizeContext(state, context);
       }
 
@@ -1356,15 +1363,35 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   async executeLLMWithTools({ model, messages, tools, config, context, nodeId }) {
-    const maxIterations = config.maxIterations || this.maxIterations;
+    // Budget-driven continuation (Claude Code TOKEN_BUDGET analog). The agent
+    // runs as long as the task and budget require, rather than a fixed count.
+    // `maxToolRoundsPerNode` is a safety backstop above the token budget; the
+    // token budget is what actually shapes when the agent wraps up.
+    const budgets = context._agentProfile?.budgets || {};
+    const roundCap = config.maxIterations || budgets.maxToolRoundsPerNode || this.maxIterations;
+    const maxTokensPerRun = budgets.maxTokensPerRun || 0; // 0 = unlimited
+    const maxIterations = roundCap;
     const temperature = config.temperature ?? 0.7;
     const maxTokens = config.maxTokens || model.maxOutputTokens || 4096;
     const language = context.language || 'en';
+
+    // Run-level token spend lives on the workflow state so the budget spans
+    // every node/iteration of the whole run, not just this node.
+    const runState = context._workflowState;
+    const runBudget = runState?.data?._budget || { input: 0, output: 0, total: 0 };
+    if (runState?.data) runState.data._budget = runBudget;
 
     let currentMessages = [...messages];
     let iteration = 0;
     let finalContent = '';
     let finalFinishReason = null;
+    // When the run token budget is exhausted we stop offering tools and ask the
+    // model for a final answer instead of continuing to call tools.
+    let forceFinish = false;
+    // Reactive context recovery (Claude Code reactive-compact analog): bounded
+    // number of microcompact-and-retry attempts when a request overflows.
+    let reactiveAttempts = 0;
+    const MAX_REACTIVE_ATTEMPTS = 2;
     // Accumulate token usage across iterations
     const totalTokens = { input: 0, output: 0 };
 
@@ -1396,22 +1423,50 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const responseSchema = config.outputSchema || undefined;
       const responseFormat = responseSchema ? 'json' : undefined;
 
-      // Execute the request using the helper (filters invalid options like user, chatId)
-      const response = await this.llmHelper.executeStreamingRequest({
-        model,
-        messages: currentMessages,
-        apiKey,
-        options: {
-          temperature,
-          maxTokens,
-          tools: tools.length > 0 ? tools : undefined,
-          responseSchema,
-          responseFormat
-          // Note: user and chatId are intentionally NOT passed here
-          // They are not valid adapter options and would corrupt provider request bodies
-        },
-        language
-      });
+      // Execute the request using the helper (filters invalid options like user, chatId).
+      // On a context-overflow error, microcompact the in-loop messages and
+      // retry the same iteration (reactive recovery) before giving up.
+      let response;
+      try {
+        response = await this.llmHelper.executeStreamingRequest({
+          model,
+          messages: currentMessages,
+          apiKey,
+          options: {
+            temperature,
+            maxTokens,
+            tools: tools.length > 0 && !forceFinish ? tools : undefined,
+            responseSchema,
+            responseFormat
+            // Note: user and chatId are intentionally NOT passed here
+            // They are not valid adapter options and would corrupt provider request bodies
+          },
+          language
+        });
+      } catch (err) {
+        if (
+          ContextSummarizer.isContextOverflowError(err) &&
+          reactiveAttempts < MAX_REACTIVE_ATTEMPTS
+        ) {
+          const mc = this.contextSummarizer.microcompactMessages(currentMessages, {
+            keepRecent: 4
+          });
+          if (mc.freedChars > 0) {
+            reactiveAttempts++;
+            currentMessages = mc.messages;
+            this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
+              component: 'PromptNodeExecutor',
+              nodeId,
+              attempt: reactiveAttempts,
+              freedChars: mc.freedChars,
+              collapsed: mc.collapsed
+            });
+            iteration--; // don't charge the failed attempt against the round cap
+            continue;
+          }
+        }
+        throw err;
+      }
 
       // Accumulate content
       if (response.content) {
@@ -1460,23 +1515,38 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // Accumulate token usage from response (or estimate if not provided)
+      // Accumulate token usage from response (or estimate if not provided).
+      // Track the per-iteration delta so it can be added to the run budget.
+      let deltaIn = 0;
+      let deltaOut = 0;
       if (response.usage) {
-        totalTokens.input += response.usage.prompt_tokens || response.usage.input_tokens || 0;
-        totalTokens.output += response.usage.completion_tokens || response.usage.output_tokens || 0;
+        deltaIn = response.usage.prompt_tokens || response.usage.input_tokens || 0;
+        deltaOut = response.usage.completion_tokens || response.usage.output_tokens || 0;
       } else {
         // Fallback: estimate tokens when usage data is not provided (streaming responses)
         // This matches the approach used in StreamingHandler for chat apps
         const inputText = currentMessages.map(m => m.content || '').join(' ');
-        totalTokens.input += estimateTokens(inputText);
+        deltaIn = estimateTokens(inputText);
         if (response.content) {
-          totalTokens.output += estimateTokens(response.content);
+          deltaOut = estimateTokens(response.content);
         }
       }
+      totalTokens.input += deltaIn;
+      totalTokens.output += deltaOut;
+      runBudget.input += deltaIn;
+      runBudget.output += deltaOut;
+      runBudget.total = runBudget.input + runBudget.output;
 
       // Check if there are tool calls to process
       if (!response.toolCalls || response.toolCalls.length === 0) {
         // No tool calls, we're done
+        break;
+      }
+
+      // If we already forced a finish but the model still tried to call tools,
+      // stop here rather than looping forever without tools available.
+      if (forceFinish) {
+        finalFinishReason = 'budget_exhausted';
         break;
       }
 
@@ -1498,21 +1568,70 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         currentMessages.push(toolResult);
       }
 
+      // Budget gate: if the run has spent its token budget, answer this round's
+      // tool calls (done above) then nudge the model to wrap up — one final
+      // tool-less turn produces the answer instead of more tool calls.
+      if (maxTokensPerRun > 0 && runBudget.total >= maxTokensPerRun && !forceFinish) {
+        forceFinish = true;
+        this.logger.info('Run token budget reached — nudging agent to wrap up', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          spent: runBudget.total,
+          maxTokensPerRun
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            `[system] Token budget for this run is exhausted (${runBudget.total}/${maxTokensPerRun}). ` +
+            `Stop calling tools. Produce your best final answer now using what you already have. ` +
+            `Be concise and note any gaps you could not close.`
+        });
+      }
+
+      // Round-cap gate: spend the LAST allowed round producing the final output
+      // instead of one more tool call. Without this, a model that keeps calling
+      // tools until the cap exits the loop having only emitted interim narration
+      // ("I'll research… let me dig deeper") — never the actual deliverable
+      // (agent) or the verdict JSON (verifier, which runs through this same
+      // loop). Disabling tools on the final round forces a text answer.
+      if (!forceFinish && iteration >= maxIterations - 1) {
+        forceFinish = true;
+        this.logger.info('Tool-round cap reached — forcing a final answer', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          iteration,
+          maxIterations
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            '[system] You have reached the tool-use round limit for this step. Do NOT call any ' +
+            'more tools. Using everything you have gathered so far, produce your COMPLETE final ' +
+            'response now, in full, exactly as instructed — not a summary of what you did. If ' +
+            'some details are missing, state them briefly but still deliver the best complete ' +
+            'answer you can.'
+        });
+      }
+
       // Continue to next iteration
     }
 
     if (iteration >= maxIterations) {
-      this.logger.warn('Max iterations reached for node', {
+      this.logger.warn('Max tool rounds reached for node', {
         component: 'PromptNodeExecutor',
         nodeId,
-        maxIterations
+        maxIterations,
+        runTokens: runBudget.total
       });
+      if (!finalFinishReason) finalFinishReason = 'max_iterations';
     }
 
     return {
       content: finalContent,
       iterations: iteration,
       tokens: totalTokens,
+      runTokens: runBudget.total,
+      budgetExhausted: forceFinish,
       finishReason: finalFinishReason,
       maxTokens
     };
@@ -2129,10 +2248,22 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // under the task's id, rather than overwriting each other.
     const logKey = effectiveLogKey || node.id;
     if (stepLog) {
-      stateUpdates._stepLogs = {
-        ...(state?.data?._stepLogs || {}),
-        [logKey]: stepLog
-      };
+      // Snapshot the plan as it stood at the END of this round so the audit
+      // trail shows how the task list evolved (set_plan replaces open tasks
+      // each call — without this, earlier plans vanish without a trace).
+      if (Array.isArray(state?.data?._taskQueue)) {
+        stepLog.planSnapshot = state.data._taskQueue.map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status
+        }));
+      }
+      // Preserve EVERY iteration's transcript, not just the last (cyclic
+      // agent↔verify loop reuses node.id="agent" across rounds).
+      Object.assign(
+        stateUpdates,
+        this.buildStepLogUpdates(state, logKey, stepLog, context?.iteration ?? null)
+      );
     }
 
     // Concurrency safety: re-publish state slots that tools may have
@@ -2491,11 +2622,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         (agentProfile?.artifacts && typeof agentProfile.artifacts.primary === 'string'
           ? agentProfile.artifacts.primary
           : null) || 'report.md';
+      // The agent node re-runs on each adversarial-review revision and persists
+      // per step. Overwriting would lose the earlier drafts (the run's
+      // history); writing the same name repeatedly piles up indistinguishable
+      // copies. Version every attempt after the first: report.md, report.v2.md,
+      // report.v3.md — so each revision is preserved and legible.
+      const priorVersions = state?.data?._artifactVersions || {};
+      const priorCount = priorVersions[primaryName] || 0;
+      const dot = primaryName.lastIndexOf('.');
+      const versionedName =
+        priorCount === 0
+          ? primaryName
+          : dot > 0
+            ? `${primaryName.slice(0, dot)}.v${priorCount + 1}${primaryName.slice(dot)}`
+            : `${primaryName}.v${priorCount + 1}`;
+      stateUpdates._artifactVersions = { ...priorVersions, [primaryName]: priorCount + 1 };
       if (runId && textContent) {
         try {
           await writeArtifactDirect({
             runId,
-            name: primaryName,
+            name: versionedName,
             content: textContent,
             contentType: 'text/markdown',
             profileId,
@@ -2917,7 +3063,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   _isCitationProducingTool(toolId) {
     if (typeof toolId !== 'string') return false;
     const id = toolId.toLowerCase();
-    if (id === 'websearch' || id === 'webcontentextractor') return true;
+    // Any *search* tool (webSearch, braveSearch, tavilySearch, …) plus the
+    // content extractor and configured source_ lookups. Previously this only
+    // matched the literal `websearch`, so the configured `braveSearch` tool
+    // produced ZERO citations — its result URLs were silently dropped. The
+    // harvest below guards on a url field, so a non-search tool that happens to
+    // match contributes nothing anyway.
+    if (id.includes('search') || id === 'webcontentextractor') return true;
     if (id.startsWith('source_')) return true;
     // Provider-native grounding (googleSearch) doesn't appear in the tool
     // call loop — Gemini emits it as grounding metadata in the assistant

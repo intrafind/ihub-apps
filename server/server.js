@@ -601,28 +601,74 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Sweep orphaned workflow executions left over from a crashed/restarted
-  // previous process. Must run before trigger registration so re-emitted
-  // events don't trip on stale state.
-  try {
-    const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
-    await sweepOrphanedExecutions();
-  } catch (error) {
-    logger.warn({
-      component: 'Server',
-      message: `Orphan sweeper skipped: ${error.message}`
-    });
-  }
-
-  // Initialize workflow triggers (schedules and webhooks)
+  // Workflow recovery + trigger init on boot. Order matters:
+  //   1. Attach the engine to the TriggerManager (this acquires the
+  //      cross-process scheduler lock).
+  //   2. Resume runs interrupted by the previous process from their last
+  //      checkpoint (only the scheduler-lock owner does this).
+  //   3. Orphan-sweep whatever could NOT be resumed, marking it failed. The
+  //      sweeper skips runs the resume manager just made active in memory.
+  //   4. Register schedule/webhook triggers.
   try {
     const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
     const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+    const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
+    const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
+    const { serializeProfile } = await import('./agents/profile/profileWorkflowSerializer.js');
+    const { buildAgentPrincipal } = await import('./utils/authorization.js');
 
+    const engine = new WorkflowEngine();
     const triggerManager = getTriggerManager();
-    triggerManager.setEngine(new WorkflowEngine());
+    triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
+
+    // Reconstruct the full definition for a persisted run: agent runs are
+    // re-serialized from their profile (with the agent principal restored);
+    // plain workflow runs are reloaded by id from disk.
+    const resolveDefinition = async state => {
+      const profileId = state?.data?._agent?.profileId;
+      if (profileId) {
+        const { data: profiles } = configCache.getAgentProfiles(true);
+        const profile = profiles?.find(p => p.id === profileId);
+        if (!profile) return null;
+        const serialized = serializeProfile(profile);
+        // External profiles reference a standalone workflow file by id;
+        // embedded profiles carry the rebuilt definition inline.
+        const definition =
+          serialized.workflow?.ref === 'external' && serialized.workflow.workflowId
+            ? configCache.getWorkflowById(serialized.workflow.workflowId)
+            : serialized.workflow?.definition;
+        if (!definition) return null;
+        const principal = buildAgentPrincipal(profile, state.data._agent?.triggeredBy || null);
+        return { definition, options: { user: principal } };
+      }
+      const workflows = await loadWorkflows(false);
+      const definition = workflows.find(w => w.id === state.workflowId);
+      if (!definition) return null;
+      return {
+        definition,
+        options: { user: { id: 'system', name: 'System (resumed)', groups: [] } }
+      };
+    };
+
+    try {
+      const resumeResult = await resumeInterruptedRuns({ engine, resolveDefinition });
+      if (resumeResult.resumed.length > 0) {
+        logger.info({
+          component: 'Server',
+          message: `Resumed ${resumeResult.resumed.length} interrupted workflow run(s) from checkpoint`
+        });
+      }
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Run resume skipped: ${error.message}` });
+    }
+
+    try {
+      await sweepOrphanedExecutions();
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Orphan sweeper skipped: ${error.message}` });
+    }
 
     const workflows = await loadWorkflows(false);
     workflows.forEach(w => triggerManager.registerWorkflowTriggers(w));
@@ -633,7 +679,7 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (error) {
     logger.warn({
       component: 'Server',
-      message: `Workflow trigger initialization skipped: ${error.message}`
+      message: `Workflow recovery / trigger initialization skipped: ${error.message}`
     });
   }
 

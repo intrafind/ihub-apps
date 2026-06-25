@@ -172,13 +172,12 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
       ],
       messages: []
     };
-    return this.createSuccessResult(currentInboxItem, {
-      stateUpdates: {
-        currentInboxItem,
-        _inboxMeta: {
-          inboxId,
-          version: inbox.version
-        },
+    const stateUpdates = {
+      currentInboxItem,
+      _inboxMeta: {
+        inboxId,
+        version: inbox.version
+      },
         // Record a timing entry so the UI step timeline can show the
         // inbox-load step alongside the LLM tasks. Deterministic nodes
         // are usually <50ms, so this is mostly for completeness.
@@ -194,8 +193,9 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
           ...(state?.data?._stepLogs || {}),
           [node.id]: stepLog
         }
-      }
-    });
+      };
+
+    return this.createSuccessResult(currentInboxItem, { stateUpdates });
   }
 
   _previewToolValue(value) {

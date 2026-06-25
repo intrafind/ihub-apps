@@ -120,6 +120,7 @@ function useWorkflowExecution(executionId, options = {}) {
       'agent.task.created',
       'agent.task.completed',
       'agent.task.failed',
+      'agent.plan.updated',
       'agent.artifact.written',
       'agent.memory.read',
       'agent.memory.write',
@@ -369,6 +370,29 @@ function useWorkflowExecution(executionId, options = {}) {
               ]
             }
           }));
+          break;
+
+        // The living-plan tools (set_plan / update_task) emit a full plan
+        // snapshot rather than per-task create events. Replace the queue with
+        // the snapshot so the plan and its status changes render live.
+        case 'agent.plan.updated':
+          if (Array.isArray(data.tasks)) {
+            setState(prev => ({
+              ...prev,
+              data: {
+                ...prev?.data,
+                _taskQueue: data.tasks.map(t => ({
+                  id: t.id,
+                  title: t.title,
+                  activeForm: t.activeForm,
+                  status: t.status || 'open',
+                  depth: t.depth ?? 0,
+                  priority: t.priority,
+                  parentTaskId: t.parentTaskId || null
+                }))
+              }
+            }));
+          }
           break;
 
         case 'agent.task.completed':

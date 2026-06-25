@@ -125,24 +125,57 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
         ],
         messages: []
       };
+      // Reaching inbox-finalize means the deliverable PASSED adversarial review
+      // (this node sits only on the verify→pass branch). Close out the living
+      // plan: any task the agent left open/in_progress is now done, since the
+      // accepted deliverable is the completed work. Without this the plan shows
+      // a still-open/seeded task on a successful run.
+      const finalizeStateUpdates = {
+        _taskTimings: {
+          ...(state?.data?._taskTimings || {}),
+          [node.id]: {
+            startedAt: startedAt.toISOString(),
+            completedAt: completedAtIso,
+            durationMs
+          }
+        },
+        _stepLogs: {
+          ...(state?.data?._stepLogs || {}),
+          [node.id]: stepLog
+        }
+      };
+      const queue = state?.data?._taskQueue;
+      if (Array.isArray(queue) && queue.length > 0) {
+        let changed = false;
+        const reconciled = queue.map(t => {
+          if (t && (t.status === 'in_progress' || t.status === 'open')) {
+            changed = true;
+            return { ...t, status: 'done' };
+          }
+          return t;
+        });
+        if (changed) {
+          finalizeStateUpdates._taskQueue = reconciled;
+          emit(
+            'agent.plan.updated',
+            {
+              reason: 'inbox-finalize-complete',
+              tasks: reconciled.map(t => ({
+                id: t.id,
+                title: t.title,
+                activeForm: t.activeForm,
+                status: t.status,
+                priority: t.priority,
+                depth: t.depth ?? 0
+              }))
+            },
+            chatId
+          );
+        }
+      }
       return this.createSuccessResult(
         { ok: true, inboxId, version: result.version, item: item.text },
-        {
-          stateUpdates: {
-            _taskTimings: {
-              ...(state?.data?._taskTimings || {}),
-              [node.id]: {
-                startedAt: startedAt.toISOString(),
-                completedAt: completedAtIso,
-                durationMs
-              }
-            },
-            _stepLogs: {
-              ...(state?.data?._stepLogs || {}),
-              [node.id]: stepLog
-            }
-          }
-        }
+        { stateUpdates: finalizeStateUpdates }
       );
     } catch (err) {
       // Race-tolerant: NOT_FOUND means another run already marked it.

@@ -18,6 +18,7 @@ import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
+import { getStateManager } from './StateManager.js';
 
 const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
 
@@ -70,12 +71,17 @@ export async function sweepOrphanedExecutions() {
   let scanned = 0;
   let marked = 0;
   const registry = getExecutionRegistry();
+  const stateManager = getStateManager();
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     if (!entry.name.startsWith('wf-exec-')) continue;
 
     scanned++;
+
+    // Skip executions that are live in memory — e.g. a run the resume manager
+    // just picked up on boot. Failing those would clobber an active run.
+    if (stateManager.activeStates?.has(entry.name)) continue;
 
     const latestPath = path.join(STATE_DIR, entry.name, 'latest.json');
     const state = await readJsonSafe(latestPath);

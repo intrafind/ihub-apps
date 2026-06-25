@@ -18,7 +18,12 @@ import logger from '../utils/logger.js';
 import { createSseEmitter } from '../utils/sseEmitter.js';
 import memoryFile from '../agents/memory/memoryFile.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
-import { validateTaskRecord } from '../agents/runtime/taskRecord.js';
+import {
+  buildTaskRecord,
+  enforceSingleInProgress,
+  deriveActiveForm,
+  TASK_STATUSES
+} from '../agents/runtime/taskRecord.js';
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
 
 const emit = createSseEmitter('AgentTools');
@@ -160,9 +165,40 @@ function getTaskQueueState(params) {
   return state;
 }
 
+/**
+ * Build a compact, UI-friendly snapshot of the current plan and emit
+ * `agent.plan.updated` so the run-detail view can render the living plan as
+ * it evolves. Called after any mutation of `_taskQueue`.
+ */
+function emitPlanUpdated(params, user, state, reason) {
+  const queue = state.data._taskQueue || [];
+  const counts = queue.reduce((acc, t) => {
+    acc[t.status] = (acc[t.status] || 0) + 1;
+    return acc;
+  }, {});
+  emit(
+    'agent.plan.updated',
+    {
+      profileId: user.profileId,
+      reason,
+      total: queue.length,
+      counts,
+      tasks: queue.map(t => ({
+        id: t.id,
+        title: t.title,
+        activeForm: t.activeForm,
+        status: t.status,
+        depth: t.depth,
+        priority: t.priority
+      }))
+    },
+    params.chatId
+  );
+}
+
 export async function createTask(params = {}) {
   const user = ensureAgent(params.user);
-  const { title, brief, priority = 'p2' } = params;
+  const { title, activeForm, brief, priority = 'p2' } = params;
   if (!title || typeof title !== 'string') {
     throw new Error('title is required');
   }
@@ -178,29 +214,27 @@ export async function createTask(params = {}) {
       message: `createTask refused: depth ${nextDepth} exceeds maxDepth ${maxDepth}`
     };
   }
-  const now = new Date().toISOString();
-  const task = {
-    id: `task_${now.replace(/[:.]/g, '-')}_${uuidv4().slice(0, 8)}`,
-    title,
-    description: brief || '',
-    brief: brief || '',
-    priority,
-    status: 'open',
-    createdBy: user.id,
-    parentTaskId: currentTask?.id || null,
-    depth: nextDepth,
-    result: null,
-    createdAt: now,
-    updatedAt: now
-  };
-  const validation = validateTaskRecord(task);
-  if (!validation.ok) {
+  let task;
+  try {
+    task = buildTaskRecord({
+      id: `task_${new Date().toISOString().replace(/[:.]/g, '-')}_${uuidv4().slice(0, 8)}`,
+      title,
+      activeForm,
+      description: brief || '',
+      brief: brief || '',
+      priority,
+      status: 'open',
+      depth: nextDepth,
+      parentTaskId: currentTask?.id || null,
+      createdBy: user.id
+    });
+  } catch (err) {
     logger.error('Refusing to enqueue malformed task', {
       component: 'AgentTools',
-      reason: validation.reason,
-      task
+      reason: err.message,
+      title
     });
-    return { error: true, code: 'INVALID_TASK', message: validation.reason };
+    return { error: true, code: 'INVALID_TASK', message: err.message };
   }
   state.data._taskQueue.push(task);
   emit(
@@ -214,7 +248,116 @@ export async function createTask(params = {}) {
     },
     params.chatId
   );
+  emitPlanUpdated(params, user, state, 'create_task');
   return { ok: true, taskId: task.id, depth: task.depth };
+}
+
+/**
+ * Declare or replace the agent's whole plan in one call (TodoWrite analog).
+ * Accepts `tasks: [{ title, activeForm?, brief?, priority? }, ...]` and
+ * rebuilds `_taskQueue` as a fresh set of `open` tasks. Existing `done`/`failed`
+ * tasks are preserved by default so prior work isn't lost; pass
+ * `replaceCompleted: true` to wipe everything. Enforces the dynamic-task
+ * depth cap and the single-in_progress invariant.
+ */
+export async function setPlan(params = {}) {
+  const user = ensureAgent(params.user);
+  const { tasks, replaceCompleted = false } = params;
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return { error: true, code: 'INVALID_PLAN', message: 'tasks must be a non-empty array' };
+  }
+  const state = getTaskQueueState(params);
+  const profile = params.appConfig?._agentProfile || {};
+  const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
+  const depth = (state.data._currentTask?.depth ?? -1) + 1;
+  if (depth > maxDepth) {
+    return {
+      error: true,
+      code: 'MAX_DEPTH',
+      message: `set_plan refused: depth ${depth} exceeds maxDepth ${maxDepth}`
+    };
+  }
+
+  const preserved = replaceCompleted
+    ? []
+    : state.data._taskQueue.filter(t => t.status === 'done' || t.status === 'failed');
+
+  const built = [];
+  for (const [i, raw] of tasks.entries()) {
+    const title = typeof raw === 'string' ? raw : raw?.title;
+    if (!title || typeof title !== 'string') {
+      return {
+        error: true,
+        code: 'INVALID_PLAN',
+        message: `tasks[${i}] is missing a title`
+      };
+    }
+    try {
+      built.push(
+        buildTaskRecord({
+          id: `task_${new Date().toISOString().replace(/[:.]/g, '-')}_${uuidv4().slice(0, 8)}`,
+          title,
+          activeForm: raw?.activeForm,
+          description: raw?.brief || raw?.description || '',
+          brief: raw?.brief || '',
+          priority: raw?.priority || 'p2',
+          status: 'open',
+          depth,
+          createdBy: user.id
+        })
+      );
+    } catch (err) {
+      return { error: true, code: 'INVALID_PLAN', message: `tasks[${i}]: ${err.message}` };
+    }
+  }
+
+  state.data._taskQueue = [...preserved, ...built];
+  emitPlanUpdated(params, user, state, 'set_plan');
+  return { ok: true, total: state.data._taskQueue.length, added: built.length };
+}
+
+/**
+ * Update an existing task's status and/or fields. Setting `status:
+ * 'in_progress'` enforces the single-in_progress invariant by demoting any
+ * other in_progress task back to `open`.
+ */
+export async function updateTask(params = {}) {
+  const user = ensureAgent(params.user);
+  const { taskId, status, title, activeForm, brief, priority, result } = params;
+  if (!taskId) throw new Error('taskId is required');
+  const state = getTaskQueueState(params);
+  const task = state.data._taskQueue.find(t => t.id === taskId);
+  if (!task) return { error: true, code: 'NOT_FOUND', message: `Task ${taskId} not found` };
+
+  if (status !== undefined) {
+    if (!TASK_STATUSES.has(status)) {
+      return {
+        error: true,
+        code: 'INVALID_STATUS',
+        message: `status must be one of ${[...TASK_STATUSES].join(', ')}`
+      };
+    }
+    task.status = status;
+  }
+  if (typeof title === 'string' && title.length > 0) {
+    task.title = title;
+    if (activeForm === undefined) task.activeForm = deriveActiveForm(title);
+  }
+  if (typeof activeForm === 'string') task.activeForm = activeForm;
+  if (typeof brief === 'string') {
+    task.brief = brief;
+    task.description = brief;
+  }
+  if (typeof priority === 'string') task.priority = priority;
+  if (result !== undefined) task.result = result;
+  task.updatedAt = new Date().toISOString();
+
+  if (task.status === 'in_progress') {
+    enforceSingleInProgress(state.data._taskQueue, task.id);
+  }
+
+  emitPlanUpdated(params, user, state, 'update_task');
+  return { ok: true, taskId: task.id, status: task.status };
 }
 
 export async function listTasks(params = {}) {
@@ -242,6 +385,7 @@ export async function markTaskDone(params = {}) {
     { profileId: user.profileId, taskId: task.id, title: task.title },
     params.chatId
   );
+  emitPlanUpdated(params, user, state, 'mark_task_done');
   return { ok: true };
 }
 
@@ -358,6 +502,8 @@ export default {
   readInbox,
   writeInbox,
   createTask,
+  setPlan,
+  updateTask,
   listTasks,
   markTaskDone,
   writeArtifact
