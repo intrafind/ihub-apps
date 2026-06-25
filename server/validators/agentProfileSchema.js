@@ -121,7 +121,18 @@ const dynamicTasksSchema = z
 const reviewSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
-    maxRounds: z.number().int().min(1).max(5).optional().default(3),
+    // Strictness preset for the adversarial review acceptance bar + round budget.
+    // See server/agents/profile/reviewSettings.js. Applies to agent runs via
+    // run-start injection onto the verifier node.
+    strictness: z.enum(['lenient', 'balanced', 'strict']).optional().default('balanced'),
+    // Round budget. Optional (NO default) so an unset value means "use the
+    // strictness preset"; when set it overrides the preset's maxRetries.
+    maxRounds: z.number().int().min(1).max(10).optional(),
+    // Optional override of the preset's stall limit.
+    stallLimit: z.number().int().min(1).max(5).optional(),
+    // Optional free-text acceptance criteria; overrides the verify node's
+    // criteria prompt for this agent.
+    criteria: z.string().optional(),
     modelId: z.string().optional(),
     system: optionalLocalizedStringSchema.optional()
   })
