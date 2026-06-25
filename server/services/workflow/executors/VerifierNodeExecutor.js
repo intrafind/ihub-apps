@@ -71,7 +71,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
     const { config = {} } = node;
     const threshold = config.threshold ?? 0.7;
-    const maxRetries = config.maxRetries ?? 3;
+    const maxRetries = config.maxRetries ?? state?.data?._agentReviewConfig?.maxRetries ?? 3;
     const mode = config.mode === 'adversarial' ? 'adversarial' : 'quality';
     const { language = 'en' } = context;
     const startedAt = new Date();
@@ -115,9 +115,43 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       const gapCountKey = `_verifier_prevgaps_${node.id}`;
       const currentRetries = state.data?.[retryKey] || 0;
       const currentStall = state.data?.[stallKey] || 0;
-      const STALL_LIMIT = config.stallLimit ?? 2;
+      const STALL_LIMIT = config.stallLimit ?? state.data?._agentReviewConfig?.stallLimit ?? 2;
+      const reviewKnobs = {
+        acceptPartial: config.acceptPartial ?? state.data?._agentReviewConfig?.acceptPartial ?? false,
+        acceptPartialAfterStall: config.acceptPartialAfterStall ?? state.data?._agentReviewConfig?.acceptPartialAfterStall ?? true,
+        requirePass: config.requirePass ?? state.data?._agentReviewConfig?.requirePass ?? false
+      };
 
-      if (currentRetries >= maxRetries || currentStall >= STALL_LIMIT) {
+      const stalledOut = currentStall >= STALL_LIMIT;
+      const retriesOut = currentRetries >= maxRetries;
+      if (stalledOut || retriesOut) {
+        const acceptOnStall = stalledOut && !retriesOut && reviewKnobs.acceptPartialAfterStall && !reviewKnobs.requirePass;
+        // When gaps have stalled (no improvement) and the knobs allow it, accept
+        // the best draft we have rather than discarding it. Routes to inbox-finalize
+        // (branch:'pass') so the inbox item is marked done with the current draft.
+        if (acceptOnStall) {
+          logger.warn({
+            component: 'VerifierNodeExecutor',
+            message: `Verification stalled for node '${node.id}' — accepting draft after ${currentStall} round(s) with no progress (acceptPartialAfterStall=true)`,
+            nodeId: node.id
+          });
+          return this.createSuccessResult(
+            { passed: true, branch: 'pass', verdict: 'PARTIAL', feedback: 'Accepted after gaps stalled', score: 0.7 },
+            {
+              stateUpdates: {
+                verificationResult: {
+                  ...(state?.data?.verificationResult || {}),
+                  passed: true,
+                  verdict: 'PARTIAL',
+                  feedback: 'Accepted after gaps stalled',
+                  accepted: 'stall',
+                  mode
+                }
+              },
+              branch: 'pass'
+            }
+          );
+        }
         // The deliverable went through every revision round and the verifier
         // still found genuine gaps (only CONCLUSIVE fails count toward this
         // budget — see the branch logic below). Earlier designs either
@@ -269,7 +303,12 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       // sends the work back for revision and spends a retry. An INCONCLUSIVE
       // verdict is accepted-with-warning — it carries no actionable feedback,
       // so blocking on it would punish the agent for the verifier's silence.
-      const needsRevision = !passed && conclusive;
+      // resolveAcceptance applies the operator's configured strictness knobs:
+      // lenient modes can accept a PARTIAL immediately; strict (requirePass)
+      // never accepts a PARTIAL. Stall-based acceptance is handled in the
+      // terminal block above (stalled:false here avoids double-handling).
+      const { accept } = this.resolveAcceptance({ verdict, passed, conclusive, stalled: false, knobs: reviewKnobs });
+      const needsRevision = !accept && conclusive && !passed;
       const branch = needsRevision ? 'retry' : 'pass';
       const inconclusive = !conclusive;
 
@@ -405,6 +444,26 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
   buildReplanUpdates(state, gaps) {
     const round = (typeof state?.data?._reviewRound === 'number' ? state.data._reviewRound : 0) + 1;
     return { _reviewRound: round, _lastReviewGaps: Array.isArray(gaps) ? gaps : [] };
+  }
+
+  /**
+   * Decide whether to accept the current draft given the verdict and the
+   * resolved review knobs. Pure (no I/O) so it is unit-testable.
+   * - PASS always accepts.
+   * - requirePass: never accept a non-PASS.
+   * - acceptPartial: accept a conclusive PARTIAL immediately.
+   * - acceptPartialAfterStall: accept a conclusive PARTIAL once gaps have stalled.
+   * @param {{verdict:string, passed:boolean, conclusive:boolean, stalled:boolean, knobs:Object}} args
+   * @returns {{accept:boolean}}
+   */
+  resolveAcceptance({ verdict, passed, conclusive, stalled, knobs = {} }) {
+    if (passed) return { accept: true };
+    if (knobs.requirePass) return { accept: false };
+    if (verdict === 'PARTIAL' && conclusive) {
+      if (knobs.acceptPartial) return { accept: true };
+      if (knobs.acceptPartialAfterStall && stalled) return { accept: true };
+    }
+    return { accept: false };
   }
 
   interpretResult(parsed = {}, { mode = 'quality', threshold = 0.7 } = {}) {

@@ -184,6 +184,7 @@ async function run() {
     // If the verifier finds no fewer gaps for STALL_LIMIT rounds, the agent
     // isn't making progress — stop instead of burning the whole retry budget.
     // This gate is checked before any model call, so it runs without an LLM.
+    // Default knobs: acceptPartialAfterStall:true → stall accepts the draft (branch:'pass').
     const exec = new VerifierNodeExecutor();
     const node = {
       id: 'verify',
@@ -199,8 +200,18 @@ async function run() {
       }
     };
     const result = await exec.execute(node, state, { language: 'en' });
-    check('stall ends the run before the retry ceiling', result.isTerminal === true);
-    check('preserved + flagged not-passed', result.stateUpdates?._verificationOutcome === 'not_passed');
+    check('stall ends the run before the retry ceiling (accepted via stall)', result.status === 'completed');
+    check('default knobs: stall accepts draft (branch pass)', result.branch === 'pass');
+    check('stall accept: verificationResult.accepted=stall', result.stateUpdates?.verificationResult?.accepted === 'stall');
+
+    // With requirePass:true, stall still ends not-passed (strict mode).
+    const strictNode = {
+      id: 'verify',
+      config: { mode: 'adversarial', inputVariable: 'draft', maxRetries: 6, stallLimit: 2, requirePass: true }
+    };
+    const strictResult = await exec.execute(strictNode, state, { language: 'en' });
+    check('requirePass + stall → not-passed (isTerminal)', strictResult.isTerminal === true);
+    check('requirePass + stall → _verificationOutcome not_passed', strictResult.stateUpdates?._verificationOutcome === 'not_passed');
   }
 
   console.log('\n🧪 inconclusive verdict is accepted-with-warning (not a wasted retry)\n');
@@ -225,6 +236,26 @@ async function run() {
     } else {
       console.log('   ⏭  no model available in this env — skipping inconclusive integration assert');
     }
+  }
+
+  console.log('\n🧪 acceptance gating (configurable strictness)\n');
+  {
+    const v = new VerifierNodeExecutor();
+    const partial = { verdict: 'PARTIAL', passed: false, conclusive: true };
+    // lenient: accept a conclusive PARTIAL immediately
+    check('lenient accepts PARTIAL immediately',
+      v.resolveAcceptance({ ...partial, stalled: false, knobs: { acceptPartial: true, acceptPartialAfterStall: true, requirePass: false } }).accept === true);
+    // balanced: PARTIAL retries until stalled, then accepts
+    check('balanced PARTIAL retries before stall',
+      v.resolveAcceptance({ ...partial, stalled: false, knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false } }).accept === false);
+    check('balanced PARTIAL accepts on stall',
+      v.resolveAcceptance({ ...partial, stalled: true, knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false } }).accept === true);
+    // strict: never accept PARTIAL, even on stall
+    check('strict never accepts PARTIAL',
+      v.resolveAcceptance({ ...partial, stalled: true, knobs: { acceptPartial: false, acceptPartialAfterStall: false, requirePass: true } }).accept === false);
+    // a real PASS always accepts regardless of knobs
+    check('PASS always accepts',
+      v.resolveAcceptance({ verdict: 'PASS', passed: true, conclusive: true, stalled: false, knobs: { requirePass: true } }).accept === true);
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
