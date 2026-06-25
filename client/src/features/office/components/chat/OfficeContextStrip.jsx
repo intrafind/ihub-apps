@@ -213,8 +213,8 @@ function OfficeContextStrip({
           />
         </button>
 
-        {/* Always show add-email button in the header, collapsed or expanded */}
-        {hasPinControls && (
+        {/* Show add-email button in the header when collapsed so it's always reachable */}
+        {!expanded && hasPinControls && (
           <PinnedEmailsBar
             pinned={[]}
             onUnpin={() => {}}
@@ -245,13 +245,13 @@ function OfficeContextStrip({
             />
           )}
 
-          {hasPinned && (
+          {(hasPinned || hasPinControls) && (
             <PinnedEmailsBar
               pinned={pinnedList}
               onUnpin={onUnpin}
               onClearAll={onClearPinned}
               onAddEmails={onAddEmails}
-              canAddEmails={false}
+              canAddEmails={canAddEmails}
               addEmailsLoading={addEmailsLoading}
               addEmailsDisabled={addEmailsDisabled}
               embedded
