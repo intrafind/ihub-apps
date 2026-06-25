@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -21,7 +21,10 @@ import {
   displayReplyFormWithAssistantResponse,
   displayNewEmailFormWithAssistantResponse
 } from '../utilities/replyForm';
-import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
+import {
+  buildPromptTemplate,
+  combineUserTextWithEmailContext
+} from '../utilities/buildChatApiMessages';
 import {
   fetchCurrentMailContext,
   fetchCurrentOutlookItemContext,
@@ -80,6 +83,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const fileUploadHandler = useFileUploadHandler();
   const mailSnapshot = useOutlookMailContextSnapshot();
   const currentModel = models.find(m => m.id === selectedModel) || null;
+
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
 
   const [inputValue, setInputValue] = useState('');
@@ -94,6 +98,21 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // wiped on new-chat / app-switch alongside the chat history.
   const [pinnedEmails, setPinnedEmails] = useState([]);
   const [addEmailsLoading, setAddEmailsLoading] = useState(false);
+
+  // Build the email-context text that will be appended to the outgoing message
+  // so ChatInput can include it in the live token-count estimate. This mirrors
+  // what combineUserTextWithEmailContext does at send time but with an empty
+  // userText so we only get the email blocks (the typed text is already counted
+  // separately by ChatInput).
+  const emailContextText = useMemo(() => {
+    const currentBodyText = mailSnapshot.includeBody ? mailSnapshot.ctx?.bodyText || '' : '';
+    return combineUserTextWithEmailContext({
+      userText: '',
+      currentBodyText,
+      currentItemId: mailSnapshot.ctx?.itemId,
+      pinned: pinnedEmails
+    });
+  }, [mailSnapshot.includeBody, mailSnapshot.ctx, pinnedEmails]);
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and
   // dedupe in the prompt builder.
@@ -638,6 +657,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                   setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
                 }
                 clarificationPending={adapter.clarificationPending}
+                // Include email body + pinned emails in the live token estimate
+                // so the context-window indicator accounts for what will actually
+                // be sent to the LLM.
+                extraContextText={emailContextText}
                 // Keep the input from dominating the small Outlook task pane;
                 // long prompts scroll inside the 3-line box. Issue #1467.
                 maxRows={3}
