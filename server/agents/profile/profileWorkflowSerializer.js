@@ -78,7 +78,12 @@ const DEFAULT_PLANNER_SYSTEM =
   'publications").\n' +
   '- DO NOT include workflow plumbing steps (reading the inbox, marking ' +
   'items done, writing artifacts); those are handled outside the plan by ' +
-  'the runtime.';
+  'the runtime.\n' +
+  '- DO NOT emit a "write the final report", "compile/assemble the report", ' +
+  '"final synthesis", or "assessment write-up" task. Final composition of ' +
+  'the report is owned by a separate synthesis step that runs after your ' +
+  'plan. Your tasks produce RESEARCH, VERIFICATION, and ANALYSIS findings ' +
+  'only — never the final deliverable document itself.';
 
 // Use the .text accessor so the planner sees just the user's question, not
 // the whole parsed inbox object (which includes .raw — a polluted line that
