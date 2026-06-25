@@ -60,7 +60,6 @@ const BLANK_PROFILE = {
   review: {
     enabled: false,
     strictness: 'balanced',
-    maxRounds: 3,
     modelId: '',
     system: { en: '' }
   },
@@ -986,7 +985,6 @@ export default function AdminAgentEditPage() {
                     type="number"
                     min="1"
                     max="10"
-                    disabled={!profile.review?.enabled}
                     value={profile.review?.maxRounds ?? ''}
                     onChange={e => handleReview({ maxRounds: e.target.value === '' ? undefined : (Number(e.target.value) || undefined) })}
                     className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
