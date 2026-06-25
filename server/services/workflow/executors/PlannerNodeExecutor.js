@@ -338,6 +338,39 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         const childResult = await this._waitForChildCompletion(childExecutionId, context);
 
         if (childResult.status === 'failed') {
+          // Bubble up whatever the child completed BEFORE it failed, so the UI
+          // can still show — and EXPAND (model + transcript) — the sub-tasks
+          // that finished. createErrorResult carries no stateUpdates and the
+          // engine doesn't apply them on a failed node, so persist directly
+          // (same pattern as the early planCreated persist above). Without
+          // this, one failed sub-task discards the ENTIRE round's _stepLogs /
+          // _taskResults, leaving its siblings unexpandable with no model.
+          try {
+            const failedChildData = childResult.data || {};
+            const partial = {};
+            if (failedChildData._taskResults && typeof failedChildData._taskResults === 'object') {
+              partial._taskResults = { ...(state?.data?._taskResults || {}), ...failedChildData._taskResults };
+            }
+            if (failedChildData._stepLogs && typeof failedChildData._stepLogs === 'object') {
+              partial._stepLogs = { ...(state?.data?._stepLogs || {}), ...failedChildData._stepLogs };
+            }
+            if (failedChildData._taskTimings && typeof failedChildData._taskTimings === 'object') {
+              partial._taskTimings = { ...(state?.data?._taskTimings || {}), ...failedChildData._taskTimings };
+            }
+            if (Array.isArray(failedChildData._citations) && failedChildData._citations.length > 0) {
+              partial._citations = [...(state?.data?._citations || []), ...failedChildData._citations];
+            }
+            if (Object.keys(partial).length > 0) {
+              const { getStateManager } = await import('../StateManager.js');
+              await getStateManager().update(state.executionId, { data: partial });
+            }
+          } catch (bubbleErr) {
+            this.logger.warn('Failed to bubble up partial sub-workflow state after child failure', {
+              component: 'PlannerNodeExecutor',
+              nodeId: node.id,
+              error: bubbleErr.message
+            });
+          }
           return this.createErrorResult('Sub-workflow failed', {
             nodeId: node.id,
             childExecutionId,
