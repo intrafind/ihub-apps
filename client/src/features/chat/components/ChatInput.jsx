@@ -75,6 +75,11 @@ function ChatInput({
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
   fileTokenWarning = null,
+  // Additional context text contributed by the host (e.g. Outlook email body +
+  // pinned emails) that will be appended to the outgoing message. Included in
+  // the live token-count estimate so the context-window indicator reflects what
+  // will actually be sent to the LLM.
+  extraContextText = '',
   // Optional override for the auto-grow textarea cap. Defaults to 5 lines
   // (~150 px) in single-line mode and 12 lines in multiline mode. The
   // Outlook taskpane passes 3 so the input doesn't dominate the small
@@ -133,23 +138,29 @@ function ChatInput({
   // Debounce the typed-message estimate so we don't run the tokenizer on every
   // keystroke (matters for large pasted text).
   const valueTokens = useEstimatedTokenCount(value || '', { debounceMs: 300 });
+  // Host-injected context (e.g. Outlook email body + pinned emails) that will
+  // be appended to the outgoing message but isn't reflected in `value` or
+  // `fileContent`. Debounced lightly since it only changes when the user
+  // navigates emails or pins/unpins — not on every keystroke.
+  const extraContextTokens = useEstimatedTokenCount(extraContextText || '', { debounceMs: 150 });
 
   // Estimate how much of the model's context window the pending input (typed
-  // message + attached document content) would consume. This is a live,
-  // client-side estimate using the shared tokenizer; the provider-reported
-  // count after each turn is authoritative. Only shown when the model exposes
-  // a context window and the user has actually entered/attached something.
+  // message + attached document content + host context) would consume. This is
+  // a live, client-side estimate using the shared tokenizer; the
+  // provider-reported count after each turn is authoritative. Only shown when
+  // the model exposes a context window and the user has actually
+  // entered/attached something.
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
-    const inputTokens = valueTokens + fileTokens;
+    const inputTokens = valueTokens + fileTokens + extraContextTokens;
     if (inputTokens === 0) return null;
     return computeContextUsage({
       contextWindow,
       inputTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, fileTokens, valueTokens]);
+  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
