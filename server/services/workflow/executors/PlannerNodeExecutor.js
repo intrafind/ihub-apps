@@ -192,6 +192,32 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await this._activateSkillsIntoState(skillsUsed, state, context);
       }
 
+      // Plan-and-review namespacing: when this planner call runs INSIDE a
+      // review loop on round 1+, prefix every emitted task id (and
+      // matching dependsOn references) with `r{round}_`. Round 0 (the
+      // initial plan) keeps the LLM's ids as-is. The prefix is the
+      // safety net for an LLM that re-uses earlier round ids despite the
+      // round-extension instructions in the system prompt — without it,
+      // _taskResults[task.id] would silently overwrite the prior round's
+      // entry for the same id.
+      //
+      // This MUST run before we emit/persist the plan below so the SSE event,
+      // the early persist, and the materialized sub-workflow all use the SAME
+      // (namespaced) task ids — otherwise round-1 rows would first appear
+      // un-namespaced and then change ids after materialization.
+      this._namespaceTaskIds(plan, activeReviewRound);
+
+      // Accumulate the plan across review rounds. A re-plan round emits only
+      // the NEW gap-closing tasks, but the UI's Tasks panel renders solely
+      // from planCreated.tasks — so without merging, the prior round's tasks
+      // disappear from view even though their results/logs persist in
+      // _taskResults/_stepLogs. Merge the prior rounds' tasks (from parent
+      // state) with this round's namespaced tasks, matching how _taskResults
+      // and _stepLogs already accumulate on bubble-up. Namespacing guarantees
+      // the ids don't collide across rounds. Computed once and reused for
+      // every planCreated write in this execution.
+      const mergedPlanTasks = this._mergePlanTasks(state?.data?.planCreated?.tasks, plan.tasks);
+
       // Emit SSE event so the UI can display the plan. Note: payload fields
       // are FLAT (not nested under `data:`) to match how WorkflowEngine
       // ._emitEvent and agentTools emit do it — the SSE forwarder serializes
@@ -199,7 +225,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       actionTracker.emit('fire-sse', {
         event: 'workflow.plan.created',
         chatId: context.chatId,
-        plan: { tasks: plan.tasks, reasoning: plan.reasoning },
+        plan: { tasks: mergedPlanTasks, reasoning: plan.reasoning },
         nodeId: node.id
       });
 
@@ -212,7 +238,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         const { getStateManager } = await import('../StateManager.js');
         const stateManager = getStateManager();
         await stateManager.update(state.executionId, {
-          data: { planCreated: { tasks: plan.tasks, reasoning: plan.reasoning } }
+          data: { planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning } }
         });
       } catch (writeErr) {
         this.logger.warn('Failed to persist planCreated early; UI may show tasks late', {
@@ -221,16 +247,6 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           error: writeErr.message
         });
       }
-
-      // Plan-and-review namespacing: when this planner call runs INSIDE a
-      // review loop on round 1+, prefix every emitted task id (and
-      // matching dependsOn references) with `r{round}_`. Round 0 (the
-      // initial plan) keeps the LLM's ids as-is. The prefix is the
-      // safety net for an LLM that re-uses earlier round ids despite the
-      // round-extension instructions in the system prompt — without it,
-      // _taskResults[task.id] would silently overwrite the prior round's
-      // entry for the same id.
-      this._namespaceTaskIds(plan, activeReviewRound);
 
       // Materialize the plan into a runnable workflow definition
       const workflowDef = SubWorkflowMaterializer.materialize(plan, config, currentDepth);
@@ -337,7 +353,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // training data instead of grounding in the actual research.
         const childData = childResult.data || {};
         const bubbledUpdates = {
-          planCreated: { tasks: plan.tasks, reasoning: plan.reasoning }
+          planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning }
         };
 
         // Bubble up per-task timings AND persist the planner's own LLM-only
@@ -451,7 +467,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         { plan },
         {
           stateUpdates: {
-            planCreated: { tasks: plan.tasks, reasoning: plan.reasoning }
+            planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning }
           }
         }
       );
@@ -1111,6 +1127,36 @@ Output rules:
         });
       }
     }
+  }
+
+  /**
+   * Merge a re-plan round's tasks into the accumulated plan so the run-detail
+   * Tasks panel keeps every round's tasks visible. A review-loop round emits
+   * only the NEW gap-closing tasks; without this the prior round's tasks (whose
+   * results/logs still live in _taskResults/_stepLogs) would vanish from the
+   * UI, which renders solely from planCreated.tasks.
+   *
+   * De-dupes by task id, preserving first-seen order (prior rounds first, this
+   * round's new tasks appended). When the same id appears in both, the incoming
+   * entry wins (refreshed metadata) but keeps its original position. Cross-round
+   * id collisions don't happen in practice because _namespaceTaskIds prefixes
+   * round N≥1 ids with `r{N}_`. Tasks without an id are dropped — they can't be
+   * keyed or rendered as a stable row.
+   *
+   * @param {Array<Object>} priorTasks - Accumulated tasks from earlier rounds
+   * @param {Array<Object>} incomingTasks - This round's (namespaced) tasks
+   * @returns {Array<Object>} Merged, de-duped task list
+   * @private
+   */
+  _mergePlanTasks(priorTasks, incomingTasks) {
+    const byId = new Map();
+    for (const t of Array.isArray(priorTasks) ? priorTasks : []) {
+      if (t && t.id != null) byId.set(t.id, t);
+    }
+    for (const t of Array.isArray(incomingTasks) ? incomingTasks : []) {
+      if (t && t.id != null) byId.set(t.id, t);
+    }
+    return Array.from(byId.values());
   }
 
   /**

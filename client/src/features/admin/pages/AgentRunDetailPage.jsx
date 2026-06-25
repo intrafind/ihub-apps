@@ -126,7 +126,24 @@ export default function AgentRunDetailPage() {
     run?.data?._agent?.profileId || (run?.data?._workflow?.startedBy || '').replace(/^agent:/, '');
   const dynamicTasks = run?.data?._taskQueue || [];
   // Planner-emitted plan (static tasks materialized into the sub-workflow).
-  const planTasks = run?.data?.planCreated?.tasks || [];
+  // planCreated.tasks is accumulated across review rounds server-side
+  // (PlannerNodeExecutor._mergePlanTasks). Backstop for older runs — and any
+  // case where planCreated lags the results — recover tasks that have a result
+  // in _taskResults but are missing from planCreated.tasks, so a re-plan
+  // round's prior tasks stay visible. _taskResults entries carry
+  // { taskId, title, ... }; recovered tasks render as done (they're in
+  // taskResultsMap) and are listed before the current plan to preserve order.
+  const planCreatedTasks = run?.data?.planCreated?.tasks || [];
+  const planCreatedTaskIds = new Set(planCreatedTasks.map(t => t.id));
+  const recoveredPlanTasks = Object.values(run?.data?._taskResults || {})
+    .filter(r => r && r.taskId && !planCreatedTaskIds.has(r.taskId))
+    .map(r => ({
+      id: r.taskId,
+      title: r.title || r.taskId,
+      description: r.title || '',
+      _recoveredFromResults: true
+    }));
+  const planTasks = [...recoveredPlanTasks, ...planCreatedTasks];
   // Sub-workflow node lifecycle, used to derive live status for planner tasks.
   // Each task node fires workflow.node.start / .complete events with its own
   // nodeId — and that nodeId matches the planner task id (SubWorkflowMaterializer
