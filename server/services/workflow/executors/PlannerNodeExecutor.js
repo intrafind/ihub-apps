@@ -225,37 +225,12 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // Plan-and-review namespacing: when this planner call runs INSIDE a
       // review loop on round 1+, prefix every emitted task id (and
       // matching dependsOn references) with `r{round}_`. Round 0 (the
-      // initial plan) keeps the LLM's ids as today. The prefix is the
+      // initial plan) keeps the LLM's ids as-is. The prefix is the
       // safety net for an LLM that re-uses earlier round ids despite the
       // round-extension instructions in the system prompt — without it,
       // _taskResults[task.id] would silently overwrite the prior round's
       // entry for the same id.
-      if (activeReviewRound >= 1 && Array.isArray(plan?.tasks)) {
-        const prefix = `r${activeReviewRound}_`;
-        // First pass: collect every task id the LLM emitted on THIS round, so
-        // we know which dependsOn references point at same-round tasks
-        // (eligible for prefixing) vs. anything else (cross-round, left
-        // alone — _validatePlan already rejected unresolvable deps).
-        const sameRoundIds = new Set();
-        for (const task of plan.tasks) {
-          if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
-        }
-        // Second pass: re-id tasks; rewrite deps ONLY when they reference
-        // a same-round task id (or were already prefixed by the LLM).
-        for (const task of plan.tasks) {
-          if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
-            task.id = `${prefix}${task.id}`;
-          }
-          if (Array.isArray(task?.dependsOn)) {
-            task.dependsOn = task.dependsOn.map(dep => {
-              if (typeof dep !== 'string') return dep;
-              if (dep.startsWith(prefix)) return dep; // already prefixed
-              if (sameRoundIds.has(dep)) return `${prefix}${dep}`; // same-round
-              return dep; // cross-round ref — preserve as-is
-            });
-          }
-        }
-      }
+      this._namespaceTaskIds(plan, activeReviewRound);
 
       // Materialize the plan into a runnable workflow definition
       const workflowDef = SubWorkflowMaterializer.materialize(plan, config, currentDepth);
@@ -1090,6 +1065,52 @@ Output rules:
     }
     budget.used += incoming;
     return null;
+  }
+
+  /**
+   * Namespace every task id (and matching dependsOn references) in `plan` for
+   * the given review round.
+   *
+   * - Round 0 (the initial plan): ids are left unchanged for backward-compat.
+   * - Round N≥1: every task id that is not already prefixed `r{N}_` gets the
+   *   prefix `r{N}_`. Within-round dependsOn references are re-prefixed to
+   *   match; cross-round references (ids not emitted by THIS round) are left
+   *   as-is so they can still resolve against prior-round results.
+   *
+   * This is the safety net that ensures _taskResults / _stepLogs from one
+   * review round never overwrite entries from a different round.
+   *
+   * @param {Object} plan - The plan object (mutated in place)
+   * @param {number} reviewRound - The current review round (0-based)
+   * @returns {void}
+   * @private
+   */
+  _namespaceTaskIds(plan, reviewRound) {
+    if (reviewRound < 1 || !Array.isArray(plan?.tasks)) return;
+    const prefix = `r${reviewRound}_`;
+    // First pass: collect every task id the LLM emitted on THIS round, so
+    // we know which dependsOn references point at same-round tasks
+    // (eligible for prefixing) vs. anything else (cross-round, left
+    // alone — _validatePlan already rejected unresolvable deps).
+    const sameRoundIds = new Set();
+    for (const task of plan.tasks) {
+      if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
+    }
+    // Second pass: re-id tasks; rewrite deps ONLY when they reference
+    // a same-round task id (or were already prefixed by the LLM).
+    for (const task of plan.tasks) {
+      if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
+        task.id = `${prefix}${task.id}`;
+      }
+      if (Array.isArray(task?.dependsOn)) {
+        task.dependsOn = task.dependsOn.map(dep => {
+          if (typeof dep !== 'string') return dep;
+          if (dep.startsWith(prefix)) return dep; // already prefixed
+          if (sameRoundIds.has(dep)) return `${prefix}${dep}`; // same-round
+          return dep; // cross-round ref — preserve as-is
+        });
+      }
+    }
   }
 
   /**
