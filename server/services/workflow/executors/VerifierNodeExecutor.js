@@ -310,7 +310,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       );
       if (needsRevision) {
         const gaps = failures.length ? failures : feedback ? [feedback] : [];
-        if (gaps.length) stateUpdates._lastReviewGaps = gaps;
+        Object.assign(stateUpdates, this.buildReplanUpdates(state, gaps));
         // Progress tracking: compare this round's gap count to the previous one.
         // Strictly fewer gaps = the agent is fixing things → reset the stall
         // counter and keep revising. No improvement → increment stall; once it
@@ -389,6 +389,19 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       models[0] ||
       null
     );
+  }
+
+  /**
+   * Build the state updates that advance the review round and carry gaps to the
+   * planner on a conclusive retry. Pure (no I/O) so it can be unit-tested directly.
+   *
+   * @param {Object} state - Current workflow state (reads state.data._reviewRound)
+   * @param {string[]} gaps - Concrete defects found by the verifier
+   * @returns {{ _reviewRound: number, _lastReviewGaps: string[] }}
+   */
+  buildReplanUpdates(state, gaps) {
+    const round = (typeof state?.data?._reviewRound === 'number' ? state.data._reviewRound : 0) + 1;
+    return { _reviewRound: round, _lastReviewGaps: Array.isArray(gaps) ? gaps : [] };
   }
 
   interpretResult(parsed = {}, { mode = 'quality', threshold = 0.7 } = {}) {
