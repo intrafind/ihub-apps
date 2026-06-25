@@ -2190,6 +2190,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
+  /**
+   * Version a primary artifact name so re-runs (adversarial-review revisions)
+   * don't overwrite earlier drafts. The first write keeps the base name; each
+   * subsequent write gets `.v2`, `.v3`, … inserted before the extension:
+   * report.md → report.v2.md → report.v3.md (or `name.v2` if there's no ext).
+   * Pure (no I/O) so it can be unit-tested directly.
+   *
+   * @param {string} primaryName - The base artifact name (e.g. 'report.md')
+   * @param {number} priorCount - How many times this name was already written
+   * @returns {string} The name to write this time
+   * @private
+   */
+  _versionedArtifactName(primaryName, priorCount) {
+    if (!priorCount || priorCount < 1) return primaryName;
+    const dot = primaryName.lastIndexOf('.');
+    return dot > 0
+      ? `${primaryName.slice(0, dot)}.v${priorCount + 1}${primaryName.slice(dot)}`
+      : `${primaryName}.v${priorCount + 1}`;
+  }
+
   async _autoPersistResult({
     node,
     config,
@@ -2507,11 +2527,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           ? agentProfile.artifacts.primary
           : null) || 'report.md';
 
+      // The synthesizer re-runs on every adversarial-review revision round.
+      // Overwriting the same name would lose each round's compose (the run's
+      // drafting history). Version every attempt after the first: report.md,
+      // report.v2.md, report.v3.md — mirrors the primary-producer path below
+      // and shares the same _artifactVersions counter (keyed by primaryName).
+      const priorVersions = state?.data?._artifactVersions || {};
+      const priorCount = priorVersions[primaryName] || 0;
+      const versionedName = this._versionedArtifactName(primaryName, priorCount);
+      stateUpdates._artifactVersions = { ...priorVersions, [primaryName]: priorCount + 1 };
+
       if (runId) {
         try {
           await writeArtifactDirect({
             runId,
-            name: primaryName,
+            name: versionedName,
             content: textContent,
             contentType: 'text/markdown',
             profileId,
@@ -2522,7 +2552,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           this.logger.error('Auto-persist of synthesizer artifact failed', {
             component: 'PromptNodeExecutor',
             nodeId: node.id,
-            primaryName,
+            primaryName: versionedName,
             error: err.message
           });
         }
@@ -2643,13 +2673,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // report.v3.md — so each revision is preserved and legible.
       const priorVersions = state?.data?._artifactVersions || {};
       const priorCount = priorVersions[primaryName] || 0;
-      const dot = primaryName.lastIndexOf('.');
-      const versionedName =
-        priorCount === 0
-          ? primaryName
-          : dot > 0
-            ? `${primaryName.slice(0, dot)}.v${priorCount + 1}${primaryName.slice(dot)}`
-            : `${primaryName}.v${priorCount + 1}`;
+      const versionedName = this._versionedArtifactName(primaryName, priorCount);
       stateUpdates._artifactVersions = { ...priorVersions, [primaryName]: priorCount + 1 };
       if (runId && textContent) {
         try {
