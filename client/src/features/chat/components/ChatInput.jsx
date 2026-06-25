@@ -144,12 +144,12 @@ function ChatInput({
   // navigates emails or pins/unpins — not on every keystroke.
   const extraContextTokens = useEstimatedTokenCount(extraContextText || '', { debounceMs: 150 });
 
-  // Estimate how much of the model's context window the pending input (typed
-  // message + attached document content + host context) would consume. This is
-  // a live, client-side estimate using the shared tokenizer; the
-  // provider-reported count after each turn is authoritative. Only shown when
-  // the model exposes a context window and the user has actually
-  // entered/attached something.
+  // Estimate how much of the model's context window the pending input would
+  // consume. This is a live, client-side estimate using the shared tokenizer;
+  // the provider-reported count after each turn is authoritative. Only shown
+  // when the model exposes a context window and inputTokens is non-zero.
+  // Note: extraContextTokens (e.g. Outlook email body / pinned emails) can make
+  // inputTokens non-zero even when no text has been typed and no files attached.
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
