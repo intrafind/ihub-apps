@@ -20,6 +20,7 @@ import configCache from '../../configCache.js';
 import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
+import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
@@ -58,6 +59,30 @@ export function applyNodeModels(workflow, nodeModels) {
     if (node && typeof node.id === 'string' && nodeModels[node.id]) {
       node.config = { ...(node.config || {}), modelId: nodeModels[node.id] };
     }
+  }
+  return workflow;
+}
+
+/**
+ * Inject resolved review knobs onto every verifier node's config. Mirrors
+ * applyNodeModels: external workflows ignore profile flags, so the run-start
+ * code wires per-node config. Mutates and returns the workflow.
+ * @param {Object} workflow
+ * @param {Object} resolved - from resolveReviewSettings()
+ */
+export function applyReviewSettings(workflow, resolved) {
+  if (!workflow || !Array.isArray(workflow.nodes) || !resolved) return workflow;
+  for (const node of workflow.nodes) {
+    if (node?.type !== 'verifier') continue;
+    node.config = {
+      ...(node.config || {}),
+      maxRetries: resolved.maxRetries,
+      stallLimit: resolved.stallLimit,
+      acceptPartial: resolved.acceptPartial,
+      acceptPartialAfterStall: resolved.acceptPartialAfterStall,
+      requirePass: resolved.requirePass,
+      ...(resolved.criteria ? { criteria: resolved.criteria } : {})
+    };
   }
   return workflow;
 }
@@ -224,6 +249,10 @@ export default function registerAgentRunRoutes(app) {
             defaultModelId: profile.preferredModel || null,
             nodeModels: profile.nodeModels || {}
           },
+          // DURABLE review config — stashed in run state so it survives workflow
+          // config-cache refreshes and is available to all verifier nodes throughout
+          // the run (including in child sub-workflows via PlannerNodeExecutor copy).
+          _agentReviewConfig: resolveReviewSettings(profile.review),
           // Pre-initialize mutable state slots so they're shared by reference
           // between any state-snapshot that an in-flight async caller (e.g.
           // the fire-and-forget title generator) may have captured before
@@ -254,6 +283,10 @@ export default function registerAgentRunRoutes(app) {
         // Per-step model overrides (profile.nodeModels) win over the run-wide
         // default for the listed nodes.
         applyNodeModels(workflow, profile.nodeModels);
+        // Inject resolved review knobs onto every verifier node so EXTERNAL
+        // workflows (which don't reference profile flags directly) pick up the
+        // operator's strictness / retry / acceptance configuration.
+        applyReviewSettings(workflow, initialData._agentReviewConfig);
 
         // Persist a checkpoint after every node completes. Agent runs are
         // long-lived (each task is a multi-minute LLM call) and otherwise
@@ -682,6 +715,9 @@ export default function registerAgentRunRoutes(app) {
           ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
         };
         applyNodeModels(workflow, profile.nodeModels);
+        // Re-inject review knobs on resume so the re-fetched workflow's verifier
+        // nodes reflect the operator's current profile settings.
+        applyReviewSettings(workflow, resolveReviewSettings(profile.review));
 
         const newState = await getEngine().resumeFromTerminated(runId, {
           user: req.user,
