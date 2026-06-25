@@ -131,6 +131,9 @@
     "showTaskPane": "Show Task Pane",
     "insertIntoEmail": "Add to email",
     "insertIntoDocument": "Add to document",
+    "insertOptions": "More options",
+    "replyToEmail": "Reply to email",
+    "newEmail": "New email",
     "pinned": {
       "addEmails": "Add email(s)",
       "addEmailsTooltip": "Attach the open email — or every email you've selected in Outlook — to the chat",
