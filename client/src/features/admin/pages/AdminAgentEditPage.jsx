@@ -59,6 +59,7 @@ const BLANK_PROFILE = {
   dynamicTasks: { enabled: false, maxDepth: 3 },
   review: {
     enabled: false,
+    strictness: 'balanced',
     maxRounds: 3,
     modelId: '',
     system: { en: '' }
@@ -291,6 +292,8 @@ export default function AdminAgentEditPage() {
         if (typeof payload.review.modelId === 'string' && !payload.review.modelId.trim()) {
           delete payload.review.modelId;
         }
+        ['maxRounds', 'stallLimit'].forEach(k => { if (payload.review[k] == null || payload.review[k] === '') delete payload.review[k]; });
+        if (typeof payload.review.criteria === 'string' && !payload.review.criteria.trim()) delete payload.review.criteria;
       }
 
       if (isNew) {
@@ -922,6 +925,24 @@ export default function AdminAgentEditPage() {
               )}
             >
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewStrictness', 'Review strictness')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('admin.agents.edit.reviewStrictnessHint', 'How strict the adversarial review is and how many rounds it runs. Lenient: accept a partial result fast (2 rounds). Balanced: accept once gaps stop shrinking (4 rounds). Strict: require a full pass (6 rounds).')}
+                  </p>
+                  <select
+                    value={profile.review?.strictness || 'balanced'}
+                    onChange={e => handleReview({ strictness: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  >
+                    <option value="lenient">{t('admin.agents.edit.reviewLenient', 'Lenient')}</option>
+                    <option value="balanced">{t('admin.agents.edit.reviewBalanced', 'Balanced')}</option>
+                    <option value="strict">{t('admin.agents.edit.reviewStrict', 'Strict')}</option>
+                  </select>
+                </div>
+
                 <label className="flex items-start gap-2">
                   <input
                     type="checkbox"
@@ -953,22 +974,51 @@ export default function AdminAgentEditPage() {
 
                 <div>
                   <label className="block text-sm text-gray-600 dark:text-gray-400">
-                    {t('admin.agents.edit.reviewMaxRounds', 'Max rounds')}
+                    {t('admin.agents.edit.reviewMaxRounds', 'Max rounds (advanced, optional)')}
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     {t(
                       'admin.agents.edit.reviewMaxRoundsHint',
-                      'Hard cap on planner-reviewer iterations (1–5). The first round is the initial plan; subsequent rounds run only if the reviewer flags material gaps. Total tasks across all rounds remain bounded by the shared planner budget (default 100).'
+                      'Hard cap on planner-reviewer iterations (1–10). Leave blank to use the strictness preset. The first round is the initial plan; subsequent rounds run only if the reviewer flags material gaps. Total tasks across all rounds remain bounded by the shared planner budget (default 100).'
                     )}
                   </p>
                   <input
                     type="number"
                     min="1"
-                    max="5"
+                    max="10"
                     disabled={!profile.review?.enabled}
-                    value={profile.review?.maxRounds ?? 3}
-                    onChange={e => handleReview({ maxRounds: Number(e.target.value) || 3 })}
+                    value={profile.review?.maxRounds ?? ''}
+                    onChange={e => handleReview({ maxRounds: e.target.value === '' ? undefined : (Number(e.target.value) || undefined) })}
                     className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewStallLimit', 'Stall limit (advanced, optional)')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('admin.agents.edit.reviewStallLimitHint', 'Stop early after this many rounds with no reduction in gaps. Leave blank to use the strictness preset.')}
+                  </p>
+                  <input
+                    type="number" min="1" max="5"
+                    value={profile.review?.stallLimit ?? ''}
+                    onChange={e => handleReview({ stallLimit: e.target.value === '' ? undefined : (Number(e.target.value) || undefined) })}
+                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400">
+                    {t('admin.agents.edit.reviewCriteria', 'Acceptance criteria (advanced, optional)')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('admin.agents.edit.reviewCriteriaHint', 'Free-text description of what the reviewer should treat as "good enough" for this agent. Overrides the default review criteria.')}
+                  </p>
+                  <textarea
+                    rows={3}
+                    value={profile.review?.criteria || ''}
+                    onChange={e => handleReview({ criteria: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
 
