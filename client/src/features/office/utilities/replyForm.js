@@ -1,6 +1,7 @@
 /* global Office */
 
 import { isOutlookMailItemAvailable } from './outlookMailContext';
+import { isMailboxAvailable } from './officeCapabilities';
 import { marked } from 'marked';
 
 export function displayReplyFormWithAssistantResponse(assistantMarkdownText) {
@@ -52,8 +53,8 @@ export function displayReplyFormWithAssistantResponse(assistantMarkdownText) {
 }
 
 export function displayNewEmailFormWithAssistantResponse(assistantMarkdownText) {
-  if (!isOutlookMailItemAvailable()) {
-    window.alert('Insert is only available when you open this add-in from an email in Outlook.');
+  if (!isMailboxAvailable()) {
+    window.alert('Creating a new email is only available in Outlook.');
     return;
   }
 
