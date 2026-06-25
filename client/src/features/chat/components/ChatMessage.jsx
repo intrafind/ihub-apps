@@ -969,7 +969,11 @@ function ChatMessage({
                     aria-expanded={insertDropdownOpen}
                     title={t('office.insertOptions', 'More options')}
                   >
-                    <Icon name={insertDropdownOpen ? 'chevronUp' : 'chevronDown'} size="sm" className="text-white" />
+                    <Icon
+                      name={insertDropdownOpen ? 'chevronUp' : 'chevronDown'}
+                      size="sm"
+                      className="text-white"
+                    />
                   </button>
 
                   {insertDropdownOpen && (
