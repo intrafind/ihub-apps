@@ -17,7 +17,10 @@ import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
 import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
-import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
+import {
+  displayReplyFormWithAssistantResponse,
+  displayNewEmailFormWithAssistantResponse
+} from '../utilities/replyForm';
 import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
 import {
   fetchCurrentMailContext,
@@ -271,6 +274,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
 
   const handleInsert = useCallback(content => {
     displayReplyFormWithAssistantResponse(content);
+  }, []);
+
+  const handleInsertNew = useCallback(content => {
+    displayNewEmailFormWithAssistantResponse(content);
   }, []);
 
   const submitMessage = useCallback(
@@ -555,6 +562,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 editable={true}
                 compact={true}
                 onInsert={handleInsert}
+                onInsertNew={handleInsertNew}
                 insertAction={embeddedHost?.insertAction}
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}

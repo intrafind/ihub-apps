@@ -146,6 +146,9 @@
     "showTaskPane": "Aufgabenbereich anzeigen",
     "insertIntoEmail": "In E-Mail einfügen",
     "insertIntoDocument": "In Dokument einfügen",
+    "insertOptions": "Weitere Optionen",
+    "replyToEmail": "Auf E-Mail antworten",
+    "newEmail": "Neue E-Mail",
     "pinned": {
       "addEmails": "E-Mail(s) hinzufügen",
       "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",

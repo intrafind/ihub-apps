@@ -50,3 +50,29 @@ export function displayReplyFormWithAssistantResponse(assistantMarkdownText) {
 
   window.alert('Insert is not supported for this item type.');
 }
+
+export function displayNewEmailFormWithAssistantResponse(assistantMarkdownText) {
+  if (!isOutlookMailItemAvailable()) {
+    window.alert('Insert is only available when you open this add-in from an email in Outlook.');
+    return;
+  }
+
+  const html = marked.parse(assistantMarkdownText);
+
+  if (typeof Office.context.mailbox.displayNewMessageFormAsync === 'function') {
+    Office.context.mailbox.displayNewMessageFormAsync({ htmlBody: html }, result => {
+      if (result.status === Office.AsyncResultStatus.Failed) {
+        console.error('[iHub] displayNewMessageFormAsync failed:', result.error);
+        window.alert('Could not open new email form. ' + (result.error?.message || ''));
+      }
+    });
+    return;
+  }
+
+  if (typeof Office.context.mailbox.displayNewMessageForm === 'function') {
+    Office.context.mailbox.displayNewMessageForm({ htmlBody: html });
+    return;
+  }
+
+  window.alert('Creating a new email is not supported for this Outlook version.');
+}
