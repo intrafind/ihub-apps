@@ -690,6 +690,11 @@ function ChatMessage({
   // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
   const hasPendingClarification = message.clarification && !message.clarificationAnswered;
   const showBubble = !hasPendingClarification;
+  // Dropdown is email-specific: only show it when both onInsertNew is provided AND the
+  // insert action is for email (not Word/PowerPoint). This keeps the rounding and the
+  // dropdown chevron in sync regardless of how future hosts wire onInsertNew.
+  const showInsertDropdown =
+    Boolean(onInsertNew) && insertAction?.labelKey === 'office.insertIntoEmail';
 
   return (
     <div
@@ -941,11 +946,11 @@ function ChatMessage({
             }`}
           >
             <div className="relative flex w-full" ref={insertDropdownRef}>
-              {/* Main action button */}
+              {/* Main action button — square-right when the chevron is shown, fully rounded otherwise */}
               <button
                 type="button"
                 onClick={() => onInsert(message.content)}
-                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${onInsertNew ? 'rounded-l-md' : 'rounded-md'}`}
+                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
               >
                 <Icon name="arrow-right" size="sm" className="text-white" />
                 <span>
@@ -958,8 +963,8 @@ function ChatMessage({
                 </span>
               </button>
 
-              {/* Dropdown toggle — only shown when a "new email" handler is wired up */}
-              {onInsertNew && (
+              {/* Dropdown toggle — email hosts only (showInsertDropdown is false for Word/PowerPoint) */}
+              {showInsertDropdown && (
                 <>
                   <button
                     type="button"
