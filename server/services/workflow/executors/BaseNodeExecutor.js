@@ -330,6 +330,32 @@ export class BaseNodeExecutor {
   }
 
   /**
+   * Resolve the model id configured for this run from DURABLE run state.
+   *
+   * Agent runs publish their model config into `state.data._agentModelConfig`
+   * (`{ defaultModelId, nodeModels }`) at start. This lives in run state, so —
+   * unlike `workflow.config.defaultModelId` / per-node `config.modelId`, which
+   * are applied at runtime by mutating the shared cached workflow object — it
+   * SURVIVES the config cache's periodic TTL refresh (which reloads
+   * config/workflows.json from disk and discards runtime mutations). Resolvers
+   * use this as the fallback so a node always lands on the agent's configured
+   * model instead of silently dropping to the global default (e.g. local-vllm).
+   *
+   * Precedence: the node's own override (`nodeModels[nodeId]`) wins, else the
+   * run-wide default (`defaultModelId` = profile.preferredModel).
+   *
+   * @param {Object} state - Execution state (reads `state.data._agentModelConfig`)
+   * @param {string} [nodeId] - Node id, for a per-node override lookup
+   * @returns {string|null} The configured model id, or null if none is set
+   */
+  resolveConfiguredModelId(state, nodeId) {
+    const cfg = state?.data?._agentModelConfig;
+    if (!cfg) return null;
+    if (nodeId && cfg.nodeModels && cfg.nodeModels[nodeId]) return cfg.nodeModels[nodeId];
+    return cfg.defaultModelId || null;
+  }
+
+  /**
    * Build the state updates that record a node's step transcript for auditing,
    * preserving EVERY iteration instead of overwriting.
    *

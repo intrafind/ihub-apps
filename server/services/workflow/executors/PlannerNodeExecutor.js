@@ -91,7 +91,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       let plan;
       const maxReplans = 1;
       for (let attempt = 0; attempt <= maxReplans; attempt++) {
-        plan = await this._generatePlan(goal, config, state, context, stepLog);
+        plan = await this._generatePlan(goal, config, state, context, stepLog, node.id);
 
         const requested = Array.isArray(plan?.activate_then_replan)
           ? plan.activate_then_replan.filter(s => typeof s === 'string')
@@ -571,13 +571,20 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
    * @throws {Error} If no model is available or LLM response cannot be parsed
    * @private
    */
-  async _generatePlan(goal, config, state, context, stepLog) {
+  async _generatePlan(goal, config, state, context, stepLog, nodeId) {
     const { language = 'en' } = context;
 
-    // Resolve which model to use for planning
+    // Resolve which model to use for planning. config.modelId may have been
+    // wiped by a config-cache TTL refresh (it's applied at runtime by mutating
+    // the shared cached workflow), so fall back to the DURABLE per-run agent
+    // model config before the global default — otherwise planning silently
+    // drops to local-vllm and overflows its small context on re-plan rounds.
     const { data: models } = configCache.getModels();
+    const configuredModelId = config.modelId || this.resolveConfiguredModelId(state, nodeId);
     const model =
-      models?.find(m => m.id === config.modelId) || models?.find(m => m.default) || models?.[0];
+      (configuredModelId && models?.find(m => m.id === configuredModelId)) ||
+      models?.find(m => m.default) ||
+      models?.[0];
 
     if (!model) {
       throw new Error('No model available for planning');

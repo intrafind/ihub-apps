@@ -239,9 +239,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Get model configuration first — buildMessages uses it to decide
       // whether image attachments are appropriate for this model.
-      const model = await this.getModel(config.modelId, context, state);
+      // config.modelId may have been wiped by a config-cache TTL refresh (it's
+      // applied at runtime by mutating the shared cached workflow). Fall back to
+      // the durable per-run agent model config so we don't drop to local-vllm.
+      const resolvedModelId = config.modelId || this.resolveConfiguredModelId(state, node.id);
+      const model = await this.getModel(resolvedModelId, context, state);
       if (!model) {
-        return this.createErrorResult(`Model not found: ${config.modelId || 'default'}`, {
+        return this.createErrorResult(`Model not found: ${resolvedModelId || 'default'}`, {
           nodeId: node.id
         });
       }
@@ -1175,9 +1179,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       return null;
     }
 
-    // 1. Use model from node config if specified
+    // 1. Use model from node config if specified. If the configured model
+    //    isn't in the enabled set (e.g. its id was wiped/changed), fall
+    //    through to the durable fallbacks below rather than failing the node.
     if (modelId) {
-      return models.find(m => m.id === modelId);
+      const configured = models.find(m => m.id === modelId);
+      if (configured) return configured;
     }
 
     // 2. Check for model override from initial data (user selection at start)
@@ -1189,8 +1196,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    // 3. Check workflow-level defaultModelId
-    const workflowDefaultModelId = context.workflow?.config?.defaultModelId;
+    // 3. Check workflow-level defaultModelId, then the DURABLE per-run agent
+    //    model config (state survives the config-cache TTL refresh that wipes
+    //    the runtime-applied workflow.config.defaultModelId).
+    const workflowDefaultModelId =
+      context.workflow?.config?.defaultModelId || this.resolveConfiguredModelId(state);
     if (workflowDefaultModelId) {
       const workflowModel = models.find(m => m.id === workflowDefaultModelId);
       if (workflowModel) {

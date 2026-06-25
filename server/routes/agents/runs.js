@@ -212,6 +212,18 @@ export default function registerAgentRunRoutes(app) {
             triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' },
             artifacts: []
           },
+          // DURABLE model config for the whole run. `applyNodeModels` and
+          // `workflow.config.defaultModelId` mutate the shared cached workflow
+          // object, which the config cache's TTL refresh later discards —
+          // dropping every node back to the global default (local-vllm). Stash
+          // the agent's configured model in run state (which survives the
+          // refresh) so resolvers always land on the configured model. Copied
+          // into child sub-workflows automatically (see PlannerNodeExecutor's
+          // childInitial copy), so planner sub-tasks inherit it too.
+          _agentModelConfig: {
+            defaultModelId: profile.preferredModel || null,
+            nodeModels: profile.nodeModels || {}
+          },
           // Pre-initialize mutable state slots so they're shared by reference
           // between any state-snapshot that an in-flight async caller (e.g.
           // the fire-and-forget title generator) may have captured before

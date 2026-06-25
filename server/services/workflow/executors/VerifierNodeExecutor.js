@@ -179,7 +179,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       // the verifier runs on the SAME model the operator configured for the run
       // — not the global default. A per-node `config.modelId` still overrides.
       const { data: models } = configCache.getModels();
-      const model = this.resolveModel(models, config, context);
+      const model = this.resolveModel(models, config, context, state, node.id);
 
       if (!model) {
         return this.createErrorResult('No model available for verification', { nodeId: node.id });
@@ -379,12 +379,15 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    * @param {Object} context - execution context (carries workflow.config)
    * @returns {Object|null}
    */
-  resolveModel(models, config = {}, context = {}) {
+  resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {
     if (!Array.isArray(models) || models.length === 0) return null;
     const byId = id => (id ? models.find(m => m.id === id) : null);
     return (
       byId(config.modelId) ||
       byId(context?.workflow?.config?.defaultModelId) ||
+      // DURABLE per-run agent model config — survives the config-cache TTL
+      // refresh that wipes the runtime-applied workflow defaultModelId.
+      byId(this.resolveConfiguredModelId(state, nodeId)) ||
       models.find(m => m.default) ||
       models[0] ||
       null
