@@ -5,6 +5,7 @@ import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import StepDetails from '../components/StepDetails';
+import { aggregateTokenUsage, formatTokenCount } from '../utils/tokenStats';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import {
@@ -316,6 +317,9 @@ export default function AgentRunDetailPage() {
   function logFor(nodeId) {
     return stepLogs[nodeId] || null;
   }
+  // Run-level token usage rolled up from every step's recorded tokens, for the
+  // Token usage summary card. Per-step numbers also render in the steps table.
+  const tokenUsage = aggregateTokenUsage(stepLogs);
   // Full per-iteration history for a node (the agent / verifier re-run across
   // rounds). Falls back to the single latest transcript for nodes that run once
   // (inbox-load / finalize). Used to render every round, not just the last.
@@ -896,8 +900,8 @@ export default function AgentRunDetailPage() {
           {run?.data?._verificationOutcome === 'not_passed' && (
             <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded text-sm text-amber-900 dark:text-amber-200">
               <span className="font-medium">Review not passed.</span> The adversarial verifier still
-              found gaps after every revision, so this run did not pass review. The deliverable below
-              is preserved for inspection and the inbox item was left open.
+              found gaps after every revision, so this run did not pass review. The deliverable
+              below is preserved for inspection and the inbox item was left open.
               {run?.data?.verificationResult?.feedback && (
                 <div className="mt-2 text-xs text-amber-800 dark:text-amber-300">
                   Last review: {run.data.verificationResult.feedback}
@@ -989,6 +993,64 @@ export default function AgentRunDetailPage() {
                 </div>
               </div>
 
+              {tokenUsage.llmStepCount > 0 && (
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                    Token usage
+                  </h2>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Input</div>
+                      <div
+                        className="font-mono text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.totalInput.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.totalInput)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Output</div>
+                      <div
+                        className="font-mono text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.totalOutput.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.totalOutput)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+                      <div
+                        className="font-mono font-semibold text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.total.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.total)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">LLM steps</div>
+                      <div className="font-mono text-gray-900 dark:text-gray-100">
+                        {tokenUsage.llmStepCount}
+                      </div>
+                    </div>
+                  </div>
+                  {Object.keys(tokenUsage.byModel).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      {Object.entries(tokenUsage.byModel).map(([model, u]) => (
+                        <div key={model} className="flex justify-between gap-4">
+                          <span className="font-mono">{model}</span>
+                          <span className="font-mono whitespace-nowrap">
+                            {formatTokenCount(u.input)} in / {formatTokenCount(u.output)} out
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 italic">
+                    Input is summed across each step&apos;s agent iterations, not a single prompt.
+                  </p>
+                </div>
+              )}
+
               {currentInboxItem && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-gray-100">
@@ -1047,6 +1109,7 @@ export default function AgentRunDetailPage() {
                         <th className="text-left py-1">Status</th>
                         <th className="text-left py-1 whitespace-nowrap">Started</th>
                         <th className="text-left py-1 whitespace-nowrap">Duration</th>
+                        <th className="text-left py-1 whitespace-nowrap">Tokens (in/out)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1064,6 +1127,9 @@ export default function AgentRunDetailPage() {
                         const isExpanded = expandedSteps.has(t.nodeId);
                         const logHistory = historyFor(t.nodeId);
                         const hasDetails = logHistory.length > 0;
+                        const rowTokens = (t.log || logFor(t.nodeId))?.tokens;
+                        const hasRowTokens =
+                          rowTokens && (rowTokens.input > 0 || rowTokens.output > 0);
                         return (
                           <Fragment key={t.key}>
                             <tr
@@ -1079,7 +1145,9 @@ export default function AgentRunDetailPage() {
                               </td>
                               <td
                                 className="py-2 pr-3"
-                                style={t.depth ? { paddingLeft: `${t.depth * 1.25}rem` } : undefined}
+                                style={
+                                  t.depth ? { paddingLeft: `${t.depth * 1.25}rem` } : undefined
+                                }
                               >
                                 {(isCurrent || t.status === 'in_progress') && (
                                   <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
@@ -1112,15 +1180,27 @@ export default function AgentRunDetailPage() {
                               <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
                                 {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
                               </td>
-                              <td className="py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              <td className="py-2 pr-3 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                 {typeof t.timing?.durationMs === 'number'
                                   ? formatDuration(t.timing.durationMs)
                                   : '—'}
                               </td>
+                              <td className="py-2 text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                {hasRowTokens ? (
+                                  <span
+                                    title={`${(rowTokens.input || 0).toLocaleString()} in / ${(rowTokens.output || 0).toLocaleString()} out`}
+                                  >
+                                    {formatTokenCount(rowTokens.input || 0)} /{' '}
+                                    {formatTokenCount(rowTokens.output || 0)}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
                             </tr>
                             {hasDetails && isExpanded && (
                               <tr className="bg-gray-50/50 dark:bg-gray-700/30">
-                                <td colSpan={6} className="px-0 pt-0 pb-2">
+                                <td colSpan={7} className="px-0 pt-0 pb-2">
                                   {/* Per-round audit timeline — LIGHT summaries
                                       (no transcripts), so it stays cheap no
                                       matter how many rounds ran. */}
@@ -1134,17 +1214,35 @@ export default function AgentRunDetailPage() {
                                           <span className="font-semibold text-indigo-700 dark:text-indigo-300">
                                             Round {entry.iteration ?? i + 1}
                                           </span>
-                                          {entry.verdict ? ` · ${entry.verdict}` : ''}
+                                          {entry.verdict && (
+                                            <>
+                                              {' · '}
+                                              <span
+                                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                                  entry.verdict === 'PASS'
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                                    : entry.verdict === 'PARTIAL'
+                                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300'
+                                                      : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                                }`}
+                                              >
+                                                {entry.verdict}
+                                              </span>
+                                            </>
+                                          )}
                                           {typeof entry.durationMs === 'number'
                                             ? ` · ${formatDuration(entry.durationMs)}`
                                             : ''}
-                                          {entry.toolCount ? ` · ${entry.toolCount} tool calls` : ''}
-                                          {Array.isArray(entry.toolNames) && entry.toolNames.length > 0 && (
-                                            <span className="text-gray-500 dark:text-gray-400">
-                                              {' '}
-                                              ({entry.toolNames.join(', ')})
-                                            </span>
-                                          )}
+                                          {entry.toolCount
+                                            ? ` · ${entry.toolCount} tool calls`
+                                            : ''}
+                                          {Array.isArray(entry.toolNames) &&
+                                            entry.toolNames.length > 0 && (
+                                              <span className="text-gray-500 dark:text-gray-400">
+                                                {' '}
+                                                ({entry.toolNames.join(', ')})
+                                              </span>
+                                            )}
                                           {Array.isArray(entry.planSnapshot) &&
                                             entry.planSnapshot.length > 0 && (
                                               <div className="text-gray-500 dark:text-gray-400">
@@ -1154,10 +1252,21 @@ export default function AgentRunDetailPage() {
                                                   .join(' · ')}
                                               </div>
                                             )}
-                                          {entry.outputExcerpt && (
-                                            <div className="text-gray-500 dark:text-gray-400 italic truncate">
-                                              {entry.outputExcerpt}
-                                            </div>
+                                          {Array.isArray(entry.failures) &&
+                                          entry.failures.length > 0 ? (
+                                            <ul className="mt-1 ml-1 list-disc list-inside space-y-1 text-gray-600 dark:text-gray-300">
+                                              {entry.failures.map((f, fi) => (
+                                                <li key={fi} className="whitespace-pre-wrap">
+                                                  {f}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            entry.outputExcerpt && (
+                                              <div className="text-gray-500 dark:text-gray-400 italic truncate">
+                                                {entry.outputExcerpt}
+                                              </div>
+                                            )
                                           )}
                                         </div>
                                       ))}
@@ -1165,7 +1274,9 @@ export default function AgentRunDetailPage() {
                                   )}
                                   {/* Full transcript of the LATEST round only
                                       (one copy kept server-side). */}
-                                  <StepDetails log={logFor(t.nodeId) || logHistory[logHistory.length - 1]} />
+                                  <StepDetails
+                                    log={logFor(t.nodeId) || logHistory[logHistory.length - 1]}
+                                  />
                                 </td>
                               </tr>
                             )}
