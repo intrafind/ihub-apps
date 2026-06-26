@@ -424,6 +424,16 @@ export class BaseNodeExecutor {
             : undefined,
       citationsAdded: stepLog.citationsAdded,
       planSnapshot: stepLog.planSnapshot,
+      // Verifier defects, bounded for the per-round history so the
+      // adversarial-review panel can render a readable failure list per round
+      // (instead of a truncated raw-JSON blob) without bloating state: cap the
+      // count and clip each item. Omitted entirely when there are no failures.
+      failures: Array.isArray(stepLog.failures)
+        ? stepLog.failures
+            .filter(f => typeof f === 'string')
+            .slice(0, 12)
+            .map(f => (f.length > 600 ? `${f.slice(0, 600)}…` : f))
+        : undefined,
       outputExcerpt: typeof stepLog.output === 'string' ? stepLog.output.slice(0, 500) : undefined
     };
   }

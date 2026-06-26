@@ -117,15 +117,23 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       const currentStall = state.data?.[stallKey] || 0;
       const STALL_LIMIT = config.stallLimit ?? state.data?._agentReviewConfig?.stallLimit ?? 2;
       const reviewKnobs = {
-        acceptPartial: config.acceptPartial ?? state.data?._agentReviewConfig?.acceptPartial ?? false,
-        acceptPartialAfterStall: config.acceptPartialAfterStall ?? state.data?._agentReviewConfig?.acceptPartialAfterStall ?? true,
+        acceptPartial:
+          config.acceptPartial ?? state.data?._agentReviewConfig?.acceptPartial ?? false,
+        acceptPartialAfterStall:
+          config.acceptPartialAfterStall ??
+          state.data?._agentReviewConfig?.acceptPartialAfterStall ??
+          true,
         requirePass: config.requirePass ?? state.data?._agentReviewConfig?.requirePass ?? false
       };
 
       const stalledOut = currentStall >= STALL_LIMIT;
       const retriesOut = currentRetries >= maxRetries;
       if (stalledOut || retriesOut) {
-        const acceptOnStall = stalledOut && !retriesOut && reviewKnobs.acceptPartialAfterStall && !reviewKnobs.requirePass;
+        const acceptOnStall =
+          stalledOut &&
+          !retriesOut &&
+          reviewKnobs.acceptPartialAfterStall &&
+          !reviewKnobs.requirePass;
         // When gaps have stalled (no improvement) and the knobs allow it, accept
         // the best draft we have rather than discarding it. Routes to inbox-finalize
         // (branch:'pass') so the inbox item is marked done with the current draft.
@@ -136,7 +144,13 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
             nodeId: node.id
           });
           return this.createSuccessResult(
-            { passed: true, branch: 'pass', verdict: 'PARTIAL', feedback: 'Accepted after gaps stalled', score: 0.7 },
+            {
+              passed: true,
+              branch: 'pass',
+              verdict: 'PARTIAL',
+              feedback: 'Accepted after gaps stalled',
+              score: 0.7
+            },
             {
               stateUpdates: {
                 verificationResult: {
@@ -307,7 +321,13 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
       // lenient modes can accept a PARTIAL immediately; strict (requirePass)
       // never accepts a PARTIAL. Stall-based acceptance is handled in the
       // terminal block above (stalled:false here avoids double-handling).
-      const { accept } = this.resolveAcceptance({ verdict, passed, conclusive, stalled: false, knobs: reviewKnobs });
+      const { accept } = this.resolveAcceptance({
+        verdict,
+        passed,
+        conclusive,
+        stalled: false,
+        knobs: reviewKnobs
+      });
       const needsRevision = !accept && conclusive && !passed;
       const branch = needsRevision ? 'retry' : 'pass';
       const inconclusive = !conclusive;
@@ -323,6 +343,10 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         durationMs,
         verdict,
         conclusive,
+        // Concrete defects the verifier found, so the per-round history (and the
+        // adversarial-review panel) can show a readable failure list instead of
+        // a truncated raw-JSON blob. _summarizeStepLogForHistory bounds these.
+        failures: Array.isArray(failures) ? failures : [],
         // The raw model output is the audit trail — without it an operator
         // can't tell WHY a verdict came out the way it did (the missing piece
         // when the verifier silently defaulted to FAIL).
