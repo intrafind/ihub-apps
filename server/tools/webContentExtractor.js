@@ -9,25 +9,6 @@ import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils
 
 const dnsLookupAsync = dns.promises.lookup;
 
-/**
- * Hard server-side ceiling on returned content length. The model may request
- * a larger `maxLength` (observed: 30000), but a single tool result that large
- * gets re-billed on every subsequent agent iteration. Clamp it.
- */
-export const MAX_CONTENT_CEILING = 10000;
-
-/**
- * Resolve the effective maxLength: a valid positive request, clamped to the
- * ceiling; otherwise the 5000 default.
- * @param {number} [requested]
- * @returns {number}
- */
-export function clampMaxLength(requested) {
-  const n = Number(requested);
-  if (!Number.isFinite(n) || n <= 0) return 5000;
-  return Math.min(n, MAX_CONTENT_CEILING);
-}
-
 // IPv4 and IPv6 private/internal address patterns
 const PRIVATE_IP_RE = [
   /^127\./, // 127.0.0.0/8 loopback
@@ -85,9 +66,6 @@ export default async function webContentExtractor({
   ignoreSSL = null,
   chatId
 }) {
-  // Clamp the caller-requested length to the server-side ceiling.
-  maxLength = clampMaxLength(maxLength);
-
   actionTracker.trackToolCallStart(chatId, {
     toolName: 'webContentExtractor',
     toolInput: { url: url || uri || link }
