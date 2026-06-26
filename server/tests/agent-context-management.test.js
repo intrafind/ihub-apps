@@ -62,7 +62,10 @@ async function run() {
     const res = cs.microcompactMessages(messages, { keepRecent: 4 });
     check('frees chars from the bulky old tool result', res.freedChars >= 3000);
     check('collapses exactly one message', res.collapsed === 1);
-    check('never touches system/user prompts', res.messages[0].content === 'sys' && res.messages[1].content === 'do it');
+    check(
+      'never touches system/user prompts',
+      res.messages[0].content === 'sys' && res.messages[1].content === 'do it'
+    );
     check('preserves the last keepRecent messages verbatim', res.messages[6].content === 'c');
     check(
       'collapsed message carries an elision marker',
@@ -73,6 +76,52 @@ async function run() {
     const short = [{ role: 'tool', content: 'tiny' }];
     const res = cs.microcompactMessages(short, { keepRecent: 4 });
     check('no-op when below keepRecent', res.freedChars === 0 && res.collapsed === 0);
+  }
+
+  console.log('\n🧪 compactIfOversized\n');
+  {
+    const big = 'x'.repeat(8000); // ~2000 tokens each
+    const small = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'task' },
+      { role: 'tool', content: 'short result' }
+    ];
+    const under = cs.compactIfOversized(small, { thresholdTokens: 16000 });
+    check('no-op when under threshold', under.compacted === false && under.collapsed === 0);
+    check('returns original messages untouched under threshold', under.messages === small);
+
+    const heavy = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'task' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 't1' }] },
+      { role: 'tool', content: big },
+      { role: 'assistant', content: null, tool_calls: [{ id: 't2' }] },
+      { role: 'tool', content: big },
+      { role: 'assistant', content: null, tool_calls: [{ id: 't3' }] },
+      { role: 'tool', content: big },
+      { role: 'assistant', content: null, tool_calls: [{ id: 't4' }] },
+      { role: 'tool', content: big }
+    ];
+    const over = cs.compactIfOversized(heavy, { thresholdTokens: 4000, keepRecent: 4 });
+    check('compacts when over threshold', over.compacted === true && over.collapsed > 0);
+    check('frees characters', over.freedChars > 0);
+    check('system prompt never elided', over.messages[0].content === 'sys');
+    check('user prompt never elided', over.messages[1].content === 'task');
+    check(
+      'last keepRecent messages kept verbatim',
+      over.messages[over.messages.length - 1].content === big
+    );
+    check(
+      'old tool body elided to placeholder',
+      typeof over.messages[3].content === 'string' && over.messages[3].content.includes('elided')
+    );
+    check(
+      'assistant tool_calls structure preserved',
+      Array.isArray(over.messages[2].tool_calls) && over.messages[2].tool_calls[0].id === 't1'
+    );
+    // Idempotent: running again does nothing new (placeholders are now small).
+    const again = cs.compactIfOversized(over.messages, { thresholdTokens: 4000, keepRecent: 4 });
+    check('idempotent on already-compacted input', again.collapsed === 0);
   }
 
   console.log('\n🧪 reactive recovery in executeLLMWithTools\n');
@@ -92,7 +141,11 @@ async function run() {
       }
     };
     const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
-    const context = { language: 'en', _agentProfile: { budgets: {} }, _workflowState: { data: {} } };
+    const context = {
+      language: 'en',
+      _agentProfile: { budgets: {} },
+      _workflowState: { data: {} }
+    };
     const res = await executor.executeLLMWithTools({
       model: { id: 'm', provider: 'openai', maxOutputTokens: 4096 },
       messages: [
@@ -126,7 +179,11 @@ async function run() {
       }
     };
     const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
-    const context = { language: 'en', _agentProfile: { budgets: {} }, _workflowState: { data: {} } };
+    const context = {
+      language: 'en',
+      _agentProfile: { budgets: {} },
+      _workflowState: { data: {} }
+    };
     let threw = false;
     try {
       await executor.executeLLMWithTools({
@@ -143,7 +200,11 @@ async function run() {
     } catch (e) {
       threw = e.message.includes('context length');
     }
-    check('throws when no chars can be freed (no infinite loop)', threw && calls === 1, `calls=${calls}`);
+    check(
+      'throws when no chars can be freed (no infinite loop)',
+      threw && calls === 1,
+      `calls=${calls}`
+    );
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

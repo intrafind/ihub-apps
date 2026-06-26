@@ -155,6 +155,42 @@ export class ContextSummarizer {
   }
 
   /**
+   * Proactively microcompact a message array WHEN it exceeds a token
+   * threshold — the cure for O(N²) prompt growth in a tool-heavy loop on
+   * large-window models (where the reactive overflow path never fires).
+   *
+   * Pure: estimates the current size, and only when it exceeds
+   * `thresholdTokens` does it collapse old bulky tool/assistant bodies via
+   * `microcompactMessages`. Under the threshold it returns the original array
+   * untouched (referential identity preserved) so callers can cheaply detect
+   * the no-op. Idempotent: already-collapsed placeholders are below `maxChars`
+   * and won't be touched again.
+   *
+   * @param {Array<Object>} messages
+   * @param {Object} [opts]
+   * @param {number} [opts.thresholdTokens=16000] - compact only above this size
+   * @param {number} [opts.keepRecent=6] - trailing messages kept verbatim
+   * @param {number} [opts.maxChars=2000] - collapse bodies longer than this
+   * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number, compacted: boolean }}
+   */
+  compactIfOversized(messages, opts = {}) {
+    const thresholdTokens = opts.thresholdTokens ?? 16000;
+    const keepRecent = opts.keepRecent ?? 6;
+    const maxChars = opts.maxChars ?? 2000;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return { messages, freedChars: 0, collapsed: 0, compacted: false };
+    }
+    const totalText = messages
+      .map(m => (typeof m?.content === 'string' ? m.content : ''))
+      .join(' ');
+    if (this.estimateTokens(totalText) <= thresholdTokens) {
+      return { messages, freedChars: 0, collapsed: 0, compacted: false };
+    }
+    const result = this.microcompactMessages(messages, { keepRecent, maxChars });
+    return { ...result, compacted: result.collapsed > 0 };
+  }
+
+  /**
    * Check whether the current workflow state has accumulated enough
    * node results to warrant summarization.
    *
