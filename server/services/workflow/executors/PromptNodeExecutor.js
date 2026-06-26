@@ -1578,6 +1578,27 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         currentMessages.push(toolResult);
       }
 
+      // Proactively compact the in-flight history once it grows large, so old
+      // (already-consumed) tool-result bodies are not re-billed on every
+      // subsequent iteration — the O(N²) prompt-token fix. Citations are
+      // already persisted to _citations and the audit preview to the step log,
+      // so eliding the raw bodies here loses nothing durable. Reactive
+      // overflow recovery (the catch above) remains as a backstop.
+      const compaction = this.contextSummarizer.compactIfOversized(currentMessages, {
+        thresholdTokens: config.compactThresholdTokens ?? 16000,
+        keepRecent: config.compactKeepRecent ?? 6
+      });
+      if (compaction.compacted) {
+        currentMessages = compaction.messages;
+        this.logger.info('Proactively compacted agent context', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          iteration,
+          collapsed: compaction.collapsed,
+          freedChars: compaction.freedChars
+        });
+      }
+
       // Budget gate: if the run has spent its token budget, answer this round's
       // tool calls (done above) then nudge the model to wrap up — one final
       // tool-less turn produces the answer instead of more tool calls.
