@@ -349,16 +349,31 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             const failedChildData = childResult.data || {};
             const partial = {};
             if (failedChildData._taskResults && typeof failedChildData._taskResults === 'object') {
-              partial._taskResults = { ...(state?.data?._taskResults || {}), ...failedChildData._taskResults };
+              partial._taskResults = {
+                ...(state?.data?._taskResults || {}),
+                ...failedChildData._taskResults
+              };
             }
             if (failedChildData._stepLogs && typeof failedChildData._stepLogs === 'object') {
-              partial._stepLogs = { ...(state?.data?._stepLogs || {}), ...failedChildData._stepLogs };
+              partial._stepLogs = {
+                ...(state?.data?._stepLogs || {}),
+                ...failedChildData._stepLogs
+              };
             }
             if (failedChildData._taskTimings && typeof failedChildData._taskTimings === 'object') {
-              partial._taskTimings = { ...(state?.data?._taskTimings || {}), ...failedChildData._taskTimings };
+              partial._taskTimings = {
+                ...(state?.data?._taskTimings || {}),
+                ...failedChildData._taskTimings
+              };
             }
-            if (Array.isArray(failedChildData._citations) && failedChildData._citations.length > 0) {
-              partial._citations = [...(state?.data?._citations || []), ...failedChildData._citations];
+            if (
+              Array.isArray(failedChildData._citations) &&
+              failedChildData._citations.length > 0
+            ) {
+              partial._citations = [
+                ...(state?.data?._citations || []),
+                ...failedChildData._citations
+              ];
             }
             if (Object.keys(partial).length > 0) {
               const { getStateManager } = await import('../StateManager.js');
@@ -943,6 +958,15 @@ Output rules:
       properties: plannerSchemaProperties,
       required: ['tasks']
     };
+    // Output-token budget: NEVER hardcode this. A thinking model
+    // (gemini-3-flash, gemini-flash-latest) counts its reasoning tokens
+    // against the output budget, so a small fixed cap (the old 8192) gets
+    // entirely consumed by 30s+ of thinking and the answer JSON is truncated
+    // mid-stream → "Failed to parse plan". Derive from the explicit node
+    // config, then the resolved model's own maxOutputTokens (32k on
+    // gemini-flash-latest), with 8192 only as a last-resort floor. Mirrors
+    // PromptNodeExecutor's `config.maxTokens || model.maxOutputTokens || …`.
+    const maxTokens = config.maxTokens || model.maxOutputTokens || 8192;
     const response = await this.llmHelper.executeStreamingRequest({
       model,
       messages,
@@ -951,7 +975,7 @@ Output rules:
         temperature: 0.7,
         responseFormat: 'json',
         responseSchema: plannerResponseSchema,
-        maxTokens: 8192
+        maxTokens
       },
       language
     });
