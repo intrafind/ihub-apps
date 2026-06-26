@@ -531,3 +531,10 @@ The audit log no longer records a `POST /api/session/start -> 200` entry every t
 
 - Session-start requests are now excluded from the generic audit safety-net, matching how chat, inference, and page reads are already treated.
 - Login and logout continue to be audited via their own explicit hooks — no change to security-relevant events.
+
+## Fix — Session Expiry in the Admin Area Returns You to the Same Page
+
+When an admin's session expires while they are working in the admin panel, signing back in through the login dialog now returns them to the admin page they were on, instead of dropping them on the application home screen.
+
+- Previously an expired session triggered a hard redirect to the home page the moment an admin request failed, so the login dialog opened on the home screen and admins had to navigate all the way back into the admin area after re-authenticating.
+- The admin panel now uses the same in-place re-authentication as the rest of the app: the login dialog appears over the current page, and after signing in the admin stays exactly where they were. This also covers file-upload (multipart) admin requests, which previously bypassed the re-authentication prompt entirely.
