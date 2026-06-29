@@ -19,6 +19,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
+import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
 import { actionTracker } from '../../../actionTracker.js';
 
@@ -510,7 +511,16 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // look up). Citations are the runtime ledger of URLs the agent
         // actually consulted; sources is the configured catalog.
         if (Array.isArray(childData._citations) && childData._citations.length > 0) {
-          bubbledUpdates._citations = [...(state?.data?._citations || []), ...childData._citations];
+          // Dedup on merge. The child was seeded with a COPY of the parent's
+          // _citations (childInitial copies it), and concatenating the child's
+          // full ledger back would re-add every parent entry — doubling the
+          // ledger each round (run wf-exec-78d4c018: a URL stored 2^rounds = 64
+          // times). dedupeCitations collapses the copy + trivial URL variants,
+          // keeping first-seen order so citation ordering stays stable.
+          bubbledUpdates._citations = dedupeCitations([
+            ...(state?.data?._citations || []),
+            ...childData._citations
+          ]);
         }
 
         // Optional output variable points at the synthesized output (if the

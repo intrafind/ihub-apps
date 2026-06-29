@@ -22,6 +22,7 @@ import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
+import { dedupeCitations } from '../citationUtils.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -3269,22 +3270,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   _formatCitations(state) {
     const citations = state?.data?._citations;
     if (!Array.isArray(citations) || citations.length === 0) return '';
-    const seen = new Set();
-    const ordered = [];
-    for (const c of citations) {
-      if (!c || typeof c !== 'object' || typeof c.url !== 'string') continue;
-      if (seen.has(c.url)) continue;
-      seen.add(c.url);
-      ordered.push(c);
-    }
+    const ordered = dedupeCitations(citations);
     if (ordered.length === 0) return '';
+    // Render as an UNNUMBERED pool of URLs — deliberately NOT `[1] … [N] …`.
+    // A pre-numbered ledger let the synthesizer copy sparse ledger indices
+    // inline (e.g. "[88]") that didn't line up with its own References list
+    // (run wf-exec-78d4c018 cited up to [575] over a 52-entry list). With no
+    // numbers to copy, the synthesizer assigns its OWN contiguous [1..M]
+    // numbering for the sources it actually cites — see the synthesizer prompt.
     return ordered
-      .map((c, i) => {
+      .map(c => {
         const label = c.title ? `${c.title} — ${c.url}` : c.url;
         const tail = c.snippet
           ? `\n    ${String(c.snippet).replace(/\s+/g, ' ').slice(0, 240)}`
           : '';
-        return `[${i + 1}] ${label}${tail}`;
+        return `- ${label}${tail}`;
       })
       .join('\n');
   }
