@@ -1,5 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { TextEncoder, TextDecoder } from 'node:util';
+
+// jest-environment-jsdom does not expose TextEncoder/TextDecoder as globals,
+// but they are standard in every browser. Polyfill them so client code that
+// decodes binary content (e.g. MSG/HTML byte streams) runs under jsdom.
+if (typeof globalThis.TextEncoder === 'undefined') globalThis.TextEncoder = TextEncoder;
+if (typeof globalThis.TextDecoder === 'undefined') globalThis.TextDecoder = TextDecoder;
 
 // Load test environment variables
 dotenv.config({ path: path.resolve('.env.test') });

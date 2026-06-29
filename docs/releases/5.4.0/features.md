@@ -549,3 +549,11 @@ Uploading Outlook `.msg` email files now works. In the file picker, `.msg` files
 ## Fix — Outlook `.msg` Files Now Process After Selection
 
 Once a `.msg` file could be selected, uploading it still failed with an "Error processing file" message and the email's contents were never extracted. Selecting and uploading an Outlook `.msg` email now reads its subject, sender, recipients, and body as expected.
+
+## Fix — `.msg` Body Now Extracted from HTML-only Emails (Newsletters)
+
+Uploading an Outlook `.msg` email that has no plain-text part — most newsletters and richly formatted mails — previously returned only the `Subject`, `From`, and `To` lines, with the actual message body missing. The full body is now extracted in every case.
+
+- The body is resolved across every format Outlook may store it in: plain text, HTML (`PidTagHtml` / `PidTagBodyHtml`), and compressed RTF. HTML and RTF bodies are flattened to readable text, decoded using the message's declared code page so accented characters and umlauts survive.
+- Sender and recipient lines now prefer real SMTP addresses (e.g. `name@company.com`) over the internal Exchange directory address (`/O=EXCHANGELABS/...`) that Outlook stores for internal mail.
+- The extracted headers now also include the message **Date** and a list of **attachment names** (names only, not their content) for additional context.

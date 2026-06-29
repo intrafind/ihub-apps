@@ -167,6 +167,13 @@ export const loadMsgReader = async () => {
   return MsgReader;
 };
 
+// Lazy load the RTF decompressor only when a .msg has no plain/HTML body and we
+// must fall back to its compressed RTF stream (PidTagRtfCompressed).
+export const loadDecompressRtf = async () => {
+  const mod = await import('@kenjiuno/decompressrtf');
+  return mod?.decompressRTF || mod?.default?.decompressRTF || mod?.default;
+};
+
 // Lazy load JSZip only when needed for OpenOffice formats
 export const loadJSZip = async () => {
   const JSZip = await import('jszip');
@@ -529,33 +536,184 @@ export const processXlsxFile = async file => {
   return parts.join('\n\n').trim();
 };
 
+// Map a Windows/MAPI code page number to a label TextDecoder understands.
+// MSG bodies stored as bytes (PidTagHtml, decompressed RTF) carry no charset of
+// their own, so we decode with the message's declared code page when possible.
+const CODEPAGE_TO_LABEL = {
+  20127: 'us-ascii',
+  28591: 'iso-8859-1',
+  28592: 'iso-8859-2',
+  28595: 'iso-8859-5',
+  65000: 'utf-7',
+  65001: 'utf-8',
+  1200: 'utf-16le',
+  1250: 'windows-1250',
+  1251: 'windows-1251',
+  1252: 'windows-1252',
+  1253: 'windows-1253',
+  1254: 'windows-1254',
+  1255: 'windows-1255',
+  1256: 'windows-1256',
+  1257: 'windows-1257',
+  1258: 'windows-1258',
+  932: 'shift_jis',
+  936: 'gbk',
+  949: 'euc-kr',
+  950: 'big5'
+};
+
+const decodeBytesWithCodepage = (bytes, ...codepages) => {
+  const label = codepages.map(cp => CODEPAGE_TO_LABEL[cp]).find(Boolean) || 'utf-8';
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+};
+
+// Convert an HTML fragment/document to readable plain text. Runs in the browser
+// (and jsdom) using an inert document, so no scripts run and no resources load.
+export const htmlToText = html => {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc
+    .querySelectorAll('script, style, head, title, meta, link, noscript')
+    .forEach(el => el.remove());
+  doc.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  // Force a line break after common block-level elements so the flattened text
+  // keeps paragraph/row structure instead of running together.
+  doc
+    .querySelectorAll(
+      'p, div, tr, li, h1, h2, h3, h4, h5, h6, table, blockquote, section, article, header, footer'
+    )
+    .forEach(el => el.append('\n'));
+  const root = doc.body || doc.documentElement;
+  const text = root ? root.textContent || '' : '';
+  return text
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+// Best-effort conversion of RTF to plain text. Handles HTML-encapsulated RTF
+// (MS-OXRTFEX, used by Outlook) by stripping the RTF wrapper and then flattening
+// the recovered HTML. Never throws; returns '' if nothing readable is found.
+const rtfToText = rtf => {
+  if (!rtf) return '';
+  let text = rtf
+    // Drop RTF-only spans that wrap the encapsulated HTML markup.
+    .replace(/\\htmlrtf\b[\s\S]*?\\htmlrtf0 ?/g, ' ')
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\u(-?\d+)\??/g, (_m, n) => {
+      let code = parseInt(n, 10);
+      if (code < 0) code += 65536;
+      return String.fromCharCode(code);
+    })
+    .replace(/\\par[d]?\b ?/g, '\n')
+    .replace(/\\line\b ?/g, '\n')
+    .replace(/\\tab\b ?/g, '\t')
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, '') // remaining control words
+    .replace(/[{}]/g, '')
+    .replace(/\\\r?\n/g, '\n');
+  // Encapsulated HTML leaves real markup behind — flatten it to text.
+  if (/<\/?[a-z][\s\S]*>/i.test(text)) {
+    text = htmlToText(text);
+  }
+  return text
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+// Outlook stores internal Exchange addresses as an X.500 DN (e.g. "/O=EXCHANGE
+// LABS/...") which is noise to a model. Prefer a real SMTP address when present.
+const isExchangeDn = value => typeof value === 'string' && /^\/[oO]=/.test(value);
+const pickEmail = (...candidates) => candidates.find(v => v && !isExchangeDn(v)) || '';
+
+const formatMsgParticipant = (name, email) => {
+  if (name && email && name !== email) return `${name} <${email}>`;
+  return name || email || '';
+};
+
+// Build a readable text representation (headers + body) from parsed MSG data.
+// Exported for unit testing of the fallback chain independent of the binary
+// parser. The body falls back across all storage formats Outlook may use:
+// plain text → HTML string → HTML bytes → compressed RTF.
+export const extractMsgContent = async fileData => {
+  if (!fileData) return '';
+
+  const headerLines = [];
+  if (fileData.subject) headerLines.push(`Subject: ${fileData.subject}`);
+
+  const senderEmail = pickEmail(
+    fileData.senderSmtpAddress,
+    fileData.sentRepresentingSmtpAddress,
+    fileData.senderEmail
+  );
+  const fromLine = formatMsgParticipant(fileData.senderName, senderEmail);
+  if (fromLine) headerLines.push(`From: ${fromLine}`);
+
+  const recipients = Array.isArray(fileData.recipients) ? fileData.recipients : [];
+  const formatGroup = type =>
+    recipients
+      .filter(r => (r.recipType || 'to').toLowerCase() === type)
+      .map(r => formatMsgParticipant(r.name, pickEmail(r.smtpAddress, r.email)))
+      .filter(Boolean)
+      .join(', ');
+  const toLine = formatGroup('to');
+  const ccLine = formatGroup('cc');
+  if (toLine) headerLines.push(`To: ${toLine}`);
+  if (ccLine) headerLines.push(`Cc: ${ccLine}`);
+
+  const date = fileData.messageDeliveryTime || fileData.clientSubmitTime || fileData.creationTime;
+  if (date) headerLines.push(`Date: ${date}`);
+
+  const attachmentNames = (Array.isArray(fileData.attachments) ? fileData.attachments : [])
+    .map(a => a.fileName || a.name)
+    .filter(Boolean);
+  if (attachmentNames.length > 0) {
+    headerLines.push(`Attachments: ${attachmentNames.join(', ')}`);
+  }
+
+  // Resolve the body across every format Outlook may have stored it in.
+  let body = '';
+  if (fileData.body && fileData.body.trim()) {
+    body = fileData.body.trim();
+  } else if (fileData.bodyHtml && String(fileData.bodyHtml).trim()) {
+    body = htmlToText(String(fileData.bodyHtml));
+  } else if (fileData.html) {
+    const htmlString =
+      typeof fileData.html === 'string'
+        ? fileData.html
+        : decodeBytesWithCodepage(
+            fileData.html,
+            fileData.internetCodepage,
+            fileData.messageCodepage
+          );
+    body = htmlToText(htmlString);
+  } else if (fileData.compressedRtf) {
+    try {
+      const decompressRTF = await loadDecompressRtf();
+      const rtfBytes = decompressRTF(Array.from(fileData.compressedRtf));
+      const rtf = decodeBytesWithCodepage(Uint8Array.from(rtfBytes), fileData.messageCodepage);
+      body = rtfToText(rtf);
+    } catch (error) {
+      console.warn('[fileProcessing] MSG RTF body extraction failed:', error);
+    }
+  }
+
+  return [headerLines.join('\n'), body].filter(Boolean).join('\n\n').trim();
+};
+
 // Process MSG file
 export const processMsgFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const MsgReader = await loadMsgReader();
   const msgReader = new MsgReader(arrayBuffer);
   const fileData = msgReader.getFileData();
-
-  // Extract text content from MSG file
-  let textContent = '';
-  if (fileData.subject) {
-    textContent += `Subject: ${fileData.subject}\n\n`;
-  }
-  if (fileData.senderName) {
-    textContent += `From: ${fileData.senderName}`;
-    if (fileData.senderEmail) {
-      textContent += ` <${fileData.senderEmail}>`;
-    }
-    textContent += '\n';
-  }
-  if (fileData.recipients && fileData.recipients.length > 0) {
-    textContent += `To: ${fileData.recipients.map(r => r.name || r.email).join(', ')}\n`;
-  }
-  if (fileData.body) {
-    textContent += `\n${fileData.body}`;
-  }
-
-  return textContent.trim();
+  return extractMsgContent(fileData);
 };
 
 // Process OpenOffice/LibreOffice file
