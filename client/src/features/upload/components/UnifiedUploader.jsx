@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
@@ -8,7 +9,8 @@ import {
   processDocumentFile,
   formatAcceptAttribute,
   processTiffFile,
-  extractAudioFromVideo
+  extractAudioFromVideo,
+  loadMimetypesConfig
 } from '../utils/fileProcessing';
 
 /**
@@ -25,6 +27,26 @@ const UnifiedUploader = ({
   children
 }) => {
   const { t } = useTranslation();
+
+  // Load the server mimetypes config so the file picker's `accept` attribute
+  // gets real file extensions (e.g. `.msg`, `.eml`, `.xlsx`). Without it the
+  // module falls back to a minimal DEFAULT_CONFIG that only knows a handful of
+  // extensions; non-standard MIME types like `application/vnd.ms-outlook` then
+  // reach the OS dialog without a matching extension, so `.msg` files appear
+  // greyed out and cannot be selected. `.eml` survives because its MIME type
+  // (`message/rfc822`) is recognised by the OS even without the extension.
+  // The load is cached/idempotent; the state flip forces a single re-render so
+  // the synchronous format helpers below recompute against the loaded config.
+  const [, setMimetypesLoaded] = useState(false);
+  useEffect(() => {
+    let active = true;
+    loadMimetypesConfig().finally(() => {
+      if (active) setMimetypesLoaded(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Image upload configuration
   const imageConfig = config.imageUpload || {};

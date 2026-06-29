@@ -625,11 +625,7 @@ export const processDocumentFile = async file => {
     fileExtension === '.xls'
   ) {
     content = await processXlsxFile(file);
-  } else if (
-    file.type === 'application/vnd.ms-outlook' ||
-    file.type === 'application/x-msg' ||
-    fileExtension === '.msg'
-  ) {
+  } else if (file.type === 'application/vnd.ms-outlook' || fileExtension === '.msg') {
     content = await processMsgFile(file);
   } else if (
     file.type === 'image/tif' ||

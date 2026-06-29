@@ -538,3 +538,10 @@ When an admin's session expires while they are working in the admin panel, signi
 
 - Previously an expired session triggered a hard redirect to the home page the moment an admin request failed, so the login dialog opened on the home screen and admins had to navigate all the way back into the admin area after re-authenticating.
 - The admin panel now uses the same in-place re-authentication as the rest of the app: the login dialog appears over the current page, and after signing in the admin stays exactly where they were. This also covers file-upload (multipart) admin requests, which previously bypassed the re-authentication prompt entirely.
+
+## Fix — Outlook `.msg` Files Can Now Be Selected for Upload
+
+Uploading Outlook `.msg` email files now works. In the file picker, `.msg` files appeared greyed out and could not be selected even on apps that listed MSG as a supported format, while `.eml` files worked.
+
+- The upload component never loaded the server's MIME-type configuration, so the file picker's accepted-types list was built from a minimal built-in fallback that omitted the `.msg` file extension. Because the Outlook MIME types (`application/vnd.ms-outlook`) are not recognised by the operating system's file dialog, `.msg` files had no matching rule and were blocked. `.eml` was unaffected because its MIME type (`message/rfc822`) is understood by the OS even without the extension. The component now loads the full configuration, so every configured format — `.msg`, `.eml`, `.xlsx`, `.pptx`, OpenOffice formats, and more — is correctly offered in the file picker.
+- The MSG format also no longer appears twice when configuring an app's upload formats. `.msg` had been registered under two MIME types (`application/vnd.ms-outlook` and a redundant `application/x-msg`), producing duplicate "MSG" entries in the admin upload-format selector. The duplicate is removed automatically on upgrade (migration **V064**); `application/vnd.ms-outlook` remains the single canonical type.
