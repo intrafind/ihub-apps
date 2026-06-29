@@ -103,7 +103,35 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await this._activateSkillsIntoState(requested, state, context);
       }
 
-      // Validate plan structure and dependencies
+      // Read the in-flight review round once, up front, so namespacing,
+      // validation, the step-log key, and the SSE payload all use a consistent
+      // value. Round 0 = first planner pass; the reviewer bumps this at the end
+      // of each iteration.
+      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
+        ? state.data._reviewRound
+        : 0;
+
+      // Repair BEFORE validate. Namespace round-N≥1 task ids to `r{N}_` first
+      // (so dedupe and validation see the FINAL ids the run will materialize),
+      // then drop duplicate ids. A re-plan LLM sometimes re-lists the same
+      // gap-closing task or self-prefixes round ids, producing collisions
+      // (raw dups, or `foo` + `r{N}_foo` → both `r{N}_foo`). A redundant task
+      // is safe to drop; hard-failing the whole run — and discarding a finished
+      // deliverable from an earlier round — is not (run wf-exec-8b36a2e7 died
+      // on "Duplicate task ID: r2_reconstruct_thesis_mapping" after producing a
+      // complete round-1 report).
+      this._namespaceTaskIds(plan, activeReviewRound);
+      const droppedDupes = this._dedupeTaskIds(plan);
+      if (droppedDupes > 0) {
+        this.logger.warn('Planner emitted duplicate task ids — de-duped instead of failing', {
+          component: 'PlannerNodeExecutor',
+          nodeId: node.id,
+          reviewRound: activeReviewRound,
+          dropped: droppedDupes
+        });
+      }
+
+      // Validate plan structure and dependencies (post-namespace, post-dedupe)
       const validationError = this._validatePlan(plan, config.maxTasks || 10);
       if (validationError) {
         return this.createErrorResult(`Invalid plan: ${validationError}`, { nodeId: node.id });
@@ -117,14 +145,6 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       if (budgetError) {
         return this.createErrorResult(budgetError, { nodeId: node.id });
       }
-
-      // Read the in-flight review round once, so every code path below
-      // (step-log key, SSE payload, task-id namespacing) uses a consistent
-      // value. Round 0 = first planner pass; the reviewer bumps this at the
-      // end of each iteration.
-      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
-        ? state.data._reviewRound
-        : 0;
 
       // Planning phase is DONE here — the LLM call returned a valid plan.
       // Capture the LLM-only duration NOW (not after _waitForChildCompletion,
@@ -192,20 +212,10 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await this._activateSkillsIntoState(skillsUsed, state, context);
       }
 
-      // Plan-and-review namespacing: when this planner call runs INSIDE a
-      // review loop on round 1+, prefix every emitted task id (and
-      // matching dependsOn references) with `r{round}_`. Round 0 (the
-      // initial plan) keeps the LLM's ids as-is. The prefix is the
-      // safety net for an LLM that re-uses earlier round ids despite the
-      // round-extension instructions in the system prompt — without it,
-      // _taskResults[task.id] would silently overwrite the prior round's
-      // entry for the same id.
-      //
-      // This MUST run before we emit/persist the plan below so the SSE event,
-      // the early persist, and the materialized sub-workflow all use the SAME
-      // (namespaced) task ids — otherwise round-1 rows would first appear
-      // un-namespaced and then change ids after materialization.
-      this._namespaceTaskIds(plan, activeReviewRound);
+      // NOTE: task-id namespacing (`r{round}_` prefix for round ≥1) and
+      // duplicate-id de-duping already ran up top, BEFORE validation — so the
+      // SSE event, the early persist, and the materialized sub-workflow below
+      // all use the SAME final task ids, and a duplicate can't abort the run.
 
       // Accumulate the plan across review rounds. A re-plan round emits only
       // the NEW gap-closing tasks, but the UI's Tasks panel renders solely
@@ -451,6 +461,19 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
             ...(state?.data?._stepLogs || {}),
             ...childData._stepLogs
           };
+        }
+
+        // Token circuit-breaker. Per-task workers run in the child
+        // sub-workflow, so their token usage never reached the parent's
+        // `_budget` — `maxTokensPerRun` only ever saw a single child's count
+        // (run wf-exec-f33f80fc: `_budget.total`=266K while the true cost was
+        // 3.29M, so no guard could trip). Recompute the parent budget from the
+        // merged step logs (the authoritative per-step token records). It is
+        // idempotent — recomputing from the full merged set each round can't
+        // double-count — and because `childInitial` copies `_budget` into the
+        // next round, the in-task guard then sees the running cumulative total.
+        if (bubbledUpdates._stepLogs) {
+          bubbledUpdates._budget = this._aggregateBudgetFromStepLogs(bubbledUpdates._stepLogs);
         }
 
         // Artifact metadata (file write log). The actual files are written
@@ -1148,6 +1171,35 @@ Output rules:
   }
 
   /**
+   * Sum the token usage recorded across a map of step logs into a run-level
+   * `{ input, output, total }` budget. Step logs without a numeric `tokens`
+   * record (e.g. the planner's own `tokens: null`) contribute nothing.
+   *
+   * This is the source of truth for the run's cumulative token cost: per-task
+   * workers run in child sub-workflows and only their step logs bubble up to
+   * the parent, so summing the merged step logs is the only place the parent
+   * can see the TRUE total (its own `_budget` counter sees only top-level
+   * nodes). Used to refresh `state.data._budget` on planner bubble-up so the
+   * `maxTokensPerRun` circuit-breaker can trip on real cumulative cost.
+   *
+   * @param {Object} stepLogs - map of nodeId → step log
+   * @returns {{input:number, output:number, total:number}}
+   * @private
+   */
+  _aggregateBudgetFromStepLogs(stepLogs) {
+    const acc = { input: 0, output: 0, total: 0 };
+    if (!stepLogs || typeof stepLogs !== 'object') return acc;
+    for (const log of Object.values(stepLogs)) {
+      const t = log && log.tokens;
+      if (!t || typeof t !== 'object') continue;
+      acc.input += Number.isFinite(t.input) ? t.input : 0;
+      acc.output += Number.isFinite(t.output) ? t.output : 0;
+    }
+    acc.total = acc.input + acc.output;
+    return acc;
+  }
+
+  /**
    * Namespace every task id (and matching dependsOn references) in `plan` for
    * the given review round.
    *
@@ -1212,6 +1264,41 @@ Output rules:
    * @returns {Array<Object>} Merged, de-duped task list
    * @private
    */
+  /**
+   * Drop tasks whose id duplicates an earlier task's id, keeping the FIRST
+   * occurrence and preserving order. Run AFTER `_namespaceTaskIds` so it also
+   * collapses post-namespace collisions (`foo` + `r{N}_foo` both become
+   * `r{N}_foo`). Returns the number of tasks dropped.
+   *
+   * A re-plan LLM sometimes re-lists the same gap-closing task (or self-
+   * prefixes round ids), producing duplicate ids. `_validatePlan` would reject
+   * the whole plan and abort the run — discarding a finished deliverable from
+   * an earlier round. A redundant task is safe to drop instead. Tasks with no
+   * id are left untouched (validation still flags those — a task that can't be
+   * keyed is a genuinely invalid plan, not a recoverable duplicate).
+   *
+   * @param {Object} plan - The plan object (mutated in place)
+   * @returns {number} count of duplicate tasks removed
+   * @private
+   */
+  _dedupeTaskIds(plan) {
+    if (!plan || !Array.isArray(plan.tasks)) return 0;
+    const seen = new Set();
+    const out = [];
+    let dropped = 0;
+    for (const task of plan.tasks) {
+      const id = task && task.id;
+      if (id != null && seen.has(id)) {
+        dropped += 1;
+        continue;
+      }
+      if (id != null) seen.add(id);
+      out.push(task);
+    }
+    plan.tasks = out;
+    return dropped;
+  }
+
   _mergePlanTasks(priorTasks, incomingTasks) {
     const byId = new Map();
     for (const t of Array.isArray(priorTasks) ? priorTasks : []) {

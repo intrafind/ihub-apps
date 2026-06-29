@@ -35,6 +35,15 @@ import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/ap
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
 
+// Bound on the {{previousTaskResults}} digest baked into a per-task worker's
+// prompt (the synthesizer is exempt — it needs the full corpus). Keeps the
+// most recent N task results and truncates each body, so a worker's seed
+// prompt can't carry the whole accumulated research corpus and get re-sent on
+// every tool-loop iteration (the O(N²) input-token blow-up in wf-exec-f33f80fc:
+// 22 results ≈ 70K tokens × ~8 iterations ≈ 481K input for one verification).
+const PROMPT_NODE_WORKER_TASK_RESULT_LIMIT = 10;
+const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
+
 /**
  * Agent node configuration
  * @typedef {Object} PromptNodeConfig
@@ -667,10 +676,27 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const language = context?.language || 'en';
     const modelSupportsVision = !!(model && (model.supportsVision || model.supportsImages));
 
+    // Template-resolution budget. The synthesizer must see the FULL task-result
+    // corpus to compose the report, so it resolves {{previousTaskResults}}
+    // unbounded. Every other node (per-task workers, verifiers) gets a bounded
+    // digest: baking the whole accumulated corpus into a worker's seed prompt
+    // and re-sending it on every tool-loop iteration is what drove O(N²)
+    // input-token blow-up (run wf-exec-f33f80fc). Override per node via
+    // config.previousTaskResultsBudget.
+    const tplOpts =
+      config._isSynthesizer === true
+        ? {}
+        : {
+            previousTaskResults: config.previousTaskResultsBudget || {
+              maxResults: PROMPT_NODE_WORKER_TASK_RESULT_LIMIT,
+              maxBodyChars: PROMPT_NODE_WORKER_TASK_BODY_CHARS
+            }
+          };
+
     // Add system message if configured
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
-      let systemContent = this.resolveTemplateVariables(systemTemplate, state);
+      let systemContent = this.resolveTemplateVariables(systemTemplate, state, tplOpts);
 
       // Agent runs auto-include the profile memory file body (if enabled).
       // `context._agentMemoryBlock` is populated by execute() before
@@ -717,7 +743,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     let userContent;
     if (config.prompt) {
       const promptTemplate = this.getLocalizedValue(config.prompt, language);
-      userContent = this.resolveTemplateVariables(promptTemplate, state);
+      userContent = this.resolveTemplateVariables(promptTemplate, state, tplOpts);
     } else if (state.data?.input) {
       userContent = state.data.input;
     } else if (state.data?.message) {
@@ -878,7 +904,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {string} Resolved template
    * @private
    */
-  resolveTemplateVariables(template, state) {
+  resolveTemplateVariables(template, state, opts = {}) {
     if (typeof template !== 'string') {
       return template;
     }
@@ -942,7 +968,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             });
         }
 
-        return comparisonResult ? this.resolveTemplateVariables(content, state) : '';
+        return comparisonResult ? this.resolveTemplateVariables(content, state, opts) : '';
       }
     );
 
@@ -954,7 +980,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         const conditionValue = this.getNestedValue(condition.trim(), state.data || {});
         if (conditionValue) {
           // Recursively resolve variables in the content
-          return this.resolveTemplateVariables(content, state);
+          return this.resolveTemplateVariables(content, state, opts);
         }
         return '';
       }
@@ -974,7 +1000,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // accumulated planner task results into a markdown block so the
       // synthesizer (and intermediate plan tasks) can see prior work.
       if (trimmed === 'previousTaskResults') {
-        return this._formatPreviousTaskResults(state);
+        return this._formatPreviousTaskResults(state, opts.previousTaskResults);
       }
 
       // Citations ledger collected from every search/extract tool call
@@ -3147,7 +3173,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
-  _formatPreviousTaskResults(state) {
+  _formatPreviousTaskResults(state, opts = {}) {
     const map = state?.data?._taskResults;
     if (!map || typeof map !== 'object') return '';
     const entries = Object.values(map)
@@ -3159,13 +3185,40 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         return ta < tb ? -1 : 1;
       });
     if (entries.length === 0) return '';
-    return entries
-      .map(r => {
-        const title = (r.title || r.taskId || 'Task').toString().trim();
-        const body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content || '');
-        return `### ${title}\n\n${body}`.trim();
-      })
-      .join('\n\n---\n\n');
+
+    // Context budget. The synthesizer (no opts) sees the FULL corpus in
+    // completion order — it must, to compose the report. Per-task workers
+    // pass a bound: they only need a digest of prior work, and baking the
+    // whole accumulated corpus into every task's seed prompt — then
+    // re-sending it on every tool-loop iteration — is what caused O(N²)
+    // input-token blow-up (run wf-exec-f33f80fc: 481K input for a one-fact
+    // verification). When bounded we keep the MOST RECENT results (most
+    // relevant to the current step) and truncate oversized bodies.
+    const maxResults = Number.isFinite(opts.maxResults) ? opts.maxResults : Infinity;
+    const maxBodyChars = Number.isFinite(opts.maxBodyChars) ? opts.maxBodyChars : Infinity;
+
+    let kept = entries;
+    let omitted = 0;
+    if (entries.length > maxResults) {
+      omitted = entries.length - maxResults;
+      kept = entries.slice(omitted); // keep the most recent, preserve order
+    }
+
+    const blocks = kept.map(r => {
+      const title = (r.title || r.taskId || 'Task').toString().trim();
+      let body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content || '');
+      if (body.length > maxBodyChars) {
+        const dropped = body.length - maxBodyChars;
+        body = `${body.slice(0, maxBodyChars)}\n\n[…truncated ${dropped} chars to bound context]`;
+      }
+      return `### ${title}\n\n${body}`.trim();
+    });
+
+    let out = blocks.join('\n\n---\n\n');
+    if (omitted > 0) {
+      out = `_[${omitted} earlier task result(s) omitted to bound context; see the report draft for the full synthesis]_\n\n${out}`;
+    }
+    return out;
   }
 
   /**

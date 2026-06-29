@@ -122,9 +122,22 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'information-dense as the sub-task results combined: timeline, roles, ' +
     'companies, projects, publications, open-source contributions, ' +
     'speaking engagements, philosophy — whatever the sub-tasks gathered.\n' +
-    '5. End with a "## References" section listing every cited URL with ' +
+    '5. QUOTE INTEGRITY: never alter, paraphrase, complete, "tidy up", or ' +
+    'fabricate text inside quotation marks. Reproduce a quote EXACTLY as it ' +
+    'appears in the sub-task results, character for character. If you do not ' +
+    'have the exact wording, paraphrase WITHOUT quotation marks (e.g. "he ' +
+    'argues that…") — never present invented or edited wording as a verbatim ' +
+    'quote, even to make it fit the narrative.\n' +
+    '6. DATE & IDENTIFIER INTEGRITY: never invent, guess, or extrapolate ' +
+    'dates, publication years, document IDs, author lists, or version ' +
+    'numbers. Use only values explicitly present in the sub-task results. ' +
+    'Never state a publication date in the future relative to today. If a ' +
+    'date or identifier is missing, ambiguous, or conflicting across sources, ' +
+    'say so explicitly (e.g. "date not stated in the sources") rather than ' +
+    'supplying one.\n' +
+    '7. End with a "## References" section listing every cited URL with ' +
     'its index.\n' +
-    '6. Do not call tools. Just write the report.\n\n' +
+    '8. Do not call tools. Just write the report.\n\n' +
     'Note: the citations ledger is the run-time record of URLs the agent ' +
     'visited; it is NOT the same as the configured knowledge-base sources ' +
     'in the profile. Cite what the agent actually consulted, not what it ' +
