@@ -1432,6 +1432,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // Accumulate token usage across iterations
     const totalTokens = { input: 0, output: 0 };
 
+    // Tool circuit-breaker. A tool that keeps returning a rate-limit error
+    // (HTTP 429/503) won't recover within this step; left unchecked the model
+    // retries it every round and drags the loop to the iteration cap, re-sending
+    // the whole accumulating history each time (run wf-exec-f4f70e84: 151/151
+    // braveSearch calls 429'd, ~60K wasted input/task). After RATE_LIMIT_FAIL_LIMIT
+    // rate-limit failures we stop offering that tool; when no tools remain we
+    // force a final answer. Per-item errors (e.g. a 404 on one URL) are NOT
+    // counted — the tool itself still works.
+    const RATE_LIMIT_FAIL_LIMIT = config.maxRateLimitFailures ?? 2;
+    const rateLimitFails = new Map();
+    const disabledTools = new Set();
+
     // Verify API key using centralized helper
     const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
     if (!apiKeyResult.success) {
@@ -1460,6 +1472,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const responseSchema = config.outputSchema || undefined;
       const responseFormat = responseSchema ? 'json' : undefined;
 
+      // Offer only tools that haven't been circuit-broken this step.
+      const availableTools = tools.filter(t => !disabledTools.has(t.id));
+
       // Execute the request using the helper (filters invalid options like user, chatId).
       // On a context-overflow error, microcompact the in-loop messages and
       // retry the same iteration (reactive recovery) before giving up.
@@ -1472,7 +1487,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           options: {
             temperature,
             maxTokens,
-            tools: tools.length > 0 && !forceFinish ? tools : undefined,
+            tools: availableTools.length > 0 && !forceFinish ? availableTools : undefined,
             responseSchema,
             responseFormat
             // Note: user and chatId are intentionally NOT passed here
@@ -1603,6 +1618,54 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       for (const toolCall of response.toolCalls) {
         const toolResult = await this.executeToolCall(toolCall, tools, context);
         currentMessages.push(toolResult);
+
+        // Circuit-breaker: count rate-limit failures per tool and disable a
+        // tool that keeps hitting them, so the model can't retry a dead tool to
+        // the round cap.
+        const verdict = this._classifyToolResult(toolResult);
+        if (verdict.failed && verdict.rateLimited) {
+          const matched = tools.find(
+            t => t.id === toolResult.name || normalizeToolName(t.id) === toolResult.name
+          );
+          const tid = matched?.id || toolResult.name;
+          const n = (rateLimitFails.get(tid) || 0) + 1;
+          rateLimitFails.set(tid, n);
+          if (n >= RATE_LIMIT_FAIL_LIMIT && !disabledTools.has(tid)) {
+            disabledTools.add(tid);
+            this.logger.warn('Tool circuit-broken (rate-limited) — withholding for this step', {
+              component: 'PromptNodeExecutor',
+              nodeId,
+              tool: tid,
+              failures: n
+            });
+            currentMessages.push({
+              role: 'user',
+              content:
+                `[system] The tool "${tid}" is rate-limited and unavailable for the rest of ` +
+                `this step (it failed ${n}× with a rate-limit error). Do NOT call it again. ` +
+                `Use any other available tools, or produce your best final answer now with what ` +
+                `you already have.`
+            });
+          }
+        }
+      }
+
+      // If every tool has been circuit-broken, there's nothing left to call —
+      // force a final answer instead of spinning to the round cap.
+      if (!forceFinish && tools.length > 0 && tools.every(t => disabledTools.has(t.id))) {
+        forceFinish = true;
+        this.logger.info('All tools circuit-broken — forcing a final answer', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          disabledTools: [...disabledTools]
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            '[system] All tools are currently unavailable (rate-limited). Do NOT call any more ' +
+            'tools. Produce your COMPLETE final response now using everything you have gathered, ' +
+            'and briefly note any gaps you could not close.'
+        });
       }
 
       // Proactively compact the in-flight history once it grows large, so old
@@ -1691,6 +1754,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       runTokens: runBudget.total,
       budgetExhausted: forceFinish,
       finishReason: finalFinishReason,
+      disabledTools: [...disabledTools],
       maxTokens
     };
   }
@@ -3267,6 +3331,34 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
+  /**
+   * Classify a tool result returned by executeToolCall. Failed tool calls carry
+   * `content: JSON.stringify({ error: true, message })`; successful ones carry
+   * the raw result JSON (no `error` flag). A rate-limit failure (HTTP 429/503,
+   * "too many requests", "rate limit") won't self-heal within a step, so it is
+   * flagged separately — the circuit-breaker disables a tool that keeps hitting
+   * it instead of letting the model retry until the round cap.
+   *
+   * @param {{content?: string}} toolResult
+   * @returns {{failed: boolean, rateLimited: boolean, message: string}}
+   * @private
+   */
+  _classifyToolResult(toolResult) {
+    const content = toolResult?.content;
+    if (typeof content !== 'string') return { failed: false, rateLimited: false, message: '' };
+    let message = '';
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.error) message = String(parsed.message || 'tool error');
+    } catch {
+      // Non-JSON content is real tool output, not an error envelope.
+      return { failed: false, rateLimited: false, message: '' };
+    }
+    if (!message) return { failed: false, rateLimited: false, message: '' };
+    const rateLimited = /\b(429|503)\b|too many requests|rate[ -]?limit/i.test(message);
+    return { failed: true, rateLimited, message };
+  }
+
   _formatCitations(state) {
     const citations = state?.data?._citations;
     if (!Array.isArray(citations) || citations.length === 0) return '';

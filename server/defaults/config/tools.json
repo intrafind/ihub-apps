@@ -44,7 +44,8 @@
       "de": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
     },
     "script": "braveSearch.js",
-    "concurrency": 5,
+    "concurrency": 1,
+    "requestDelayMs": 1100,
     "parameters": {
       "type": "object",
       "properties": {

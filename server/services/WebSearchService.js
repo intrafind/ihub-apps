@@ -1,6 +1,7 @@
 import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
+import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
 import configCache from '../configCache.js';
 import tokenStorageService from './TokenStorageService.js';
 import logger from '../utils/logger.js';
@@ -85,6 +86,16 @@ class BraveSearchProvider extends SearchProvider {
 
     if (chatId) {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
+    }
+
+    // Query cache. Across re-plan/verify rounds the same query recurs; serving
+    // a repeat from cache skips both the network and the ~1 req/s throttle,
+    // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
+    const cacheKey = makeSearchCacheKey('brave', query);
+    const cached = getCachedSearch(cacheKey);
+    if (cached) {
+      logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
+      return cached;
     }
 
     // Brave's Free plan is rate-limited to ~1 request/second, so an agent that
@@ -187,7 +198,13 @@ class BraveSearchProvider extends SearchProvider {
       }
     }
 
-    return { results };
+    const payload = { results };
+    // Cache only successful responses (errors throw above and never reach here),
+    // so a transient 429 is never cached. TTL is configurable; default 10 min —
+    // long enough to dedupe within a multi-round run, short enough to stay fresh.
+    const ttlMs = Number.isFinite(config.SEARCH_CACHE_TTL_MS) ? config.SEARCH_CACHE_TTL_MS : 600000;
+    setCachedSearch(cacheKey, payload, ttlMs);
+    return payload;
   }
 }
 
