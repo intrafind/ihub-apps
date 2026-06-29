@@ -12,7 +12,10 @@ function check(l, c, d) {
 }
 async function run() {
   const wf = JSON.parse(
-    readFileSync(path.join(root, 'contents/workflows/claude-style-agent-phased.json'), 'utf8')
+    readFileSync(
+      path.join(root, 'server/defaults/workflows/claude-style-agent-phased.json'),
+      'utf8'
+    )
   );
   check(
     'schema-valid',

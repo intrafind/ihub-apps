@@ -2,10 +2,10 @@
 
 /**
  * Validates the shipped Claude-style autonomous agent:
- *   - contents/workflows/claude-style-agent.json passes workflowConfigSchema
+ *   - server/defaults/workflows/claude-style-agent.json passes workflowConfigSchema
  *     and wires the adversarial self-correction loop (agent → verify → {pass:
  *     end | retry: agent}) with a tool-enabled adversarial verifier.
- *   - contents/agents/profiles/claude-style-agent.json passes
+ *   - server/defaults/agents/profiles/claude-style-agent.json passes
  *     agentProfileSchema, references the workflow externally, and turns on the
  *     capabilities the loop relies on (dynamic tasks, memory, token budget).
  *   - serializeProfile preserves the external reference.
@@ -37,8 +37,8 @@ function readJson(rel) {
 }
 
 async function run() {
-  const workflow = readJson('contents/workflows/claude-style-agent.json');
-  const profile = readJson('contents/agents/profiles/claude-style-agent.json');
+  const workflow = readJson('server/defaults/workflows/claude-style-agent.json');
+  const profile = readJson('server/defaults/agents/profiles/claude-style-agent.json');
 
   console.log('🧪 workflow passes the schema\n');
   {
@@ -114,7 +114,10 @@ async function run() {
     check('dynamic tasks enabled (living plan)', profile.dynamicTasks?.enabled === true);
     check('memory enabled', profile.memory?.enabled === true);
     check('per-run token budget set', profile.budgets?.maxTokensPerRun > 0);
-    check('profile is runnable (enabled)', profile.enabled === true);
+    // Shipped as a DEFAULT it ships DISABLED (the profile's own description says
+    // "Ships disabled — enable it…"): an admin enables it deliberately rather
+    // than a fresh install auto-running an autonomous agent.
+    check('profile ships disabled (admin enables)', profile.enabled === false);
     // The standalone workflow is intentionally disabled so it is hidden from
     // the Workflows UI and can only run via the agent profile (which supplies
     // the agent principal + profile so the living-plan tools register). Running

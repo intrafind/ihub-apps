@@ -1,0 +1,67 @@
+{
+  "id": "claude-style-agent",
+  "name": {
+    "en": "Claude-style Autonomous Agent",
+    "de": "Claude-artiger autonomer Agent"
+  },
+  "description": {
+    "en": "Takes a task and gets it done like Claude Code: plans, decomposes into subtasks, executes with tools, reconsiders, and verifies adversarially before finishing. Budget- and context-managed, resumable. Ships disabled — enable it, configure its tools' API keys, and trigger from the agents admin UI.",
+    "de": "Erledigt eine Aufgabe wie Claude Code: planen, in Teilaufgaben zerlegen, mit Werkzeugen ausführen, überdenken und adversarial prüfen, bevor abgeschlossen wird. Budget- und kontextverwaltet, fortsetzbar. Standardmäßig deaktiviert."
+  },
+  "color": "#D97757",
+  "icon": "robot",
+  "workflow": {
+    "ref": "external",
+    "workflowId": "claude-style-agent"
+  },
+  "preferredModel": "gemini-flash-latest",
+  "preferredTemperature": 1,
+  "maxIterations": 10,
+  "tools": [],
+  "sources": [],
+  "apps": [],
+  "skills": [],
+  "memory": {
+    "enabled": true,
+    "autoInclude": true,
+    "maxBytes": 8192,
+    "temperature": 0.2
+  },
+  "inboxId": "claude-style-agent",
+  "hitl": {
+    "approverGroups": []
+  },
+  "planner": {
+    "enabled": false,
+    "maxTasks": 10
+  },
+  "synthesizer": {
+    "enabled": false,
+    "maxTokens": 8000
+  },
+  "dynamicTasks": {
+    "enabled": true,
+    "maxDepth": 3
+  },
+  "review": {
+    "enabled": false,
+    "maxRounds": 3
+  },
+  "budgets": {
+    "maxWallTimeSec": 1800,
+    "maxTokensPerRun": 400000,
+    "maxToolRoundsPerNode": 12
+  },
+  "concurrency": {
+    "maxConcurrent": 1
+  },
+  "artifacts": {
+    "outputDir": "auto",
+    "primary": "result.md"
+  },
+  "groups": [],
+  "serviceAccount": {
+    "groups": ["agents", "authenticated"]
+  },
+  "enabled": false
+}

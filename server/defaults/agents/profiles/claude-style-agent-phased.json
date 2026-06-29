@@ -1,0 +1,74 @@
+{
+  "id": "claude-style-agent-phased",
+  "name": {
+    "en": "Claude-style Autonomous Agent (Phased)",
+    "de": "Claude-artiger autonomer Agent (phasenweise)"
+  },
+  "description": {
+    "en": "Phased variant of the Claude-style agent: deterministically loads the highest-priority open inbox item, plans and executes research sub-tasks (planner node), synthesizes a full markdown report, then adversarially verifies it. Non-pass routes back to the planner for gap-closing; pass finalizes the inbox item. Use alongside the single-node profile for A/B comparison.",
+    "de": "Phasenweise Variante des Claude-artigen Agenten: lädt deterministisch den wichtigsten offenen Posteingangseintrag, plant und führt Forschungs-Teilaufgaben aus (Planer-Knoten), erstellt einen vollständigen Markdown-Bericht und prüft diesen adversarial. Bei Nicht-Bestehen zurück zum Planer; bei Bestehen wird der Posteingangseintrag abgeschlossen."
+  },
+  "color": "#7C3AED",
+  "icon": "robot",
+  "workflow": {
+    "ref": "external",
+    "workflowId": "claude-style-agent-phased"
+  },
+  "preferredModel": "gemini-flash-latest",
+  "nodeModels": {
+    "planner": "gemini-flash-latest",
+    "synthesize": "gemini-flash-latest",
+    "verify": "gemini-3.1-pro"
+  },
+  "preferredTemperature": 1,
+  "maxIterations": 20,
+  "tools": [],
+  "sources": [],
+  "apps": [],
+  "skills": [],
+  "memory": {
+    "enabled": true,
+    "autoInclude": true,
+    "maxBytes": 8192,
+    "temperature": 0.2
+  },
+  "inboxId": "claude-style-agent",
+  "hitl": {
+    "approverGroups": []
+  },
+  "planner": {
+    "enabled": false,
+    "maxTasks": 10
+  },
+  "synthesizer": {
+    "enabled": false,
+    "maxTokens": 32000
+  },
+  "dynamicTasks": {
+    "enabled": false,
+    "maxDepth": 3
+  },
+  "review": {
+    "enabled": false,
+    "strictness": "balanced",
+    "maxRounds": 6,
+    "stallLimit": 4
+  },
+  "budgets": {
+    "maxWallTimeSec": 1800,
+    "maxTokensPerRun": 400000,
+    "maxToolRoundsPerNode": 12
+  },
+  "concurrency": {
+    "maxConcurrent": 1
+  },
+  "artifacts": {
+    "outputDir": "auto",
+    "primary": "result.md"
+  },
+  "groups": [],
+  "serviceAccount": {
+    "groups": ["agents", "authenticated"]
+  },
+  "enabled": false
+}

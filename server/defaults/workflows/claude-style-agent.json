@@ -1,0 +1,177 @@
+{
+  "id": "claude-style-agent",
+  "name": {
+    "en": "Claude-style Autonomous Agent",
+    "de": "Claude-artiger autonomer Agent"
+  },
+  "description": {
+    "en": "An autonomous agent loop modeled on Claude Code: it deterministically loads the highest-priority open item from its inbox, lays out a plan (set_plan), does the work with tools while keeping one task in progress, then an adversarial verifier tries to break the result and sends it back for revision until it passes. On success the inbox item is marked done. Budget- and context-managed; resumable after a restart.",
+    "de": "Eine autonome Agentenschleife nach dem Vorbild von Claude Code: Sie lädt deterministisch den wichtigsten offenen Eintrag aus ihrem Posteingang, erstellt einen Plan (set_plan), erledigt die Arbeit mit Werkzeugen und hält dabei genau eine Aufgabe in Bearbeitung. Anschließend versucht ein adversarialer Prüfer, das Ergebnis zu widerlegen, und schickt es zur Überarbeitung zurück, bis es besteht. Bei Erfolg wird der Posteingangseintrag als erledigt markiert."
+  },
+  "version": "1.1.0",
+  "enabled": false,
+  "config": {
+    "maxIterations": 14,
+    "allowCycles": true,
+    "maxExecutionTime": 1800000,
+    "persistence": "session",
+    "errorHandling": "fail"
+  },
+  "allowedGroups": [],
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Start",
+        "de": "Start"
+      },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "task",
+            "type": "string",
+            "required": false,
+            "description": {
+              "en": "Optional explicit task. When omitted (the normal case for an inbox-bound agent), the task is the highest-priority open inbox item loaded by the inbox-load node.",
+              "de": "Optionale explizite Aufgabe. Wird sie weggelassen (Normalfall bei einem an einen Posteingang gebundenen Agenten), ist die Aufgabe der wichtigste offene Posteingangseintrag, der vom inbox-load-Knoten geladen wird."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "inbox-load",
+      "type": "inbox-load",
+      "name": {
+        "en": "Load Inbox Item",
+        "de": "Posteingang laden"
+      },
+      "position": {
+        "x": 100,
+        "y": 220
+      },
+      "config": {}
+    },
+    {
+      "id": "agent",
+      "type": "prompt",
+      "name": {
+        "en": "Plan & Execute",
+        "de": "Planen & Ausführen"
+      },
+      "position": {
+        "x": 100,
+        "y": 340
+      },
+      "config": {
+        "system": {
+          "en": "You are an autonomous engineering agent. You take a task and get it done end-to-end.\n\nHow you work:\n1. PLAN FIRST. Before acting, call set_plan with a concrete, ordered list of steps (each with a short imperative title). Re-plan with set_plan or create_task when you learn something that changes the approach.\n2. EXECUTE. Work the plan one step at a time. Keep exactly ONE task in_progress (use update_task to move a task to in_progress before starting it and to done immediately when finished — never batch completions). Use your tools to actually gather evidence and do the work; do not guess when you can check.\n3. THINK & RECONSIDER. After each step, ask whether the result changes the plan. If you hit a dead end, revise the plan rather than forcing the original one.\n4. VERIFY YOUR OWN WORK before declaring done — an adversarial reviewer will try to break it, so close gaps proactively. Finish only when every task in your plan is done.\n\nThe task comes from your inbox; treat it as the authoritative instruction and do NOT invent a different topic. Output: produce the complete deliverable for the task as your final message. Be concise and concrete. Cite the sources/tools behind any factual claim. If a previous review found gaps, address every one of them.",
+          "de": "Sie sind ein autonomer Engineering-Agent, der eine Aufgabe vollständig erledigt. Planen Sie zuerst mit set_plan, führen Sie die Schritte einzeln aus (genau eine Aufgabe in Bearbeitung, update_task), denken Sie nach und überdenken Sie den Plan bei Bedarf, und prüfen Sie Ihre Arbeit selbst, bevor Sie fertig melden. Die Aufgabe stammt aus Ihrem Posteingang; behandeln Sie sie als verbindliche Anweisung und erfinden Sie kein anderes Thema. Belegen Sie Tatsachenbehauptungen mit Quellen. Beheben Sie alle in einer vorherigen Prüfung gefundenen Lücken. Schließen Sie erst ab, wenn jede Aufgabe Ihres Plans erledigt ist."
+        },
+        "prompt": {
+          "en": "Task:\n{{#if currentInboxItem.text}}{{currentInboxItem.text}}{{/if}}{{#if task}}{{task}}{{/if}}\n\n{{#if verificationResult.feedback}}A previous adversarial review did NOT pass. Below is YOUR OWN previous draft — REVISE it: keep everything that is correct and well-sourced, and fix every gap listed. Do NOT start over from scratch, and do NOT drop content that was already good.\n\n=== YOUR PREVIOUS DRAFT ===\n{{draft}}\n=== END PREVIOUS DRAFT ===\n\nGaps you MUST fix (verify each against a real source before changing it):\n{{verificationResult.feedback}}{{/if}}",
+          "de": "Aufgabe:\n{{#if currentInboxItem.text}}{{currentInboxItem.text}}{{/if}}{{#if task}}{{task}}{{/if}}\n\n{{#if verificationResult.feedback}}Eine vorherige Prüfung wurde NICHT bestanden. Unten steht IHR EIGENER vorheriger Entwurf — ÜBERARBEITEN Sie ihn: Behalten Sie alles Korrekte und gut Belegte und beheben Sie jede aufgeführte Lücke. Beginnen Sie NICHT von vorne und verwerfen Sie keine bereits guten Inhalte.\n\n=== IHR VORHERIGER ENTWURF ===\n{{draft}}\n=== ENDE VORHERIGER ENTWURF ===\n\nZu behebende Lücken (prüfen Sie jede gegen eine echte Quelle, bevor Sie sie ändern):\n{{verificationResult.feedback}}{{/if}}"
+        },
+        "tools": ["braveSearch", "webContentExtractor"],
+        "outputVariable": "draft",
+        "_persistAsArtifact": true
+      }
+    },
+    {
+      "id": "verify",
+      "type": "verifier",
+      "name": {
+        "en": "Adversarial Verify",
+        "de": "Adversariale Prüfung"
+      },
+      "position": {
+        "x": 100,
+        "y": 460
+      },
+      "config": {
+        "mode": "adversarial",
+        "tools": ["braveSearch", "webContentExtractor"],
+        "maxToolRounds": 6,
+        "maxRetries": 6,
+        "stallLimit": 2,
+        "inputVariable": "draft",
+        "criteria": "The deliverable must fully accomplish the task, be internally consistent, handle the obvious edge cases, and support every factual claim with a verifiable source. Try to break it: probe for missing requirements, unsupported claims, and wrong assumptions."
+      }
+    },
+    {
+      "id": "inbox-finalize",
+      "type": "inbox-finalize",
+      "name": {
+        "en": "Mark Inbox Item Done",
+        "de": "Posteingang abschließen"
+      },
+      "position": {
+        "x": 100,
+        "y": 580
+      },
+      "config": {}
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Done",
+        "de": "Fertig"
+      },
+      "position": {
+        "x": 100,
+        "y": 700
+      },
+      "config": {
+        "outputVariables": ["draft", "currentInboxItem"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-start-inbox",
+      "source": "start",
+      "target": "inbox-load"
+    },
+    {
+      "id": "e-inbox-agent",
+      "source": "inbox-load",
+      "target": "agent"
+    },
+    {
+      "id": "e-agent-verify",
+      "source": "agent",
+      "target": "verify"
+    },
+    {
+      "id": "e-verify-pass",
+      "source": "verify",
+      "target": "inbox-finalize",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "pass"
+      }
+    },
+    {
+      "id": "e-verify-retry",
+      "source": "verify",
+      "target": "agent",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "retry"
+      }
+    },
+    {
+      "id": "e-finalize-end",
+      "source": "inbox-finalize",
+      "target": "end"
+    }
+  ]
+}

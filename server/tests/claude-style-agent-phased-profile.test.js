@@ -2,7 +2,7 @@
 
 /**
  * Validates the phased Claude-style autonomous agent profile:
- *   - contents/agents/profiles/claude-style-agent-phased.json passes
+ *   - server/defaults/agents/profiles/claude-style-agent-phased.json passes
  *     agentProfileSchema.
  *   - Profile wires to the external phased workflow
  *     (workflow.ref === 'external', workflow.workflowId === 'claude-style-agent-phased').
@@ -33,8 +33,8 @@ function readJson(rel) {
 }
 
 async function run() {
-  const profile = readJson('contents/agents/profiles/claude-style-agent-phased.json');
-  const phasedWorkflow = readJson('contents/workflows/claude-style-agent-phased.json');
+  const profile = readJson('server/defaults/agents/profiles/claude-style-agent-phased.json');
+  const phasedWorkflow = readJson('server/defaults/workflows/claude-style-agent-phased.json');
 
   // The LLM node ids in the phased workflow that nodeModels may reference
   const PHASED_LLM_NODE_IDS = new Set(['planner', 'synthesize', 'verify']);
@@ -81,7 +81,10 @@ async function run() {
 
   console.log('\n🧪 profile is runnable for live validation\n');
   {
-    check('profile is enabled', profile.enabled === true);
+    // Shipped as a DEFAULT it ships DISABLED — an admin enables it deliberately
+    // rather than a fresh install auto-running an autonomous agent (and avoids
+    // two agents racing on the shared inbox).
+    check('profile ships disabled (admin enables)', profile.enabled === false);
     check('profile has a valid id', profile.id === 'claude-style-agent-phased');
     check(
       'profile has a localized name',
