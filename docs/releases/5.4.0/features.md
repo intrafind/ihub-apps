@@ -545,3 +545,7 @@ Uploading Outlook `.msg` email files now works. In the file picker, `.msg` files
 
 - The upload component never loaded the server's MIME-type configuration, so the file picker's accepted-types list was built from a minimal built-in fallback that omitted the `.msg` file extension. Because the Outlook MIME types (`application/vnd.ms-outlook`) are not recognised by the operating system's file dialog, `.msg` files had no matching rule and were blocked. `.eml` was unaffected because its MIME type (`message/rfc822`) is understood by the OS even without the extension. The component now loads the full configuration, so every configured format — `.msg`, `.eml`, `.xlsx`, `.pptx`, OpenOffice formats, and more — is correctly offered in the file picker.
 - The MSG format also no longer appears twice when configuring an app's upload formats. `.msg` had been registered under two MIME types (`application/vnd.ms-outlook` and a redundant `application/x-msg`), producing duplicate "MSG" entries in the admin upload-format selector. The duplicate is removed automatically on upgrade (migration **V064**); `application/vnd.ms-outlook` remains the single canonical type.
+
+## Fix — Outlook `.msg` Files Now Process After Selection
+
+Once a `.msg` file could be selected, uploading it still failed with an "Error processing file" message and the email's contents were never extracted. Selecting and uploading an Outlook `.msg` email now reads its subject, sender, recipients, and body as expected.
