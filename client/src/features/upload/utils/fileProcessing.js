@@ -150,9 +150,20 @@ export const loadMammoth = async () => {
   return mammoth;
 };
 
-// Lazy load MSGReader only when needed
+// Lazy load MSGReader only when needed.
+// @kenjiuno/msgreader is a CommonJS module that exposes the MsgReader class as
+// its default export (it sets both `__esModule` and `exports.default`). Because
+// of that double-default, bundler CJS/ESM interop can surface the constructor at
+// mod.default, mod.default.default, or mod itself depending on the build. Pick
+// the first candidate that is actually a constructor so it works everywhere.
 export const loadMsgReader = async () => {
-  const MsgReader = await import('@kenjiuno/msgreader');
+  const mod = await import('@kenjiuno/msgreader');
+  const MsgReader = [mod?.default?.default, mod?.default, mod].find(
+    candidate => typeof candidate === 'function'
+  );
+  if (!MsgReader) {
+    throw new Error('msg-reader-unavailable');
+  }
   return MsgReader;
 };
 
@@ -522,7 +533,7 @@ export const processXlsxFile = async file => {
 export const processMsgFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const MsgReader = await loadMsgReader();
-  const msgReader = new MsgReader.default(arrayBuffer);
+  const msgReader = new MsgReader(arrayBuffer);
   const fileData = msgReader.getFileData();
 
   // Extract text content from MSG file
