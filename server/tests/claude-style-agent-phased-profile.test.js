@@ -51,10 +51,7 @@ async function run() {
 
   console.log('\n🧪 profile wires to the phased external workflow\n');
   {
-    check(
-      'workflow.ref is "external"',
-      profile.workflow?.ref === 'external'
-    );
+    check('workflow.ref is "external"', profile.workflow?.ref === 'external');
     check(
       'workflow.workflowId is "claude-style-agent-phased"',
       profile.workflow?.workflowId === 'claude-style-agent-phased'
@@ -66,7 +63,7 @@ async function run() {
     const nodeModels = profile.nodeModels ?? {};
     const invalidKeys = Object.keys(nodeModels).filter(k => !PHASED_LLM_NODE_IDS.has(k));
     check(
-      'no typo\'d node ids in nodeModels',
+      "no typo'd node ids in nodeModels",
       invalidKeys.length === 0,
       invalidKeys.length > 0 ? `Unknown node ids: ${invalidKeys.join(', ')}` : undefined
     );
@@ -76,7 +73,9 @@ async function run() {
     check(
       'all nodeModels keys exist in the phased workflow',
       missingFromWorkflow.length === 0,
-      missingFromWorkflow.length > 0 ? `Not in workflow: ${missingFromWorkflow.join(', ')}` : undefined
+      missingFromWorkflow.length > 0
+        ? `Not in workflow: ${missingFromWorkflow.join(', ')}`
+        : undefined
     );
   }
 
@@ -84,10 +83,16 @@ async function run() {
   {
     check('profile is enabled', profile.enabled === true);
     check('profile has a valid id', profile.id === 'claude-style-agent-phased');
-    check('profile has a localized name', typeof profile.name?.en === 'string' && profile.name.en.length > 0);
+    check(
+      'profile has a localized name',
+      typeof profile.name?.en === 'string' && profile.name.en.length > 0
+    );
     check('memory enabled', profile.memory?.enabled === true);
     check('per-run token budget set', profile.budgets?.maxTokensPerRun > 0);
-    check('inboxId is set (inbox-load resolves)', typeof profile.inboxId === 'string' && profile.inboxId.length > 0);
+    check(
+      'inboxId is set (inbox-load resolves)',
+      typeof profile.inboxId === 'string' && profile.inboxId.length > 0
+    );
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

@@ -88,7 +88,11 @@ async function run() {
       nodeId: node.id
     });
 
-    check('stopped well before the 20-round cap', res.iterations <= 4, `iterations=${res.iterations}`);
+    check(
+      'stopped well before the 20-round cap',
+      res.iterations <= 4,
+      `iterations=${res.iterations}`
+    );
     check('flagged budget exhausted', res.budgetExhausted === true);
     check('produced the final answer', res.content.includes('final answer'));
     check(

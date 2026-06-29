@@ -28,7 +28,10 @@ function run() {
 
   // Defensive: falsy / <1 prior count returns the base name unchanged.
   check('null priorCount → base', e._versionedArtifactName('result.md', null) === 'result.md');
-  check('undefined priorCount → base', e._versionedArtifactName('result.md', undefined) === 'result.md');
+  check(
+    'undefined priorCount → base',
+    e._versionedArtifactName('result.md', undefined) === 'result.md'
+  );
 
   // Counter semantics: priorCount is "how many already written", so a fresh
   // run (0) writes result.md and bumps the counter to 1; the next compose

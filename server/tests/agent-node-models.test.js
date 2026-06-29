@@ -42,9 +42,17 @@ async function run() {
       preferredModel: 'gemini-flash-3',
       nodeModels: { agent: 'gemini-flash-3', verify: 'claude-opus-4-8' }
     });
-    check('valid profile with nodeModels parses', res.success, JSON.stringify(res.error?.issues?.slice(0, 2)));
+    check(
+      'valid profile with nodeModels parses',
+      res.success,
+      JSON.stringify(res.error?.issues?.slice(0, 2))
+    );
 
-    const bad = agentProfileSchema.safeParse({ id: 'p2', name: { en: 'P2' }, nodeModels: { agent: 5 } });
+    const bad = agentProfileSchema.safeParse({
+      id: 'p2',
+      name: { en: 'P2' },
+      nodeModels: { agent: 5 }
+    });
     check('non-string model id is rejected', bad.success === false);
   }
 
@@ -56,14 +64,20 @@ async function run() {
     check('agent node gets its model', byId.agent === 'fast-model', JSON.stringify(byId));
     check('verify node gets its model', byId.verify === 'strong-model', JSON.stringify(byId));
     check('unlisted node (start) is untouched', byId.start === undefined);
-    check('agent node keeps its other config', wf.nodes.find(n => n.id === 'agent').config.tools.length === 1);
+    check(
+      'agent node keeps its other config',
+      wf.nodes.find(n => n.id === 'agent').config.tools.length === 1
+    );
   }
 
   console.log('\n🧪 applyNodeModels is a safe no-op without a map\n');
   {
     const wf = makeWorkflow();
     applyNodeModels(wf, undefined);
-    check('no modelId added when nodeModels absent', wf.nodes.every(n => n.config?.modelId === undefined));
+    check(
+      'no modelId added when nodeModels absent',
+      wf.nodes.every(n => n.config?.modelId === undefined)
+    );
     // Also tolerant of malformed input.
     check('no throw on null workflow', applyNodeModels(null, { agent: 'x' }) === null);
   }

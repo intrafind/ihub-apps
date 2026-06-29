@@ -81,7 +81,9 @@ export async function resumeInterruptedRuns({
   stateDir = DEFAULT_STATE_DIR
 } = {}) {
   if (!engine || typeof engine.resumeFromCheckpoint !== 'function') {
-    throw new Error('resumeInterruptedRuns requires an engine with a resumeFromCheckpoint() method');
+    throw new Error(
+      'resumeInterruptedRuns requires an engine with a resumeFromCheckpoint() method'
+    );
   }
   if (typeof resolveDefinition !== 'function') {
     throw new Error('resumeInterruptedRuns requires a resolveDefinition(state) function');

@@ -46,7 +46,10 @@ async function run() {
   {
     const got = tryAcquireSchedulerLock({ lockPath });
     check('acquired the lock', got === true && isSchedulerOwner() === true);
-    check('lock file written with our identity', existsSync(lockPath) && JSON.parse(readFileSync(lockPath, 'utf8')).identity === _identity());
+    check(
+      'lock file written with our identity',
+      existsSync(lockPath) && JSON.parse(readFileSync(lockPath, 'utf8')).identity === _identity()
+    );
   }
 
   console.log('\n🧪 re-acquire refreshes our own lock\n');
@@ -65,7 +68,10 @@ async function run() {
     writeForeignLock({ pid: process.pid, lockTime: Date.now() });
     const got = tryAcquireSchedulerLock({ lockPath });
     check('did not acquire', got === false && isSchedulerOwner() === false);
-    check('foreign lock untouched', JSON.parse(readFileSync(lockPath, 'utf8')).identity === 'someone-else');
+    check(
+      'foreign lock untouched',
+      JSON.parse(readFileSync(lockPath, 'utf8')).identity === 'someone-else'
+    );
   }
 
   console.log('\n🧪 takes over a STALE foreign lock (past TTL)\n');

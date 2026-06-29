@@ -17,7 +17,9 @@ import { VerifierNodeExecutor } from '../services/workflow/executors/VerifierNod
 
 // Seed a fake enabled+default model so execute()'s model resolution succeeds.
 configCache.cache.set('config/models.json', {
-  data: [{ id: 'test-model', provider: 'openai', enabled: true, default: true, maxOutputTokens: 4096 }],
+  data: [
+    { id: 'test-model', provider: 'openai', enabled: true, default: true, maxOutputTokens: 4096 }
+  ],
   etag: 'test'
 });
 
@@ -43,7 +45,8 @@ async function run() {
   {
     let toolLoopArgs = null;
     const promptExecutor = {
-      getAgentTools: async ids => ids.map(id => ({ id, name: id, parameters: { type: 'object', properties: {} } })),
+      getAgentTools: async ids =>
+        ids.map(id => ({ id, name: id, parameters: { type: 'object', properties: {} } })),
       executeLLMWithTools: async args => {
         toolLoopArgs = args;
         return {
@@ -67,9 +70,13 @@ async function run() {
     check('verdict PARTIAL → retry branch', result.branch === 'retry');
     check(
       'surfaces failures as _lastReviewGaps',
-      Array.isArray(result.stateUpdates._lastReviewGaps) && result.stateUpdates._lastReviewGaps.length === 1
+      Array.isArray(result.stateUpdates._lastReviewGaps) &&
+        result.stateUpdates._lastReviewGaps.length === 1
     );
-    check('records adversarial verdict', result.stateUpdates.verificationResult.verdict === 'PARTIAL');
+    check(
+      'records adversarial verdict',
+      result.stateUpdates.verificationResult.verdict === 'PARTIAL'
+    );
   }
 
   console.log('\n🧪 toolless adversarial verifier uses a single LLM call (no tool loop)\n');

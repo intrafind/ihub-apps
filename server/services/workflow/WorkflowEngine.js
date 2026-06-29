@@ -387,11 +387,7 @@ export class WorkflowEngine {
     }
 
     // Terminal runs are not resumable.
-    const TERMINAL = [
-      WorkflowStatus.COMPLETED,
-      WorkflowStatus.FAILED,
-      WorkflowStatus.CANCELLED
-    ];
+    const TERMINAL = [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED];
     if (TERMINAL.includes(state.status)) {
       logger.debug('Skipping resume — execution already terminal', {
         component: 'WorkflowEngine',
@@ -431,18 +427,15 @@ export class WorkflowEngine {
     });
 
     // Re-enter the same loop; it reads currentNodes/completedNodes from state.
-    this._runExecutionLoop(
-      workflowDefinition,
-      executionId,
-      options,
-      abortController.signal
-    ).catch(error => {
-      logger.error('Resumed workflow execution failed', {
-        component: 'WorkflowEngine',
-        executionId,
-        error
-      });
-    });
+    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
+      error => {
+        logger.error('Resumed workflow execution failed', {
+          component: 'WorkflowEngine',
+          executionId,
+          error
+        });
+      }
+    );
 
     return this.stateManager.get(executionId);
   }

@@ -41,7 +41,10 @@ console.log('\n🧪 round 1 — task ids get r1_ prefix\n');
   const got = plan.tasks.map(t => t.id);
   check('task_a → r1_task_a', got[0] === 'r1_task_a', `got ${got[0]}`);
   check('task_b → r1_task_b', got[1] === 'r1_task_b', `got ${got[1]}`);
-  check('all round-1 ids start with r1_', got.every(id => id.startsWith('r1_')));
+  check(
+    'all round-1 ids start with r1_',
+    got.every(id => id.startsWith('r1_'))
+  );
 }
 
 // ── round-2 ids are prefixed r2_ ──────────────────────────────────────────
@@ -68,12 +71,21 @@ console.log('\n🧪 auditability — round-0 and round-1 ids produce no overlap\
   const ids1 = new Set(plan1.tasks.map(t => t.id));
 
   const overlap = [...ids0].filter(id => ids1.has(id));
-  check('round-0 ids and round-1 ids are disjoint', overlap.length === 0,
-    `overlap: ${JSON.stringify(overlap)}`);
-  check('round-0 ids have no r{N}_ prefix', [...ids0].every(id => !/^r\d+_/.test(id)),
-    `ids0: ${JSON.stringify([...ids0])}`);
-  check('round-1 ids are namespaced (r1_ prefix)', [...ids1].every(id => id.startsWith('r1_')),
-    `ids1: ${JSON.stringify([...ids1])}`);
+  check(
+    'round-0 ids and round-1 ids are disjoint',
+    overlap.length === 0,
+    `overlap: ${JSON.stringify(overlap)}`
+  );
+  check(
+    'round-0 ids have no r{N}_ prefix',
+    [...ids0].every(id => !/^r\d+_/.test(id)),
+    `ids0: ${JSON.stringify([...ids0])}`
+  );
+  check(
+    'round-1 ids are namespaced (r1_ prefix)',
+    [...ids1].every(id => id.startsWith('r1_')),
+    `ids1: ${JSON.stringify([...ids1])}`
+  );
 }
 
 // ── dependsOn same-round refs are also namespaced ─────────────────────────
@@ -88,8 +100,11 @@ console.log('\n🧪 dependsOn — same-round deps get same prefix\n');
   executor._namespaceTaskIds(plan, 1);
   check('step_1 → r1_step_1', plan.tasks[0].id === 'r1_step_1', `got ${plan.tasks[0].id}`);
   check('step_2 → r1_step_2', plan.tasks[1].id === 'r1_step_2', `got ${plan.tasks[1].id}`);
-  check('dep step_1 → r1_step_1', plan.tasks[1].dependsOn[0] === 'r1_step_1',
-    `got ${plan.tasks[1].dependsOn[0]}`);
+  check(
+    'dep step_1 → r1_step_1',
+    plan.tasks[1].dependsOn[0] === 'r1_step_1',
+    `got ${plan.tasks[1].dependsOn[0]}`
+  );
 }
 
 // ── cross-round deps (from a prior round) are NOT re-prefixed ─────────────
@@ -104,8 +119,11 @@ console.log('\n🧪 dependsOn — cross-round deps (prior round ids) are preserv
   };
   executor._namespaceTaskIds(plan, 1);
   check('new_task → r1_new_task', plan.tasks[0].id === 'r1_new_task', `got ${plan.tasks[0].id}`);
-  check('cross-round dep prior_task unchanged', plan.tasks[0].dependsOn[0] === 'prior_task',
-    `got ${plan.tasks[0].dependsOn[0]}`);
+  check(
+    'cross-round dep prior_task unchanged',
+    plan.tasks[0].dependsOn[0] === 'prior_task',
+    `got ${plan.tasks[0].dependsOn[0]}`
+  );
 }
 
 // ── already-prefixed ids are not double-prefixed ───────────────────────────
@@ -113,12 +131,15 @@ console.log('\n🧪 idempotency — already-prefixed ids are not double-prefixed
 {
   const plan = {
     tasks: [
-      { id: 'r1_task_a', dependsOn: [] }  // LLM already added the prefix
+      { id: 'r1_task_a', dependsOn: [] } // LLM already added the prefix
     ]
   };
   executor._namespaceTaskIds(plan, 1);
-  check('r1_task_a not doubled to r1_r1_task_a', plan.tasks[0].id === 'r1_task_a',
-    `got ${plan.tasks[0].id}`);
+  check(
+    'r1_task_a not doubled to r1_r1_task_a',
+    plan.tasks[0].id === 'r1_task_a',
+    `got ${plan.tasks[0].id}`
+  );
 }
 
 console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

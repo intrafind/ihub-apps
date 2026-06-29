@@ -61,7 +61,10 @@ async function run() {
       { verdict: 'FAIL', failures: ['Section 2 unsupported'] },
       { mode: 'adversarial' }
     );
-    check('FAIL with gaps is conclusive', realFail.verdict === 'FAIL' && realFail.conclusive === true);
+    check(
+      'FAIL with gaps is conclusive',
+      realFail.verdict === 'FAIL' && realFail.conclusive === true
+    );
     check('PASS is conclusive', pass.conclusive === true);
   }
 
@@ -73,15 +76,26 @@ async function run() {
       { id: 'cheap-verifier', default: false }
     ];
     // No per-node override → inherit the run's workflow default (profile model).
-    const inherited = v.resolveModel(models, {}, {
-      workflow: { config: { defaultModelId: 'gemini-flash-3' } }
-    });
-    check('inherits workflow defaultModelId (profile preferredModel)', inherited?.id === 'gemini-flash-3');
+    const inherited = v.resolveModel(
+      models,
+      {},
+      {
+        workflow: { config: { defaultModelId: 'gemini-flash-3' } }
+      }
+    );
+    check(
+      'inherits workflow defaultModelId (profile preferredModel)',
+      inherited?.id === 'gemini-flash-3'
+    );
 
     // Per-node config.modelId still wins (advanced override).
-    const overridden = v.resolveModel(models, { modelId: 'cheap-verifier' }, {
-      workflow: { config: { defaultModelId: 'gemini-flash-3' } }
-    });
+    const overridden = v.resolveModel(
+      models,
+      { modelId: 'cheap-verifier' },
+      {
+        workflow: { config: { defaultModelId: 'gemini-flash-3' } }
+      }
+    );
     check('per-node config.modelId overrides the default', overridden?.id === 'cheap-verifier');
 
     // Nothing configured → global default.
@@ -106,9 +120,15 @@ async function run() {
     const msgs = v.buildAdversarialMessages('Must handle empty input', 'function f(){}');
     const sys = msgs[0].content;
     check('system role is adversarial', /try to break it/i.test(sys));
-    check('asks for PASS/FAIL/PARTIAL verdict', /PASS/.test(sys) && /FAIL/.test(sys) && /PARTIAL/.test(sys));
+    check(
+      'asks for PASS/FAIL/PARTIAL verdict',
+      /PASS/.test(sys) && /FAIL/.test(sys) && /PARTIAL/.test(sys)
+    );
     check('names rationalizations', /rationalization/i.test(sys));
-    check('user message carries criteria + output', /Must handle empty input/.test(msgs[1].content));
+    check(
+      'user message carries criteria + output',
+      /Must handle empty input/.test(msgs[1].content)
+    );
   }
 
   console.log('\n🧪 reconsideration hook — execute() surfaces gaps\n');
@@ -164,7 +184,11 @@ async function run() {
       data: {
         draft: 'some unverified deliverable',
         _verifier_retries_verify: 2,
-        verificationResult: { passed: false, verdict: 'FAIL', feedback: 'Section 3 is unsupported.' },
+        verificationResult: {
+          passed: false,
+          verdict: 'FAIL',
+          feedback: 'Section 3 is unsupported.'
+        },
         _lastReviewGaps: ['Section 3 is unsupported.']
       }
     };
@@ -200,18 +224,33 @@ async function run() {
       }
     };
     const result = await exec.execute(node, state, { language: 'en' });
-    check('stall ends the run before the retry ceiling (accepted via stall)', result.status === 'completed');
+    check(
+      'stall ends the run before the retry ceiling (accepted via stall)',
+      result.status === 'completed'
+    );
     check('default knobs: stall accepts draft (branch pass)', result.branch === 'pass');
-    check('stall accept: verificationResult.accepted=stall', result.stateUpdates?.verificationResult?.accepted === 'stall');
+    check(
+      'stall accept: verificationResult.accepted=stall',
+      result.stateUpdates?.verificationResult?.accepted === 'stall'
+    );
 
     // With requirePass:true, stall still ends not-passed (strict mode).
     const strictNode = {
       id: 'verify',
-      config: { mode: 'adversarial', inputVariable: 'draft', maxRetries: 6, stallLimit: 2, requirePass: true }
+      config: {
+        mode: 'adversarial',
+        inputVariable: 'draft',
+        maxRetries: 6,
+        stallLimit: 2,
+        requirePass: true
+      }
     };
     const strictResult = await exec.execute(strictNode, state, { language: 'en' });
     check('requirePass + stall → not-passed (isTerminal)', strictResult.isTerminal === true);
-    check('requirePass + stall → _verificationOutcome not_passed', strictResult.stateUpdates?._verificationOutcome === 'not_passed');
+    check(
+      'requirePass + stall → _verificationOutcome not_passed',
+      strictResult.stateUpdates?._verificationOutcome === 'not_passed'
+    );
   }
 
   console.log('\n🧪 inconclusive verdict is accepted-with-warning (not a wasted retry)\n');
@@ -225,16 +264,24 @@ async function run() {
       executeStreamingRequest: async () => ({ content: 'I am not sure how to judge this.' })
     };
     const exec = new VerifierNodeExecutor({ llmHelper });
-    const node = { id: 'verify', config: { mode: 'adversarial', inputVariable: 'draft', maxRetries: 2 } };
+    const node = {
+      id: 'verify',
+      config: { mode: 'adversarial', inputVariable: 'draft', maxRetries: 2 }
+    };
     const state = { data: { draft: 'an okish deliverable', _verifier_retries_verify: 0 } };
     const result = await exec.execute(node, state, { language: 'en' });
     if (result.status === 'completed' && result.branch) {
       check('inconclusive does not retry (branch pass)', result.branch === 'pass');
       check('retry counter not incremented', result.stateUpdates?._verifier_retries_verify === 0);
-      check('records a verification warning', typeof result.stateUpdates?._verificationWarning === 'string');
+      check(
+        'records a verification warning',
+        typeof result.stateUpdates?._verificationWarning === 'string'
+      );
       check('verdict is INCONCLUSIVE', result.output?.verdict === 'INCONCLUSIVE');
     } else {
-      console.log('   ⏭  no model available in this env — skipping inconclusive integration assert');
+      console.log(
+        '   ⏭  no model available in this env — skipping inconclusive integration assert'
+      );
     }
   }
 
@@ -243,19 +290,51 @@ async function run() {
     const v = new VerifierNodeExecutor();
     const partial = { verdict: 'PARTIAL', passed: false, conclusive: true };
     // lenient: accept a conclusive PARTIAL immediately
-    check('lenient accepts PARTIAL immediately',
-      v.resolveAcceptance({ ...partial, stalled: false, knobs: { acceptPartial: true, acceptPartialAfterStall: true, requirePass: false } }).accept === true);
+    check(
+      'lenient accepts PARTIAL immediately',
+      v.resolveAcceptance({
+        ...partial,
+        stalled: false,
+        knobs: { acceptPartial: true, acceptPartialAfterStall: true, requirePass: false }
+      }).accept === true
+    );
     // balanced: PARTIAL retries until stalled, then accepts
-    check('balanced PARTIAL retries before stall',
-      v.resolveAcceptance({ ...partial, stalled: false, knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false } }).accept === false);
-    check('balanced PARTIAL accepts on stall',
-      v.resolveAcceptance({ ...partial, stalled: true, knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false } }).accept === true);
+    check(
+      'balanced PARTIAL retries before stall',
+      v.resolveAcceptance({
+        ...partial,
+        stalled: false,
+        knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false }
+      }).accept === false
+    );
+    check(
+      'balanced PARTIAL accepts on stall',
+      v.resolveAcceptance({
+        ...partial,
+        stalled: true,
+        knobs: { acceptPartial: false, acceptPartialAfterStall: true, requirePass: false }
+      }).accept === true
+    );
     // strict: never accept PARTIAL, even on stall
-    check('strict never accepts PARTIAL',
-      v.resolveAcceptance({ ...partial, stalled: true, knobs: { acceptPartial: false, acceptPartialAfterStall: false, requirePass: true } }).accept === false);
+    check(
+      'strict never accepts PARTIAL',
+      v.resolveAcceptance({
+        ...partial,
+        stalled: true,
+        knobs: { acceptPartial: false, acceptPartialAfterStall: false, requirePass: true }
+      }).accept === false
+    );
     // a real PASS always accepts regardless of knobs
-    check('PASS always accepts',
-      v.resolveAcceptance({ verdict: 'PASS', passed: true, conclusive: true, stalled: false, knobs: { requirePass: true } }).accept === true);
+    check(
+      'PASS always accepts',
+      v.resolveAcceptance({
+        verdict: 'PASS',
+        passed: true,
+        conclusive: true,
+        stalled: false,
+        knobs: { requirePass: true }
+      }).accept === true
+    );
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

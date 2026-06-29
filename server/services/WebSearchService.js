@@ -94,42 +94,42 @@ class BraveSearchProvider extends SearchProvider {
     const MAX_RETRIES = 2;
     let res;
     let attempt = 0;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
-    try {
-      res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
-        headers: {
-          'X-Subscription-Token': apiKey,
-          Accept: 'application/json'
-        }
-      });
-    } catch (error) {
-      // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
-      // surface here as a thrown Error from node-fetch. Without this branch the upstream
-      // wrapper only sees `error.message` and drops the code/cause, making proxy issues
-      // impossible to diagnose from the logs.
-      const causeMsg =
-        error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
-      logger.error('Brave search network request failed', {
-        component: 'WebSearch',
-        provider: 'brave',
-        endpoint,
-        errorName: error?.name,
-        errorCode: error?.code || error?.cause?.code,
-        errorMessage: error?.message,
-        errorCause: causeMsg,
-        hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
-      });
-      const detailParts = [error?.message];
-      if (error?.code) detailParts.push(`code=${error.code}`);
-      if (causeMsg) detailParts.push(`cause=${causeMsg}`);
-      const wrapped = new Error(
-        `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
-      );
-      wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
-      wrapped.cause = error;
-      throw wrapped;
-    }
+      try {
+        res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+          headers: {
+            'X-Subscription-Token': apiKey,
+            Accept: 'application/json'
+          }
+        });
+      } catch (error) {
+        // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
+        // surface here as a thrown Error from node-fetch. Without this branch the upstream
+        // wrapper only sees `error.message` and drops the code/cause, making proxy issues
+        // impossible to diagnose from the logs.
+        const causeMsg =
+          error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
+        logger.error('Brave search network request failed', {
+          component: 'WebSearch',
+          provider: 'brave',
+          endpoint,
+          errorName: error?.name,
+          errorCode: error?.code || error?.cause?.code,
+          errorMessage: error?.message,
+          errorCause: causeMsg,
+          hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
+        });
+        const detailParts = [error?.message];
+        if (error?.code) detailParts.push(`code=${error.code}`);
+        if (causeMsg) detailParts.push(`cause=${causeMsg}`);
+        const wrapped = new Error(
+          `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
+        );
+        wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
+        wrapped.cause = error;
+        throw wrapped;
+      }
 
       if (res.ok) break;
 

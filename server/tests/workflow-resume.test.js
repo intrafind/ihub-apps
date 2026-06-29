@@ -115,7 +115,10 @@ async function run() {
     seedState(stateDir, 'wf-exec-c', { status: 'pending' });
     const found = await findResumableExecutions(stateDir);
     const ids = found.map(f => f.executionId).sort();
-    check('returns only running/pending runs', ids.length === 2 && ids[0] === 'wf-exec-a' && ids[1] === 'wf-exec-c');
+    check(
+      'returns only running/pending runs',
+      ids.length === 2 && ids[0] === 'wf-exec-a' && ids[1] === 'wf-exec-c'
+    );
   }
 
   console.log('\n🧪 resumeInterruptedRuns\n');

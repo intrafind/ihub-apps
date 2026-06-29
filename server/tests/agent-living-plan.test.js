@@ -49,7 +49,10 @@ async function run() {
   check('empty input → ""', deriveActiveForm('') === '' && deriveActiveForm(undefined) === '');
 
   console.log('\n🧪 buildTaskRecord\n');
-  check('derives activeForm', buildTaskRecord({ title: 'Run tests' }).activeForm === 'Running tests');
+  check(
+    'derives activeForm',
+    buildTaskRecord({ title: 'Run tests' }).activeForm === 'Running tests'
+  );
   check(
     'honors explicit activeForm',
     buildTaskRecord({ title: 'Run tests', activeForm: 'Executing' }).activeForm === 'Executing'
@@ -65,7 +68,10 @@ async function run() {
     ];
     const demoted = enforceSingleInProgress(queue, 'b');
     check('demotes other in_progress tasks', demoted.length === 1 && demoted[0] === 'a');
-    check('keeps the chosen task in_progress', queue.find(t => t.id === 'b').status === 'in_progress');
+    check(
+      'keeps the chosen task in_progress',
+      queue.find(t => t.id === 'b').status === 'in_progress'
+    );
     check('demoted task goes back to open', queue.find(t => t.id === 'a').status === 'open');
   }
 
@@ -75,7 +81,10 @@ async function run() {
     const res = await setPlan({ ...params, tasks: [{ title: 'Step one' }, { title: 'Step two' }] });
     const q = params.appConfig._workflowState.data._taskQueue;
     check('builds a fresh queue', res.ok === true && res.added === 2 && q.length === 2);
-    check('all new tasks are open', q.every(t => t.status === 'open'));
+    check(
+      'all new tasks are open',
+      q.every(t => t.status === 'open')
+    );
   }
   {
     const params = makeParams();
@@ -117,7 +126,10 @@ async function run() {
     check('rejects an unknown status', bad.error === true && bad.code === 'INVALID_STATUS');
 
     const missing = await updateTask({ ...params, taskId: 'nope', status: 'done' });
-    check('returns NOT_FOUND for missing task', missing.error === true && missing.code === 'NOT_FOUND');
+    check(
+      'returns NOT_FOUND for missing task',
+      missing.error === true && missing.code === 'NOT_FOUND'
+    );
   }
 
   console.log('\n🧪 list_tasks still filters after upgrade\n');

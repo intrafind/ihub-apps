@@ -43,7 +43,11 @@ async function run() {
   console.log('🧪 workflow passes the schema\n');
   {
     const result = workflowConfigSchema.safeParse(workflow);
-    check('claude-style-agent.json is schema-valid', result.success, JSON.stringify(result.error?.issues?.slice(0, 3)));
+    check(
+      'claude-style-agent.json is schema-valid',
+      result.success,
+      JSON.stringify(result.error?.issues?.slice(0, 3))
+    );
   }
 
   console.log('\n🧪 workflow wires the adversarial self-correction loop\n');
@@ -51,9 +55,14 @@ async function run() {
     const verify = workflow.nodes.find(n => n.id === 'verify');
     check('has a verifier node', verify?.type === 'verifier');
     check('verifier is adversarial', verify?.config?.mode === 'adversarial');
-    check('verifier is tool-enabled', Array.isArray(verify?.config?.tools) && verify.config.tools.length > 0);
+    check(
+      'verifier is tool-enabled',
+      Array.isArray(verify?.config?.tools) && verify.config.tools.length > 0
+    );
 
-    const finalizeEdge = workflow.edges.find(e => e.source === 'verify' && e.target === 'inbox-finalize');
+    const finalizeEdge = workflow.edges.find(
+      e => e.source === 'verify' && e.target === 'inbox-finalize'
+    );
     const retryEdge = workflow.edges.find(e => e.source === 'verify' && e.target === 'agent');
     check('pass branch routes verify → inbox-finalize', finalizeEdge?.condition?.value === 'pass');
     check('retry branch loops verify → agent', retryEdge?.condition?.value === 'retry');
@@ -69,7 +78,9 @@ async function run() {
 
     const startToLoad = workflow.edges.find(e => e.source === 'start' && e.target === 'inbox-load');
     const loadToAgent = workflow.edges.find(e => e.source === 'inbox-load' && e.target === 'agent');
-    const finalizeToEnd = workflow.edges.find(e => e.source === 'inbox-finalize' && e.target === 'end');
+    const finalizeToEnd = workflow.edges.find(
+      e => e.source === 'inbox-finalize' && e.target === 'end'
+    );
     check('start routes into inbox-load (not straight to agent)', !!startToLoad);
     check('inbox-load feeds the agent', !!loadToAgent);
     check('inbox-finalize closes into end', !!finalizeToEnd);
@@ -87,12 +98,19 @@ async function run() {
   console.log('\n🧪 profile passes the schema\n');
   {
     const result = agentProfileSchema.safeParse(profile);
-    check('claude-style-agent profile is schema-valid', result.success, JSON.stringify(result.error?.issues?.slice(0, 3)));
+    check(
+      'claude-style-agent profile is schema-valid',
+      result.success,
+      JSON.stringify(result.error?.issues?.slice(0, 3))
+    );
   }
 
   console.log('\n🧪 profile enables the Claude-like capabilities\n');
   {
-    check('references the external workflow', profile.workflow?.ref === 'external' && profile.workflow?.workflowId === 'claude-style-agent');
+    check(
+      'references the external workflow',
+      profile.workflow?.ref === 'external' && profile.workflow?.workflowId === 'claude-style-agent'
+    );
     check('dynamic tasks enabled (living plan)', profile.dynamicTasks?.enabled === true);
     check('memory enabled', profile.memory?.enabled === true);
     check('per-run token budget set', profile.budgets?.maxTokensPerRun > 0);
@@ -117,7 +135,10 @@ async function run() {
     const ids = getAgentToolIds(profile, agentNode.config);
     check('set_plan auto-registered', ids.includes('set_plan'));
     check('update_task auto-registered', ids.includes('update_task'));
-    check('memory tools auto-registered', ids.includes('read_memory') && ids.includes('write_memory'));
+    check(
+      'memory tools auto-registered',
+      ids.includes('read_memory') && ids.includes('write_memory')
+    );
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

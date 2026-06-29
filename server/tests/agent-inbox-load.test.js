@@ -41,7 +41,9 @@ async function run() {
     try {
       inbox = await inboxStore.readInbox(INBOX_ID, { status: 'all' });
     } catch (err) {
-      console.log(`   ⏭  inbox '${INBOX_ID}' not present in this env — skipping runtime read (${err.message})`);
+      console.log(
+        `   ⏭  inbox '${INBOX_ID}' not present in this env — skipping runtime read (${err.message})`
+      );
     }
 
     if (inbox) {
@@ -57,12 +59,20 @@ async function run() {
       };
       const result = await exec.execute(node, state, context);
 
-      check('node succeeds (inboxId resolved from context.user)', result.status === 'completed', result.error);
+      check(
+        'node succeeds (inboxId resolved from context.user)',
+        result.status === 'completed',
+        result.error
+      );
       if (openItems.length === 0) {
         check('empty inbox short-circuits the run', result.isTerminal === true);
       } else {
         const item = result.stateUpdates?.currentInboxItem;
-        check('currentInboxItem is populated (not empty → no hallucination)', !!item?.text, JSON.stringify(item));
+        check(
+          'currentInboxItem is populated (not empty → no hallucination)',
+          !!item?.text,
+          JSON.stringify(item)
+        );
         check(
           'picked item is one of the OPEN inbox items',
           openItems.some(o => o.text === item?.text),
