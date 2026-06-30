@@ -94,24 +94,55 @@ async function run() {
     check('stopped offering the dead tool', calls.withToolsOffered < calls.count, `withTools=${calls.withToolsOffered} total=${calls.count}`);
   }
 
-  console.log('\n🧪 per-item 404s do NOT disable a working tool\n');
+  console.log('\n🧪 repeated 404s (any error) trip the breaker after the streak\n');
   {
-    // A 404 from one URL is input-specific — the tool itself still works, so it
-    // must NOT be circuit-broken. With tools always offered and the model always
-    // calling, only the round cap stops it (proving the breaker did not fire).
+    // The wf-exec-64d14c07 pivot: braveSearch dies, the model fabricates URLs
+    // and webContentExtractor 404s every round to the cap. A 404 is per-item so
+    // it is NOT rate-limited, but failing 3× IN A ROW is futile → disable it.
     const { executor } = makeExecutor({ error: true, message: 'Page could not be found (HTTP 404)' });
     const context = { language: 'en', _agentProfile: { budgets: {} }, _workflowState: { executionId: 'e2', data: {} } };
-    const tools = [{ id: 'webContentExtractor', name: 'braveSearch', parameters: { type: 'object', properties: {} } }];
+    // The mock model always calls a tool named "braveSearch"; keep the tool id
+    // consistent so matching resolves. The point is the ERROR TYPE (404, not a
+    // rate-limit) tripping the consecutive-failure breaker.
+    const tools = [{ id: 'braveSearch', name: 'braveSearch', parameters: { type: 'object', properties: {} } }];
     const res = await executor.executeLLMWithTools({
       model,
       messages: [{ role: 'user', content: 'extract' }],
       tools,
-      config: { maxIterations: 5 },
+      config: { maxIterations: 8, maxConsecutiveToolFailures: 3 },
       context,
       nodeId: 'extract-x'
     });
-    check('404 did not trip the breaker (ran to cap)', res.iterations === 5, `iterations=${res.iterations}`);
-    check('no tools disabled for per-item 404', (res.disabledTools || []).length === 0, JSON.stringify(res.disabledTools));
+    check('repeated failures trip the breaker before the cap', res.iterations <= 5, `iterations=${res.iterations}`);
+    check('the repeatedly-failing tool is disabled', (res.disabledTools || []).includes('braveSearch'), JSON.stringify(res.disabledTools));
+    check('signaled circuit-break on workflow state', Array.isArray(context._workflowState.data._circuitBrokenTools) && context._workflowState.data._circuitBrokenTools.some(e => e.reason === 'repeated_failures'), JSON.stringify(context._workflowState.data._circuitBrokenTools));
+    check('still produced a final answer', res.content.includes('final answer'));
+  }
+
+  console.log('\n🧪 an intermittent success resets the streak (working tool stays)\n');
+  {
+    // err, err, success, err, err … never 3-in-a-row → tool keeps working and
+    // only the round cap stops it (the streak breaker must not over-fire).
+    let i = 0;
+    const { executor } = makeExecutor(null);
+    executor.executeToolCall = async toolCall => {
+      i += 1;
+      const fail = i % 3 !== 0; // pattern: fail, fail, ok, fail, fail, ok …
+      return {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
+        content: fail ? JSON.stringify({ error: true, message: 'HTTP 404' }) : JSON.stringify({ results: [] })
+      };
+    };
+    const context = { language: 'en', _agentProfile: { budgets: {} }, _workflowState: { executionId: 'e3', data: {} } };
+    const tools = [{ id: 'braveSearch', name: 'braveSearch', parameters: { type: 'object', properties: {} } }];
+    const res = await executor.executeLLMWithTools({
+      model, messages: [{ role: 'user', content: 'x' }], tools,
+      config: { maxIterations: 6, maxConsecutiveToolFailures: 3 }, context, nodeId: 'intermittent'
+    });
+    check('intermittent success keeps the tool alive (ran to cap)', res.iterations === 6, `iterations=${res.iterations}`);
+    check('no disable when streak never reaches the limit', (res.disabledTools || []).length === 0, JSON.stringify(res.disabledTools));
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

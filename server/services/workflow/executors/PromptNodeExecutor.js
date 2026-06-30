@@ -1441,7 +1441,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // force a final answer. Per-item errors (e.g. a 404 on one URL) are NOT
     // counted — the tool itself still works.
     const RATE_LIMIT_FAIL_LIMIT = config.maxRateLimitFailures ?? 2;
+    // A tool that fails this many times IN A ROW (any error — e.g. a search
+    // provider that's down, or webContentExtractor 404ing on URLs the model
+    // invented because search returned nothing) is futile; disable it too. A
+    // single success resets the streak, so occasional per-item misses are
+    // tolerated (run wf-exec-64d14c07: braveSearch was circuit-broken on 429s
+    // but the model pivoted to webContentExtractor and 404'd to the round cap).
+    const CONSECUTIVE_FAIL_LIMIT = config.maxConsecutiveToolFailures ?? 3;
     const rateLimitFails = new Map();
+    const consecutiveFails = new Map();
     const disabledTools = new Set();
 
     // Verify API key using centralized helper
@@ -1619,34 +1627,50 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         const toolResult = await this.executeToolCall(toolCall, tools, context);
         currentMessages.push(toolResult);
 
-        // Circuit-breaker: count rate-limit failures per tool and disable a
-        // tool that keeps hitting them, so the model can't retry a dead tool to
-        // the round cap.
+        // Circuit-breaker: a tool that is rate-limited (fast trip) OR fails
+        // repeatedly in a row (any error — futile) is withheld for the rest of
+        // the step so the model can't retry a dead tool to the round cap.
         const verdict = this._classifyToolResult(toolResult);
-        if (verdict.failed && verdict.rateLimited) {
-          const matched = tools.find(
-            t => t.id === toolResult.name || normalizeToolName(t.id) === toolResult.name
-          );
-          const tid = matched?.id || toolResult.name;
-          const n = (rateLimitFails.get(tid) || 0) + 1;
-          rateLimitFails.set(tid, n);
-          if (n >= RATE_LIMIT_FAIL_LIMIT && !disabledTools.has(tid)) {
-            disabledTools.add(tid);
-            this.logger.warn('Tool circuit-broken (rate-limited) — withholding for this step', {
-              component: 'PromptNodeExecutor',
-              nodeId,
-              tool: tid,
-              failures: n
-            });
-            currentMessages.push({
-              role: 'user',
-              content:
-                `[system] The tool "${tid}" is rate-limited and unavailable for the rest of ` +
-                `this step (it failed ${n}× with a rate-limit error). Do NOT call it again. ` +
-                `Use any other available tools, or produce your best final answer now with what ` +
-                `you already have.`
-            });
-          }
+        const matched = tools.find(
+          t => t.id === toolResult.name || normalizeToolName(t.id) === toolResult.name
+        );
+        const tid = matched?.id || toolResult.name;
+        if (verdict.failed) {
+          if (verdict.rateLimited) rateLimitFails.set(tid, (rateLimitFails.get(tid) || 0) + 1);
+          consecutiveFails.set(tid, (consecutiveFails.get(tid) || 0) + 1);
+        } else {
+          consecutiveFails.set(tid, 0); // a success resets the streak
+        }
+        const rl = rateLimitFails.get(tid) || 0;
+        const streak = consecutiveFails.get(tid) || 0;
+        const tripped =
+          (verdict.rateLimited && rl >= RATE_LIMIT_FAIL_LIMIT) || streak >= CONSECUTIVE_FAIL_LIMIT;
+        if (tripped && !disabledTools.has(tid)) {
+          disabledTools.add(tid);
+          const reason = rl >= RATE_LIMIT_FAIL_LIMIT ? 'rate_limited' : 'repeated_failures';
+          const count = reason === 'rate_limited' ? rl : streak;
+          this._signalToolCircuitBroken(context, {
+            tool: tid,
+            reason,
+            failures: count,
+            lastMessage: verdict.message,
+            nodeId
+          });
+          // Search tools failing means the model has no real URLs — explicitly
+          // forbid fabricating sources so it doesn't pivot to inventing URLs.
+          const isSearch = this._isCitationProducingTool(tid);
+          currentMessages.push({
+            role: 'user',
+            content:
+              `[system] The tool "${tid}" is unavailable for the rest of this step ` +
+              `(${reason === 'rate_limited' ? `rate-limited, failed ${count}×` : `failed ${count}× in a row`}: ${verdict.message || 'tool error'}). ` +
+              `Do NOT call it again. ` +
+              (isSearch
+                ? `Web search/fetch is unavailable — do NOT invent or guess URLs, sources, or quotes. `
+                : '') +
+              `Produce your best final answer now using only what you have already gathered, and ` +
+              `explicitly note anything you could not verify because the tool was unavailable.`
+          });
         }
       }
 
@@ -1662,9 +1686,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         currentMessages.push({
           role: 'user',
           content:
-            '[system] All tools are currently unavailable (rate-limited). Do NOT call any more ' +
-            'tools. Produce your COMPLETE final response now using everything you have gathered, ' +
-            'and briefly note any gaps you could not close.'
+            '[system] All tools are currently unavailable (rate-limited or repeatedly failing). ' +
+            'Do NOT call any more tools and do NOT invent URLs, sources, or quotes. Produce your ' +
+            'COMPLETE final response now using everything you have gathered, and briefly note any ' +
+            'gaps you could not close because tools were unavailable.'
         });
       }
 
@@ -3343,6 +3368,48 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {{failed: boolean, rateLimited: boolean, message: string}}
    * @private
    */
+  /**
+   * Signal that a tool was circuit-broken during a step: record it on the
+   * workflow state (so the run-detail UI can surface "search unavailable"
+   * instead of silently producing a thin, source-less report) and emit an SSE
+   * event for live runs. Best-effort — never throws into the tool loop.
+   *
+   * @private
+   */
+  _signalToolCircuitBroken(context, { tool, reason, failures, lastMessage, nodeId }) {
+    const entry = {
+      tool,
+      reason, // 'rate_limited' | 'repeated_failures'
+      failures,
+      nodeId,
+      message: typeof lastMessage === 'string' ? lastMessage.slice(0, 200) : '',
+      ts: new Date().toISOString()
+    };
+    this.logger.warn('Tool circuit-broken — withholding for this step', {
+      component: 'PromptNodeExecutor',
+      ...entry
+    });
+    try {
+      const ws = context?._workflowState;
+      if (ws?.data) {
+        if (!Array.isArray(ws.data._circuitBrokenTools)) ws.data._circuitBrokenTools = [];
+        ws.data._circuitBrokenTools.push(entry);
+      }
+    } catch {
+      // state recording is best-effort
+    }
+    try {
+      actionTracker.emit('fire-sse', {
+        event: 'agent.tool.circuit_broken',
+        chatId: context?.chatId,
+        executionId: context?.executionId,
+        ...entry
+      });
+    } catch {
+      // telemetry must never fail a tool call
+    }
+  }
+
   _classifyToolResult(toolResult) {
     const content = toolResult?.content;
     if (typeof content !== 'string') return { failed: false, rateLimited: false, message: '' };
