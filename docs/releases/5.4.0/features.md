@@ -557,3 +557,9 @@ Uploading an Outlook `.msg` email that has no plain-text part — most newslette
 - The body is resolved across every format Outlook may store it in: plain text, HTML (`PidTagHtml` / `PidTagBodyHtml`), and compressed RTF. HTML and RTF bodies are flattened to readable text, decoded using the message's declared code page so accented characters and umlauts survive.
 - Sender and recipient lines now prefer real SMTP addresses (e.g. `name@company.com`) over the internal Exchange directory address (`/O=EXCHANGELABS/...`) that Outlook stores for internal mail.
 - The extracted headers now also include the message **Date** and a list of **attachment names** (names only, not their content) for additional context.
+
+## Fix — Custom Rendered Components (e.g. NDA Risk Analyzer) No Longer Fail to Display
+
+Apps that render their results with a custom React component — such as the NDA Risk Analyzer's color-coded risk report — now display correctly again. Affected components had stopped rendering and showed a blank result or a `_jsxs is not defined` error in the browser console.
+
+- The in-browser JSX compiler used by dynamic page and result renderers now pins the classic React runtime. A newer build of the underlying Babel library had begun defaulting to a different JSX runtime that expects helper imports the sandbox does not provide, which broke any custom-rendered component. No configuration change is required.
