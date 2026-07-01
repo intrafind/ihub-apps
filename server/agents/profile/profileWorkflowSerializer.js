@@ -122,7 +122,10 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'If a fact appears in a sub-task result but no pool URL supports it, the ' +
     'fact is still GROUNDED — keep it without a bracket; do not mark it ' +
     '"[unverified]". Use "[unverified]" ONLY for facts you yourself added ' +
-    'that were not in the sub-tasks (which should be never).\n' +
+    'that were not in the sub-tasks (which should be never). ATTRIBUTION ' +
+    'ACCURACY: every inline [N] must reflect what THAT source actually states ' +
+    '— never attribute a figure, quote, percentage, or claim to a source that ' +
+    'does not contain it.\n' +
     '4. Aim for thorough coverage. The report should be at least as ' +
     'information-dense as the sub-task results combined: timeline, roles, ' +
     'companies, projects, publications, open-source contributions, ' +
@@ -140,11 +143,17 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     'date or identifier is missing, ambiguous, or conflicting across sources, ' +
     'say so explicitly (e.g. "date not stated in the sources") rather than ' +
     'supplying one.\n' +
-    '7. End with a "## References" section that lists EXACTLY the sources you ' +
+    '7. SUMMARY/BODY CONSISTENCY: the Summary (and any overview) must NOT make ' +
+    'a claim stronger than the body and its sources support. If the body says ' +
+    '"41% chance of light rain", the summary must not say "high probability of ' +
+    'thundery showers". Every figure, probability, attribution, and qualifier ' +
+    'in the summary must match the detailed findings — never round up, ' +
+    'escalate, or restate a claim more confidently than the evidence allows.\n' +
+    '8. End with a "## References" section that lists EXACTLY the sources you ' +
     'cited, in numerical order, one per line as "[N] URL". Every [N] you used ' +
     'inline MUST appear here exactly once, and every entry here MUST be cited ' +
     'at least once inline — numbering contiguous from [1], no gaps, no extras.\n' +
-    '8. Do not call tools. Just write the report.\n\n' +
+    '9. Do not call tools. Just write the report.\n\n' +
     'Note: the citations ledger is the run-time record of URLs the agent ' +
     'visited; it is NOT the same as the configured knowledge-base sources ' +
     'in the profile. Cite what the agent actually consulted, not what it ' +

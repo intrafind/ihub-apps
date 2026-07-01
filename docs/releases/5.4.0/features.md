@@ -531,3 +531,11 @@ The audit log no longer records a `POST /api/session/start -> 200` entry every t
 
 - Session-start requests are now excluded from the generic audit safety-net, matching how chat, inference, and page reads are already treated.
 - Login and logout continue to be audited via their own explicit hooks — no change to security-relevant events.
+
+## Agents: date-aware runs with fewer verification rounds
+
+Agent runs now know the current date, and the phased agent stops over-verifying simple questions — together this sharply cuts the number of review rounds (and wall-clock time) a run spends before finishing.
+
+- **Temporal context everywhere.** The planner, task workers, report writer, and verifier now all receive the real current date/timezone (the same context the chat assistant already had). Previously they had no notion of "today", so a run could write a date the verifier then flagged as "in the future", looping the review until it gave up. `{{date}}`, `{{year}}`, and `{{timezone}}` placeholders now also work inside agent prompts.
+- **Tighter retry budget.** The Claude-style (Phased) agent profile now caps review at **3 rounds** (was 6) and bails sooner when rounds stop improving (`stallLimit` 4 → 2). Adjust under the profile's **Review** settings.
+- **More accurate reports.** The report writer is now explicitly forbidden from letting the summary overstate the body, or attributing a figure/quote to a source that does not actually contain it — preventing the kind of embellishment that used to trigger extra review rounds.

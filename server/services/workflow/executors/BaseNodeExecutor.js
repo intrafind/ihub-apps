@@ -12,6 +12,7 @@
  */
 
 import logger from '../../../utils/logger.js';
+import promptService from '../../PromptService.js';
 
 /**
  * Execution result returned by node executors
@@ -436,6 +437,84 @@ export class BaseNodeExecutor {
         : undefined,
       outputExcerpt: typeof stepLog.output === 'string' ? stepLog.output.slice(0, 500) : undefined
     };
+  }
+
+  /**
+   * Resolve the platform's global prompt variables (date, time, timezone,
+   * platform_context, user_name, …) for the current run.
+   *
+   * Workflow node prompts historically BYPASSED this — unlike the chat path —
+   * leaving the planner, task workers, synthesizer, and verifier with no notion
+   * of "today". That let agents emit training-era dates which a tool-using
+   * verifier then flagged as "future"/unverifiable, burning entire retry loops
+   * (run wf-exec-4d5952a6). Resolving the same vars the chat path uses gives
+   * every workflow node a reliable temporal anchor.
+   *
+   * @param {ExecutionContext} context - execution context (reads user + language)
+   * @returns {Object} resolved global prompt variables (empty object on failure)
+   */
+  resolveGlobalPromptVars(context) {
+    try {
+      return (
+        promptService.resolveGlobalPromptVariables(
+          context?.user || null,
+          null,
+          context?.language || null,
+          null
+        ) || {}
+      );
+    } catch (err) {
+      this.logger.warn('Failed to resolve global prompt variables', {
+        component: this.constructor.name,
+        error: err.message
+      });
+      return {};
+    }
+  }
+
+  /**
+   * Substitute `{{key}}` placeholders for every resolved global variable in a
+   * string, giving workflow node prompts the same `{{date}}`/`{{timezone}}`/…
+   * substitution the chat path has. Empty/undefined vars are skipped so a
+   * missing value never blanks out a literal placeholder.
+   *
+   * @param {string} text - template text
+   * @param {Object} vars - resolved global vars (from resolveGlobalPromptVars)
+   * @returns {string} text with global placeholders replaced
+   */
+  applyGlobalPromptVars(text, vars) {
+    if (typeof text !== 'string' || !vars) return text;
+    let out = text;
+    for (const [key, value] of Object.entries(vars)) {
+      if (value === null || value === undefined || value === '') continue;
+      out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+    }
+    return out;
+  }
+
+  /**
+   * Build a ready-to-inject system-prompt preamble carrying the current date /
+   * timezone so every workflow node is temporally grounded. Prefers the
+   * admin-configured `platform_context` block (already resolved with the live
+   * date); falls back to a deterministic one-liner if that block was cleared.
+   * Returns '' when nothing resolves (e.g. PromptService unavailable).
+   *
+   * @param {ExecutionContext} context - execution context
+   * @returns {string} preamble text, or '' if unavailable
+   */
+  buildTemporalContextBlock(context) {
+    const vars = this.resolveGlobalPromptVars(context);
+    const platformContext =
+      typeof vars.platform_context === 'string' ? vars.platform_context.trim() : '';
+    if (platformContext) return platformContext;
+    if (vars.date) {
+      const tz = vars.timezone ? ` (timezone ${vars.timezone})` : '';
+      return (
+        `Current date: ${vars.date}${tz}. Treat any date after this as the future; ` +
+        `do not assume your training-time knowledge of "today" or the "latest" is current.`
+      );
+    }
+    return '';
   }
 
   /**

@@ -51,8 +51,8 @@
   "review": {
     "enabled": false,
     "strictness": "balanced",
-    "maxRounds": 6,
-    "stallLimit": 4
+    "maxRounds": 3,
+    "stallLimit": 2
   },
   "budgets": {
     "maxWallTimeSec": 1800,

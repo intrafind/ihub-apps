@@ -245,10 +245,14 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           ? JSON.stringify(inputToVerify, null, 2)
           : String(inputToVerify);
 
+      // Give the verifier the same temporal anchor as the producer nodes so it
+      // judges "future date" / "latest" claims against the real current date
+      // rather than its training-time sense of "today".
+      const temporalBlock = this.buildTemporalContextBlock(context);
       const messages =
         mode === 'adversarial'
-          ? this.buildAdversarialMessages(criteria, inputStr)
-          : this.buildQualityMessages(criteria, inputStr, threshold);
+          ? this.buildAdversarialMessages(criteria, inputStr, temporalBlock)
+          : this.buildQualityMessages(criteria, inputStr, threshold, temporalBlock);
 
       // Tool-enabled adversarial verification: when the node lists `tools`, run
       // the verifier through a real tool loop so it can actually execute
@@ -538,11 +542,13 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    * Build messages for the soft quality-scorer mode (legacy behavior).
    * @private
    */
-  buildQualityMessages(criteria, inputStr, threshold) {
+  buildQualityMessages(criteria, inputStr, threshold, temporalBlock = '') {
+    const preamble = temporalBlock ? `${temporalBlock}\n\n` : '';
     return [
       {
         role: 'system',
         content:
+          preamble +
           `You are a quality verifier. Evaluate the given output against the criteria.\n` +
           `Return JSON: { "score": <0.0-1.0>, "passed": <boolean>, "feedback": "<specific feedback>" }\n` +
           `Score 1.0 = perfect, 0.0 = completely fails criteria. ` +
@@ -562,11 +568,13 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    * cannot find a defect. Returns a structured verdict the loop can route on.
    * @private
    */
-  buildAdversarialMessages(criteria, inputStr) {
+  buildAdversarialMessages(criteria, inputStr, temporalBlock = '') {
+    const preamble = temporalBlock ? `${temporalBlock}\n\n` : '';
     return [
       {
         role: 'system',
         content:
+          preamble +
           `You are an adversarial verifier. Your job is NOT to confirm the work is good — ` +
           `it is to TRY TO BREAK IT. You have two documented failure modes: (1) verification ` +
           `avoidance — finding reasons not to actually check; and (2) being seduced by the ` +

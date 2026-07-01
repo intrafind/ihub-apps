@@ -677,6 +677,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const language = context?.language || 'en';
     const modelSupportsVision = !!(model && (model.supportsVision || model.supportsImages));
 
+    // Temporal grounding: resolve the platform's global prompt variables once so
+    // every workflow node prompt knows the current date/timezone — the same
+    // context the chat path injects. Without this the planner/worker/synthesizer
+    // fall back to training-era "today" and emit dates a verifier flags as
+    // future, looping the review (run wf-exec-4d5952a6). `{{date}}`-style
+    // placeholders in the configured prompts also get resolved here.
+    const globalVars = this.resolveGlobalPromptVars(context);
+    const temporalBlock = this.buildTemporalContextBlock(context);
+
     // Template-resolution budget. The synthesizer must see the FULL task-result
     // corpus to compose the report, so it resolves {{previousTaskResults}}
     // unbounded. Every other node (per-task workers, verifiers) gets a bounded
@@ -697,7 +706,19 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // Add system message if configured
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
-      let systemContent = this.resolveTemplateVariables(systemTemplate, state, tplOpts);
+      // Resolve global placeholders ({{date}}, {{timezone}}, …) on the RAW
+      // template first — resolveTemplateVariables strips unknown {{...}} tokens,
+      // so the global pass must run before it, not after.
+      let systemContent = this.resolveTemplateVariables(
+        this.applyGlobalPromptVars(systemTemplate, globalVars),
+        state,
+        tplOpts
+      );
+
+      // Prepend the temporal block so the date is the first thing the model reads.
+      if (temporalBlock) {
+        systemContent = `${temporalBlock}\n\n${systemContent}`;
+      }
 
       // Agent runs auto-include the profile memory file body (if enabled).
       // `context._agentMemoryBlock` is populated by execute() before
@@ -733,6 +754,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         role: 'system',
         content: systemContent
       });
+    } else if (temporalBlock) {
+      // No system prompt configured (e.g. a bare task worker) — still give the
+      // model a temporal anchor so it doesn't invent the current date.
+      messages.push({
+        role: 'system',
+        content: temporalBlock
+      });
     }
 
     // Include conversation history if configured
@@ -744,7 +772,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     let userContent;
     if (config.prompt) {
       const promptTemplate = this.getLocalizedValue(config.prompt, language);
-      userContent = this.resolveTemplateVariables(promptTemplate, state, tplOpts);
+      userContent = this.resolveTemplateVariables(
+        this.applyGlobalPromptVars(promptTemplate, globalVars),
+        state,
+        tplOpts
+      );
     } else if (state.data?.input) {
       userContent = state.data.input;
     } else if (state.data?.message) {

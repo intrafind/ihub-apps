@@ -27,6 +27,12 @@ function check(label, cond, detail) {
 // serializer source vs. the single-line escaped string in the workflow JSON.
 const QUOTE_RULE = /(never|do not|don't).{0,60}(alter|fabricat|invent|paraphrase|change).{0,60}quot|quot.{0,60}(verbatim|exact)/i;
 const DATE_RULE = /(never|do not|don't).{0,80}(invent|guess|fabricat|extrapolat).{0,40}(date|publication)|future.{0,40}date/i;
+// Synthesis-discipline guardrails added after run wf-exec-c9907222, where the
+// synthesizer's summary invented a "67% thundery showers" figure and attributed
+// it to a source that said 41% light rain. The summary must not overstate the
+// body, and every [N] must match what that source actually states.
+const SUMMARY_RULE = /summary.{0,160}(must not|not).{0,40}(stronger|exceed|overstate|escalat|more confiden)/i;
+const ATTRIBUTION_RULE = /attribut.{0,160}(never|not).{0,80}(figure|quote|percentage|claim|source)|never attribute/i;
 
 // Join adjacent string literals (`'…' + '…'`) and collapse whitespace so prose
 // that wraps across source lines reads as one continuous string.
@@ -41,12 +47,22 @@ function hasGuardrails(rawText, where) {
   check(`${where}: forbids inventing/future dates`, DATE_RULE.test(text));
 }
 
+// Synthesizer-only: summary may not overstate the body, and attributions must
+// match their source. (Task workers don't write a summary, so this is not
+// asserted there.)
+function hasSynthDiscipline(rawText, where) {
+  const text = normalize(rawText);
+  check(`${where}: summary must not overstate the body`, SUMMARY_RULE.test(text), text ? '(present but no match)' : '(empty)');
+  check(`${where}: attributions must match their source`, ATTRIBUTION_RULE.test(text));
+}
+
 // 1. Canonical default in the serializer.
 const serializerSrc = readFileSync(
   path.join(root, 'server/agents/profile/profileWorkflowSerializer.js'),
   'utf8'
 );
 hasGuardrails(serializerSrc, 'DEFAULT_SYNTHESIZER_SYSTEM (serializer)');
+hasSynthDiscipline(serializerSrc, 'DEFAULT_SYNTHESIZER_SYSTEM (serializer)');
 
 // 2. Tracked phased workflow's inline synthesize node prompt (what runs live).
 const phased = JSON.parse(
@@ -57,6 +73,7 @@ const synth = nodes.find(n => n.id === 'synthesize');
 check('phased workflow has a synthesize node', !!synth);
 const synthSys = synth && (typeof synth.config?.system === 'object' ? synth.config.system.en : synth.config?.system);
 hasGuardrails(synthSys || '', 'phased synthesize node');
+hasSynthDiscipline(synthSys || '', 'phased synthesize node');
 
 // 3. The upstream task worker (taskTemplate.system) — where quotes/dates are
 // first gathered — must carry the same integrity guard.

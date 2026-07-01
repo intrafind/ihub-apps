@@ -777,7 +777,16 @@ Hard rules for this extension plan:
       });
     }
 
-    const systemPrompt = `${baseSystem}${TOOL_SELECTION_GUIDANCE}${roundExtensionBlock}${skillsBlock}${activeSkillsBlock}`;
+    // Temporal grounding: prepend the current date/timezone so the planner
+    // doesn't decompose around a stale "today" (and spawn date-chasing verify
+    // tasks). Also resolve any {{date}}-style placeholders the prompt uses.
+    const globalVars = this.resolveGlobalPromptVars(context);
+    const temporalBlock = this.buildTemporalContextBlock(context);
+    const baseSystemGrounded = temporalBlock
+      ? `${temporalBlock}\n\n${this.applyGlobalPromptVars(baseSystem, globalVars)}`
+      : this.applyGlobalPromptVars(baseSystem, globalVars);
+
+    const systemPrompt = `${baseSystemGrounded}${TOOL_SELECTION_GUIDANCE}${roundExtensionBlock}${skillsBlock}${activeSkillsBlock}`;
 
     // Build context summary from state data (exclude internal keys)
     const contextData = Object.entries(state.data || {})
@@ -882,7 +891,7 @@ Output rules:
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: this.applyGlobalPromptVars(userPrompt, globalVars) }
     ];
 
     // Record what the planner sees on this iteration so operators can
