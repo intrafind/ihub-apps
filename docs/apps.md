@@ -485,7 +485,7 @@ The following fields are specific to chat apps and are not used for redirect or 
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
-- `sources`, `thinking`
+- `sources`, `thinking`, `ephemeral`
 
 ## Basic App Structure
 
@@ -537,6 +537,7 @@ Each app is defined with the following essential properties:
 | `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
 | `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
 | `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
+| `ephemeral`             | Boolean | Optional. When `true`, the chat is never stored. Messages exist only in memory while the chat is open and are discarded when the user switches apps or reloads the page. No chat history or iAssistant conversation ID is written to browser storage. This is the default value for the runtime toggle users see in the chat configuration panel (hide it with `settings.ephemeral.enabled: false`). Default: `false` |
 | `allowEmptyContent`     | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`              |
 | `allowedModels`         | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                       |
 | `disallowModelSelection`| Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                     |
@@ -968,6 +969,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 #### Other Options
 
 - `autoStart`: Automatically begin the chat on app open, sending the configured `prompt` immediately
+- `ephemeral`: Never store the chat. Messages live only in memory while the chat is open and are discarded on app switch or reload. Useful for privacy-sensitive apps such as iFinder document chats
 - `allowEmptyContent`: Allow submission without content input
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model

@@ -88,6 +88,11 @@ const settingsSchema = z
         enabled: z.boolean().optional().default(true)
       })
       .optional(),
+    ephemeral: z
+      .object({
+        enabled: z.boolean().optional().default(true)
+      })
+      .optional(),
     style: z
       .object({
         enabled: z.boolean().optional().default(true)
@@ -341,6 +346,7 @@ const baseAppConfigSchema = z.object({
   disallowModelSelection: z.boolean().optional().default(false),
   allowEmptyContent: z.boolean().optional().default(false),
   autoStart: z.boolean().optional().default(false),
+  ephemeral: z.boolean().optional().default(false),
   websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
   workflows: z.array(z.string()).optional(),

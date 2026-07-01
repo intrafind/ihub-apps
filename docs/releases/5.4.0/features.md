@@ -563,3 +563,13 @@ Uploading an Outlook `.msg` email that has no plain-text part — most newslette
 Apps that render their results with a custom React component — such as the NDA Risk Analyzer's color-coded risk report — now display correctly again. Affected components had stopped rendering and showed a blank result or a `_jsxs is not defined` error in the browser console.
 
 - The in-browser JSX compiler used by dynamic page and result renderers now pins the classic React runtime. A newer build of the underlying Babel library had begun defaulting to a different JSX runtime that expects helper imports the sandbox does not provide, which broke any custom-rendered component. No configuration change is required.
+
+## Ephemeral Chats — Conversations That Are Never Stored
+
+Apps can now be marked **ephemeral** so their chats are never persisted anywhere. Messages exist only in memory while the chat is open and are discarded the moment the user switches to another app or reloads the page — nothing is written to the browser's session/local storage, and for iFinder/iAssistant apps the backend conversation is created as ephemeral so no server-side record is kept.
+
+- Enable it per app with the new **Ephemeral chat** toggle in the admin app editor, or by setting `"ephemeral": true` in the app configuration.
+- End users can also switch it on or off at runtime from the chat's configuration panel (the **Ephemeral chat** checkbox), seeded from the app's default. Admins can hide this control per app with `"settings": { "ephemeral": { "enabled": false } }`.
+- The built-in **iFinder Document Actions** app now ships with ephemeral enabled by default, so document conversations leave no trace.
+- The flag is independent of chat history: when persistent chat history arrives in the future, ephemeral apps will remain opted out.
+- Default is `false`, so all existing apps keep their current behaviour.

@@ -97,6 +97,7 @@ function AdminAppEditPage() {
         },
         allowEmptyContent: false,
         sendChatHistory: true,
+        ephemeral: false,
         category: 'utility',
         inputMode: {
           type: 'singleline',
@@ -169,6 +170,7 @@ function AdminAppEditPage() {
         },
         allowEmptyContent: data.allowEmptyContent ?? false,
         sendChatHistory: data.sendChatHistory ?? true,
+        ephemeral: data.ephemeral ?? false,
         inputMode: {
           type: 'singleline',
           rows: 5,

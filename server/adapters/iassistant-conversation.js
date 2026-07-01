@@ -54,7 +54,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       tools: appConfig.tools || modelConfig.tools || [],
       scope: appConfig.scope || modelConfig.scope,
       labels: appConfig.labels || modelConfig.labels,
-      ephemeral: appConfig.ephemeral ?? modelConfig.ephemeral ?? false,
+      ephemeral:
+        appConfig.ephemeral ?? options.appConfig?.ephemeral ?? modelConfig.ephemeral ?? false,
       extraContext: appConfig.extraContext || modelConfig.extraContext,
       systemPromptPreamble: appConfig.systemPromptPreamble || modelConfig.systemPromptPreamble
     };
