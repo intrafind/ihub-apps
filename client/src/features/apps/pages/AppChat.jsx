@@ -156,6 +156,7 @@ function AppChat({ preloadedApp = null }) {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    ephemeral,
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
@@ -170,6 +171,7 @@ function AppChat({ preloadedApp = null }) {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    setEphemeral,
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,
@@ -434,13 +436,17 @@ function AppChat({ preloadedApp = null }) {
   } = useAppChat({
     appId,
     chatId: chatId.current,
-    onMessageComplete: handleMessageComplete
+    onMessageComplete: handleMessageComplete,
+    // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
+    // the chat settings. When on, nothing is persisted to browser storage.
+    ephemeral
   });
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
   useEffect(() => {
     if (conversationResumed.current || !app || messages.length > 0) return;
+    if (ephemeral) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
@@ -460,7 +466,7 @@ function AppChat({ preloadedApp = null }) {
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages]);
+  }, [app, appId, messages.length, loadServerMessages, ephemeral]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -1685,6 +1691,7 @@ function AppChat({ preloadedApp = null }) {
         selectedStyle={selectedStyle}
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
+        ephemeral={ephemeral}
         temperature={temperature}
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
@@ -1696,6 +1703,7 @@ function AppChat({ preloadedApp = null }) {
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
+        onEphemeralChange={setEphemeral}
         onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingBudgetChange={setThinkingBudget}
@@ -1786,6 +1794,7 @@ function AppChat({ preloadedApp = null }) {
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
                   onDocumentAction={handleDocumentAction}
+                  ephemeral={ephemeral}
                 />
               </div>
               <div className="flex-shrink-0 px-4 pt-2">

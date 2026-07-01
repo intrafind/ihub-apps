@@ -17,6 +17,7 @@ function useAppSettings(appId, app) {
   const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
   const [temperature, setTemperature] = useState(0.7);
   const [sendChatHistory, setSendChatHistory] = useState(true);
+  const [ephemeral, setEphemeral] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(null);
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
@@ -86,6 +87,7 @@ function useAppSettings(appId, app) {
       temperature: app.preferredTemperature || 0.7,
       selectedOutputFormat: app.preferredOutputFormat || 'markdown',
       sendChatHistory: true,
+      ephemeral: app.ephemeral ?? false,
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
@@ -101,6 +103,7 @@ function useAppSettings(appId, app) {
     setTemperature(initialState.temperature);
     setSelectedOutputFormat(initialState.selectedOutputFormat);
     setSendChatHistory(initialState.sendChatHistory);
+    setEphemeral(initialState.ephemeral);
     setThinkingEnabled(initialState.thinkingEnabled);
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
@@ -128,6 +131,7 @@ function useAppSettings(appId, app) {
       if (savedSettings.temperature) setTemperature(savedSettings.temperature);
       if (savedSettings.sendChatHistory !== undefined)
         setSendChatHistory(savedSettings.sendChatHistory);
+      if (savedSettings.ephemeral !== undefined) setEphemeral(savedSettings.ephemeral);
       if (savedSettings.thinkingEnabled !== undefined)
         setThinkingEnabled(savedSettings.thinkingEnabled);
       if (savedSettings.thinkingBudget !== undefined)
@@ -154,6 +158,7 @@ function useAppSettings(appId, app) {
         selectedOutputFormat,
         temperature,
         sendChatHistory,
+        ephemeral,
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts,
@@ -172,6 +177,7 @@ function useAppSettings(appId, app) {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    ephemeral,
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
@@ -189,6 +195,7 @@ function useAppSettings(appId, app) {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    ephemeral,
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
@@ -206,6 +213,7 @@ function useAppSettings(appId, app) {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    setEphemeral,
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,

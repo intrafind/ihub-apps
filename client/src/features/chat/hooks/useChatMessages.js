@@ -6,9 +6,12 @@ import { useState, useCallback, useRef, useEffect } from 'react';
  * Each new browser tab will start with a new chat session
  *
  * @param {string} chatId - The ID of the current chat for storage purposes
+ * @param {Object} [options] - Additional options
+ * @param {boolean} [options.ephemeral] - When true, messages are never persisted to
+ *   sessionStorage and are reset to empty whenever the chatId changes.
  * @returns {Object} Chat message management functions and state
  */
-function useChatMessages(chatId = 'default') {
+function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
   // Use sessionStorage for persistence during page refreshes
   const storageKey = `ai_hub_chat_messages_${chatId}`;
 
@@ -17,6 +20,7 @@ function useChatMessages(chatId = 'default') {
 
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
+    if (ephemeral) return [];
     try {
       const storedData = sessionStorage.getItem(storageKey);
       console.log(
@@ -67,6 +71,11 @@ function useChatMessages(chatId = 'default') {
         chatId,
         '- loading messages for new chat'
       );
+      if (ephemeral) {
+        setMessages([]);
+        prevChatIdRef.current = chatId;
+        return;
+      }
       // Load messages for the new chatId
       const newStorageKey = `ai_hub_chat_messages_${chatId}`;
       try {
@@ -95,7 +104,7 @@ function useChatMessages(chatId = 'default') {
       }
     }
     prevChatIdRef.current = chatId;
-  }, [chatId]);
+  }, [chatId, ephemeral]);
 
   // Use a ref to store a copy of messages for read-only operations
   const messagesRef = useRef(messages);
@@ -107,6 +116,15 @@ function useChatMessages(chatId = 'default') {
 
   // Save messages to sessionStorage whenever they change (exclude greeting messages)
   useEffect(() => {
+    if (ephemeral) {
+      // Ephemeral chats are never persisted; clear any stray data.
+      try {
+        sessionStorage.removeItem(storageKey);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     try {
       // Filter out greeting messages for persistence
       const persistableMessages = messages.filter(msg => !msg.isGreeting);
@@ -174,7 +192,7 @@ function useChatMessages(chatId = 'default') {
         }
       }
     }
-  }, [messages, storageKey]);
+  }, [messages, storageKey, ephemeral]);
 
   /**
    * Add a user message to the chat

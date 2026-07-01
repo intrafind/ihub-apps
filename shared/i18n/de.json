@@ -405,6 +405,7 @@
     "title": "Konfiguration",
     "save": "Speichern",
     "cancel": "Abbrechen",
+    "ephemeral": "Flüchtiger Chat (wird nie gespeichert)",
     "model": "Modell",
     "selectModel": "Modell auswählen",
     "defaultModel": "Standardmodell",
@@ -1728,6 +1729,8 @@
       "edit": {
         "autoStart": "Konversation automatisch starten",
         "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
+        "ephemeral": "Flüchtiger Chat",
+        "ephemeralHelp": "Wenn aktiviert, wird der Chat nie gespeichert. Nachrichten existieren nur, solange der Chat geöffnet ist, und werden verworfen, wenn Sie die App wechseln oder neu laden.",
         "mcpTools": {
           "title": "MCP-Server-Tools",
           "desc": "Aktivieren Sie Tools, die von verbundenen MCP-Servern bereitgestellt werden, für diese App.",
