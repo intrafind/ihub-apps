@@ -20,10 +20,10 @@
  * What IS auto-registered now:
  *
  *   - `read_memory` / `write_memory` — memory needs LLM agency by design.
- *   - `create_task` / `list_tasks` — dynamic decomposition is a legitimate
- *     planner-task power and the only way the agent can extend its own
- *     work queue during a run. Only attached for `_isPlannerTask: true`
- *     nodes when dynamicTasks is enabled.
+ *   - `create_task` / `set_plan` / `update_task` / `list_tasks` — dynamic
+ *     decomposition is the only way the agent can shape its own work queue
+ *     during a run. Attached to ANY prompt node whose node config OR profile
+ *     has `dynamicTasks.enabled` (not restricted to `_isPlannerTask` nodes).
  *
  * Synthesizer nodes (`_isSynthesizer: true`) get NO tools at all — they are
  * pure text-in/text-out. The runtime persists their output as the final
@@ -37,7 +37,8 @@
 const MEMORY_TOOLS = ['read_memory', 'write_memory'];
 
 /**
- * Dynamic decomposition tools — only on planner-task nodes when enabled.
+ * Dynamic decomposition tools — attached whenever `dynamicTasks.enabled` is set
+ * on the node config or the profile (see getAgentToolIds).
  * `set_plan` lets the agent declare/replace its whole plan up front
  * (TodoWrite analog); `update_task` lets it re-title, reprioritize, or mark a
  * task blocked as it reconsiders. The drain loop still owns the

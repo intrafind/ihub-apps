@@ -22,6 +22,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import inboxStore from '../../../agents/inbox/inboxStore.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { summarizePlanForEvent } from '../../../agents/runtime/taskRecord.js';
 
 function emit(event, payload, chatId) {
   try {
@@ -158,17 +159,7 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
           finalizeStateUpdates._taskQueue = reconciled;
           emit(
             'agent.plan.updated',
-            {
-              reason: 'inbox-finalize-complete',
-              tasks: reconciled.map(t => ({
-                id: t.id,
-                title: t.title,
-                activeForm: t.activeForm,
-                status: t.status,
-                priority: t.priority,
-                depth: t.depth ?? 0
-              }))
-            },
+            { reason: 'inbox-finalize-complete', ...summarizePlanForEvent(reconciled) },
             chatId
           );
         }

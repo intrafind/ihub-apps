@@ -106,23 +106,35 @@ export function parseRetryAfterMs(retryAfter) {
 
 /**
  * Compute the delay before the next retry. Honors a server-instructed
- * `Retry-After` (still capped); otherwise exponential backoff
- * (base · 2^attempt) plus up to `baseMs` of jitter, capped at `capMs`.
+ * `Retry-After` (bounded only by `retryAfterCapMs`); otherwise exponential
+ * backoff (base · 2^attempt) plus up to `baseMs` of jitter, capped at `capMs`.
+ *
+ * A server-instructed delay is NOT clamped to the small backoff `capMs`:
+ * retrying before the server's stated window has elapsed just re-trips the
+ * rate limit and burns the whole retry budget. It is bounded by a separate,
+ * larger `retryAfterCapMs` only to guard against an absurd header value.
  *
  * @param {number} attempt - zero-based attempt index that just failed
  * @param {Object} [opts]
  * @param {number|null} [opts.retryAfterMs] - server-instructed delay, if any
  * @param {number} [opts.baseMs=1000]
- * @param {number} [opts.capMs=15000]
+ * @param {number} [opts.capMs=15000] - cap for computed exponential backoff
+ * @param {number} [opts.retryAfterCapMs=60000] - upper bound for an explicit Retry-After
  * @param {() => number} [opts.jitter=Math.random]
  * @returns {number} delay in ms
  */
 export function computeRetryDelayMs(
   attempt,
-  { retryAfterMs = null, baseMs = 1000, capMs = 15000, jitter = Math.random } = {}
+  {
+    retryAfterMs = null,
+    baseMs = 1000,
+    capMs = 15000,
+    retryAfterCapMs = 60000,
+    jitter = Math.random
+  } = {}
 ) {
   if (typeof retryAfterMs === 'number' && retryAfterMs >= 0) {
-    return Math.min(retryAfterMs, capMs);
+    return Math.min(retryAfterMs, retryAfterCapMs);
   }
   const exp = baseMs * Math.pow(2, attempt);
   const jitterMs = Math.floor(jitter() * baseMs);
@@ -298,9 +310,15 @@ export class WorkflowLLMHelper {
           // makes diagnosis hard. Dump a SHAPE summary of the request body so
           // we can see what was sent without leaking the full prompt content to
           // logs. Sizes/keys are enough to spot empty messages, oversized
-          // payloads, missing fields, etc.
+          // payloads, missing fields, etc. Skip transient 429s — they're
+          // retried, so this would rebuild the shape (JSON.stringify(body)) on
+          // every attempt for a request that isn't actually malformed.
           let requestShape = null;
-          if (response.status >= 400 && response.status < 500) {
+          if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            !isTransientHttpStatus(response.status)
+          ) {
             try {
               const body = request.body || {};
               const summarizeMessage = m => ({
@@ -375,12 +393,17 @@ export class WorkflowLLMHelper {
             }
           }
 
-          // For 4xx failures, dump the FULL request body + response to disk
-          // so we can inspect everything without overwhelming the log line. Files
-          // land under contents/data/debug/llm-failures/. Best-effort — never let
-          // a disk-write failure mask the original LLM error.
+          // For non-transient 4xx failures, dump the FULL request body +
+          // response to disk so we can inspect everything without overwhelming
+          // the log line. Files land under contents/data/debug/llm-failures/.
+          // Skip 429 (retried) so we don't write a dump file per attempt.
+          // Best-effort — never let a disk-write failure mask the LLM error.
           let dumpPath = null;
-          if (response.status >= 400 && response.status < 500) {
+          if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            !isTransientHttpStatus(response.status)
+          ) {
             try {
               dumpPath = await this._dumpRequest(request, model, 'failures', {
                 response: { status: response.status, body: errorInfo.details }

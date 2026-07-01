@@ -160,7 +160,11 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
                   feedback: 'Accepted after gaps stalled',
                   accepted: 'stall',
                   mode
-                }
+                },
+                // Clear stale gaps on acceptance so a downstream prompt node
+                // doesn't pick up an "address these gaps" block for work we've
+                // decided to accept (matches the normal pass path's reset).
+                _lastReviewGaps: []
               },
               branch: 'pass'
             }
@@ -263,6 +267,11 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         mode === 'adversarial' && Array.isArray(config.tools) && config.tools.length > 0;
 
       let responseContent = '';
+      // Capture token usage so verifier steps (including multi-iteration tool
+      // loops) count toward the run-detail token-usage card / per-model rollup,
+      // exactly like PromptNodeExecutor's prompt path. Null when no usage is
+      // reported so tokenStats treats it as a non-LLM step.
+      let responseTokens = null;
       if (useToolLoop) {
         const promptExecutor = await this.getPromptExecutor();
         const tools = await promptExecutor.getAgentTools(config.tools, language, context);
@@ -279,6 +288,8 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           nodeId: node.id
         });
         responseContent = toolResp.content || '';
+        // executeLLMWithTools already returns an { input, output } accumulator.
+        responseTokens = toolResp.tokens || null;
       } else {
         const response = await this.llmHelper.executeStreamingRequest({
           model,
@@ -288,6 +299,12 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           language
         });
         responseContent = response.content || '';
+        const u = response.usage;
+        if (u) {
+          const input = u.prompt_tokens || u.input_tokens || 0;
+          const output = u.completion_tokens || u.output_tokens || 0;
+          responseTokens = input || output ? { input, output } : null;
+        }
       }
 
       // Parse a JSON object out of the response (both modes return JSON).
@@ -345,6 +362,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         startedAt: startedAt.toISOString(),
         completedAt: completedAtIso,
         durationMs,
+        tokens: responseTokens,
         verdict,
         conclusive,
         // Concrete defects the verifier found, so the per-round history (and the

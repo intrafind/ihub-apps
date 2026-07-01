@@ -89,12 +89,47 @@ export function tryAcquireSchedulerLock(opts = {}) {
       hostname: HOSTNAME,
       lockTime: now
     });
-    // Synchronous temp-write + rename keeps the lock acquisition atomic and
-    // race-free without making this a promise (the heartbeat is sync).
     mkdirSync(path.dirname(lockPath), { recursive: true });
+
+    if (!current) {
+      // FRESH acquisition (no lock file yet). Use an exclusive create
+      // (O_CREAT|O_EXCL) so that among processes booting simultaneously with no
+      // pre-existing lock, exactly ONE wins. A temp-write + rename would let
+      // every racer's rename succeed and every racer set owner=true — multiple
+      // owners, which then fire every scheduled trigger N times (the exact
+      // duplication this lock exists to prevent).
+      try {
+        writeFileSync(lockPath, payload, { encoding: 'utf8', flag: 'wx' });
+        owner = true;
+        return true;
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          // Another process created the lock between our read and our write —
+          // we lost the race and are not the owner. A later heartbeat re-runs
+          // this (and the TTL / dead-PID paths take over if that owner dies).
+          owner = false;
+          return false;
+        }
+        throw err;
+      }
+    }
+
+    // Refresh our own lock, or take over a stale / dead-owner lock. We are
+    // entitled to replace the existing file, so an atomic temp-write + rename
+    // (overwrite) is correct here. Clean up the temp file if the rename fails
+    // so a transient FS error doesn't leave a stray PID-keyed temp behind.
     const tmp = `${lockPath}.${process.pid}.tmp`;
-    writeFileSync(tmp, payload, 'utf8');
-    renameSync(tmp, lockPath);
+    try {
+      writeFileSync(tmp, payload, 'utf8');
+      renameSync(tmp, lockPath);
+    } catch (err) {
+      try {
+        rmSync(tmp, { force: true });
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
     owner = true;
     return true;
   } catch (err) {

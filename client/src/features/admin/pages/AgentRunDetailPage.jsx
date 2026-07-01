@@ -317,13 +317,15 @@ export default function AgentRunDetailPage() {
   function logFor(nodeId) {
     return stepLogs[nodeId] || null;
   }
-  // Run-level token usage rolled up from every step's recorded tokens, for the
-  // Token usage summary card. Per-step numbers also render in the steps table.
-  const tokenUsage = aggregateTokenUsage(stepLogs);
   // Full per-iteration history for a node (the agent / verifier re-run across
   // rounds). Falls back to the single latest transcript for nodes that run once
   // (inbox-load / finalize). Used to render every round, not just the last.
   const stepLogHistory = run?.data?._stepLogHistory || {};
+  // Run-level token usage rolled up from every step's recorded tokens, for the
+  // Token usage summary card. Pass the per-round history so multi-round nodes
+  // (agent → verify → retry) count EVERY round, not just the latest snapshot
+  // that _stepLogs holds. Per-step numbers also render in the steps table.
+  const tokenUsage = aggregateTokenUsage(stepLogs, stepLogHistory);
   function historyFor(nodeId) {
     const h = stepLogHistory[nodeId];
     if (Array.isArray(h) && h.length > 0) return h;
@@ -1127,7 +1129,9 @@ export default function AgentRunDetailPage() {
                         const isExpanded = expandedSteps.has(t.nodeId);
                         const logHistory = historyFor(t.nodeId);
                         const hasDetails = logHistory.length > 0;
-                        const rowTokens = (t.log || logFor(t.nodeId))?.tokens;
+                        // Every row sets `t.log` to logFor(<its nodeId>) already,
+                        // so the old `|| logFor(t.nodeId)` fallback was a no-op.
+                        const rowTokens = t.log?.tokens;
                         const hasRowTokens =
                           rowTokens && (rowTokens.input > 0 || rowTokens.output > 0);
                         return (

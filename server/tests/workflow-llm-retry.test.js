@@ -92,13 +92,22 @@ console.log('\n🧪 computeRetryDelayMs — exponential, capped, Retry-After win
       7000
   );
   check(
-    'Retry-After still capped',
+    'Retry-After is honored past the backoff cap (not clamped to capMs)',
+    computeRetryDelayMs(0, {
+      retryAfterMs: 30000,
+      baseMs: 1000,
+      capMs: 15000,
+      jitter: noJitter
+    }) === 30000
+  );
+  check(
+    'Retry-After bounded by the larger retryAfterCapMs',
     computeRetryDelayMs(0, {
       retryAfterMs: 99000,
       baseMs: 1000,
       capMs: 15000,
       jitter: noJitter
-    }) === 15000
+    }) === 60000
   );
 }
 

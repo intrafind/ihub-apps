@@ -19,6 +19,7 @@ import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { getStateManager } from './StateManager.js';
+import { isSchedulerOwner } from './triggers/schedulerLock.js';
 
 const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
 
@@ -53,8 +54,27 @@ async function writeJsonSafe(filePath, data) {
  *
  * Safe to call on every server boot — entries already in a terminal state are
  * skipped.
+ *
+ * Guarded by the scheduler lock (like the resume manager) so that in a
+ * multi-worker / multi-replica deployment only ONE instance sweeps. The
+ * activeStates guard below only protects runs live in the CURRENT process; a
+ * resumed run lives solely in the lock owner's in-memory state, so a non-owner
+ * worker would otherwise mark the owner's just-resumed run as failed. Keeping
+ * resume + sweep in the same (owner) process makes that guard authoritative.
+ *
+ * @param {Object} [opts]
+ * @param {boolean} [opts.requireSchedulerOwner=true] - Only sweep if this
+ *   instance owns the scheduler lock.
+ * @returns {Promise<{ scanned: number, marked: number }>}
  */
-export async function sweepOrphanedExecutions() {
+export async function sweepOrphanedExecutions({ requireSchedulerOwner = true } = {}) {
+  if (requireSchedulerOwner && !isSchedulerOwner()) {
+    logger.debug('Not the scheduler-lock owner — skipping orphan sweep', {
+      component: 'OrphanSweeper'
+    });
+    return { scanned: 0, marked: 0 };
+  }
+
   let entries;
   try {
     entries = await fs.readdir(STATE_DIR, { withFileTypes: true });

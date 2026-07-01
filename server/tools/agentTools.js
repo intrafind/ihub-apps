@@ -22,6 +22,8 @@ import {
   buildTaskRecord,
   enforceSingleInProgress,
   deriveActiveForm,
+  normalizePriority,
+  summarizePlanForEvent,
   TASK_STATUSES
 } from '../agents/runtime/taskRecord.js';
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
@@ -172,26 +174,9 @@ function getTaskQueueState(params) {
  */
 function emitPlanUpdated(params, user, state, reason) {
   const queue = state.data._taskQueue || [];
-  const counts = queue.reduce((acc, t) => {
-    acc[t.status] = (acc[t.status] || 0) + 1;
-    return acc;
-  }, {});
   emit(
     'agent.plan.updated',
-    {
-      profileId: user.profileId,
-      reason,
-      total: queue.length,
-      counts,
-      tasks: queue.map(t => ({
-        id: t.id,
-        title: t.title,
-        activeForm: t.activeForm,
-        status: t.status,
-        depth: t.depth,
-        priority: t.priority
-      }))
-    },
+    { profileId: user.profileId, reason, ...summarizePlanForEvent(queue) },
     params.chatId
   );
 }
@@ -278,9 +263,13 @@ export async function setPlan(params = {}) {
     };
   }
 
-  const preserved = replaceCompleted
-    ? []
-    : state.data._taskQueue.filter(t => t.status === 'done' || t.status === 'failed');
+  // When not fully replacing, keep every task that is NOT a fresh re-declarable
+  // 'open' task: done/failed (already-recorded results), cancelled (preserve the
+  // cancellation record), and — critically — in_progress. Dropping the running
+  // task would orphan the drain loop's `_currentTask`: the loop resolves the
+  // task by id after the body runs, and a missing record loses its completion
+  // state and lets the queue re-run work.
+  const preserved = replaceCompleted ? [] : state.data._taskQueue.filter(t => t.status !== 'open');
 
   const built = [];
   for (const [i, raw] of tasks.entries()) {
@@ -348,7 +337,7 @@ export async function updateTask(params = {}) {
     task.brief = brief;
     task.description = brief;
   }
-  if (typeof priority === 'string') task.priority = priority;
+  if (typeof priority === 'string') task.priority = normalizePriority(priority);
   if (result !== undefined) task.result = result;
   task.updatedAt = new Date().toISOString();
 

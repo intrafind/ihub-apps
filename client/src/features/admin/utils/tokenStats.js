@@ -14,31 +14,50 @@
 /**
  * Roll up per-step token usage into run-level totals + per-model breakdown.
  *
+ * A cyclic node (the agent→verify→retry loop) runs multiple rounds under the
+ * same id; `_stepLogs[id]` only holds the LATEST round (each round overwrites
+ * the prior), so summing it alone undercounts multi-round runs. When the
+ * per-round history is supplied, sum EVERY round of each node from it and fall
+ * back to `_stepLogs` only for ids with no history. History and _stepLogs are
+ * written together per round, so a node's history already includes its latest
+ * round — never sum both for the same id (that would double-count).
+ *
  * @param {Object|null|undefined} stepLogs - run.data._stepLogs map (id -> step log)
+ * @param {Object|null|undefined} [stepLogHistory] - run.data._stepLogHistory map
+ *   (id -> array of per-round summaries, each carrying its own tokens + model)
  * @returns {{ totalInput: number, totalOutput: number, total: number,
  *   llmStepCount: number, byModel: Record<string, { input: number, output: number }> }}
  */
-export function aggregateTokenUsage(stepLogs) {
+export function aggregateTokenUsage(stepLogs, stepLogHistory) {
   const result = { totalInput: 0, totalOutput: 0, total: 0, llmStepCount: 0, byModel: {} };
   if (!stepLogs || typeof stepLogs !== 'object') return result;
 
-  for (const log of Object.values(stepLogs)) {
-    const tok = log?.tokens;
-    if (!tok || typeof tok !== 'object') continue;
-    const input = Number.isFinite(tok.input) ? tok.input : 0;
-    const output = Number.isFinite(tok.output) ? tok.output : 0;
-    // A step that recorded zero usage made no billable LLM call (e.g. a
-    // deterministic node) — don't inflate the step count or the model map.
-    if (input === 0 && output === 0) continue;
+  const history = stepLogHistory && typeof stepLogHistory === 'object' ? stepLogHistory : {};
+  const ids = new Set([...Object.keys(stepLogs), ...Object.keys(history)]);
 
-    result.totalInput += input;
-    result.totalOutput += output;
-    result.llmStepCount += 1;
+  for (const id of ids) {
+    // Prefer the per-round history (all rounds) over the single latest snapshot.
+    const rounds =
+      Array.isArray(history[id]) && history[id].length > 0 ? history[id] : [stepLogs[id]];
 
-    const model = typeof log.model === 'string' && log.model ? log.model : 'unknown';
-    if (!result.byModel[model]) result.byModel[model] = { input: 0, output: 0 };
-    result.byModel[model].input += input;
-    result.byModel[model].output += output;
+    for (const log of rounds) {
+      const tok = log?.tokens;
+      if (!tok || typeof tok !== 'object') continue;
+      const input = Number.isFinite(tok.input) ? tok.input : 0;
+      const output = Number.isFinite(tok.output) ? tok.output : 0;
+      // A step that recorded zero usage made no billable LLM call (e.g. a
+      // deterministic node) — don't inflate the step count or the model map.
+      if (input === 0 && output === 0) continue;
+
+      result.totalInput += input;
+      result.totalOutput += output;
+      result.llmStepCount += 1;
+
+      const model = typeof log.model === 'string' && log.model ? log.model : 'unknown';
+      if (!result.byModel[model]) result.byModel[model] = { input: 0, output: 0 };
+      result.byModel[model].input += input;
+      result.byModel[model].output += output;
+    }
   }
 
   result.total = result.totalInput + result.totalOutput;

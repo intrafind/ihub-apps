@@ -413,6 +413,10 @@ export class BaseNodeExecutor {
       startedAt: stepLog.startedAt,
       completedAt: stepLog.completedAt,
       durationMs: stepLog.durationMs,
+      // Per-round token usage — small { input, output } object, kept so the
+      // token-usage card can sum EVERY round of a cyclic node instead of only
+      // the latest (`_stepLogs[logKey]` is overwritten each round).
+      tokens: stepLog.tokens,
       verdict: stepLog.verdict,
       conclusive: stepLog.conclusive,
       toolNames: toolCalls.map(c => c?.name).filter(Boolean),

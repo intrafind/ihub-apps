@@ -9,6 +9,19 @@
  */
 
 const VALID_STATUSES = new Set(['open', 'in_progress', 'done', 'failed', 'cancelled']);
+const VALID_PRIORITIES = new Set(['p1', 'p2', 'p3']);
+
+/**
+ * Coerce a priority to the declared enum. LLM tool-calls frequently violate
+ * enums ("high", "urgent", null); anything unrecognized falls back to the
+ * default 'p2' so the stored record always honors the schema contract.
+ *
+ * @param {*} priority
+ * @returns {'p1'|'p2'|'p3'}
+ */
+export function normalizePriority(priority) {
+  return typeof priority === 'string' && VALID_PRIORITIES.has(priority) ? priority : 'p2';
+}
 
 /**
  * Validate that an object is a well-formed TaskRecord. Returns
@@ -81,7 +94,7 @@ export function buildTaskRecord({
     activeForm: activeForm && typeof activeForm === 'string' ? activeForm : deriveActiveForm(title),
     description,
     brief,
-    priority,
+    priority: normalizePriority(priority),
     status,
     depth,
     parentTaskId,
@@ -115,3 +128,35 @@ export function enforceSingleInProgress(queue, keepId) {
 }
 
 export const TASK_STATUSES = VALID_STATUSES;
+
+/**
+ * Build the canonical `agent.plan.updated` payload body from a task queue:
+ * `{ total, counts, tasks }` where `tasks` is a compact projection of exactly
+ * the fields the client renders. Every emitter of `agent.plan.updated` should
+ * spread this so the event contract stays uniform (the client only reads
+ * `tasks`, but `total`/`counts` are part of the documented shape). Callers add
+ * their own context keys (reason, profileId, executionId, …).
+ *
+ * @param {Array<Object>} queue - the task queue (`state.data._taskQueue`)
+ * @returns {{ total: number, counts: Record<string, number>, tasks: Array<Object> }}
+ */
+export function summarizePlanForEvent(queue) {
+  const tasks = Array.isArray(queue) ? queue : [];
+  const counts = tasks.reduce((acc, t) => {
+    if (t?.status) acc[t.status] = (acc[t.status] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    total: tasks.length,
+    counts,
+    tasks: tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      activeForm: t.activeForm,
+      status: t.status,
+      depth: t.depth ?? 0,
+      priority: t.priority,
+      parentTaskId: t.parentTaskId ?? null
+    }))
+  };
+}

@@ -66,6 +66,55 @@ console.log('🧪 aggregateTokenUsage\n');
   );
 }
 
+console.log('\n🧪 aggregateTokenUsage — multi-round history\n');
+{
+  // _stepLogs holds only the LATEST round of each cyclic node; the per-round
+  // history holds all rounds. The card must sum ALL rounds.
+  const stepLogs = {
+    // 'agent' ran twice; _stepLogs has only round 2.
+    agent: { kind: 'agent', model: 'gemini-flash-latest', tokens: { input: 5000, output: 400 } },
+    // 'verify' ran twice; _stepLogs has only round 2.
+    verify: { kind: 'verifier', model: 'gemini-3.1-pro', tokens: { input: 2000, output: 100 } },
+    // A once-only node with no history entry — must fall back to _stepLogs.
+    'inbox-finalize': { kind: 'inbox-finalize', model: 'x', tokens: { input: 300, output: 30 } }
+  };
+  const stepLogHistory = {
+    agent: [
+      { model: 'gemini-flash-latest', tokens: { input: 3000, output: 250 } },
+      { model: 'gemini-flash-latest', tokens: { input: 5000, output: 400 } }
+    ],
+    verify: [
+      { model: 'gemini-3.1-pro', tokens: { input: 1500, output: 80 } },
+      { model: 'gemini-3.1-pro', tokens: { input: 2000, output: 100 } }
+    ]
+  };
+  const agg = aggregateTokenUsage(stepLogs, stepLogHistory);
+  check(
+    'sums BOTH rounds of each cyclic node + falls back to _stepLogs for others',
+    agg.totalInput === 3000 + 5000 + 1500 + 2000 + 300,
+    `got ${agg.totalInput}`
+  );
+  check(
+    'sums output across rounds',
+    agg.totalOutput === 250 + 400 + 80 + 100 + 30,
+    `got ${agg.totalOutput}`
+  );
+  check('llmStepCount counts each round', agg.llmStepCount === 5, `got ${agg.llmStepCount}`);
+  check(
+    'byModel sums rounds (no double-count of latest)',
+    agg.byModel['gemini-flash-latest']?.input === 3000 + 5000,
+    `got ${agg.byModel['gemini-flash-latest']?.input}`
+  );
+
+  // Backward-compat: no history arg → behaves exactly like before (latest only).
+  const aggNoHistory = aggregateTokenUsage(stepLogs);
+  check(
+    'no history arg → sums only _stepLogs (latest round)',
+    aggNoHistory.totalInput === 5000 + 2000 + 300,
+    `got ${aggNoHistory.totalInput}`
+  );
+}
+
 console.log('\n🧪 formatTokenCount\n');
 {
   check(

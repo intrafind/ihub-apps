@@ -122,16 +122,23 @@ const reviewSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
     // Strictness preset for the adversarial review acceptance bar + round budget.
-    // See server/agents/profile/reviewSettings.js. Applies to agent runs via
-    // run-start injection onto the verifier node.
+    // See server/agents/profile/reviewSettings.js.
+    //
+    // NOTE: strictness / stallLimit / criteria are consumed by the adversarial
+    // `verifier` node, which only exists in EXTERNAL workflows (e.g. the
+    // claude-style-agent workflows) — they are injected at run start via
+    // applyReviewSettings(). The DEFAULT serializer-built (embedded) agent
+    // workflow uses a prompt-based reviewer loop instead and honors ONLY
+    // maxRounds; strictness/stallLimit/criteria have no effect there.
     strictness: z.enum(['lenient', 'balanced', 'strict']).optional().default('balanced'),
     // Round budget. Optional (NO default) so an unset value means "use the
-    // strictness preset"; when set it overrides the preset's maxRetries.
+    // strictness preset"; when set it overrides the preset's maxRetries. This is
+    // the one review knob the embedded planner loop also honors.
     maxRounds: z.number().int().min(1).max(10).optional(),
-    // Optional override of the preset's stall limit.
+    // Optional override of the preset's stall limit (verifier node only).
     stallLimit: z.number().int().min(1).max(5).optional(),
     // Optional free-text acceptance criteria; overrides the verify node's
-    // criteria prompt for this agent.
+    // criteria prompt for this agent (verifier node only).
     criteria: z.string().optional(),
     modelId: z.string().optional(),
     system: optionalLocalizedStringSchema.optional()

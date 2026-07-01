@@ -381,10 +381,14 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
               Array.isArray(failedChildData._citations) &&
               failedChildData._citations.length > 0
             ) {
-              partial._citations = [
+              // The child was seeded with a COPY of the parent's _citations, so
+              // a raw concat re-adds every parent entry (the 2^rounds doubling
+              // bug). Dedupe like the success path (below) to keep the ledger
+              // stable.
+              partial._citations = dedupeCitations([
                 ...(state?.data?._citations || []),
                 ...failedChildData._citations
-              ];
+              ]);
             }
             if (Object.keys(partial).length > 0) {
               const { getStateManager } = await import('../StateManager.js');
@@ -1265,25 +1269,6 @@ Output rules:
   }
 
   /**
-   * Merge a re-plan round's tasks into the accumulated plan so the run-detail
-   * Tasks panel keeps every round's tasks visible. A review-loop round emits
-   * only the NEW gap-closing tasks; without this the prior round's tasks (whose
-   * results/logs still live in _taskResults/_stepLogs) would vanish from the
-   * UI, which renders solely from planCreated.tasks.
-   *
-   * De-dupes by task id, preserving first-seen order (prior rounds first, this
-   * round's new tasks appended). When the same id appears in both, the incoming
-   * entry wins (refreshed metadata) but keeps its original position. Cross-round
-   * id collisions don't happen in practice because _namespaceTaskIds prefixes
-   * round N≥1 ids with `r{N}_`. Tasks without an id are dropped — they can't be
-   * keyed or rendered as a stable row.
-   *
-   * @param {Array<Object>} priorTasks - Accumulated tasks from earlier rounds
-   * @param {Array<Object>} incomingTasks - This round's (namespaced) tasks
-   * @returns {Array<Object>} Merged, de-duped task list
-   * @private
-   */
-  /**
    * Drop tasks whose id duplicates an earlier task's id, keeping the FIRST
    * occurrence and preserving order. Run AFTER `_namespaceTaskIds` so it also
    * collapses post-namespace collisions (`foo` + `r{N}_foo` both become
@@ -1318,6 +1303,25 @@ Output rules:
     return dropped;
   }
 
+  /**
+   * Merge a re-plan round's tasks into the accumulated plan so the run-detail
+   * Tasks panel keeps every round's tasks visible. A review-loop round emits
+   * only the NEW gap-closing tasks; without this the prior round's tasks (whose
+   * results/logs still live in _taskResults/_stepLogs) would vanish from the
+   * UI, which renders solely from planCreated.tasks.
+   *
+   * De-dupes by task id, preserving first-seen order (prior rounds first, this
+   * round's new tasks appended). When the same id appears in both, the incoming
+   * entry wins (refreshed metadata) but keeps its original position. Cross-round
+   * id collisions don't happen in practice because _namespaceTaskIds prefixes
+   * round N≥1 ids with `r{N}_`. Tasks without an id are dropped — they can't be
+   * keyed or rendered as a stable row.
+   *
+   * @param {Array<Object>} priorTasks - Accumulated tasks from earlier rounds
+   * @param {Array<Object>} incomingTasks - This round's (namespaced) tasks
+   * @returns {Array<Object>} Merged, de-duped task list
+   * @private
+   */
   _mergePlanTasks(priorTasks, incomingTasks) {
     const byId = new Map();
     for (const t of Array.isArray(priorTasks) ? priorTasks : []) {

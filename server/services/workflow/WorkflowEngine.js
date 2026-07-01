@@ -4,6 +4,7 @@ import { getStateManager, WorkflowStatus } from './StateManager.js';
 import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
+import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -400,11 +401,24 @@ export class WorkflowEngine {
     // Re-anchor the execution deadline to now so a run that was interrupted
     // hours ago doesn't instantly trip MAX_EXECUTION_TIME on resume.
     const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
+
+    // Reset the per-node iteration counter for the nodes we're about to
+    // re-run (same rationale as resumeFromTerminated): the counter is a CYCLE
+    // guard, not a retry counter. Without this, a loop node interrupted near
+    // MAX_NODE_ITERATIONS trips the cap on its first post-resume execution and
+    // defeats recovery. deepMerge preserves counters for other in-loop nodes.
+    const prevIterations = state.data?._nodeIterations || {};
+    const resetIterations = { ...prevIterations };
+    for (const nodeId of state.currentNodes || []) {
+      resetIterations[nodeId] = 0;
+    }
+
     await this.stateManager.update(executionId, {
       status: WorkflowStatus.RUNNING,
       data: {
         _executionDeadline: Date.now() + maxExecutionTime,
-        _resumedAt: new Date().toISOString()
+        _resumedAt: new Date().toISOString(),
+        _nodeIterations: resetIterations
       }
     });
 
@@ -1632,7 +1646,7 @@ export class WorkflowEngine {
       this._emitEvent('agent.plan.updated', {
         executionId,
         reason: 'terminal-reconcile',
-        tasks: reconciled
+        ...summarizePlanForEvent(reconciled)
       });
     } catch (err) {
       logger.warn('Plan reconciliation on terminal state failed', {

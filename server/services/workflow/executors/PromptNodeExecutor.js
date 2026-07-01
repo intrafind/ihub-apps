@@ -1706,31 +1706,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // If every tool has been circuit-broken, there's nothing left to call —
-      // force a final answer instead of spinning to the round cap.
-      if (!forceFinish && tools.length > 0 && tools.every(t => disabledTools.has(t.id))) {
-        forceFinish = true;
-        this.logger.info('All tools circuit-broken — forcing a final answer', {
-          component: 'PromptNodeExecutor',
-          nodeId,
-          disabledTools: [...disabledTools]
-        });
-        currentMessages.push({
-          role: 'user',
-          content:
-            '[system] All tools are currently unavailable (rate-limited or repeatedly failing). ' +
-            'Do NOT call any more tools and do NOT invent URLs, sources, or quotes. Produce your ' +
-            'COMPLETE final response now using everything you have gathered, and briefly note any ' +
-            'gaps you could not close because tools were unavailable.'
-        });
-      }
-
       // Proactively compact the in-flight history once it grows large, so old
       // (already-consumed) tool-result bodies are not re-billed on every
       // subsequent iteration — the O(N²) prompt-token fix. Citations are
       // already persisted to _citations and the audit preview to the step log,
       // so eliding the raw bodies here loses nothing durable. Reactive
-      // overflow recovery (the catch above) remains as a backstop.
+      // overflow recovery (the catch above) remains as a backstop. Compaction
+      // only elides tool-result bodies, never the wrap-up nudges pushed below,
+      // so it is safe to run before the force-finish gates.
       const compaction = this.contextSummarizer.compactIfOversized(currentMessages, {
         thresholdTokens: config.compactThresholdTokens ?? 16000,
         keepRecent: config.compactKeepRecent ?? 6
@@ -1746,10 +1729,32 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       }
 
-      // Budget gate: if the run has spent its token budget, answer this round's
-      // tool calls (done above) then nudge the model to wrap up — one final
-      // tool-less turn produces the answer instead of more tool calls.
-      if (maxTokensPerRun > 0 && runBudget.total >= maxTokensPerRun && !forceFinish) {
+      // Force a final (tool-less) answer for exactly ONE reason per iteration,
+      // in precedence order: all tools dead > run budget spent > round cap.
+      // Each sets forceFinish and pushes a wrap-up nudge; the next iteration
+      // then breaks at the top (no tool calls, or the `if (forceFinish)` guard).
+      // The if/else-if chain makes the precedence explicit — a plain sequence of
+      // `if (… && !forceFinish)` gates has the same effect but reads as (and gets
+      // flagged as) redundant negations.
+      if (tools.length > 0 && tools.every(t => disabledTools.has(t.id))) {
+        // Every tool has been circuit-broken — nothing left to call.
+        forceFinish = true;
+        this.logger.info('All tools circuit-broken — forcing a final answer', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          disabledTools: [...disabledTools]
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            '[system] All tools are currently unavailable (rate-limited or repeatedly failing). ' +
+            'Do NOT call any more tools and do NOT invent URLs, sources, or quotes. Produce your ' +
+            'COMPLETE final response now using everything you have gathered, and briefly note any ' +
+            'gaps you could not close because tools were unavailable.'
+        });
+      } else if (maxTokensPerRun > 0 && runBudget.total >= maxTokensPerRun) {
+        // Run token budget spent: answer this round's tool calls (done above)
+        // then nudge the model to wrap up on the next, tool-less turn.
         forceFinish = true;
         this.logger.info('Run token budget reached — nudging agent to wrap up', {
           component: 'PromptNodeExecutor',
@@ -1764,15 +1769,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             `Stop calling tools. Produce your best final answer now using what you already have. ` +
             `Be concise and note any gaps you could not close.`
         });
-      }
-
-      // Round-cap gate: spend the LAST allowed round producing the final output
-      // instead of one more tool call. Without this, a model that keeps calling
-      // tools until the cap exits the loop having only emitted interim narration
-      // ("I'll research… let me dig deeper") — never the actual deliverable
-      // (agent) or the verdict JSON (verifier, which runs through this same
-      // loop). Disabling tools on the final round forces a text answer.
-      if (!forceFinish && iteration >= maxIterations - 1) {
+      } else if (iteration >= maxIterations - 1) {
+        // Last allowed round: spend it producing the final output instead of one
+        // more tool call. Without this, a model that keeps calling tools until
+        // the cap exits the loop having only emitted interim narration ("I'll
+        // research… let me dig deeper") — never the actual deliverable (agent)
+        // or the verdict JSON (verifier, which runs through this same loop).
         forceFinish = true;
         this.logger.info('Tool-round cap reached — forcing a final answer', {
           component: 'PromptNodeExecutor',

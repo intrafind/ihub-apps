@@ -93,7 +93,6 @@
       "config": {
         "_isSynthesizer": true,
         "outputVariable": "draft",
-        "_persistAsArtifact": true,
         "maxIterations": 1,
         "maxTokens": 32000,
         "system": {
