@@ -18,12 +18,15 @@ import { setConversationId } from '../../../utils/chatId';
  * @param {boolean} options.persistConversationId - Whether to persist iAssistant conversationId
  *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
+ * @param {boolean} options.ephemeral - When true, chat is never persisted to browser storage
+ *   and no conversationId is stored.
  */
 function useAppChat({
   appId,
   chatId: initialChatId,
   onMessageComplete,
-  persistConversationId = true
+  persistConversationId = true,
+  ephemeral = false
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
@@ -44,6 +47,9 @@ function useAppChat({
   const isCancellingRef = useRef(false);
   const messageMetadataRef = useRef(null); // Store metadata for the current message
 
+  // Never persist the iAssistant conversationId for ephemeral chats.
+  const shouldPersistConversationId = persistConversationId && !ephemeral;
+
   const {
     messages,
     messagesRef,
@@ -59,7 +65,7 @@ function useAppChat({
     getMessagesForApi,
     loadServerMessages,
     mergeCitations
-  } = useChatMessages(chatId); // Now this will properly react to chatId changes
+  } = useChatMessages(chatId, { ephemeral }); // Now this will properly react to chatId changes
 
   const cleanupEventSourceRef = useRef();
 
@@ -266,7 +272,7 @@ function useAppChat({
           }
           break;
         case 'conversation.id':
-          if (data?.conversationId && appId && persistConversationId) {
+          if (data?.conversationId && appId && shouldPersistConversationId) {
             setConversationId(appId, data.conversationId);
           }
           break;
@@ -361,7 +367,7 @@ function useAppChat({
       onMessageComplete,
       t,
       messagesRef,
-      persistConversationId
+      shouldPersistConversationId
     ]
   );
 

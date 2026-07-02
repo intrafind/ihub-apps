@@ -9,6 +9,7 @@ function AppConfigForm({
   selectedStyle,
   selectedOutputFormat,
   sendChatHistory,
+  ephemeral,
   temperature,
   thinkingEnabled,
   thinkingBudget,
@@ -19,6 +20,7 @@ function AppConfigForm({
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
+  onEphemeralChange,
   onTemperatureChange,
   onThinkingEnabledChange,
   onThinkingBudgetChange,
@@ -181,6 +183,21 @@ function AppConfigForm({
               className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
             />
             {t('appConfig.includeChatHistory', 'Include chat history in requests')}
+          </label>
+        </div>
+      )}
+
+      {/* Ephemeral Chat Toggle */}
+      {app?.settings?.ephemeral?.enabled !== false && (
+        <div className="flex items-center">
+          <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ephemeral === true}
+              onChange={e => onEphemeralChange?.(e.target.checked)}
+              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+            />
+            {t('appConfig.ephemeral', 'Ephemeral chat (never stored)')}
           </label>
         </div>
       )}

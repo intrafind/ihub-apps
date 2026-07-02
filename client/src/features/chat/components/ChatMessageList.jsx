@@ -23,6 +23,7 @@ function ChatMessageList({
   compact = false,
   onOpenInCanvas,
   onInsert,
+  onInsertNew = null,
   insertAction = null,
   canvasEnabled = false,
   // Integration auth props
@@ -173,6 +174,7 @@ function ChatMessageList({
                 compact={compact}
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
+                onInsertNew={onInsertNew}
                 insertAction={insertAction}
                 isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}

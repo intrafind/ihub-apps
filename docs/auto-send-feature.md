@@ -56,7 +56,18 @@ When sharing links with support users or creating automated workflows, you can u
 | `model` | No | Override the default model | `model=gpt-4` |
 | `temp` | No | Set temperature (0-2) | `temp=0.7` |
 | `style` | No | Set response style | `style=concise` |
+| `outfmt` | No | Set output format (`markdown`, `text`, `json`, `html`) | `outfmt=json` |
+| `history` | No | Include chat history in requests (`true`/`false`) | `history=true` |
 | `var_*` | No | Set app variables | `var_date=2024-01-01` |
+| `documentId` | No | Attach an iFinder document (requires `source=ifinder`) | `documentId=doc-12345` |
+| `source` | No | Document source; must be `ifinder` to trigger attachment | `source=ifinder` |
+| `searchProfile` | No | iFinder search profile used to resolve the document | `searchProfile=default` |
+
+> **Note:** `prefill` works on its own (without `send=true`) to simply pre-populate
+> the input field. Likewise, the `model`, `temp`, `style`, `outfmt`, `history`,
+> `var_*`, and `documentId` parameters can be used independently of auto-send.
+> All of these parameters are automatically removed from the URL after they are
+> applied, so refreshing the page will not re-trigger them.
 
 ## Safety Features
 
@@ -108,6 +119,68 @@ Create webhooks or buttons in external systems:
 </a>
 ```
 
+## iFinder Document Attachment
+
+In addition to the message parameters above, the chat URL can pre-attach an
+iFinder document to the conversation. This powers the "Open in App" flow from
+iFinder, but the parameters can be used in any link.
+
+### Syntax
+
+```
+/apps/{app-id}?documentId={id}&source=ifinder
+```
+
+The `source=ifinder` parameter is **required** to trigger the attachment — the
+`documentId` is ignored unless `source` is exactly `ifinder`.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `documentId` | Yes | The iFinder document identifier to fetch and attach |
+| `source` | Yes | Must be `ifinder` to trigger the document attachment |
+| `searchProfile` | No | iFinder search profile used to resolve the document download link |
+
+### How It Works
+
+1. The page loads and shows a loading placeholder in the attachment area.
+2. The document is fetched server-side via the iFinder proxy
+   (`/api/integrations/ifinder/document`), which resolves the download link and
+   streams the binary. If the binary fetch fails, the text content is fetched as
+   a fallback.
+3. The document is processed through the same pipeline as an uploaded file and
+   attached to the chat.
+4. The `documentId`, `source`, and `searchProfile` parameters are removed from
+   the URL to prevent re-fetching on refresh.
+
+When sent to the backend, the attached document is passed as a `documentIds`
+array, so the chat request always carries the document context.
+
+### Examples
+
+#### Attach a document and pre-fill a prompt
+
+```
+/apps/chat?documentId=doc-12345&source=ifinder&prefill=Summarize%20this%20document
+```
+
+#### Attach a document, pre-fill, and auto-send
+
+```
+/apps/chat?documentId=doc-12345&source=ifinder&prefill=Summarize%20this%20document&send=true
+```
+
+#### Attach a document using a specific search profile
+
+```
+/apps/chat?documentId=doc-12345&searchProfile=default&source=ifinder
+```
+
+> **Note:** Only a single `documentId` is supported via the URL. The `prefill`
+> value is also used as the initial display name for the document while it is
+> loading.
+
 ## Backwards Compatibility
 
 The feature is fully backwards compatible:
@@ -157,3 +230,4 @@ For technical implementation details, see:
 - [Prefill Parameter](./user-guide.md#prefill-parameter) - Pre-populate the input field
 - [Short Links](./user-guide.md#short-links) - Create shareable links
 - [Variables](./apps.md#variables) - Pass data to apps via URL parameters
+- [iFinder Integration](./iFinder-Integration.md) - Enterprise document management and the "Open in App" flow

@@ -191,7 +191,7 @@ function OfficeContextStrip({
         <button
           type="button"
           onClick={() => setOverrideExpanded(!expanded)}
-          className="flex-1 flex items-center gap-2 text-left hover:bg-slate-50 transition-colors rounded-md px-1 py-0.5 -ml-1"
+          className="flex-1 min-w-0 flex items-center gap-2 text-left hover:bg-slate-50 transition-colors rounded-md px-1 py-0.5 -ml-1"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse email context' : 'Expand email context'}
           title={expanded ? 'Collapse email context' : 'Expand email context'}
@@ -213,19 +213,21 @@ function OfficeContextStrip({
           />
         </button>
 
-        {/* Always show pin controls in the header, even when collapsed */}
+        {/* Show add-email button in the header when collapsed so it's always reachable */}
         {!expanded && hasPinControls && (
-          <PinnedEmailsBar
-            pinned={[]}
-            onUnpin={() => {}}
-            onClearAll={() => {}}
-            onAddEmails={onAddEmails}
-            canAddEmails={canAddEmails}
-            addEmailsLoading={addEmailsLoading}
-            addEmailsDisabled={addEmailsDisabled}
-            embedded
-            collapsedMode
-          />
+          <div className="flex-shrink-0">
+            <PinnedEmailsBar
+              pinned={[]}
+              onUnpin={() => {}}
+              onClearAll={() => {}}
+              onAddEmails={onAddEmails}
+              canAddEmails={canAddEmails}
+              addEmailsLoading={addEmailsLoading}
+              addEmailsDisabled={addEmailsDisabled}
+              embedded
+              collapsedMode
+            />
+          </div>
         )}
       </div>
 

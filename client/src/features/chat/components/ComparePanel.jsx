@@ -38,7 +38,8 @@ const ComparePanel = forwardRef(function ComparePanel(
     onConnectIntegration,
     onClarificationSubmit,
     onClarificationSkip,
-    onDocumentAction
+    onDocumentAction,
+    ephemeral
   },
   ref
 ) {
@@ -53,7 +54,8 @@ const ComparePanel = forwardRef(function ComparePanel(
     onMessageComplete,
     // Compare panels share the same appId; persisting the iAssistant conversationId
     // (which is keyed by appId) would race between the panels. Keep these chats ephemeral.
-    persistConversationId: false
+    persistConversationId: false,
+    ephemeral
   });
 
   // Keep selectedModel in sync if the available models change (e.g. defaults arrive late).

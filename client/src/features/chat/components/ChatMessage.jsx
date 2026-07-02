@@ -67,6 +67,7 @@ function ChatMessage({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
+  onInsertNew = null,
   insertAction = null, // { variant: 'icon'|'primary', labelKey: string } — Office host promotes the per-message insert action to a labelled primary button; web app default keeps the legacy icon button on the action row.
   isLatestAssistantMessage = false, // Keeps the primary insert button always-visible on the most recent assistant response inside small Outlook panes.
   canvasEnabled = false,
@@ -99,6 +100,8 @@ function ChatMessage({
   const [editedContent, setEditedContent] = useState(getEditableContent());
   const editTextareaRef = useRef(null);
   const [showActions, setShowActions] = useState(false);
+  const [insertDropdownOpen, setInsertDropdownOpen] = useState(false);
+  const insertDropdownRef = useRef(null);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -133,6 +136,19 @@ function ChatMessage({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Close insert dropdown on outside click
+  useEffect(() => {
+    const handleClick = e => {
+      if (insertDropdownRef.current && !insertDropdownRef.current.contains(e.target)) {
+        setInsertDropdownOpen(false);
+      }
+    };
+    if (insertDropdownOpen) {
+      document.addEventListener('mousedown', handleClick);
+      return () => document.removeEventListener('mousedown', handleClick);
+    }
+  }, [insertDropdownOpen]);
 
   // Auto-grow the edit textarea and clamp at a soft max-height (60vh, capped at 480px).
   // Mirrors the autosize pattern used by ChatInput / ClarificationInput.
@@ -674,6 +690,11 @@ function ChatMessage({
   // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
   const hasPendingClarification = message.clarification && !message.clarificationAnswered;
   const showBubble = !hasPendingClarification;
+  // Dropdown is email-specific: only show it when both onInsertNew is provided AND the
+  // insert action is for email (not Word/PowerPoint). This keeps the rounding and the
+  // dropdown chevron in sync regardless of how future hosts wire onInsertNew.
+  const showInsertDropdown =
+    Boolean(onInsertNew) && insertAction?.labelKey === 'office.insertIntoEmail';
 
   return (
     <div
@@ -924,21 +945,78 @@ function ChatMessage({
               isLatestAssistantMessage || showActions ? 'opacity-100' : 'opacity-60'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => onInsert(message.content)}
-              className="inline-flex w-full items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
-            >
-              <Icon name="arrow-right" size="sm" className="text-white" />
-              <span>
-                {t(
-                  insertAction.labelKey || 'office.insertIntoDocument',
-                  insertAction.labelKey === 'office.insertIntoEmail'
-                    ? 'Add to email'
-                    : 'Add to document'
-                )}
-              </span>
-            </button>
+            <div className="relative flex w-full" ref={insertDropdownRef}>
+              {/* Main action button — square-right when the chevron is shown, fully rounded otherwise */}
+              <button
+                type="button"
+                onClick={() => onInsert(message.content)}
+                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
+              >
+                <Icon name="arrow-right" size="sm" className="text-white" />
+                <span>
+                  {t(
+                    insertAction.labelKey || 'office.insertIntoDocument',
+                    insertAction.labelKey === 'office.insertIntoEmail'
+                      ? 'Add to email'
+                      : 'Add to document'
+                  )}
+                </span>
+              </button>
+
+              {/* Dropdown toggle — email hosts only (showInsertDropdown is false for Word/PowerPoint) */}
+              {showInsertDropdown && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInsertDropdownOpen(prev => !prev)}
+                    className="inline-flex items-center px-2 py-2 rounded-r-md text-sm font-semibold bg-indigo-700 text-white shadow-sm hover:bg-indigo-800 border-l border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+                    aria-haspopup="menu"
+                    aria-expanded={insertDropdownOpen}
+                    title={t('office.insertOptions', 'More options')}
+                  >
+                    <Icon
+                      name={insertDropdownOpen ? 'chevronUp' : 'chevronDown'}
+                      size="sm"
+                      className="text-white"
+                    />
+                  </button>
+
+                  {insertDropdownOpen && (
+                    <div
+                      role="menu"
+                      className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                    >
+                      <div className="py-1">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            onInsert(message.content);
+                            setInsertDropdownOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <Icon name="arrow-right" size="sm" />
+                          {t('office.replyToEmail', 'Reply to email')}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            onInsertNew(message.content);
+                            setInsertDropdownOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <Icon name="pencil" size="sm" />
+                          {t('office.newEmail', 'New email')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
 

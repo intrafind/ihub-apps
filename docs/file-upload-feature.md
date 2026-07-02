@@ -111,7 +111,7 @@ Supported providers (configured at the platform level):
 | `.odt` | `application/vnd.oasis.opendocument.text` | XML text extracted via `jszip` |
 | `.ods` | `application/vnd.oasis.opendocument.spreadsheet` | XML text extracted via `jszip` |
 | `.odp` | `application/vnd.oasis.opendocument.presentation` | XML text extracted via `jszip` |
-| `.msg` | `application/vnd.ms-outlook`, `application/x-msg` | Subject, sender, recipients, body extracted via `@kenjiuno/msgreader` |
+| `.msg` | `application/vnd.ms-outlook`, `application/x-msg` | Subject, sender/recipients (SMTP addresses preferred), date, attachment names, and body extracted via `@kenjiuno/msgreader`. Body falls back across plain text → HTML → compressed RTF, so HTML-only emails (e.g. newsletters) are read correctly |
 | `.eml` | `message/rfc822` | Read as-is (RFC 822 format) |
 
 > `.xlsx`, `.xls`, `.pptx`, and `.ppt` are fully supported by the processing engine but are not included in the default `supportedFormats` list. Add their MIME types explicitly to enable them.
@@ -163,7 +163,7 @@ All file processing happens **client-side** before content is sent to the server
    - **XLSX / XLS** — Cell content extracted as text via the xlsx library.
    - **PPTX / PPT** — Slide text extracted via the xlsx library.
    - **ODT / ODS / ODP** — XML parsed and text content extracted via jszip.
-   - **MSG** — Subject, sender, recipients, and body extracted via msgreader.
+   - **MSG** — Headers (subject, sender, recipients, date, attachment names) plus the body extracted via msgreader. The body is resolved across every format Outlook may store it in — plain text, HTML (`PidTagHtml`/`PidTagBodyHtml`), or compressed RTF — so HTML-only emails like newsletters extract their full content instead of just headers.
    - **EML** — Read as-is.
    - **Images** — Optionally resized to max 1024 px and converted to JPEG; TIFF images converted to PNG first.
    - **Audio** — Base64-encoded and sent natively to the model.

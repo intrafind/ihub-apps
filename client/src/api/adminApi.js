@@ -99,24 +99,33 @@ export const makeAdminApiCall = async (url, options = {}) => {
       return response;
     }
   } catch (error) {
+    const status = error.response?.status;
+
     // Handle admin-specific auth failures
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Clear invalid admin tokens
+    if (status === 401 || status === 403) {
+      // Clear the anonymous-mode admin token if present; it is no longer valid.
       if (adminToken) {
         localStorage.removeItem('adminToken');
       }
 
-      // For auth failures, redirect appropriately based on the auth mode
-      if (window.location.pathname.startsWith('/admin')) {
-        const authToken = localStorage.getItem('authToken');
-        // If we have a regular auth token, this suggests a permission issue
-        if (authToken) {
-          // User is authenticated but doesn't have admin permissions
-          window.location.href = buildPath('/admin'); // Will show appropriate error message
-        } else {
-          // User is not authenticated, redirect to login
-          window.location.href = buildPath('/');
-        }
+      if (status === 401) {
+        // Session expired or token invalid. Trigger the global re-authentication
+        // flow instead of hard-redirecting away from the admin area. The
+        // `authTokenExpired` handler stores the current URL and shows the auth
+        // gate overlay, returning the user to exactly where they were after they
+        // log back in — so an admin re-prompted mid-session lands back on the
+        // admin page, not the app home.
+        //
+        // The shared apiClient interceptor already dispatches this for JSON
+        // requests, but FormData requests use raw fetch and bypass that
+        // interceptor, so we dispatch here to cover both paths. Dispatching is
+        // idempotent: handleTokenExpired guards against re-entry and the auth
+        // gate won't re-show while it is already visible.
+        window.dispatchEvent(new CustomEvent('authTokenExpired'));
+      } else if (window.location.pathname.startsWith('/admin')) {
+        // 403: authenticated but lacking admin permission. Send the user to the
+        // admin root, which renders an "Admin Access Required" message.
+        window.location.href = buildPath('/admin');
       }
     }
     throw error;

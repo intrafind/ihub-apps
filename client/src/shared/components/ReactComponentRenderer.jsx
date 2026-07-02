@@ -175,7 +175,13 @@ UserComponent;
           }
 
           transformed = transformMethod(fullCode, {
-            presets: ['react'],
+            // Force the classic JSX runtime so Babel emits React.createElement
+            // calls. The execution context below only injects `React`; it does
+            // not provide the react/jsx-runtime imports (_jsx/_jsxs) that the
+            // automatic runtime relies on. Newer @babel/standalone builds
+            // default to the automatic runtime, which produced
+            // "_jsxs is not defined" at render time.
+            presets: [['react', { runtime: 'classic' }]],
             plugins: []
           });
         } catch (babelError) {

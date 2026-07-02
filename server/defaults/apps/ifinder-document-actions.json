@@ -18,6 +18,7 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,
   "sendChatHistory": true,
+  "ephemeral": true,
   "tools": ["iFinder_getMetadata", "iFinder_getContent"],
   "settings": {
     "enabled": true,

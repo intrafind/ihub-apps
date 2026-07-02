@@ -30,7 +30,8 @@ const CompareModeView = forwardRef(function CompareModeView(
     onConnectIntegration,
     onClarificationSubmit,
     onClarificationSkip,
-    onDocumentAction
+    onDocumentAction,
+    ephemeral
   },
   ref
 ) {
@@ -102,6 +103,7 @@ const CompareModeView = forwardRef(function CompareModeView(
           onClarificationSubmit={onClarificationSubmit}
           onClarificationSkip={onClarificationSkip}
           onDocumentAction={onDocumentAction}
+          ephemeral={ephemeral}
         />
       ))}
     </div>

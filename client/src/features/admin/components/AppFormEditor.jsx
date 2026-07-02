@@ -576,6 +576,29 @@ function AppFormEditor({
                     </p>
                   </div>
                 )}
+
+                {/* Ephemeral chat - Only for chat apps */}
+                {(app.type === 'chat' || !app.type) && (
+                  <div className="col-span-6">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.ephemeral === true}
+                        onChange={e => handleInputChange('ephemeral', e.target.checked)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.ephemeral', 'Ephemeral chat')}
+                      </label>
+                    </div>
+                    <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.apps.edit.ephemeralHelp',
+                        'When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.'
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
