@@ -21,20 +21,7 @@ import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
 import { createParser } from 'eventsource-parser';
-
-/**
- * Valid adapter options as defined in BaseAdapter.extractRequestOptions()
- * @type {string[]}
- */
-const VALID_ADAPTER_OPTIONS = [
-  'temperature',
-  'stream',
-  'maxTokens',
-  'tools',
-  'toolChoice',
-  'responseFormat',
-  'responseSchema'
-];
+import { filterAdapterOptions as filterAdapterOptionsPure } from './adapterOptions.js';
 
 /**
  * Default number of retries for transient LLM errors. A brief Google 503
@@ -217,15 +204,7 @@ export class WorkflowLLMHelper {
    * @returns {Object} Filtered options with only valid adapter parameters
    */
   filterAdapterOptions(options = {}) {
-    const filtered = {};
-
-    for (const key of VALID_ADAPTER_OPTIONS) {
-      if (options[key] !== undefined) {
-        filtered[key] = options[key];
-      }
-    }
-
-    return filtered;
+    return filterAdapterOptionsPure(options);
   }
 
   /**

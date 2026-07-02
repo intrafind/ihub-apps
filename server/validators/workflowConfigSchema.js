@@ -137,6 +137,32 @@ const nodeTypeEnum = z.enum([
 ]);
 
 /**
+ * Per-node thinking override schema.
+ *
+ * Mirrors the model config `thinking` shape (see
+ * `server/validators/modelConfigSchema.js`) but every field is optional — a
+ * node may set only what it wants to override. Mapped to per-request adapter
+ * options by `thinkingConfigToOptions()` in
+ * `server/services/workflow/thinkingOptions.js`. `.strict()` catches typos
+ * (e.g. `enabld`) instead of silently ignoring them.
+ *
+ *   - Gemini 3.x: { enabled, level: "minimal"|"low"|"medium"|"high" }
+ *   - Gemini 2.5: { enabled, budget, thoughts }
+ */
+const nodeThinkingSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    level: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
+    budget: z.number().int().optional(),
+    thoughts: z.boolean().optional(),
+    chatTemplateKwargs: z.record(z.any()).optional()
+  })
+  .strict()
+  .optional();
+
+/**
  * Node configuration schema
  * Represents a single node in the workflow graph
  */
@@ -182,7 +208,13 @@ export const nodeConfigSchema = z.object({
   config: z
     .object({
       /** Whether this node's progress is visible in the chat step indicator. Defaults to true. */
-      chatVisible: z.boolean().optional()
+      chatVisible: z.boolean().optional(),
+      /**
+       * Optional per-node thinking override for LLM-backed nodes (prompt,
+       * planner, verifier, query-plan). Overrides the model's thinking config
+       * for this node's LLM call only. See nodeThinkingSchema.
+       */
+      thinking: nodeThinkingSchema
     })
     .passthrough()
     .optional(),

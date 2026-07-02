@@ -18,6 +18,7 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
@@ -1021,7 +1022,9 @@ Output rules:
         temperature: 0.7,
         responseFormat: 'json',
         responseSchema: plannerResponseSchema,
-        maxTokens
+        maxTokens,
+        // Per-node thinking override (no-op when the node sets no `thinking`).
+        ...thinkingConfigToOptions(config.thinking)
       },
       language
     });

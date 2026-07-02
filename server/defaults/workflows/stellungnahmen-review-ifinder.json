@@ -312,12 +312,15 @@
           "de": "Sie sind ein Korpus-Vollständigkeits-Schiedsrichter. Sie prüfen die Kandidatenliste und den Nutzer-Fokus und entscheiden, ob der Korpus breit genug für eine revisionssichere Stellungnahmen-Auswertung ist. Antworten Sie NUR mit JSON."
         },
         "prompt": {
-          "en": "## User focus\n{{userPrompt}}\n\n## Current query plan\nTopics: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nExpansions: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Candidates so far ({{_corpus.length}} hits in round {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  source={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Decision\nReturn JSON:\n{\n  \"done\": <bool>,                          // true if corpus is sufficient OR you are out of iterations\n  \"reason\": \"<one sentence>\",\n  \"extraTopics\": [\"<additional iFinder query string>\"]  // empty when done=true\n}\n\nRules: if `_searchIterations >= _maxSearchIterations`, ALWAYS return `done: true` (we have hit the cap). Otherwise: if the candidate list clearly misses obvious paragraphs/themes from the user focus, propose 1-3 extra topics; if not, return done=true.",
-          "de": "## Nutzer-Fokus\n{{userPrompt}}\n\n## Aktueller Suchplan\nThemen: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nErweiterungen: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Bisherige Kandidaten ({{_corpus.length}} Treffer in Runde {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  quelle={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Entscheidung\nJSON zurückgeben:\n{\n  \"done\": <bool>,\n  \"reason\": \"<ein Satz>\",\n  \"extraTopics\": [\"<zusätzliche iFinder-Anfrage>\"]\n}\n\nRegeln: wenn `_searchIterations >= _maxSearchIterations`, IMMER `done: true` zurückgeben (Obergrenze erreicht). Andernfalls: wenn die Kandidatenliste offensichtliche Paragraphen/Themen aus dem Fokus übergeht, 1-3 zusätzliche Themen vorschlagen; sonst `done: true` zurückgeben."
+          "en": "## User focus\n{{userPrompt}}\n\n## Current query plan\nTopics: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nExpansions: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Candidates so far ({{_corpus.length}} hits in round {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  source={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Decision\nReturn JSON:\n{\n  \"done\": <bool>,                          // true if corpus is sufficient OR you are out of iterations\n  \"reason\": \"<one short sentence, max 25 words — never repeat yourself>\",\n  \"extraTopics\": [\"<additional iFinder query string>\"]  // empty when done=true\n}\n\nRules: if `_searchIterations >= _maxSearchIterations`, ALWAYS return `done: true` (we have hit the cap). Otherwise: if the candidate list clearly misses obvious paragraphs/themes from the user focus, propose 1-3 extra topics; if not, return done=true.",
+          "de": "## Nutzer-Fokus\n{{userPrompt}}\n\n## Aktueller Suchplan\nThemen: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nErweiterungen: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Bisherige Kandidaten ({{_corpus.length}} Treffer in Runde {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  quelle={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Entscheidung\nJSON zurückgeben:\n{\n  \"done\": <bool>,\n  \"reason\": \"<ein kurzer Satz, max. 25 Wörter — niemals wiederholen>\",\n  \"extraTopics\": [\"<zusätzliche iFinder-Anfrage>\"]\n}\n\nRegeln: wenn `_searchIterations >= _maxSearchIterations`, IMMER `done: true` zurückgeben (Obergrenze erreicht). Andernfalls: wenn die Kandidatenliste offensichtliche Paragraphen/Themen aus dem Fokus übergeht, 1-3 zusätzliche Themen vorschlagen; sonst `done: true` zurückgeben."
         },
         "outputVariable": "_refineDecision",
+        "thinking": {
+          "enabled": false
+        },
         "maxIterations": 1,
-        "maxTokens": 1000,
+        "maxTokens": 1024,
         "outputSchema": {
           "type": "object",
           "properties": {
@@ -755,7 +758,7 @@
       "target": "init-cursor",
       "condition": {
         "type": "expression",
-        "expression": "$.data._refineDecision.done === true || $.data._searchIterations >= $.data._maxSearchIterations"
+        "expression": "$.data._refineDecision.done !== false || $.data._searchIterations >= $.data._maxSearchIterations"
       }
     },
     {

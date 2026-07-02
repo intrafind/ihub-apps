@@ -20,6 +20,7 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 
 export class QueryPlanNodeExecutor extends BaseNodeExecutor {
@@ -117,7 +118,7 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
           { role: 'user', content: userParts.join('\n\n') }
         ],
         apiKey: apiKeyResult.apiKey,
-        options: { temperature: 0.2 },
+        options: { temperature: 0.2, ...thinkingConfigToOptions(config.thinking) },
         language
       });
       plan = parsePlan(response?.content || '');
