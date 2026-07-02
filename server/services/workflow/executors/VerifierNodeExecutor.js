@@ -21,6 +21,7 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
@@ -295,7 +296,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
           model,
           messages,
           apiKey: apiKeyResult.apiKey,
-          options: { temperature: 0.3 },
+          options: { temperature: 0.3, ...thinkingConfigToOptions(node.config?.thinking) },
           language
         });
         responseContent = response.content || '';

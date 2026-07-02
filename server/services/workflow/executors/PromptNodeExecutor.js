@@ -15,6 +15,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import ChatService from '../../chat/ChatService.js';
 import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { actionTracker } from '../../../actionTracker.js';
@@ -1529,7 +1530,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             maxTokens,
             tools: availableTools.length > 0 && !forceFinish ? availableTools : undefined,
             responseSchema,
-            responseFormat
+            responseFormat,
+            // Per-node thinking override: lets a node disable or dial down the
+            // model's reasoning (e.g. a fast JSON decision node). No-op when the
+            // node declares no `thinking` block.
+            ...thinkingConfigToOptions(config.thinking)
             // Note: user and chatId are intentionally NOT passed here
             // They are not valid adapter options and would corrupt provider request bodies
           },

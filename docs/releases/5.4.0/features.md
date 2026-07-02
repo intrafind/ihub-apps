@@ -69,6 +69,14 @@ The canonical use is **iFinder corpus discovery**: `iFinder_discover` probes a s
 
 Server startup rebuilds each profile's embedded workflow so it picks up the canonical `synthesize → memory-compose → memory-finalize` chain and a cleaned planner prompt. This fixes profiles where memory was never written (missing `memory-compose` node) or the planner emitted a redundant review task. **V053** also normalizes the `${$.data.currentInboxItem}` template to `.text` so the planner receives real content instead of `"[object Object]"`. The prior definition is snapshotted to `workflow._preMigrationV052Backup`; profiles with `workflow.ref === "external"` are untouched; both migrations are idempotent.
 
+### Per-node thinking control in workflows
+
+Workflow authors can set a `thinking` block on any LLM-backed node (`prompt`, `planner`, `verifier`, `query-plan`) to override the model's reasoning **for that node's call only**. This keeps fast, deterministic decision nodes fast: a node that only emits a small JSON verdict no longer burns tens of seconds — or truncates its own output — on a thinking model's unbounded reasoning.
+
+- Same shape as the model config: `"thinking": { "enabled": false }` turns reasoning off; `{ "enabled": true, "level": "low" }` (Gemini 3) or `{ "enabled": true, "budget": 512 }` (Gemini 2.5) dials it down.
+- Overrides the model per call. It can disable or tune thinking on a thinking-enabled model, but cannot force-enable it on a model that has thinking off; no-op for providers without thinking (e.g. Anthropic).
+- Applied to the `stellungnahmen-review-ifinder` search-refine decision node, which had been spending ~40s per round (and occasionally looping) on the moving `gemini-flash-latest` alias after Google repointed it to a thinking model.
+
 ## Admin experience
 
 ### Redesigned navigation — collapsible left-rail sidebar

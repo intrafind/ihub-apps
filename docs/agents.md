@@ -74,6 +74,41 @@ so admins control reach by listing the right groups on the app and on
 App→App nesting is forbidden: when an agent calls an app internally, all
 `app__*` tools are stripped from the nested call's tool list.
 
+## Per-node thinking override
+
+LLM-backed nodes (`prompt`, `planner`, `verifier`, `query-plan`) accept an
+optional `config.thinking` block that overrides the selected model's thinking
+config **for that node's LLM call only**. It mirrors the model-config
+`thinking` shape:
+
+```jsonc
+// A fast, deterministic JSON decision node — disable reasoning entirely:
+"config": {
+  "thinking": { "enabled": false }
+}
+
+// Gemini 3.x — dial reasoning down instead of off:
+"config": { "thinking": { "enabled": true, "level": "low" } }
+
+// Gemini 2.5 — explicit token budget:
+"config": { "thinking": { "enabled": true, "budget": 512, "thoughts": false } }
+```
+
+Why it matters: thinking models (e.g. the `gemini-flash-latest` alias) count
+reasoning tokens against `maxTokens`. On a node that only needs to emit a small
+JSON verdict, unbounded thinking (`budget: -1`) is both slow (tens of seconds
+per call) and prone to runaway repetition that truncates the JSON. Setting
+`thinking: { enabled: false }` on such a node makes it fast and reliable.
+
+Semantics and limits:
+
+- The node override wins over the model's `thinking` config for that call.
+- Fields are individually optional — set only what you want to change.
+- The adapter gates thinking on `model.thinking.enabled`, so a node can
+  **disable or tune** thinking on a thinking-enabled model, but cannot
+  **force-enable** it on a model whose config has thinking off.
+- No-op for providers that don't support thinking (e.g. Anthropic).
+
 ## Workflow shapes
 
 The Profile editor lets you pick the underlying shape implicitly:
