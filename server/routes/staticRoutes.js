@@ -7,10 +7,11 @@ import {
   buildServerPath,
   buildUploadsPath,
   buildDocsPath,
-  getRelativeRequestPath
+  getRelativeRequestPath,
+  getBasePath
 } from '../utils/basePath.js';
 import configCache from '../configCache.js';
-import { buildIndexWithPwaTags, resolvePwaConfig } from '../services/pwa/PwaService.js';
+import { buildIndexHtml, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath }) {
   // Only serve static files in production or packaged mode
@@ -19,11 +20,16 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
     const staticPath = path.join(rootDir, 'public');
     logger.info('Serving static files', { component: 'StaticRoutes', staticPath });
 
-    // Serve static files at base path
+    // Serve static files at base path.
+    // `index: false` disables automatic directory-index serving so that all
+    // HTML entry points (`/`, subpath root, and any deep link) flow through the
+    // SPA handler below, which injects the authoritative base path into
+    // index.html. Serving the raw file here would skip that injection.
+    const staticOptions = { index: false };
     if (basePath) {
-      app.use(basePath, express.static(staticPath));
+      app.use(basePath, express.static(staticPath, staticOptions));
     } else {
-      app.use(express.static(staticPath));
+      app.use(express.static(staticPath, staticOptions));
     }
   } else {
     logger.info('Development mode: Static files served by Vite on port 5173', {
@@ -85,20 +91,21 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
         return res.status(404).send('File not found');
       }
 
+      // The base path is authoritative here (resolved from X-Forwarded-Prefix)
+      // and is injected into index.html so the client never has to guess it
+      // from the URL — which breaks for unknown/404 routes.
+      const serverBasePath = getBasePath();
       const uiConfig = configCache.getUI();
       const rawPwaConfig = uiConfig?.data?.pwa;
+      const pwaConfig = rawPwaConfig?.enabled ? resolvePwaConfig(rawPwaConfig) : null;
 
-      if (rawPwaConfig?.enabled) {
-        const pwaConfig = resolvePwaConfig(rawPwaConfig);
-        const html = buildIndexWithPwaTags(indexPath, pwaConfig);
-        if (html !== null) {
-          res.set('Content-Type', 'text/html; charset=utf-8');
-          res.set('Cache-Control', 'no-cache');
-          return res.send(html);
-        }
-        // buildIndexWithPwaTags logged the error; fall through to sendFile
+      const html = buildIndexHtml(indexPath, { basePath: serverBasePath, pwaConfig });
+      if (html !== null) {
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.set('Cache-Control', 'no-cache');
+        return res.send(html);
       }
-
+      // buildIndexHtml logged the error; fall through to sendFile
       res.sendFile(indexPath);
     };
 
