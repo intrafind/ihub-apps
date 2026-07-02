@@ -574,6 +574,12 @@ Apps can now be marked **ephemeral** so their chats are never persisted anywhere
 - The flag is independent of chat history: when persistent chat history arrives in the future, ephemeral apps will remain opted out.
 - Default is `false`, so all existing apps keep their current behaviour.
 
+## AI OCR: custom prompt limited by tokens, not characters
+
+The **Custom OCR Prompt** field in the AI OCR tool (Tools Service) is now bounded by token count instead of a raw 2,000-character cap, using the same token estimator as the chat. This lets admins write longer, more detailed OCR prompts.
+
+- The limit is now **4,096 tokens** (previously 2,000 characters).
+- The character counter under the prompt box is replaced by a live token counter (`N / 4096 tokens`) that turns red and blocks submission when the limit is exceeded.
 ## Fix — Uploaded Files No Longer Labeled "Based on Email Content"
 
 Answers grounded on an uploaded document (PDF, DOCX, image, etc.) now show a **"Based on uploaded file"** source badge instead of the misleading **"Based on email content"**.

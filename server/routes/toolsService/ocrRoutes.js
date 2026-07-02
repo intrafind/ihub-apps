@@ -6,10 +6,13 @@ import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { recordUpload } from '../../telemetry/metrics.js';
+import { estimateTokens } from '../../usageTracker.js';
 
 const router = express.Router();
 
-const MAX_PROMPT_LENGTH = 2000;
+// Custom prompt is bounded by tokens (matching the chat token estimator), not
+// raw characters. Keep this in sync with the client-side limit in OcrPage.jsx.
+const MAX_PROMPT_TOKENS = 4096;
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB per file
 const MAX_FILES = 20;
 const VALID_OCR_MODES = ['full', 'smart', 'text-only'];
@@ -91,11 +94,11 @@ router.post(
       }
 
       // Validate prompt
-      if (prompt && (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH)) {
-        return sendBadRequest(
-          res,
-          `prompt must be a string of at most ${MAX_PROMPT_LENGTH} characters`
-        );
+      if (prompt !== undefined && typeof prompt !== 'string') {
+        return sendBadRequest(res, 'prompt must be a string');
+      }
+      if (prompt && estimateTokens(prompt) > MAX_PROMPT_TOKENS) {
+        return sendBadRequest(res, `prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
       }
 
       const jobs = [];
