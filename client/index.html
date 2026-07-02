@@ -6,6 +6,22 @@
       // Dynamically set base tag for proper asset loading when deployed at subpath
       // This logic is aligned with client/src/utils/runtimeBasePath.js
       (function () {
+        // Prefer the authoritative base path injected by the server (from the
+        // X-Forwarded-Prefix header). The server is the only component that
+        // reliably knows the deployment prefix; URL-based detection below is
+        // ambiguous for unknown/404 routes (e.g. `/tools-service`) and would
+        // otherwise misroute API calls. This runs in production; in dev (Vite
+        // serves index.html directly) __SERVER_BASE_PATH__ is undefined and we
+        // fall back to URL detection.
+        if (typeof window.__SERVER_BASE_PATH__ === 'string') {
+          const serverBase = window.__SERVER_BASE_PATH__;
+          const base = document.createElement('base');
+          base.href = serverBase === '' ? '/' : serverBase + '/';
+          document.head.appendChild(base);
+          window.__BASE_PATH__ = serverBase;
+          return;
+        }
+
         // Get the current pathname
         const pathname = window.location.pathname;
 

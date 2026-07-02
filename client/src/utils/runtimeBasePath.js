@@ -12,6 +12,13 @@
  * @returns {string} The detected base path (e.g., "", "/ihub", "/tools/ai")
  */
 export const detectBasePath = () => {
+  // Prefer the authoritative base path injected by the server into index.html
+  // (from the X-Forwarded-Prefix header). URL-based detection below is
+  // ambiguous for unknown/404 routes, so trust the server whenever it told us.
+  if (typeof window !== 'undefined' && typeof window.__SERVER_BASE_PATH__ === 'string') {
+    return window.__SERVER_BASE_PATH__;
+  }
+
   // Get the current pathname
   const pathname = window.location.pathname;
 
@@ -89,6 +96,14 @@ export const detectBasePath = () => {
  * @returns {string} The base path
  */
 export const getBasePath = () => {
+  // The server-injected base path is authoritative and cannot be stale (it is
+  // set fresh on every index.html render), so short-circuit before touching the
+  // sessionStorage cache or URL heuristics. This is what fixes 404 URLs like
+  // `/tools-service` misdetecting the whole path as a deployment prefix.
+  if (typeof window !== 'undefined' && typeof window.__SERVER_BASE_PATH__ === 'string') {
+    return window.__SERVER_BASE_PATH__;
+  }
+
   // Cache the detected base path in sessionStorage for performance
   const cacheKey = 'runtime-base-path';
 

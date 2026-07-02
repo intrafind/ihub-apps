@@ -573,3 +573,10 @@ Apps can now be marked **ephemeral** so their chats are never persisted anywhere
 - The built-in **iFinder Document Actions** app now ships with ephemeral enabled by default, so document conversations leave no trace.
 - The flag is independent of chat history: when persistent chat history arrives in the future, ephemeral apps will remain opted out.
 - Default is `false`, so all existing apps keep their current behaviour.
+
+## Fix — Opening a Non-Existent URL No Longer Breaks the Login Dialog
+
+Visiting a URL that does not exist (for example `https://your-ihub/tools-service`) now correctly shows the "page not found" screen instead of a broken login dialog with an `Unexpected token '<' … is not valid JSON` error.
+
+- The application previously guessed its deployment base path from the URL. For an unknown path it mistook the whole path for a subpath deployment, so every API call was sent to the wrong address and returned the HTML page instead of data — which the login dialog then failed to parse.
+- The server now tells the browser the correct base path directly when it serves the page, so unknown URLs, deep links, and subpath deployments (behind a reverse proxy prefix) all resolve reliably. No configuration change is required.
