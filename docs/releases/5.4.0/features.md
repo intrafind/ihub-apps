@@ -580,3 +580,9 @@ The **Custom OCR Prompt** field in the AI OCR tool (Tools Service) is now bounde
 
 - The limit is now **4,096 tokens** (previously 2,000 characters).
 - The character counter under the prompt box is replaced by a live token counter (`N / 4096 tokens`) that turns red and blocks submission when the limit is exceeded.
+## Fix — Uploaded Files No Longer Labeled "Based on Email Content"
+
+Answers grounded on an uploaded document (PDF, DOCX, image, etc.) now show a **"Based on uploaded file"** source badge instead of the misleading **"Based on email content"**.
+
+- The answer-source detection previously lumped all file uploads together with Outlook email context under a single `email` source type, so any uploaded PDF was reported as email-derived.
+- File uploads now get their own distinct `file` source type and badge; genuine email context (from the Outlook add-in) keeps the `email` badge.

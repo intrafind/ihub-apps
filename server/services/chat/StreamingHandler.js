@@ -88,7 +88,7 @@ class StreamingHandler {
   /**
    * Add a knowledge source for tracking
    * @param {string} chatId - The conversation/chat ID
-   * @param {string} source - Source type ('websearch', 'sources', 'iassistant', 'grounding')
+   * @param {string} source - Source type ('websearch', 'sources', 'iassistant', 'grounding', 'email', 'file')
    */
   addKnowledgeSource(chatId, source) {
     if (!this.knowledgeSources.has(chatId)) {
@@ -245,8 +245,11 @@ class StreamingHandler {
       );
     });
 
-    if (hasEmailContext || hasFileUploads) {
+    if (hasEmailContext) {
       this.addKnowledgeSource(chatId, 'email');
+    }
+    if (hasFileUploads) {
+      this.addKnowledgeSource(chatId, 'file');
     }
 
     actionTracker.trackAction(chatId, {
