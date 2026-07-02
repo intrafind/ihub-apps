@@ -2,9 +2,15 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { apiClient } from '../../../api/client';
+import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
 const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp'];
+
+// Custom prompt is bounded by tokens (using the same estimator as the chat),
+// not raw characters. Keep this in sync with MAX_PROMPT_TOKENS in
+// server/routes/toolsService/ocrRoutes.js.
+const MAX_PROMPT_TOKENS = 4096;
 
 const OCR_MODES = [
   { value: 'full', label: 'Full VLM', description: 'Every page analyzed by AI (best quality)' },
@@ -166,6 +172,9 @@ export default function OcrPage() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
+  const promptTokens = useEstimatedTokenCount(customPrompt, { debounceMs: 300 });
+  const promptTooLong = promptTokens > MAX_PROMPT_TOKENS;
+
   // Fetch available models on mount
   useEffect(() => {
     apiClient
@@ -214,6 +223,11 @@ export default function OcrPage() {
 
   const startOcr = async () => {
     if (files.length === 0) return;
+    if (promptTooLong) {
+      setStatus('error');
+      setErrorMessage(`Custom prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
+      return;
+    }
     setErrorMessage('');
     setStatus('uploading');
 
@@ -366,12 +380,21 @@ export default function OcrPage() {
                   onChange={e => setCustomPrompt(e.target.value)}
                   disabled={isProcessing}
                   rows={4}
-                  maxLength={2000}
                   placeholder="Leave empty to use the default prompt (handles tables, charts, diagrams, and mixed content)..."
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 resize-y"
+                  className={`w-full rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:border-blue-500 disabled:opacity-50 resize-y ${
+                    promptTooLong
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                  }`}
                 />
-                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 text-right">
-                  {customPrompt.length} / 2000
+                <div
+                  className={`text-xs mt-1 text-right ${
+                    promptTooLong
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-400 dark:text-gray-500'
+                  }`}
+                >
+                  {promptTokens} / {MAX_PROMPT_TOKENS} tokens
                 </div>
               </div>
             )}
@@ -462,7 +485,8 @@ export default function OcrPage() {
         {status === 'idle' && files.length > 0 && (
           <button
             onClick={startOcr}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+            disabled={promptTooLong}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start OCR
           </button>
