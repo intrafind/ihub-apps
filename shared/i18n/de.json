@@ -479,6 +479,7 @@
       "iassistant": "Basierend auf iAssistant-Wissensbasis",
       "grounding": "Basierend auf Such-Grounding",
       "email": "Basierend auf E-Mail-Inhalt",
+      "file": "Basierend auf hochgeladener Datei",
       "mixed": "Basierend auf externem Wissen",
       "workflow": "Erzeugt durch Workflow",
       "workflowTooltip": "Workflow-Ausführung öffnen",

@@ -573,3 +573,10 @@ Apps can now be marked **ephemeral** so their chats are never persisted anywhere
 - The built-in **iFinder Document Actions** app now ships with ephemeral enabled by default, so document conversations leave no trace.
 - The flag is independent of chat history: when persistent chat history arrives in the future, ephemeral apps will remain opted out.
 - Default is `false`, so all existing apps keep their current behaviour.
+
+## Fix — Uploaded Files No Longer Labeled "Based on Email Content"
+
+Answers grounded on an uploaded document (PDF, DOCX, image, etc.) now show a **"Based on uploaded file"** source badge instead of the misleading **"Based on email content"**.
+
+- The answer-source detection previously lumped all file uploads together with Outlook email context under a single `email` source type, so any uploaded PDF was reported as email-derived.
+- File uploads now get their own distinct `file` source type and badge; genuine email context (from the Outlook add-in) keeps the `email` badge.
