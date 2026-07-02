@@ -78,7 +78,12 @@ const DEFAULT_PLANNER_SYSTEM =
   'publications").\n' +
   '- DO NOT include workflow plumbing steps (reading the inbox, marking ' +
   'items done, writing artifacts); those are handled outside the plan by ' +
-  'the runtime.';
+  'the runtime.\n' +
+  '- DO NOT emit a "write the final report", "compile/assemble the report", ' +
+  '"final synthesis", or "assessment write-up" task. Final composition of ' +
+  'the report is owned by a separate synthesis step that runs after your ' +
+  'plan. Your tasks produce RESEARCH, VERIFICATION, and ANALYSIS findings ' +
+  'only — never the final deliverable document itself.';
 
 // Use the .text accessor so the planner sees just the user's question, not
 // the whole parsed inbox object (which includes .raw — a polluted line that
@@ -108,18 +113,47 @@ const DEFAULT_SYNTHESIZER_SYSTEM = {
     '2. Do NOT add facts that are not present in the sub-task results. Do ' +
     'NOT draw on background knowledge or training data. If two sub-tasks ' +
     'disagree, surface the disagreement explicitly.\n' +
-    '3. Cite inline as [N] when a citations-ledger URL supports a claim. ' +
-    'If a fact appears in a sub-task result but the ledger has no matching ' +
-    'URL, the fact is still GROUNDED — keep it; do not mark it ' +
+    '3. CITATIONS — YOU assign the numbering. The citations pool you receive ' +
+    'is an UNNUMBERED list of URLs. When a URL supports a claim, cite it ' +
+    'inline as [N], numbering sources in order of FIRST appearance in your ' +
+    'report and CONTIGUOUSLY from 1: the first source you cite is [1], the ' +
+    'next NEW source is [2], and so on. Reuse the SAME [N] every later time ' +
+    'you cite that same source. Do NOT invent gaps or jump to large numbers. ' +
+    'If a fact appears in a sub-task result but no pool URL supports it, the ' +
+    'fact is still GROUNDED — keep it without a bracket; do not mark it ' +
     '"[unverified]". Use "[unverified]" ONLY for facts you yourself added ' +
-    'that were not in the sub-tasks (which should be never).\n' +
+    'that were not in the sub-tasks (which should be never). ATTRIBUTION ' +
+    'ACCURACY: every inline [N] must reflect what THAT source actually states ' +
+    '— never attribute a figure, quote, percentage, or claim to a source that ' +
+    'does not contain it.\n' +
     '4. Aim for thorough coverage. The report should be at least as ' +
     'information-dense as the sub-task results combined: timeline, roles, ' +
     'companies, projects, publications, open-source contributions, ' +
     'speaking engagements, philosophy — whatever the sub-tasks gathered.\n' +
-    '5. End with a "## References" section listing every cited URL with ' +
-    'its index.\n' +
-    '6. Do not call tools. Just write the report.\n\n' +
+    '5. QUOTE INTEGRITY: never alter, paraphrase, complete, "tidy up", or ' +
+    'fabricate text inside quotation marks. Reproduce a quote EXACTLY as it ' +
+    'appears in the sub-task results, character for character. If you do not ' +
+    'have the exact wording, paraphrase WITHOUT quotation marks (e.g. "he ' +
+    'argues that…") — never present invented or edited wording as a verbatim ' +
+    'quote, even to make it fit the narrative.\n' +
+    '6. DATE & IDENTIFIER INTEGRITY: never invent, guess, or extrapolate ' +
+    'dates, publication years, document IDs, author lists, or version ' +
+    'numbers. Use only values explicitly present in the sub-task results. ' +
+    'Never state a publication date in the future relative to today. If a ' +
+    'date or identifier is missing, ambiguous, or conflicting across sources, ' +
+    'say so explicitly (e.g. "date not stated in the sources") rather than ' +
+    'supplying one.\n' +
+    '7. SUMMARY/BODY CONSISTENCY: the Summary (and any overview) must NOT make ' +
+    'a claim stronger than the body and its sources support. If the body says ' +
+    '"41% chance of light rain", the summary must not say "high probability of ' +
+    'thundery showers". Every figure, probability, attribution, and qualifier ' +
+    'in the summary must match the detailed findings — never round up, ' +
+    'escalate, or restate a claim more confidently than the evidence allows.\n' +
+    '8. End with a "## References" section that lists EXACTLY the sources you ' +
+    'cited, in numerical order, one per line as "[N] URL". Every [N] you used ' +
+    'inline MUST appear here exactly once, and every entry here MUST be cited ' +
+    'at least once inline — numbering contiguous from [1], no gaps, no extras.\n' +
+    '9. Do not call tools. Just write the report.\n\n' +
     'Note: the citations ledger is the run-time record of URLs the agent ' +
     'visited; it is NOT the same as the configured knowledge-base sources ' +
     'in the profile. Cite what the agent actually consulted, not what it ' +
@@ -195,7 +229,8 @@ const DEFAULT_SYNTHESIZER_PROMPT = {
     '## Original brief (workflow framing — NOT the topic)\n${$.data.brief}\n\n' +
     '## Sub-task results (the EVIDENCE BASE — preserve this content)\n' +
     '{{previousTaskResults}}\n\n' +
-    '## Citations ledger (URLs the agent consulted — use for inline [N])\n' +
+    '## Citations pool (UNNUMBERED URLs the agent consulted — assign your OWN ' +
+    'contiguous [N] for the ones you cite)\n' +
     '{{citations}}\n\n' +
     'Write a COMPREHENSIVE final markdown report focused on the item ' +
     'above. Carry through the full detail the sub-tasks gathered — every ' +
@@ -206,13 +241,15 @@ const DEFAULT_SYNTHESIZER_PROMPT = {
     '- **Findings** — detailed synthesis of the sub-task results, ' +
     'thematically organised. Use sub-sections (career timeline, projects, ' +
     'publications, expertise, etc.) when the material warrants it. Cite ' +
-    '[N] when the ledger supports a claim. Facts that the sub-tasks ' +
-    'grounded inline are still grounded even if no ledger URL matches — ' +
-    'keep them; do not mark them "[unverified]".\n' +
+    '[N] when a pool URL supports a claim, assigning your own contiguous ' +
+    'numbering (see the citation rule). Facts that the sub-tasks grounded ' +
+    'inline are still grounded even if no pool URL matches — keep them; do ' +
+    'not mark them "[unverified]".\n' +
     '- **Limitations** — what the sub-tasks themselves flagged as ' +
     'uncertain or could not verify. Be specific.\n' +
-    '- **References** — numbered list matching the inline citations, one ' +
-    'URL per entry.'
+    '- **References** — list EXACTLY the sources you cited, one per line as ' +
+    '"[N] URL", numbered contiguously from [1] to match your inline ' +
+    'citations. No gaps, no uncited extras.'
 };
 
 function pickModel(profile) {

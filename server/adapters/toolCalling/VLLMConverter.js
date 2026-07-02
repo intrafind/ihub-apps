@@ -273,7 +273,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
           } catch (error) {
             logger.warn('Failed to parse accumulated vLLM tool arguments on [DONE]', {
               component: 'VLLMConverter',
-              error: e
+              error
             });
             parsedArgs = { __raw_arguments: pending.arguments };
           }
@@ -385,7 +385,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
             } catch (error) {
               logger.warn('Failed to parse accumulated vLLM tool arguments', {
                 component: 'VLLMConverter',
-                error: e
+                error
               });
               parsedArgs = { __raw_arguments: pending.arguments };
             }

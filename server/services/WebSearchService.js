@@ -1,6 +1,7 @@
 import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
+import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
 import configCache from '../configCache.js';
 import tokenStorageService from './TokenStorageService.js';
 import logger from '../utils/logger.js';
@@ -87,43 +88,81 @@ class BraveSearchProvider extends SearchProvider {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
     }
 
-    let res;
-    try {
-      res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
-        headers: {
-          'X-Subscription-Token': apiKey,
-          Accept: 'application/json'
-        }
-      });
-    } catch (error) {
-      // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
-      // surface here as a thrown Error from node-fetch. Without this branch the upstream
-      // wrapper only sees `error.message` and drops the code/cause, making proxy issues
-      // impossible to diagnose from the logs.
-      const causeMsg =
-        error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
-      logger.error('Brave search network request failed', {
-        component: 'WebSearch',
-        provider: 'brave',
-        endpoint,
-        errorName: error?.name,
-        errorCode: error?.code || error?.cause?.code,
-        errorMessage: error?.message,
-        errorCause: causeMsg,
-        hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
-      });
-      const detailParts = [error?.message];
-      if (error?.code) detailParts.push(`code=${error.code}`);
-      if (causeMsg) detailParts.push(`cause=${causeMsg}`);
-      const wrapped = new Error(
-        `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
-      );
-      wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
-      wrapped.cause = error;
-      throw wrapped;
+    // Query cache. Across re-plan/verify rounds the same query recurs; serving
+    // a repeat from cache skips both the network and the ~1 req/s throttle,
+    // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
+    const cacheKey = makeSearchCacheKey('brave', query);
+    const cached = getCachedSearch(cacheKey);
+    if (cached) {
+      logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
+      return cached;
     }
 
-    if (!res.ok) {
+    // Brave's Free plan is rate-limited to ~1 request/second, so an agent that
+    // fires several searches in a turn reliably trips HTTP 429. Retry a bounded
+    // number of times with backoff (honoring Retry-After) so transient
+    // rate-limit / 503 responses recover instead of failing the whole step.
+    const MAX_RETRIES = 2;
+    let res;
+    let attempt = 0;
+
+    while (true) {
+      try {
+        res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+          headers: {
+            'X-Subscription-Token': apiKey,
+            Accept: 'application/json'
+          }
+        });
+      } catch (error) {
+        // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
+        // surface here as a thrown Error from node-fetch. Without this branch the upstream
+        // wrapper only sees `error.message` and drops the code/cause, making proxy issues
+        // impossible to diagnose from the logs.
+        const causeMsg =
+          error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
+        logger.error('Brave search network request failed', {
+          component: 'WebSearch',
+          provider: 'brave',
+          endpoint,
+          errorName: error?.name,
+          errorCode: error?.code || error?.cause?.code,
+          errorMessage: error?.message,
+          errorCause: causeMsg,
+          hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
+        });
+        const detailParts = [error?.message];
+        if (error?.code) detailParts.push(`code=${error.code}`);
+        if (causeMsg) detailParts.push(`cause=${causeMsg}`);
+        const wrapped = new Error(
+          `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
+        );
+        wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      if (res.ok) break;
+
+      // Retry transient rate-limit (429) and server (503) responses.
+      if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+        const retryAfter = Number(res.headers?.get?.('retry-after'));
+        const waitMs =
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(retryAfter * 1000, 5000)
+            : 1200 * (attempt + 1);
+        logger.warn('Brave search rate-limited; backing off and retrying', {
+          component: 'WebSearch',
+          provider: 'brave',
+          status: res.status,
+          attempt: attempt + 1,
+          waitMs
+        });
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        attempt += 1;
+        continue;
+      }
+
       let bodyPreview = '';
       try {
         bodyPreview = (await res.text()).slice(0, 500);
@@ -159,7 +198,17 @@ class BraveSearchProvider extends SearchProvider {
       }
     }
 
-    return { results };
+    const payload = { results };
+    // Cache only successful responses (errors throw above and never reach here),
+    // so a transient 429 is never cached. TTL is configurable; default 10 min —
+    // long enough to dedupe within a multi-round run, short enough to stay fresh.
+    // `config.SEARCH_CACHE_TTL_MS` arrives via the `{...process.env}` spread and
+    // is a string when set, so coerce it (Number.isFinite would reject a string
+    // and silently pin the default, making the override dead config).
+    const parsedTtl = Number(config.SEARCH_CACHE_TTL_MS);
+    const ttlMs = Number.isFinite(parsedTtl) && parsedTtl > 0 ? parsedTtl : 600000;
+    setCachedSearch(cacheKey, payload, ttlMs);
+    return payload;
   }
 }
 

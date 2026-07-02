@@ -12,6 +12,11 @@
 
 import { ScheduleTrigger } from './ScheduleTrigger.js';
 import { WebhookTrigger } from './WebhookTrigger.js';
+import {
+  startSchedulerLockHeartbeat,
+  stopSchedulerLockHeartbeat,
+  isSchedulerOwner
+} from './schedulerLock.js';
 import logger from '../../../utils/logger.js';
 
 /** @type {TriggerManager|null} */
@@ -86,6 +91,10 @@ export class TriggerManager {
    */
   setEngine(engine) {
     this.engine = engine;
+    // Start the cross-process scheduler lock heartbeat once an engine is
+    // attached. Only the lock owner will fire schedule triggers, so multiple
+    // instances registering the same cron schedules won't double-fire.
+    startSchedulerLockHeartbeat();
   }
 
   /**
@@ -177,6 +186,9 @@ export class TriggerManager {
     for (const [workflowId] of this.triggers) {
       this.unregisterWorkflowTriggers(workflowId);
     }
+    // Release the scheduler lock so another instance can take over promptly
+    // rather than waiting for the TTL to lapse.
+    stopSchedulerLockHeartbeat();
   }
 
   /**
@@ -200,6 +212,19 @@ export class TriggerManager {
       logger.error({
         component: 'TriggerManager',
         message: 'Cannot fire trigger: engine not set',
+        workflowId
+      });
+      return;
+    }
+
+    // Schedule triggers fire on every instance's cron clock; only the lock
+    // owner should actually start the run, so N instances don't N-times-fire
+    // the same scheduled workflow. Manual / webhook triggers are user- or
+    // HTTP-initiated and always fire.
+    if (trigger.type === 'schedule' && !isSchedulerOwner()) {
+      logger.debug({
+        component: 'TriggerManager',
+        message: `Skipping scheduled trigger '${trigger.id}' — not the scheduler-lock owner`,
         workflowId
       });
       return;

@@ -5,6 +5,7 @@ import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import StepDetails from '../components/StepDetails';
+import { aggregateTokenUsage, formatTokenCount } from '../utils/tokenStats';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import {
@@ -126,7 +127,24 @@ export default function AgentRunDetailPage() {
     run?.data?._agent?.profileId || (run?.data?._workflow?.startedBy || '').replace(/^agent:/, '');
   const dynamicTasks = run?.data?._taskQueue || [];
   // Planner-emitted plan (static tasks materialized into the sub-workflow).
-  const planTasks = run?.data?.planCreated?.tasks || [];
+  // planCreated.tasks is accumulated across review rounds server-side
+  // (PlannerNodeExecutor._mergePlanTasks). Backstop for older runs — and any
+  // case where planCreated lags the results — recover tasks that have a result
+  // in _taskResults but are missing from planCreated.tasks, so a re-plan
+  // round's prior tasks stay visible. _taskResults entries carry
+  // { taskId, title, ... }; recovered tasks render as done (they're in
+  // taskResultsMap) and are listed before the current plan to preserve order.
+  const planCreatedTasks = run?.data?.planCreated?.tasks || [];
+  const planCreatedTaskIds = new Set(planCreatedTasks.map(t => t.id));
+  const recoveredPlanTasks = Object.values(run?.data?._taskResults || {})
+    .filter(r => r && r.taskId && !planCreatedTaskIds.has(r.taskId))
+    .map(r => ({
+      id: r.taskId,
+      title: r.title || r.taskId,
+      description: r.title || '',
+      _recoveredFromResults: true
+    }));
+  const planTasks = [...recoveredPlanTasks, ...planCreatedTasks];
   // Sub-workflow node lifecycle, used to derive live status for planner tasks.
   // Each task node fires workflow.node.start / .complete events with its own
   // nodeId — and that nodeId matches the planner task id (SubWorkflowMaterializer
@@ -271,6 +289,20 @@ export default function AgentRunDetailPage() {
     completedNodes.has('memory-finalize') ||
     !!run?.data?._stepLogs?.['memory-finalize'];
 
+  // How many times each node actually executed. In a cyclic workflow (the
+  // adversarial agent → verify → retry → agent loop) the same node id runs
+  // multiple times. Without surfacing this, the agent row looks like it
+  // "completed" once while the run inexplicably keeps going — or, live, like
+  // it completed several times over. We turn the count into an explicit
+  // attempt/round badge so the retry loop is legible instead of confusing.
+  const nodeIterations =
+    run?.data?._nodeIterations && typeof run.data._nodeIterations === 'object'
+      ? run.data._nodeIterations
+      : {};
+  // The adversarial verifier node (type 'verifier'). It drives the retry loop
+  // but was never surfaced as its own step, so the loop was invisible.
+  const hasVerifier = wfSummaryNodes.some(n => n?.type === 'verifier');
+
   // Per-step timings populated by every executor (planner records its LLM
   // call only, NOT the sub-workflow wait; planner-tasks bubble up from the
   // child; inbox-load/finalize record directly). Map keyed by node id.
@@ -284,6 +316,21 @@ export default function AgentRunDetailPage() {
   const stepLogs = run?.data?._stepLogs || {};
   function logFor(nodeId) {
     return stepLogs[nodeId] || null;
+  }
+  // Full per-iteration history for a node (the agent / verifier re-run across
+  // rounds). Falls back to the single latest transcript for nodes that run once
+  // (inbox-load / finalize). Used to render every round, not just the last.
+  const stepLogHistory = run?.data?._stepLogHistory || {};
+  // Run-level token usage rolled up from every step's recorded tokens, for the
+  // Token usage summary card. Pass the per-round history so multi-round nodes
+  // (agent → verify → retry) count EVERY round, not just the latest snapshot
+  // that _stepLogs holds. Per-step numbers also render in the steps table.
+  const tokenUsage = aggregateTokenUsage(stepLogs, stepLogHistory);
+  function historyFor(nodeId) {
+    const h = stepLogHistory[nodeId];
+    if (Array.isArray(h) && h.length > 0) return h;
+    const single = stepLogs[nodeId];
+    return single ? [single] : [];
   }
 
   // Inbox load / finalize are deterministic runtime steps that produce
@@ -370,24 +417,75 @@ export default function AgentRunDetailPage() {
       // Agent in a drain workflow = planner / decomposer; agent in a
       // simple-agent or inbox-worker-without-drain = direct answerer.
       const isDecomposer = isAgentNode && hasDrain;
+      const runs = nodeIterations[n.id] || 1;
+      const baseTitle = isDecomposer
+        ? 'Planning sub-tasks'
+        : isAgentNode
+          ? 'Agent answering'
+          : `Running ${n.id}`;
+      const baseDescription = isDecomposer
+        ? 'Analysing the request and queueing sub-tasks for the drain loop to execute'
+        : 'Generating the answer for this run';
       return {
         key: `agent:${n.id}`,
         nodeId: n.id,
         kind: 'agent',
-        title: isDecomposer
-          ? 'Planning sub-tasks'
-          : isAgentNode
-            ? 'Agent answering'
-            : `Running ${n.id}`,
-        description: isDecomposer
-          ? 'Analysing the request and queueing sub-tasks for the drain loop to execute'
-          : 'Generating the answer for this run',
+        // When the verifier sent the work back, this node ran more than once.
+        // Make that explicit instead of letting repeated completions read as
+        // the agent "finishing" several times.
+        title: runs > 1 ? `${baseTitle} · attempt ${runs}` : baseTitle,
+        description:
+          runs > 1
+            ? `${baseDescription} — revised ${runs - 1} time${runs - 1 === 1 ? '' : 's'} after adversarial review`
+            : baseDescription,
         status: orchestratorStatus(n.id),
         timing: timingFor(n.id),
         log: logFor(n.id),
         depth: 0
       };
     }),
+    // Dynamic tasks the agent created at runtime (set_plan / create_task) are
+    // the breakdown of the agent's own work — it plans, then executes them, all
+    // WITHIN the agent node, before the verifier runs. Render them nested
+    // directly under "Agent answering" (and before the review) rather than
+    // appended after it, which read as "answering happened before the tasks".
+    ...dynamicTasks.map(t => ({
+      key: `dyn:${t.id}`,
+      nodeId: t.id,
+      kind: 'dynamic',
+      title: t.title,
+      description: t.description || t.brief,
+      status: t.status || 'open',
+      timing: timingFor(t.id),
+      log: logFor(t.id),
+      depth: (t.depth ?? 0) + 1
+    })),
+    ...(hasVerifier
+      ? (() => {
+          const rounds = nodeIterations.verify || (run?.data?._verifier_retries_verify ?? 0) + 1;
+          const vr = run?.data?.verificationResult;
+          const verdict = typeof vr?.verdict === 'string' ? vr.verdict : null;
+          // A forced verdict means the retry budget ran out. Post-fix that
+          // fails the run, but older runs may still carry forced:true — call
+          // it out either way so a green PASS isn't read as a clean pass.
+          const description = verdict
+            ? `${rounds} round${rounds === 1 ? '' : 's'} — verdict ${verdict}${vr?.forced ? ' (forced: retries exhausted)' : ''}`
+            : 'Adversarially probing the deliverable for gaps before accepting it';
+          return [
+            {
+              key: 'orch:verify',
+              nodeId: 'verify',
+              kind: 'orchestrator',
+              title: rounds > 1 ? `Adversarial review · ${rounds} rounds` : 'Adversarial review',
+              description,
+              status: orchestratorStatus('verify'),
+              timing: timingFor('verify'),
+              log: logFor('verify'),
+              depth: 0
+            }
+          ];
+        })()
+      : []),
     ...(hasReviewer
       ? (() => {
           const reviewerLog = logFor('reviewer');
@@ -507,17 +605,6 @@ export default function AgentRunDetailPage() {
           ];
         })()
       : []),
-    ...dynamicTasks.map(t => ({
-      key: `dyn:${t.id}`,
-      nodeId: t.id,
-      kind: 'dynamic',
-      title: t.title,
-      description: t.description || t.brief,
-      status: t.status || 'open',
-      timing: timingFor(t.id),
-      log: logFor(t.id),
-      depth: t.depth ?? 0
-    })),
     ...(hasInboxFinalize
       ? [
           {
@@ -812,6 +899,19 @@ export default function AgentRunDetailPage() {
             </div>
           )}
 
+          {run?.data?._verificationOutcome === 'not_passed' && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded text-sm text-amber-900 dark:text-amber-200">
+              <span className="font-medium">Review not passed.</span> The adversarial verifier still
+              found gaps after every revision, so this run did not pass review. The deliverable
+              below is preserved for inspection and the inbox item was left open.
+              {run?.data?.verificationResult?.feedback && (
+                <div className="mt-2 text-xs text-amber-800 dark:text-amber-300">
+                  Last review: {run.data.verificationResult.feedback}
+                </div>
+              )}
+            </div>
+          )}
+
           {isFailed && runErrors.length > 0 && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded">
               <h2 className="font-semibold text-red-900 dark:text-red-300 mb-2">
@@ -895,6 +995,64 @@ export default function AgentRunDetailPage() {
                 </div>
               </div>
 
+              {tokenUsage.llmStepCount > 0 && (
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                    Token usage
+                  </h2>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Input</div>
+                      <div
+                        className="font-mono text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.totalInput.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.totalInput)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Output</div>
+                      <div
+                        className="font-mono text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.totalOutput.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.totalOutput)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Total</div>
+                      <div
+                        className="font-mono font-semibold text-gray-900 dark:text-gray-100"
+                        title={tokenUsage.total.toLocaleString()}
+                      >
+                        {formatTokenCount(tokenUsage.total)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">LLM steps</div>
+                      <div className="font-mono text-gray-900 dark:text-gray-100">
+                        {tokenUsage.llmStepCount}
+                      </div>
+                    </div>
+                  </div>
+                  {Object.keys(tokenUsage.byModel).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      {Object.entries(tokenUsage.byModel).map(([model, u]) => (
+                        <div key={model} className="flex justify-between gap-4">
+                          <span className="font-mono">{model}</span>
+                          <span className="font-mono whitespace-nowrap">
+                            {formatTokenCount(u.input)} in / {formatTokenCount(u.output)} out
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 italic">
+                    Input is summed across each step&apos;s agent iterations, not a single prompt.
+                  </p>
+                </div>
+              )}
+
               {currentInboxItem && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h2 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-gray-100">
@@ -953,6 +1111,7 @@ export default function AgentRunDetailPage() {
                         <th className="text-left py-1">Status</th>
                         <th className="text-left py-1 whitespace-nowrap">Started</th>
                         <th className="text-left py-1 whitespace-nowrap">Duration</th>
+                        <th className="text-left py-1 whitespace-nowrap">Tokens (in/out)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -968,7 +1127,13 @@ export default function AgentRunDetailPage() {
                                 ? 'text-blue-700 dark:text-blue-400'
                                 : 'text-gray-600 dark:text-gray-400';
                         const isExpanded = expandedSteps.has(t.nodeId);
-                        const hasDetails = !!t.log;
+                        const logHistory = historyFor(t.nodeId);
+                        const hasDetails = logHistory.length > 0;
+                        // Every row sets `t.log` to logFor(<its nodeId>) already,
+                        // so the old `|| logFor(t.nodeId)` fallback was a no-op.
+                        const rowTokens = t.log?.tokens;
+                        const hasRowTokens =
+                          rowTokens && (rowTokens.input > 0 || rowTokens.output > 0);
                         return (
                           <Fragment key={t.key}>
                             <tr
@@ -982,7 +1147,12 @@ export default function AgentRunDetailPage() {
                               <td className="py-2 pr-1 text-xs text-gray-400 dark:text-gray-500 select-none">
                                 {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
                               </td>
-                              <td className="py-2 pr-3">
+                              <td
+                                className="py-2 pr-3"
+                                style={
+                                  t.depth ? { paddingLeft: `${t.depth * 1.25}rem` } : undefined
+                                }
+                              >
                                 {(isCurrent || t.status === 'in_progress') && (
                                   <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
                                 )}
@@ -1014,16 +1184,103 @@ export default function AgentRunDetailPage() {
                               <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
                                 {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
                               </td>
-                              <td className="py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                              <td className="py-2 pr-3 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                 {typeof t.timing?.durationMs === 'number'
                                   ? formatDuration(t.timing.durationMs)
                                   : '—'}
                               </td>
+                              <td className="py-2 text-xs text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                {hasRowTokens ? (
+                                  <span
+                                    title={`${(rowTokens.input || 0).toLocaleString()} in / ${(rowTokens.output || 0).toLocaleString()} out`}
+                                  >
+                                    {formatTokenCount(rowTokens.input || 0)} /{' '}
+                                    {formatTokenCount(rowTokens.output || 0)}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
                             </tr>
                             {hasDetails && isExpanded && (
                               <tr className="bg-gray-50/50 dark:bg-gray-700/30">
-                                <td colSpan={6} className="px-0 pt-0 pb-2">
-                                  <StepDetails log={t.log} />
+                                <td colSpan={7} className="px-0 pt-0 pb-2">
+                                  {/* Per-round audit timeline — LIGHT summaries
+                                      (no transcripts), so it stays cheap no
+                                      matter how many rounds ran. */}
+                                  {logHistory.length > 1 && (
+                                    <div className="mb-3 text-xs">
+                                      {logHistory.map((entry, i) => (
+                                        <div
+                                          key={`round-${entry.iteration ?? i}`}
+                                          className="border-l-2 border-indigo-300 dark:border-indigo-700 pl-2 py-1"
+                                        >
+                                          <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                                            Round {entry.iteration ?? i + 1}
+                                          </span>
+                                          {entry.verdict && (
+                                            <>
+                                              {' · '}
+                                              <span
+                                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                                  entry.verdict === 'PASS'
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                                    : entry.verdict === 'PARTIAL'
+                                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300'
+                                                      : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                                }`}
+                                              >
+                                                {entry.verdict}
+                                              </span>
+                                            </>
+                                          )}
+                                          {typeof entry.durationMs === 'number'
+                                            ? ` · ${formatDuration(entry.durationMs)}`
+                                            : ''}
+                                          {entry.toolCount
+                                            ? ` · ${entry.toolCount} tool calls`
+                                            : ''}
+                                          {Array.isArray(entry.toolNames) &&
+                                            entry.toolNames.length > 0 && (
+                                              <span className="text-gray-500 dark:text-gray-400">
+                                                {' '}
+                                                ({entry.toolNames.join(', ')})
+                                              </span>
+                                            )}
+                                          {Array.isArray(entry.planSnapshot) &&
+                                            entry.planSnapshot.length > 0 && (
+                                              <div className="text-gray-500 dark:text-gray-400">
+                                                plan:{' '}
+                                                {entry.planSnapshot
+                                                  .map(p => `${p.title} (${p.status})`)
+                                                  .join(' · ')}
+                                              </div>
+                                            )}
+                                          {Array.isArray(entry.failures) &&
+                                          entry.failures.length > 0 ? (
+                                            <ul className="mt-1 ml-1 list-disc list-inside space-y-1 text-gray-600 dark:text-gray-300">
+                                              {entry.failures.map((f, fi) => (
+                                                <li key={fi} className="whitespace-pre-wrap">
+                                                  {f}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          ) : (
+                                            entry.outputExcerpt && (
+                                              <div className="text-gray-500 dark:text-gray-400 italic truncate">
+                                                {entry.outputExcerpt}
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* Full transcript of the LATEST round only
+                                      (one copy kept server-side). */}
+                                  <StepDetails
+                                    log={logFor(t.nodeId) || logHistory[logHistory.length - 1]}
+                                  />
                                 </td>
                               </tr>
                             )}

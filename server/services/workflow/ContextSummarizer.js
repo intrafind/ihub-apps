@@ -59,6 +59,138 @@ export class ContextSummarizer {
   }
 
   /**
+   * Detect whether an LLM error is a context-window-overflow / prompt-too-long
+   * error (the trigger for reactive recovery — Claude Code's reactive-compact
+   * analog). Heuristic across providers: HTTP 413, or a 4xx whose message
+   * mentions context length / token limits.
+   *
+   * @param {Error|Object} err - Error thrown by the LLM helper
+   * @returns {boolean}
+   */
+  static isContextOverflowError(err) {
+    if (!err) return false;
+    const status = err.status || err.httpStatus;
+    if (status === 413) return true;
+    const haystack = `${err.message || ''} ${err.details || ''} ${err.code || ''}`.toLowerCase();
+    const overflowSignals = [
+      'context length',
+      'context window',
+      'maximum context',
+      'too long',
+      'prompt is too long',
+      'context_length_exceeded',
+      'reduce the length',
+      'too many tokens',
+      'exceeds the maximum'
+    ];
+    const looksLikeOverflow = overflowSignals.some(s => haystack.includes(s));
+    // Only treat 4xx (client-side / request-shape) overflows as recoverable.
+    if (looksLikeOverflow && (status === undefined || (status >= 400 && status < 500))) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Compute a summarization threshold from a model's context window when
+   * known, so the trigger scales with the model instead of a flat constant.
+   * Falls back to the configured `thresholdTokens`.
+   *
+   * @param {Object} [model] - Model config (may carry tokens/contextWindow)
+   * @returns {number} threshold in tokens
+   */
+  thresholdForModel(model) {
+    const window =
+      model?.tokens ||
+      model?.contextWindow ||
+      model?.context_window ||
+      model?.maxInputTokens ||
+      model?.maxTokens;
+    if (typeof window === 'number' && window > 0) {
+      // Trigger at ~65% of the window — leaves headroom for the response and
+      // the summarization call itself.
+      return Math.floor(window * 0.65);
+    }
+    return this.thresholdTokens;
+  }
+
+  /**
+   * Microcompact a message array (Claude Code's microcompact analog): collapse
+   * the *content* of large, old `tool` results and oversized assistant turns
+   * into short reference placeholders, while preserving the last `keepRecent`
+   * messages verbatim and never touching system/user prompts. This is the
+   * cheapest way to recover from context overflow in a tool-heavy loop without
+   * an extra LLM call.
+   *
+   * @param {Array<Object>} messages - Chat messages (role/content)
+   * @param {Object} [opts]
+   * @param {number} [opts.keepRecent=4] - Trailing messages to keep verbatim
+   * @param {number} [opts.maxChars=2000] - Collapse contents longer than this
+   * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number }}
+   */
+  microcompactMessages(messages, opts = {}) {
+    const keepRecent = opts.keepRecent ?? 4;
+    const maxChars = opts.maxChars ?? 2000;
+    if (!Array.isArray(messages) || messages.length <= keepRecent) {
+      return { messages, freedChars: 0, collapsed: 0 };
+    }
+    const cutoff = messages.length - keepRecent;
+    let freedChars = 0;
+    let collapsed = 0;
+    const out = messages.map((msg, i) => {
+      if (i >= cutoff) return msg; // keep recent verbatim
+      if (!msg || typeof msg.content !== 'string') return msg;
+      // Only compact bulky tool results / oversized assistant content.
+      const isCompactable = msg.role === 'tool' || msg.role === 'assistant';
+      if (!isCompactable || msg.content.length <= maxChars) return msg;
+      freedChars += msg.content.length;
+      collapsed += 1;
+      const head = msg.content.slice(0, 200).replace(/\s+/g, ' ');
+      return {
+        ...msg,
+        content: `[older ${msg.role} output elided to save context — ${msg.content.length} chars. Preview: ${head}…]`
+      };
+    });
+    return { messages: out, freedChars, collapsed };
+  }
+
+  /**
+   * Proactively microcompact a message array WHEN it exceeds a token
+   * threshold — the cure for O(N²) prompt growth in a tool-heavy loop on
+   * large-window models (where the reactive overflow path never fires).
+   *
+   * Pure: estimates the current size, and only when it exceeds
+   * `thresholdTokens` does it collapse old bulky tool/assistant bodies via
+   * `microcompactMessages`. Under the threshold it returns the original array
+   * untouched (referential identity preserved) so callers can cheaply detect
+   * the no-op. Idempotent: already-collapsed placeholders are below `maxChars`
+   * and won't be touched again.
+   *
+   * @param {Array<Object>} messages
+   * @param {Object} [opts]
+   * @param {number} [opts.thresholdTokens=16000] - compact only above this size
+   * @param {number} [opts.keepRecent=6] - trailing messages kept verbatim
+   * @param {number} [opts.maxChars=2000] - collapse bodies longer than this
+   * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number, compacted: boolean }}
+   */
+  compactIfOversized(messages, opts = {}) {
+    const thresholdTokens = opts.thresholdTokens ?? 16000;
+    const keepRecent = opts.keepRecent ?? 6;
+    const maxChars = opts.maxChars ?? 2000;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return { messages, freedChars: 0, collapsed: 0, compacted: false };
+    }
+    const totalText = messages
+      .map(m => (typeof m?.content === 'string' ? m.content : ''))
+      .join(' ');
+    if (this.estimateTokens(totalText) <= thresholdTokens) {
+      return { messages, freedChars: 0, collapsed: 0, compacted: false };
+    }
+    const result = this.microcompactMessages(messages, { keepRecent, maxChars });
+    return { ...result, compacted: result.collapsed > 0 };
+  }
+
+  /**
    * Check whether the current workflow state has accumulated enough
    * node results to warrant summarization.
    *

@@ -121,7 +121,25 @@ const dynamicTasksSchema = z
 const reviewSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
-    maxRounds: z.number().int().min(1).max(5).optional().default(3),
+    // Strictness preset for the adversarial review acceptance bar + round budget.
+    // See server/agents/profile/reviewSettings.js.
+    //
+    // NOTE: strictness / stallLimit / criteria are consumed by the adversarial
+    // `verifier` node, which only exists in EXTERNAL workflows (e.g. the
+    // claude-style-agent workflows) — they are injected at run start via
+    // applyReviewSettings(). The DEFAULT serializer-built (embedded) agent
+    // workflow uses a prompt-based reviewer loop instead and honors ONLY
+    // maxRounds; strictness/stallLimit/criteria have no effect there.
+    strictness: z.enum(['lenient', 'balanced', 'strict']).optional().default('balanced'),
+    // Round budget. Optional (NO default) so an unset value means "use the
+    // strictness preset"; when set it overrides the preset's maxRetries. This is
+    // the one review knob the embedded planner loop also honors.
+    maxRounds: z.number().int().min(1).max(10).optional(),
+    // Optional override of the preset's stall limit (verifier node only).
+    stallLimit: z.number().int().min(1).max(5).optional(),
+    // Optional free-text acceptance criteria; overrides the verify node's
+    // criteria prompt for this agent (verifier node only).
+    criteria: z.string().optional(),
     modelId: z.string().optional(),
     system: optionalLocalizedStringSchema.optional()
   })
@@ -129,7 +147,16 @@ const reviewSchema = z
 
 const budgetsSchema = z
   .object({
-    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600)
+    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600),
+    // Per-run token budget across all LLM iterations (input + output). 0 means
+    // unlimited. When the running spend reaches this ceiling, the agent's tool
+    // loop is nudged to wrap up: it answers the current round's tool calls,
+    // then does one final tool-less turn to produce its answer instead of
+    // continuing to call tools. Modeled on Claude Code's token-budget gating.
+    maxTokensPerRun: z.number().int().min(0).max(100_000_000).optional().default(0),
+    // Per-node cap on tool-calling rounds (safety backstop above the budget).
+    // 0 falls back to the node/executor default (10).
+    maxToolRoundsPerNode: z.number().int().min(0).max(200).optional().default(0)
   })
   .strict();
 
@@ -178,6 +205,13 @@ const baseAgentProfileSchema = z.object({
   // who hand-author `workflow.definition` can still override per-node.
   system: optionalLocalizedStringSchema.optional(),
   preferredModel: z.string().optional(),
+  // Per-step model overrides for the run's workflow, keyed by node id
+  // (e.g. { "agent": "gemini-flash-3", "verify": "claude-opus-4-8" }). Applied
+  // at run start onto each matching node's config.modelId. `preferredModel`
+  // remains the run-wide default for any node not listed here. Lets an operator
+  // run, say, a fast model for drafting and a stronger one for verification —
+  // configured on the profile, without editing the workflow definition.
+  nodeModels: z.record(z.string(), z.string()).optional(),
   preferredTemperature: z.number().min(0).max(2).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
   tools: z.array(z.string()).optional().default([]),

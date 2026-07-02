@@ -19,6 +19,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
+import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
 import { actionTracker } from '../../../actionTracker.js';
 
@@ -91,7 +92,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       let plan;
       const maxReplans = 1;
       for (let attempt = 0; attempt <= maxReplans; attempt++) {
-        plan = await this._generatePlan(goal, config, state, context, stepLog);
+        plan = await this._generatePlan(goal, config, state, context, stepLog, node.id);
 
         const requested = Array.isArray(plan?.activate_then_replan)
           ? plan.activate_then_replan.filter(s => typeof s === 'string')
@@ -103,7 +104,35 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await this._activateSkillsIntoState(requested, state, context);
       }
 
-      // Validate plan structure and dependencies
+      // Read the in-flight review round once, up front, so namespacing,
+      // validation, the step-log key, and the SSE payload all use a consistent
+      // value. Round 0 = first planner pass; the reviewer bumps this at the end
+      // of each iteration.
+      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
+        ? state.data._reviewRound
+        : 0;
+
+      // Repair BEFORE validate. Namespace round-N≥1 task ids to `r{N}_` first
+      // (so dedupe and validation see the FINAL ids the run will materialize),
+      // then drop duplicate ids. A re-plan LLM sometimes re-lists the same
+      // gap-closing task or self-prefixes round ids, producing collisions
+      // (raw dups, or `foo` + `r{N}_foo` → both `r{N}_foo`). A redundant task
+      // is safe to drop; hard-failing the whole run — and discarding a finished
+      // deliverable from an earlier round — is not (run wf-exec-8b36a2e7 died
+      // on "Duplicate task ID: r2_reconstruct_thesis_mapping" after producing a
+      // complete round-1 report).
+      this._namespaceTaskIds(plan, activeReviewRound);
+      const droppedDupes = this._dedupeTaskIds(plan);
+      if (droppedDupes > 0) {
+        this.logger.warn('Planner emitted duplicate task ids — de-duped instead of failing', {
+          component: 'PlannerNodeExecutor',
+          nodeId: node.id,
+          reviewRound: activeReviewRound,
+          dropped: droppedDupes
+        });
+      }
+
+      // Validate plan structure and dependencies (post-namespace, post-dedupe)
       const validationError = this._validatePlan(plan, config.maxTasks || 10);
       if (validationError) {
         return this.createErrorResult(`Invalid plan: ${validationError}`, { nodeId: node.id });
@@ -117,14 +146,6 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       if (budgetError) {
         return this.createErrorResult(budgetError, { nodeId: node.id });
       }
-
-      // Read the in-flight review round once, so every code path below
-      // (step-log key, SSE payload, task-id namespacing) uses a consistent
-      // value. Round 0 = first planner pass; the reviewer bumps this at the
-      // end of each iteration.
-      const activeReviewRound = Number.isFinite(state?.data?._reviewRound)
-        ? state.data._reviewRound
-        : 0;
 
       // Planning phase is DONE here — the LLM call returned a valid plan.
       // Capture the LLM-only duration NOW (not after _waitForChildCompletion,
@@ -192,6 +213,22 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         await this._activateSkillsIntoState(skillsUsed, state, context);
       }
 
+      // NOTE: task-id namespacing (`r{round}_` prefix for round ≥1) and
+      // duplicate-id de-duping already ran up top, BEFORE validation — so the
+      // SSE event, the early persist, and the materialized sub-workflow below
+      // all use the SAME final task ids, and a duplicate can't abort the run.
+
+      // Accumulate the plan across review rounds. A re-plan round emits only
+      // the NEW gap-closing tasks, but the UI's Tasks panel renders solely
+      // from planCreated.tasks — so without merging, the prior round's tasks
+      // disappear from view even though their results/logs persist in
+      // _taskResults/_stepLogs. Merge the prior rounds' tasks (from parent
+      // state) with this round's namespaced tasks, matching how _taskResults
+      // and _stepLogs already accumulate on bubble-up. Namespacing guarantees
+      // the ids don't collide across rounds. Computed once and reused for
+      // every planCreated write in this execution.
+      const mergedPlanTasks = this._mergePlanTasks(state?.data?.planCreated?.tasks, plan.tasks);
+
       // Emit SSE event so the UI can display the plan. Note: payload fields
       // are FLAT (not nested under `data:`) to match how WorkflowEngine
       // ._emitEvent and agentTools emit do it — the SSE forwarder serializes
@@ -199,7 +236,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       actionTracker.emit('fire-sse', {
         event: 'workflow.plan.created',
         chatId: context.chatId,
-        plan: { tasks: plan.tasks, reasoning: plan.reasoning },
+        plan: { tasks: mergedPlanTasks, reasoning: plan.reasoning },
         nodeId: node.id
       });
 
@@ -212,7 +249,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         const { getStateManager } = await import('../StateManager.js');
         const stateManager = getStateManager();
         await stateManager.update(state.executionId, {
-          data: { planCreated: { tasks: plan.tasks, reasoning: plan.reasoning } }
+          data: { planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning } }
         });
       } catch (writeErr) {
         this.logger.warn('Failed to persist planCreated early; UI may show tasks late', {
@@ -220,41 +257,6 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           nodeId: node.id,
           error: writeErr.message
         });
-      }
-
-      // Plan-and-review namespacing: when this planner call runs INSIDE a
-      // review loop on round 1+, prefix every emitted task id (and
-      // matching dependsOn references) with `r{round}_`. Round 0 (the
-      // initial plan) keeps the LLM's ids as today. The prefix is the
-      // safety net for an LLM that re-uses earlier round ids despite the
-      // round-extension instructions in the system prompt — without it,
-      // _taskResults[task.id] would silently overwrite the prior round's
-      // entry for the same id.
-      if (activeReviewRound >= 1 && Array.isArray(plan?.tasks)) {
-        const prefix = `r${activeReviewRound}_`;
-        // First pass: collect every task id the LLM emitted on THIS round, so
-        // we know which dependsOn references point at same-round tasks
-        // (eligible for prefixing) vs. anything else (cross-round, left
-        // alone — _validatePlan already rejected unresolvable deps).
-        const sameRoundIds = new Set();
-        for (const task of plan.tasks) {
-          if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
-        }
-        // Second pass: re-id tasks; rewrite deps ONLY when they reference
-        // a same-round task id (or were already prefixed by the LLM).
-        for (const task of plan.tasks) {
-          if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
-            task.id = `${prefix}${task.id}`;
-          }
-          if (Array.isArray(task?.dependsOn)) {
-            task.dependsOn = task.dependsOn.map(dep => {
-              if (typeof dep !== 'string') return dep;
-              if (dep.startsWith(prefix)) return dep; // already prefixed
-              if (sameRoundIds.has(dep)) return `${prefix}${dep}`; // same-round
-              return dep; // cross-round ref — preserve as-is
-            });
-          }
-        }
       }
 
       // Materialize the plan into a runnable workflow definition
@@ -347,6 +349,58 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         const childResult = await this._waitForChildCompletion(childExecutionId, context);
 
         if (childResult.status === 'failed') {
+          // Bubble up whatever the child completed BEFORE it failed, so the UI
+          // can still show — and EXPAND (model + transcript) — the sub-tasks
+          // that finished. createErrorResult carries no stateUpdates and the
+          // engine doesn't apply them on a failed node, so persist directly
+          // (same pattern as the early planCreated persist above). Without
+          // this, one failed sub-task discards the ENTIRE round's _stepLogs /
+          // _taskResults, leaving its siblings unexpandable with no model.
+          try {
+            const failedChildData = childResult.data || {};
+            const partial = {};
+            if (failedChildData._taskResults && typeof failedChildData._taskResults === 'object') {
+              partial._taskResults = {
+                ...(state?.data?._taskResults || {}),
+                ...failedChildData._taskResults
+              };
+            }
+            if (failedChildData._stepLogs && typeof failedChildData._stepLogs === 'object') {
+              partial._stepLogs = {
+                ...(state?.data?._stepLogs || {}),
+                ...failedChildData._stepLogs
+              };
+            }
+            if (failedChildData._taskTimings && typeof failedChildData._taskTimings === 'object') {
+              partial._taskTimings = {
+                ...(state?.data?._taskTimings || {}),
+                ...failedChildData._taskTimings
+              };
+            }
+            if (
+              Array.isArray(failedChildData._citations) &&
+              failedChildData._citations.length > 0
+            ) {
+              // The child was seeded with a COPY of the parent's _citations, so
+              // a raw concat re-adds every parent entry (the 2^rounds doubling
+              // bug). Dedupe like the success path (below) to keep the ledger
+              // stable.
+              partial._citations = dedupeCitations([
+                ...(state?.data?._citations || []),
+                ...failedChildData._citations
+              ]);
+            }
+            if (Object.keys(partial).length > 0) {
+              const { getStateManager } = await import('../StateManager.js');
+              await getStateManager().update(state.executionId, { data: partial });
+            }
+          } catch (bubbleErr) {
+            this.logger.warn('Failed to bubble up partial sub-workflow state after child failure', {
+              component: 'PlannerNodeExecutor',
+              nodeId: node.id,
+              error: bubbleErr.message
+            });
+          }
           return this.createErrorResult('Sub-workflow failed', {
             nodeId: node.id,
             childExecutionId,
@@ -362,7 +416,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // training data instead of grounding in the actual research.
         const childData = childResult.data || {};
         const bubbledUpdates = {
-          planCreated: { tasks: plan.tasks, reasoning: plan.reasoning }
+          planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning }
         };
 
         // Bubble up per-task timings AND persist the planner's own LLM-only
@@ -414,6 +468,19 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           };
         }
 
+        // Token circuit-breaker. Per-task workers run in the child
+        // sub-workflow, so their token usage never reached the parent's
+        // `_budget` — `maxTokensPerRun` only ever saw a single child's count
+        // (run wf-exec-f33f80fc: `_budget.total`=266K while the true cost was
+        // 3.29M, so no guard could trip). Recompute the parent budget from the
+        // merged step logs (the authoritative per-step token records). It is
+        // idempotent — recomputing from the full merged set each round can't
+        // double-count — and because `childInitial` copies `_budget` into the
+        // next round, the in-task guard then sees the running cumulative total.
+        if (bubbledUpdates._stepLogs) {
+          bubbledUpdates._budget = this._aggregateBudgetFromStepLogs(bubbledUpdates._stepLogs);
+        }
+
         // Artifact metadata (file write log). The actual files are written
         // to the root run's artifacts directory (see _resolveRootRunId in
         // PromptNodeExecutor) so the parent's artifact endpoint can list
@@ -448,7 +515,16 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         // look up). Citations are the runtime ledger of URLs the agent
         // actually consulted; sources is the configured catalog.
         if (Array.isArray(childData._citations) && childData._citations.length > 0) {
-          bubbledUpdates._citations = [...(state?.data?._citations || []), ...childData._citations];
+          // Dedup on merge. The child was seeded with a COPY of the parent's
+          // _citations (childInitial copies it), and concatenating the child's
+          // full ledger back would re-add every parent entry — doubling the
+          // ledger each round (run wf-exec-78d4c018: a URL stored 2^rounds = 64
+          // times). dedupeCitations collapses the copy + trivial URL variants,
+          // keeping first-seen order so citation ordering stays stable.
+          bubbledUpdates._citations = dedupeCitations([
+            ...(state?.data?._citations || []),
+            ...childData._citations
+          ]);
         }
 
         // Optional output variable points at the synthesized output (if the
@@ -476,7 +552,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         { plan },
         {
           stateUpdates: {
-            planCreated: { tasks: plan.tasks, reasoning: plan.reasoning }
+            planCreated: { tasks: mergedPlanTasks, reasoning: plan.reasoning }
           }
         }
       );
@@ -547,13 +623,20 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
    * @throws {Error} If no model is available or LLM response cannot be parsed
    * @private
    */
-  async _generatePlan(goal, config, state, context, stepLog) {
+  async _generatePlan(goal, config, state, context, stepLog, nodeId) {
     const { language = 'en' } = context;
 
-    // Resolve which model to use for planning
+    // Resolve which model to use for planning. config.modelId may have been
+    // wiped by a config-cache TTL refresh (it's applied at runtime by mutating
+    // the shared cached workflow), so fall back to the DURABLE per-run agent
+    // model config before the global default — otherwise planning silently
+    // drops to local-vllm and overflows its small context on re-plan rounds.
     const { data: models } = configCache.getModels();
+    const configuredModelId = config.modelId || this.resolveConfiguredModelId(state, nodeId);
     const model =
-      models?.find(m => m.id === config.modelId) || models?.find(m => m.default) || models?.[0];
+      (configuredModelId && models?.find(m => m.id === configuredModelId)) ||
+      models?.find(m => m.default) ||
+      models?.[0];
 
     if (!model) {
       throw new Error('No model available for planning');
@@ -698,7 +781,16 @@ Hard rules for this extension plan:
       });
     }
 
-    const systemPrompt = `${baseSystem}${TOOL_SELECTION_GUIDANCE}${roundExtensionBlock}${skillsBlock}${activeSkillsBlock}`;
+    // Temporal grounding: prepend the current date/timezone so the planner
+    // doesn't decompose around a stale "today" (and spawn date-chasing verify
+    // tasks). Also resolve any {{date}}-style placeholders the prompt uses.
+    const globalVars = this.resolveGlobalPromptVars(context);
+    const temporalBlock = this.buildTemporalContextBlock(context);
+    const baseSystemGrounded = temporalBlock
+      ? `${temporalBlock}\n\n${this.applyGlobalPromptVars(baseSystem, globalVars)}`
+      : this.applyGlobalPromptVars(baseSystem, globalVars);
+
+    const systemPrompt = `${baseSystemGrounded}${TOOL_SELECTION_GUIDANCE}${roundExtensionBlock}${skillsBlock}${activeSkillsBlock}`;
 
     // Build context summary from state data (exclude internal keys)
     const contextData = Object.entries(state.data || {})
@@ -803,7 +895,7 @@ Output rules:
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: this.applyGlobalPromptVars(userPrompt, globalVars) }
     ];
 
     // Record what the planner sees on this iteration so operators can
@@ -912,6 +1004,15 @@ Output rules:
       properties: plannerSchemaProperties,
       required: ['tasks']
     };
+    // Output-token budget: NEVER hardcode this. A thinking model
+    // (gemini-3-flash, gemini-flash-latest) counts its reasoning tokens
+    // against the output budget, so a small fixed cap (the old 8192) gets
+    // entirely consumed by 30s+ of thinking and the answer JSON is truncated
+    // mid-stream → "Failed to parse plan". Derive from the explicit node
+    // config, then the resolved model's own maxOutputTokens (32k on
+    // gemini-flash-latest), with 8192 only as a last-resort floor. Mirrors
+    // PromptNodeExecutor's `config.maxTokens || model.maxOutputTokens || …`.
+    const maxTokens = config.maxTokens || model.maxOutputTokens || 8192;
     const response = await this.llmHelper.executeStreamingRequest({
       model,
       messages,
@@ -920,7 +1021,7 @@ Output rules:
         temperature: 0.7,
         responseFormat: 'json',
         responseSchema: plannerResponseSchema,
-        maxTokens: 8192
+        maxTokens
       },
       language
     });
@@ -1090,6 +1191,146 @@ Output rules:
     }
     budget.used += incoming;
     return null;
+  }
+
+  /**
+   * Sum the token usage recorded across a map of step logs into a run-level
+   * `{ input, output, total }` budget. Step logs without a numeric `tokens`
+   * record (e.g. the planner's own `tokens: null`) contribute nothing.
+   *
+   * This is the source of truth for the run's cumulative token cost: per-task
+   * workers run in child sub-workflows and only their step logs bubble up to
+   * the parent, so summing the merged step logs is the only place the parent
+   * can see the TRUE total (its own `_budget` counter sees only top-level
+   * nodes). Used to refresh `state.data._budget` on planner bubble-up so the
+   * `maxTokensPerRun` circuit-breaker can trip on real cumulative cost.
+   *
+   * @param {Object} stepLogs - map of nodeId → step log
+   * @returns {{input:number, output:number, total:number}}
+   * @private
+   */
+  _aggregateBudgetFromStepLogs(stepLogs) {
+    const acc = { input: 0, output: 0, total: 0 };
+    if (!stepLogs || typeof stepLogs !== 'object') return acc;
+    for (const log of Object.values(stepLogs)) {
+      const t = log && log.tokens;
+      if (!t || typeof t !== 'object') continue;
+      acc.input += Number.isFinite(t.input) ? t.input : 0;
+      acc.output += Number.isFinite(t.output) ? t.output : 0;
+    }
+    acc.total = acc.input + acc.output;
+    return acc;
+  }
+
+  /**
+   * Namespace every task id (and matching dependsOn references) in `plan` for
+   * the given review round.
+   *
+   * - Round 0 (the initial plan): ids are left unchanged for backward-compat.
+   * - Round N≥1: every task id that is not already prefixed `r{N}_` gets the
+   *   prefix `r{N}_`. Within-round dependsOn references are re-prefixed to
+   *   match; cross-round references (ids not emitted by THIS round) are left
+   *   as-is so they can still resolve against prior-round results.
+   *
+   * This is the safety net that ensures _taskResults / _stepLogs from one
+   * review round never overwrite entries from a different round.
+   *
+   * @param {Object} plan - The plan object (mutated in place)
+   * @param {number} reviewRound - The current review round (0-based)
+   * @returns {void}
+   * @private
+   */
+  _namespaceTaskIds(plan, reviewRound) {
+    if (reviewRound < 1 || !Array.isArray(plan?.tasks)) return;
+    const prefix = `r${reviewRound}_`;
+    // First pass: collect every task id the LLM emitted on THIS round, so
+    // we know which dependsOn references point at same-round tasks
+    // (eligible for prefixing) vs. anything else (cross-round, left
+    // alone — _validatePlan already rejected unresolvable deps).
+    const sameRoundIds = new Set();
+    for (const task of plan.tasks) {
+      if (task && typeof task.id === 'string') sameRoundIds.add(task.id);
+    }
+    // Second pass: re-id tasks; rewrite deps ONLY when they reference
+    // a same-round task id (or were already prefixed by the LLM).
+    for (const task of plan.tasks) {
+      if (task && typeof task.id === 'string' && !task.id.startsWith(prefix)) {
+        task.id = `${prefix}${task.id}`;
+      }
+      if (Array.isArray(task?.dependsOn)) {
+        task.dependsOn = task.dependsOn.map(dep => {
+          if (typeof dep !== 'string') return dep;
+          if (dep.startsWith(prefix)) return dep; // already prefixed
+          if (sameRoundIds.has(dep)) return `${prefix}${dep}`; // same-round
+          return dep; // cross-round ref — preserve as-is
+        });
+      }
+    }
+  }
+
+  /**
+   * Drop tasks whose id duplicates an earlier task's id, keeping the FIRST
+   * occurrence and preserving order. Run AFTER `_namespaceTaskIds` so it also
+   * collapses post-namespace collisions (`foo` + `r{N}_foo` both become
+   * `r{N}_foo`). Returns the number of tasks dropped.
+   *
+   * A re-plan LLM sometimes re-lists the same gap-closing task (or self-
+   * prefixes round ids), producing duplicate ids. `_validatePlan` would reject
+   * the whole plan and abort the run — discarding a finished deliverable from
+   * an earlier round. A redundant task is safe to drop instead. Tasks with no
+   * id are left untouched (validation still flags those — a task that can't be
+   * keyed is a genuinely invalid plan, not a recoverable duplicate).
+   *
+   * @param {Object} plan - The plan object (mutated in place)
+   * @returns {number} count of duplicate tasks removed
+   * @private
+   */
+  _dedupeTaskIds(plan) {
+    if (!plan || !Array.isArray(plan.tasks)) return 0;
+    const seen = new Set();
+    const out = [];
+    let dropped = 0;
+    for (const task of plan.tasks) {
+      const id = task && task.id;
+      if (id != null && seen.has(id)) {
+        dropped += 1;
+        continue;
+      }
+      if (id != null) seen.add(id);
+      out.push(task);
+    }
+    plan.tasks = out;
+    return dropped;
+  }
+
+  /**
+   * Merge a re-plan round's tasks into the accumulated plan so the run-detail
+   * Tasks panel keeps every round's tasks visible. A review-loop round emits
+   * only the NEW gap-closing tasks; without this the prior round's tasks (whose
+   * results/logs still live in _taskResults/_stepLogs) would vanish from the
+   * UI, which renders solely from planCreated.tasks.
+   *
+   * De-dupes by task id, preserving first-seen order (prior rounds first, this
+   * round's new tasks appended). When the same id appears in both, the incoming
+   * entry wins (refreshed metadata) but keeps its original position. Cross-round
+   * id collisions don't happen in practice because _namespaceTaskIds prefixes
+   * round N≥1 ids with `r{N}_`. Tasks without an id are dropped — they can't be
+   * keyed or rendered as a stable row.
+   *
+   * @param {Array<Object>} priorTasks - Accumulated tasks from earlier rounds
+   * @param {Array<Object>} incomingTasks - This round's (namespaced) tasks
+   * @returns {Array<Object>} Merged, de-duped task list
+   * @private
+   */
+  _mergePlanTasks(priorTasks, incomingTasks) {
+    const byId = new Map();
+    for (const t of Array.isArray(priorTasks) ? priorTasks : []) {
+      if (t && t.id != null) byId.set(t.id, t);
+    }
+    for (const t of Array.isArray(incomingTasks) ? incomingTasks : []) {
+      if (t && t.id != null) byId.set(t.id, t);
+    }
+    return Array.from(byId.values());
   }
 
   /**
