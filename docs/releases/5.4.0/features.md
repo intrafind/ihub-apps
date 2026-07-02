@@ -231,3 +231,27 @@ When an admin's session expires in the admin panel, signing back in returns them
 ### Admin-configurable favicon
 
 The browser-tab icon can now be set from **UI Customization › Header › Favicon URL** (a path or uploaded asset) and applies live without editing HTML. Stored as `header.favicon` in `ui.json`; existing installs get the default via migration **V057**.
+- Enable it per app with the new **Ephemeral chat** toggle in the admin app editor, or by setting `"ephemeral": true` in the app configuration.
+- End users can also switch it on or off at runtime from the chat's configuration panel (the **Ephemeral chat** checkbox), seeded from the app's default. Admins can hide this control per app with `"settings": { "ephemeral": { "enabled": false } }`.
+- The built-in **iFinder Document Actions** app now ships with ephemeral enabled by default, so document conversations leave no trace.
+- The flag is independent of chat history: when persistent chat history arrives in the future, ephemeral apps will remain opted out.
+- Default is `false`, so all existing apps keep their current behaviour.
+
+## Fix — Opening a Non-Existent URL No Longer Breaks the Login Dialog
+
+Visiting a URL that does not exist (for example `https://your-ihub/tools-service`) now correctly shows the "page not found" screen instead of a broken login dialog with an `Unexpected token '<' … is not valid JSON` error.
+
+- The application previously guessed its deployment base path from the URL. For an unknown path it mistook the whole path for a subpath deployment, so every API call was sent to the wrong address and returned the HTML page instead of data — which the login dialog then failed to parse.
+- The server now tells the browser the correct base path directly when it serves the page, so unknown URLs, deep links, and subpath deployments (behind a reverse proxy prefix) all resolve reliably. No configuration change is required.
+## AI OCR: custom prompt limited by tokens, not characters
+
+The **Custom OCR Prompt** field in the AI OCR tool (Tools Service) is now bounded by token count instead of a raw 2,000-character cap, using the same token estimator as the chat. This lets admins write longer, more detailed OCR prompts.
+
+- The limit is now **4,096 tokens** (previously 2,000 characters).
+- The character counter under the prompt box is replaced by a live token counter (`N / 4096 tokens`) that turns red and blocks submission when the limit is exceeded.
+## Fix — Uploaded Files No Longer Labeled "Based on Email Content"
+
+Answers grounded on an uploaded document (PDF, DOCX, image, etc.) now show a **"Based on uploaded file"** source badge instead of the misleading **"Based on email content"**.
+
+- The answer-source detection previously lumped all file uploads together with Outlook email context under a single `email` source type, so any uploaded PDF was reported as email-derived.
+- File uploads now get their own distinct `file` source type and badge; genuine email context (from the Outlook add-in) keeps the `email` badge.
