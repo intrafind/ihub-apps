@@ -68,7 +68,7 @@ class ToolExecutor {
   /**
    * Add a knowledge source for tracking
    * @param {string} chatId - The conversation/chat ID
-   * @param {string} source - Source type ('websearch', 'source', 'iassistant', 'grounding')
+   * @param {string} source - Source type ('websearch', 'sources', 'iassistant', 'grounding', 'email', 'file')
    */
   addKnowledgeSource(chatId, source) {
     if (!this.knowledgeSources.has(chatId)) {
@@ -816,8 +816,11 @@ class ToolExecutor {
       );
     });
 
-    if (hasEmailContext || hasFileUploads) {
+    if (hasEmailContext) {
       this.streamingHandler.addKnowledgeSource(chatId, 'email');
+    }
+    if (hasFileUploads) {
+      this.streamingHandler.addKnowledgeSource(chatId, 'file');
     }
 
     // Debug: Log available tools and file data for workflow debugging
