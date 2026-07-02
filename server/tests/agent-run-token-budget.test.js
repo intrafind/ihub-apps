@@ -38,7 +38,11 @@ check('sums input across step logs', agg.input === 32884 + 220446 + 481724, `got
 check('sums output across step logs', agg.output === 2469 + 3726 + 2481, `got ${agg.output}`);
 check('total = input + output', agg.total === agg.input + agg.output, `got ${agg.total}`);
 
-check('empty object → zeros', JSON.stringify(e._aggregateBudgetFromStepLogs({})) === JSON.stringify({ input: 0, output: 0, total: 0 }));
+check(
+  'empty object → zeros',
+  JSON.stringify(e._aggregateBudgetFromStepLogs({})) ===
+    JSON.stringify({ input: 0, output: 0, total: 0 })
+);
 check('null → zeros', e._aggregateBudgetFromStepLogs(null).total === 0);
 check('undefined → zeros', e._aggregateBudgetFromStepLogs(undefined).total === 0);
 

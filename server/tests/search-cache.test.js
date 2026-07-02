@@ -45,11 +45,18 @@ check('expired entry is evicted (miss again)', getCachedSearch(k, 5000) === unde
 
 // ---- bounded size: old entries evicted, never grows unbounded ----
 _clearSearchCache();
-for (let i = 0; i < 1000; i++) setCachedSearch(makeSearchCacheKey('brave', `q${i}`), { results: [] }, 60000, 1000);
+for (let i = 0; i < 1000; i++)
+  setCachedSearch(makeSearchCacheKey('brave', `q${i}`), { results: [] }, 60000, 1000);
 // the most recent entry must still be present...
-check('recent entry retained under load', getCachedSearch(makeSearchCacheKey('brave', 'q999'), 2000) !== undefined);
+check(
+  'recent entry retained under load',
+  getCachedSearch(makeSearchCacheKey('brave', 'q999'), 2000) !== undefined
+);
 // ...and the oldest evicted (cache is bounded)
-check('oldest entry evicted under load', getCachedSearch(makeSearchCacheKey('brave', 'q0'), 2000) === undefined);
+check(
+  'oldest entry evicted under load',
+  getCachedSearch(makeSearchCacheKey('brave', 'q0'), 2000) === undefined
+);
 
 console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
 process.exit(failures ? 1 : 0);

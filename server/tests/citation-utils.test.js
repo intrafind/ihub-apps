@@ -22,9 +22,15 @@ check('www prefix', n('https://www.x.com/a') === n('https://x.com/a'));
 check('http vs https', n('http://x.com/a') === n('https://x.com/a'));
 check('#fragment stripped', n('https://x.com/a#sec') === n('https://x.com/a'));
 check('host case-insensitive', n('https://X.COM/a') === n('https://x.com/a'));
-check('utm tracking param stripped', n('https://x.com/a?utm_source=g&utm_medium=cpc') === n('https://x.com/a'));
+check(
+  'utm tracking param stripped',
+  n('https://x.com/a?utm_source=g&utm_medium=cpc') === n('https://x.com/a')
+);
 check('REAL query param preserved', n('https://x.com/p?id=42') !== n('https://x.com/p?id=99'));
-check('different paths NOT merged', n('https://gartner.com/analyst/aaa') !== n('https://gartner.com/analyst/bbb'));
+check(
+  'different paths NOT merged',
+  n('https://gartner.com/analyst/aaa') !== n('https://gartner.com/analyst/bbb')
+);
 check('non-string → empty', n(null) === '' && n(42) === '');
 
 // ---- dedupeCitations: keep first occurrence, preserve order ----
@@ -48,7 +54,11 @@ check('non-array → []', Array.isArray(dedupeCitations(null)) && dedupeCitation
 // ---- The doubling scenario: parent + child(=copy of parent + new) concat ----
 {
   const parent = [{ url: 'https://a.com' }, { url: 'https://b.com' }];
-  const childCopyPlusNew = [{ url: 'https://a.com' }, { url: 'https://b.com' }, { url: 'https://c.com' }];
+  const childCopyPlusNew = [
+    { url: 'https://a.com' },
+    { url: 'https://b.com' },
+    { url: 'https://c.com' }
+  ];
   const concatenated = [...parent, ...childCopyPlusNew]; // what bubble-up produces today
   check('concat has the duplication', concatenated.length === 5);
   const deduped = dedupeCitations(concatenated);

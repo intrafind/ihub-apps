@@ -34,12 +34,19 @@ function check(label, cond, detail) {
   const out = e._formatCitations(state);
   check('no pre-assigned [N] index in the pool', !/\[\d+\]/.test(out), out);
   check('renders as a bullet list', /^- /m.test(out));
-  check('dedupes URL variants (2 unique not 3)', out.split('\n').filter(l => l.startsWith('- ')).length === 2, out);
+  check(
+    'dedupes URL variants (2 unique not 3)',
+    out.split('\n').filter(l => l.startsWith('- ')).length === 2,
+    out
+  );
   check('empty citations → empty string', e._formatCitations({ data: {} }) === '');
 }
 
 // ---- Prompt contract: self-numbering language in BOTH copies ----
-const normalize = s => String(s).replace(/['"]\s*\+\s*['"]/g, '').replace(/\s+/g, ' ');
+const normalize = s =>
+  String(s)
+    .replace(/['"]\s*\+\s*['"]/g, '')
+    .replace(/\s+/g, ' ');
 const SELF_NUMBER = /(assign|your own).{0,40}(contiguous|numbering)|contiguous.{0,30}from\s*\[?1/i;
 const NO_OLD_LEDGER = /citations-ledger url supports a claim/i; // the old decoupled contract
 
@@ -49,17 +56,25 @@ function checkContract(text, where) {
   check(`${where}: dropped the old "cite ledger index" contract`, !NO_OLD_LEDGER.test(t));
 }
 
-const serializer = readFileSync(path.join(root, 'server/agents/profile/profileWorkflowSerializer.js'), 'utf8');
+const serializer = readFileSync(
+  path.join(root, 'server/agents/profile/profileWorkflowSerializer.js'),
+  'utf8'
+);
 checkContract(serializer, 'serializer synthesizer');
 
 const phased = JSON.parse(
   readFileSync(path.join(root, 'server/defaults/workflows/claude-style-agent-phased.json'), 'utf8')
 );
 const synth = phased.nodes.find(n => n.id === 'synthesize');
-const synthSys = typeof synth.config.system === 'object' ? synth.config.system.en : synth.config.system;
-const synthPrompt = typeof synth.config.prompt === 'object' ? synth.config.prompt.en : synth.config.prompt;
+const synthSys =
+  typeof synth.config.system === 'object' ? synth.config.system.en : synth.config.system;
+const synthPrompt =
+  typeof synth.config.prompt === 'object' ? synth.config.prompt.en : synth.config.prompt;
 checkContract(`${synthSys}\n${synthPrompt}`, 'phased synthesize node');
-check('phased prompt no longer calls it a pre-numbered "ledger ... for inline [N]"', !/ledger \(URLs the agent consulted — use for inline \[N\]\)/.test(synthPrompt));
+check(
+  'phased prompt no longer calls it a pre-numbered "ledger ... for inline [N]"',
+  !/ledger \(URLs the agent consulted — use for inline \[N\]\)/.test(synthPrompt)
+);
 
 console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
 process.exit(failures ? 1 : 0);

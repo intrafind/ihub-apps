@@ -74,8 +74,14 @@ const e = new PlannerNodeExecutor();
   e._namespaceTaskIds(plan, 2); // first → r2_reconstruct_thesis_mapping (collides), verify_dates → r2_verify_dates
   const dropped = e._dedupeTaskIds(plan);
   check('post-namespace collision is de-duped', dropped === 1, `dropped ${dropped}`);
-  check('distinct task survives', plan.tasks.some(t => t.id === 'r2_verify_dates'));
-  check('collided pair reduced to one', plan.tasks.filter(t => t.id === 'r2_reconstruct_thesis_mapping').length === 1);
+  check(
+    'distinct task survives',
+    plan.tasks.some(t => t.id === 'r2_verify_dates')
+  );
+  check(
+    'collided pair reduced to one',
+    plan.tasks.filter(t => t.id === 'r2_reconstruct_thesis_mapping').length === 1
+  );
   check('validation passes after repair', e._validatePlan(plan, 10) === null);
 }
 

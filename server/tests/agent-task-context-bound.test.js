@@ -48,7 +48,11 @@ function run() {
 
   // ---- Bounded (worker path) caps count + truncates bodies ----
   const bounded = e._formatPreviousTaskResults(state, { maxResults: 8, maxBodyChars: 2000 });
-  check('bounded is dramatically smaller', bounded.length < unbounded.length / 10, `len=${bounded.length}`);
+  check(
+    'bounded is dramatically smaller',
+    bounded.length < unbounded.length / 10,
+    `len=${bounded.length}`
+  );
   check('bounded stays under a sane ceiling', bounded.length < 25000, `len=${bounded.length}`);
   check('bounded keeps the MOST RECENT results', bounded.includes('Task 21'));
   check('bounded drops the OLDEST results', !bounded.includes('Task 0\n'));
@@ -79,7 +83,11 @@ function run() {
   const workerUser = userOf(workerMsgs);
   const synthUser = userOf(synthMsgs);
 
-  check('synthesizer user message carries the full corpus', synthUser.length > 200000, `len=${synthUser.length}`);
+  check(
+    'synthesizer user message carries the full corpus',
+    synthUser.length > 200000,
+    `len=${synthUser.length}`
+  );
   check('worker user message is bounded', workerUser.length < 25000, `len=${workerUser.length}`);
   check('worker << synthesizer', workerUser.length < synthUser.length / 10);
   check('worker still includes the most recent task', workerUser.includes('Task 21'));
