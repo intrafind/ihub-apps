@@ -601,28 +601,102 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Sweep orphaned workflow executions left over from a crashed/restarted
-  // previous process. Must run before trigger registration so re-emitted
-  // events don't trip on stale state.
-  try {
-    const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
-    await sweepOrphanedExecutions();
-  } catch (error) {
-    logger.warn({
-      component: 'Server',
-      message: `Orphan sweeper skipped: ${error.message}`
-    });
-  }
-
-  // Initialize workflow triggers (schedules and webhooks)
+  // Workflow recovery + trigger init on boot. Order matters:
+  //   1. Attach the engine to the TriggerManager (this acquires the
+  //      cross-process scheduler lock).
+  //   2. Resume runs interrupted by the previous process from their last
+  //      checkpoint (only the scheduler-lock owner does this).
+  //   3. Orphan-sweep whatever could NOT be resumed, marking it failed. Also
+  //      owner-gated: resume + sweep run in the SAME process so the sweeper's
+  //      in-memory activeStates guard authoritatively skips just-resumed runs.
+  //      A non-owner worker must not sweep — it would clobber the owner's runs.
+  //   4. Register schedule/webhook triggers.
   try {
     const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
     const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+    const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
+    const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
+    const { serializeProfile } = await import('./agents/profile/profileWorkflowSerializer.js');
+    const { buildAgentPrincipal } = await import('./utils/authorization.js');
+    const { applyNodeModels, applyReviewSettings } = await import('./routes/agents/runs.js');
+    const { resolveReviewSettings } = await import('./agents/profile/reviewSettings.js');
 
+    // 30-minute default node timeout consistent with the agent-run engine in
+    // routes/agents/runs.js — needed so resumed agent runs (including phased
+    // planner nodes) don't hit the 5-minute DEFAULT_NODE_TIMEOUT on recovery.
+    const engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
     const triggerManager = getTriggerManager();
-    triggerManager.setEngine(new WorkflowEngine());
+    triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
+
+    // Reconstruct the full definition for a persisted run: agent runs are
+    // re-serialized from their profile (with the agent principal restored);
+    // plain workflow runs are reloaded by id from disk.
+    const resolveDefinition = async state => {
+      const profileId = state?.data?._agent?.profileId;
+      if (profileId) {
+        const { data: profiles } = configCache.getAgentProfiles(true);
+        const profile = profiles?.find(p => p.id === profileId);
+        if (!profile) return null;
+        const serialized = serializeProfile(profile);
+        // External profiles reference a standalone workflow file by id;
+        // embedded profiles carry the rebuilt definition inline. Deep-clone the
+        // external definition — getWorkflowById returns the SHARED cached object
+        // and we mutate config/nodes below (embedded definitions are already
+        // cloned by serializeProfile).
+        let definition;
+        if (serialized.workflow?.ref === 'external' && serialized.workflow.workflowId) {
+          const cached = configCache.getWorkflowById(serialized.workflow.workflowId);
+          definition = cached ? JSON.parse(JSON.stringify(cached)) : null;
+        } else {
+          definition = serialized.workflow?.definition;
+        }
+        if (!definition) return null;
+
+        // Re-apply the same run-start wiring the request path sets
+        // (routes/agents/runs.js) so a resumed run keeps its wall-time budget
+        // and per-step model / review config. Without the wall-time budget,
+        // resumeFromCheckpoint falls back to the engine's 5-minute default and
+        // the resumed run trips MAX_EXECUTION_TIME shortly after recovery.
+        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
+        definition.config = {
+          ...(definition.config || {}),
+          maxExecutionTime: maxWallTimeSec * 1000,
+          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
+        };
+        applyNodeModels(definition, profile.nodeModels);
+        applyReviewSettings(definition, resolveReviewSettings(profile.review));
+
+        const principal = buildAgentPrincipal(profile, state.data._agent?.triggeredBy || null);
+        return { definition, options: { user: principal } };
+      }
+      const workflows = await loadWorkflows(false);
+      const definition = workflows.find(w => w.id === state.workflowId);
+      if (!definition) return null;
+      return {
+        definition,
+        options: { user: { id: 'system', name: 'System (resumed)', groups: [] } }
+      };
+    };
+
+    try {
+      const resumeResult = await resumeInterruptedRuns({ engine, resolveDefinition });
+      if (resumeResult.resumed.length > 0) {
+        logger.info({
+          component: 'Server',
+          message: `Resumed ${resumeResult.resumed.length} interrupted workflow run(s) from checkpoint`
+        });
+      }
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Run resume skipped: ${error.message}` });
+    }
+
+    try {
+      await sweepOrphanedExecutions({ requireSchedulerOwner: true });
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Orphan sweeper skipped: ${error.message}` });
+    }
 
     const workflows = await loadWorkflows(false);
     workflows.forEach(w => triggerManager.registerWorkflowTriggers(w));
@@ -633,7 +707,7 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (error) {
     logger.warn({
       component: 'Server',
-      message: `Workflow trigger initialization skipped: ${error.message}`
+      message: `Workflow recovery / trigger initialization skipped: ${error.message}`
     });
   }
 

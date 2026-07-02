@@ -22,6 +22,7 @@ import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
+import { dedupeCitations } from '../citationUtils.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -34,6 +35,15 @@ import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/appAsToolGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
+
+// Bound on the {{previousTaskResults}} digest baked into a per-task worker's
+// prompt (the synthesizer is exempt — it needs the full corpus). Keeps the
+// most recent N task results and truncates each body, so a worker's seed
+// prompt can't carry the whole accumulated research corpus and get re-sent on
+// every tool-loop iteration (the O(N²) input-token blow-up in wf-exec-f33f80fc:
+// 22 results ≈ 70K tokens × ~8 iterations ≈ 481K input for one verification).
+const PROMPT_NODE_WORKER_TASK_RESULT_LIMIT = 10;
+const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
 
 /**
  * Agent node configuration
@@ -166,8 +176,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // node WAS configured with makes it visible in the audit.
       const stepSourceMetadata = Array.isArray(sourcesMetadata) ? sourcesMetadata : [];
 
-      // Auto-summarize context if configured and needed
-      if (config.autoSummarize === true && this.contextSummarizer.needsSummarization(state)) {
+      // Auto-summarize accumulated cross-node context (Claude Code autocompact
+      // analog). Opt-in via `config.autoSummarize: true` for plain workflows;
+      // on by default for agent runs (which can accumulate many task results)
+      // unless explicitly disabled with `config.autoSummarize: false`. The
+      // `needsSummarization` threshold means small runs are untouched.
+      const wantSummarize =
+        config.autoSummarize === true ||
+        (!!context._agentProfile && config.autoSummarize !== false);
+      if (wantSummarize && this.contextSummarizer.needsSummarization(state)) {
         state = await this.contextSummarizer.summarizeContext(state, context);
       }
 
@@ -232,9 +249,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Get model configuration first — buildMessages uses it to decide
       // whether image attachments are appropriate for this model.
-      const model = await this.getModel(config.modelId, context, state);
+      // config.modelId may have been wiped by a config-cache TTL refresh (it's
+      // applied at runtime by mutating the shared cached workflow). Fall back to
+      // the durable per-run agent model config so we don't drop to local-vllm.
+      const resolvedModelId = config.modelId || this.resolveConfiguredModelId(state, node.id);
+      const model = await this.getModel(resolvedModelId, context, state);
       if (!model) {
-        return this.createErrorResult(`Model not found: ${config.modelId || 'default'}`, {
+        return this.createErrorResult(`Model not found: ${resolvedModelId || 'default'}`, {
           nodeId: node.id
         });
       }
@@ -656,10 +677,48 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const language = context?.language || 'en';
     const modelSupportsVision = !!(model && (model.supportsVision || model.supportsImages));
 
+    // Temporal grounding: resolve the platform's global prompt variables once so
+    // every workflow node prompt knows the current date/timezone — the same
+    // context the chat path injects. Without this the planner/worker/synthesizer
+    // fall back to training-era "today" and emit dates a verifier flags as
+    // future, looping the review (run wf-exec-4d5952a6). `{{date}}`-style
+    // placeholders in the configured prompts also get resolved here.
+    const globalVars = this.resolveGlobalPromptVars(context);
+    const temporalBlock = this.buildTemporalContextBlock(context);
+
+    // Template-resolution budget. The synthesizer must see the FULL task-result
+    // corpus to compose the report, so it resolves {{previousTaskResults}}
+    // unbounded. Every other node (per-task workers, verifiers) gets a bounded
+    // digest: baking the whole accumulated corpus into a worker's seed prompt
+    // and re-sending it on every tool-loop iteration is what drove O(N²)
+    // input-token blow-up (run wf-exec-f33f80fc). Override per node via
+    // config.previousTaskResultsBudget.
+    const tplOpts =
+      config._isSynthesizer === true
+        ? {}
+        : {
+            previousTaskResults: config.previousTaskResultsBudget || {
+              maxResults: PROMPT_NODE_WORKER_TASK_RESULT_LIMIT,
+              maxBodyChars: PROMPT_NODE_WORKER_TASK_BODY_CHARS
+            }
+          };
+
     // Add system message if configured
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
-      let systemContent = this.resolveTemplateVariables(systemTemplate, state);
+      // Resolve global placeholders ({{date}}, {{timezone}}, …) on the RAW
+      // template first — resolveTemplateVariables strips unknown {{...}} tokens,
+      // so the global pass must run before it, not after.
+      let systemContent = this.resolveTemplateVariables(
+        this.applyGlobalPromptVars(systemTemplate, globalVars),
+        state,
+        tplOpts
+      );
+
+      // Prepend the temporal block so the date is the first thing the model reads.
+      if (temporalBlock) {
+        systemContent = `${temporalBlock}\n\n${systemContent}`;
+      }
 
       // Agent runs auto-include the profile memory file body (if enabled).
       // `context._agentMemoryBlock` is populated by execute() before
@@ -695,6 +754,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         role: 'system',
         content: systemContent
       });
+    } else if (temporalBlock) {
+      // No system prompt configured (e.g. a bare task worker) — still give the
+      // model a temporal anchor so it doesn't invent the current date.
+      messages.push({
+        role: 'system',
+        content: temporalBlock
+      });
     }
 
     // Include conversation history if configured
@@ -706,7 +772,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     let userContent;
     if (config.prompt) {
       const promptTemplate = this.getLocalizedValue(config.prompt, language);
-      userContent = this.resolveTemplateVariables(promptTemplate, state);
+      userContent = this.resolveTemplateVariables(
+        this.applyGlobalPromptVars(promptTemplate, globalVars),
+        state,
+        tplOpts
+      );
     } else if (state.data?.input) {
       userContent = state.data.input;
     } else if (state.data?.message) {
@@ -867,7 +937,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {string} Resolved template
    * @private
    */
-  resolveTemplateVariables(template, state) {
+  resolveTemplateVariables(template, state, opts = {}) {
     if (typeof template !== 'string') {
       return template;
     }
@@ -931,7 +1001,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             });
         }
 
-        return comparisonResult ? this.resolveTemplateVariables(content, state) : '';
+        return comparisonResult ? this.resolveTemplateVariables(content, state, opts) : '';
       }
     );
 
@@ -943,7 +1013,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         const conditionValue = this.getNestedValue(condition.trim(), state.data || {});
         if (conditionValue) {
           // Recursively resolve variables in the content
-          return this.resolveTemplateVariables(content, state);
+          return this.resolveTemplateVariables(content, state, opts);
         }
         return '';
       }
@@ -963,7 +1033,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // accumulated planner task results into a markdown block so the
       // synthesizer (and intermediate plan tasks) can see prior work.
       if (trimmed === 'previousTaskResults') {
-        return this._formatPreviousTaskResults(state);
+        return this._formatPreviousTaskResults(state, opts.previousTaskResults);
       }
 
       // Citations ledger collected from every search/extract tool call
@@ -1168,9 +1238,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       return null;
     }
 
-    // 1. Use model from node config if specified
+    // 1. Use model from node config if specified. If the configured model
+    //    isn't in the enabled set (e.g. its id was wiped/changed), fall
+    //    through to the durable fallbacks below rather than failing the node.
     if (modelId) {
-      return models.find(m => m.id === modelId);
+      const configured = models.find(m => m.id === modelId);
+      if (configured) return configured;
     }
 
     // 2. Check for model override from initial data (user selection at start)
@@ -1182,8 +1255,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    // 3. Check workflow-level defaultModelId
-    const workflowDefaultModelId = context.workflow?.config?.defaultModelId;
+    // 3. Check workflow-level defaultModelId, then the DURABLE per-run agent
+    //    model config (state survives the config-cache TTL refresh that wipes
+    //    the runtime-applied workflow.config.defaultModelId).
+    const workflowDefaultModelId =
+      context.workflow?.config?.defaultModelId || this.resolveConfiguredModelId(state);
     if (workflowDefaultModelId) {
       const workflowModel = models.find(m => m.id === workflowDefaultModelId);
       if (workflowModel) {
@@ -1356,17 +1432,57 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   async executeLLMWithTools({ model, messages, tools, config, context, nodeId }) {
-    const maxIterations = config.maxIterations || this.maxIterations;
+    // Budget-driven continuation (Claude Code TOKEN_BUDGET analog). The agent
+    // runs as long as the task and budget require, rather than a fixed count.
+    // `maxToolRoundsPerNode` is a safety backstop above the token budget; the
+    // token budget is what actually shapes when the agent wraps up.
+    const budgets = context._agentProfile?.budgets || {};
+    const roundCap = config.maxIterations || budgets.maxToolRoundsPerNode || this.maxIterations;
+    const maxTokensPerRun = budgets.maxTokensPerRun || 0; // 0 = unlimited
+    const maxIterations = roundCap;
     const temperature = config.temperature ?? 0.7;
     const maxTokens = config.maxTokens || model.maxOutputTokens || 4096;
     const language = context.language || 'en';
+
+    // Run-level token spend lives on the workflow state so the budget spans
+    // every node/iteration of the whole run, not just this node.
+    const runState = context._workflowState;
+    const runBudget = runState?.data?._budget || { input: 0, output: 0, total: 0 };
+    if (runState?.data) runState.data._budget = runBudget;
 
     let currentMessages = [...messages];
     let iteration = 0;
     let finalContent = '';
     let finalFinishReason = null;
+    // When the run token budget is exhausted we stop offering tools and ask the
+    // model for a final answer instead of continuing to call tools.
+    let forceFinish = false;
+    // Reactive context recovery (Claude Code reactive-compact analog): bounded
+    // number of microcompact-and-retry attempts when a request overflows.
+    let reactiveAttempts = 0;
+    const MAX_REACTIVE_ATTEMPTS = 2;
     // Accumulate token usage across iterations
     const totalTokens = { input: 0, output: 0 };
+
+    // Tool circuit-breaker. A tool that keeps returning a rate-limit error
+    // (HTTP 429/503) won't recover within this step; left unchecked the model
+    // retries it every round and drags the loop to the iteration cap, re-sending
+    // the whole accumulating history each time (run wf-exec-f4f70e84: 151/151
+    // braveSearch calls 429'd, ~60K wasted input/task). After RATE_LIMIT_FAIL_LIMIT
+    // rate-limit failures we stop offering that tool; when no tools remain we
+    // force a final answer. Per-item errors (e.g. a 404 on one URL) are NOT
+    // counted — the tool itself still works.
+    const RATE_LIMIT_FAIL_LIMIT = config.maxRateLimitFailures ?? 2;
+    // A tool that fails this many times IN A ROW (any error — e.g. a search
+    // provider that's down, or webContentExtractor 404ing on URLs the model
+    // invented because search returned nothing) is futile; disable it too. A
+    // single success resets the streak, so occasional per-item misses are
+    // tolerated (run wf-exec-64d14c07: braveSearch was circuit-broken on 429s
+    // but the model pivoted to webContentExtractor and 404'd to the round cap).
+    const CONSECUTIVE_FAIL_LIMIT = config.maxConsecutiveToolFailures ?? 3;
+    const rateLimitFails = new Map();
+    const consecutiveFails = new Map();
+    const disabledTools = new Set();
 
     // Verify API key using centralized helper
     const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
@@ -1396,22 +1512,53 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const responseSchema = config.outputSchema || undefined;
       const responseFormat = responseSchema ? 'json' : undefined;
 
-      // Execute the request using the helper (filters invalid options like user, chatId)
-      const response = await this.llmHelper.executeStreamingRequest({
-        model,
-        messages: currentMessages,
-        apiKey,
-        options: {
-          temperature,
-          maxTokens,
-          tools: tools.length > 0 ? tools : undefined,
-          responseSchema,
-          responseFormat
-          // Note: user and chatId are intentionally NOT passed here
-          // They are not valid adapter options and would corrupt provider request bodies
-        },
-        language
-      });
+      // Offer only tools that haven't been circuit-broken this step.
+      const availableTools = tools.filter(t => !disabledTools.has(t.id));
+
+      // Execute the request using the helper (filters invalid options like user, chatId).
+      // On a context-overflow error, microcompact the in-loop messages and
+      // retry the same iteration (reactive recovery) before giving up.
+      let response;
+      try {
+        response = await this.llmHelper.executeStreamingRequest({
+          model,
+          messages: currentMessages,
+          apiKey,
+          options: {
+            temperature,
+            maxTokens,
+            tools: availableTools.length > 0 && !forceFinish ? availableTools : undefined,
+            responseSchema,
+            responseFormat
+            // Note: user and chatId are intentionally NOT passed here
+            // They are not valid adapter options and would corrupt provider request bodies
+          },
+          language
+        });
+      } catch (err) {
+        if (
+          ContextSummarizer.isContextOverflowError(err) &&
+          reactiveAttempts < MAX_REACTIVE_ATTEMPTS
+        ) {
+          const mc = this.contextSummarizer.microcompactMessages(currentMessages, {
+            keepRecent: 4
+          });
+          if (mc.freedChars > 0) {
+            reactiveAttempts++;
+            currentMessages = mc.messages;
+            this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
+              component: 'PromptNodeExecutor',
+              nodeId,
+              attempt: reactiveAttempts,
+              freedChars: mc.freedChars,
+              collapsed: mc.collapsed
+            });
+            iteration--; // don't charge the failed attempt against the round cap
+            continue;
+          }
+        }
+        throw err;
+      }
 
       // Accumulate content
       if (response.content) {
@@ -1460,23 +1607,38 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // Accumulate token usage from response (or estimate if not provided)
+      // Accumulate token usage from response (or estimate if not provided).
+      // Track the per-iteration delta so it can be added to the run budget.
+      let deltaIn = 0;
+      let deltaOut = 0;
       if (response.usage) {
-        totalTokens.input += response.usage.prompt_tokens || response.usage.input_tokens || 0;
-        totalTokens.output += response.usage.completion_tokens || response.usage.output_tokens || 0;
+        deltaIn = response.usage.prompt_tokens || response.usage.input_tokens || 0;
+        deltaOut = response.usage.completion_tokens || response.usage.output_tokens || 0;
       } else {
         // Fallback: estimate tokens when usage data is not provided (streaming responses)
         // This matches the approach used in StreamingHandler for chat apps
         const inputText = currentMessages.map(m => m.content || '').join(' ');
-        totalTokens.input += estimateTokens(inputText);
+        deltaIn = estimateTokens(inputText);
         if (response.content) {
-          totalTokens.output += estimateTokens(response.content);
+          deltaOut = estimateTokens(response.content);
         }
       }
+      totalTokens.input += deltaIn;
+      totalTokens.output += deltaOut;
+      runBudget.input += deltaIn;
+      runBudget.output += deltaOut;
+      runBudget.total = runBudget.input + runBudget.output;
 
       // Check if there are tool calls to process
       if (!response.toolCalls || response.toolCalls.length === 0) {
         // No tool calls, we're done
+        break;
+      }
+
+      // If we already forced a finish but the model still tried to call tools,
+      // stop here rather than looping forever without tools available.
+      if (forceFinish) {
+        finalFinishReason = 'budget_exhausted';
         break;
       }
 
@@ -1496,24 +1658,162 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       for (const toolCall of response.toolCalls) {
         const toolResult = await this.executeToolCall(toolCall, tools, context);
         currentMessages.push(toolResult);
+
+        // Circuit-breaker: a tool that is rate-limited (fast trip) OR fails
+        // repeatedly in a row (any error — futile) is withheld for the rest of
+        // the step so the model can't retry a dead tool to the round cap.
+        const verdict = this._classifyToolResult(toolResult);
+        const matched = tools.find(
+          t => t.id === toolResult.name || normalizeToolName(t.id) === toolResult.name
+        );
+        const tid = matched?.id || toolResult.name;
+        if (verdict.failed) {
+          if (verdict.rateLimited) rateLimitFails.set(tid, (rateLimitFails.get(tid) || 0) + 1);
+          consecutiveFails.set(tid, (consecutiveFails.get(tid) || 0) + 1);
+        } else {
+          consecutiveFails.set(tid, 0); // a success resets the streak
+        }
+        const rl = rateLimitFails.get(tid) || 0;
+        const streak = consecutiveFails.get(tid) || 0;
+        const tripped =
+          (verdict.rateLimited && rl >= RATE_LIMIT_FAIL_LIMIT) || streak >= CONSECUTIVE_FAIL_LIMIT;
+        if (tripped && !disabledTools.has(tid)) {
+          disabledTools.add(tid);
+          const reason = rl >= RATE_LIMIT_FAIL_LIMIT ? 'rate_limited' : 'repeated_failures';
+          const count = reason === 'rate_limited' ? rl : streak;
+          this._signalToolCircuitBroken(context, {
+            tool: tid,
+            reason,
+            failures: count,
+            lastMessage: verdict.message,
+            nodeId
+          });
+          // Search tools failing means the model has no real URLs — explicitly
+          // forbid fabricating sources so it doesn't pivot to inventing URLs.
+          const isSearch = this._isCitationProducingTool(tid);
+          currentMessages.push({
+            role: 'user',
+            content:
+              `[system] The tool "${tid}" is unavailable for the rest of this step ` +
+              `(${reason === 'rate_limited' ? `rate-limited, failed ${count}×` : `failed ${count}× in a row`}: ${verdict.message || 'tool error'}). ` +
+              `Do NOT call it again. ` +
+              (isSearch
+                ? `Web search/fetch is unavailable — do NOT invent or guess URLs, sources, or quotes. `
+                : '') +
+              `Produce your best final answer now using only what you have already gathered, and ` +
+              `explicitly note anything you could not verify because the tool was unavailable.`
+          });
+        }
+      }
+
+      // Proactively compact the in-flight history once it grows large, so old
+      // (already-consumed) tool-result bodies are not re-billed on every
+      // subsequent iteration — the O(N²) prompt-token fix. Citations are
+      // already persisted to _citations and the audit preview to the step log,
+      // so eliding the raw bodies here loses nothing durable. Reactive
+      // overflow recovery (the catch above) remains as a backstop. Compaction
+      // only elides tool-result bodies, never the wrap-up nudges pushed below,
+      // so it is safe to run before the force-finish gates.
+      const compaction = this.contextSummarizer.compactIfOversized(currentMessages, {
+        thresholdTokens: config.compactThresholdTokens ?? 16000,
+        keepRecent: config.compactKeepRecent ?? 6
+      });
+      if (compaction.compacted) {
+        currentMessages = compaction.messages;
+        this.logger.info('Proactively compacted agent context', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          iteration,
+          collapsed: compaction.collapsed,
+          freedChars: compaction.freedChars
+        });
+      }
+
+      // Force a final (tool-less) answer for exactly ONE reason per iteration,
+      // in precedence order: all tools dead > run budget spent > round cap.
+      // Each sets forceFinish and pushes a wrap-up nudge; the next iteration
+      // then breaks at the top (no tool calls, or the `if (forceFinish)` guard).
+      // The if/else-if chain makes the precedence explicit — a plain sequence of
+      // `if (… && !forceFinish)` gates has the same effect but reads as (and gets
+      // flagged as) redundant negations.
+      if (tools.length > 0 && tools.every(t => disabledTools.has(t.id))) {
+        // Every tool has been circuit-broken — nothing left to call.
+        forceFinish = true;
+        this.logger.info('All tools circuit-broken — forcing a final answer', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          disabledTools: [...disabledTools]
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            '[system] All tools are currently unavailable (rate-limited or repeatedly failing). ' +
+            'Do NOT call any more tools and do NOT invent URLs, sources, or quotes. Produce your ' +
+            'COMPLETE final response now using everything you have gathered, and briefly note any ' +
+            'gaps you could not close because tools were unavailable.'
+        });
+      } else if (maxTokensPerRun > 0 && runBudget.total >= maxTokensPerRun) {
+        // Run token budget spent: answer this round's tool calls (done above)
+        // then nudge the model to wrap up on the next, tool-less turn.
+        forceFinish = true;
+        this.logger.info('Run token budget reached — nudging agent to wrap up', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          spent: runBudget.total,
+          maxTokensPerRun
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            `[system] Token budget for this run is exhausted (${runBudget.total}/${maxTokensPerRun}). ` +
+            `Stop calling tools. Produce your best final answer now using what you already have. ` +
+            `Be concise and note any gaps you could not close.`
+        });
+      } else if (iteration >= maxIterations - 1) {
+        // Last allowed round: spend it producing the final output instead of one
+        // more tool call. Without this, a model that keeps calling tools until
+        // the cap exits the loop having only emitted interim narration ("I'll
+        // research… let me dig deeper") — never the actual deliverable (agent)
+        // or the verdict JSON (verifier, which runs through this same loop).
+        forceFinish = true;
+        this.logger.info('Tool-round cap reached — forcing a final answer', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          iteration,
+          maxIterations
+        });
+        currentMessages.push({
+          role: 'user',
+          content:
+            '[system] You have reached the tool-use round limit for this step. Do NOT call any ' +
+            'more tools. Using everything you have gathered so far, produce your COMPLETE final ' +
+            'response now, in full, exactly as instructed — not a summary of what you did. If ' +
+            'some details are missing, state them briefly but still deliver the best complete ' +
+            'answer you can.'
+        });
       }
 
       // Continue to next iteration
     }
 
     if (iteration >= maxIterations) {
-      this.logger.warn('Max iterations reached for node', {
+      this.logger.warn('Max tool rounds reached for node', {
         component: 'PromptNodeExecutor',
         nodeId,
-        maxIterations
+        maxIterations,
+        runTokens: runBudget.total
       });
+      if (!finalFinishReason) finalFinishReason = 'max_iterations';
     }
 
     return {
       content: finalContent,
       iterations: iteration,
       tokens: totalTokens,
+      runTokens: runBudget.total,
+      budgetExhausted: forceFinish,
       finishReason: finalFinishReason,
+      disabledTools: [...disabledTools],
       maxTokens
     };
   }
@@ -2061,6 +2361,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
+  /**
+   * Version a primary artifact name so re-runs (adversarial-review revisions)
+   * don't overwrite earlier drafts. The first write keeps the base name; each
+   * subsequent write gets `.v2`, `.v3`, … inserted before the extension:
+   * report.md → report.v2.md → report.v3.md (or `name.v2` if there's no ext).
+   * Pure (no I/O) so it can be unit-tested directly.
+   *
+   * @param {string} primaryName - The base artifact name (e.g. 'report.md')
+   * @param {number} priorCount - How many times this name was already written
+   * @returns {string} The name to write this time
+   * @private
+   */
+  _versionedArtifactName(primaryName, priorCount) {
+    if (!priorCount || priorCount < 1) return primaryName;
+    const dot = primaryName.lastIndexOf('.');
+    return dot > 0
+      ? `${primaryName.slice(0, dot)}.v${priorCount + 1}${primaryName.slice(dot)}`
+      : `${primaryName}.v${priorCount + 1}`;
+  }
+
   async _autoPersistResult({
     node,
     config,
@@ -2129,10 +2449,22 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // under the task's id, rather than overwriting each other.
     const logKey = effectiveLogKey || node.id;
     if (stepLog) {
-      stateUpdates._stepLogs = {
-        ...(state?.data?._stepLogs || {}),
-        [logKey]: stepLog
-      };
+      // Snapshot the plan as it stood at the END of this round so the audit
+      // trail shows how the task list evolved (set_plan replaces open tasks
+      // each call — without this, earlier plans vanish without a trace).
+      if (Array.isArray(state?.data?._taskQueue)) {
+        stepLog.planSnapshot = state.data._taskQueue.map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status
+        }));
+      }
+      // Preserve EVERY iteration's transcript, not just the last (cyclic
+      // agent↔verify loop reuses node.id="agent" across rounds).
+      Object.assign(
+        stateUpdates,
+        this.buildStepLogUpdates(state, logKey, stepLog, context?.iteration ?? null)
+      );
     }
 
     // Concurrency safety: re-publish state slots that tools may have
@@ -2201,7 +2533,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         title: taskTitle,
         content: textContent,
         citations: taskCitations.map(c => ({ url: c.url, title: c.title })),
-        model: response?.model || null,
+        // Prefer the model the provider echoes back; fall back to the model we
+        // RESOLVED for this step (stepLog.model). vLLM/Gemini often omit `model`
+        // in their streaming responses, which left _taskResults[*].model null so
+        // the UI couldn't show which model ran each planner sub-task.
+        model: response?.model || stepLog?.model || null,
         startedAt: startedAtIso || completedAt,
         completedAt,
         durationMs
@@ -2362,11 +2698,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           ? agentProfile.artifacts.primary
           : null) || 'report.md';
 
+      // The synthesizer re-runs on every adversarial-review revision round.
+      // Overwriting the same name would lose each round's compose (the run's
+      // drafting history). Version every attempt after the first: report.md,
+      // report.v2.md, report.v3.md — mirrors the primary-producer path below
+      // and shares the same _artifactVersions counter (keyed by primaryName).
+      const priorVersions = state?.data?._artifactVersions || {};
+      const priorCount = priorVersions[primaryName] || 0;
+      const versionedName = this._versionedArtifactName(primaryName, priorCount);
+      stateUpdates._artifactVersions = { ...priorVersions, [primaryName]: priorCount + 1 };
+
       if (runId) {
         try {
           await writeArtifactDirect({
             runId,
-            name: primaryName,
+            name: versionedName,
             content: textContent,
             contentType: 'text/markdown',
             profileId,
@@ -2377,7 +2723,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           this.logger.error('Auto-persist of synthesizer artifact failed', {
             component: 'PromptNodeExecutor',
             nodeId: node.id,
-            primaryName,
+            primaryName: versionedName,
             error: err.message
           });
         }
@@ -2491,11 +2837,20 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         (agentProfile?.artifacts && typeof agentProfile.artifacts.primary === 'string'
           ? agentProfile.artifacts.primary
           : null) || 'report.md';
+      // The agent node re-runs on each adversarial-review revision and persists
+      // per step. Overwriting would lose the earlier drafts (the run's
+      // history); writing the same name repeatedly piles up indistinguishable
+      // copies. Version every attempt after the first: report.md, report.v2.md,
+      // report.v3.md — so each revision is preserved and legible.
+      const priorVersions = state?.data?._artifactVersions || {};
+      const priorCount = priorVersions[primaryName] || 0;
+      const versionedName = this._versionedArtifactName(primaryName, priorCount);
+      stateUpdates._artifactVersions = { ...priorVersions, [primaryName]: priorCount + 1 };
       if (runId && textContent) {
         try {
           await writeArtifactDirect({
             runId,
-            name: primaryName,
+            name: versionedName,
             content: textContent,
             contentType: 'text/markdown',
             profileId,
@@ -2917,7 +3272,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   _isCitationProducingTool(toolId) {
     if (typeof toolId !== 'string') return false;
     const id = toolId.toLowerCase();
-    if (id === 'websearch' || id === 'webcontentextractor') return true;
+    // Any *search* tool (webSearch, braveSearch, tavilySearch, …) plus the
+    // content extractor and configured source_ lookups. Previously this only
+    // matched the literal `websearch`, so the configured `braveSearch` tool
+    // produced ZERO citations — its result URLs were silently dropped. The
+    // harvest below guards on a url field, so a non-search tool that happens to
+    // match contributes nothing anyway.
+    if (id.includes('search') || id === 'webcontentextractor') return true;
     if (id.startsWith('source_')) return true;
     // Provider-native grounding (googleSearch) doesn't appear in the tool
     // call loop — Gemini emits it as grounding metadata in the assistant
@@ -2936,7 +3297,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
-  _formatPreviousTaskResults(state) {
+  _formatPreviousTaskResults(state, opts = {}) {
     const map = state?.data?._taskResults;
     if (!map || typeof map !== 'object') return '';
     const entries = Object.values(map)
@@ -2948,13 +3309,40 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         return ta < tb ? -1 : 1;
       });
     if (entries.length === 0) return '';
-    return entries
-      .map(r => {
-        const title = (r.title || r.taskId || 'Task').toString().trim();
-        const body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content || '');
-        return `### ${title}\n\n${body}`.trim();
-      })
-      .join('\n\n---\n\n');
+
+    // Context budget. The synthesizer (no opts) sees the FULL corpus in
+    // completion order — it must, to compose the report. Per-task workers
+    // pass a bound: they only need a digest of prior work, and baking the
+    // whole accumulated corpus into every task's seed prompt — then
+    // re-sending it on every tool-loop iteration — is what caused O(N²)
+    // input-token blow-up (run wf-exec-f33f80fc: 481K input for a one-fact
+    // verification). When bounded we keep the MOST RECENT results (most
+    // relevant to the current step) and truncate oversized bodies.
+    const maxResults = Number.isFinite(opts.maxResults) ? opts.maxResults : Infinity;
+    const maxBodyChars = Number.isFinite(opts.maxBodyChars) ? opts.maxBodyChars : Infinity;
+
+    let kept = entries;
+    let omitted = 0;
+    if (entries.length > maxResults) {
+      omitted = entries.length - maxResults;
+      kept = entries.slice(omitted); // keep the most recent, preserve order
+    }
+
+    const blocks = kept.map(r => {
+      const title = (r.title || r.taskId || 'Task').toString().trim();
+      let body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content || '');
+      if (body.length > maxBodyChars) {
+        const dropped = body.length - maxBodyChars;
+        body = `${body.slice(0, maxBodyChars)}\n\n[…truncated ${dropped} chars to bound context]`;
+      }
+      return `### ${title}\n\n${body}`.trim();
+    });
+
+    let out = blocks.join('\n\n---\n\n');
+    if (omitted > 0) {
+      out = `_[${omitted} earlier task result(s) omitted to bound context; see the report draft for the full synthesis]_\n\n${out}`;
+    }
+    return out;
   }
 
   /**
@@ -3002,25 +3390,94 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
+  /**
+   * Classify a tool result returned by executeToolCall. Failed tool calls carry
+   * `content: JSON.stringify({ error: true, message })`; successful ones carry
+   * the raw result JSON (no `error` flag). A rate-limit failure (HTTP 429/503,
+   * "too many requests", "rate limit") won't self-heal within a step, so it is
+   * flagged separately — the circuit-breaker disables a tool that keeps hitting
+   * it instead of letting the model retry until the round cap.
+   *
+   * @param {{content?: string}} toolResult
+   * @returns {{failed: boolean, rateLimited: boolean, message: string}}
+   * @private
+   */
+  /**
+   * Signal that a tool was circuit-broken during a step: record it on the
+   * workflow state (so the run-detail UI can surface "search unavailable"
+   * instead of silently producing a thin, source-less report) and emit an SSE
+   * event for live runs. Best-effort — never throws into the tool loop.
+   *
+   * @private
+   */
+  _signalToolCircuitBroken(context, { tool, reason, failures, lastMessage, nodeId }) {
+    const entry = {
+      tool,
+      reason, // 'rate_limited' | 'repeated_failures'
+      failures,
+      nodeId,
+      message: typeof lastMessage === 'string' ? lastMessage.slice(0, 200) : '',
+      ts: new Date().toISOString()
+    };
+    this.logger.warn('Tool circuit-broken — withholding for this step', {
+      component: 'PromptNodeExecutor',
+      ...entry
+    });
+    try {
+      const ws = context?._workflowState;
+      if (ws?.data) {
+        if (!Array.isArray(ws.data._circuitBrokenTools)) ws.data._circuitBrokenTools = [];
+        ws.data._circuitBrokenTools.push(entry);
+      }
+    } catch {
+      // state recording is best-effort
+    }
+    try {
+      actionTracker.emit('fire-sse', {
+        event: 'agent.tool.circuit_broken',
+        chatId: context?.chatId,
+        executionId: context?.executionId,
+        ...entry
+      });
+    } catch {
+      // telemetry must never fail a tool call
+    }
+  }
+
+  _classifyToolResult(toolResult) {
+    const content = toolResult?.content;
+    if (typeof content !== 'string') return { failed: false, rateLimited: false, message: '' };
+    let message = '';
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.error) message = String(parsed.message || 'tool error');
+    } catch {
+      // Non-JSON content is real tool output, not an error envelope.
+      return { failed: false, rateLimited: false, message: '' };
+    }
+    if (!message) return { failed: false, rateLimited: false, message: '' };
+    const rateLimited = /\b(429|503)\b|too many requests|rate[ -]?limit/i.test(message);
+    return { failed: true, rateLimited, message };
+  }
+
   _formatCitations(state) {
     const citations = state?.data?._citations;
     if (!Array.isArray(citations) || citations.length === 0) return '';
-    const seen = new Set();
-    const ordered = [];
-    for (const c of citations) {
-      if (!c || typeof c !== 'object' || typeof c.url !== 'string') continue;
-      if (seen.has(c.url)) continue;
-      seen.add(c.url);
-      ordered.push(c);
-    }
+    const ordered = dedupeCitations(citations);
     if (ordered.length === 0) return '';
+    // Render as an UNNUMBERED pool of URLs — deliberately NOT `[1] … [N] …`.
+    // A pre-numbered ledger let the synthesizer copy sparse ledger indices
+    // inline (e.g. "[88]") that didn't line up with its own References list
+    // (run wf-exec-78d4c018 cited up to [575] over a 52-entry list). With no
+    // numbers to copy, the synthesizer assigns its OWN contiguous [1..M]
+    // numbering for the sources it actually cites — see the synthesizer prompt.
     return ordered
-      .map((c, i) => {
+      .map(c => {
         const label = c.title ? `${c.title} — ${c.url}` : c.url;
         const tail = c.snippet
           ? `\n    ${String(c.snippet).replace(/\s+/g, ' ').slice(0, 240)}`
           : '';
-        return `[${i + 1}] ${label}${tail}`;
+        return `- ${label}${tail}`;
       })
       .join('\n');
   }

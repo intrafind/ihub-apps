@@ -49,8 +49,15 @@ configured per-node `tools`):
 | `read_inbox` | Read the bound inbox (or override via `inboxId`). |
 | `write_inbox` | Add / markDone / replace items. |
 | `create_task` | Push a new open task onto `_taskQueue`. Honors `dynamicTasks.maxDepth`. |
+| `set_plan` | Declare or replace the whole plan in one call (TodoWrite analog). Takes `tasks: [{ title, activeForm?, brief?, priority? }]`; rebuilds `_taskQueue` as fresh `open` tasks, preserving prior `done`/`failed` unless `replaceCompleted`. |
+| `update_task` | Update a task's status/fields as the agent reconsiders. Setting `in_progress` enforces the single-in_progress invariant (demotes any other in_progress task to `open`). |
 | `list_tasks` | View current queue items. |
 | `mark_task_done` | Explicitly complete a queue item. |
+
+Task records now carry an `activeForm` (present-continuous label, e.g. "Running
+tests") alongside the imperative `title`, for live-plan display. `create_task`,
+`set_plan`, and `update_task` are auto-registered on dynamic-task-enabled
+planner nodes.
 | `write_artifact` | Save a named file under the run's artifact directory. |
 
 Memory tools are always on. Inbox tools require `profile.inboxId`. Dynamic-task
@@ -138,6 +145,52 @@ new gap-closing tasks. Task ids are namespaced `r{round}_*` to keep
 `review.maxRounds + 1` iterations defends against runaway loops; the
 shared planner budget (`_planBudget`) caps total tasks across rounds.
 
+### Verifier modes (`verifier` node `config.mode`)
+
+A `verifier` node supports two modes:
+
+- **`quality`** (default) — a soft scorer: the LLM returns
+  `{ score, passed, feedback }` and the node branches `pass`/`retry` against
+  `config.threshold`.
+- **`adversarial`** — ported in spirit from Claude Code's verification agent.
+  The verifier is told its job is to **try to break** the output, probe edge
+  cases and unsupported claims, and name its own rationalizations. It returns
+  `{ verdict: PASS|FAIL|PARTIAL, failures[], rationale }`. `PASS` branches
+  `pass`; `FAIL`/`PARTIAL` branch `retry` **and** surface the concrete
+  `failures` as `state.data._lastReviewGaps`, so a plan-and-review loop
+  re-entry (see above) re-plans to close exactly those gaps — the
+  reconsideration path. List `config.tools` on an adversarial verifier to make
+  it **tool-enabled**: it then runs a real tool loop (search, fetch, re-check)
+  before its verdict instead of judging from reading alone
+  (`config.maxToolRounds` caps the rounds).
+
+### Run budgets (`profile.budgets`)
+
+- `maxTokensPerRun` — per-run token ceiling across all LLM iterations. When
+  reached, the agent's tool loop answers the current round's tool calls, then
+  is nudged to produce a final tool-less answer rather than continuing to call
+  tools (Claude Code TOKEN_BUDGET analog). `0` = unlimited.
+- `maxToolRoundsPerNode` — safety backstop on tool-calling rounds per node.
+- Running spend is tracked on `state.data._budget`.
+
+### Durable scheduling (multi-instance safety)
+
+Schedule triggers run on every instance's cron clock, so multiple workers /
+replicas would each fire the same scheduled workflow. A cross-process lock
+(`contents/data/agent-scheduler.lock`, TTL + PID-liveness, modeled on Claude
+Code's cron scheduler) ensures only the **lock owner** fires scheduled triggers;
+ownership transfers automatically if the owner dies. Manual and webhook
+triggers are unaffected. (Resuming an in-flight run from its checkpoint after a
+crash is deferred — today the orphan sweeper marks stuck runs failed on boot.)
+
+### Context management
+
+Agent prompt nodes auto-summarize accumulated cross-node results once they
+exceed a context-window-aware threshold (disable per node with
+`config.autoSummarize: false`). On a provider context-overflow error the tool
+loop microcompacts older/bulky tool results in-place and retries before failing
+(reactive recovery).
+
 ## HITL approval
 
 Place a `human` node anywhere in the workflow. When it executes, the run pauses
@@ -156,6 +209,35 @@ Two demo Profiles ship disabled in `contents/agents/profiles/`:
 Enable them by setting `"enabled": true` in their JSON, then trigger from the
 admin UI.
 
+### Claude-style autonomous agent (`claude-style-agent`)
+
+A demo profile + external workflow modeled on Claude Code, shipped **disabled**:
+
+- Profile: `contents/agents/profiles/claude-style-agent.json` (references the
+  workflow externally; turns on dynamic tasks, memory, and a per-run token
+  budget).
+- Workflow: `contents/workflows/claude-style-agent.json` — a self-correction
+  loop: `start → agent → verify → {pass: end | retry: agent}`.
+
+The `agent` prompt node plans with `set_plan`, executes with tools while
+keeping one task in progress (`update_task`), and reconsiders as it learns —
+running in a budget- and context-managed tool loop. The `verify` node is a
+**tool-enabled adversarial verifier**: it tries to break the result, and on
+`FAIL`/`PARTIAL` loops back to the agent with the specific gaps until it passes
+(bounded by `maxRetries`). Enable the profile, configure the search tools' API
+keys, and trigger it from the agents admin UI.
+
+## Crash recovery (resume on boot)
+
+On startup the server reconstructs each interrupted run's definition (agent
+runs re-serialize from their profile; plain workflow runs reload by id) and
+calls `WorkflowEngine.resumeFromCheckpoint()` to continue from the last
+checkpoint — instead of marking it failed. Only the scheduler-lock owner
+resumes (multi-instance safety); whatever can't be resumed is still swept to
+`failed`. Enable per-node checkpointing (`checkpointOnNode`) for the most
+granular resume. Distinct from the HITL `resume()` that un-pauses a `human`
+node.
+
 ## Out of scope for V1
 
 These pieces are explicitly **deferred to V1.5+** — see `concepts/agent-factory/2026-05-20 V1 Slim Scope.md`:
@@ -164,7 +246,6 @@ These pieces are explicitly **deferred to V1.5+** — see `concepts/agent-factor
 - Per-entry `{source: agent|human}` markers and immutability
 - End-of-run consolidation node + `ConsolidationNodeExecutor`
 - `priorVersions` snapshots (git is the V1 audit story)
-- `maxTokensPerRun` budget enforcement
 - Implicit pause on sensitive tool/app calls (`requireApprovalFor`)
 - Sub-agent delegation / multi-agent handoffs
 - Vector store / semantic recall
@@ -179,6 +260,7 @@ run-detail page):
 - `agent.memory.read` / `agent.memory.write`
 - `agent.inbox.read` / `agent.inbox.write`
 - `agent.task.created` / `.completed` / `.failed`
+- `agent.plan.updated` — emitted after any `_taskQueue` mutation (create/set/update/done); carries a compact plan snapshot (`tasks[]`, `counts`, `reason`) for live run-detail rendering
 - `agent.artifact.written`
 - `agent.hitl.requested` / `.approved` / `.rejected`
 - `agent.app.call` / `agent.app.result` (when App-as-tool is enabled)

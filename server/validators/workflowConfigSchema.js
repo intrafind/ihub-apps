@@ -125,7 +125,15 @@ const nodeTypeEnum = z.enum([
   'structured-record',
   'quote-validator',
   'template-render',
-  'progress'
+  'progress',
+  // Agent-runtime deterministic primitives. These have registered executors
+  // (see services/workflow/executors/index.js) but were previously only emitted
+  // in-memory by the inbox-worker serializer (never schema-validated). A
+  // hand-authored EXTERNAL agent workflow loaded from disk IS validated, so the
+  // enum must list them.
+  'inbox-load',
+  'inbox-finalize',
+  'memory-finalize'
 ]);
 
 /**

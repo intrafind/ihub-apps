@@ -817,6 +817,12 @@ export function buildAgentPrincipal(profile, triggeredBy = null) {
     groups,
     isAgent: true,
     profileId: profile.id,
+    // Carry the bound inbox so the deterministic inbox nodes
+    // (InboxLoadNodeExecutor) can resolve it via `context.user.inboxId` when the
+    // run uses an EXTERNAL workflow that wasn't built by the inbox-worker
+    // serializer (which would otherwise set `config.inboxId` on the node).
+    inboxId:
+      typeof profile.inboxId === 'string' && profile.inboxId.length > 0 ? profile.inboxId : null,
     triggeredBy: triggeredBy || null
   };
 }
