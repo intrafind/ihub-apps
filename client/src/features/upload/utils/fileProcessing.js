@@ -716,6 +716,68 @@ export const processMsgFile = async file => {
   return extractMsgContent(fileData);
 };
 
+// DrawingML namespace — text runs in PPTX slide XML live in <a:t> elements
+// under this namespace regardless of the prefix the producer chose.
+const DRAWINGML_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+
+// Process PPTX file — extracts the visible text of every slide from the OOXML
+// package (ppt/slides/slideN.xml). Without this handler PPTX fell through to
+// readTextFile, which decoded the raw ZIP container as text and shipped
+// hundreds of thousands of garbage tokens to the model.
+export const processPptxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const JSZip = await loadJSZip();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  const slideNumber = path => {
+    const match = path.match(/slide(\d+)\.xml$/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  const slidePaths = Object.keys(zip.files)
+    .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+    .sort((a, b) => slideNumber(a) - slideNumber(b));
+
+  const parser = new DOMParser();
+  const slides = [];
+  for (const path of slidePaths) {
+    const xml = await zip.file(path).async('string');
+    const doc = parser.parseFromString(xml, 'application/xml');
+    // Paragraphs (<a:p>) keep line structure; each holds one or more text
+    // runs (<a:t>) that must be joined without separators (a word can be
+    // split across runs by formatting boundaries).
+    const paragraphs = [];
+    for (const p of Array.from(doc.getElementsByTagNameNS(DRAWINGML_NS, 'p'))) {
+      const line = Array.from(p.getElementsByTagNameNS(DRAWINGML_NS, 't'))
+        .map(t => t.textContent)
+        .join('')
+        .trim();
+      if (line) paragraphs.push(line);
+    }
+    if (paragraphs.length > 0) {
+      slides.push(`[Slide ${slideNumber(path)}]\n${paragraphs.join('\n')}`);
+    }
+  }
+
+  return slides.join('\n\n').trim();
+};
+
+// Heuristic check that a string produced by reading a file "as text" is
+// actually text. Binary containers (ZIP, OLE, images) decode to NUL bytes
+// and long runs of U+FFFD replacement characters — either signal means the
+// file has no meaningful text representation and must not be sent to the
+// model as content.
+export const looksLikeBinaryText = text => {
+  if (!text) return false;
+  const sample = text.slice(0, 8192);
+  let replacements = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    if (code === 0) return true;
+    if (code === 0xfffd) replacements++;
+  }
+  return replacements > sample.length * 0.05;
+};
+
 // Process OpenOffice/LibreOffice file
 export const processOpenOfficeFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
@@ -804,6 +866,16 @@ export const processDocumentFile = async file => {
   ) {
     content = await processTiffFile(file);
   } else if (
+    file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    fileExtension === '.pptx'
+  ) {
+    content = await processPptxFile(file);
+  } else if (file.type === 'application/vnd.ms-powerpoint' || fileExtension === '.ppt') {
+    // Legacy binary PowerPoint (OLE compound file) — no client-side extractor
+    // exists. Reject instead of falling through to readTextFile, which would
+    // decode the OLE container as garbage text.
+    throw new Error('unsupported-format');
+  } else if (
     file.type === 'application/vnd.oasis.opendocument.text' ||
     file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
     file.type === 'application/vnd.oasis.opendocument.presentation' ||
@@ -815,6 +887,12 @@ export const processDocumentFile = async file => {
   } else {
     // Default: read as text file
     content = await readTextFile(file);
+    // Unknown binary formats (renamed Office files, archives, executables)
+    // decode to NUL/replacement-character soup here — refuse to treat that
+    // as document content rather than flooding the model's context window.
+    if (looksLikeBinaryText(content)) {
+      throw new Error('unsupported-format');
+    }
   }
 
   return { content, pageImages };

@@ -26,7 +26,8 @@ const {
   isImageAttachment,
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
-  collectAttachmentsForSend
+  collectAttachmentsForSend,
+  formatFileDataAsPromptText
 } = require('../../../client/src/features/office/utilities/buildChatApiMessages');
 
 // JSDom doesn't implement createObjectURL by default — stub it so the
@@ -353,5 +354,42 @@ describe('collectAttachmentsForSend', () => {
       'currentItem'
     );
     expect(merged.map(a => a.id)).toEqual(['p1a', 'p2a', 'p2b']);
+  });
+});
+
+describe('formatFileDataAsPromptText', () => {
+  // The live token estimate must count attachment text the same way the
+  // server stitches it into the prompt (RequestBuilder's
+  // preprocessMessagesWithFileData): "[File: name (type)]\n\ncontent\n\n"
+  // blocks, concatenated. Anything else and the context-window indicator
+  // drifts from the request that actually goes out.
+  test('mirrors the server-side file block format', () => {
+    const text = formatFileDataAsPromptText([
+      { fileName: 'report.pdf', fileType: 'application/pdf', content: 'PDF TEXT' },
+      {
+        fileName: 'deck.pptx',
+        fileType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        displayType: 'PPTX',
+        content: '[Slide 1]\nHello'
+      }
+    ]);
+    expect(text).toBe(
+      '[File: report.pdf (application/pdf)]\n\nPDF TEXT\n\n' +
+        '[File: deck.pptx (PPTX)]\n\n[Slide 1]\nHello\n\n'
+    );
+  });
+
+  test('skips entries without extracted content (e.g. image-based PDFs)', () => {
+    const text = formatFileDataAsPromptText([
+      { fileName: 'scan.pdf', fileType: 'application/pdf', pageImages: ['data:image/jpeg;...'] },
+      { fileName: 'notes.txt', fileType: 'text/plain', content: 'hello' }
+    ]);
+    expect(text).toBe('[File: notes.txt (text/plain)]\n\nhello\n\n');
+  });
+
+  test('returns empty string for null/empty input', () => {
+    expect(formatFileDataAsPromptText(null)).toBe('');
+    expect(formatFileDataAsPromptText([])).toBe('');
+    expect(formatFileDataAsPromptText(undefined)).toBe('');
   });
 });
