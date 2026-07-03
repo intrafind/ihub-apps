@@ -1,7 +1,9 @@
 import { promises as fs } from 'fs';
 import { join, normalize, sep } from 'path';
 import SwaggerParser from '@apidevtools/swagger-parser';
-import yaml from 'js-yaml';
+// js-yaml v5 is ESM-only with named exports — a default import throws
+// "does not provide an export named 'default'" at module load time.
+import { load as parseYaml, JSON_SCHEMA } from 'js-yaml';
 import { getRootDir } from '../../pathUtils.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { throttledRun } from '../../requestThrottler.js';
@@ -21,7 +23,7 @@ export function parseOpenApiText(text) {
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     return JSON.parse(text);
   }
-  return yaml.load(text, { schema: yaml.JSON_SCHEMA, json: true });
+  return parseYaml(text, { schema: JSON_SCHEMA, json: true });
 }
 
 /**
