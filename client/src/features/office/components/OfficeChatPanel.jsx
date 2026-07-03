@@ -23,7 +23,10 @@ import {
 } from '../utilities/replyForm';
 import {
   buildPromptTemplate,
-  combineUserTextWithEmailContext
+  combineUserTextWithEmailContext,
+  buildFileDataFromMailAttachments,
+  collectAttachmentsForSend,
+  formatFileDataAsPromptText
 } from '../utilities/buildChatApiMessages';
 import {
   fetchCurrentMailContext,
@@ -112,6 +115,44 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       pinned: pinnedEmails
     });
   }, [mailSnapshot.includeBody, mailSnapshot.ctx, pinnedEmails]);
+
+  // Attachment text for the live token estimate. The adapter extracts document
+  // attachments (current email + pinned emails) into fileData at send time and
+  // the server stitches their content into the prompt — so they must be counted
+  // too, or the indicator wildly undercounts (a single document can dwarf the
+  // email body). Mirrors the send path: same attachment merge, same extraction
+  // pipeline, same [File: ...] block format the server prepends. Extraction is
+  // async (JSZip/pdfjs/mammoth), so this lives in state guarded against stale
+  // results; attachments only change on email navigation, pin/unpin, or
+  // banner removals, so the cost stays off the keystroke path.
+  const [attachmentContextText, setAttachmentContextText] = useState('');
+  const attachmentsForEstimate = useMemo(() => {
+    const removed = mailSnapshot.removedAttachmentIds;
+    const current = (mailSnapshot.ctx?.attachments ?? []).filter(a => !removed?.has(a?.id));
+    return collectAttachmentsForSend(current, pinnedEmails, mailSnapshot.ctx?.itemId ?? null);
+  }, [mailSnapshot.ctx, mailSnapshot.removedAttachmentIds, pinnedEmails]);
+  useEffect(() => {
+    let stale = false;
+    const extraction =
+      attachmentsForEstimate.length === 0
+        ? Promise.resolve(null)
+        : buildFileDataFromMailAttachments(attachmentsForEstimate);
+    extraction
+      .then(files => {
+        if (!stale) setAttachmentContextText(formatFileDataAsPromptText(files));
+      })
+      .catch(() => {
+        if (!stale) setAttachmentContextText('');
+      });
+    return () => {
+      stale = true;
+    };
+  }, [attachmentsForEstimate]);
+
+  const estimateContextText = useMemo(
+    () => [emailContextText, attachmentContextText].filter(Boolean).join('\n\n'),
+    [emailContextText, attachmentContextText]
+  );
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and
   // dedupe in the prompt builder. Derived from the snapshot hook — the
@@ -646,10 +687,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                   setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
                 }
                 clarificationPending={adapter.clarificationPending}
-                // Include email body + pinned emails in the live token estimate
-                // so the context-window indicator accounts for what will actually
-                // be sent to the LLM.
-                extraContextText={emailContextText}
+                // Include email body, pinned emails AND extracted attachment
+                // content in the live token estimate so the context-window
+                // indicator accounts for what will actually be sent to the LLM.
+                extraContextText={estimateContextText}
                 // Keep the input from dominating the small Outlook task pane;
                 // long prompts scroll inside the 3-line box. Issue #1467.
                 maxRows={3}

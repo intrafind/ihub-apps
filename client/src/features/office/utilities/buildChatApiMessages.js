@@ -195,7 +195,11 @@ export async function buildFileDataFromMailAttachments(attachments) {
           content: content || undefined,
           pageImages: pageImages?.length ? pageImages : undefined
         };
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[office] attachment "${a?.name}" could not be converted to text and was skipped`,
+          err
+        );
         return null;
       }
     })
@@ -203,6 +207,20 @@ export async function buildFileDataFromMailAttachments(attachments) {
 
   const valid = results.filter(Boolean);
   return valid.length ? valid : null;
+}
+
+/**
+ * Flatten extracted attachment file data into the exact text blocks the
+ * server stitches into the prompt (RequestBuilder.preprocessMessagesWithFileData).
+ * Used by the Outlook taskpane's live token estimate so the context-window
+ * indicator counts attachment content the same way the outgoing request will.
+ */
+export function formatFileDataAsPromptText(files) {
+  if (!Array.isArray(files) || files.length === 0) return '';
+  return files
+    .filter(f => f?.content)
+    .map(f => `[File: ${f.fileName} (${f.displayType || f.fileType})]\n\n${f.content}\n\n`)
+    .join('');
 }
 
 /**
