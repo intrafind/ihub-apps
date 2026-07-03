@@ -1612,6 +1612,9 @@ function AppChat({ preloadedApp = null }) {
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
+      // Ephemeral chat toggle (rendered next to the send button)
+      ephemeral,
+      onEphemeralChange: setEphemeral,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
@@ -1633,22 +1636,21 @@ function AppChat({ preloadedApp = null }) {
 
     // Always use ChatInput (which now has the NextGen design with model selector)
     return (
-      <>
-        <ChatInput
-          {...commonProps}
-          models={models}
-          selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
-          currentLanguage={currentLanguage}
-          showModelSelector={
-            !compareModeActive &&
-            app?.disallowModelSelection !== true &&
-            app?.settings?.model?.enabled !== false
-          }
-        />
-        {/* Show AI disclaimer after user has submitted at least one message */}
-        {messages.length > 0 && <AIDisclaimerBanner />}
-      </>
+      <ChatInput
+        {...commonProps}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        currentLanguage={currentLanguage}
+        showModelSelector={
+          !compareModeActive &&
+          app?.disallowModelSelection !== true &&
+          app?.settings?.model?.enabled !== false
+        }
+        // AI disclaimer shares the tight line below the input with the
+        // ephemeral toggle; shown after the first submitted message.
+        disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
+      />
     );
   };
 
@@ -1691,7 +1693,6 @@ function AppChat({ preloadedApp = null }) {
         selectedStyle={selectedStyle}
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
-        ephemeral={ephemeral}
         temperature={temperature}
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
@@ -1703,7 +1704,6 @@ function AppChat({ preloadedApp = null }) {
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
-        onEphemeralChange={setEphemeral}
         onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingBudgetChange={setThinkingBudget}

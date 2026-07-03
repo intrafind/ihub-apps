@@ -26,30 +26,30 @@ function AIDisclaimerBanner() {
   const isClickable = !!disclaimerLink;
   const ElementTag = isClickable ? 'button' : 'div';
 
-  // Dynamic classes based on whether element is clickable
+  // Dynamic classes based on whether element is clickable. Kept compact
+  // (no outer margins, minimal padding) — it renders on the tight status
+  // line directly below the chat input, next to the ephemeral toggle.
   const baseClasses =
-    'flex items-center gap-2 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400';
+    'inline-flex items-center gap-1.5 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400';
   const clickableClasses = isClickable
     ? 'hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
     : 'cursor-default';
 
   return (
-    <div className="flex items-center justify-center mt-1 mb-2">
-      <ElementTag
-        onClick={isClickable ? handleClick : undefined}
-        className={`${baseClasses} ${clickableClasses} rounded-lg transition-colors`}
-        title={t('disclaimer.title', 'Disclaimer')}
-      >
-        <Icon name="informationCircle" size="sm" className="flex-shrink-0" />
-        <span>
-          {disclaimerHint ||
-            t(
-              'disclaimer.defaultMessage',
-              'iHub uses AI and can make mistakes. Please verify results carefully.'
-            )}
-        </span>
-      </ElementTag>
-    </div>
+    <ElementTag
+      onClick={isClickable ? handleClick : undefined}
+      className={`${baseClasses} ${clickableClasses} rounded-lg transition-colors`}
+      title={t('disclaimer.title', 'Disclaimer')}
+    >
+      <Icon name="informationCircle" size="sm" className="flex-shrink-0" />
+      <span>
+        {disclaimerHint ||
+          t(
+            'disclaimer.defaultMessage',
+            'iHub uses AI and can make mistakes. Please verify results carefully.'
+          )}
+      </span>
+    </ElementTag>
   );
 }
 

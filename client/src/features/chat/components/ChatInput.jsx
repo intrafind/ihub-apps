@@ -49,6 +49,14 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Ephemeral (incognito-style) chat. When on, the conversation is never
+  // persisted — it disappears on reload or when leaving the app. The toggle
+  // renders below the input, aligned with the send button.
+  ephemeral = false,
+  onEphemeralChange = null,
+  // Optional node (e.g. the AI disclaimer) rendered centered on the same
+  // tight line as the ephemeral toggle, directly below the input box.
+  disclaimer = null,
   // Per-message host-context toggles. Surfaced under the `+` menu when
   // the embedded host (Outlook taskpane / browser extension side panel)
   // declares any in its EmbeddedHostAdapter.contextToggles. Empty in the
@@ -102,6 +110,10 @@ function ChatInput({
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  // The ephemeral toggle is shown unless the app explicitly disables the
+  // setting (same gate the settings dialog used before the toggle moved here).
+  const ephemeralToggleAvailable =
+    typeof onEphemeralChange === 'function' && app?.settings?.ephemeral?.enabled !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
   const workflowMentionsEnabled =
     featureFlags.isEnabled('workflows', true) &&
@@ -451,13 +463,27 @@ function ChatInput({
         </div>
       )}
 
-      {contextUsage && !fileTokenWarning && (
-        <div className="mx-2 mb-1 text-xs text-gray-400 dark:text-gray-500 text-right">
-          {t('chat.contextUsage', {
-            used: contextUsage.inputTokens.toLocaleString(i18n.language),
-            total: contextUsage.contextWindow.toLocaleString(i18n.language),
-            defaultValue: '~{{used}} / {{total}} context tokens'
-          })}
+      {/* Status line above the input: ephemeral "not saved" notice centered,
+          token count right. Rendered as one row to keep vertical space tight. */}
+      {(ephemeral || (contextUsage && !fileTokenWarning)) && (
+        <div className="mx-2 mb-0.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
+          <span />
+          <span className="text-center text-violet-600 dark:text-violet-400">
+            {ephemeral &&
+              t(
+                'chat.ephemeral.activeNotice',
+                'Messages are not saved and disappear when you leave or reload.'
+              )}
+          </span>
+          <span className="justify-self-end text-gray-400 dark:text-gray-500">
+            {contextUsage &&
+              !fileTokenWarning &&
+              t('chat.contextUsage', {
+                used: contextUsage.inputTokens.toLocaleString(i18n.language),
+                total: contextUsage.contextWindow.toLocaleString(i18n.language),
+                defaultValue: '~{{used}} / {{total}} context tokens'
+              })}
+          </span>
         </div>
       )}
 
@@ -495,7 +521,11 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
-          className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
+          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 mb-1 ${
+            ephemeral
+              ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
+              : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
+          }`}
         >
           {/* Top line: User input */}
           <div className="relative flex-1">
@@ -685,6 +715,42 @@ function ChatInput({
             </button>
           </div>
         </form>
+
+        {/* Single tight line below the input: disclaimer centered, ephemeral
+            (incognito) toggle right-aligned under the send button. The active
+            "not saved" notice lives in the status line above the input. */}
+        {(ephemeralToggleAvailable || disclaimer) && (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <span />
+            <div className="text-center">{disclaimer}</div>
+            <div className="justify-self-end">
+              {ephemeralToggleAvailable && (
+                <button
+                  type="button"
+                  onClick={() => onEphemeralChange(!ephemeral)}
+                  disabled={isInputDisabled || isProcessing}
+                  aria-pressed={ephemeral}
+                  title={
+                    ephemeral
+                      ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
+                      : t(
+                          'chat.ephemeral.enable',
+                          'Turn on ephemeral chat — messages are not saved'
+                        )
+                  }
+                  className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
+                    ephemeral
+                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:hover:bg-violet-900/70'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <Icon name="ghost" size="sm" solid={ephemeral} />
+                  <span>{t('chat.ephemeral.label', 'Incognito mode')}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

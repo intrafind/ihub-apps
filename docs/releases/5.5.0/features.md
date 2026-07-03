@@ -14,6 +14,17 @@ the pane on the old email entirely. Both required closing and reopening the add-
 - Attachment reads are far less chatty with the Outlook host, improving task-pane responsiveness
   on emails with large attachments.
 
+## Ephemeral Chat Is Now a First-Class Toggle
+
+Ephemeral (never-stored) chat moves out of the settings dialog and becomes a ghost-icon toggle
+directly below the chat input, next to the send button — working like a browser's incognito mode.
+
+- While active, the chat input is highlighted in violet and a notice states that messages are not
+  saved and disappear when leaving or reloading — so users always know the conversation is private.
+- Behavior is unchanged: ephemeral chats are never written to browser storage and no iAssistant
+  conversation ID is persisted.
+- The app-level configuration is the same: `ephemeral: true` presets the toggle, and
+  `settings.ephemeral.enabled: false` hides it.
 ## PowerPoint Files Are Now Read Properly (and Binary Files Rejected)
 
 Uploaded or email-attached PowerPoint decks are now converted to real slide text before being sent
