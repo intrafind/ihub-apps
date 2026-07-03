@@ -11,6 +11,7 @@ This book contains configuration details and user instructions for the iHub Apps
 
 ## Configuration
 
+- [Customizing iHub Apps](customization.md) - Override labels, translations, and branding via the `contents/` folder
 - [App Configuration](apps.md) - AI application setup and management
 - [Custom Response Renderers](custom-renderers.md) - Custom output rendering
 - [Models](models.md) - LLM model configuration
