@@ -28,7 +28,6 @@ function SharedAppHeader({
   selectedStyle,
   selectedOutputFormat,
   sendChatHistory,
-  ephemeral,
   temperature,
   thinkingEnabled,
   thinkingBudget,
@@ -40,7 +39,6 @@ function SharedAppHeader({
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
-  onEphemeralChange,
   onTemperatureChange,
   onThinkingEnabledChange,
   onThinkingBudgetChange,
@@ -171,7 +169,6 @@ function SharedAppHeader({
             selectedStyle={selectedStyle}
             selectedOutputFormat={selectedOutputFormat}
             sendChatHistory={sendChatHistory}
-            ephemeral={ephemeral}
             temperature={temperature}
             thinkingEnabled={thinkingEnabled}
             thinkingBudget={thinkingBudget}
@@ -182,7 +179,6 @@ function SharedAppHeader({
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
             onSendChatHistoryChange={onSendChatHistoryChange}
-            onEphemeralChange={onEphemeralChange}
             onTemperatureChange={onTemperatureChange}
             onThinkingEnabledChange={onThinkingEnabledChange}
             onThinkingBudgetChange={onThinkingBudgetChange}

@@ -49,6 +49,11 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Ephemeral (incognito-style) chat. When on, the conversation is never
+  // persisted — it disappears on reload or when leaving the app. The toggle
+  // renders below the input, aligned with the send button.
+  ephemeral = false,
+  onEphemeralChange = null,
   // Per-message host-context toggles. Surfaced under the `+` menu when
   // the embedded host (Outlook taskpane / browser extension side panel)
   // declares any in its EmbeddedHostAdapter.contextToggles. Empty in the
@@ -102,6 +107,10 @@ function ChatInput({
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  // The ephemeral toggle is shown unless the app explicitly disables the
+  // setting (same gate the settings dialog used before the toggle moved here).
+  const ephemeralToggleAvailable =
+    typeof onEphemeralChange === 'function' && app?.settings?.ephemeral?.enabled !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
   const workflowMentionsEnabled =
     featureFlags.isEnabled('workflows', true) &&
@@ -495,7 +504,11 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
-          className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
+          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 mb-1 ${
+            ephemeral
+              ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
+              : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
+          }`}
         >
           {/* Top line: User input */}
           <div className="relative flex-1">
@@ -685,6 +698,43 @@ function ChatInput({
             </button>
           </div>
         </form>
+
+        {/* Ephemeral (incognito) chat toggle — below the input, aligned with the
+            send button. While active, an explicit "not saved" notice makes the
+            private-browsing-style behavior unmistakable. */}
+        {(ephemeralToggleAvailable || ephemeral) && (
+          <div className="flex items-center justify-end gap-2 mb-1">
+            {ephemeral && (
+              <span className="text-xs text-violet-600 dark:text-violet-400">
+                {t(
+                  'chat.ephemeral.activeNotice',
+                  'Messages are not saved and disappear when you leave or reload.'
+                )}
+              </span>
+            )}
+            {ephemeralToggleAvailable && (
+              <button
+                type="button"
+                onClick={() => onEphemeralChange(!ephemeral)}
+                disabled={isInputDisabled || isProcessing}
+                aria-pressed={ephemeral}
+                title={
+                  ephemeral
+                    ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
+                    : t('chat.ephemeral.enable', 'Turn on ephemeral chat — messages are not saved')
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+                  ephemeral
+                    ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:hover:bg-violet-900/70'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+              >
+                <Icon name="ghost" size="sm" solid={ephemeral} />
+                <span>{t('chat.ephemeral.label', 'Ephemeral chat')}</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

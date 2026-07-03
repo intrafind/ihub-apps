@@ -362,7 +362,13 @@
     },
     "messageList": "Chat messages",
     "inputLabel": "Type your message",
-    "clearInput": "Clear input"
+    "clearInput": "Clear input",
+    "ephemeral": {
+      "label": "Ephemeral chat",
+      "enable": "Turn on ephemeral chat — messages are not saved",
+      "disable": "Turn off ephemeral chat",
+      "activeNotice": "Messages are not saved and disappear when you leave or reload."
+    }
   },
   "auth": {
     "login": {
@@ -1773,7 +1779,6 @@
     "title": "Configuration",
     "save": "Save",
     "cancel": "Cancel",
-    "ephemeral": "Ephemeral chat (never stored)",
     "model": "Model",
     "selectModel": "Select Model",
     "defaultModel": "Default model",

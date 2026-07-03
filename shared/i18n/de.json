@@ -129,6 +129,12 @@
     "contextUsage": "~{{used}} / {{total}} Kontext-Tokens",
     "inputLabel": "Nachricht eingeben",
     "clearInput": "Eingabe löschen",
+    "ephemeral": {
+      "label": "Flüchtiger Chat",
+      "enable": "Flüchtigen Chat aktivieren – Nachrichten werden nicht gespeichert",
+      "disable": "Flüchtigen Chat deaktivieren",
+      "activeNotice": "Nachrichten werden nicht gespeichert und verschwinden beim Verlassen oder Neuladen."
+    },
     "compareMode": {
       "toggle": "Vergleichsmodus",
       "disable": "Vergleichsmodus deaktivieren",
@@ -405,7 +411,6 @@
     "title": "Konfiguration",
     "save": "Speichern",
     "cancel": "Abbrechen",
-    "ephemeral": "Flüchtiger Chat (wird nie gespeichert)",
     "model": "Modell",
     "selectModel": "Modell auswählen",
     "defaultModel": "Standardmodell",

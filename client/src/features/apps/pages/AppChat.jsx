@@ -1612,6 +1612,9 @@ function AppChat({ preloadedApp = null }) {
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
+      // Ephemeral chat toggle (rendered next to the send button)
+      ephemeral,
+      onEphemeralChange: setEphemeral,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
@@ -1691,7 +1694,6 @@ function AppChat({ preloadedApp = null }) {
         selectedStyle={selectedStyle}
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
-        ephemeral={ephemeral}
         temperature={temperature}
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
@@ -1703,7 +1705,6 @@ function AppChat({ preloadedApp = null }) {
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
-        onEphemeralChange={setEphemeral}
         onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingBudgetChange={setThinkingBudget}

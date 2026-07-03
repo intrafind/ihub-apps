@@ -176,6 +176,52 @@ import {
   PlusIcon as SolidPlusIcon
 } from '@heroicons/react/24/solid';
 
+// Custom icons not available in Heroicons. They mirror the Heroicons component
+// contract (24x24 viewBox, className/title/rest props) so they can live in the
+// iconMap alongside the imported ones.
+const OutlineGhostIcon = ({ className, title, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    aria-hidden={title ? undefined : 'true'}
+    className={className}
+    {...props}
+  >
+    {title ? <title>{title}</title> : null}
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M19.5 10.5a7.5 7.5 0 0 0-15 0v9.75l2.625-2.25 2.437 2.25L12 18l2.438 2.25 2.437-2.25 2.625 2.25V10.5Z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9.375 10.125h.008v.008h-.008v-.008Zm5.25 0h.008v.008h-.008v-.008Z"
+    />
+  </svg>
+);
+
+const SolidGhostIcon = ({ className, title, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden={title ? undefined : 'true'}
+    className={className}
+    {...props}
+  >
+    {title ? <title>{title}</title> : null}
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M12 2.25a8.25 8.25 0 0 0-8.25 8.25v9.75a.75.75 0 0 0 1.238.57l2.387-2.047 1.929 1.781a.75.75 0 0 0 1.017.001L12 18.77l1.679 1.786a.75.75 0 0 0 1.017-.001l1.929-1.781 2.387 2.046a.75.75 0 0 0 1.238-.569V10.5A8.25 8.25 0 0 0 12 2.25Zm-2.625 6.9a.975.975 0 1 0 0 1.95.975.975 0 0 0 0-1.95Zm5.25 0a.975.975 0 1 0 0 1.95.975.975 0 0 0 0-1.95Z"
+    />
+  </svg>
+);
+
 const iconMap = {
   arrowLeft: { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
   'arrow-right': { outline: ArrowRightIcon, solid: ArrowRightIcon },
@@ -206,6 +252,7 @@ const iconMap = {
   },
   'face-frown': { outline: OutlineFaceFrownIcon, solid: SolidFaceFrownIcon },
   format: { outline: Bars3Icon, solid: Bars3Icon },
+  ghost: { outline: OutlineGhostIcon, solid: SolidGhostIcon },
   'information-circle': {
     outline: OutlineInformationCircleIcon,
     solid: SolidInformationCircleIcon
