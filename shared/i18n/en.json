@@ -364,7 +364,7 @@
     "inputLabel": "Type your message",
     "clearInput": "Clear input",
     "ephemeral": {
-      "label": "Ephemeral chat",
+      "label": "Incognito mode",
       "enable": "Turn on ephemeral chat — messages are not saved",
       "disable": "Turn off ephemeral chat",
       "activeNotice": "Messages are not saved and disappear when you leave or reload."

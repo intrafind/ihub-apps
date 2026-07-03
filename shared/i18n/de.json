@@ -130,7 +130,7 @@
     "inputLabel": "Nachricht eingeben",
     "clearInput": "Eingabe löschen",
     "ephemeral": {
-      "label": "Flüchtiger Chat",
+      "label": "Inkognito-Modus",
       "enable": "Flüchtigen Chat aktivieren – Nachrichten werden nicht gespeichert",
       "disable": "Flüchtigen Chat deaktivieren",
       "activeNotice": "Nachrichten werden nicht gespeichert und verschwinden beim Verlassen oder Neuladen."

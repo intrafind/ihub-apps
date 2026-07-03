@@ -730,7 +730,7 @@ function ChatInput({
                 }`}
               >
                 <Icon name="ghost" size="sm" solid={ephemeral} />
-                <span>{t('chat.ephemeral.label', 'Ephemeral chat')}</span>
+                <span>{t('chat.ephemeral.label', 'Incognito mode')}</span>
               </button>
             )}
           </div>
