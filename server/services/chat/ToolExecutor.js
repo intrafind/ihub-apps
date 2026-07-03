@@ -85,21 +85,30 @@ class ToolExecutor {
    */
   getKnowledgeSources(chatId) {
     const toolSources = this.knowledgeSources.get(chatId);
+    // The internal streaming handler collects sources of its own during tool
+    // loops (e.g. 'grounding' from processGroundingMetadata) — merge them in
+    // so they aren't lost when this executor emits the answer-source event.
+    const handlerSources = this.streamingHandler.knowledgeSources.get(chatId);
     const promptSources = PromptService.getPromptSources(chatId);
 
-    // Combine both sources, using a Set to avoid duplicates
-    const combined = new Set([...(toolSources ? Array.from(toolSources) : []), ...promptSources]);
+    // Combine all sources, using a Set to avoid duplicates
+    const combined = new Set([
+      ...(toolSources ? Array.from(toolSources) : []),
+      ...(handlerSources ? Array.from(handlerSources) : []),
+      ...promptSources
+    ]);
 
     return Array.from(combined);
   }
 
   /**
    * Reset knowledge sources for a conversation
-   * Resets both tool-based and prompt-based sources
+   * Resets tool-based, handler-based and prompt-based sources
    * @param {string} chatId - The conversation/chat ID
    */
   resetKnowledgeSources(chatId) {
     this.knowledgeSources.delete(chatId);
+    this.streamingHandler.knowledgeSources.delete(chatId);
     PromptService.resetPromptSources(chatId);
   }
 
@@ -816,11 +825,16 @@ class ToolExecutor {
       );
     });
 
+    // Track on this executor's own map — getKnowledgeSources() reads
+    // this.knowledgeSources when emitting the answer-source event, so adding
+    // to the internal streamingHandler's map (as this used to) meant email
+    // and file sources were silently dropped for every app with tools and
+    // the client fell back to the "Based on AI knowledge" badge.
     if (hasEmailContext) {
-      this.streamingHandler.addKnowledgeSource(chatId, 'email');
+      this.addKnowledgeSource(chatId, 'email');
     }
     if (hasFileUploads) {
-      this.streamingHandler.addKnowledgeSource(chatId, 'file');
+      this.addKnowledgeSource(chatId, 'file');
     }
 
     // Debug: Log available tools and file data for workflow debugging
