@@ -31,22 +31,31 @@ export function useOutlookMailContextSnapshot() {
   const [includeBody, setIncludeBody] = useState(true);
   // Bumped by ItemChanged so the chat panel can reset its edit state too.
   const [generation, setGeneration] = useState(0);
-  const cancelRef = useRef({ cancelled: false });
+  // Monotonic sequence for context loads. A single click in Outlook fires
+  // both ItemChanged and SelectedItemsChanged (each dispatching
+  // 'ihub:itemchanged'), so loads overlap; only the newest one may publish
+  // its result. Without this, a slow load that started on the previous
+  // email resolves last and clobbers the fresh snapshot with stale
+  // attachments ("not part of this item" errors).
+  const loadSeqRef = useRef(0);
+  const reloadTimerRef = useRef(null);
 
   const hostKind = host?.kind;
 
   useEffect(() => {
-    cancelRef.current = { cancelled: false };
-    const localCancel = cancelRef.current;
+    let disposed = false;
 
     async function load() {
+      const seq = ++loadSeqRef.current;
       setState({ loading: true, ctx: null });
+      let ctx = null;
       try {
-        const ctx = await host.readMessageContext();
-        if (!localCancel.cancelled) setState({ loading: false, ctx });
+        ctx = await host.readMessageContext();
       } catch {
-        if (!localCancel.cancelled) setState({ loading: false, ctx: null });
+        ctx = null;
       }
+      if (disposed || seq !== loadSeqRef.current) return;
+      setState({ loading: false, ctx });
     }
 
     load();
@@ -55,12 +64,29 @@ export function useOutlookMailContextSnapshot() {
       setRemovedAttachmentIds(new Set());
       setIncludeBody(true);
       setGeneration(g => g + 1);
-      load();
+      // Supersede any in-flight load right away and show the loading state,
+      // but debounce the actual read: the second event of the double
+      // dispatch lands within milliseconds, and the short pause also gives
+      // the host time to finish swapping Office.context.mailbox.item.
+      loadSeqRef.current++;
+      setState({ loading: true, ctx: null });
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        reloadTimerRef.current = null;
+        load();
+      }, 150);
     }
 
     document.addEventListener('ihub:itemchanged', onItemChange);
     return () => {
-      localCancel.cancelled = true;
+      // `disposed` keeps every load started by this effect run from
+      // publishing; a re-run's own loads supersede them via the shared
+      // sequence ref.
+      disposed = true;
+      if (reloadTimerRef.current) {
+        clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = null;
+      }
       document.removeEventListener('ihub:itemchanged', onItemChange);
     };
     // host is a stable object from EmbeddedHostProvider; depend on kind so we

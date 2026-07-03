@@ -4,7 +4,17 @@ export default {
   extensionsToTreatAsEsm: ['.jsx'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    // Force a single React copy. Files under client/ resolve
+    // client/node_modules/react while the test renderer (@testing-library/react
+    // + react-dom from the root) would use the root copy — two React instances
+    // make every real client hook fail with "Invalid hook call". Pin to the
+    // CLIENT copy so tests exercise the same React major the shipped bundle
+    // is built with.
+    '^react$': '<rootDir>/client/node_modules/react',
+    '^react/(.*)$': '<rootDir>/client/node_modules/react/$1',
+    '^react-dom$': '<rootDir>/client/node_modules/react-dom',
+    '^react-dom/(.*)$': '<rootDir>/client/node_modules/react-dom/$1'
   },
   modulePaths: [
     '<rootDir>/node_modules',
