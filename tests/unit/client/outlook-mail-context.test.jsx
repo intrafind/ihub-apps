@@ -177,6 +177,49 @@ describe('fetchCurrentMailContext', () => {
     expect(ctx.attachments).toEqual([]);
   });
 
+  test('switch away and back mid-download retries instead of returning a truncated attachment list', async () => {
+    const itemB = makeMailItem({ itemId: 'B', subject: 'Mail B', bodyText: 'body of B' });
+    const itemA = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'body of A',
+      attachments: [
+        { id: 'a1', name: 'first.pdf' },
+        { id: 'a2', name: 'second.pdf' }
+      ]
+    });
+    // While a1's content arrives, the user flips to B and immediately back
+    // to A. The download loop aborts during the B interval, but by the time
+    // the post-read itemId check runs the live item is A again — without the
+    // aborted flag, a snapshot with only a1 missing-in-silence would be
+    // returned as intact.
+    const originalGetContent = itemA.getAttachmentContentAsync;
+    let flipped = false;
+    itemA.getAttachmentContentAsync = (id, cb) => {
+      if (id === 'a1' && !flipped) {
+        flipped = true;
+        setTimeout(() => {
+          global.Office.context.mailbox.item = itemB;
+          cb({ status: SUCCEEDED, value: { format: 'base64', content: 'CONTENT(a1)' } });
+          queueMicrotask(() => {
+            global.Office.context.mailbox.item = itemA;
+          });
+        }, 0);
+        return;
+      }
+      originalGetContent(id, cb);
+    };
+    Office.context.mailbox.item = itemA;
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.available).toBe(true);
+    expect(ctx.itemId).toBe('A');
+    expect(ctx.attachments).toHaveLength(2);
+    expect(ctx.attachments.map(a => a.id)).toEqual(['a1', 'a2']);
+    expect(ctx.attachments.every(a => a.content && !a.error)).toBe(true);
+  });
+
   test('still records per-attachment errors when the item is stable but the host rejects one id', async () => {
     const itemA = makeMailItem({
       itemId: 'A',

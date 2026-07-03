@@ -148,12 +148,20 @@ function getSubjectAsync(item) {
  * strip, chat adapter) can pick the right banner / prompt formatter.
  */
 export async function fetchCurrentOutlookItemContext() {
-  const itemType = getCurrentOutlookItemType();
-  if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
-    return fetchCurrentAppointmentContext();
-  }
-  const ctx = await fetchCurrentMailContext();
-  return { ...ctx, itemKind: 'message' };
+  // The itemType probe and both readers run under the mailbox lock: while a
+  // multi-select loadItemByIdAsync cycle is active, Office.context.mailbox.item
+  // is redirected to the loaded message, so probing outside the lock could
+  // classify a calendar item as mail (or hand the appointment reader a
+  // redirected item). Note fetchCurrentMailContextLocked is called directly —
+  // the public fetchCurrentMailContext would try to take the lock again.
+  return withMailboxLock(async () => {
+    const itemType = getCurrentOutlookItemType();
+    if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
+      return fetchCurrentAppointmentContext();
+    }
+    const ctx = await fetchCurrentMailContextLocked();
+    return { ...ctx, itemKind: 'message' };
+  });
 }
 
 // How often a snapshot read restarts against the new item before giving up
@@ -181,13 +189,15 @@ async function fetchCurrentMailContextLocked() {
     const item = Office.context.mailbox.item;
     const itemId = item.itemId ?? null;
 
-    const snapshot = await readMailSnapshot(item, itemId);
+    const { snapshot, aborted } = await readMailSnapshot(item, itemId);
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
     // (old descriptors, failed content fetches) must never be surfaced:
-    // restart against the item that is now selected.
-    if (getLiveItemId() !== itemId) continue;
+    // restart against the item that is now selected. The `aborted` flag
+    // covers the switch-away-and-back case, where the live itemId matches
+    // again by the time we check but the attachment list was cut short.
+    if (aborted || getLiveItemId() !== itemId) continue;
     return snapshot;
   }
 
@@ -211,6 +221,7 @@ async function readMailSnapshot(item, itemId) {
 
   const descriptors = getAttachmentDescriptors(item);
   const attachments = [];
+  let aborted = false;
 
   for (const d of descriptors) {
     if (!d.id) {
@@ -218,10 +229,15 @@ async function readMailSnapshot(item, itemId) {
       continue;
     }
     // Stop downloading as soon as the selection moves on — the caller
-    // detects the itemId mismatch and retries the whole snapshot, so
-    // finishing these fetches would only produce InvalidAttachmentId
-    // errors against the newly selected item.
-    if (getLiveItemId() !== itemId) break;
+    // retries the whole snapshot, so finishing these fetches would only
+    // produce InvalidAttachmentId errors against the newly selected item.
+    // The explicit flag matters for the switch-away-and-back case: the
+    // live itemId can match the capture again by the time the caller
+    // checks, but the attachment list would be silently truncated.
+    if (getLiveItemId() !== itemId) {
+      aborted = true;
+      break;
+    }
     try {
       const raw = await getAttachmentContentAsync(item, d.id);
       attachments.push({
@@ -240,11 +256,14 @@ async function readMailSnapshot(item, itemId) {
   }
 
   return {
-    available: true,
-    subject,
-    itemId,
-    bodyText,
-    attachments
+    snapshot: {
+      available: true,
+      subject,
+      itemId,
+      bodyText,
+      attachments
+    },
+    aborted
   };
 }
 
