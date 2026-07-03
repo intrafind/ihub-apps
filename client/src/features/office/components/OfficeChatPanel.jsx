@@ -27,7 +27,6 @@ import {
 } from '../utilities/buildChatApiMessages';
 import {
   fetchCurrentMailContext,
-  fetchCurrentOutlookItemContext,
   fetchSelectedItemsContext
 } from '../utilities/outlookMailContext';
 import {
@@ -115,14 +114,20 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   }, [mailSnapshot.includeBody, mailSnapshot.ctx, pinnedEmails]);
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and
-  // dedupe in the prompt builder.
-  const [currentItemId, setCurrentItemId] = useState(null);
-  // Tracks whether the current Outlook item is a calendar appointment so
-  // we can swap the starter-prompt set (and hide the pin-email controls,
-  // which don't apply to a single meeting). Re-checked on every
-  // ihub:itemchanged event so users moving between Inbox and Calendar see
-  // the right prompts without needing to reopen the taskpane.
-  const [isAppointment, setIsAppointment] = useState(() => isOutlookAppointmentMode());
+  // dedupe in the prompt builder. Derived from the snapshot hook — the
+  // single reader of the Outlook item on every ihub:itemchanged — instead
+  // of a second parallel fetch, so the pin state can never disagree with
+  // the banner about which email is open.
+  const currentItemId = mailSnapshot.ctx?.itemId ?? null;
+  // Whether the current Outlook item is a calendar appointment, used to
+  // swap the starter-prompt set and hide the pin-email controls (which
+  // don't apply to a single meeting). Comes from the snapshot's itemKind;
+  // while the snapshot is (re)loading we fall back to a cheap synchronous
+  // probe of the live item so users moving between Inbox and Calendar see
+  // the right prompts without waiting for the fetch.
+  const isAppointment = mailSnapshot.ctx
+    ? mailSnapshot.ctx.itemKind === 'appointment'
+    : isOutlookAppointmentMode();
   const multiSelectSupported = isMultiSelectBodySupported();
   // Incremented each time a message is sent (manual submit or starter prompt)
   // to trigger auto-collapse of the OfficeContextStrip, giving the user more
@@ -155,34 +160,19 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     pinnedEmailsRef.current = pinnedEmails;
   }, [pinnedEmails]);
 
-  // Track the currently-open email's itemId so the "Add this email" button
-  // can hide once the user has pinned it. Reading the id alone is cheap —
-  // we don't fetch the body here, that still happens lazily inside
-  // useOfficeChatAdapter.sendMessage. Refreshed on mount and whenever
-  // Outlook switches emails.
+  // Same for the adapter: useOfficeChatAdapter returns a fresh object every
+  // render, so depending on it directly would re-run the listener effect on
+  // every keystroke and streaming chunk. The previous version did exactly
+  // that AND ran a full mail fetch (including attachment downloads) per
+  // render, saturating the Office item API and widening the stale-snapshot
+  // race — the snapshot hook is the single item reader now.
+  const adapterRef = useRef(adapter);
   useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      // Re-detect appointment mode on every refresh so users moving
-      // between Inbox and Calendar see the right starter prompts and the
-      // pin-email toolbar stays hidden inside meeting items.
-      const apptMode = isOutlookAppointmentMode();
-      if (!cancelled) setIsAppointment(apptMode);
-      try {
-        // For appointments we only need the itemId to track changes —
-        // pulling the full mail context returns "not available". Use the
-        // unified reader so we never miss the calendar item.
-        const ctx = apptMode
-          ? await fetchCurrentOutlookItemContext()
-          : await fetchCurrentMailContext();
-        if (!cancelled) setCurrentItemId(ctx?.itemId ?? null);
-      } catch {
-        if (!cancelled) setCurrentItemId(null);
-      }
-    };
-    refresh();
+    adapterRef.current = adapter;
+  });
+
+  useEffect(() => {
     const handler = () => {
-      refresh();
       // Pinned emails are the whole point of the feature, so they must
       // survive ItemChanged. We only reset the chat history (and the
       // staged input) when the user has nothing pinned — otherwise we'd
@@ -190,16 +180,15 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       if (pinnedEmailsRef.current.length === 0) {
         chatIdRef.current = `office-${uuidv4()}`;
         selectedStarterPromptRef.current = null;
-        adapter.clearMessages();
+        adapterRef.current.clearMessages();
         setInputValue('');
       }
     };
     document.addEventListener('ihub:itemchanged', handler);
     return () => {
-      cancelled = true;
       document.removeEventListener('ihub:itemchanged', handler);
     };
-  }, [adapter]);
+  }, []);
 
   const handleUnpin = useCallback(itemId => {
     setPinnedEmails(prev => {
