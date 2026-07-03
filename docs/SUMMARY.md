@@ -5,6 +5,7 @@
   - [Admin UI Guide](admin-ui.md)
   - [Architecture Overview](architecture.md)
   - [Configuration]()
+    - [Customizing iHub Apps](customization.md)
     - [App Configuration](apps.md)
     - [Custom Response Renderers](custom-renderers.md)
     - [Models](models.md)
