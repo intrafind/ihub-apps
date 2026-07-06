@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import { sendMessageFeedback } from '../../../api/api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
@@ -120,11 +119,6 @@ function ChatMessage({
   // This survives re-renders and component unmounting/remounting
   const customRendererFromMessage = message.customResponseRenderer;
   const outputFormatFromMessage = message.outputFormat;
-
-  // Configure marked renderer and copy buttons
-  useEffect(() => {
-    configureMarked();
-  }, []);
 
   // Close copy menu on outside click
   useEffect(() => {

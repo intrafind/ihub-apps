@@ -9,9 +9,7 @@
  */
 
 import { saveAs } from 'file-saver';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import { renderMarkdown } from '../../../config/marked.config';
 
 /**
  * Fetch the artifact's raw text via authenticated request.
@@ -67,8 +65,7 @@ export async function downloadAsMarkdown(runId, artifactName) {
  */
 export async function downloadAsHTML(runId, artifactName) {
   const text = await fetchArtifactText(runId, artifactName);
-  configureMarked();
-  const body = DOMPurify.sanitize(marked(text || ''));
+  const body = renderMarkdown(text || '');
   const title = baseNameWithoutMd(artifactName);
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -102,8 +99,7 @@ ${body}
  */
 export async function printAsPDF(runId, artifactName) {
   const text = await fetchArtifactText(runId, artifactName);
-  configureMarked();
-  const body = DOMPurify.sanitize(marked(text || ''));
+  const body = renderMarkdown(text || '');
   const title = baseNameWithoutMd(artifactName);
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';

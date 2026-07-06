@@ -1,4 +1,5 @@
-import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { Marked, Renderer } from 'marked';
 import {
   getLanguageDisplayName,
   isMermaidLanguage,
@@ -27,8 +28,10 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-export const configureMarked = t => {
-  const renderer = new marked.Renderer();
+const escapeHtml = text => String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const createRenderer = t => {
+  const renderer = new Renderer();
 
   // --- Code Renderer ---
   renderer.code = (code, language) => {
@@ -57,9 +60,20 @@ export const configureMarked = t => {
     const displayLanguage = getLanguageDisplayName(lang);
 
     // Use the original highlighted code from marked
-    const highlightedCode = marked.defaults.highlight
-      ? marked.defaults.highlight(actualCode, lang)
-      : actualCode.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightedCode =
+      typeof window !== 'undefined' && lang && window.hljs && window.hljs.getLanguage(lang)
+        ? (() => {
+            try {
+              return window.hljs.highlight(actualCode, {
+                language: lang,
+                ignoreIllegals: true
+              }).value;
+            } catch (e) {
+              console.error('Highlight.js error:', e);
+              return escapeHtml(actualCode);
+            }
+          })()
+        : escapeHtml(actualCode);
 
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
@@ -139,28 +153,36 @@ export const configureMarked = t => {
     return `<a href="${actualHref}"${titleAttr}${targetAttr}>${text}</a>`;
   };
 
-  marked.setOptions({
+  return renderer;
+};
+
+const createMarked = t =>
+  new Marked({
     gfm: true,
     breaks: true,
     headerIds: true,
     mangle: false,
     pedantic: false,
-    sanitize: false, // IMPORTANT: Ensure your markdown source is trusted
     smartLists: true,
     smartypants: false,
     xhtml: false,
-    renderer: renderer,
-    highlight: (code, lang) => {
-      // Use a global hljs instance if available
-      if (lang && window.hljs && window.hljs.getLanguage(lang)) {
-        try {
-          return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-        } catch (e) {
-          console.error('Highlight.js error:', e);
-        }
-      }
-      // Fallback to no highlighting
-      return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+    renderer: createRenderer(t)
   });
+
+export const renderMarkdown = (markdown, options = {}) => {
+  const { t, transformHtml, sanitizeOptions } = options;
+  const source = markdown == null ? '' : String(markdown);
+
+  try {
+    const marked = createMarked(t);
+    const html = marked.parse(source);
+    const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
+    return DOMPurify.sanitize(transformedHtml, sanitizeOptions);
+  } catch (error) {
+    console.error('Error rendering markdown:', error);
+    return DOMPurify.sanitize(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+  }
 };
+
+// Backward-compatible no-op: markdown rendering no longer mutates global marked state.
+export const configureMarked = () => {};
