@@ -349,6 +349,7 @@ class StreamingHandler {
             { timeout: DEFAULT_TIMEOUT / 1000 },
             clientLanguage
           );
+          errorEmitted = true;
           actionTracker.trackError(chatId, { message: errorMessage });
           activeRequests.delete(chatId);
         }
@@ -358,6 +359,11 @@ class StreamingHandler {
 
     let doneEmitted = false;
     let finishReason = null;
+    // Set whenever an error is surfaced to the client (stream error, non-OK
+    // response, exception, timeout/abort). The finally block reads it so it does
+    // not stamp a "Based on uploaded file/email" answer-source badge onto an
+    // error bubble — sources are still cleared on every path regardless.
+    let errorEmitted = false;
     // Declared up here so the finally block can read accumulated streaming usage
     // for telemetry span/metric finalization.
     let accumulatedUsage = null;
@@ -414,6 +420,7 @@ class StreamingHandler {
           });
         }
 
+        errorEmitted = true;
         actionTracker.trackError(chatId, {
           message: errorInfo.message,
           code: errorInfo.code,
@@ -474,6 +481,7 @@ class StreamingHandler {
               response: fullResponse
             })
           );
+          errorEmitted = true;
           actionTracker.trackError(chatId, {
             message: result.errorMessage || 'Error processing response'
           });
@@ -514,6 +522,10 @@ class StreamingHandler {
       }
     } catch (error) {
       clearTimeout(timeoutId);
+      // Any thrown path (stream exception, timeout/client abort, provider
+      // failure) surfaces as an error/aborted turn — don't stamp an answer
+      // source badge in the finally below.
+      errorEmitted = true;
 
       // End telemetry span with error
       if (instrumentation && llmSpan) {
@@ -593,8 +605,12 @@ class StreamingHandler {
         // The stream ended without a clean 'complete' chunk (connection closed,
         // timeout, abort, or a provider that never signalled completion). Emit
         // the answer-source badge here too so uploads/email context are still
-        // attributed instead of falling back to "Based on AI knowledge".
-        this.finalizeAnswerSource(chatId);
+        // attributed instead of falling back to "Based on AI knowledge" — but
+        // NOT when an error was surfaced, since the assistant bubble is then an
+        // error message and a "Based on uploaded file" badge there is misleading.
+        if (!errorEmitted) {
+          this.finalizeAnswerSource(chatId);
+        }
         const finalFinishReason = finishReason || 'connection_closed';
         actionTracker.trackDone(chatId, { finishReason: finalFinishReason });
       }
