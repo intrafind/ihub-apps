@@ -15,22 +15,22 @@ cross-tab orchestration.
 ```
 browser-extension/
 ├── manifest.json        Manifest V3 manifest
-├── background.js        Service worker — OAuth, token storage, API forwarding
-├── sidepanel.html       Side panel root
-├── sidepanel.js         Side panel UI (vanilla JS, no build step)
-├── sidepanel.css        Styling
-├── options.html         Settings page (set iHub base URL, sign in/out)
-├── options.js
+├── background.js        Service worker — opens the side panel on toolbar click
+├── extension/           React app built by Vite from client/extension/
+│   ├── sidepanel.html   Side panel root (entry point for the React app)
+│   ├── sidepanel.js     Bundled React side-panel UI
+│   ├── options.html     Settings page (set iHub base URL, sign in/out)
+│   └── options.js       Bundled React options UI
 ├── icons/               16/48/128 PNG icons
 └── README.md            (this file)
 ```
 
-The package is dependency-free. Page text is extracted with a small
-self-contained reader (article / main / body fallback) executed in the
-content world via `chrome.scripting.executeScript`. To upgrade to Mozilla
-Readability later, vendor `@mozilla/readability/Readability.js` next to
-`background.js` and replace the `extractPageInPage` function with one that
-runs Readability on a `document.cloneNode(true)`.
+The side-panel and options pages are React apps built by Vite from
+`client/extension/sidepanel-entry.jsx` and `client/extension/options-entry.jsx`.
+Run `npm run extension:build` (from the repository root) to populate the
+`extension/` subdirectory before loading the extension. Page text is extracted
+with a small self-contained reader (article / main / body fallback) executed
+in the content world via `chrome.scripting.executeScript`.
 
 ## Server side
 
@@ -54,11 +54,16 @@ of the listed groups sees a clear access-denied page during sign-in.
 
 ## Loading the extension (Chrome / Edge)
 
-1. Visit `chrome://extensions` (or `edge://extensions`) and enable
+1. Build the extension assets (required before first load and after any
+   React code changes):
+   ```
+   npm run extension:build
+   ```
+2. Visit `chrome://extensions` (or `edge://extensions`) and enable
    **Developer mode**.
-2. Click **Load unpacked** and pick the `browser-extension/` directory.
-3. Note the **extension ID** Chrome assigns and copy it.
-4. In iHub admin, open **Browser Extension** and:
+3. Click **Load unpacked** and pick the `browser-extension/` directory.
+4. Note the **extension ID** Chrome assigns and copy it.
+5. In iHub admin, open **Browser Extension** and:
    - Click **Enable** if you haven't already (this auto-creates the
      OAuth client).
    - Paste the extension ID into the **Extension IDs** box and **Save**.
@@ -67,9 +72,9 @@ of the listed groups sees a clear access-denied page during sign-in.
      `https://<id>.extensions.allizom.org/cb` on the OAuth client.
    - Add eligible users to the **browser-extension** group (or whichever groups
      you listed under **Allowed Groups**).
-5. Click the iHub icon in the toolbar to open the side panel, then
+6. Click the iHub icon in the toolbar to open the side panel, then
    click the gear in the side panel header to set the iHub base URL.
-6. Click **Sign in**. Chrome opens a tab against
+7. Click **Sign in**. Chrome opens a tab against
    `${baseUrl}/api/oauth/authorize`; on success the extension stores
    tokens and the side panel switches to the main view.
 
@@ -86,17 +91,20 @@ of the listed groups sees a clear access-denied page during sign-in.
 
 ## Privacy & security model
 
-- **Tokens never leave the service worker.** The side panel and content
-  script always go through the worker via `chrome.runtime` messages.
-  Refresh tokens live in `chrome.storage.local` (encrypted at rest by
-  the OS keychain on Chrome 122+); access tokens live in
-  `chrome.storage.session` and are cleared on browser restart.
+- **Tokens are managed by the React side panel.** The side panel app
+  (`client/extension/sidepanel-entry.jsx`) makes its own `fetch` calls
+  directly to the iHub server (OAuth token exchange, `/api/apps`,
+  `/api/apps/{id}/chat/{cid}`). Refresh tokens live in
+  `chrome.storage.local` (encrypted at rest by the OS keychain on
+  Chrome 122+); access tokens live in `chrome.storage.session` and are
+  cleared on browser restart. The service worker's only job is to open
+  the side panel on toolbar click.
 - **Page content is sent only on explicit user action.** No background
   scraping, no telemetry, no idle requests.
-- **No host permissions at install time.** The extension uses
-  `activeTab` + on-demand `scripting.executeScript`, so it only touches
-  a page when the user clicks. The user grants per-site access via the
-  `optional_host_permissions` flow if needed.
+- **`<all_urls>` host permission is declared in the manifest.** This is
+  required so the React side panel can reach any user-configured iHub
+  server URL. The extension only contacts the URL the user enters in the
+  settings page, and only when the user triggers an action.
 - **Self-hosted iHub URL.** The extension stores the user-entered base
   URL and rejects anything that doesn't begin with `http://` or
   `https://`. The runtime config endpoint is fetched without
