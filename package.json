@@ -145,7 +145,7 @@
     "@testing-library/user-event": "^14.5.2",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
-    "electron": "^42.5.0",
+    "electron": "^42.5.2",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
