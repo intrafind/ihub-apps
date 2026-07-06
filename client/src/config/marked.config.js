@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import { Marked, Renderer } from 'marked';
 import {
+  escapeHtml,
   getLanguageDisplayName,
   isMermaidLanguage,
   generateId,
@@ -28,7 +29,26 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-const escapeHtml = text => String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const highlightCode = (code, lang) => {
+  if (
+    typeof window !== 'undefined' &&
+    lang &&
+    window.hljs &&
+    typeof window.hljs.getLanguage === 'function' &&
+    window.hljs.getLanguage(lang)
+  ) {
+    try {
+      return window.hljs.highlight(code, {
+        language: lang,
+        ignoreIllegals: true
+      }).value;
+    } catch (e) {
+      console.error('Highlight.js error:', e);
+    }
+  }
+
+  return escapeHtml(code);
+};
 
 const createRenderer = t => {
   const renderer = new Renderer();
@@ -60,20 +80,7 @@ const createRenderer = t => {
     const displayLanguage = getLanguageDisplayName(lang);
 
     // Use the original highlighted code from marked
-    const highlightedCode =
-      typeof window !== 'undefined' && lang && window.hljs && window.hljs.getLanguage(lang)
-        ? (() => {
-            try {
-              return window.hljs.highlight(actualCode, {
-                language: lang,
-                ignoreIllegals: true
-              }).value;
-            } catch (e) {
-              console.error('Highlight.js error:', e);
-              return escapeHtml(actualCode);
-            }
-          })()
-        : escapeHtml(actualCode);
+    const highlightedCode = highlightCode(actualCode, lang);
 
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
@@ -169,12 +176,43 @@ const createMarked = t =>
     renderer: createRenderer(t)
   });
 
+const markedInstanceByTranslator = new WeakMap();
+let defaultMarkedInstance = null;
+
+// Cache parser instances by translation function so repeated renders avoid
+// rebuilding renderers. WeakMap ensures stale translator functions can be GC'd.
+// `defaultMarkedInstance` is used for call sites that don't pass `t`.
+const getMarkedInstance = t => {
+  if (typeof t === 'function') {
+    if (!markedInstanceByTranslator.has(t)) {
+      markedInstanceByTranslator.set(t, createMarked(t));
+    }
+    return markedInstanceByTranslator.get(t);
+  }
+
+  if (!defaultMarkedInstance) {
+    defaultMarkedInstance = createMarked();
+  }
+  return defaultMarkedInstance;
+};
+
+/**
+ * Render markdown to sanitized HTML using an isolated Marked instance.
+ *
+ * @param {string} markdown - Markdown source string.
+ * @param {Object} [options] - Optional rendering behavior.
+ * @param {Function} [options.t] - Translation function for renderer labels.
+ * @param {Function} [options.transformHtml] - Optional post-parse HTML transform.
+ *   The transformed HTML is still sanitized by DOMPurify afterwards.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @returns {string} Sanitized HTML string.
+ */
 export const renderMarkdown = (markdown, options = {}) => {
   const { t, transformHtml, sanitizeOptions } = options;
-  const source = markdown == null ? '' : String(markdown);
+  const source = String(markdown ?? '');
 
   try {
-    const marked = createMarked(t);
+    const marked = getMarkedInstance(t);
     const html = marked.parse(source);
     const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
     return DOMPurify.sanitize(transformedHtml, sanitizeOptions);

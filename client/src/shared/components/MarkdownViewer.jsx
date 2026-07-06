@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { renderMarkdown } from '../../config/marked.config';
+import { escapeHtml } from '../../utils/markdownHelpers';
 import MarkdownDownloadMenu from './MarkdownDownloadMenu';
 
 /**
@@ -21,7 +22,7 @@ function MarkdownViewer({ content, name, onClose }) {
     try {
       return renderMarkdown(content || '');
     } catch {
-      return renderMarkdown((content || '').toString());
+      return `<pre>${escapeHtml(content || '')}</pre>`;
     }
   }, [content]);
 

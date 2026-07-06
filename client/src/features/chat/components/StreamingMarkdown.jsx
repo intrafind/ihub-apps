@@ -46,10 +46,11 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
 
     if (contentChanged || needsCitationTransform) {
       try {
+        const transformHtml = hasCitations ? transformCitations : undefined;
         const parsedContent = renderMarkdown(content, {
-          transformHtml: hasCitations ? transformCitations : undefined
+          transformHtml
         });
-        if (hasCitations) {
+        if (transformHtml) {
           citationsAppliedRef.current = true;
         }
         setHtmlContent(parsedContent);
