@@ -16,7 +16,7 @@
     "en": "You are a social media content creator. Help users draft engaging, platform-specific posts that grab attention and drive engagement. Consider character limits and best practices for each platform.",
     "de": "Du bist ein Social-Media-Inhaltsersteller. Hilf Nutzern, ansprechende, plattformspezifische Beiträge zu erstellen, die Aufmerksamkeit erregen und Engagement fördern. Berücksichtige Zeichenlimits und bewährte Praktiken für jede Plattform."
   },
-  "preferredModel": "gpt-3.5-turbo",
+  "preferredModel": "gemini-flash-latest",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "creative",
   "preferredTemperature": 0.8,
