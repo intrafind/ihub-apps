@@ -7,6 +7,35 @@
  */
 
 /**
+ * Known top-level React Router routes — these are app routes, not deployment subpaths.
+ *
+ * ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this list!
+ * Also update the matching array in client/index.html for consistency.
+ *
+ * Failure to keep this list in sync will cause base path detection to fail for subpath
+ * deployments (e.g. /ihub/forbidden would incorrectly be detected as the base path
+ * instead of /ihub).
+ */
+export const KNOWN_ROUTES = [
+  'apps', // App listing and individual app routes
+  'admin', // Admin panel and all admin sub-routes
+  'login', // Standalone login page
+  'pages', // Dynamic content pages
+  'prompts', // Prompts listing
+  'settings', // Settings pages (integrations, etc.)
+  'teams', // Microsoft Teams embed routes
+  'workflows', // Workflow management and execution
+  's', // Short-link redirect (server-side, same base path)
+  'setup', // First-run setup wizard
+  'tools', // Tool pages (AI OCR, etc.)
+  'office', // Office add-in pages (served by server at /office/*)
+  'nextcloud', // Nextcloud embed pages (served by server at /nextcloud/*)
+  'unauthorized', // 401 / insufficient-permissions error page
+  'forbidden', // 403 forbidden error page
+  'server-error' // 500 server error page
+];
+
+/**
  * Detect the base path from the current window location
  * This works by finding where the app is served from
  * @returns {string} The detected base path (e.g., "", "/ihub", "/tools/ai")
@@ -27,36 +56,6 @@ export const detectBasePath = () => {
   // Remove any trailing /index.html or just trailing slash
   const cleanPath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
 
-  // Known React routes - these are app routes, not deployment subpaths
-  //
-  // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
-  // Also update the matching array in index.html for consistency.
-  // This includes any new routes like:
-  // - New feature routes (e.g., /reports, /analytics)
-  // - New page routes (e.g., /help, /docs)
-  // - New API endpoint prefixes that need special handling
-  //
-  // Failure to update this array will cause base path detection to fail for subpath
-  // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
-  // instead of /ihub).
-  const knownRoutes = [
-    'apps', // App listing and individual app routes
-    'admin', // Admin panel routes
-    'auth', // Authentication routes
-    'login', // Login page
-    'chat', // Direct chat routes
-    'pages', // Dynamic pages
-    'prompts', // Prompts listing
-    'settings', // Settings pages (integrations, etc.)
-    'teams', // Microsoft Teams routes
-    'workflows', // Workflow management and execution
-    's', // Short links
-    'setup', // First-run setup wizard
-    'tools', // Tool pages (AI OCR, etc.)
-    'office', // Office add-in pages
-    'nextcloud' // Nextcloud embed pages
-  ];
-
   // Split path into segments and find the first known route
   // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
   // vs /ihub/admin/apps (route 'admin' at segment 1, base path is '/ihub')
@@ -65,7 +64,7 @@ export const detectBasePath = () => {
   // Find the index of the first segment that matches a known route
   let routeSegmentIndex = -1;
   for (let i = 0; i < segments.length; i++) {
-    if (knownRoutes.includes(segments[i])) {
+    if (KNOWN_ROUTES.includes(segments[i])) {
       routeSegmentIndex = i;
       break;
     }
@@ -122,24 +121,7 @@ export const getBasePath = () => {
     const currentPath = window.location.pathname;
 
     // Check if cached base path is actually a known route (invalid - routes are not base paths)
-    const knownRoutes = [
-      'apps',
-      'admin',
-      'auth',
-      'login',
-      'chat',
-      'pages',
-      'prompts',
-      'settings',
-      'teams',
-      'workflows',
-      's',
-      'setup',
-      'tools',
-      'office',
-      'nextcloud'
-    ];
-    const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
+    const isKnownRoute = KNOWN_ROUTES.some(route => basePath === '/' + route);
 
     if (isKnownRoute) {
       // Cached base path is a React route, not a deployment path - invalid!
