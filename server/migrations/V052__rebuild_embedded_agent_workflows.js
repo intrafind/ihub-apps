@@ -53,6 +53,7 @@ export const version = '052';
 export const description = 'rebuild_embedded_agent_workflows';
 
 // ─── Snapshot of profileWorkflowSerializer.js (as of V052) ──────────────────
+// Captured: 2026-07-06
 // All helpers below are copied verbatim from the live serialiser at the time
 // this migration was written. They must NOT be replaced with an import so that
 // future changes to the serialiser do not alter what this migration produces on
@@ -307,10 +308,10 @@ const DEFAULT_REVIEWER_PROMPT = {
     'JSON shape specified in the system prompt.'
 };
 
-// pickModel — simplified for migration context: configCache is not available
-// here (it initialises after migrations run). Return profile.preferredModel
-// when set; otherwise null. Node configs that omit a modelId will fall back to
-// the server's runtime default when the workflow actually executes.
+// Simplified for migration: returns preferredModel or null.
+// configCache is unavailable at migration time — it initialises after
+// migrations run. Nodes that omit a modelId fall back to the server's
+// runtime default when the workflow actually executes.
 function _v052_pickModel(profile) {
   return profile.preferredModel || null;
 }
