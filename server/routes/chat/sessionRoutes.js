@@ -480,8 +480,6 @@ export default function registerSessionRoutes(
     clientLanguage,
     user
   }) {
-    const {} = prep;
-
     // Log the request
     const requestLog = buildLogData(streaming);
     await logInteraction('chat_request', requestLog);
