@@ -62,3 +62,13 @@ limit — silently fell back to "Based on AI knowledge" even though a file or em
   same conversation can no longer inherit a stale badge.
 - On error/aborted turns the badge is intentionally not shown, since the assistant bubble is an
   error message rather than a real answer.
+
+## Admin Saves Now Respect `CONTENTS_DIR` Everywhere
+
+Admin write operations now consistently use the configured `CONTENTS_DIR` path, so edits are saved
+to the same location the runtime reads from.
+
+- Updates in Admin Apps, Models, Prompts, Groups, Tools, Auth, UI, Sources, and Platform Config now
+  target the configured contents directory instead of hardcoded `contents/`.
+- Backup export/import now resolves the active contents directory correctly in packaged and custom
+  deployment setups.

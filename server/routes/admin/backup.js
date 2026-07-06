@@ -3,22 +3,23 @@ import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import archiver from 'archiver';
 import yauzl from 'yauzl';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 // Define the contents directory path
-const contentsPath = path.join(__dirname, '../../../contents');
+const contentsPath = getContentsPath();
+const contentsDirName = path.basename(contentsPath);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Get all files recursively from a directory
@@ -73,7 +74,7 @@ function extractZip(zipPath, extractPath) {
       // base directory, so the contents/ base must exist before we start
       // validating entries — otherwise every entry is rejected as a path
       // traversal and the import silently extracts nothing.
-      const contentsBase = path.join(extractPath, 'contents');
+      const contentsBase = path.join(extractPath, contentsDirName);
       try {
         await ensureDir(contentsBase);
       } catch (mkdirErr) {
@@ -82,6 +83,9 @@ function extractZip(zipPath, extractPath) {
       }
 
       let extractedCount = 0;
+      const backupContentsEntryPattern = new RegExp(
+        `(?:^|.*\\/)${escapeRegExp(contentsDirName)}\\/(.+)$`
+      );
 
       zipfile.readEntry();
 
@@ -107,7 +111,7 @@ function extractZip(zipPath, extractPath) {
         }
 
         // Check if this is a contents file (either direct contents/ or nested */contents/)
-        const contentsMatch = entry.fileName.match(/(?:^|.*\/)contents\/(.+)$/);
+        const contentsMatch = entry.fileName.match(backupContentsEntryPattern);
         if (!contentsMatch) {
           logger.info('Skipping non-contents file', {
             component: 'AdminBackup',
@@ -207,7 +211,7 @@ export async function exportConfig(req, res) {
     for (const filePath of allFiles) {
       try {
         // Get relative path from project root
-        const relativePath = path.relative(path.join(contentsPath, '../'), filePath);
+        const relativePath = path.relative(path.dirname(contentsPath), filePath);
 
         // Debug logging
         logger.info('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
@@ -287,9 +291,9 @@ export async function importConfig(req, res) {
     });
 
     // Verify the ZIP actually contained contents/ files
-    const extractedContentsPath = path.join(tempExtractPath, 'contents');
+    const extractedContentsPath = path.join(tempExtractPath, contentsDirName);
     if (extractedCount === 0) {
-      return sendBadRequest(res, 'Invalid backup file: No contents directory found');
+      return sendBadRequest(res, `Invalid backup file: No ${contentsDirName} directory found`);
     }
 
     // Get backup metadata if available
@@ -309,7 +313,7 @@ export async function importConfig(req, res) {
     const backupTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const currentBackupPath = path.join(
       path.dirname(contentsPath),
-      `contents-backup-${backupTimestamp}`
+      `${contentsDirName}-backup-${backupTimestamp}`
     );
 
     logger.info('Creating backup of current configuration', {

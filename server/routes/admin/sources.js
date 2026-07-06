@@ -1,6 +1,4 @@
 import crypto from 'crypto';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
@@ -16,6 +14,7 @@ import {
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -2026,7 +2025,7 @@ export default function registerAdminSourcesRoutes(app) {
  * @param {Array} sources - Array of source configurations
  */
 async function saveSourcesConfig(sources) {
-  const sourcesPath = join(getRootDir(), 'contents', 'config', 'sources.json');
+  const sourcesPath = getContentsPath('config', 'sources.json');
 
   // Validate entire array
   const validation = validateSourcesArray(sources);
