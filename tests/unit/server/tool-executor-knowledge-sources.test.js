@@ -66,6 +66,25 @@ jest.mock('../../../server/usageTracker.js', () => ({
 }));
 
 import ToolExecutor from '../../../server/services/chat/ToolExecutor.js';
+import { actionTracker } from '../../../server/actionTracker.js';
+
+/**
+ * Capture the answer-source events emitted on the actionTracker's SSE channel
+ * while running `fn`. Returns the array of emitted `answer.source` payloads.
+ */
+function captureAnswerSourceEvents(fn) {
+  const events = [];
+  const listener = e => {
+    if (e && e.event === 'answer.source') events.push(e);
+  };
+  actionTracker.on('fire-sse', listener);
+  try {
+    fn();
+  } finally {
+    actionTracker.off('fire-sse', listener);
+  }
+  return events;
+}
 
 describe('ToolExecutor knowledge-source bookkeeping', () => {
   it('emits sources registered on the executor itself (email/file detection path)', () => {
@@ -109,5 +128,48 @@ describe('ToolExecutor knowledge-source bookkeeping', () => {
 
     expect(executor.getKnowledgeSources('chat-1')).toEqual([]);
     expect(executor.streamingHandler.knowledgeSources.has('chat-1')).toBe(false);
+  });
+});
+
+/**
+ * finalizeAnswerSource() is the single choke point every terminal path in the
+ * tool loop (final answer, passthrough tool, max iterations) now calls. It must
+ * emit the badge exactly once when sources exist and always clear the maps so a
+ * later turn on the same chatId does not inherit stale sources. This is the
+ * contract that stops the "Based on AI knowledge" badge from silently dropping.
+ */
+describe('ToolExecutor.finalizeAnswerSource', () => {
+  it('emits one answer-source event with the collected sources, then clears them', () => {
+    const executor = new ToolExecutor();
+    executor.addKnowledgeSource('chat-fin', 'file');
+    executor.streamingHandler.addKnowledgeSource('chat-fin', 'grounding');
+
+    const events = captureAnswerSourceEvents(() => executor.finalizeAnswerSource('chat-fin'));
+
+    expect(events).toHaveLength(1);
+    expect(events[0].sources.sort()).toEqual(['file', 'grounding']);
+    expect(events[0].type).toBe('mixed');
+    // Sources are cleared so the next turn on this chatId starts fresh.
+    expect(executor.getKnowledgeSources('chat-fin')).toEqual([]);
+    expect(executor.streamingHandler.knowledgeSources.has('chat-fin')).toBe(false);
+  });
+
+  it('does not emit an answer-source event when no sources were recorded', () => {
+    const executor = new ToolExecutor();
+
+    const events = captureAnswerSourceEvents(() => executor.finalizeAnswerSource('chat-none'));
+
+    expect(events).toHaveLength(0);
+  });
+
+  it('is idempotent — a second call does not re-emit a stale source', () => {
+    const executor = new ToolExecutor();
+    executor.addKnowledgeSource('chat-twice', 'file');
+
+    const first = captureAnswerSourceEvents(() => executor.finalizeAnswerSource('chat-twice'));
+    const second = captureAnswerSourceEvents(() => executor.finalizeAnswerSource('chat-twice'));
+
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(0);
   });
 });

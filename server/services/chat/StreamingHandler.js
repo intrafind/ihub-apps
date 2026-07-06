@@ -124,6 +124,26 @@ class StreamingHandler {
   }
 
   /**
+   * Emit the accumulated answer-source ("knowledge") event for this turn and
+   * then clear the per-chat bookkeeping.
+   *
+   * Safe to call on EVERY terminal path: it only emits when at least one
+   * source was recorded, and resetting is idempotent. Centralizing this here
+   * (instead of inlining the emit at a single completion branch) prevents the
+   * recurring "Based on AI knowledge" regression where a newly added
+   * completion path forgot to emit the badge — and guarantees sources never
+   * leak into the next turn on the same chatId.
+   * @param {string} chatId - The conversation/chat ID
+   */
+  finalizeAnswerSource(chatId) {
+    const sources = this.getKnowledgeSources(chatId);
+    if (sources.length > 0) {
+      actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+    }
+    this.resetKnowledgeSources(chatId);
+  }
+
+  /**
    * Convert response body to Web Streams ReadableStream
    * Handles compatibility between native fetch (Web Streams) and node-fetch (Node.js streams)
    * @param {Response} response - The fetch response object
@@ -466,15 +486,12 @@ class StreamingHandler {
         }
 
         if (result.complete) {
-          const sources = this.getKnowledgeSources(chatId);
-          if (sources.length > 0) {
-            actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
-          }
+          // Emit the answer-source badge before 'done' so the client attaches
+          // it to the message. finalizeAnswerSource() also clears the sources.
+          this.finalizeAnswerSource(chatId);
 
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           doneEmitted = true;
-
-          this.resetKnowledgeSources(chatId);
 
           await logInteraction(
             'chat_response',
@@ -573,9 +590,17 @@ class StreamingHandler {
     } finally {
       clearTimeout(timeoutId);
       if (!doneEmitted) {
+        // The stream ended without a clean 'complete' chunk (connection closed,
+        // timeout, abort, or a provider that never signalled completion). Emit
+        // the answer-source badge here too so uploads/email context are still
+        // attributed instead of falling back to "Based on AI knowledge".
+        this.finalizeAnswerSource(chatId);
         const finalFinishReason = finishReason || 'connection_closed';
         actionTracker.trackDone(chatId, { finishReason: finalFinishReason });
       }
+      // Defensive: guarantee no source bookkeeping leaks into the next turn on
+      // this chatId, regardless of which path completed the stream (idempotent).
+      this.resetKnowledgeSources(chatId);
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }

@@ -113,6 +113,25 @@ class ToolExecutor {
   }
 
   /**
+   * Emit the accumulated answer-source ("knowledge") event for this turn and
+   * then clear the per-chat bookkeeping.
+   *
+   * Safe to call on EVERY terminal path: it only emits when at least one
+   * source was recorded, and resetting is idempotent. The tool loop has
+   * several exit points (final answer, passthrough tool, max iterations) — each
+   * must finalize the source, otherwise the answer silently falls back to
+   * "Based on AI knowledge" and stale sources leak into the next turn.
+   * @param {string} chatId - The conversation/chat ID
+   */
+  finalizeAnswerSource(chatId) {
+    const sources = this.getKnowledgeSources(chatId);
+    if (sources.length > 0) {
+      actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+    }
+    this.resetKnowledgeSources(chatId);
+  }
+
+  /**
    * Check if a tool is the ask_user clarification tool
    * @param {string} toolId - Tool identifier
    * @param {Array} _tools - Available tools array (unused, for interface consistency)
@@ -1395,11 +1414,8 @@ class ToolExecutor {
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
 
-          // Emit answer source information before done event
-          const sources = this.getKnowledgeSources(chatId);
-          if (sources.length > 0) {
-            actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
-          }
+          // Emit answer source information before done event (also resets it)
+          this.finalizeAnswerSource(chatId);
 
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
@@ -1412,9 +1428,6 @@ class ToolExecutor {
           if (activeRequests.get(chatId) === controller) {
             activeRequests.delete(chatId);
           }
-
-          // Reset knowledge sources after emitting
-          this.resetKnowledgeSources(chatId);
 
           return; // Exit the loop, we have the final response
         }
@@ -1457,6 +1470,11 @@ class ToolExecutor {
               clarificationData: toolResult.clarificationData
             });
 
+            // Not a final answer (the turn pauses for user input), so don't emit
+            // an answer source — but clear the bookkeeping so it can't leak into
+            // the follow-up turn on this chatId.
+            this.resetKnowledgeSources(chatId);
+
             // Exit the iteration and function - we need user input
             clearTimeout(timeoutId);
             if (activeRequests.get(chatId) === controller) {
@@ -1477,6 +1495,11 @@ class ToolExecutor {
                 toolName: toolResult.message.tool_source
               })
             );
+
+            // Emit the answer-source badge before 'done' (also resets it). This
+            // is a terminal turn, so without this the passthrough answer would
+            // show "Based on AI knowledge" even when built on uploads/email.
+            this.finalizeAnswerSource(chatId);
 
             // Signal that we're done - user needs to send next message for LLM to continue
             actionTracker.trackDone(chatId, {
@@ -1526,6 +1549,9 @@ class ToolExecutor {
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);
         }
+        // Clear source bookkeeping so a failed turn can't leak sources into the
+        // next turn on this chatId. The caller handles the error/done event.
+        this.resetKnowledgeSources(chatId);
         throw error; // Re-throw to let the calling method handle it
       }
     }
@@ -1536,6 +1562,9 @@ class ToolExecutor {
       maxIterations,
       chatId
     });
+    // Emit the answer-source badge before 'done' (also resets it) so a
+    // max-iterations answer built on uploads/email is still attributed.
+    this.finalizeAnswerSource(chatId);
     actionTracker.trackDone(chatId, { finishReason: 'max_iterations' });
   }
 }
