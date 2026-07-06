@@ -28,6 +28,7 @@ import {
   collectAttachmentsForSend,
   formatFileDataAsPromptText
 } from '../utilities/buildChatApiMessages';
+import { pickManualUpload } from '../utilities/manualUpload';
 import {
   fetchCurrentMailContext,
   fetchSelectedItemsContext
@@ -367,7 +368,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       const sf =
         'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
       const imageData = sf?.type === 'image' ? sf : null;
-      const fileData = sf?.type === 'file' ? sf : null;
+      const fileData = sf?.type === 'file' || sf?.type === 'document' ? sf : null;
 
       adapter.sendMessage({
         displayMessage: { content: text },
@@ -418,13 +419,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // must only re-attach the manual uploads here — the email attachments will
   // be re-pulled fresh by useOfficeChatAdapter so the user still sees the
   // current message context, not a stale one. Manual uploads carry a
-  // `type: 'image' | 'file'` field; email attachments do not.
-  const pickManualUpload = data => {
-    if (!data) return null;
-    const arr = Array.isArray(data) ? data : [data];
-    const manuals = arr.filter(d => d && (d.type === 'image' || d.type === 'file'));
-    return manuals.length > 0 ? manuals[0] : null;
-  };
+  // `type: 'image' | 'document'` (legacy: 'file') field; email attachments do not.
 
   const handleResend = useCallback(
     (messageId, editedContent) => {

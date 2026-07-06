@@ -48,3 +48,9 @@ request was far above the model's context window.
 Answers based on email content or uploaded files now show the correct "Based on email content" /
 "Based on uploaded file" badge in apps that have tools enabled. Previously these apps always
 reported "Based on AI knowledge" because the source tracking was lost in the tool-execution path.
+
+## Outlook Add-in: Uploaded Documents Keep Their File Context
+
+Uploaded documents in the Outlook task pane now keep their file context correctly, so responses are
+attributed to uploaded files instead of email content. This also makes label overrides for
+`chatMessage.answerSource.file` apply as expected in this flow.
