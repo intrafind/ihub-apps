@@ -30,7 +30,7 @@ export default function registerAppSessionStartRoute(app) {
           referrer: req.headers['referer'] || metadata?.referrer || 'direct'
         };
         logger.info('[APP LOADED] New session started', {
-          component: 'SessionRoutes',
+          component: 'AppSessionRoutes',
           sessionId,
           ip: enrichedMetadata.ipAddress.split(':').pop()
         });
