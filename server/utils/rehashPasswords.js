@@ -13,7 +13,9 @@ function parseKnownPasswords() {
     const parsed = JSON.parse(json);
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch (error) {
-    throw new Error('Invalid password mapping JSON. Use --passwords=\'{"userId":"password"}\'');
+    throw new Error(
+      `Invalid password mapping JSON: ${error.message}. Use --passwords='{"userId":"password"}'`
+    );
   }
 }
 

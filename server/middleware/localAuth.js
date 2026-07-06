@@ -11,6 +11,8 @@ import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DUMMY_USER_ID = 'nonexistent-user';
+const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
 
 /**
  * Verify password against hash using user ID
@@ -57,6 +59,7 @@ export async function loginUser(username, password, localAuthConfig) {
   const user = Object.values(users).find(u => u.username === username || u.email === username);
 
   if (!user) {
+    await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
     throw new Error('Invalid credentials');
   }
 
@@ -113,7 +116,7 @@ export async function loginUser(username, password, localAuthConfig) {
  * @returns {Object} Created user (without password)
  */
 export async function createUser(userData, usersFilePath) {
-  const { username, email, password, name, groups = ['user'], active = true } = userData;
+  const { username, email, password, name, internalGroups = ['users'], active = true } = userData;
 
   if (!username || !email || !password || !name) {
     throw new Error('Missing required fields: username, email, password, name');
@@ -141,7 +144,7 @@ export async function createUser(userData, usersFilePath) {
     username,
     email,
     name,
-    groups,
+    internalGroups,
     active,
     passwordHash,
     createdAt: new Date().toISOString(),
