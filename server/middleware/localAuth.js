@@ -5,52 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { hashPasswordWithUserId, loadUsers } from '../utils/userManager.js';
 import configCache from '../configCache.js';
-import logger from '../utils/logger.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/**
- * Load users from the local users file
- * @param {string} usersFilePath - Path to users.json file
- * @returns {Object} Users configuration
- */
-function loadUsers(usersFilePath) {
-  try {
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
-
-    if (!fs.existsSync(fullPath)) {
-      logger.warn('Users file not found', { component: 'LocalAuth', fullPath });
-      return { users: {} };
-    }
-
-    const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-    return config;
-  } catch (error) {
-    logger.warn('Could not load users configuration', { component: 'LocalAuth', error });
-    return { users: {} };
-  }
-}
-
-/**
- * Hash password with user ID as salt for unique hashes
- * @param {string} password - Plain text password
- * @param {string} userId - User ID to use as salt
- * @returns {Promise<string>} Hashed password
- */
-export async function hashPasswordWithUserId(password, userId) {
-  // Create a deterministic salt from user ID
-  const salt = await bcrypt.genSalt(12);
-
-  // Combine password with user ID for unique hash
-  const passwordWithUserId = `${userId}:${password}`;
-
-  return await bcrypt.hash(passwordWithUserId, salt);
-}
 
 /**
  * Verify password against hash using user ID
