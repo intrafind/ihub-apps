@@ -106,11 +106,11 @@ function FileUploader({ source, onChange, isEditing }) {
         // Source already exists on server, upload to server
         const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
           method: 'POST',
-          body: JSON.stringify({
+          body: {
             path: filePath,
             content: content,
             encoding: 'utf8'
-          })
+          }
         });
 
         if (response.data.success) {
@@ -238,11 +238,11 @@ function FileUploader({ source, onChange, isEditing }) {
         // Source exists on server, save to server
         const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
           method: 'POST',
-          body: JSON.stringify({
+          body: {
             path: filePath,
             content: fileContent,
             encoding: 'utf8'
-          })
+          }
         });
 
         if (response.data.success) {

@@ -186,12 +186,12 @@ function AdminUsersPage() {
       await makeAdminApiCall(`/admin/auth/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           email: user.email,
           name: user.name,
           internalGroups: user.internalGroups || [],
           active: newStatus
-        })
+        }
       });
       setMessage({
         type: 'success',

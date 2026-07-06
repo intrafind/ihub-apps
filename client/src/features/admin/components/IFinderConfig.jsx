@@ -150,7 +150,7 @@ function IFinderConfig() {
 
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: updatedPlatformConfig
+        body: updatedPlatformConfig
       });
 
       setMessage({

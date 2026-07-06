@@ -275,7 +275,7 @@ function AdminLoggingPage() {
 
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
-        data: loggingConfig
+        body: loggingConfig
       });
 
       setMessage({
@@ -309,7 +309,7 @@ function AdminLoggingPage() {
       // Save back
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: platformConfig
+        body: platformConfig
       });
 
       setMessage({
@@ -342,11 +342,11 @@ function AdminLoggingPage() {
       // blocks server-side.
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
-        data: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
+        body: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
       });
       await makeAdminApiCall('/admin/audit-log/settings', {
         method: 'PUT',
-        data: { anonymizeIp: privacyConfig.auditAnonymizeIp }
+        body: { anonymizeIp: privacyConfig.auditAnonymizeIp }
       });
 
       // Reflect the saved values in `loggingConfig` so a subsequent

@@ -87,7 +87,7 @@ function AdminMcpGatewayPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(platform)
+        body: platform
       });
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {

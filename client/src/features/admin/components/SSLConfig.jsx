@@ -79,7 +79,7 @@ function SSLConfig() {
       // Save the SSL config using dedicated endpoint
       await makeAdminApiCall('/admin/ssl/config', {
         method: 'PUT',
-        data: config
+        body: config
       });
 
       setMessage({

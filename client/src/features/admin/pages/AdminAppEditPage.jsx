@@ -325,7 +325,7 @@ function AdminAppEditPage() {
 
       await makeAdminApiCall(url, {
         method,
-        body: JSON.stringify(cleanedApp)
+        body: cleanedApp
       });
 
       markSaved();

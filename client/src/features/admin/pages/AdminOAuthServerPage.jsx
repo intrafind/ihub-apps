@@ -108,7 +108,7 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig)
+        body: updatedConfig
       });
 
       setOAuthEnabled(newStatus);
@@ -158,7 +158,7 @@ function AdminOAuthServerPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig)
+        body: updatedConfig
       });
 
       setMessage({

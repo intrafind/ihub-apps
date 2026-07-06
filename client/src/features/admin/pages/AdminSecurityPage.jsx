@@ -31,7 +31,7 @@ function AdminSecurityPage() {
     try {
       const response = await makeAdminApiCall('/admin/encrypt-value', {
         method: 'POST',
-        body: JSON.stringify({ value: encryptValue }),
+        body: { value: encryptValue },
         headers: { 'Content-Type': 'application/json' }
       });
       const data = response.data;

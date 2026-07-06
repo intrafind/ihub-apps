@@ -79,7 +79,7 @@ function CorsConfig() {
     setSaving(true);
     setMessage('');
     try {
-      await makeAdminApiCall('/admin/cors/config', { method: 'PUT', data: config });
+      await makeAdminApiCall('/admin/cors/config', { method: 'PUT', body: config });
       setMessage({
         type: 'success',
         text: t('admin.cors.saved', 'CORS configuration saved successfully')
