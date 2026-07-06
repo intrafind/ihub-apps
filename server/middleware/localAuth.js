@@ -117,7 +117,7 @@ export async function loginUser(username, password, localAuthConfig) {
     username: user.username,
     name: user.name,
     email: user.email,
-    groups: user.internalGroups || ['user'],
+    groups: user.internalGroups || ['users'],
     authenticated: true,
     authMethod: 'local'
   };
@@ -153,7 +153,7 @@ export async function loginUser(username, password, localAuthConfig) {
  * @returns {Object} Created user (without password)
  */
 export async function createUser(userData, usersFilePath) {
-  const { username, email, password, name, groups = ['user'], active = true } = userData;
+  const { username, email, password, name, internalGroups = ['users'], active = true } = userData;
 
   if (!username || !email || !password || !name) {
     throw new Error('Missing required fields: username, email, password, name');
@@ -181,7 +181,7 @@ export async function createUser(userData, usersFilePath) {
     username,
     email,
     name,
-    groups,
+    internalGroups,
     active,
     passwordHash,
     createdAt: new Date().toISOString(),
