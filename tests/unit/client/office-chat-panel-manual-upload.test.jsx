@@ -27,4 +27,9 @@ describe('pickManualUpload', () => {
     const arr = [{ fileName: 'host-attachment.pdf' }, { type: 'document', fileName: 'manual.pdf' }];
     expect(pickManualUpload(arr)).toEqual(arr[1]);
   });
+
+  test('returns null when array has no manual upload entries', () => {
+    const arr = [{ fileName: 'host-attachment.pdf' }, { type: 'audio', fileName: 'voice.mp3' }];
+    expect(pickManualUpload(arr)).toBeNull();
+  });
 });
