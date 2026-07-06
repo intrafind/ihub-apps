@@ -6,15 +6,17 @@ import path from 'path';
 import { hashPasswordWithUserId, loginUser } from '../middleware/localAuth.js';
 
 describe('localAuth loginUser timing protections', () => {
+  const expectedDummyHash = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
   let testDir;
   let usersFilePath;
   let localAuthConfig;
+  let storedPasswordHash;
 
   beforeEach(async () => {
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'local-auth-test-'));
     usersFilePath = path.join(testDir, 'users.json');
 
-    const passwordHash = await hashPasswordWithUserId('correct-password', 'user_1');
+    storedPasswordHash = await hashPasswordWithUserId('correct-password', 'user_1');
     const usersConfig = {
       users: {
         user_1: {
@@ -23,7 +25,7 @@ describe('localAuth loginUser timing protections', () => {
           email: 'test@example.com',
           name: 'Test User',
           active: true,
-          passwordHash,
+          passwordHash: storedPasswordHash,
           internalGroups: ['user']
         }
       }
@@ -48,6 +50,12 @@ describe('localAuth loginUser timing protections', () => {
     );
 
     expect(compareSpy).toHaveBeenCalledTimes(2);
+    expect(compareSpy).toHaveBeenNthCalledWith(
+      1,
+      'nonexistent-user:any-password',
+      expectedDummyHash
+    );
+    expect(compareSpy).toHaveBeenNthCalledWith(2, 'user_1:wrong-password', storedPasswordHash);
     compareSpy.mockRestore();
   });
 });
