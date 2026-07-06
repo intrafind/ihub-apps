@@ -28,7 +28,7 @@ import {
   collectAttachmentsForSend,
   formatFileDataAsPromptText
 } from '../utilities/buildChatApiMessages';
-import { pickManualUpload } from '../utilities/manualUpload';
+import { isManualUploadType, pickManualUpload } from '../utilities/manualUpload';
 import {
   fetchCurrentMailContext,
   fetchSelectedItemsContext
@@ -368,7 +368,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       const sf =
         'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
       const imageData = sf?.type === 'image' ? sf : null;
-      const fileData = sf?.type === 'file' || sf?.type === 'document' ? sf : null;
+      const fileData = isManualUploadType(sf?.type) && sf?.type !== 'image' ? sf : null;
 
       adapter.sendMessage({
         displayMessage: { content: text },
