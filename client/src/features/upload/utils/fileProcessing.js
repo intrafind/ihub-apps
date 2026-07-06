@@ -138,9 +138,13 @@ export const MIME_TO_EXTENSION = {};
 // Lazy load PDF.js only when needed
 export const loadPdfjs = async () => {
   const pdfjsLib = await import('pdfjs-dist');
-  // Configure PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  // Use the locally bundled worker so the app works in offline/air-gapped
+  // environments. Vite resolves the URL at build time and includes the worker
+  // in the bundle, keeping it in sync with the installed pdfjs-dist version.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
   return pdfjsLib;
 };
 
