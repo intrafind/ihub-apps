@@ -94,7 +94,7 @@ GPU selection is done case-by-case together with IntraFind, depending on:
 
 2. **Create your own micro-app**:
    - GitHub repo contains examples and documentation
-   - See folders `examples` and `docs`, and the repository agent guide in `CLAUDE.md`
+   - See folders `examples` and `docs`, and see the repository agent guide in `CLAUDE.md`
    - Complete documentation in running iHub under `/help`
 
 ### Are prompt skills required?
