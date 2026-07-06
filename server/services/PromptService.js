@@ -16,6 +16,18 @@ import logger from '../utils/logger.js';
 const promptKnowledgeSources = new Map();
 
 /**
+ * Format a single file object into the standard inline-content string used when
+ * injecting uploaded file text into prompt templates.
+ * @param {Object} file - File data object (fileData item)
+ * @returns {string} Formatted string: "[File: name (type)]\n\ncontents\n\n"
+ */
+function buildFileInfoText(file) {
+  const name = file.fileName || file.name || 'unknown';
+  const type = file.displayType || file.fileType || file.type || 'file';
+  return `[File: ${name} (${type})]\n\n${file.content}\n\n`;
+}
+
+/**
  * Service for handling prompt processing and template resolution
  */
 class PromptService {
@@ -189,8 +201,31 @@ class PromptService {
             ? getLocalizedContent(msg.promptTemplate, lang)
             : msg.promptTemplate || msg.content;
         if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
+
+        // Build the content variable for template substitution.
+        // When the user has uploaded a document, include its text content in {{content}}
+        // so that template instructions like "Please analyze: {{content}}" correctly
+        // reference the uploaded file rather than leaving an empty placeholder.
+        let contentForTemplate = msg.content || '';
+        let fileContentInjected = false;
+
+        if (Array.isArray(msg.fileData)) {
+          const textParts = msg.fileData.filter(f => f && f.content).map(f => buildFileInfoText(f));
+          if (textParts.length > 0) {
+            contentForTemplate = textParts.join('') + contentForTemplate;
+            fileContentInjected = true;
+          }
+        } else if (msg.fileData && msg.fileData.content) {
+          contentForTemplate = buildFileInfoText(msg.fileData) + contentForTemplate;
+          fileContentInjected = true;
+        }
+
         // Combine user-defined variables with global prompt variables (user variables take precedence)
-        const variables = { ...globalPromptVariables, ...msg.variables, content: msg.content };
+        const variables = {
+          ...globalPromptVariables,
+          ...msg.variables,
+          content: contentForTemplate
+        };
         if (variables && Object.keys(variables).length > 0) {
           for (const [key, value] of Object.entries(variables)) {
             const strValue = typeof value === 'string' ? value : String(value || '');
@@ -200,33 +235,40 @@ class PromptService {
             );
           }
         }
-        // Ensure user content is always included: if template is empty or doesn't contain {{content}},
-        // append the user's actual content to make sure it's not lost
-        if (msg.content && msg.content.trim()) {
-          const templateHadContentPlaceholder =
-            (msg.promptTemplate &&
-              ((typeof msg.promptTemplate === 'object' &&
-                Object.values(msg.promptTemplate).some(
-                  v => typeof v === 'string' && v.includes('{{content}}')
-                )) ||
-                (typeof msg.promptTemplate === 'string' &&
-                  msg.promptTemplate.includes('{{content}}')))) ||
-            false;
 
-          // If template was empty or didn't have {{content}}, append user content
+        const templateHadContentPlaceholder =
+          (msg.promptTemplate &&
+            ((typeof msg.promptTemplate === 'object' &&
+              Object.values(msg.promptTemplate).some(
+                v => typeof v === 'string' && v.includes('{{content}}')
+              )) ||
+              (typeof msg.promptTemplate === 'string' &&
+                msg.promptTemplate.includes('{{content}}')))) ||
+          false;
+
+        // Ensure user content (and file content if uploaded) is always included.
+        // When a file was uploaded, use contentForTemplate (file + user text) as the
+        // effective content so the document is not silently dropped from the prompt.
+        const effectiveContent = fileContentInjected ? contentForTemplate : msg.content;
+        if (effectiveContent && effectiveContent.trim()) {
+          // If template was empty or didn't have {{content}}, append the effective content
           if (
             !processedContent.trim() ||
-            (!templateHadContentPlaceholder && !processedContent.includes(msg.content))
+            (!templateHadContentPlaceholder && !processedContent.includes(effectiveContent))
           ) {
             processedContent = processedContent.trim()
-              ? `${processedContent}\n\n${msg.content}`
-              : msg.content;
+              ? `${processedContent}\n\n${effectiveContent}`
+              : effectiveContent;
           }
         }
+
         const processedMsg = { role: 'user', content: processedContent };
         if (msg.imageData) processedMsg.imageData = msg.imageData;
         if (msg.fileData) processedMsg.fileData = msg.fileData;
         if (msg.audioData) processedMsg.audioData = msg.audioData;
+        // Signal to preprocessMessagesWithFileData that the file content was already
+        // injected via template substitution so it won't be added a second time.
+        if (fileContentInjected) processedMsg._fileContentInjectedViaTemplate = true;
         return processedMsg;
       }
       // Apply global prompt variables to normal prompts as well

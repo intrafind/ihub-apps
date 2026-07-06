@@ -7,6 +7,16 @@ import logger from '../../utils/logger.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
+    // If PromptService already injected the file content into the message via
+    // template substitution ({{content}} replacement), skip adding it again.
+    // The marker is set by processMessageTemplates when fileData content is
+    // folded into the {{content}} template variable.
+    if (msg._fileContentInjectedViaTemplate) {
+      // Strip the internal marker before the message reaches the LLM adapter.
+      const { _fileContentInjectedViaTemplate: _, ...cleanMsg } = msg;
+      return cleanMsg;
+    }
+
     // Handle array of files (multiple file upload)
     if (Array.isArray(msg.fileData)) {
       const textParts = [];
