@@ -212,16 +212,14 @@ function AdminUsersPage() {
       const email = (user.email || '').toLowerCase();
       const groups = (user.internalGroups || []).join(' ').toLowerCase();
       const authMethods = (user.authMethods || ['local']).join(' ').toLowerCase();
-      if (
-        !(
-          id.includes(searchLower) ||
-          name.includes(searchLower) ||
-          username.includes(searchLower) ||
-          email.includes(searchLower) ||
-          groups.includes(searchLower) ||
-          authMethods.includes(searchLower)
-        )
-      ) {
+      if (!(
+        id.includes(searchLower) ||
+        name.includes(searchLower) ||
+        username.includes(searchLower) ||
+        email.includes(searchLower) ||
+        groups.includes(searchLower) ||
+        authMethods.includes(searchLower)
+      )) {
         return false;
       }
     }
