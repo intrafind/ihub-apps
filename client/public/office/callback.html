@@ -5,9 +5,28 @@
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Signing in…</title>
+
+    <!-- Global error handler — must be first so it catches all subsequent errors -->
+    <script type="text/javascript">
+      window.onerror = function (msg, src, line, col, err) {
+        var el = document.getElementById('status');
+        if (el) el.textContent = 'An error occurred. Close this window and try again. (' + msg + ')';
+        return true;
+      };
+      window.addEventListener('unhandledrejection', function (e) {
+        var el = document.getElementById('status');
+        if (el)
+          el.textContent =
+            'An error occurred. Close this window and try again. (' +
+            (e.reason instanceof Error ? e.reason.message : String(e.reason)) +
+            ')';
+      });
+    </script>
+
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+      onerror="var el=document.getElementById('status'); if(el) el.textContent='Office.js failed to load. Close this window and try again.';"
     ></script>
   </head>
   <body>

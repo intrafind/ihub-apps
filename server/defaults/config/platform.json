@@ -105,7 +105,9 @@
   },
   "anonymousAuth": {
     "enabled": true,
-    "defaultGroups": ["anonymous"]
+    "defaultGroups": [
+      "anonymous"
+    ]
   },
   "proxyAuth": {
     "enabled": false
@@ -161,7 +163,15 @@
     "origin": [],
     "credentials": true,
     "maxAge": 86400,
-    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    "methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS",
+      "HEAD",
+      "PATCH"
+    ],
     "allowedHeaders": [
       "Content-Type",
       "Authorization",
@@ -224,15 +234,24 @@
   "officeIntegration": {
     "enabled": false,
     "oauthClientId": "",
-    "displayName": { "en": "iHub Apps", "de": "iHub Apps" },
+    "displayName": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
     "description": {
       "en": "AI-powered assistant for Outlook",
       "de": "KI-gestützter Assistent für Outlook"
     },
     "starterPrompts": [
       {
-        "title": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" },
-        "message": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" }
+        "title": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        },
+        "message": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        }
       },
       {
         "title": {
@@ -286,6 +305,7 @@
           "de": "Erzähle mir etwas über die Teilnehmenden dieses Meetings und warum jede Person vermutlich eingeladen wurde."
         }
       }
-    ]
+    ],
+    "useLocalOfficejs": false
   }
 }

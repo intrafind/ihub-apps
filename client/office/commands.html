@@ -3,10 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+
+    <!-- Global error handler — must be first so it catches all subsequent errors -->
+    <script type="text/javascript">
+      window.onerror = function (msg, src, line, col, err) {
+        /* Commands page runs silently; log only */
+        console.error('[commands] Uncaught error:', msg, src, line, col, err);
+        return true;
+      };
+      window.addEventListener('unhandledrejection', function (e) {
+        console.error('[commands] Unhandled rejection:', e.reason);
+      });
+    </script>
+
     <!-- Office JavaScript API -->
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+      onerror="console.error('[commands] Office.js failed to load from:', this.src)"
     ></script>
   </head>
   <body>

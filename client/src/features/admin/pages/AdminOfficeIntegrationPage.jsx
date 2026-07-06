@@ -16,6 +16,7 @@ function AdminOfficeIntegrationPage() {
   const [displayName, setDisplayName] = useState({});
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
+  const [useLocalOfficejs, setUseLocalOfficejs] = useState(false);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -44,6 +45,7 @@ function AdminOfficeIntegrationPage() {
       setStatus(data);
       setDisplayName(sanitizeLocalized(data.displayName));
       setDescription(sanitizeLocalized(data.description));
+      setUseLocalOfficejs(data.useLocalOfficejs === true);
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
@@ -125,7 +127,8 @@ function AdminOfficeIntegrationPage() {
         data: {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
-          starterPrompts: cleanedPrompts
+          starterPrompts: cleanedPrompts,
+          useLocalOfficejs
         }
       });
       await loadStatus();
@@ -346,6 +349,41 @@ function AdminOfficeIntegrationPage() {
                   type="textarea"
                 />
               </div>
+            </div>
+
+            {/* Offline / Local Office.js */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('admin.officeIntegration.offlineTitle', 'Offline Mode (Local Office.js)')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t(
+                  'admin.officeIntegration.offlineDesc',
+                  'Enable this if your environment blocks access to appsforoffice.microsoft.com. The add-in will then load the Office JavaScript library from this server instead of the Microsoft CDN.'
+                )}
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useLocalOfficejs}
+                  onChange={e => setUseLocalOfficejs(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t(
+                    'admin.officeIntegration.offlineLabel',
+                    'Serve Office.js from this server (offline mode)'
+                  )}
+                </span>
+              </label>
+              {useLocalOfficejs && (
+                <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                  {t(
+                    'admin.officeIntegration.offlineWarning',
+                    'Offline mode is active. The add-in will load Office.js from /office/office-js/office.js on this server. Note: Microsoft AppSource will reject add-ins that do not use the official CDN URL — this mode is intended for internal enterprise deployments only.'
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Starter Prompts */}

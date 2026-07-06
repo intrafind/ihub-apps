@@ -5,6 +5,22 @@ import os from 'os';
 import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 
+// Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
+// This makes the full Office.js library available locally so that deployments that
+// block appsforoffice.microsoft.com can serve it from their own origin.
+function copyOfficeJsPlugin() {
+  return {
+    name: 'copy-office-js',
+    closeBundle() {
+      const src = resolve(__dirname, 'node_modules/@microsoft/office-js/dist');
+      const dest = resolve(__dirname, 'dist/office/office-js');
+      if (!fs.existsSync(src)) return;
+      fs.mkdirSync(dest, { recursive: true });
+      fs.cpSync(src, dest, { recursive: true });
+    }
+  };
+}
+
 // Use office-addin-dev-certs if available — these are OS-trusted and required for
 // Office add-in development (WebView2/WKWebView rejects untrusted self-signed certs).
 // Run `npx office-addin-dev-certs install` once to generate and trust them.
@@ -22,7 +38,7 @@ function loadOfficeDevCerts() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), authGatePlugin()],
+  plugins: [react(), authGatePlugin(), copyOfficeJsPlugin()],
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
   build: {

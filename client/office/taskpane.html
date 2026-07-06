@@ -6,6 +6,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>iHub Apps</title>
 
+    <!-- Global error handler — must be first so it catches all subsequent errors -->
+    <script type="text/javascript">
+      (function () {
+        var errorShown = false;
+        var pendingError = null;
+
+        function renderError(title, message, detail) {
+          if (errorShown) return;
+          errorShown = true;
+          var el = document.getElementById('office-error-page');
+          if (!el) return;
+          var root = document.getElementById('office-root');
+          var trident = document.getElementById('tridentmessage');
+          if (root) root.style.display = 'none';
+          if (trident) trident.style.display = 'none';
+          document.getElementById('office-error-title').textContent = title;
+          document.getElementById('office-error-msg').textContent = message;
+          if (detail) {
+            document.getElementById('office-error-detail').textContent = detail;
+            document.getElementById('office-error-detail-wrap').style.display = 'block';
+          }
+          el.style.display = 'block';
+        }
+
+        function showError(title, message, detail) {
+          // Body may not exist yet when this is called from the <head> (e.g. onerror
+          // on a blocked <script src="...">). Queue the error and flush after DOM loads.
+          if (!document.body) {
+            pendingError = [title, message, detail];
+            document.addEventListener('DOMContentLoaded', function () {
+              if (pendingError) renderError(pendingError[0], pendingError[1], pendingError[2]);
+            });
+            return;
+          }
+          renderError(title, message, detail);
+        }
+
+        window.__showOfficeError = showError;
+
+        // Catch synchronous JS errors (e.g. Office not defined, runtime errors)
+        window.onerror = function (msg, src, line, col, err) {
+          var detail =
+            (err && err.stack ? err.stack : '') || (src ? src + ':' + line + ':' + col : '');
+          showError('Add-in Error', msg || 'An unexpected error occurred.', detail);
+          return true;
+        };
+
+        // Catch unhandled promise rejections
+        window.addEventListener('unhandledrejection', function (e) {
+          var reason = e.reason;
+          var msg =
+            reason instanceof Error
+              ? reason.message
+              : reason
+                ? String(reason)
+                : 'An unexpected error occurred.';
+          var detail = reason instanceof Error ? reason.stack || '' : '';
+          showError('Add-in Error', msg, detail);
+        });
+      })();
+    </script>
+
     <!-- Cache history API before Office.js removes it -->
     <script type="text/javascript">
       window._historyCache = {
@@ -18,6 +80,7 @@
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+      onerror="window.__showOfficeError('Office.js failed to load', 'The Office JavaScript library could not be loaded — access to appsforoffice.microsoft.com may be blocked. Ask your administrator to enable the offline Office.js option in iHub Apps.', 'Source: ' + this.src)"
     ></script>
 
     <!-- Restore history API that Office.js removes -->
@@ -29,6 +92,70 @@
 
   <body style="width: 100%; height: 100%; margin: 0; padding: 0">
     <div id="office-root"></div>
+
+    <!-- Error page shown when a fatal error occurs (hidden by default) -->
+    <div
+      id="office-error-page"
+      style="
+        display: none;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #323130;
+        background: #fef2f2;
+        min-height: 100vh;
+        box-sizing: border-box;
+      "
+    >
+      <div
+        style="
+          background: #fff;
+          border: 1px solid #fca5a5;
+          border-radius: 6px;
+          padding: 20px;
+          max-width: 480px;
+        "
+      >
+        <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px">
+          <span style="font-size: 24px; line-height: 1">⚠️</span>
+          <div>
+            <p
+              id="office-error-title"
+              style="margin: 0 0 4px; font-weight: 600; font-size: 15px; color: #991b1b"
+            ></p>
+            <p
+              id="office-error-msg"
+              style="margin: 0; font-size: 13px; color: #323130; word-break: break-word"
+            ></p>
+          </div>
+        </div>
+        <div id="office-error-detail-wrap" style="display: none; margin-top: 10px">
+          <details>
+            <summary
+              style="font-size: 12px; color: #6b7280; cursor: pointer; user-select: none"
+            >
+              Technical details (for administrators)
+            </summary>
+            <pre
+              id="office-error-detail"
+              style="
+                margin: 6px 0 0;
+                padding: 8px;
+                background: #f3f4f6;
+                border-radius: 4px;
+                font-size: 11px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                word-break: break-all;
+                color: #374151;
+              "
+            ></pre>
+          </details>
+        </div>
+        <p style="margin: 12px 0 0; font-size: 12px; color: #6b7280">
+          Reload the add-in or contact your administrator if this problem persists.
+        </p>
+      </div>
+    </div>
 
     <!-- Warn users on legacy webviews that don't support modern JS -->
     <div

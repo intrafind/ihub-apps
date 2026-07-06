@@ -57,6 +57,7 @@
     "dompurify": "^3.4.0"
   },
   "devDependencies": {
+    "@microsoft/office-js": "^1.1.110",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^6.0.2",
