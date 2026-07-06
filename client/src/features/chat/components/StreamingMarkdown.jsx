@@ -1,7 +1,5 @@
 import { useLayoutEffect, useState, useRef, useEffect, useCallback } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
-import { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import { renderMarkdown } from '../../../config/marked.config';
 import {
   transformCitations,
   attachCitationHandlers,
@@ -11,7 +9,7 @@ import './StreamingMarkdown.css';
 
 /**
  * A component that renders markdown content with optimized real-time updates.
- * Content is rendered via marked with raw HTML allowed (sanitize: false in marked config).
+ * Content is rendered via the shared markdown renderer with centralized sanitization.
  * Citation tags are transformed to interactive badges post-render.
  *
  * @param {Object} props
@@ -48,16 +46,14 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
 
     if (contentChanged || needsCitationTransform) {
       try {
-        configureMarked();
-        let parsedContent = marked(content);
-
-        // Transform citation tags into interactive badges
-        if (hasCitations) {
-          parsedContent = transformCitations(parsedContent);
+        const transformHtml = hasCitations ? transformCitations : undefined;
+        const parsedContent = renderMarkdown(content, {
+          transformHtml
+        });
+        if (transformHtml) {
           citationsAppliedRef.current = true;
         }
-
-        setHtmlContent(DOMPurify.sanitize(parsedContent));
+        setHtmlContent(parsedContent);
         contentLengthRef.current = content.length;
 
         // Force a complete re-render by updating the key

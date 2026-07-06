@@ -158,6 +158,24 @@ const MERMAID_LANGUAGES = new Set([
   'quadrant'
 ]);
 
+export const escapeHtml = text =>
+  String(text).replace(/[&<>"']/g, char => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return char;
+    }
+  });
+
 export const getLanguageDisplayName = (language = 'text') => {
   const lang = language.toLowerCase();
   return LANGUAGE_DISPLAY_MAP[lang] || language.toUpperCase();

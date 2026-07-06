@@ -1,14 +1,5 @@
-import { marked } from 'marked';
 import TurndownService from 'turndown';
-
-/**
- * Configure marked options for better HTML output
- */
-marked.setOptions({
-  breaks: true, // Convert line breaks to <br>
-  gfm: true, // Enable GitHub Flavored Markdown
-  sanitize: false // Allow HTML (ReactQuill will handle sanitization)
-});
+import { renderMarkdown } from '../config/marked.config';
 
 const turndownService = new TurndownService();
 
@@ -23,7 +14,7 @@ export const markdownToHtml = markdown => {
   }
 
   try {
-    return marked(markdown);
+    return renderMarkdown(markdown);
   } catch (error) {
     console.error('Error converting markdown to HTML:', error);
     return markdown; // Return original text if conversion fails
