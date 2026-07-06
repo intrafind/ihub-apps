@@ -80,7 +80,13 @@
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
-      onerror="window.__showOfficeError('Office.js failed to load', 'The Office JavaScript library could not be loaded — access to appsforoffice.microsoft.com may be blocked. Ask your administrator to enable the offline Office.js option in iHub Apps.', 'Source: ' + this.src)"
+      onerror="
+        window.__showOfficeError(
+          'Office.js failed to load',
+          'The Office JavaScript library could not be loaded — access to appsforoffice.microsoft.com may be blocked. Ask your administrator to enable the offline Office.js option in iHub Apps.',
+          'Source: ' + this.src
+        )
+      "
     ></script>
 
     <!-- Restore history API that Office.js removes -->
@@ -130,9 +136,7 @@
         </div>
         <div id="office-error-detail-wrap" style="display: none; margin-top: 10px">
           <details>
-            <summary
-              style="font-size: 12px; color: #6b7280; cursor: pointer; user-select: none"
-            >
+            <summary style="font-size: 12px; color: #6b7280; cursor: pointer; user-select: none">
               Technical details (for administrators)
             </summary>
             <pre
