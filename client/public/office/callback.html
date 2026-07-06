@@ -10,7 +10,8 @@
     <script type="text/javascript">
       window.onerror = function (msg, src, line, col, err) {
         var el = document.getElementById('status');
-        if (el) el.textContent = 'An error occurred. Close this window and try again. (' + msg + ')';
+        if (el)
+          el.textContent = 'An error occurred. Close this window and try again. (' + msg + ')';
         return true;
       };
       window.addEventListener('unhandledrejection', function (e) {
@@ -26,7 +27,10 @@
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
-      onerror="var el=document.getElementById('status'); if(el) el.textContent='Office.js failed to load. Close this window and try again.';"
+      onerror="
+        var el = document.getElementById('status');
+        if (el) el.textContent = 'Office.js failed to load. Close this window and try again.';
+      "
     ></script>
   </head>
   <body>
