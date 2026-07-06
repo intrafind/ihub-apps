@@ -12,6 +12,8 @@ import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DUMMY_USER_ID = 'nonexistent-user';
+// bcrypt hash for "nonexistent-user:invalid-password" generated with cost factor 12.
+// Used only to execute comparable hash work when a username/email does not exist.
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
 
 /**

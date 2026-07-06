@@ -37,7 +37,7 @@ describe('localAuth loginUser timing protections', () => {
     await fs.rm(testDir, { recursive: true, force: true });
   });
 
-  test('runs bcrypt.compare for missing and existing usernames', async () => {
+  test('prevents timing-based username enumeration for invalid logins', async () => {
     const compareSpy = jest.spyOn(bcrypt, 'compare');
 
     await expect(loginUser('missing-user', 'any-password', localAuthConfig)).rejects.toThrow(
