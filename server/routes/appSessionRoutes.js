@@ -7,7 +7,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../utils/responseHelpers.js';
 
-export default function registerSessionRoutes(app) {
+export default function registerAppSessionStartRoute(app) {
   app.post(
     buildServerPath('/api/session/start'),
     authOptional,
