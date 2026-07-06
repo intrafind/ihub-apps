@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zSafeId } from './common.js';
 import logger from '../utils/logger.js';
 
 // Localized string schema - matches client pattern for language codes
@@ -14,14 +15,7 @@ const localizedStringSchema = z.record(
  * Common fields for all source types
  */
 const baseSourceSchema = z.object({
-  id: z
-    .string()
-    .regex(
-      /^[a-zA-Z0-9._-]+$/,
-      'Source ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-    )
-    .min(1, 'Source ID cannot be empty')
-    .max(50, 'Source ID cannot exceed 50 characters'),
+  id: zSafeId.min(1, 'Source ID cannot be empty').max(50, 'Source ID cannot exceed 50 characters'),
   name: localizedStringSchema,
   description: localizedStringSchema.optional(),
   type: z.enum(['filesystem', 'url', 'ifinder', 'page'], {
@@ -86,13 +80,7 @@ const ifinderConfigSchema = z
  */
 const pageConfigSchema = z
   .object({
-    pageId: z
-      .string()
-      .min(1, 'Page ID is required')
-      .regex(
-        /^[a-zA-Z0-9._-]+$/,
-        'Page ID must contain only letters, numbers, underscores, dots, and hyphens'
-      ),
+    pageId: zSafeId.min(1, 'Page ID is required'),
     language: z.string().default('en')
   })
   .strict();
