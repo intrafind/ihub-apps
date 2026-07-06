@@ -1,14 +1,9 @@
 import { z } from 'zod';
+import { zSafeId } from './index.js';
 
 export const groupConfigSchema = z
   .object({
-    id: z
-      .string()
-      .min(1)
-      .regex(
-        /^[a-zA-Z0-9._-]+$/,
-        'Group ID can only contain letters, numbers, dots, hyphens, and underscores'
-      ),
+    id: zSafeId.min(1),
     name: z.string().min(1, 'Group name is required'),
     description: z.string().optional(),
     permissions: z

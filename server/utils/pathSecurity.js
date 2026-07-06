@@ -17,7 +17,7 @@ import { promises as fs } from 'fs';
  * - Hyphens (-)
  * - Dots (.) - for version numbers like "2.5" in model names
  */
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+export const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Property names that must be rejected to prevent prototype pollution.

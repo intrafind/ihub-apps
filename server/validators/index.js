@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';
 
 export {
   auditEntrySchema,
@@ -48,6 +49,13 @@ export const runToolSchema = {
   body: z.record(z.any()).optional(),
   query: z.record(z.any()).optional()
 };
+
+export const zSafeId = z
+  .string()
+  .regex(
+    SAFE_ID_PATTERN,
+    'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
+  );
 
 export const chatTestSchema = {
   params: z.object({ modelId: z.string().min(1) })

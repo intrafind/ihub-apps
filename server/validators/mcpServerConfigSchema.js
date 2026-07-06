@@ -1,18 +1,12 @@
 import { z } from 'zod';
+import { zSafeId } from './index.js';
 
 const localizedStringSchema = z.record(
   z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Invalid language code format'),
   z.string().min(1)
 );
 
-const idSchema = z
-  .string()
-  .regex(
-    /^[a-zA-Z0-9._-]+$/,
-    'Server ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-  )
-  .min(1)
-  .max(64);
+const idSchema = zSafeId.min(1).max(64);
 
 const authSchema = z
   .discriminatedUnion('type', [

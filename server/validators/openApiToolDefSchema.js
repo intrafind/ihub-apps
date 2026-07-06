@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zSafeId } from './index.js';
 
 /**
  * Schema for `type: "openapi"` tool entries (issue #1462).
@@ -63,11 +64,7 @@ export const openApiBlockSchema = z.object({
 });
 
 export const openApiToolDefSchema = z.object({
-  id: z
-    .string()
-    .regex(/^[a-zA-Z0-9._-]+$/, 'Tool ID must be alphanumeric with . _ - only')
-    .min(1)
-    .max(64),
+  id: zSafeId.min(1).max(64),
   name: localizedOrPlainString,
   description: localizedOrPlainString.optional(),
   type: z.literal('openapi'),
