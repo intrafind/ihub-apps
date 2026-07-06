@@ -371,7 +371,7 @@ export default function registerDataRoutes(app) {
     authRequired,
     async (req, res) => {
       try {
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
 
         // Get prompts with ETag from cache
         let { data: prompts, etag } = configCache.getPrompts();

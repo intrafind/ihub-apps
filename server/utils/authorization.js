@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 import logger from './logger.js';
+import configCache from '../configCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -645,7 +646,7 @@ export function createAuthorizationMiddleware(options = {}) {
 
   return (req, res, next) => {
     const authConfig = req.app.get('authConfig') || {};
-    const platform = req.app.get('platform') || {};
+    const platform = configCache.getPlatform() || req.app.get('platform') || {};
 
     // Enhance user with permissions if not already done
     if (req.user && !req.user.permissions) {
