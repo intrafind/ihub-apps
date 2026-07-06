@@ -18,7 +18,7 @@
   "supportsAudio": true,
   "supportsImageGeneration": false,
   "enabled": true,
-  "default": false,
+  "default": true,
   "thinking": {
     "enabled": true,
     "budget": -1,
