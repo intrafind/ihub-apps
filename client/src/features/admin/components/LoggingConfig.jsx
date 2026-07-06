@@ -41,7 +41,7 @@ function LoggingConfig() {
     try {
       await makeAdminApiCall('/admin/logging/level', {
         method: 'PUT',
-        data: {
+        body: {
           level: newLevel,
           persist: true
         }

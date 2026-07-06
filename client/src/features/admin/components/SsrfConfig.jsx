@@ -56,7 +56,7 @@ function SsrfConfig() {
     try {
       await makeAdminApiCall('/admin/ssrf/config', {
         method: 'PUT',
-        data: { allowedHosts }
+        body: { allowedHosts }
       });
       setMessage({
         type: 'success',

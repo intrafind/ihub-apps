@@ -97,7 +97,7 @@ function AdminSourcesPage() {
       const newEnabled = !source.enabled;
       await makeAdminApiCall(`/admin/sources/_toggle`, {
         method: 'POST',
-        body: JSON.stringify({ sourceIds: [sourceId], enabled: newEnabled })
+        body: { sourceIds: [sourceId], enabled: newEnabled }
       });
       setSources(prev => prev.map(s => (s.id === sourceId ? { ...s, enabled: newEnabled } : s)));
     } catch (err) {
@@ -111,7 +111,7 @@ function AdminSourcesPage() {
       const sourceIds = Array.from(selectedSources);
       await makeAdminApiCall('/admin/sources/_toggle', {
         method: 'POST',
-        body: JSON.stringify({ sourceIds, enabled })
+        body: { sourceIds, enabled }
       });
       setSources(prev => prev.map(s => (sourceIds.includes(s.id) ? { ...s, enabled } : s)));
       setSelectedSources(new Set());

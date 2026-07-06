@@ -73,7 +73,7 @@ function AdminProviderCreatePage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(dataToSend)
+        body: dataToSend
       });
 
       setSuccess(true);

@@ -130,7 +130,7 @@ function AdminUserEditPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(apiData)
+        body: apiData
       });
 
       markSaved();

@@ -67,8 +67,7 @@ function AdminBackupPage() {
 
       const response = await makeAdminApiCall('/admin/backup/import', {
         method: 'POST',
-        data: formData,
-        headers: { 'Content-Type': 'multipart/form-data' }
+        body: formData
       });
 
       const data = response.data;

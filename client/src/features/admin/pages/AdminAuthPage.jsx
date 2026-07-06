@@ -127,7 +127,7 @@ function AdminAuthPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: data
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly
