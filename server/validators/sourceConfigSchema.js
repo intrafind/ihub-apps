@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zSafeId } from './index.js';
+import { zSafeId } from './common.js';
 import logger from '../utils/logger.js';
 
 // Localized string schema - matches client pattern for language codes

@@ -82,6 +82,45 @@ export function validateIdForPath(id, idType, res) {
 }
 
 /**
+ * Validates browser extension IDs (safe chars + integration-specific length bounds).
+ *
+ * @param {string} id - Extension ID to validate
+ * @returns {boolean} - True if valid
+ */
+export function isValidExtensionId(id) {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  if (id.length < 8 || id.length > 128) {
+    return false;
+  }
+  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+    return false;
+  }
+  if (DANGEROUS_KEYS.has(id)) {
+    return false;
+  }
+  return SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validates workflow version strings used in path contexts.
+ * Must be a valid safe ID and start/end with an alphanumeric character.
+ *
+ * @param {string} version - Workflow version string
+ * @returns {boolean} - True if valid
+ */
+export function isValidWorkflowVersion(version) {
+  return (
+    typeof version === 'string' &&
+    version.length <= 64 &&
+    isValidId(version) &&
+    /^[a-zA-Z0-9]/.test(version) &&
+    /[a-zA-Z0-9]$/.test(version)
+  );
+}
+
+/**
  * Validates multiple IDs (e.g., for batch operations).
  *
  * @param {string|string[]} ids - Single ID, comma-separated string, or array of IDs

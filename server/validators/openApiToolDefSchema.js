@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zSafeId } from './index.js';
+import { zSafeId } from './common.js';
 
 /**
  * Schema for `type: "openapi"` tool entries (issue #1462).

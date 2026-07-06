@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zSafeId } from './index.js';
+import { zSafeId } from './common.js';
 
 /**
  * Central credential store schema.

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zSafeId } from './index.js';
+import { zSafeId } from './common.js';
 
 const localizedStringSchema = z.record(
   z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Invalid language code format'),

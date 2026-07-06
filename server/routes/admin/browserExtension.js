@@ -14,7 +14,7 @@ import {
   extensionIdFromPublicKeyBase64,
   packCrx3
 } from '../../utils/chromeExtensionId.js';
-import { isValidId } from '../../utils/pathSecurity.js';
+import { isValidExtensionId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
@@ -427,7 +427,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
           }
           const trimmed = id.trim();
           if (!trimmed) continue;
-          if (!isValidId(trimmed) || trimmed.length < 8 || trimmed.length > 128) {
+          if (!isValidExtensionId(trimmed)) {
             return sendBadRequest(
               res,
               `extensionIds entry "${trimmed}" must contain only alphanumeric, dot, dash or underscore characters (8-128 chars)`
