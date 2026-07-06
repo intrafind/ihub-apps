@@ -5,8 +5,16 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import logger from '../../utils/logger.js';
 
-function preprocessMessagesWithFileData(messages) {
-  return messages.map(msg => {
+export function preprocessMessagesWithFileData(messages) {
+  return messages.map(originalMsg => {
+    // PromptService may have already folded the file TEXT into this message via
+    // the {{content}} template variable (see _fileTextInjectedViaTemplate). When
+    // it has, we must NOT prepend that text again — but we still surface any
+    // image-based pages (pageImages) as imageData. Destructuring also strips the
+    // internal marker so it never reaches the LLM adapter.
+    const { _fileTextInjectedViaTemplate, ...msg } = originalMsg;
+    const textInTemplate = _fileTextInjectedViaTemplate === true;
+
     // Handle array of files (multiple file upload)
     if (Array.isArray(msg.fileData)) {
       const textParts = [];
@@ -14,9 +22,13 @@ function preprocessMessagesWithFileData(messages) {
 
       for (const file of msg.fileData) {
         if (file.content) {
-          textParts.push(
-            `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`
-          );
+          // Skip text already folded into {{content}}; image pages below are
+          // always processed since they were not injected into the template.
+          if (!textInTemplate) {
+            textParts.push(
+              `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`
+            );
+          }
         } else if (Array.isArray(file.pageImages) && file.pageImages.length > 0) {
           textParts.push(
             `[File: ${file.fileName} (${file.displayType || file.fileType})] - ${file.pageImages.length} page(s) rendered as images:\n\n`
@@ -45,6 +57,8 @@ function preprocessMessagesWithFileData(messages) {
 
     // Handle single file with text content
     if (msg.fileData && msg.fileData.content) {
+      // Text already folded into {{content}} by PromptService — don't repeat it.
+      if (textInTemplate) return msg;
       const fileInfo = `[File: ${msg.fileData.fileName || msg.fileData.name} (${msg.fileData.displayType || msg.fileData.fileType || msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
       return { ...msg, content: fileInfo + (msg.content || '') };
     }

@@ -60,3 +60,18 @@ limit — silently fell back to "Based on AI knowledge" even though a file or em
 - Applies to both the standard chat path and apps with tools enabled.
 - Source attribution is also cleared reliably at the end of each turn, so a later message in the
   same conversation can no longer inherit a stale badge.
+
+## Uploaded Documents Are Used by Prompt-Template Apps (e.g. Summarizer)
+
+Apps whose prompt contains a `{{content}}` placeholder (Summarizer, NDA analyzer, and similar) now
+correctly summarize/analyze an uploaded document. Previously the placeholder was filled only with
+the text typed into the message box — so when a user uploaded a file without typing anything, the
+model was told to work on empty content while the document sat disconnected above the instruction,
+producing generic "there is nothing to summarize" style answers.
+
+- Uploaded document text is now folded into `{{content}}` (before any typed text), so the
+  instruction references the actual document.
+- Works with a single document, multiple documents, and mixed uploads (text documents are placed in
+  the prompt while image-based pages are still attached as images).
+- The document is never duplicated in the request, and the "Based on uploaded file" badge continues
+  to appear.
