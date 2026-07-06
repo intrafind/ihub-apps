@@ -555,7 +555,7 @@ export default function registerDataRoutes(app) {
       }
 
       // Language normalization and fallback logic
-      const supportedLanguages = ['en', 'de'];
+      const supportedLanguages = configCache.getSupportedLanguages();
       const baseLanguage = lang.split('-')[0].toLowerCase();
 
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {

@@ -81,3 +81,26 @@ export async function loadBuiltinLocaleJson(relativePath) {
     return null;
   }
 }
+
+/**
+ * Returns language codes for all built-in locale files found in shared/i18n/.
+ * For example, if shared/i18n/ contains en.json and de.json this returns ['en', 'de'].
+ * Falls back to ['en', 'de'] if the directory cannot be read.
+ */
+export async function listBuiltinLocales() {
+  try {
+    const rootDir = getRootDir();
+    const i18nDir = path.join(rootDir, 'shared', 'i18n');
+    const entries = await fs.readdir(i18nDir);
+    return entries
+      .filter(f => f.endsWith('.json'))
+      .map(f => path.basename(f, '.json'))
+      .sort();
+  } catch (error) {
+    logger.error('Error listing builtin locales, falling back to defaults:', {
+      component: 'ConfigLoader',
+      error
+    });
+    return ['en', 'de'];
+  }
+}
