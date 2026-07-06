@@ -734,6 +734,11 @@ export default function registerAdminAppsRoutes(app) {
 
       const rootDir = getRootDir();
       const appsDir = join(rootDir, 'contents', 'apps');
+      // Check for duplicate ID via configCache (covers filenames that differ from their ID)
+      const { data: existingApps } = configCache.getApps(true);
+      if (existingApps.some(a => a.id === newApp.id)) {
+        return sendErrorResponse(res, 409, 'App with this ID already exists');
+      }
       const appFilePath = join(appsDir, `${newApp.id}.json`);
       try {
         readFileSync(appFilePath, 'utf8');
@@ -1045,12 +1050,12 @@ export default function registerAdminAppsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
-      try {
-        readFileSync(appFilePath, 'utf8');
-      } catch {
+      const appsDir = join(rootDir, 'contents', 'apps');
+      const filename = await findAppFile(appId, appsDir);
+      if (!filename) {
         return sendNotFound(res, 'App');
       }
+      const appFilePath = join(appsDir, filename);
       const { data: currentApps } = configCache.getApps(true);
       const deletedApp = currentApps.find(a => a.id === appId);
       if (deletedApp) {
