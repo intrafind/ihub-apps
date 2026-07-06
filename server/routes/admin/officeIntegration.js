@@ -48,6 +48,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         de: 'KI-gestützter Assistent für Outlook'
       },
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
+      useLocalOfficejs: officeConfig.useLocalOfficejs === true,
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
     });
@@ -207,7 +208,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/office-integration/config'), adminAuth, async (req, res) => {
     try {
-      const { displayName, description, starterPrompts } = req.body;
+      const { displayName, description, starterPrompts, useLocalOfficejs } = req.body;
       const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
@@ -278,6 +279,12 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           sanitized.push({ title: titleResult.value, message: messageResult.value });
         }
         allowed.starterPrompts = sanitized;
+      }
+      if (useLocalOfficejs !== undefined) {
+        if (typeof useLocalOfficejs !== 'boolean') {
+          return sendBadRequest(res, 'useLocalOfficejs must be a boolean');
+        }
+        allowed.useLocalOfficejs = useLocalOfficejs;
       }
 
       await savePlatformConfig({

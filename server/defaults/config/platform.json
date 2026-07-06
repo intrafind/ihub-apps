@@ -286,6 +286,7 @@
           "de": "Erzähle mir etwas über die Teilnehmenden dieses Meetings und warum jede Person vermutlich eingeladen wurde."
         }
       }
-    ]
+    ],
+    "useLocalOfficejs": false
   }
 }
