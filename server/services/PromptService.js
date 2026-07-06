@@ -224,7 +224,11 @@ class PromptService {
         }
 
         // Combine user-defined variables with global prompt variables (user variables take precedence)
-        const variables = { ...globalPromptVariables, ...msg.variables, content: contentForTemplate };
+        const variables = {
+          ...globalPromptVariables,
+          ...msg.variables,
+          content: contentForTemplate
+        };
         if (variables && Object.keys(variables).length > 0) {
           for (const [key, value] of Object.entries(variables)) {
             const strValue = typeof value === 'string' ? value : String(value || '');

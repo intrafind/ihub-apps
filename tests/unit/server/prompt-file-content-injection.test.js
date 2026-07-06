@@ -26,7 +26,10 @@ jest.mock('../../../server/configCache.js', () => ({
     getModels: () => ({ data: [] })
   }
 }));
-jest.mock('../../../server/config.js', () => ({ __esModule: true, default: { CONTENTS_DIR: 'contents' } }));
+jest.mock('../../../server/config.js', () => ({
+  __esModule: true,
+  default: { CONTENTS_DIR: 'contents' }
+}));
 jest.mock('../../../server/utils/logger.js', () => ({
   __esModule: true,
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
@@ -41,7 +44,10 @@ jest.mock('../../../server/services/SourceResolutionService.js', () => ({
 jest.mock('../../../server/adapters/index.js', () => ({ createCompletionRequest: jest.fn() }));
 jest.mock('../../../server/toolLoader.js', () => ({ getToolsForApp: jest.fn(async () => []) }));
 jest.mock('../../../server/utils/ErrorHandler.js', () => ({ __esModule: true, default: class {} }));
-jest.mock('../../../server/utils/ApiKeyVerifier.js', () => ({ __esModule: true, default: class {} }));
+jest.mock('../../../server/utils/ApiKeyVerifier.js', () => ({
+  __esModule: true,
+  default: class {}
+}));
 
 import promptService from '../../../server/services/PromptService.js';
 import { preprocessMessagesWithFileData } from '../../../server/services/chat/RequestBuilder.js';
