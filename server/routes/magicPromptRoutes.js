@@ -21,8 +21,6 @@ export default function registerMagicPromptRoutes(app) {
     async (req, res) => {
       try {
         const { input, prompt, modelId, appId = 'direct' } = req.body;
-        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        req.headers['accept-language']?.split(',')[0] || defaultLang;
         if (!input) {
           return sendBadRequest(res, 'Missing input');
         }

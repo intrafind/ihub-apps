@@ -20,7 +20,7 @@ import registerToolRoutes from './routes/toolRoutes.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
-import registerSessionRoutes from './routes/sessionRoutes.js';
+import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
@@ -425,7 +425,11 @@ if (cluster.isPrimary && workerCount > 1) {
   // Error localization and API key validation implemented in serverHelpers.js
 
   // Middleware
-  setupMiddleware(app, platformConfig);
+  // Use the resolved platform config from configCache (which applies IHUB_PLATFORM__*
+  // env overrides and decrypts secrets) so boot-time middleware (body-size limit,
+  // rate limiters, sessions, auth chain) picks up all overrides.  Fall back to
+  // the raw JSON value only if configCache failed to initialize.
+  setupMiddleware(app, configCache.getPlatform() || platformConfig);
 
   // Add base path middleware chain:
   // 1. Rewrite: strips X-Forwarded-Prefix from req.url (handles non-stripping proxies)
@@ -453,7 +457,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerSkillRoutes(app);
   registerPageRoutes(app);
   registerRendererRoutes(app);
-  registerSessionRoutes(app);
+  registerAppSessionStartRoute(app);
   registerMagicPromptRoutes(app);
   registerChatRoutes(app, {
     verifyApiKey,

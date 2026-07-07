@@ -1,46 +1,57 @@
 import { apiClient } from './client.js';
 import { buildPath } from '../utils/runtimeBasePath';
 
+const isPlainObjectForBody = value =>
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.prototype.toString.call(value) === '[object Object]';
+
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
   // Handle admin token for anonymous mode
   const adminToken = localStorage.getItem('adminToken');
 
-  // Create axios config from options
+  const { method = 'GET', headers = {}, ...axiosOptions } = options;
+
+  // Create axios config from supported options
   const axiosConfig = {
     url: url.startsWith('/') ? url : `/${url}`,
-    method: options.method || 'GET',
-    ...options
+    method,
+    ...axiosOptions,
+    headers: { ...headers }
   };
 
-  // Initialize headers
-  axiosConfig.headers = axiosConfig.headers || {};
+  const hasBody = Object.hasOwn(options, 'body');
+  const body = options.body;
+  const isFormData = body instanceof FormData;
 
-  // Track if this is a FormData request
-  const isFormData = options.body instanceof FormData;
+  if (Object.hasOwn(options, 'data')) {
+    throw new Error(
+      'Breaking change: makeAdminApiCall no longer supports the "data" option. Use "body" instead, for example { body: { key: value } } or { body: formData }.'
+    );
+  }
 
   // Handle request body
-  if (options.body) {
+  if (hasBody) {
+    if (!isFormData && !isPlainObjectForBody(body)) {
+      const bodyType = body === null ? 'null' : Array.isArray(body) ? 'array' : typeof body;
+      throw new Error(
+        `makeAdminApiCall expects "body" to be a plain object (or FormData). Received ${bodyType}.`
+      );
+    }
+
+    axiosConfig.data = body;
     if (isFormData) {
-      axiosConfig.data = options.body;
-      // For FormData, start with empty headers (no Content-Type)
-      // Let the browser set the correct multipart/form-data header with boundary
-      axiosConfig.headers = {
-        ...options.headers
-      };
-    } else if (typeof options.body === 'string') {
-      axiosConfig.data = JSON.parse(options.body);
-      axiosConfig.headers = {
-        'Content-Type': 'application/json',
-        ...axiosConfig.headers,
-        ...options.headers
-      };
+      // Let axios/browser set the multipart boundary for FormData bodies
+      Object.keys(axiosConfig.headers).forEach(headerKey => {
+        if (headerKey.toLowerCase() === 'content-type') {
+          delete axiosConfig.headers[headerKey];
+        }
+      });
     } else {
-      axiosConfig.data = options.body;
       axiosConfig.headers = {
         'Content-Type': 'application/json',
-        ...axiosConfig.headers,
-        ...options.headers
+        ...axiosConfig.headers
       };
     }
   }
@@ -57,47 +68,8 @@ export const makeAdminApiCall = async (url, options = {}) => {
   }
 
   try {
-    // For FormData requests, use fetch directly to avoid axios default headers
-    if (isFormData) {
-      const API_URL = import.meta.env.VITE_API_URL || '/api';
-      const fullUrl = `${API_URL}${axiosConfig.url}`;
-
-      // Add session ID manually since we're not using axios interceptors
-      const { getSessionId } = await import('../utils/sessionManager');
-      const sessionId = getSessionId();
-
-      const fetchHeaders = {
-        ...axiosConfig.headers,
-        'X-Session-ID': sessionId
-        // Deliberately NOT setting Content-Type - let browser handle it for FormData
-      };
-
-      const fetchResponse = await fetch(fullUrl, {
-        method: axiosConfig.method,
-        headers: fetchHeaders,
-        body: axiosConfig.data,
-        credentials: 'include'
-      });
-
-      if (!fetchResponse.ok) {
-        const error = new Error(`HTTP ${fetchResponse.status}`);
-        error.response = {
-          status: fetchResponse.status,
-          statusText: fetchResponse.statusText,
-          data: await fetchResponse.json().catch(() => ({}))
-        };
-        throw error;
-      }
-
-      return {
-        data: await fetchResponse.json(),
-        status: fetchResponse.status,
-        headers: Object.fromEntries(fetchResponse.headers.entries())
-      };
-    } else {
-      const response = await apiClient(axiosConfig);
-      return response;
-    }
+    const response = await apiClient(axiosConfig);
+    return response;
   } catch (error) {
     const status = error.response?.status;
 
@@ -116,11 +88,8 @@ export const makeAdminApiCall = async (url, options = {}) => {
         // log back in — so an admin re-prompted mid-session lands back on the
         // admin page, not the app home.
         //
-        // The shared apiClient interceptor already dispatches this for JSON
-        // requests, but FormData requests use raw fetch and bypass that
-        // interceptor, so we dispatch here to cover both paths. Dispatching is
-        // idempotent: handleTokenExpired guards against re-entry and the auth
-        // gate won't re-show while it is already visible.
+        // Dispatching is idempotent: handleTokenExpired guards against re-entry
+        // and the auth gate won't re-show while it is already visible.
         window.dispatchEvent(new CustomEvent('authTokenExpired'));
       } else if (window.location.pathname.startsWith('/admin')) {
         // 403: authenticated but lacking admin permission. Send the user to the
@@ -912,7 +881,7 @@ export const fetchAdminUsageMeta = async () => {
 export const updateAdminUsageTrackingMode = async mode => {
   const response = await makeAdminApiCall('/admin/usage/meta', {
     method: 'PUT',
-    data: { trackingMode: mode }
+    body: { trackingMode: mode }
   });
   return response.data;
 };

@@ -76,11 +76,11 @@ function AdminShortLinkEditPage() {
       const url = isNew ? '/shortlinks' : `/shortlinks/${code}`;
       await makeAdminApiCall(url, {
         method,
-        body: JSON.stringify({
+        body: {
           ...link,
           params: parsedParams,
           expiresAt: link.expiresAt ? new Date(link.expiresAt).toISOString() : null
-        })
+        }
       });
       markSaved();
       navigate('/admin/shortlinks');

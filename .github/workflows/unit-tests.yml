@@ -1,0 +1,40 @@
+# Unit & Adapter Tests CI
+#
+# Runs test:quick (test:unit + test:adapters) on every pull request to ensure
+# test scripts don't silently rot. The adapter tests validate request-building
+# logic against known fixtures and do not require live API keys.
+
+name: Unit Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-quick:
+    runs-on: ubuntu-latest
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Run quick test suite (unit + adapter tests)
+        run: npm run test:quick

@@ -94,7 +94,7 @@ function AdminTelemetryPage() {
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
       platform.telemetry = config;
-      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', data: platform });
+      await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
       setMessage({
         type: 'success',
         text: t(

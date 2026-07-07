@@ -3,6 +3,7 @@
  */
 import { isAnonymousAccessAllowed } from '../utils/authorization.js';
 import authDebugService from '../utils/authDebugService.js';
+import configCache from '../configCache.js';
 
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
@@ -16,7 +17,7 @@ export function authRequired(req, res, next) {
     url: req.url,
     method: req.method
   });
-  const platformConfig = req.app.get('platform') || {};
+  const platformConfig = configCache.getPlatform() || {};
 
   // If anonymous access is allowed, proceed regardless of authentication
   if (isAnonymousAccessAllowed(platformConfig)) {

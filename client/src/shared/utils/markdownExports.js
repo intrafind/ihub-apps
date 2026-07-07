@@ -15,9 +15,7 @@
  */
 
 import { saveAs } from 'file-saver';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import { configureMarked } from '../components/MarkdownRenderer';
+import { renderMarkdown } from '../../config/marked.config';
 
 function baseNameWithoutMd(name) {
   if (typeof name !== 'string') return 'document';
@@ -50,8 +48,7 @@ export function exportAsMarkdown(text, name) {
 
 /** Render markdown to a self-contained styled HTML document and save. */
 export function exportAsHTML(text, name) {
-  configureMarked();
-  const body = DOMPurify.sanitize(marked(text || ''));
+  const body = renderMarkdown(text || '');
   const title = baseNameWithoutMd(name);
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -84,8 +81,7 @@ ${body}
  * avoids 500KB+ of client weight.
  */
 export function printAsPDF(text, name) {
-  configureMarked();
-  const body = DOMPurify.sanitize(marked(text || ''));
+  const body = renderMarkdown(text || '');
   const title = baseNameWithoutMd(name);
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';

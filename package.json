@@ -39,12 +39,10 @@
     "build:package": "cd dist && npm ci --omit=dev && cd server && npm ci --omit=dev",
     "build:docker": "npm run build:clean && npm run build:client && npm run build:extension && npm run docs:build:all && npm run docs:copy:all && npm run build:server && npm run build:shared && npm run build:config && npm run build:package",
     "build:binary": "npm run prod:build && ./build-sea.sh",
-    "// === DOCUMENTATION === && npm run docs:build:pdf ": "",
+    "// === DOCUMENTATION ===": "",
     "docs:build": "npm run docs:update-version && cd docs && mdbook build",
     "docs:build:all": "npm run docs:update-version && npm run docs:build && npm run docs:build:markdown",
-    "docs:build:html": "npm run docs:build",
     "docs:build:markdown": "node scripts/export-docs-markdown.js",
-    "docs:copy": "mkdir -p dist/docs && cp -r docs/book/* dist/docs/",
     "docs:copy:all": "mkdir -p dist/docs dist/exports && cp -r docs/book/html/* dist/docs/ && cp docs/book/pdf/*.pdf dist/exports/ 2>/dev/null || true && cp docs/book/iHub-Apps-Documentation.md dist/exports/ 2>/dev/null || true",
     "docs:clean": "rm -rf docs/book",
     "docs:serve": "cd docs && mdbook serve",
@@ -87,7 +85,6 @@
     "test:watch": "jest --config tests/config/jest.config.js --watch",
     "test:coverage": "jest --config tests/config/jest.config.js --coverage",
     "// === LEGACY TESTS ===": "",
-    "test:legacy": "npm run test:openai && npm run test:mistral && npm run test:anthropic && npm run test:google && npm run test:bedrock && npm run test:vllm-images",
     "test:adapters": "npm run test:openai && npm run test:mistral && npm run test:anthropic && npm run test:google && npm run test:bedrock && npm run test:vllm-images",
     "test:openai": "node server/tests/openaiAdapter.test.js",
     "test:mistral": "node server/tests/mistralAdapter.test.js",
@@ -110,8 +107,7 @@
     "format:fix": "prettier --write .",
     "lint-format:fix": "npm run lint:fix && npm run format:fix",
     "// === SECURITY ===": "",
-    "security:audit": "node scripts/audit-admin-endpoints.js",
-    "security:audit:admin": "node scripts/audit-admin-endpoints.js"
+    "security:audit": "node scripts/audit-admin-endpoints.js"
   },
   "keywords": [
     "ai",
@@ -119,21 +115,7 @@
     "chatbot",
     "applications"
   ],
-  "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
-    "archiver": "^8.0.0",
-    "axios": "^1.18.1",
-    "croner": "^10.0.1",
-    "dotenv": "^17.4.2",
-    "file-saver": "^2.0.5",
-    "gpt-tokenizer": "^3.4.0",
-    "gray-matter": "^4.0.3",
-    "html-to-image": "^1.11.13",
-    "http-proxy-agent": "^9.1.0",
-    "https-proxy-agent": "^9.1.0",
-    "react-icons": "^5.7.0",
-    "react-resizable-panels": "^4.12.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@babel/preset-env": "^7.29.7",
@@ -143,11 +125,12 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
+    "axios": "^1.18.1",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
     "electron": "^42.5.2",
     "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.7.0",
@@ -156,12 +139,9 @@
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "lint-staged": "^17.0.8",
-    "nodemon": "^3.1.14",
-    "postject": "^1.0.0-alpha.6",
     "prettier": "^3.9.4",
     "rimraf": "^6.1.3",
-    "supertest": "^7.1.3",
-    "vitest": "^4.1.9"
+    "supertest": "^7.1.3"
   },
   "engines": {
     "node": ">=24.0.0"

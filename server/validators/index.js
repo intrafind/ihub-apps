@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export { zSafeId } from './common.js';
 
 export {
   auditEntrySchema,

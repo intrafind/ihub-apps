@@ -24,9 +24,15 @@ const adapters = {
  * Get the appropriate adapter for a model
  * @param {string} provider - The provider name
  * @returns {Object} The provider adapter
+ * @throws {Error} If the provider is not registered
  */
 export function getAdapter(provider) {
-  const adapter = adapters[provider] || adapters['openai']; // Fallback to OpenAI
+  const adapter = adapters[provider];
+  if (!adapter) {
+    throw new Error(
+      `Unknown provider "${provider}". Supported providers: ${Object.keys(adapters).join(', ')}`
+    );
+  }
   return adapter;
 }
 

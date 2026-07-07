@@ -50,7 +50,7 @@ function AdminFeaturesPage() {
 
       await makeAdminApiCall('/admin/features', {
         method: 'PUT',
-        data: dirtyFlags
+        body: dirtyFlags
       });
 
       setDirtyFlags({});

@@ -34,8 +34,6 @@ function useAppChat({
   const chatId = initialChatId || `chat-${uuidv4()}`;
   const [processing, setProcessing] = useState(false);
   const [conversationTitle, setConversationTitle] = useState(null);
-  const [searchStatus, setSearchStatus] = useState(null);
-
   // Clarification state - tracks when a clarification question is pending
   const [clarificationPending, setClarificationPending] = useState(false);
   const activeClarificationRef = useRef(null); // Store active clarification data
@@ -256,14 +254,10 @@ function useAppChat({
           }
           break;
         case 'search.status':
-          if (data) {
-            setSearchStatus(data);
-            // Also store on the message for persistence
-            if (lastMessageIdRef.current) {
-              updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-                searchStatus: data
-              });
-            }
+          if (data && lastMessageIdRef.current) {
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              searchStatus: data
+            });
           }
           break;
         case 'conversation.title':
@@ -711,7 +705,6 @@ function useAppChat({
 
   const resetConversationState = useCallback(() => {
     setConversationTitle(null);
-    setSearchStatus(null);
   }, []);
 
   return {
@@ -720,7 +713,6 @@ function useAppChat({
     processing,
     clarificationPending,
     conversationTitle,
-    searchStatus,
     sendMessage,
     resendMessage,
     deleteMessage,

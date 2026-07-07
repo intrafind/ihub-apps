@@ -21,6 +21,7 @@ import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { getRootDir } from '../../pathUtils.js';
 import {
+  isValidWorkflowVersion,
   validateIdForPath,
   resolveAndValidatePath,
   resolveAndValidateRealPath
@@ -2465,14 +2466,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       const versionParam = req.params.version;
-      // Strict version validation: alphanumeric, dot, hyphen ONLY, no `..`
-      // The previous regex allowed `..` which is a path-traversal sequence.
-      if (
-        !versionParam ||
-        versionParam.length > 64 ||
-        !/^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/.test(versionParam) ||
-        versionParam.includes('..')
-      ) {
+      // Strict version validation: safe ID chars only, no `..`, and no leading/trailing punctuation.
+      if (!isValidWorkflowVersion(versionParam)) {
         return res.status(400).json({ error: 'Invalid version format' });
       }
 

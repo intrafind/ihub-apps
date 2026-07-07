@@ -291,7 +291,7 @@ jq '.users[].passwordHash' contents/config/users.json
 - **Password Hash Missing:** Run password rehashing utility:
 ```bash
 cd server
-node utils/rehashPasswords.js
+node utils/rehashPasswords.js --passwords='{"user_demo_admin":"password123","user_demo_user":"password123"}'
 ```
 
 - **Wrong Auth Mode:** Update `platform.json`:

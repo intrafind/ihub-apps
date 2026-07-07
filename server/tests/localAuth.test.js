@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import { jest } from '@jest/globals';
 import os from 'os';
 import path from 'path';
-import { hashPasswordWithUserId, loginUser } from '../middleware/localAuth.js';
+import { loginUser } from '../middleware/localAuth.js';
+import { hashPasswordWithUserId } from '../utils/userManager.js';
 
 describe('localAuth loginUser timing protections', () => {
   const expectedDummyHash = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';

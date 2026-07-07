@@ -147,7 +147,7 @@ function AdminOAuthClientEditPage() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(formData)
+          body: formData
         });
 
         const data = response.data;
@@ -160,7 +160,7 @@ function AdminOAuthClientEditPage() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(formData)
+          body: formData
         });
 
         markSaved();

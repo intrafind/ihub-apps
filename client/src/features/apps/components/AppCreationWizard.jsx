@@ -297,7 +297,7 @@ function AppCreationWizard({ onClose, templateApp = null }) {
       // Create the app
       await makeAdminApiCall('/admin/apps', {
         method: 'POST',
-        body: JSON.stringify(cleanedAppData)
+        body: cleanedAppData
       });
 
       // If we get here, the app was created successfully
@@ -674,7 +674,7 @@ function AIGenerationStep({ appData, updateAppData }) {
       // Use OpenAI completion directly for app generation
       const response = await makeAdminApiCall('/completions', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           messages: [
             {
               role: 'system',
@@ -688,7 +688,7 @@ function AIGenerationStep({ appData, updateAppData }) {
           responseFormat: 'json',
           responseSchema: appGeneratorPrompt.outputSchema,
           temperature: 1.0
-        })
+        }
       });
 
       const data = response.data;

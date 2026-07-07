@@ -170,7 +170,7 @@ function AdminNextcloudEmbedPage() {
 
       await makeAdminApiCall('/admin/nextcloud-embed/config', {
         method: 'PUT',
-        data: {
+        body: {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,

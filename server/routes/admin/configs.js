@@ -168,7 +168,7 @@ export default function registerAdminConfigRoutes(app) {
         });
         platformConfig = {
           auth: {
-            mode: 'proxy',
+            mode: 'local',
             authenticatedGroup: 'authenticated'
           },
           anonymousAuth: {
@@ -184,16 +184,11 @@ export default function registerAdminConfigRoutes(app) {
           localAuth: {
             enabled: false,
             usersFile: 'contents/config/users.json',
-            sessionTimeoutMinutes: 480,
-            jwtSecret: '${JWT_SECRET}'
+            sessionTimeoutMinutes: 480
           },
           oidcAuth: {
             enabled: false,
             providers: []
-          },
-          anonymousAuth: {
-            enabled: true,
-            defaultGroups: ['anonymous']
           }
         };
       }

@@ -94,7 +94,7 @@ Die GPU-Auswahl erfolgt fallbezogen gemeinsam mit IntraFind, abhängig von:
 
 2. **Eigene Micro-App erstellen**:
    - GitHub-Repo enthält Beispiele und Dokumentation
-   - Siehe Ordner `examples`, `docs`, sowie `AGENTS.md` und `LLM_GUIDELINES.md`
+   - Siehe Ordner `examples` und `docs` sowie den Repository-Agenten-Leitfaden in `CLAUDE.md`
    - Komplette Dokumentation im laufenden iHub unter `/help`
 
 ### Sind Prompt-Kenntnisse erforderlich?

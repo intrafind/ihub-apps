@@ -153,4 +153,3 @@
   - any:
     - '**/*gemini*'
     - '**/gemini*'
-    - GEMINI.md

@@ -6,7 +6,6 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
-import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import {
   useWorkflowExecution,
   useElapsedTime,
@@ -50,8 +49,7 @@ const renderValue = value => {
   if (typeof value === 'string') {
     // Check if the string contains markdown formatting
     if (isMarkdown(value)) {
-      // markdownToHtml uses marked which is already configured for the app
-      // Content comes from workflow LLM responses which are trusted (same as chat)
+      // markdownToHtml uses the shared markdown renderer with centralized sanitization.
       const html = markdownToHtml(value);
       return (
         <div
@@ -238,14 +236,6 @@ function WorkflowExecutionPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-
-  // Install the same code-block renderer the chat uses. Without this, fenced
-  // code blocks (e.g. ASCII art reports) get marked's default <pre><code>,
-  // which renders correctly in chat (chat configures its renderer on mount)
-  // but loses the explicit monospace/overflow-x-auto styling here.
-  useEffect(() => {
-    configureMarked(t);
-  }, [t]);
   const [showAppSelection, setShowAppSelection] = useState(false);
   /** @type {[Set<string>, Function]} Tracks which output accordion panels are expanded */
   const [expandedOutputFields, setExpandedOutputFields] = useState(new Set());

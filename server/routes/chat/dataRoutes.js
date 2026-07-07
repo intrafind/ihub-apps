@@ -371,7 +371,7 @@ export default function registerDataRoutes(app) {
     authRequired,
     async (req, res) => {
       try {
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
 
         // Get prompts with ETag from cache
         let { data: prompts, etag } = configCache.getPrompts();
@@ -555,7 +555,7 @@ export default function registerDataRoutes(app) {
       }
 
       // Language normalization and fallback logic
-      const supportedLanguages = ['en', 'de'];
+      const supportedLanguages = configCache.getSupportedLanguages();
       const baseLanguage = lang.split('-')[0].toLowerCase();
 
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
