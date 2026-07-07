@@ -84,3 +84,15 @@ kept mislabeling upload-based answers.
 - Covers document uploads, image uploads, and email context in tool-enabled apps.
 - The detected source is also cleared when a turn instead pauses for a clarification question or
   ends in an error, so it can't carry over to the next message.
+
+## Group Management: Admin Lockout Prevention
+
+The admin Groups API's protected-group list previously checked for `admin`/`user`, but the
+built-in groups are shipped as `admins`/`users`. This meant the real administrator group could be
+deleted, or have its administrative access removed via an update, silently locking every admin out
+of the platform until `groups.json` was hand-edited.
+
+- Deleting or updating a group is now blocked whenever it would leave the platform with zero
+  groups granting administrative access, in addition to the built-in `admins`, `users`,
+  `anonymous`, and `authenticated` groups remaining non-deletable.
+- The group create/update endpoints now also accept the documented `inherits` field.

@@ -17,6 +17,16 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
+ * Count groups that grant adminAccess. Used to prevent removing/demoting the
+ * last group that can administer the platform.
+ */
+function countAdminAccessGroups(groups, excludeGroupId = null) {
+  return Object.entries(groups || {}).filter(
+    ([groupId, group]) => groupId !== excludeGroupId && group?.permissions?.adminAccess === true
+  ).length;
+}
+
+/**
  * @swagger
  * components:
  *   schemas:
@@ -521,7 +531,7 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const { id, name, description, permissions, mappings = [] } = req.body;
+      const { id, name, description, permissions, mappings = [], inherits = [] } = req.body;
 
       if (!id || !name) {
         return sendBadRequest(res, 'Group ID and name are required');
@@ -574,7 +584,8 @@ export default function registerAdminGroupRoutes(app) {
           workflows: Array.isArray(permissions.workflows) ? permissions.workflows : [],
           adminAccess: Boolean(permissions.adminAccess)
         },
-        mappings: Array.isArray(mappings) ? mappings : []
+        mappings: Array.isArray(mappings) ? mappings : [],
+        inherits: Array.isArray(inherits) ? inherits : []
       };
 
       groupsData.groups[id] = newGroup;
@@ -674,7 +685,7 @@ export default function registerAdminGroupRoutes(app) {
         return;
       }
 
-      const { name, description, permissions, mappings } = req.body;
+      const { name, description, permissions, mappings, inherits } = req.body;
 
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
@@ -700,9 +711,27 @@ export default function registerAdminGroupRoutes(app) {
       if (name !== undefined) group.name = name;
       if (description !== undefined) group.description = description;
       if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
+      if (inherits !== undefined) group.inherits = Array.isArray(inherits) ? inherits : [];
 
       // Update permissions
       if (permissions !== undefined && typeof permissions === 'object') {
+        const newAdminAccess =
+          permissions.adminAccess !== undefined
+            ? Boolean(permissions.adminAccess)
+            : group.permissions.adminAccess || false;
+
+        // Prevent stripping adminAccess from the last group that grants it,
+        // which would lock every admin out of the platform.
+        if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
+          const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
+          if (remainingAdminGroups === 0) {
+            return sendBadRequest(
+              res,
+              `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
+            );
+          }
+        }
+
         group.permissions = {
           apps: Array.isArray(permissions.apps) ? permissions.apps : group.permissions.apps || [],
           prompts: Array.isArray(permissions.prompts)
@@ -714,10 +743,7 @@ export default function registerAdminGroupRoutes(app) {
           workflows: Array.isArray(permissions.workflows)
             ? permissions.workflows
             : group.permissions.workflows || [],
-          adminAccess:
-            permissions.adminAccess !== undefined
-              ? Boolean(permissions.adminAccess)
-              : group.permissions.adminAccess || false
+          adminAccess: newAdminAccess
         };
       }
 
@@ -758,13 +784,14 @@ export default function registerAdminGroupRoutes(app) {
    *     summary: Delete a user group
    *     description: |
    *       Permanently deletes a user group and its configuration.
-   *       Protected system groups (admin, user, anonymous, authenticated) cannot be deleted
-   *       to maintain system integrity.
+   *       Protected system groups (admins, users, anonymous, authenticated) cannot be deleted
+   *       to maintain system integrity. Additionally, the last remaining group that grants
+   *       adminAccess cannot be deleted, to prevent locking all admins out of the platform.
    *
    *       **Protected Groups:**
    *       The following system groups are protected and cannot be deleted:
-   *       - admin: Administrative access group
-   *       - user: Standard user group
+   *       - admins: Administrative access group
+   *       - users: Standard user group
    *       - anonymous: Anonymous access group
    *       - authenticated: Base authenticated user group
    *     tags:
@@ -802,7 +829,7 @@ export default function registerAdminGroupRoutes(app) {
    *                 error:
    *                   type: string
    *             example:
-   *               error: "Cannot delete protected system group: admin"
+   *               error: "Cannot delete protected system group: admins"
    *       404:
    *         description: Group not found
    *         content:
@@ -827,7 +854,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Prevent deletion of core system groups
-      const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
+      const protectedGroups = ['admins', 'users', 'anonymous', 'authenticated'];
       if (protectedGroups.includes(groupId)) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
@@ -851,6 +878,18 @@ export default function registerAdminGroupRoutes(app) {
 
       const deletedGroup = groupsData.groups[groupId];
       const groupName = deletedGroup.name;
+
+      // Prevent deleting the last group that grants adminAccess, which would
+      // lock every admin out of the platform.
+      if (deletedGroup.permissions?.adminAccess === true) {
+        const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
+        if (remainingAdminGroups === 0) {
+          return sendBadRequest(
+            res,
+            `Cannot delete group '${groupId}': it is the only group with administrative access`
+          );
+        }
+      }
 
       // Save snapshot before deletion
       await saveSnapshot({
