@@ -4,6 +4,7 @@ export default {
   extensionsToTreatAsEsm: ['.jsx'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^(.*)\\?url$': '<rootDir>/tests/config/fileUrlMock.js',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     // Force a single React copy. Files under client/ resolve
     // client/node_modules/react while the test renderer (@testing-library/react
