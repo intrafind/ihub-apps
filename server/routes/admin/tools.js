@@ -6,6 +6,7 @@ import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
@@ -124,9 +125,7 @@ import {
  * For admin operations, we need the original tool definitions, not the expanded ones
  */
 function loadRawTools() {
-  const rootDir = getRootDir();
-  const contentsDir = process.env.CONTENTS_DIR || 'contents';
-  const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+  const toolsFilePath = getContentsPath('config', 'tools.json');
 
   let tools = [];
   let needsCleanup = false;
@@ -166,7 +165,7 @@ function loadRawTools() {
     }
   } else {
     // Fall back to defaults if no custom config exists
-    const defaultToolsPath = join(rootDir, 'server', 'defaults', 'config', 'tools.json');
+    const defaultToolsPath = join(getRootDir(), 'server', 'defaults', 'config', 'tools.json');
     if (existsSync(defaultToolsPath)) {
       const fileContent = readFileSync(defaultToolsPath, 'utf-8');
       tools = JSON.parse(fileContent);
@@ -234,9 +233,7 @@ export default function registerAdminToolsRoutes(app) {
       // If we detected expanded tools, clean up the file
       if (needsCleanup && filePath) {
         try {
-          const rootDir = getRootDir();
-          const contentsDir = process.env.CONTENTS_DIR || 'contents';
-          await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+          await fs.mkdir(getContentsPath('config'), { recursive: true });
           await fs.writeFile(filePath, JSON.stringify(tools, null, 2));
           logger.info('Cleaned up tools file - removed expanded tools', {
             component: 'AdminTools',
@@ -414,9 +411,7 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      const toolsFilePath = getContentsPath('config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
       const { tools } = loadRawTools();
@@ -432,7 +427,7 @@ export default function registerAdminToolsRoutes(app) {
       tools[toolIndex] = updatedTool;
 
       // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+      await fs.mkdir(getContentsPath('config'), { recursive: true });
 
       // Write back to file
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
@@ -523,9 +518,7 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      const toolsFilePath = getContentsPath('config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
       const { tools } = loadRawTools();
@@ -544,7 +537,7 @@ export default function registerAdminToolsRoutes(app) {
       tools.push(newTool);
 
       // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+      await fs.mkdir(getContentsPath('config'), { recursive: true });
 
       // Write back to file
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
@@ -625,9 +618,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      const toolsFilePath = getContentsPath('config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
       const { tools } = loadRawTools();
@@ -641,7 +632,7 @@ export default function registerAdminToolsRoutes(app) {
 
       // Delete the script file if it exists (only for non-special tools)
       if (tool.script && !tool.isSpecialTool && !tool.provider) {
-        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+        const scriptPath = join(getRootDir(), 'server', 'tools', tool.script);
         try {
           if (existsSync(scriptPath)) {
             await fs.unlink(scriptPath);
@@ -661,7 +652,7 @@ export default function registerAdminToolsRoutes(app) {
       tools.splice(toolIndex, 1);
 
       // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+      await fs.mkdir(getContentsPath('config'), { recursive: true });
 
       // Write back to file
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
@@ -748,9 +739,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      const toolsFilePath = getContentsPath('config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
       const { tools } = loadRawTools();
@@ -764,7 +753,7 @@ export default function registerAdminToolsRoutes(app) {
       tool.enabled = !tool.enabled;
 
       // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+      await fs.mkdir(getContentsPath('config'), { recursive: true });
 
       // Write back to file
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));

@@ -1,11 +1,10 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import logger from '../../utils/logger.js';
 import {
   sendInternalError,
@@ -231,8 +230,7 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+      const groupsFilePath = getContentsPath('config', 'groups.json');
 
       let groupsData = { groups: {}, metadata: {} };
       try {
@@ -305,17 +303,15 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups/resources'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-
       // Get apps
-      const appsPath = join(rootDir, 'contents', 'apps');
+      const appsPath = getContentsPath('apps');
       const appFiles = await fs.readdir(appsPath);
       const apps = [];
 
       for (const file of appFiles) {
         if (file.endsWith('.json')) {
           try {
-            const appData = await fs.readFile(join(appsPath, file), 'utf8');
+            const appData = await fs.readFile(getContentsPath('apps', file), 'utf8');
             const app = JSON.parse(appData);
             apps.push({
               id: app.id,
@@ -332,14 +328,14 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Get models
-      const modelsPath = join(rootDir, 'contents', 'models');
+      const modelsPath = getContentsPath('models');
       const modelFiles = await fs.readdir(modelsPath);
       const models = [];
 
       for (const file of modelFiles) {
         if (file.endsWith('.json')) {
           try {
-            const modelData = await fs.readFile(join(modelsPath, file), 'utf8');
+            const modelData = await fs.readFile(getContentsPath('models', file), 'utf8');
             const model = JSON.parse(modelData);
             models.push({
               id: model.id,
@@ -356,7 +352,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Get prompts
-      const promptsPath = join(rootDir, 'contents', 'prompts');
+      const promptsPath = getContentsPath('prompts');
       const prompts = [];
 
       try {
@@ -364,7 +360,7 @@ export default function registerAdminGroupRoutes(app) {
         for (const file of promptFiles) {
           if (file.endsWith('.json')) {
             try {
-              const promptData = await fs.readFile(join(promptsPath, file), 'utf8');
+              const promptData = await fs.readFile(getContentsPath('prompts', file), 'utf8');
               const prompt = JSON.parse(promptData);
               prompts.push({
                 id: prompt.id,
@@ -384,7 +380,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Get workflows
-      const workflowsPath = join(rootDir, 'contents', 'workflows');
+      const workflowsPath = getContentsPath('workflows');
       const workflows = [];
 
       try {
@@ -392,7 +388,7 @@ export default function registerAdminGroupRoutes(app) {
         for (const file of workflowFiles) {
           if (file.endsWith('.json')) {
             try {
-              const workflowData = await fs.readFile(join(workflowsPath, file), 'utf8');
+              const workflowData = await fs.readFile(getContentsPath('workflows', file), 'utf8');
               const workflow = JSON.parse(workflowData);
               workflows.push({
                 id: workflow.id,
@@ -547,8 +543,7 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, 'Valid permissions object is required');
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+      const groupsFilePath = getContentsPath('config', 'groups.json');
 
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };
@@ -688,8 +683,7 @@ export default function registerAdminGroupRoutes(app) {
 
       const { name, description, permissions, mappings, inherits } = req.body;
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+      const groupsFilePath = getContentsPath('config', 'groups.json');
 
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };
@@ -861,8 +855,7 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+      const groupsFilePath = getContentsPath('config', 'groups.json');
 
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };

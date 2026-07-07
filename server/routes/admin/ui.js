@@ -3,12 +3,12 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { recordUpload } from '../../telemetry/metrics.js';
@@ -17,7 +17,7 @@ export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      const uploadDir = join(getRootDir(), 'contents/uploads/assets');
+      const uploadDir = getContentsPath('uploads', 'assets');
       // Create directory if it doesn't exist
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
@@ -122,7 +122,7 @@ export default function registerAdminUIRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/ui/assets'), authRequired, adminAuth, (req, res) => {
     try {
-      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+      const assetsDir = getContentsPath('uploads', 'assets');
 
       // Create directory if it doesn't exist
       if (!fs.existsSync(assetsDir)) {
@@ -190,7 +190,7 @@ export default function registerAdminUIRoutes(app) {
     async (req, res) => {
       try {
         const { id } = req.params;
-        const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+        const assetsDir = getContentsPath('uploads', 'assets');
 
         // Validate path stays within assets directory (prevents traversal)
         const filepath = await resolveAndValidatePath(id, assetsDir);
@@ -261,7 +261,7 @@ export default function registerAdminUIRoutes(app) {
       }
 
       // Get the current config path
-      const configPath = join(getRootDir(), 'contents/config/ui.json');
+      const configPath = getContentsPath('config', 'ui.json');
 
       // Validate the configuration structure (basic validation)
       validateUIConfig(config);
@@ -294,7 +294,7 @@ export default function registerAdminUIRoutes(app) {
       const uiConfig = configCache.getUI();
       const currentConfig = uiConfig?.data || {};
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = join(getRootDir(), 'contents/backups');
+      const backupDir = getContentsPath('backups');
 
       // Create backup directory if it doesn't exist
       if (!fs.existsSync(backupDir)) {
