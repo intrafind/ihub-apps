@@ -145,7 +145,7 @@ ls contents/config/
 
 # Confirm default files are present
 ls contents/config/platform.json
-ls contents/config/tools.json
+ls contents/tools/
 ls contents/models/
 ls contents/apps/
 ```
@@ -327,7 +327,7 @@ echo -n "searchprofile-standard" | base64
 
 ### 1. Enable iFinder Tools
 
-The iFinder tools should already be configured in `contents/config/tools.json`. Verify the configuration:
+The iFinder tools should already be configured in `contents/tools/iFinder.json`. Verify the configuration:
 
 ```json
 {
@@ -795,7 +795,7 @@ Solutions:
 ```
 Cause: iAssistant tool not properly configured
 Solutions:
-- Verify contents/config/tools.json includes iAssistant tool
+- Verify a tool file exists under contents/tools/ for the iAssistant tool
 - Check server/tools/iAssistant.js exists
 - Verify tool script exports ask function
 - Restart server and check tool loading logs

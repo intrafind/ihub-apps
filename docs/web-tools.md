@@ -198,7 +198,7 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 
 - `url` (string, required): The URL of the webpage to extract content from
 - `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
-- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in `tools.json` is used.
+- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in the tool's file under `contents/tools/` is used.
 
 **Returns**:
 
@@ -214,7 +214,7 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
-- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in `tools.json`)
+- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in the tool's file under `contents/tools/`)
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)

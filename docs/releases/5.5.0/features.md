@@ -73,16 +73,14 @@ limit — silently fell back to "Based on AI knowledge" even though a file or em
 - On error/aborted turns the badge is intentionally not shown, since the assistant bubble is an
   error message rather than a real answer.
 
-## Tools Can Now Be Managed as Individual Files
+## Tools Are Now Managed as Individual Files
 
-Tool configurations can now live as individual JSON files under `contents/tools/`, matching how
-apps, prompts, and models are already stored — instead of only as entries in one shared
-`config/tools.json` array.
+Tool configurations now live as individual JSON files under `contents/tools/`, matching how apps,
+prompts, and models are already stored, instead of as entries in one shared `config/tools.json`
+array. See [Breaking Changes](breaking-changes.md#configtoolsjson-is-removed) for the upgrade path.
 
-- Creating, editing, toggling, or deleting a tool in the admin UI now reads and writes its own
-  file, making it easy to add or remove a single tool without touching the others.
-- Existing tools defined in `config/tools.json` keep working unchanged; editing one through the
-  admin UI moves it to its own file automatically.
+- Creating, editing, toggling, or deleting a tool in the admin UI reads and writes its own file,
+  making it easy to add or remove a single tool without touching the others.
 
 ## Outlook Add-in: Attached Emails and Meeting Invites Are Now Included
 

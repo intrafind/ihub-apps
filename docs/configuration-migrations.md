@@ -8,7 +8,7 @@ Create a migration whenever you:
 
 - Add new required or default fields to existing config files (e.g., a new section in `platform.json`)
 - Rename or restructure fields in JSON config files
-- Add default entries to `providers.json`, `groups.json`, `tools.json`, `sources.json`, etc.
+- Add default entries to `providers.json`, `groups.json`, `sources.json`, etc.
 - Remove or move configuration keys that existing installations may still have in the old format
 
 **Do NOT** create migrations for:

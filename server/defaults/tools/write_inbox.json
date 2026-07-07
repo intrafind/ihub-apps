@@ -1,0 +1,44 @@
+{
+  "id": "write_inbox",
+  "name": {
+    "en": "Write Inbox"
+  },
+  "description": {
+    "en": "Update an inbox. mode='add' appends a new item; 'markDone' marks an existing item done by matching its text; 'replace' rewrites the full body."
+  },
+  "script": "agentTools.js",
+  "method": "writeInbox",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "inboxId": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["add", "markDone", "replace"]
+      },
+      "item": {
+        "type": "string",
+        "description": "The text of the item (for add or markDone)"
+      },
+      "priority": {
+        "type": "string",
+        "enum": ["p1", "p2", "p3"]
+      },
+      "body": {
+        "type": "string",
+        "description": "Full markdown body for replace mode"
+      },
+      "note": {
+        "type": "string",
+        "description": "Optional completion note for markDone"
+      },
+      "expectedVersion": {
+        "type": "integer"
+      }
+    },
+    "required": ["mode"]
+  }
+}

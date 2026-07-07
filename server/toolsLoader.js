@@ -3,45 +3,45 @@ import { createResourceLoader, createValidator } from './utils/resourceLoader.js
 /**
  * Tools Configuration Loader
  *
- * Loads tool definitions from both individual files in contents/tools/
- * and the legacy config/tools.json file for backward compatibility.
- *
- * Uses the generic resource loader factory to eliminate code duplication
- * (mirrors appsLoader.js, modelsLoader.js, promptsLoader.js).
+ * Loads tool definitions from individual files in contents/tools/, mirroring
+ * appsLoader.js, modelsLoader.js, and promptsLoader.js. There is no legacy
+ * config/tools.json support — installations are migrated to individual files
+ * by V068__split_tools_config_into_individual_files.js.
  */
 
 const toolsLoader = createResourceLoader({
   resourceName: 'Tools',
+  // createResourceLoader requires a legacyPath, but loadAllTools() below only
+  // ever calls loadFromFiles() — this path is never read.
   legacyPath: 'config/tools.json',
   individualPath: 'tools',
   validateItem: createValidator(['id', 'name'])
 });
 
-/**
- * Load tools from individual files in contents/tools/
- * @param {boolean} verbose - Whether to log verbose output
- * @returns {Array} Array of tool objects
- */
-export async function loadToolsFromFiles(verbose = true) {
-  return await toolsLoader.loadFromFiles(verbose);
+function getNameString(tool) {
+  if (typeof tool.name === 'object' && tool.name) {
+    return tool.name.en || tool.name[Object.keys(tool.name)[0]] || '';
+  }
+  return tool.name || tool.id || '';
+}
+
+function sortTools(a, b) {
+  const orderA = a.order ?? 999;
+  const orderB = b.order ?? 999;
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  return getNameString(a).localeCompare(getNameString(b));
 }
 
 /**
- * Load tools from legacy config/tools.json file
- * @param {boolean} verbose - Whether to log verbose output
- * @returns {Array} Array of tool objects
- */
-export async function loadToolsFromLegacyFile(verbose = true) {
-  return await toolsLoader.loadFromLegacy(verbose);
-}
-
-/**
- * Load all tools from both individual files and the legacy file.
- * Individual files take precedence over legacy entries with the same ID.
+ * Load all tools from individual files in contents/tools/.
  * @param {boolean} includeDisabled - Include disabled tools
  * @param {boolean} verbose - Whether to log verbose output
  * @returns {Array} Array of tool objects
  */
 export async function loadAllTools(includeDisabled = false, verbose = true) {
-  return await toolsLoader.loadAll(includeDisabled, verbose);
+  const tools = await toolsLoader.loadFromFiles(verbose);
+  const filtered = includeDisabled ? tools : tools.filter(tool => tool.enabled !== false);
+  return filtered.sort(sortTools);
 }

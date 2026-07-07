@@ -178,7 +178,7 @@ function localizeTools(tools, language = 'en') {
 }
 
 /**
- * Load tools defined locally in config/tools.json
+ * Load tools defined locally in contents/tools/
  * @param {string} language - Optional language for localization
  */
 export async function loadConfiguredTools(language = null) {

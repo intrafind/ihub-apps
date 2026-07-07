@@ -1,0 +1,35 @@
+{
+  "id": "write_memory",
+  "name": {
+    "en": "Write Memory"
+  },
+  "description": {
+    "en": "Append or replace the contents of your long-term memory file. Use mode='append' for adding notes, 'replace' for full rewrite. Provide expectedVersion to avoid clobbering concurrent writes."
+  },
+  "script": "agentTools.js",
+  "method": "writeMemory",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["append", "replace"],
+        "default": "append"
+      },
+      "content": {
+        "type": "string",
+        "description": "The markdown content to write"
+      },
+      "summary": {
+        "type": "string",
+        "description": "Optional one-line summary of what changed"
+      },
+      "expectedVersion": {
+        "type": "integer",
+        "description": "Expected version for optimistic concurrency"
+      }
+    },
+    "required": ["content"]
+  }
+}

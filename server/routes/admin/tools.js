@@ -4,7 +4,7 @@ import { join, basename } from 'path';
 import { createHash } from 'crypto';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
-import { loadToolsFromFiles } from '../../toolsLoader.js';
+import { loadAllTools } from '../../toolsLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
@@ -139,53 +139,12 @@ function filterExpandedTools(tools) {
 }
 
 /**
- * Load raw tool definitions (unexpanded) merged from both the legacy
- * config/tools.json file and individual files in contents/tools/.
- * Individual files take precedence over legacy entries with the same ID.
- * For admin operations, we need the original tool definitions, not the
- * expanded (per-function) ones used at runtime.
+ * Load raw tool definitions (unexpanded) from individual files in
+ * contents/tools/. For admin operations, we need the original tool
+ * definitions, not the expanded (per-function) ones used at runtime.
  */
 async function loadRawTools() {
-  const rootDir = getRootDir();
-  const contentsDir = process.env.CONTENTS_DIR || 'contents';
-  const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
-
-  let legacyTools = [];
-  let needsCleanup = false;
-
-  if (existsSync(toolsFilePath)) {
-    const fileContent = readFileSync(toolsFilePath, 'utf-8');
-    const allLegacyTools = JSON.parse(fileContent);
-    legacyTools = filterExpandedTools(allLegacyTools);
-
-    // Check if we filtered any tools out
-    if (legacyTools.length !== allLegacyTools.length) {
-      needsCleanup = true;
-      logger.info('Detected expanded tools in config file', {
-        component: 'AdminTools',
-        expandedCount: allLegacyTools.length - legacyTools.length,
-        toolsFilePath
-      });
-      logger.info('Filtered raw tool definitions', {
-        component: 'AdminTools',
-        count: legacyTools.length
-      });
-    }
-  }
-
-  const individualTools = filterExpandedTools(await loadToolsFromFiles(false));
-
-  // Merge: individual files override legacy entries with the same ID
-  const merged = new Map();
-  for (const tool of legacyTools) merged.set(tool.id, tool);
-  for (const tool of individualTools) merged.set(tool.id, tool);
-
-  return {
-    tools: Array.from(merged.values()),
-    legacyTools,
-    needsCleanup,
-    filePath: toolsFilePath
-  };
+  return filterExpandedTools(await loadAllTools(true, false));
 }
 
 export default function registerAdminToolsRoutes(app) {
@@ -233,7 +192,7 @@ export default function registerAdminToolsRoutes(app) {
   app.get(buildServerPath('/api/admin/tools'), adminAuth, async (req, res) => {
     try {
       // Load raw (unexpanded) tools for admin interface
-      const { tools, legacyTools, needsCleanup, filePath } = await loadRawTools();
+      const tools = await loadRawTools();
 
       if (!tools) {
         return sendFailedOperationError(
@@ -241,26 +200,6 @@ export default function registerAdminToolsRoutes(app) {
           'load tools configuration',
           new Error('tools is null')
         );
-      }
-
-      // If we detected expanded tools, clean up the legacy file
-      if (needsCleanup && filePath) {
-        try {
-          const rootDir = getRootDir();
-          const contentsDir = process.env.CONTENTS_DIR || 'contents';
-          await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-          await fs.writeFile(filePath, JSON.stringify(legacyTools, null, 2));
-          logger.info('Cleaned up tools file - removed expanded tools', {
-            component: 'AdminTools',
-            filePath
-          });
-        } catch (cleanupError) {
-          logger.error('Failed to cleanup tools file', {
-            component: 'AdminTools',
-            error: cleanupError
-          });
-          // Don't fail the request, just log the error
-        }
       }
 
       // Workflows are managed as a dedicated app.workflows array (first-class
@@ -333,7 +272,7 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Load raw (unexpanded) tools
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -357,7 +296,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -431,25 +370,19 @@ export default function registerAdminToolsRoutes(app) {
       const toolsDir = join(rootDir, contentsDir, 'tools');
 
       // Load existing tools (raw, unexpanded) to confirm the tool exists
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
       const oldTool = tools.find(t => t.id === toolId);
 
       if (!oldTool) {
         return sendNotFound(res, 'Tool');
       }
 
-      // Persist the update to the tool's individual file (migrates
-      // legacy-sourced tools to the per-file store on first edit). The
-      // filename is re-derived with path.basename() (stripping any
-      // directory components) so the write target can't escape toolsDir,
-      // in addition to the resolveAndValidatePath containment check.
+      // Persist the update to the tool's individual file.
       await fs.mkdir(toolsDir, { recursive: true });
-      const safeToolFileName = basename(`${toolId}.json`);
-      const validatedToolPath = await resolveAndValidatePath(safeToolFileName, toolsDir);
-      if (!validatedToolPath) {
+      const toolFilePath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
+      if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      const toolFilePath = join(toolsDir, safeToolFileName);
       await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2));
 
       // Refresh cache
@@ -484,7 +417,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -543,7 +476,7 @@ export default function registerAdminToolsRoutes(app) {
       const toolsDir = join(rootDir, contentsDir, 'tools');
 
       // Load existing tools (raw, unexpanded)
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
 
       // Check if tool already exists
       if (tools.find(t => t.id === newTool.id)) {
@@ -555,17 +488,15 @@ export default function registerAdminToolsRoutes(app) {
         newTool.enabled = true;
       }
 
-      // Create the new tool as its own individual file. The filename is
-      // re-derived with path.basename() (stripping any directory
-      // components) so the write target can't escape toolsDir, in
-      // addition to the resolveAndValidatePath containment check.
+      // Create the new tool as its own individual file.
       await fs.mkdir(toolsDir, { recursive: true });
-      const safeNewToolFileName = basename(`${newTool.id}.json`);
-      const validatedNewToolPath = await resolveAndValidatePath(safeNewToolFileName, toolsDir);
-      if (!validatedNewToolPath) {
+      const newToolFilePath = await resolveAndValidatePath(
+        `${basename(newTool.id)}.json`,
+        toolsDir
+      );
+      if (!newToolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      const newToolFilePath = join(toolsDir, safeNewToolFileName);
       await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2));
 
       // Refresh cache
@@ -600,7 +531,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -646,11 +577,10 @@ export default function registerAdminToolsRoutes(app) {
 
       const rootDir = getRootDir();
       const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
       const toolsDir = join(rootDir, contentsDir, 'tools');
 
       // Load existing tools (raw, unexpanded) to confirm the tool exists
-      const { tools, legacyTools } = await loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -675,23 +605,10 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      // Remove the tool's individual file, if it has been migrated there.
-      // The filename is re-derived with path.basename() (stripping any
-      // directory components) so the target can't escape toolsDir, in
-      // addition to the resolveAndValidatePath containment check.
-      const safeDeleteFileName = basename(`${toolId}.json`);
-      const validatedDeletePath = await resolveAndValidatePath(safeDeleteFileName, toolsDir);
-      const individualToolPath = join(toolsDir, safeDeleteFileName);
-      const hasIndividualToolFile = validatedDeletePath && existsSync(individualToolPath);
-      if (hasIndividualToolFile) {
+      // Remove the tool's individual file.
+      const individualToolPath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
+      if (individualToolPath && existsSync(individualToolPath)) {
         await fs.unlink(individualToolPath);
-      }
-
-      // Remove the tool from the legacy config file, if it's still stored there
-      if (legacyTools.some(t => t.id === toolId)) {
-        const remainingLegacyTools = legacyTools.filter(t => t.id !== toolId);
-        await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-        await fs.writeFile(toolsFilePath, JSON.stringify(remainingLegacyTools, null, 2));
       }
 
       // Refresh cache
@@ -729,7 +646,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -781,7 +698,7 @@ export default function registerAdminToolsRoutes(app) {
       const toolsDir = join(rootDir, contentsDir, 'tools');
 
       // Load existing tools (raw, unexpanded)
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -791,18 +708,12 @@ export default function registerAdminToolsRoutes(app) {
       // Toggle enabled state
       tool.enabled = !tool.enabled;
 
-      // Persist to the tool's individual file (migrates legacy-sourced
-      // tools to the per-file store on first toggle). The filename is
-      // re-derived with path.basename() (stripping any directory
-      // components) so the write target can't escape toolsDir, in
-      // addition to the resolveAndValidatePath containment check.
+      // Persist to the tool's individual file.
       await fs.mkdir(toolsDir, { recursive: true });
-      const safeToggleFileName = basename(`${toolId}.json`);
-      const validatedTogglePath = await resolveAndValidatePath(safeToggleFileName, toolsDir);
-      if (!validatedTogglePath) {
+      const toolFilePath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
+      if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      const toolFilePath = join(toolsDir, safeToggleFileName);
       await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2));
 
       // Refresh cache
@@ -864,7 +775,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -969,7 +880,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const { tools } = await loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {

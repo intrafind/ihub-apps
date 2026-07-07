@@ -1105,7 +1105,7 @@ Here are some practical examples of how to configure the settings for different 
 - Verify required fields are marked correctly
 
 **Tools not executing:**
-- Ensure tools are defined in `contents/config/tools.json`
+- Ensure tools are defined as individual files under `contents/tools/`
 - Check that tool IDs match exactly (case-sensitive)
 - Verify user has permissions for the specified tools
 

@@ -1,0 +1,31 @@
+{
+  "id": "create_task",
+  "name": {
+    "en": "Create Task"
+  },
+  "description": {
+    "en": "Enqueue a new task on the run task queue. The drain loop will process it. Refused if depth would exceed dynamicTasks.maxDepth."
+  },
+  "script": "agentTools.js",
+  "method": "createTask",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "description": "Short title"
+      },
+      "brief": {
+        "type": "string",
+        "description": "Longer description / instructions"
+      },
+      "priority": {
+        "type": "string",
+        "enum": ["p1", "p2", "p3"],
+        "default": "p2"
+      }
+    },
+    "required": ["title"]
+  }
+}
