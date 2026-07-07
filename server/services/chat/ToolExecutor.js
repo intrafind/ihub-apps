@@ -1286,7 +1286,7 @@ class ToolExecutor {
     while (iteration < maxIterations) {
       iteration++;
 
-      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
+      const followRequest = await createCompletionRequest(model, llmMessages, apiKey, {
         temperature,
         maxTokens,
         stream: true,

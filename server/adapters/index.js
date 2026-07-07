@@ -44,11 +44,11 @@ export function getAdapter(provider) {
  * @param {Array} messages - The messages to send
  * @param {string} apiKey - The API key
  * @param {Object} options - Additional options like temperature
- * @returns {Object} Request details including URL, headers, and body
+ * @returns {Promise<Object>} Request details including URL, headers, and body
  */
-export function createCompletionRequest(model, messages, apiKey, options = {}) {
+export async function createCompletionRequest(model, messages, apiKey, options = {}) {
   const adapter = getAdapter(model.provider);
-  return adapter.createCompletionRequest(model, messages, apiKey, options);
+  return await adapter.createCompletionRequest(model, messages, apiKey, options);
 }
 
 /**

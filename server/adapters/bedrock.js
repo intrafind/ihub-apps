@@ -308,7 +308,7 @@ class BedrockAdapterClass extends BaseAdapter {
   /**
    * Build the Converse request.
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}) {
     const opts = this.extractRequestOptions(options);
     const { messages: bedrockMessages, system } = this.formatMessages(messages);
 

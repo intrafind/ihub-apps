@@ -56,7 +56,7 @@ logger.info('\nOriginal schema has additionalProperties at:');
 logger.info('- Root level:', ndaLikeSchema.additionalProperties);
 logger.info('- Array items:', ndaLikeSchema.properties.risks.items.additionalProperties);
 
-const req = GoogleAdapter.createCompletionRequest(model, messages, 'test-key', {
+const req = await GoogleAdapter.createCompletionRequest(model, messages, 'test-key', {
   responseFormat: 'json',
   responseSchema: ndaLikeSchema,
   stream: true

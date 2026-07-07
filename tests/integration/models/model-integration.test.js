@@ -48,7 +48,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -82,7 +82,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real API call with tools
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           tools: availableTools.slice(0, 2), // Use first 2 tools
           temperature: 0.1,
           maxTokens: 200,
@@ -124,7 +124,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real streaming API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.7,
           maxTokens: 100,
           stream: true
@@ -171,7 +171,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls) {
         // Test with invalid API key
-        const request = createCompletionRequest(model, messages, invalidApiKey, {
+        const request = await createCompletionRequest(model, messages, invalidApiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -206,7 +206,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.ANTHROPIC_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -252,7 +252,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.ANTHROPIC_API_KEY) {
         // Real API call with tools
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           tools: availableTools.slice(0, 1), // Use first tool
           temperature: 0.1,
           maxTokens: 200,
@@ -309,7 +309,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.GOOGLE_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -364,7 +364,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.MISTRAL_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -405,7 +405,7 @@ describe('Model Integration Tests', () => {
           process.env[`${provider.toUpperCase()}_API_KEY`]
         ) {
           try {
-            const request = createCompletionRequest(
+            const request = await createCompletionRequest(
               model,
               [{ role: 'user', content: testMessage }],
               apiKey,
@@ -463,7 +463,7 @@ describe('Model Integration Tests', () => {
         const model = testModels.openai;
         const apiKey = process.env.OPENAI_API_KEY;
 
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 10,
           stream: false
@@ -501,7 +501,7 @@ describe('Model Integration Tests', () => {
           .map(async (_, index) => {
             const messages = [{ role: 'user', content: `Concurrent test ${index + 1}` }];
 
-            const request = createCompletionRequest(model, messages, apiKey, {
+            const request = await createCompletionRequest(model, messages, apiKey, {
               temperature: 0.1,
               maxTokens: 10,
               stream: false

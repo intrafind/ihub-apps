@@ -113,7 +113,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for OpenAI Responses API
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}) {
     const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 

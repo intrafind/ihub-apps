@@ -132,7 +132,7 @@ for (const provider of providers) {
   const messages = testScenarios.singleToolCall.messages;
 
   try {
-    const request = createCompletionRequest(model, messages, {
+    const request = await createCompletionRequest(model, messages, {
       tools: testTools,
       temperature: 0.7,
       max_tokens: 1000
@@ -180,7 +180,7 @@ for (const provider of providers) {
   const model = testModels[provider];
 
   try {
-    const request = createCompletionRequest(model, multiRoundMessages, {
+    const request = await createCompletionRequest(model, multiRoundMessages, {
       tools: testTools,
       temperature: 0.7
     });
@@ -251,7 +251,7 @@ for (const provider of providers) {
   const messages = [{ role: 'user', content: 'Test tool parameters' }];
 
   try {
-    const request = createCompletionRequest(model, messages, {
+    const request = await createCompletionRequest(model, messages, {
       tools: [toolWithRequiredParams],
       temperature: 0.7
     });
@@ -297,7 +297,7 @@ try {
   getAdapter('unknown');
   logger.info('✅ Fallback adapter loaded (should default to OpenAI)');
 
-  const request = createCompletionRequest(invalidModel, [{ role: 'user', content: 'test' }], {
+  const request = await createCompletionRequest(invalidModel, [{ role: 'user', content: 'test' }], {
     tools: testTools
   });
 

@@ -160,3 +160,18 @@ loaded or reviewed — so the audit report silently missed most of the corpus.
   (unlimited per query). A positive value keeps the previous top-N-per-query limit.
 - Very large corpora may need a higher `maxTotalDocs` and, since each document is fetched and
   analysed individually, a longer `maxExecutionTime`.
+  
+## Workflows and Other Paths Now Work with OpenAI-Compatible Models
+
+AI apps that run **workflows** with a model on the **OpenAI adapter** — including self-hosted
+vLLM, LM Studio, and Jan.ai endpoints, and Mistral/Ministral models served over an
+OpenAI-compatible URL — could fail with `Unsupported URL scheme: <model-id>` (for example
+`Unsupported URL scheme: ministral`). The model's configured API URL was correct; the request was
+being built before the model's endpoint had finished resolving, so the model's id leaked through as
+the URL.
+
+- Affected the workflow query-plan/agent steps, the OpenAI-compatible proxy endpoint, the session
+  test-chat, OCR, and tool follow-up calls. The standard streaming chat path was not affected.
+- No configuration change is required — existing OpenAI-adapter models work as configured.
+- When a request URL genuinely cannot be resolved, the error now names the offending URL (with any
+  embedded secrets redacted) so misconfiguration is easier to diagnose.
