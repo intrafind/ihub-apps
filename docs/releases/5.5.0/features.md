@@ -144,3 +144,19 @@ or corrupted arguments.
 - Each conversation's in-flight tool-call data is now isolated by chat.
 - A cancelled or errored stream can no longer leave stale tool-call data behind to be picked up by
   a later, unrelated conversation.
+
+## Stellungnahmen (iFinder) Review Now Covers the Whole Corpus
+
+The iFinder-backed **Stellungnahmen Review** workflow now analyses every matching document instead
+of only the first 25 hits per search. Previously, when a search reported many more results than it
+returned (e.g. 155 total but only the first 25 retrieved), the remaining documents were never
+loaded or reviewed — so the audit report silently missed most of the corpus.
+
+- Each search now pages through all of its hits, bounded only by an overall document ceiling
+  (raised from 200 to 500).
+- Existing installations are updated automatically on upgrade via the configuration migration
+  system; no manual action is required.
+- Corpus-search nodes in custom workflows can opt into this behaviour by setting `maxPerTopic: 0`
+  (unlimited per query). A positive value keeps the previous top-N-per-query limit.
+- Very large corpora may need a higher `maxTotalDocs` and, since each document is fetched and
+  analysed individually, a longer `maxExecutionTime`.

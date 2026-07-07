@@ -266,8 +266,8 @@
         "corpusVar": "_corpus",
         "coverageVar": "_coverage",
         "searchProfile": "$.data.searchProfile",
-        "maxPerTopic": 25,
-        "maxTotalDocs": 200,
+        "maxPerTopic": 0,
+        "maxTotalDocs": 500,
         "fetchFulltext": false,
         "extraQueries": ["$.data.userPrompt", "*"]
       }

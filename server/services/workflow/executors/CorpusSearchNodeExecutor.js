@@ -6,9 +6,12 @@
  * deduped doc, and populates the workflow's `_corpus` array plus
  * `_coverage.candidates`.
  *
- * Within-topic pagination is intentionally not implemented in v1 —
- * `iFinderService.search()` caps `size` at 100 per call. Breadth comes
- * from multiple topics, not deep pagination.
+ * Within-topic pagination IS implemented: `iFinderService.search()` caps
+ * `size` at 100 per call, so each query is paged (varying `from`) until it
+ * has collected `maxPerTopic` hits, hit the corpus-wide `maxTotalDocs` cap,
+ * or iFinder runs out of results. Set `maxPerTopic: 0` to page through ALL
+ * hits a query returns (bounded only by `maxTotalDocs`) — use this when the
+ * goal is to resolve every matching document, not just a top-N sample.
  *
  * Loop-aware: when placed inside a `forEach`, the node's `query` config
  * can reference `_loopItem` via Handlebars (`{{_loopItem.lawReference}}`).
@@ -219,11 +222,18 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       emitStep(`Filters: ${filters.join(' AND ')}`);
     }
 
-    // iFinder caps a single response at 100 results, so any `maxPerTopic`
-    // larger than 100 has to be paged. We loop with `from` until we've
-    // collected `maxPerTopic` hits for this query, hit the corpus-wide
-    // `maxTotalDocs` cap, or iFinder reports no more results.
+    // iFinder caps a single response at 100 results, so a query for more
+    // than that has to be paged. We loop with `from` until we've collected
+    // `perTopicCap` hits for this query, hit the corpus-wide `maxTotalDocs`
+    // cap, or iFinder reports no more results.
+    //
+    // `maxPerTopic: 0` (or negative) means "no per-topic limit" — page
+    // through every hit the query returns, bounded only by `maxTotalDocs`.
+    // This is what lets the workflow resolve ALL documents (e.g. when one
+    // search reports 155 total) instead of just the first page. A positive
+    // value keeps the historical top-N-per-query behaviour.
     const IFINDER_MAX_PAGE = 100;
+    const perTopicCap = maxPerTopic > 0 ? maxPerTopic : Infinity;
 
     const buildDoc = (hit, query) => {
       const docId = hit?.id;
@@ -271,8 +281,8 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       let pages = 0;
       let queryFailed = false;
 
-      while (hitsThisQuery < maxPerTopic && dedup.size < maxTotalDocs && !isCancelled()) {
-        const remainingForQuery = maxPerTopic - hitsThisQuery;
+      while (hitsThisQuery < perTopicCap && dedup.size < maxTotalDocs && !isCancelled()) {
+        const remainingForQuery = perTopicCap - hitsThisQuery;
         const remainingForCorpus = maxTotalDocs - dedup.size;
         const pageSize = Math.min(remainingForQuery, remainingForCorpus, IFINDER_MAX_PAGE);
         if (pageSize <= 0) break;
@@ -336,12 +346,19 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
           totalFound,
           pages
         });
-        const truncated =
-          totalFound > hitsThisQuery && hitsThisQuery >= maxPerTopic
+        // Explain any shortfall against totalFound: the per-topic cap, the
+        // corpus-wide cap, or (with maxPerTopic:0) neither — in which case a
+        // remaining shortfall means the corpus cap bit before we finished.
+        const moreAvailable = totalFound > hitsThisQuery;
+        const reachedPerTopicCap = Number.isFinite(perTopicCap) && hitsThisQuery >= perTopicCap;
+        const reachedCorpusCap = dedup.size >= maxTotalDocs;
+        const truncated = !moreAvailable
+          ? ''
+          : reachedPerTopicCap
             ? ` (capped at maxPerTopic=${maxPerTopic}, ${totalFound} available)`
-            : totalFound > hitsThisQuery
-              ? `, ${totalFound} total in profile`
-              : '';
+            : reachedCorpusCap
+              ? ` (corpus cap maxTotalDocs=${maxTotalDocs} reached, ${totalFound} available)`
+              : `, ${totalFound} total in profile`;
         emitStep(
           `iFinder "${query}" — ${hitsThisQuery} hit${hitsThisQuery === 1 ? '' : 's'} (${newHitsThisQuery} new${truncated}, ${pages} page${pages === 1 ? '' : 's'})`
         );
