@@ -939,6 +939,7 @@ Some tools are not executed server-side but are instead passed directly to the L
 This is used for native capabilities such as:
 - Google Search grounding in Gemini models
 - Web search in OpenAI Responses API models
+- Web search in Anthropic Claude models
 
 These tools do not have a `script` file because no server-side code runs.
 
@@ -966,6 +967,17 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Response**: Returns grounding metadata with search queries, sources, and citations
 - **How it works**: When enabled in an app's tools array, Gemini models automatically invoke Google Search when they detect queries requiring current information. The search is performed directly by Google's infrastructure and results are incorporated into the response with citations.
 - **Use Cases**: Current events, fact-checking with authoritative sources, questions requiring real-time information
+
+### `anthropicWebSearch`
+
+- **Provider**: Anthropic Claude models only
+- **Description**: Enables Claude to search the web using Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool), returning answers with citations and sources
+- **Type**: Provider-handled (`isSpecialTool: true`)
+- **Parameters**: None — automatically enabled when listed in an app's `tools` array
+- **Authentication**: Uses the configured Anthropic API key; no additional setup required
+- **Response**: Search results and citations are surfaced as grounding metadata (same "Grounding" answer-source badge used for Google Search)
+- **How it works**: Claude decides when to search, runs the search server-side (billed separately by Anthropic per search), and returns the final answer with citations in the same turn — unlike `braveSearch`, no tool round-trip through iHub is required
+- **Use Cases**: Current events, latest news, real-time data, fact-checking
 
 ### `braveSearch`
 
@@ -1029,6 +1041,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 **How provider resolution works**:
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
+- **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
 - **Otherwise** → Brave Search
 
 **Key properties**:
@@ -1037,7 +1050,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
 | `provider` | String | `"auto"` | Provider: `"auto"` or `"brave"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI models |
+| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI/Anthropic models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
 | `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |

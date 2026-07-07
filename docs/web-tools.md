@@ -12,6 +12,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 |----------|------|----------|
 | **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
+| **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
 | **Brave Search** | Server-side | Privacy-focused search, any model |
 
 ### Additional Web Tools
@@ -58,7 +59,7 @@ Add a `websearch` object to your app configuration:
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
 | `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when available |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
@@ -80,6 +81,9 @@ The system automatically selects the best search tool at runtime based on the mo
 │                                                  │
 │  useNativeSearch + OpenAI Responses model?       │
 │    → OpenAI Web Search                           │
+│                                                  │
+│  useNativeSearch + Anthropic model?              │
+│    → Anthropic Web Search                        │
 │                                                  │
 │  Otherwise (provider = "auto" or "brave")        │
 │    → Brave Search                                │
@@ -104,7 +108,7 @@ When web search is enabled for an app, users see a toggle in the chat input area
 
 Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
 
-- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, `anthropicWebSearch`, or `webContentExtractor` in their `tools` array
 - Infers the provider and content extraction settings from the tools used
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
@@ -155,7 +159,7 @@ The system checks admin panel configuration first, then falls back to environmen
 
 ### Native Search Providers
 
-Native search providers (Google Search and OpenAI Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed.
+Native search providers (Google Search, OpenAI Web Search, and Anthropic Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed. Anthropic's native web search is billed separately by Anthropic in addition to standard token costs — see [Anthropic's web search pricing](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool#usage-and-pricing).
 
 ## Tools Reference
 
@@ -189,6 +193,15 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 - **Type**: Provider-handled (native)
 - **Parameters**: None — automatically enabled
 - **Authentication**: Uses configured OpenAI API key
+
+### Anthropic Web Search (`anthropicWebSearch`)
+
+**Purpose**: Enable Claude to search the web natively and cite sources, using Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool).
+
+- **Provider**: Anthropic Claude models only
+- **Type**: Provider-handled (native) — Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub
+- **Parameters**: None — automatically enabled
+- **Authentication**: Uses configured Anthropic API key
 
 ### Web Content Extractor (`webContentExtractor`)
 
@@ -414,9 +427,9 @@ The web content extractor includes protection against Server-Side Request Forger
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 
-5. **Native search not activating for Gemini/GPT models**
+5. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
-   - Verify the model's provider is correctly identified as `google` or `openai-responses`
+   - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
 
 ### Debugging
 

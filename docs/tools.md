@@ -5,7 +5,7 @@
 
 ## Quick Links
 
-- [Built-in Tools Reference](tool-calling.md#built-in-tools-reference) — webSearch, googleSearch, braveSearch, enhancedWebSearch, iFinder, entraPeopleSearch
+- [Built-in Tools Reference](tool-calling.md#built-in-tools-reference) — webSearch, braveSearch, enhancedWebSearch, iFinder, entraPeopleSearch
 - [Tool Configuration Reference](tool-calling.md#tool-configuration-reference) — tool file field descriptions and `isSpecialTool` explanation
 - [Quick Start](tool-calling.md#quick-start) — Enable a tool for your app in under 10 minutes
 - [Tool Development Lifecycle](tool-calling.md#tool-development-lifecycle) — Create, implement, test, and integrate a tool

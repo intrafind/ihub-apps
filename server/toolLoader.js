@@ -280,6 +280,8 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
     toolId = 'googleSearch';
   } else if (useNativeSearch && modelProvider === 'openai-responses') {
     toolId = 'webSearch';
+  } else if (useNativeSearch && modelProvider === 'anthropic') {
+    toolId = 'anthropicWebSearch';
   } else {
     toolId = 'braveSearch';
   }

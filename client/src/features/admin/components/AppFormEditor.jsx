@@ -988,7 +988,7 @@ function AppFormEditor({
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {t(
                               'admin.apps.edit.websearchUseNativeDesc',
-                              "Use the model's built-in search when available (e.g. Google, OpenAI)"
+                              "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)"
                             )}
                           </p>
                         </div>
