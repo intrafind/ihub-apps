@@ -1,5 +1,5 @@
 /**
- * Migration V062 — Remove the Tavily web search implementation
+ * Migration V063 — Remove the Tavily web search implementation
  *
  * The Tavily web search provider and its `tavilySearch` tool have been removed
  * from the platform. This migration cleans up existing installations:
