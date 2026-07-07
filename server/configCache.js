@@ -1,4 +1,4 @@
-import { loadJson, loadBuiltinLocaleJson } from './configLoader.js';
+import { loadJson, loadBuiltinLocaleJson, listBuiltinLocales } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
@@ -313,7 +313,7 @@ class ConfigCache {
       'config/agents.json'
     ];
 
-    // Built-in locales that should always be preloaded
+    // Built-in locales that should always be preloaded (resolved dynamically during initialize())
     this.defaultLocales = ['en', 'de'];
   }
 
@@ -323,6 +323,13 @@ class ConfigCache {
    */
   async initialize() {
     logger.info('Initializing configuration cache', { component: 'ConfigCache' });
+
+    // Discover supported languages from built-in locale files
+    this.defaultLocales = await listBuiltinLocales();
+    logger.info('Discovered built-in locales', {
+      component: 'ConfigCache',
+      locales: this.defaultLocales
+    });
 
     const loadPromises = this.criticalConfigs.map(async configPath => {
       try {
@@ -1101,6 +1108,13 @@ class ConfigCache {
   getFeatures() {
     const result = this.get('config/features.json');
     return result?.data || {};
+  }
+
+  /**
+   * Get the list of supported language codes, derived from built-in locale files.
+   */
+  getSupportedLanguages() {
+    return this.defaultLocales;
   }
 
   /**
