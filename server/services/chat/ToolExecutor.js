@@ -1047,6 +1047,13 @@ class ToolExecutor {
           collectedToolCalls
         });
         clearTimeout(timeoutId);
+        // Emit the answer-source badge before 'done' (also resets it). The
+        // initial LLM call answering directly from an upload/email context —
+        // with no tool call — is the common case (e.g. "summarise this file").
+        // continueWithToolExecution() finalizes the multi-iteration paths; this
+        // is the first, no-tool-call turn that path never reaches, so without
+        // this finalize the answer silently fell back to "Based on AI knowledge".
+        this.finalizeAnswerSource(chatId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
           'chat_response',
@@ -1072,6 +1079,9 @@ class ToolExecutor {
           chatId
         });
         clearTimeout(timeoutId);
+        // Terminal answer turn — finalize the source badge before 'done' so an
+        // upload/email answer isn't mislabeled "Based on AI knowledge".
+        this.finalizeAnswerSource(chatId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
           'chat_response',
@@ -1152,6 +1162,12 @@ class ToolExecutor {
             })
           );
 
+          // Emit the answer-source badge before 'done' (also resets it). A
+          // passthrough tool is a terminal turn, so without this the streamed
+          // answer would show "Based on AI knowledge" even when built on
+          // uploads/email. Matches continueWithToolExecution()'s passthrough path.
+          this.finalizeAnswerSource(chatId);
+
           // Signal that we're done - user needs to send next message for LLM to continue
           actionTracker.trackDone(chatId, {
             finishReason: 'tool_passthrough_complete',
@@ -1166,6 +1182,10 @@ class ToolExecutor {
       // If we had a clarification request, stop here and wait for user input
       if (hasClarificationRequest) {
         clearTimeout(timeoutId);
+        // The turn pauses for user input (not a final answer), so don't emit an
+        // answer source — but clear the bookkeeping so a detected upload/email
+        // source can't leak into the follow-up turn on this chatId.
+        this.resetKnowledgeSources(chatId);
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);
         }
@@ -1226,6 +1246,9 @@ class ToolExecutor {
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }
+      // Clear source bookkeeping so a failed turn can't leak a detected
+      // upload/email source into the next turn on this chatId.
+      this.resetKnowledgeSources(chatId);
     }
   }
 
