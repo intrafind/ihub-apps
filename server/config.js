@@ -41,7 +41,18 @@ const env = cleanEnv(
     PROXY_AUTH_JWT_HEADER: str({ optional: true }),
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
-    NO_PROXY: str({ optional: true })
+    NO_PROXY: str({ optional: true }),
+    JWT_SECRET: str({ optional: true }),
+    USE_HTTPS: str({ default: 'false', optional: true }),
+    NODE_ENV: str({ default: 'development', optional: true }),
+    IASSISTANT_TIMEOUT: num({ default: 60000 }),
+    IFINDER_API_URL: str({ optional: true }),
+    IFINDER_DOWNLOAD_DIR: str({ default: '/tmp/ifinder-downloads', optional: true }),
+    IFINDER_PRIVATE_KEY: str({ optional: true }),
+    IFINDER_TIMEOUT: num({ default: 30000 }),
+    MAGIC_PROMPT_MODEL: str({ optional: true }),
+    MAGIC_PROMPT_PROMPT: str({ optional: true }),
+    SEARCH_CACHE_TTL_MS: num({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -49,8 +60,18 @@ const env = cleanEnv(
   }
 );
 
+// Provider- and model-specific API keys (e.g. COHERE_API_KEY, GPT_4_AZURE1_API_KEY for
+// model id "gpt-4-azure1") are looked up dynamically by name in utils.js and can't be
+// enumerated in the schema above, since the set of providers/models is defined in JSON
+// config rather than known statically. Pass through only vars matching that one pattern
+// instead of the entire process environment, so undeclared/unrelated env vars stay out
+// of the exported config.
+const dynamicApiKeys = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.endsWith('_API_KEY'))
+);
+
 const config = Object.freeze({
-  ...process.env,
+  ...dynamicApiKeys,
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
@@ -77,7 +98,18 @@ const config = Object.freeze({
   PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
-  NO_PROXY: env.NO_PROXY
+  NO_PROXY: env.NO_PROXY,
+  JWT_SECRET: env.JWT_SECRET,
+  USE_HTTPS: env.USE_HTTPS,
+  NODE_ENV: env.NODE_ENV,
+  IASSISTANT_TIMEOUT: env.IASSISTANT_TIMEOUT,
+  IFINDER_API_URL: env.IFINDER_API_URL,
+  IFINDER_DOWNLOAD_DIR: env.IFINDER_DOWNLOAD_DIR,
+  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY,
+  IFINDER_TIMEOUT: env.IFINDER_TIMEOUT,
+  MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
+  MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
+  SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
 });
 
 export default config;
