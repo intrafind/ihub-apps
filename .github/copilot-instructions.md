@@ -390,6 +390,5 @@ This array is used for base path detection to support subpath deployments (e.g.,
 ## Additional Resources
 
 - **Full Architecture**: See `CLAUDE.md` for comprehensive technical details
-- **Code Guidelines**: See `LLM_GUIDELINES.md` for detailed coding rules
-- **Gemini Specifics**: See `GEMINI.md` for Gemini model guidelines
+- **Code Guidelines**: See `CLAUDE.md` for detailed coding rules
 - **Documentation**: Consult `docs/` for feature documentation and user guides

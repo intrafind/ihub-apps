@@ -111,13 +111,13 @@ function AdminSourceEditPage() {
       if (isEditing) {
         const response = await makeAdminApiCall(`/admin/sources/${id}`, {
           method: 'PUT',
-          body: JSON.stringify(cleanSourceData)
+          body: cleanSourceData
         });
         savedSource = response.data?.source || cleanSourceData;
       } else {
         const response = await makeAdminApiCall('/admin/sources', {
           method: 'POST',
-          body: JSON.stringify(cleanSourceData)
+          body: cleanSourceData
         });
         savedSource = response.data?.source || cleanSourceData;
 
@@ -126,11 +126,11 @@ function AdminSourceEditPage() {
           try {
             await makeAdminApiCall(`/admin/sources/${savedSource.id}/files`, {
               method: 'POST',
-              body: JSON.stringify({
+              body: {
                 path: sourceData.config.path,
                 content: tempContent,
                 encoding: 'utf8'
-              })
+              }
             });
           } catch (uploadErr) {
             console.error('Failed to upload temporary content:', uploadErr);

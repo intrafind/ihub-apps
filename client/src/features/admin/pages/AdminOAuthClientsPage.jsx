@@ -58,7 +58,7 @@ function AdminOAuthClientsPage() {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedConfig)
+        body: updatedConfig
       });
 
       setClientsEnabled(newStatus);
@@ -146,9 +146,9 @@ function AdminOAuthClientsPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
+        body: {
           active: newStatus
-        })
+        }
       });
 
       setMessage({
@@ -220,9 +220,9 @@ function AdminOAuthClientsPage() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
+          body: {
             expirationDays: tokenExpirationDays
-          })
+          }
         }
       );
 

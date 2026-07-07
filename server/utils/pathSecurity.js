@@ -17,7 +17,7 @@ import { promises as fs } from 'fs';
  * - Hyphens (-)
  * - Dots (.) - for version numbers like "2.5" in model names
  */
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+export const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Property names that must be rejected to prevent prototype pollution.
@@ -79,6 +79,45 @@ export function validateIdForPath(id, idType, res) {
     return false;
   }
   return true;
+}
+
+/**
+ * Validates browser extension IDs (safe chars + integration-specific length bounds).
+ *
+ * @param {string} id - Extension ID to validate
+ * @returns {boolean} - True if valid
+ */
+export function isValidExtensionId(id) {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  if (id.length < 8 || id.length > 128) {
+    return false;
+  }
+  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+    return false;
+  }
+  if (DANGEROUS_KEYS.has(id)) {
+    return false;
+  }
+  return SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validates workflow version strings used in path contexts.
+ * Must be a valid safe ID and start/end with an alphanumeric character.
+ *
+ * @param {string} version - Workflow version string
+ * @returns {boolean} - True if valid
+ */
+export function isValidWorkflowVersion(version) {
+  return (
+    typeof version === 'string' &&
+    version.length <= 64 &&
+    isValidId(version) &&
+    /^[a-zA-Z0-9]/.test(version) &&
+    /[a-zA-Z0-9]$/.test(version)
+  );
 }
 
 /**

@@ -238,7 +238,7 @@ function AdminBrowserExtensionPage() {
 
       await makeAdminApiCall('/admin/browser-extension/config', {
         method: 'PUT',
-        data: {
+        body: {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,

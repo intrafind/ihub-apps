@@ -1,5 +1,7 @@
-import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { Marked, Renderer } from 'marked';
 import {
+  escapeHtml,
   getLanguageDisplayName,
   isMermaidLanguage,
   generateId,
@@ -27,8 +29,29 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-export const configureMarked = t => {
-  const renderer = new marked.Renderer();
+const highlightCode = (code, lang) => {
+  if (
+    typeof window !== 'undefined' &&
+    lang &&
+    window.hljs &&
+    typeof window.hljs.getLanguage === 'function' &&
+    window.hljs.getLanguage(lang)
+  ) {
+    try {
+      return window.hljs.highlight(code, {
+        language: lang,
+        ignoreIllegals: true
+      }).value;
+    } catch (e) {
+      console.error('Highlight.js error:', e);
+    }
+  }
+
+  return escapeHtml(code);
+};
+
+const createRenderer = t => {
+  const renderer = new Renderer();
 
   // --- Code Renderer ---
   renderer.code = (code, language) => {
@@ -57,9 +80,7 @@ export const configureMarked = t => {
     const displayLanguage = getLanguageDisplayName(lang);
 
     // Use the original highlighted code from marked
-    const highlightedCode = marked.defaults.highlight
-      ? marked.defaults.highlight(actualCode, lang)
-      : actualCode.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightedCode = highlightCode(actualCode, lang);
 
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
@@ -139,28 +160,67 @@ export const configureMarked = t => {
     return `<a href="${actualHref}"${titleAttr}${targetAttr}>${text}</a>`;
   };
 
-  marked.setOptions({
+  return renderer;
+};
+
+const createMarked = t =>
+  new Marked({
     gfm: true,
     breaks: true,
     headerIds: true,
     mangle: false,
     pedantic: false,
-    sanitize: false, // IMPORTANT: Ensure your markdown source is trusted
     smartLists: true,
     smartypants: false,
     xhtml: false,
-    renderer: renderer,
-    highlight: (code, lang) => {
-      // Use a global hljs instance if available
-      if (lang && window.hljs && window.hljs.getLanguage(lang)) {
-        try {
-          return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-        } catch (e) {
-          console.error('Highlight.js error:', e);
-        }
-      }
-      // Fallback to no highlighting
-      return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+    renderer: createRenderer(t)
   });
+
+const markedInstanceByTranslator = new WeakMap();
+let defaultMarkedInstance = null;
+
+// Cache parser instances by translation function so repeated renders avoid
+// rebuilding renderers. WeakMap ensures stale translator functions can be GC'd.
+// `defaultMarkedInstance` is used for call sites that don't pass `t`.
+const getMarkedInstance = t => {
+  if (typeof t === 'function') {
+    if (!markedInstanceByTranslator.has(t)) {
+      markedInstanceByTranslator.set(t, createMarked(t));
+    }
+    return markedInstanceByTranslator.get(t);
+  }
+
+  if (!defaultMarkedInstance) {
+    defaultMarkedInstance = createMarked();
+  }
+  return defaultMarkedInstance;
 };
+
+/**
+ * Render markdown to sanitized HTML using an isolated Marked instance.
+ *
+ * @param {string} markdown - Markdown source string.
+ * @param {Object} [options] - Optional rendering behavior.
+ * @param {Function} [options.t] - Translation function for renderer labels.
+ * @param {Function} [options.transformHtml] - Optional post-parse HTML transform.
+ *   The transformed HTML is still sanitized by DOMPurify afterwards.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @returns {string} Sanitized HTML string.
+ */
+export const renderMarkdown = (markdown, options = {}) => {
+  const { t, transformHtml, sanitizeOptions } = options;
+  const source = String(markdown ?? '');
+
+  try {
+    const marked = getMarkedInstance(t);
+    const html = marked.parse(source);
+    const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
+    return DOMPurify.sanitize(transformedHtml, sanitizeOptions);
+  } catch (error) {
+    console.error('Error rendering markdown:', error);
+    return DOMPurify.sanitize(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+  }
+};
+
+// Backward-compatible no-op: markdown rendering no longer mutates global marked state.
+export const configureMarked = () => {};

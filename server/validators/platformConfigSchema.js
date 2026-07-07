@@ -62,6 +62,7 @@ const rateLimitSchema = z.object({
   adminApi: rateLimitConfigSchema.partial().default({}),
   publicApi: rateLimitConfigSchema.partial().default({}),
   authApi: rateLimitConfigSchema.partial().default({}),
+  oauthApi: rateLimitConfigSchema.partial().default({}),
   inferenceApi: rateLimitConfigSchema.partial().default({})
 });
 
@@ -99,7 +100,7 @@ export const platformConfigSchema = z
   .object({
     auth: z
       .object({
-        mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).default('proxy'),
+        mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).default('local'),
         authenticatedGroup: z.string().default('authenticated'),
         debug: z
           .object({
@@ -140,8 +141,7 @@ export const platformConfigSchema = z
         enabled: z.boolean().default(false),
         usersFile: z.string().default('contents/config/users.json'),
         sessionTimeoutMinutes: z.number().min(1).default(480),
-        jwtSecret: z.string().default('${JWT_SECRET}'),
-        showDemoAccounts: z.boolean().default(false)
+        showDemoAccounts: z.boolean().default(true)
       })
       .default({}),
     oidcAuth: z

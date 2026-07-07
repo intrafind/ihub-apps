@@ -545,7 +545,13 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
   app.use(cookieParser()); // Add cookie parser middleware
 
-  // Set platform config on app for middleware access
+  // Store the boot-time platform config for backward compatibility.
+  // NOTE: body-size limit, rate limiters, session store, and the NTLM static-asset
+  // bypass are all wired from this snapshot and are truly restart-only — they rely
+  // on Express middleware objects that cannot be hot-swapped at runtime.
+  // All per-request auth and permission decisions (authRequired, enhanceUser…) read
+  // configCache.getPlatform() so they pick up admin saves and IHUB_* overrides
+  // without a restart.
   app.set('platform', platformConfig);
 
   // Create configurable rate limiters based on platform configuration
@@ -624,12 +630,14 @@ export function setupMiddleware(app, platformConfig = {}) {
     next();
   });
 
-  // Enhance user with permissions after authentication
+  // Enhance user with permissions after authentication.
+  // Read platform config from configCache per-request so that admin saves and
+  // IHUB_PLATFORM__* overrides take effect without a server restart.
   app.use((req, res, next) => {
     if (req.user && !req.user.permissions) {
-      // Use auth config from platform config
-      const authConfig = platformConfig.auth || {};
-      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      const livePlatform = configCache.getPlatform() || platformConfig;
+      const authConfig = livePlatform.auth || {};
+      req.user = enhanceUserWithPermissions(req.user, authConfig, livePlatform);
 
       // logger.info('🔍 User permissions enhanced:', {
       //   userId: req.user.id,

@@ -1,5 +1,5 @@
 /**
- * Migration V023 — Rename model files and fix IDs to match filenames
+ * Migration V024 — Rename model files and fix IDs to match filenames
  *
  * Fixes model deletion 404 error by ensuring model files have IDs that match
  * their filenames. The DELETE endpoint constructs paths as ${modelId}.json,

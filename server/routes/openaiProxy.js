@@ -170,7 +170,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       stream,
       temperature,
       hasTools: !!tools,
-      tools: JSON.stringify(tools, null, 2),
+      toolNames: tools?.map(t => t.function?.name ?? t.name) ?? null,
       toolChoice,
       maxTokens
     });
@@ -522,7 +522,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         try {
           // Convert provider response to generic format, then to OpenAI format
           const genericResult = await convertResponseToGeneric(data, model.provider);
-          logger.info('[OpenAI Proxy] Generic result', {
+          logger.debug('[OpenAI Proxy] Generic result', {
             component: 'OpenAIProxy',
             result: JSON.stringify(genericResult, null, 2)
           });

@@ -79,7 +79,7 @@ function JiraConfig() {
       // Save the updated platform config
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: updatedPlatformConfig
+        body: updatedPlatformConfig
       });
 
       setMessage({

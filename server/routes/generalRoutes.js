@@ -162,7 +162,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    */
   app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
     try {
-      const platformConfig = req.app.get('platform') || {};
+      const platformConfig = configCache.getPlatform() || {};
       const authConfig = platformConfig.auth || {};
 
       // Force permission enhancement if not already done

@@ -124,7 +124,7 @@ function AdminOfficeIntegrationPage() {
 
       await makeAdminApiCall('/admin/office-integration/config', {
         method: 'PUT',
-        data: {
+        body: {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,

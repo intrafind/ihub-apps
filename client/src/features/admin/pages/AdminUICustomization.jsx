@@ -56,7 +56,7 @@ function AdminUICustomization() {
 
       const response = await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
-        body: JSON.stringify({ config }),
+        body: { config },
         headers: {
           'Content-Type': 'application/json'
         }

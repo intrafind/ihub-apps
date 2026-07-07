@@ -315,7 +315,7 @@ function AdminMcpServersPage() {
       const { data } = await makeAdminApiCall('/admin/mcp/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody())
+        body: buildBody()
       });
       setDraftTest({ ok: true, status: data.status, tools: data.tools || [] });
     } catch (err) {
@@ -339,7 +339,7 @@ function AdminMcpServersPage() {
       await makeAdminApiCall(path, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body
       });
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
       closeDialog();

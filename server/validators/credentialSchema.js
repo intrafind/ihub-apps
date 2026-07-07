@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zSafeId } from './common.js';
 
 /**
  * Central credential store schema.
@@ -14,14 +15,7 @@ import { z } from 'zod';
  * admin route, decryption-on-load by configCache.
  */
 
-const idSchema = z
-  .string()
-  .regex(
-    /^[a-zA-Z0-9._-]+$/,
-    'Credential ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-  )
-  .min(1)
-  .max(64);
+const idSchema = zSafeId.min(1).max(64);
 
 const localizedOrPlainString = z.union([
   z.record(z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/), z.string()),

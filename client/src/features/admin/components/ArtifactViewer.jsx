@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
-import { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import { renderMarkdown } from '../../../config/marked.config';
 import ArtifactDownloadMenu from './ArtifactDownloadMenu';
 
 /**
@@ -32,12 +30,7 @@ function ArtifactViewer({ runId, name, onClose }) {
       .then(text => {
         if (cancelled) return;
         try {
-          configureMarked();
-          const parsed = marked(text || '');
-          // Sanitize before storing — render path uses dangerouslySetInnerHTML
-          // and we only set state with content that's already gone through
-          // DOMPurify, mirroring features/chat/components/StreamingMarkdown.
-          setHtmlContent(DOMPurify.sanitize(parsed));
+          setHtmlContent(renderMarkdown(text || ''));
         } catch (renderErr) {
           setError(renderErr.message);
         }

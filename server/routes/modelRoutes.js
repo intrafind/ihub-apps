@@ -74,7 +74,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
    */
   app.get(buildServerPath('/api/models'), authRequired, async (req, res) => {
     try {
-      const platformConfig = req.app.get('platform') || {};
+      const platformConfig = configCache.getPlatform() || {};
       const authConfig = platformConfig.auth || {};
 
       // Force permission enhancement if not already done

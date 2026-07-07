@@ -5,9 +5,9 @@ import { handleApiResponse } from '../utils/requestHandler';
 import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
 
 // Isolated marked instance for static exports (PDF/HTML). It intentionally does
-// NOT use the global configureMarked() renderer, which injects interactive
-// toolbars/buttons and mermaid placeholders that don't work in a downloaded
-// document. GFM is enabled so tables, lists, and code blocks render correctly.
+// NOT use the shared interactive markdown renderer, which injects toolbar
+// buttons and mermaid placeholders that don't work in downloaded documents.
+// GFM is enabled so tables, lists, and code blocks render correctly.
 const exportMarked = new Marked({
   gfm: true,
   breaks: true,

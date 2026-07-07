@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
-import { configureMarked } from './MarkdownRenderer';
+import { renderMarkdown } from '../../config/marked.config';
+import { escapeHtml } from '../../utils/markdownHelpers';
 import MarkdownDownloadMenu from './MarkdownDownloadMenu';
 
 /**
@@ -21,10 +20,9 @@ import MarkdownDownloadMenu from './MarkdownDownloadMenu';
 function MarkdownViewer({ content, name, onClose }) {
   const htmlContent = useMemo(() => {
     try {
-      configureMarked();
-      return DOMPurify.sanitize(marked(content || ''));
+      return renderMarkdown(content || '');
     } catch {
-      return DOMPurify.sanitize(`<pre>${(content || '').toString()}</pre>`);
+      return `<pre>${escapeHtml(content || '')}</pre>`;
     }
   }, [content]);
 
