@@ -116,14 +116,6 @@
     "applications"
   ],
   "dependencies": {
-    "archiver": "^8.0.0",
-    "axios": "^1.18.1",
-    "croner": "^10.0.1",
-    "dotenv": "^17.4.2",
-    "gpt-tokenizer": "^3.4.0",
-    "gray-matter": "^4.0.3",
-    "http-proxy-agent": "^9.1.0",
-    "https-proxy-agent": "^9.1.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
@@ -134,8 +126,10 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
+    "axios": "^1.18.1",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
     "electron": "^42.5.2",
     "electron-builder": "^26.15.3",
     "eslint": "^10.6.0",
