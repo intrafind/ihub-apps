@@ -1,5 +1,15 @@
 # Features — 5.5.0
 
+## iHub Support Bot Can Now Answer Questions About the Platform
+
+The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
+can look up and cite the full platform documentation on demand instead of only the short FAQ.
+
+- The documentation is exposed as a tool the model calls on demand, so ordinary questions are not
+  slowed down by loading the full document.
+- Existing installations receive the updated app configuration automatically on upgrade via the
+  configuration migration system; no manual action is required.
+
 ## Outlook Add-in: Reliable Email and Attachment Sync
 
 The Outlook task pane now follows the selected email reliably. Previously, switching emails could

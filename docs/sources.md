@@ -195,8 +195,10 @@ Fresh installations ship with a standard **iHub Documentation** source
 (`id: ihub-documentation`). It bundles the complete iHub Apps documentation —
 consolidated from the repository's `docs/` folder — into a single knowledge
 source and is exposed as a tool (`exposeAs: "tool"`), so the model retrieves it
-on demand rather than inflating every prompt. Add it to an app's `sources` list
-to build a self-service help or onboarding assistant.
+on demand rather than inflating every prompt. The bundled **iHub Support Bot**
+app already references it, so it can answer questions about the platform out
+of the box. Add it to any other app's `sources` list to build a self-service
+help or onboarding assistant.
 
 The bundled content is generated from the `docs/` folder by
 `scripts/export-docs-markdown.js` — the same export that produces the standalone
