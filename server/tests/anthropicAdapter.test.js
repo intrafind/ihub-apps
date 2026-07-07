@@ -10,7 +10,7 @@ const model = {
 const messages = [{ role: 'user', content: 'test' }];
 
 const schema = { type: 'object', properties: { foo: { type: 'string' } }, required: ['foo'] };
-const req = AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
+const req = await AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
   responseSchema: schema
 });
 

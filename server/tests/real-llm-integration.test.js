@@ -79,7 +79,7 @@ async function makeRealAPICall(provider, model, messages, tools) {
   try {
     logger.info(`\n🔄 Making real API call to ${provider.toUpperCase()}...`);
 
-    const request = createCompletionRequest(model, messages, apiKeys[provider], {
+    const request = await createCompletionRequest(model, messages, apiKeys[provider], {
       tools: tools.slice(0, 2), // Use first 2 tools to avoid overwhelming
       temperature: 0.1,
       maxTokens: 500,

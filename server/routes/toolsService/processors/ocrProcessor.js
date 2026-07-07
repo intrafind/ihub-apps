@@ -273,7 +273,7 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
     }
   ];
 
-  const request = createCompletionRequest(model, messages, apiKey, {
+  const request = await createCompletionRequest(model, messages, apiKey, {
     temperature: 0.1,
     maxTokens: 8192,
     stream: false

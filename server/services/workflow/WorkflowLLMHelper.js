@@ -237,8 +237,13 @@ export class WorkflowLLMHelper {
       stream: true // Always stream for workflow agent operations
     });
 
-    // Create the request using centralized adapter infrastructure
-    const request = createCompletionRequest(model, messages, apiKey, filteredOptions);
+    // Create the request using centralized adapter infrastructure.
+    // MUST be awaited: some adapters (openai, iassistant-conversation) implement
+    // createCompletionRequest as async (they await model auto-discovery). Without
+    // await, `request` is an unresolved Promise, `request.url` is undefined, and
+    // throttledFetch falls back to using model.id as the URL — surfacing as the
+    // confusing "Unsupported URL scheme: <model-id>".
+    const request = await createCompletionRequest(model, messages, apiKey, filteredOptions);
 
     logger.debug('Executing streaming request', {
       component: 'WorkflowLLMHelper',

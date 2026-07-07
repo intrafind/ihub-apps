@@ -10,7 +10,7 @@ const model = {
 const messages = [{ role: 'user', content: 'test' }];
 const schema = { type: 'object', properties: { foo: { type: 'string' } }, required: ['foo'] };
 
-const req = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const req = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json',
   responseSchema: schema
 });
@@ -39,7 +39,7 @@ const mcpTool = {
   }
 };
 
-const toolReq = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const toolReq = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   tools: [mcpTool]
 });
 

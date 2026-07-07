@@ -237,7 +237,7 @@ export default function registerSessionRoutes(
             'test chat completion'
           );
         }
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           stream: false,
           tools: []
         });
