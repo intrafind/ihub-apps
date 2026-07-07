@@ -21,48 +21,48 @@ const baseModel = {
 const messages = [{ role: 'user', content: 'test' }];
 
 describe('vLLM reasoning — request side', () => {
-  test('no reasoning fields without thinking config', () => {
-    const req = VLLMAdapter.createCompletionRequest(baseModel, messages, 'key', {});
+  test('no reasoning fields without thinking config', async () => {
+    const req = await VLLMAdapter.createCompletionRequest(baseModel, messages, 'key', {});
     expect(req.body.chat_template_kwargs).toBeUndefined();
     expect(req.body.reasoning_effort).toBeUndefined();
   });
 
-  test('thinking enabled defaults to enable_thinking:true', () => {
+  test('thinking enabled defaults to enable_thinking:true', async () => {
     const model = { ...baseModel, thinking: { enabled: true } };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
     expect(req.body.chat_template_kwargs).toEqual({ enable_thinking: true });
   });
 
-  test('thinkingEnabled:false → enable_thinking:false', () => {
+  test('thinkingEnabled:false → enable_thinking:false', async () => {
     const model = { ...baseModel, thinking: { enabled: true } };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
       thinkingEnabled: false
     });
     expect(req.body.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
-  test('single-boolean chatTemplateKwargs override defaults to its configured value', () => {
+  test('single-boolean chatTemplateKwargs override defaults to its configured value', async () => {
     const model = {
       ...baseModel,
       thinking: { enabled: true, chatTemplateKwargs: { thinking: true } }
     };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
     expect(req.body.chat_template_kwargs).toEqual({ thinking: true });
   });
 
-  test('per-request toggle overrides a single-boolean chatTemplateKwargs key (Granite)', () => {
+  test('per-request toggle overrides a single-boolean chatTemplateKwargs key (Granite)', async () => {
     const model = {
       ...baseModel,
       thinking: { enabled: true, chatTemplateKwargs: { thinking: true } }
     };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
       thinkingEnabled: false
     });
     // Honors the app/user toggle even for a non-`enable_thinking` toggle key.
     expect(req.body.chat_template_kwargs).toEqual({ thinking: false });
   });
 
-  test('multi-key chatTemplateKwargs override is passed through unchanged', () => {
+  test('multi-key chatTemplateKwargs override is passed through unchanged', async () => {
     const model = {
       ...baseModel,
       thinking: {
@@ -70,7 +70,7 @@ describe('vLLM reasoning — request side', () => {
         chatTemplateKwargs: { enable_thinking: true, reasoning_format: 'parsed' }
       }
     };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
       thinkingEnabled: false
     });
     expect(req.body.chat_template_kwargs).toEqual({
@@ -79,9 +79,9 @@ describe('vLLM reasoning — request side', () => {
     });
   });
 
-  test('level present → reasoning_effort also sent', () => {
+  test('level present → reasoning_effort also sent', async () => {
     const model = { ...baseModel, thinking: { enabled: true, level: 'high' } };
-    const req = VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
     expect(req.body.reasoning_effort).toBe('high');
   });
 });

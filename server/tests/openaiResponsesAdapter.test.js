@@ -16,7 +16,7 @@ const messages = [
   { role: 'user', content: 'Hello!' }
 ];
 
-const req = OpenAIResponsesAdapter.createCompletionRequest(model, messages, 'test-key', {
+const req = await OpenAIResponsesAdapter.createCompletionRequest(model, messages, 'test-key', {
   stream: true
 });
 
@@ -62,9 +62,14 @@ const multipleMessages = [
   { role: 'user', content: 'How are you?' }
 ];
 
-const req2 = OpenAIResponsesAdapter.createCompletionRequest(model, multipleMessages, 'test-key', {
-  stream: true
-});
+const req2 = await OpenAIResponsesAdapter.createCompletionRequest(
+  model,
+  multipleMessages,
+  'test-key',
+  {
+    stream: true
+  }
+);
 
 // Verify input is an array when multiple messages
 assert.ok(Array.isArray(req2.body.input), 'Input should be array for multiple messages');
@@ -83,7 +88,7 @@ const schema = {
   required: ['name', 'age']
 };
 
-const req3 = OpenAIResponsesAdapter.createCompletionRequest(
+const req3 = await OpenAIResponsesAdapter.createCompletionRequest(
   model,
   [{ role: 'user', content: 'Extract person info' }],
   'test-key',

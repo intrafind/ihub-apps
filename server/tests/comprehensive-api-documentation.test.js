@@ -258,7 +258,7 @@ async function documentAPIInteraction(provider, model, messages, tools, scenario
  */
 async function makeAPICall(provider, model, messages, tools, documentation, stepName) {
   getAdapter(provider);
-  const requestData = createCompletionRequest(model, messages, apiKeys[provider], {
+  const requestData = await createCompletionRequest(model, messages, apiKeys[provider], {
     temperature: 0.1,
     stream: false,
     maxTokens: 1000,

@@ -540,7 +540,7 @@ export async function simpleCompletion(
 
   const msgArray = Array.isArray(messages) ? messages : [{ role: 'user', content: messages }];
 
-  const request = createCompletionRequest(modelConfig, msgArray, resolvedApiKey, {
+  const request = await createCompletionRequest(modelConfig, msgArray, resolvedApiKey, {
     temperature,
     maxTokens,
     stream: false,

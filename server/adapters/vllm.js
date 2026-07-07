@@ -78,7 +78,7 @@ class VLLMAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for vLLM
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}) {
     const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 

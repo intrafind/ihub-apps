@@ -441,6 +441,26 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
 }
 
 /**
+ * Redact secret-looking parts of a URL so it can be safely included in logs and
+ * error messages. Credentials ride along in a URL two ways: query parameters
+ * (Google's `?key=`, plus `token` / `api_key` / `client_secret` / ...) and
+ * basic-auth userinfo (`http://user:pass@host`). Both are masked; non-strings
+ * are returned unchanged.
+ *
+ * @param {string} url - The URL to sanitize
+ * @returns {string} URL with any embedded secrets replaced by `REDACTED`
+ */
+export function redactUrlSecrets(url) {
+  if (typeof url !== 'string') return url;
+  return url
+    .replace(/(\/\/)[^/@\s]+@/, '$1REDACTED@')
+    .replace(
+      /([?&](?:api[-_]?key|access[-_]?token|client[-_]?secret|key|token|password|secret)=)[^&#\s]*/gi,
+      '$1REDACTED'
+    );
+}
+
+/**
  * Fetch wrapper that automatically applies proxy and SSL configuration.
  * Uses node-fetch (not native fetch) to support the agent option required
  * by http-proxy-agent/https-proxy-agent.
@@ -455,11 +475,17 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
  * @returns {Promise<Response>} node-fetch Response
  */
 export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
-  // Validate URL scheme - admin-configured URLs are trusted but must use http(s)
+  // Validate URL scheme - admin-configured URLs are trusted but must use http(s).
+  // Include the offending URL (secrets redacted) in the error: a bad scheme
+  // usually means a model/tool has no valid endpoint URL and its id or an
+  // unresolved placeholder leaked through as the URL (e.g. "ministral"), which
+  // the bare scheme alone doesn't reveal.
   if (url && typeof url === 'string') {
     const scheme = url.split(':')[0].toLowerCase();
     if (scheme !== 'http' && scheme !== 'https') {
-      throw new Error(`Unsupported URL scheme: ${scheme}`);
+      throw new Error(
+        `Unsupported URL scheme "${scheme}" (expected http or https) for URL: ${redactUrlSecrets(url)}`
+      );
     }
   }
   // `lookup` is not a node-fetch option; pull it out and apply it to the agent
