@@ -50,11 +50,7 @@ console.log('\n🧪 parseEmlAttachment — multipart/alternative with encoded su
 {
   const text = parseEmlAttachment(MULTIPART_EML);
   check('returns non-null', text !== null, text);
-  check(
-    'decodes RFC 2047 base64-encoded Subject',
-    text?.includes('Subject: Förster Report'),
-    text
-  );
+  check('decodes RFC 2047 base64-encoded Subject', text?.includes('Subject: Förster Report'), text);
   check(
     'prefers the quoted-printable text/plain part over the HTML part',
     text?.includes('Hello, this is the plain part.'),
