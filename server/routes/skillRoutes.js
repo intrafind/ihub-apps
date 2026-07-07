@@ -17,7 +17,7 @@ export default function registerSkillRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       try {
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -60,7 +60,7 @@ export default function registerSkillRoutes(app) {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -93,7 +93,7 @@ export default function registerSkillRoutes(app) {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -143,7 +143,7 @@ export default function registerSkillRoutes(app) {
           return sendBadRequest(res, 'File path is required');
         }
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
