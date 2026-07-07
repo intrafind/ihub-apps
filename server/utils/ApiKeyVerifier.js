@@ -1,8 +1,12 @@
-import { getApiKeyForModel } from '../utils.js';
 import ErrorHandler from './ErrorHandler.js';
 import { sendSSE } from '../sse.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
+
+async function resolveApiKeyForModel(modelId) {
+  const { getApiKeyForModel } = await import('../utils.js');
+  return await getApiKeyForModel(modelId);
+}
 
 class ApiKeyVerifier {
   constructor() {
@@ -19,7 +23,7 @@ class ApiKeyVerifier {
     }
 
     try {
-      const apiKey = await getApiKeyForModel(model.id);
+      const apiKey = await resolveApiKeyForModel(model.id);
 
       if (!apiKey) {
         logger.error(
