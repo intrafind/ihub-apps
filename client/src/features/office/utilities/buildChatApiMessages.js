@@ -1,4 +1,11 @@
 import { processDocumentFile } from '../../upload/utils/fileProcessing';
+import {
+  sanitizeContentType,
+  hasBase64Content,
+  isUnsupportedAttachmentFormat
+} from './attachmentFormat';
+
+export { sanitizeContentType, hasBase64Content, isUnsupportedAttachmentFormat };
 
 export function createUserMessageId() {
   return `msg-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
@@ -13,16 +20,10 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const IMAGE_MAX_DIMENSION = 1024;
 const IMAGE_REENCODE_QUALITY = 0.8;
 
-/**
- * Strip MIME-type parameters so e.g. `image/jpeg; name="foo.jpg"` collapses to
- * `image/jpeg`. Outlook (and some Exchange servers) decorate the contentType
- * with a `name=` parameter which the LLM adapters then send as the `media_type`
- * — Anthropic rejects anything that isn't a bare MIME type, so without this
- * step image attachments fail before the model ever sees them.
- */
-function sanitizeContentType(ct) {
-  if (!ct || typeof ct !== 'string') return '';
-  return ct.split(';')[0].trim().toLowerCase();
+/** Human-readable "name (content type)" used in skip/failure log lines. */
+function describeAttachment(att) {
+  const contentType = sanitizeContentType(att?.contentType) || att?.contentType || 'unknown type';
+  return `"${att?.name || 'unnamed'}" (${contentType})`;
 }
 
 export function isImageAttachment(att) {
@@ -100,24 +101,6 @@ async function resizeImageBase64(base64Content, contentType, maxDimension) {
 }
 
 /**
- * True only when the attachment's `content` blob carries actual binary
- * data. Outlook's `getAttachmentContentAsync` can return four formats —
- * `Base64`, `Eml`, `iCalendar`, `Url` — and only `base64` is usable as an
- * image / file payload. Cloud attachments (OneDrive / SharePoint links)
- * arrive as `format: 'url'` with `content` set to the share link, which
- * we previously fed straight into `atob()` and shipped to the LLM as if
- * it were base64. That was the silent failure path behind issue #1467.
- */
-function hasBase64Content(att) {
-  if (!att?.content) return false;
-  const fmt = String(att.content.format || '').toLowerCase();
-  // Office.js returns the enum value verbatim; treat anything other
-  // than the explicit "base64" string as non-base64 to be safe.
-  if (fmt && fmt !== 'base64') return false;
-  return typeof att.content.content === 'string' && att.content.content.length > 0;
-}
-
-/**
  * Build the imageData array sent to the LLM from a list of Outlook
  * attachments. Filters out inline images (HTML-signature logos, embedded
  * UI badges, etc.) so they don't silently bloat the request — they're
@@ -173,11 +156,23 @@ function base64ToFile(base64, name, contentType) {
 // the document pipeline expects binary file bytes — see `hasBase64Content`.
 export async function buildFileDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
-  const files = attachments
+  const candidates = attachments
     .filter(a => !a?.isInline)
     .filter(a => !isImageAttachment(a))
-    .filter(hasBase64Content)
     .filter(a => !a.error);
+
+  // Attachments that fetched fine but are in a format this pipeline can't
+  // convert (eml/icalendar/url) used to be dropped here with no trace at
+  // all — the review banner still showed them as "attached". Log them so
+  // the drop is at least visible, even though the banner is the primary
+  // fix (see OfficeMailContextBanner's use of isUnsupportedAttachmentFormat).
+  candidates
+    .filter(a => !hasBase64Content(a))
+    .forEach(a => {
+      console.warn(`[office] attachment ${describeAttachment(a)} is not supported and was skipped`);
+    });
+
+  const files = candidates.filter(hasBase64Content);
   if (!files.length) return null;
 
   const results = await Promise.all(
@@ -197,7 +192,8 @@ export async function buildFileDataFromMailAttachments(attachments) {
         };
       } catch (err) {
         console.warn(
-          `[office] attachment "${a?.name}" could not be converted to text and was skipped`,
+          `[office] attachment ${describeAttachment(a)} could not be converted to text` +
+            ' and was skipped',
           err
         );
         return null;
