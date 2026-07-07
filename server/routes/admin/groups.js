@@ -567,8 +567,9 @@ export default function registerAdminGroupRoutes(app) {
         };
       }
 
-      // Check if group ID already exists
-      if (groupsData.groups[id]) {
+      // Check if group ID already exists (own-property check so names inherited
+      // from Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (Object.hasOwn(groupsData.groups, id)) {
         return sendErrorResponse(res, 409, 'Group ID already exists');
       }
 
@@ -699,8 +700,9 @@ export default function registerAdminGroupRoutes(app) {
         return sendNotFound(res, 'Groups file');
       }
 
-      // Check if group exists
-      if (!groupsData.groups[groupId]) {
+      // Check if group exists (own-property check so names inherited from
+      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (!Object.hasOwn(groupsData.groups, groupId)) {
         return sendNotFound(res, 'Group');
       }
 
@@ -871,8 +873,9 @@ export default function registerAdminGroupRoutes(app) {
         return sendNotFound(res, 'Groups file');
       }
 
-      // Check if group exists
-      if (!groupsData.groups[groupId]) {
+      // Check if group exists (own-property check so names inherited from
+      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (!Object.hasOwn(groupsData.groups, groupId)) {
         return sendNotFound(res, 'Group');
       }
 
