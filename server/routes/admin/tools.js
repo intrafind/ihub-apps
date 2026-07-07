@@ -441,7 +441,11 @@ export default function registerAdminToolsRoutes(app) {
       // Persist the update to the tool's individual file (migrates
       // legacy-sourced tools to the per-file store on first edit).
       await fs.mkdir(toolsDir, { recursive: true });
-      await fs.writeFile(join(toolsDir, `${toolId}.json`), JSON.stringify(updatedTool, null, 2));
+      const toolFilePath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
+      if (!toolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2)); // codeql[js/path-injection] -- toolId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -548,7 +552,11 @@ export default function registerAdminToolsRoutes(app) {
 
       // Create the new tool as its own individual file
       await fs.mkdir(toolsDir, { recursive: true });
-      await fs.writeFile(join(toolsDir, `${newTool.id}.json`), JSON.stringify(newTool, null, 2));
+      const newToolFilePath = await resolveAndValidatePath(`${newTool.id}.json`, toolsDir);
+      if (!newToolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2)); // codeql[js/path-injection] -- newTool.id validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -659,8 +667,9 @@ export default function registerAdminToolsRoutes(app) {
 
       // Remove the tool's individual file, if it has been migrated there
       const individualToolPath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
-      if (individualToolPath && existsSync(individualToolPath)) {
-        await fs.unlink(individualToolPath);
+      const hasIndividualToolFile = individualToolPath && existsSync(individualToolPath); // codeql[js/path-injection] -- toolId validated; path canonicalized via resolveAndValidatePath.
+      if (hasIndividualToolFile) {
+        await fs.unlink(individualToolPath); // codeql[js/path-injection] -- toolId validated; path canonicalized via resolveAndValidatePath.
       }
 
       // Remove the tool from the legacy config file, if it's still stored there
@@ -770,7 +779,11 @@ export default function registerAdminToolsRoutes(app) {
       // Persist to the tool's individual file (migrates legacy-sourced
       // tools to the per-file store on first toggle).
       await fs.mkdir(toolsDir, { recursive: true });
-      await fs.writeFile(join(toolsDir, `${toolId}.json`), JSON.stringify(tool, null, 2));
+      const toolFilePath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
+      if (!toolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2)); // codeql[js/path-injection] -- toolId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
 
       // Refresh cache
       await configCache.refreshToolsCache();
