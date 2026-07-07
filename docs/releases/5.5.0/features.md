@@ -84,3 +84,13 @@ kept mislabeling upload-based answers.
 - Covers document uploads, image uploads, and email context in tool-enabled apps.
 - The detected source is also cleared when a turn instead pauses for a clarification question or
   ends in an error, so it can't carry over to the next message.
+
+## Restrict Which Models an App Can Use
+
+The App Editor now has an "Allowed Models" picker, so admins can limit a specific app to a chosen
+set of AI models instead of only being able to set a single preferred one.
+
+- Search and add models to the allow-list, same picker used for group and OAuth-client
+  permissions; leave it empty to keep the app open to every available model.
+- Users can no longer pick or be switched to a model outside the app's allow-list — chat requests
+  fall back to a compatible model automatically.
