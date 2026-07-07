@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { createHash } from 'crypto';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
@@ -439,13 +439,18 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Persist the update to the tool's individual file (migrates
-      // legacy-sourced tools to the per-file store on first edit).
+      // legacy-sourced tools to the per-file store on first edit). The
+      // filename is re-derived with path.basename() (stripping any
+      // directory components) so the write target can't escape toolsDir,
+      // in addition to the resolveAndValidatePath containment check.
       await fs.mkdir(toolsDir, { recursive: true });
-      const toolFilePath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
-      if (!toolFilePath) {
+      const safeToolFileName = basename(`${toolId}.json`);
+      const validatedToolPath = await resolveAndValidatePath(safeToolFileName, toolsDir);
+      if (!validatedToolPath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2)); // codeql[js/path-injection] -- toolId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+      const toolFilePath = join(toolsDir, safeToolFileName);
+      await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2));
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -550,13 +555,18 @@ export default function registerAdminToolsRoutes(app) {
         newTool.enabled = true;
       }
 
-      // Create the new tool as its own individual file
+      // Create the new tool as its own individual file. The filename is
+      // re-derived with path.basename() (stripping any directory
+      // components) so the write target can't escape toolsDir, in
+      // addition to the resolveAndValidatePath containment check.
       await fs.mkdir(toolsDir, { recursive: true });
-      const newToolFilePath = await resolveAndValidatePath(`${newTool.id}.json`, toolsDir);
-      if (!newToolFilePath) {
+      const safeNewToolFileName = basename(`${newTool.id}.json`);
+      const validatedNewToolPath = await resolveAndValidatePath(safeNewToolFileName, toolsDir);
+      if (!validatedNewToolPath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2)); // codeql[js/path-injection] -- newTool.id validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+      const newToolFilePath = join(toolsDir, safeNewToolFileName);
+      await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2));
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -665,11 +675,16 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      // Remove the tool's individual file, if it has been migrated there
-      const individualToolPath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
-      const hasIndividualToolFile = individualToolPath && existsSync(individualToolPath); // codeql[js/path-injection] -- toolId validated; path canonicalized via resolveAndValidatePath.
+      // Remove the tool's individual file, if it has been migrated there.
+      // The filename is re-derived with path.basename() (stripping any
+      // directory components) so the target can't escape toolsDir, in
+      // addition to the resolveAndValidatePath containment check.
+      const safeDeleteFileName = basename(`${toolId}.json`);
+      const validatedDeletePath = await resolveAndValidatePath(safeDeleteFileName, toolsDir);
+      const individualToolPath = join(toolsDir, safeDeleteFileName);
+      const hasIndividualToolFile = validatedDeletePath && existsSync(individualToolPath);
       if (hasIndividualToolFile) {
-        await fs.unlink(individualToolPath); // codeql[js/path-injection] -- toolId validated; path canonicalized via resolveAndValidatePath.
+        await fs.unlink(individualToolPath);
       }
 
       // Remove the tool from the legacy config file, if it's still stored there
@@ -777,13 +792,18 @@ export default function registerAdminToolsRoutes(app) {
       tool.enabled = !tool.enabled;
 
       // Persist to the tool's individual file (migrates legacy-sourced
-      // tools to the per-file store on first toggle).
+      // tools to the per-file store on first toggle). The filename is
+      // re-derived with path.basename() (stripping any directory
+      // components) so the write target can't escape toolsDir, in
+      // addition to the resolveAndValidatePath containment check.
       await fs.mkdir(toolsDir, { recursive: true });
-      const toolFilePath = await resolveAndValidatePath(`${toolId}.json`, toolsDir);
-      if (!toolFilePath) {
+      const safeToggleFileName = basename(`${toolId}.json`);
+      const validatedTogglePath = await resolveAndValidatePath(safeToggleFileName, toolsDir);
+      if (!validatedTogglePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2)); // codeql[js/path-injection] -- toolId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+      const toolFilePath = join(toolsDir, safeToggleFileName);
+      await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2));
 
       // Refresh cache
       await configCache.refreshToolsCache();
