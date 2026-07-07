@@ -48,18 +48,47 @@ function decodeMimeWords(str) {
 // text/html part. Deliberately simple (no DOMParser) so this module stays
 // dependency-free; `htmlToText` in fileProcessing.js is the DOM-based,
 // more accurate version used for direct HTML file uploads.
+// Named entities this parser understands, decoded in a single regex pass
+// below (see the double-unescaping note).
+const HTML_ENTITIES = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" };
+
 function stripHtmlToText(html) {
-  return html
-    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+  let text = html;
+
+  // Loop each strip to a fixed point: a single non-recursive pass can
+  // leave a live tag behind when the input nests/overlaps delimiters so
+  // that removing part of it reassembles one (e.g.
+  // "<scr<script>ipt>...</scr</script>ipt>" contains no literal
+  // "<script>...</script>" substring, but removing the inner match once
+  // leaves "<script>...</script>" behind). Repeating until nothing changes
+  // closes that gap.
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+  } while (text !== previous);
+
+  text = text
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h[1-6]|table|blockquote)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/<\/(p|div|tr|li|h[1-6]|table|blockquote)>/gi, '\n');
+
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+
+  // Decode all named entities in one pass — resolving each match exactly
+  // once — instead of one independent replace per entity. Sequential
+  // independent replaces would double-unescape: e.g. text that safely
+  // encodes a literal "&lt;" as "&amp;lt;" would, after an `&amp;` -> `&`
+  // pass, read as "&lt;" and then get wrongly decoded to "<" by a later
+  // pass, turning inert text into a live tag delimiter.
+  text = text.replace(
+    /&(nbsp|amp|lt|gt|quot|#39|apos);/gi,
+    (match, name) => HTML_ENTITIES[name.toLowerCase()] ?? match
+  );
+
+  return text
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')

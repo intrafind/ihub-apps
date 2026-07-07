@@ -36,6 +36,17 @@ const MULTIPART_EML =
 const ICS =
   'QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0KQkVHSU46VkVWRU5UDQpTVU1NQVJZOlF1YXJ0ZXJseSBQbGFubmluZw0KRFRTVEFSVDoyMDI2MDcxNVQwOTAwMDBaDQpEVEVORDoyMDI2MDcxNVQxMDAwMDBaDQpMT0NBVElPTjpDb25mZXJlbmNlIFJvb20gQQ0KT1JHQU5JWkVSO0NOPUphbmUgRG9lOm1haWx0bzpqYW5lQGV4YW1wbGUuY29tDQpERVNDUklQVElPTjpQbGVhc2UgcmV2aWV3IHRoZSBkZWNrXG5iZWZvcmUgdGhlIGNhbGwuDQpFTkQ6VkVWRU5UDQpFTkQ6VkNBTEVOREFSDQo=';
 
+// HTML-only body (no text/plain alternative) exercising the regex-based
+// stripHtmlToText fallback specifically:
+//  - a real <script> block that must be stripped
+//  - a "tag reconstruction" attempt: "<scr<script>ipt>...</scr</script>ipt>"
+//    contains no literal "<script>...</script>" substring, but a single
+//    non-looping strip pass leaves one behind once part of it is removed
+//  - a double-escaped "&amp;lt;script&amp;gt;" that must render as the
+//    literal text "&lt;script&gt;", not decode to a live "<script>" tag
+const HTML_ONLY_EML =
+  'RnJvbTogSmFuZSBEb2UgPGphbmVAZXhhbXBsZS5jb20+DQpUbzogQm9iIFNtaXRoIDxib2JAZXhhbXBsZS5jb20+DQpTdWJqZWN0OiBIVE1MIG9ubHkNCkRhdGU6IFdlZCwgMTcgSnVsIDIwMjYgMDg6MDA6MDAgKzAwMDANCkNvbnRlbnQtVHlwZTogdGV4dC9odG1sOyBjaGFyc2V0PVVURi04DQoNCjxodG1sPjxib2R5PjxzY3JpcHQ+YWxlcnQoMSk8L3NjcmlwdD48cD5IZWxsbyA8Yj5Cb2I8L2I+LDwvcD48c2NyPHNjcmlwdD5pcHQ+YWxlcnQoMik8L3Njcjwvc2NyaXB0PmlwdD48cD5MaXRlcmFsIHRleHQ6ICZhbXA7bHQ7c2NyaXB0JmFtcDtndDs8L3A+PHA+TGluZTE8YnI+TGluZTI8L3A+PC9ib2R5PjwvaHRtbD4NCg==';
+
 console.log('🧪 parseEmlAttachment — simple plain-text email\n');
 {
   const text = parseEmlAttachment(SIMPLE_EML);
@@ -57,6 +68,25 @@ console.log('\n🧪 parseEmlAttachment — multipart/alternative with encoded su
     text
   );
   check('does not leak MIME boundary markers into the output', !text?.includes('BOUNDARY123'));
+}
+
+console.log('\n🧪 parseEmlAttachment — HTML-only body (stripHtmlToText hardening)\n');
+{
+  const text = parseEmlAttachment(HTML_ONLY_EML);
+  check('returns non-null', text !== null, text);
+  check('keeps the visible text', text?.includes('Hello Bob,'), text);
+  check('converts <br> to a newline', text?.includes('Line1\nLine2'), text);
+  check('strips a normal <script> block entirely', !text?.includes('alert(1)'), text);
+  check(
+    'strips a "reconstructed" <script> block left behind by a single non-looping pass',
+    !text?.includes('alert(2)') && !/<script/i.test(text || ''),
+    text
+  );
+  check(
+    'decodes a double-escaped "&amp;lt;script&amp;gt;" to literal text, not a live tag',
+    text?.includes('Literal text: &lt;script&gt;'),
+    text
+  );
 }
 
 console.log('\n🧪 parseEmlAttachment — malformed input\n');
