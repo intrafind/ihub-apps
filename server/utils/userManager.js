@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
@@ -10,6 +11,18 @@ import { ensureFirstUserIsAdmin } from './adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Hash password with user ID as salt for unique hashes
+ * @param {string} password - Plain text password
+ * @param {string} userId - User ID to use as salt
+ * @returns {Promise<string>} Hashed password
+ */
+export async function hashPasswordWithUserId(password, userId) {
+  const salt = await bcrypt.genSalt(12);
+  const passwordWithUserId = `${userId}:${password}`;
+  return await bcrypt.hash(passwordWithUserId, salt);
+}
 
 /**
  * Load users from the local users file
