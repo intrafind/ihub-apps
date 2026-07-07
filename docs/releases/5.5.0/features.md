@@ -106,3 +106,15 @@ of the platform until `groups.json` was hand-edited.
   groups granting administrative access, in addition to the built-in `admins`, `users`,
   `anonymous`, and `authenticated` groups remaining non-deletable.
 - The group create/update endpoints now also accept the documented `inherits` field.
+
+## Fixed Cross-Chat Tool-Call Mixups Under Concurrent Load
+
+Streaming tool calls for OpenAI-, Anthropic-, and vLLM/local-backed apps are now tracked per
+conversation instead of in one shared bucket. Previously, two users streaming tool calls at the
+same time — or a user whose stream was cancelled mid-flight — could have their pending tool-call
+data overwritten or merged with another user's, occasionally causing a tool to run with the wrong
+or corrupted arguments.
+
+- Each conversation's in-flight tool-call data is now isolated by chat.
+- A cancelled or errored stream can no longer leave stale tool-call data behind to be picked up by
+  a later, unrelated conversation.

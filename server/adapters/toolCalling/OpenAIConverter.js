@@ -426,6 +426,15 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
 }
 
 /**
+ * Discard accumulated streaming state for a stream that errored or was aborted,
+ * so stale pending tool calls can't leak into a later, unrelated stream.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearOpenAIStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
+}
+
+/**
  * Convert generic streaming response to OpenAI format
  * @param {import('./GenericToolCalling.js').GenericStreamingResponse} genericResponse - Generic response
  * @param {string} completionId - Completion ID for OpenAI format

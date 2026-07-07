@@ -328,6 +328,15 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
 }
 
 /**
+ * Discard accumulated streaming state for a stream that errored or was aborted,
+ * so a stale pending tool call can't leak into a later, unrelated stream.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearAnthropicStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
+}
+
+/**
  * Convert generic streaming response to Anthropic format
  * Note: This is primarily for testing/debugging as we typically don't need to convert back to Anthropic format
  * @param {import('./GenericToolCalling.js').GenericStreamingResponse} genericResponse - Generic response
