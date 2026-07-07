@@ -73,17 +73,20 @@ limit — silently fell back to "Based on AI knowledge" even though a file or em
 - On error/aborted turns the badge is intentionally not shown, since the assistant bubble is an
   error message rather than a real answer.
 
-## Outlook Add-in: Clear Status for Unsupported Email Attachments
+## Outlook Add-in: Attached Emails and Meeting Invites Are Now Included
 
-Attached/forwarded emails, meeting invites, and OneDrive/SharePoint share links on an email no
-longer look like they'll be sent when they can't be. Previously these fetched successfully and
-showed as "attached" in the review banner, but were silently dropped when the message was sent —
-with no indication to the user that anything was missing.
+Forwarding an email or meeting invite as an attachment now actually sends its content to the
+model. Previously these fetched successfully and showed as "attached" in the review banner, but
+were silently dropped when the message was sent — the model never saw them and the user had no
+indication anything was missing.
 
-- Each attachment now shows one of three clear states: attached, unsupported (for attached emails,
-  invites, and cloud links — not yet convertible to text), or failed.
-- Attachments larger than 20 MB are skipped up front with a "too large" status instead of being
-  downloaded into the task pane, which could previously stall the pane on a large attachment.
+- Attached/forwarded emails (`.eml`) are parsed into their subject, sender, recipients, and body
+  text.
+- Meeting invites (`.ics`) are parsed into a short summary: subject, time, location, and organizer.
+- OneDrive/SharePoint attachments (share links, not the file itself) now include the link as a
+  reference instead of being dropped without a trace.
+- Attachments larger than 20 MB are skipped up front instead of being downloaded into the task
+  pane, which could previously stall the pane on a large attachment.
 - On Outlook hosts older than Mailbox 1.8 (which can't fetch attachment content at all), the
   banner now shows one explanation instead of repeating the same error on every attachment.
 

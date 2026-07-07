@@ -5,19 +5,17 @@
  * ("[Outlook] Bug: PDF / Word / .eml attachments fail silently or throw").
  *
  * Covers the classification helpers that decide whether an attachment
- * descriptor (as produced by outlookMailContext.js) is usable content,
- * an unsupported format (attached email / invite / cloud link), or a
- * genuine fetch failure. Pure (no React, no Office.js) so it runs under
- * node directly.
+ * descriptor (as produced by outlookMailContext.js) carries real binary
+ * document data usable by the document pipeline, vs. a textual/reference
+ * format (attached email, invite, cloud link) handled separately — see
+ * emailAttachmentParsers.js and buildChatApiMessages.js's
+ * buildFileEntryForAttachment. Pure (no React, no Office.js) so it runs
+ * under node directly.
  *
  * Run directly: `node client/src/features/office/utilities/attachmentFormat.test.js`.
  */
 
-import {
-  sanitizeContentType,
-  hasBase64Content,
-  isUnsupportedAttachmentFormat
-} from './attachmentFormat.js';
+import { sanitizeContentType, hasBase64Content } from './attachmentFormat.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -54,6 +52,10 @@ console.log('\n🧪 hasBase64Content — PDF / Word attachments (issue #1451)\n'
 
 console.log('\n🧪 hasBase64Content — attached .eml / invite / cloud-link attachments\n');
 {
+  // These formats are handled by dedicated parsers / a link stub instead
+  // (see emailAttachmentParsers.test.js) — hasBase64Content just needs to
+  // keep saying "not raw binary content" so they don't get fed into
+  // base64ToFile/atob() as if they were a PDF/DOCX.
   const eml = { content: { format: 'eml', content: 'RnJvbTogYUBiLmNvbQ==' } };
   check('eml-format content is NOT base64-usable', hasBase64Content(eml) === false);
 
@@ -64,45 +66,6 @@ console.log('\n🧪 hasBase64Content — attached .eml / invite / cloud-link att
   check(
     'url-format (cloud share link) content is NOT base64-usable — was previously fed to atob()',
     hasBase64Content(cloudLink) === false
-  );
-}
-
-console.log('\n🧪 isUnsupportedAttachmentFormat\n');
-{
-  const pdf = { content: { format: 'base64', content: 'JVBERi0xLjQK' } };
-  check('a normal PDF is not "unsupported"', isUnsupportedAttachmentFormat(pdf) === false);
-
-  const eml = { name: 'Fwd: Q3 report.eml', content: { format: 'eml', content: 'RnJvbTo=' } };
-  check(
-    'a forwarded .eml attachment IS flagged unsupported (not silently "attached")',
-    isUnsupportedAttachmentFormat(eml) === true
-  );
-
-  const invite = { content: { format: 'icalendar', content: 'QkVHSU4=' } };
-  check(
-    'an .ics invite attachment is flagged unsupported',
-    isUnsupportedAttachmentFormat(invite) === true
-  );
-
-  const cloudLink = { content: { format: 'url', content: 'https://contoso.sharepoint.com/x' } };
-  check(
-    'a OneDrive/SharePoint link attachment is flagged unsupported',
-    isUnsupportedAttachmentFormat(cloudLink) === true
-  );
-
-  const failed = {
-    error: 'Attachment too large to include automatically.',
-    content: { format: 'eml', content: 'RnJvbTo=' }
-  };
-  check(
-    'a fetch failure (.error set) is reported as failed, not unsupported',
-    isUnsupportedAttachmentFormat(failed) === false
-  );
-
-  const pending = { name: 'invoice.pdf' };
-  check(
-    'an attachment with no content yet is not "unsupported"',
-    isUnsupportedAttachmentFormat(pending) === false
   );
 }
 

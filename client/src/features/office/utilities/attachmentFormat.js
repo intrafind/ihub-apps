@@ -34,24 +34,3 @@ export function hasBase64Content(att) {
   if (fmt && fmt !== 'base64') return false;
   return typeof att.content.content === 'string' && att.content.content.length > 0;
 }
-
-// Formats getAttachmentContentAsync can return that this pipeline cannot
-// turn into a file/image payload: `eml` (attached/forwarded email items),
-// `icalendar` (meeting invites) and `url` (OneDrive/SharePoint share links,
-// not binary data). These attachments fetch successfully — they have no
-// `.error` — so without this check they looked "attached" in the review
-// banner while `hasBase64Content` silently dropped them at send time. See
-// issue #1451.
-const UNSUPPORTED_CONTENT_FORMATS = new Set(['eml', 'icalendar', 'url']);
-
-/**
- * True for an attachment that fetched successfully but is in a format this
- * pipeline doesn't convert to LLM-ready content. Distinct from `att.error`
- * (a fetch/network failure) so the UI can show "unsupported" instead of
- * "failed" for these.
- */
-export function isUnsupportedAttachmentFormat(att) {
-  if (!att?.content || att.error) return false;
-  const fmt = String(att.content.format || '').toLowerCase();
-  return UNSUPPORTED_CONTENT_FORMATS.has(fmt);
-}

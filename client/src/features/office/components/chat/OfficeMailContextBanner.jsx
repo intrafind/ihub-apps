@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
-import { isUnsupportedAttachmentFormat } from '../../utilities/attachmentFormat';
 import { MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE } from '../../utilities/outlookMailContext';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
@@ -16,9 +15,6 @@ function isImageAttachment(att) {
 
 function getAttachmentStatus(att) {
   if (att?.error) return { kind: 'failed', label: att.error };
-  if (isUnsupportedAttachmentFormat(att)) {
-    return { kind: 'unsupported', label: 'This attachment type is not supported yet' };
-  }
   if (att?.content) return { kind: 'attached', label: 'Will be sent' };
   return { kind: 'pending', label: 'Loading...' };
 }
@@ -211,14 +207,6 @@ function OfficeMailContextBanner({
                         <span aria-hidden>•</span>
                         <span className="text-rose-600" title={status.label}>
                           Failed
-                        </span>
-                      </>
-                    )}
-                    {status.kind === 'unsupported' && (
-                      <>
-                        <span aria-hidden>•</span>
-                        <span className="text-amber-600" title={status.label}>
-                          Unsupported
                         </span>
                       </>
                     )}

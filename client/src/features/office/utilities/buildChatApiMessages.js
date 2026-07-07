@@ -1,11 +1,8 @@
 import { processDocumentFile } from '../../upload/utils/fileProcessing';
-import {
-  sanitizeContentType,
-  hasBase64Content,
-  isUnsupportedAttachmentFormat
-} from './attachmentFormat';
+import { sanitizeContentType, hasBase64Content } from './attachmentFormat';
+import { parseEmlAttachment, parseIcsAttachment } from './emailAttachmentParsers';
 
-export { sanitizeContentType, hasBase64Content, isUnsupportedAttachmentFormat };
+export { sanitizeContentType, hasBase64Content };
 
 export function createUserMessageId() {
   return `msg-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
@@ -149,58 +146,102 @@ function base64ToFile(base64, name, contentType) {
   return new File([bytes], name, { type: contentType });
 }
 
-// Processes non-image attachments through the shared document pipeline.
-// Returns an array of { fileName, fileType, displayType, content?, pageImages? }
-// in the shape RequestBuilder.preprocessMessagesWithFileData expects.
-// Skips cloud attachments (format: 'url') and EML / iCalendar items since
-// the document pipeline expects binary file bytes — see `hasBase64Content`.
+// Builds the { fileName, fileType, displayType, content?, pageImages? }
+// entry (shape RequestBuilder.preprocessMessagesWithFileData expects) for a
+// single non-image attachment, dispatching on the content format Office
+// actually returned rather than assuming everything is a binary document:
+// - `eml` (attached/forwarded emails) and `icalendar` (meeting invites) are
+//   textual formats — parsed directly into readable content.
+// - `url` (OneDrive/SharePoint share links) has no file bytes to read, so
+//   the link itself is sent as a reference instead of being dropped.
+// - anything else goes through the shared binary-document pipeline.
+async function buildFileEntryForAttachment(a) {
+  const format = String(a?.content?.format || '').toLowerCase();
+  const cleanType =
+    sanitizeContentType(a.contentType) || a.contentType || 'application/octet-stream';
+
+  if (format === 'eml') {
+    const text = parseEmlAttachment(a.content.content);
+    if (!text) {
+      console.warn(`[office] attachment ${describeAttachment(a)} could not be parsed as an email`);
+      return null;
+    }
+    return {
+      source: 'local',
+      fileName: a.name,
+      fileType: 'message/rfc822',
+      displayType: 'Email',
+      content: text
+    };
+  }
+
+  if (format === 'icalendar') {
+    const text = parseIcsAttachment(a.content.content);
+    if (!text) {
+      console.warn(`[office] attachment ${describeAttachment(a)} could not be parsed as an invite`);
+      return null;
+    }
+    return {
+      source: 'local',
+      fileName: a.name,
+      fileType: 'text/calendar',
+      displayType: 'Calendar invite',
+      content: text
+    };
+  }
+
+  if (format === 'url') {
+    // Office only exposes the share link for cloud attachments, not the
+    // file bytes — there's nothing to extract, but the link is still
+    // useful context, so it's sent instead of silently dropping the
+    // attachment (previously fed straight into atob() as if it were
+    // base64 — see issue #1467).
+    return {
+      source: 'local',
+      fileName: a.name,
+      fileType: cleanType,
+      displayType: cleanType,
+      content: `[Cloud-hosted attachment — content was not retrieved. Link: ${a.content.content}]`
+    };
+  }
+
+  if (!hasBase64Content(a)) {
+    console.warn(`[office] attachment ${describeAttachment(a)} has an unrecognized content format`);
+    return null;
+  }
+
+  try {
+    const file = base64ToFile(a.content.content, a.name, cleanType);
+    const { content, pageImages } = await processDocumentFile(file);
+    return {
+      source: 'local',
+      fileName: a.name,
+      fileType: cleanType,
+      displayType: cleanType,
+      content: content || undefined,
+      pageImages: pageImages?.length ? pageImages : undefined
+    };
+  } catch (err) {
+    console.warn(
+      `[office] attachment ${describeAttachment(a)} could not be converted to text and was skipped`,
+      err
+    );
+    return null;
+  }
+}
+
+// Processes non-image attachments into file data for the outgoing request.
+// Returns an array of { fileName, fileType, displayType, content?, pageImages? }.
 export async function buildFileDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
   const candidates = attachments
     .filter(a => !a?.isInline)
     .filter(a => !isImageAttachment(a))
-    .filter(a => !a.error);
+    .filter(a => !a.error)
+    .filter(a => a?.content?.content);
+  if (!candidates.length) return null;
 
-  // Attachments that fetched fine but are in a format this pipeline can't
-  // convert (eml/icalendar/url) used to be dropped here with no trace at
-  // all — the review banner still showed them as "attached". Log them so
-  // the drop is at least visible, even though the banner is the primary
-  // fix (see OfficeMailContextBanner's use of isUnsupportedAttachmentFormat).
-  candidates
-    .filter(a => !hasBase64Content(a))
-    .forEach(a => {
-      console.warn(`[office] attachment ${describeAttachment(a)} is not supported and was skipped`);
-    });
-
-  const files = candidates.filter(hasBase64Content);
-  if (!files.length) return null;
-
-  const results = await Promise.all(
-    files.map(async a => {
-      try {
-        const cleanType =
-          sanitizeContentType(a.contentType) || a.contentType || 'application/octet-stream';
-        const file = base64ToFile(a.content.content, a.name, cleanType);
-        const { content, pageImages } = await processDocumentFile(file);
-        return {
-          source: 'local',
-          fileName: a.name,
-          fileType: cleanType,
-          displayType: cleanType,
-          content: content || undefined,
-          pageImages: pageImages?.length ? pageImages : undefined
-        };
-      } catch (err) {
-        console.warn(
-          `[office] attachment ${describeAttachment(a)} could not be converted to text` +
-            ' and was skipped',
-          err
-        );
-        return null;
-      }
-    })
-  );
-
+  const results = await Promise.all(candidates.map(buildFileEntryForAttachment));
   const valid = results.filter(Boolean);
   return valid.length ? valid : null;
 }
