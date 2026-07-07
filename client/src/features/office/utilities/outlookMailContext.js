@@ -92,10 +92,25 @@ function getBodyTextAsync(item) {
   });
 }
 
+// Exported so the review banner can recognize this specific failure and
+// collapse it into a single explanatory line instead of repeating it once
+// per attachment (see issue #1451).
+export const MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE =
+  'getAttachmentContentAsync is not available (requires Mailbox 1.8+).';
+
+// Exported for the same reason as above: the banner needs to tell "too
+// large to fetch" apart from a generic fetch failure.
+export const ATTACHMENT_TOO_LARGE_MESSAGE = 'Attachment too large to include automatically.';
+
+// Attachments larger than this are skipped instead of pulled into memory as
+// base64 — a large PDF/video attachment previously hung the taskpane while
+// downloading, then failed anyway once it reached the document pipeline.
+const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
+
 function getAttachmentContentAsync(item, attachmentId) {
   return new Promise((resolve, reject) => {
     if (!item || typeof item.getAttachmentContentAsync !== 'function') {
-      reject(new Error('getAttachmentContentAsync is not available (requires Mailbox 1.8+).'));
+      reject(new Error(MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE));
       return;
     }
     item.getAttachmentContentAsync(attachmentId, result => {
@@ -237,6 +252,10 @@ async function readMailSnapshot(item, itemId) {
     if (getLiveItemId() !== itemId) {
       aborted = true;
       break;
+    }
+    if (typeof d.size === 'number' && d.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      attachments.push({ ...d, error: ATTACHMENT_TOO_LARGE_MESSAGE });
+      continue;
     }
     try {
       const raw = await getAttachmentContentAsync(item, d.id);

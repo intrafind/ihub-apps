@@ -418,6 +418,15 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
 }
 
 /**
+ * Discard accumulated streaming state for a stream that errored or was aborted,
+ * so stale pending tool calls can't leak into a later, unrelated stream.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearVLLMStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
+}
+
+/**
  * Convert generic streaming response to vLLM format (same as OpenAI)
  * @param {import('./GenericToolCalling.js').GenericStreamingResponse} genericResponse - Generic response
  * @param {string} completionId - Completion ID for vLLM format

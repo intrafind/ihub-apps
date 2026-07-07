@@ -55,6 +55,7 @@ jest.mock('../../../server/adapters/toolCalling/index.js', () => ({
     complete: true,
     tool_calls: []
   })),
+  clearStreamingState: jest.fn(),
   normalizeToolName: x => x
 }));
 

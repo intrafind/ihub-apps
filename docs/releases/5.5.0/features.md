@@ -84,6 +84,23 @@ apps, prompts, and models are already stored — instead of only as entries in o
 - Existing tools defined in `config/tools.json` keep working unchanged; editing one through the
   admin UI moves it to its own file automatically.
 
+## Outlook Add-in: Attached Emails and Meeting Invites Are Now Included
+
+Forwarding an email or meeting invite as an attachment now actually sends its content to the
+model. Previously these fetched successfully and showed as "attached" in the review banner, but
+were silently dropped when the message was sent — the model never saw them and the user had no
+indication anything was missing.
+
+- Attached/forwarded emails (`.eml`) are parsed into their subject, sender, recipients, and body
+  text.
+- Meeting invites (`.ics`) are parsed into a short summary: subject, time, location, and organizer.
+- OneDrive/SharePoint attachments (share links, not the file itself) now include the link as a
+  reference instead of being dropped without a trace.
+- Attachments larger than 20 MB are skipped up front instead of being downloaded into the task
+  pane, which could previously stall the pane on a large attachment.
+- On Outlook hosts older than Mailbox 1.8 (which can't fetch attachment content at all), the
+  banner now shows one explanation instead of repeating the same error on every attachment.
+
 ## Answer-Source Badge Fixed When a Tool-Enabled App Answers an Upload Directly
 
 Uploading a document or image to an app that has tools enabled, then getting an answer straight
@@ -95,3 +112,37 @@ kept mislabeling upload-based answers.
 - Covers document uploads, image uploads, and email context in tool-enabled apps.
 - The detected source is also cleared when a turn instead pauses for a clarification question or
   ends in an error, so it can't carry over to the next message.
+
+## Restrict Which Models an App Can Use
+
+The App Editor now has an "Allowed Models" picker, so admins can limit a specific app to a chosen
+set of AI models instead of only being able to set a single preferred one.
+
+- Search and add models to the allow-list, same picker used for group and OAuth-client
+  permissions; leave it empty to keep the app open to every available model.
+- Users can no longer pick or be switched to a model outside the app's allow-list — chat requests
+  fall back to a compatible model automatically.
+  
+## Group Management: Admin Lockout Prevention
+
+The admin Groups API's protected-group list previously checked for `admin`/`user`, but the
+built-in groups are shipped as `admins`/`users`. This meant the real administrator group could be
+deleted, or have its administrative access removed via an update, silently locking every admin out
+of the platform until `groups.json` was hand-edited.
+
+- Deleting or updating a group is now blocked whenever it would leave the platform with zero
+  groups granting administrative access, in addition to the built-in `admins`, `users`,
+  `anonymous`, and `authenticated` groups remaining non-deletable.
+- The group create/update endpoints now also accept the documented `inherits` field.
+
+## Fixed Cross-Chat Tool-Call Mixups Under Concurrent Load
+
+Streaming tool calls for OpenAI-, Anthropic-, and vLLM/local-backed apps are now tracked per
+conversation instead of in one shared bucket. Previously, two users streaming tool calls at the
+same time — or a user whose stream was cancelled mid-flight — could have their pending tool-call
+data overwritten or merged with another user's, occasionally causing a tool to run with the wrong
+or corrupted arguments.
+
+- Each conversation's in-flight tool-call data is now isolated by chat.
+- A cancelled or errored stream can no longer leave stale tool-call data behind to be picked up by
+  a later, unrelated conversation.

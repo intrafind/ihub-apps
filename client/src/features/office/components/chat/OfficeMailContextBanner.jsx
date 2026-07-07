@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
+import { MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE } from '../../utilities/outlookMailContext';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 
@@ -64,6 +65,12 @@ function OfficeMailContextBanner({
 
   const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
   const hasAttachments = attachments.length > 0;
+  // Older Outlook hosts (pre-Mailbox 1.8) fail every attachment fetch with
+  // the same "API not available" error — show one explanation instead of
+  // repeating it on every row.
+  const attachmentApiUnavailable =
+    hasAttachments &&
+    attachments.every(a => a?.error === MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE);
 
   if (loading) {
     return (
@@ -167,6 +174,14 @@ function OfficeMailContextBanner({
       {/* Attachments list */}
       {hasAttachments && remainingAttachments.length > 0 && (
         <div className="divide-y divide-slate-100">
+          {attachmentApiUnavailable && (
+            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[11px] text-amber-700">
+              <Icon name="information-circle" size="sm" />
+              <span>
+                Attachments can&apos;t be read on this version of Outlook (requires Mailbox 1.8+).
+              </span>
+            </div>
+          )}
           {remainingAttachments.map(att => {
             const status = getAttachmentStatus(att);
             const isImage = isImageAttachment(att);
@@ -187,7 +202,7 @@ function OfficeMailContextBanner({
                   </div>
                   <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
                     <span>{formatFileSize(Number(att.size) || 0)}</span>
-                    {status.kind === 'failed' && (
+                    {status.kind === 'failed' && !attachmentApiUnavailable && (
                       <>
                         <span aria-hidden>•</span>
                         <span className="text-rose-600" title={status.label}>

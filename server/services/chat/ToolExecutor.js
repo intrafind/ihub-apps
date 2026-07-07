@@ -1,5 +1,5 @@
 import { createCompletionRequest } from '../../adapters/index.js';
-import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
+import { convertResponseToGeneric, clearStreamingState } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
 import { normalizeToolName } from '../../adapters/toolCalling/index.js';
@@ -941,7 +941,7 @@ class ToolExecutor {
 
         while (events.length > 0) {
           const evt = events.shift();
-          const result = await convertResponseToGeneric(evt.data, model.provider);
+          const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
 
           if (result.error) {
             throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -1038,6 +1038,12 @@ class ToolExecutor {
           }
         }
       }
+
+      // Whether the stream finished naturally, was superseded by a newer
+      // request on this chatId, or the reader was cancelled mid-flight,
+      // discard any leftover tool-call accumulation state so it can't be
+      // finalized by a future, unrelated stream reusing this chatId.
+      clearStreamingState(model.provider, chatId);
 
       if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         logger.info('No tool calls to process', {
@@ -1249,6 +1255,10 @@ class ToolExecutor {
       // Clear source bookkeeping so a failed turn can't leak a detected
       // upload/email source into the next turn on this chatId.
       this.resetKnowledgeSources(chatId);
+      // A throw (e.g. result.error) can skip the post-loop cleanup below the
+      // streaming reader, so also clear here to avoid leaking pending tool
+      // calls into the next turn on this chatId.
+      clearStreamingState(model.provider, chatId);
     }
   }
 
@@ -1365,7 +1375,7 @@ class ToolExecutor {
 
           while (events.length > 0) {
             const evt = events.shift();
-            const result = await convertResponseToGeneric(evt.data, model.provider);
+            const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
 
             if (result.error) {
               throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -1432,6 +1442,12 @@ class ToolExecutor {
             }
           }
         }
+
+        // Whether the stream finished naturally, was superseded by a newer
+        // request on this chatId, or the reader was cancelled mid-flight,
+        // discard any leftover tool-call accumulation state so it can't be
+        // finalized by a future, unrelated stream reusing this chatId.
+        clearStreamingState(model.provider, chatId);
 
         // If no tool calls, this is the final response - stream it back to client
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {

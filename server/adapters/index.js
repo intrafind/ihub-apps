@@ -8,17 +8,18 @@ import VLLMAdapter from './vllm.js';
 import IAssistantConversationAdapter from './iassistant-conversation.js';
 import BedrockAdapter from './bedrock.js';
 
-// Adapter registry
-const adapters = {
-  openai: OpenAIAdapter,
-  'openai-responses': OpenAIResponsesAdapter,
-  anthropic: AnthropicAdapter,
-  google: GoogleAdapter,
-  mistral: MistralAdapter,
-  local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
-  'iassistant-conversation': IAssistantConversationAdapter,
-  bedrock: BedrockAdapter
-};
+function getAdapterRegistry() {
+  return {
+    openai: OpenAIAdapter,
+    'openai-responses': OpenAIResponsesAdapter,
+    anthropic: AnthropicAdapter,
+    google: GoogleAdapter,
+    mistral: MistralAdapter,
+    local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
+    'iassistant-conversation': IAssistantConversationAdapter,
+    bedrock: BedrockAdapter
+  };
+}
 
 /**
  * Get the appropriate adapter for a model
@@ -27,6 +28,7 @@ const adapters = {
  * @throws {Error} If the provider is not registered
  */
 export function getAdapter(provider) {
+  const adapters = getAdapterRegistry();
   const adapter = adapters[provider];
   if (!adapter) {
     throw new Error(

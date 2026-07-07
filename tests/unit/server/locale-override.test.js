@@ -1,12 +1,36 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { ConfigCache } from '../configCache.js';
+import configCacheSingleton from '../../../server/configCache.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.join(__dirname, '../../');
+jest.mock('../../../server/pathUtils.js', () => ({
+  getRootDir: () => process.cwd()
+}));
+
+jest.mock('../../../server/utils/authorization.js', () => ({
+  resolveGroupInheritance: groups => groups,
+  filterResourcesByPermissions: resources => resources,
+  isAnonymousAccessAllowed: () => false
+}));
+
+jest.mock('../../../server/toolLoader.js', () => ({
+  loadTools: async () => []
+}));
+
+jest.mock('../../../server/utils/ApiKeyVerifier.js', () => {
+  return jest.fn().mockImplementation(() => ({
+    validateEnabledModelsApiKeys: async () => {}
+  }));
+});
+
+// Jest transpiles this file to CommonJS via Babel, which does not support
+// the raw `import.meta` syntax, so __dirname is used directly rather than
+// deriving it from import.meta.url.
+const rootDir = path.join(__dirname, '../../../');
+
+if (typeof global.setImmediate !== 'function') {
+  global.setImmediate = (fn, ...args) => setTimeout(fn, 0, ...args);
+}
 
 describe('Locale Override Feature', () => {
   let configCache;
@@ -30,8 +54,10 @@ describe('Locale Override Feature', () => {
     await fs.writeFile(testOverrideFile, JSON.stringify(overrideContent, null, 2));
 
     // Initialize config cache
-    configCache = new ConfigCache();
-    await configCache.initialize();
+    configCache = configCacheSingleton;
+    if (!configCache.isInitialized) {
+      await configCache.initialize();
+    }
   });
 
   afterAll(async () => {
@@ -51,7 +77,8 @@ describe('Locale Override Feature', () => {
   it('should merge override locale with builtin locale', async () => {
     // Load the locale with overrides
     await configCache.loadAndCacheLocale('en');
-    const translations = configCache.getLocalizations('en');
+    const localeEntry = configCache.getLocalizations('en');
+    const translations = localeEntry?.data;
 
     expect(translations).toBeDefined();
     expect(translations.app).toBeDefined();
@@ -61,7 +88,7 @@ describe('Locale Override Feature', () => {
   });
 
   it('should preserve non-overridden keys from builtin locale', async () => {
-    const translations = configCache.getLocalizations('en');
+    const translations = configCache.getLocalizations('en')?.data;
 
     expect(translations).toBeDefined();
     // These keys should exist from the base translation file
@@ -72,7 +99,7 @@ describe('Locale Override Feature', () => {
   it('should handle missing override file gracefully', async () => {
     // Load a locale without override file
     await configCache.loadAndCacheLocale('de');
-    const translations = configCache.getLocalizations('de');
+    const translations = configCache.getLocalizations('de')?.data;
 
     expect(translations).toBeDefined();
     expect(translations.app).toBeDefined();

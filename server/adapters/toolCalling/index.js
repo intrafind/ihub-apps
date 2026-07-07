@@ -30,6 +30,7 @@ export {
   convertResponseToGeneric,
   convertResponseFromGeneric,
   convertResponseBetweenProviders,
+  clearStreamingState,
   processMessageForProvider,
   getSupportedProviders,
   isProviderSupported,

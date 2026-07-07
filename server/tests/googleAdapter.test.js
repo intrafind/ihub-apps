@@ -16,7 +16,7 @@ const req = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
 });
 
 assert.strictEqual(req.body.generationConfig.responseMimeType, 'application/json');
-assert.deepStrictEqual(req.body.generationConfig.response_schema, schema);
+assert.deepStrictEqual(req.body.generationConfig.responseSchema, schema);
 logger.info('Google adapter structured output test passed');
 
 // Regression: MCP tool schemas include JSON Schema meta keywords ($schema,

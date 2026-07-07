@@ -1,7 +1,7 @@
 import logger from '../utils/logger.js';
 import { createParser } from 'eventsource-parser';
 import { getReadableStream } from '../utils/streamUtils.js';
-import { convertResponseToGeneric } from './toolCalling/index.js';
+import { convertResponseToGeneric, clearStreamingState } from './toolCalling/index.js';
 
 /**
  * Base adapter class for LLM providers to reduce duplication
@@ -169,7 +169,7 @@ export class BaseAdapter {
    * @yields {object} Normalized result chunks consumed by StreamingHandler
    */
   async *parseResponseStream(response, ctx) {
-    yield* this.parseSseStream(response, ctx.model.provider);
+    yield* this.parseSseStream(response, ctx.model.provider, ctx.chatId);
   }
 
   /**
@@ -179,9 +179,12 @@ export class BaseAdapter {
    *
    * @param {Response} response
    * @param {string} provider - Provider name passed to the converter registry
+   * @param {string} [streamId] - Per-chat identifier isolating tool-call accumulation
+   *   state between concurrent streams; falls back to a shared 'default' bucket
+   *   (previous behavior) when the caller doesn't provide one.
    * @yields {object} Normalized result chunks
    */
-  async *parseSseStream(response, provider) {
+  async *parseSseStream(response, provider, streamId = 'default') {
     const readable = getReadableStream(response);
     const reader = readable.getReader();
     const decoder = new TextDecoder();
@@ -231,7 +234,7 @@ export class BaseAdapter {
         while (queue.length > 0) {
           const evt = queue.shift();
           try {
-            const result = await convertResponseToGeneric(evt.data, provider);
+            const result = await convertResponseToGeneric(evt.data, provider, streamId);
             if (!result) continue;
             yield result;
             if (result.error || result.complete) return;
@@ -269,6 +272,10 @@ export class BaseAdapter {
       } catch {
         /* ignore */
       }
+      // Guard against a stale pending tool call surviving an aborted/errored
+      // stream and being finalized by a later, unrelated stream on the same
+      // provider's shared state map (only relevant when streamId was reused).
+      clearStreamingState(provider, streamId);
     }
   }
 

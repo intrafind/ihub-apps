@@ -6,6 +6,7 @@ import McpToolsSelector from './McpToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import WorkflowsSelector from '../../../shared/components/WorkflowsSelector';
 import SourcePicker from './SourcePicker';
+import ResourceSelector from './ResourceSelector';
 import Icon from '../../../shared/components/Icon';
 import IconPicker from '../../../shared/components/IconPicker';
 import MimeTypeSelector from './MimeTypeSelector';
@@ -269,6 +270,14 @@ function AppFormEditor({
     onChange(updatedApp);
   };
 
+  const handleAllowedModelsChange = selectedModelIds => {
+    const updatedApp = {
+      ...app,
+      allowedModels: selectedModelIds
+    };
+    onChange(updatedApp);
+  };
+
   // Source handling functions
   const handleSourcesChange = selectedSourceIds => {
     const updatedApp = {
@@ -506,6 +515,27 @@ function AppFormEditor({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="col-span-6">
+                  <ResourceSelector
+                    label={t('admin.apps.edit.allowedModels', 'Allowed Models')}
+                    resources={availableModels}
+                    selectedResources={app.allowedModels || []}
+                    onSelectionChange={handleAllowedModelsChange}
+                    allowWildcard={false}
+                    placeholder={t('admin.apps.edit.searchModels', 'Search models to add...')}
+                    emptyMessage={t(
+                      'admin.apps.edit.noModelsSelected',
+                      'No restriction — all available models can be used with this app'
+                    )}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.allowedModelsHint',
+                      'Restrict which models users can select for this app. Leave empty to allow all models.'
+                    )}
+                  </p>
                 </div>
 
                 <div className="col-span-6 sm:col-span-3">
