@@ -1,5 +1,10 @@
 // Shared file processing utilities for upload components
 import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+// Resolved by Vite at build time → copied to dist as a local asset.
+// Using the ?url suffix is the correct Vite pattern for worker files from
+// node_modules; it ensures offline/air-gapped deployments work and the
+// version always tracks the installed pdfjs-dist package.
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // Cache for mimetypes configuration
 let mimetypesConfigCache = null;
@@ -138,9 +143,9 @@ export const MIME_TO_EXTENSION = {};
 // Lazy load PDF.js only when needed
 export const loadPdfjs = async () => {
   const pdfjsLib = await import('pdfjs-dist');
-  // Configure PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  // Use the locally bundled worker (resolved by the static import above).
+  // Works in offline/air-gapped environments; version tracks pdfjs-dist.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
   return pdfjsLib;
 };
 

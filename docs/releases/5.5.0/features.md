@@ -94,3 +94,15 @@ set of AI models instead of only being able to set a single preferred one.
   permissions; leave it empty to keep the app open to every available model.
 - Users can no longer pick or be switched to a model outside the app's allow-list — chat requests
   fall back to a compatible model automatically.
+  
+## Group Management: Admin Lockout Prevention
+
+The admin Groups API's protected-group list previously checked for `admin`/`user`, but the
+built-in groups are shipped as `admins`/`users`. This meant the real administrator group could be
+deleted, or have its administrative access removed via an update, silently locking every admin out
+of the platform until `groups.json` was hand-edited.
+
+- Deleting or updating a group is now blocked whenever it would leave the platform with zero
+  groups granting administrative access, in addition to the built-in `admins`, `users`,
+  `anonymous`, and `authenticated` groups remaining non-deletable.
+- The group create/update endpoints now also accept the documented `inherits` field.
