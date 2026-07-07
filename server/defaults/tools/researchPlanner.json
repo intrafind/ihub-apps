@@ -1,0 +1,42 @@
+{
+  "id": "researchPlanner",
+  "name": {
+    "en": "Research Planner",
+    "de": "Recherche-Planer"
+  },
+  "description": {
+    "en": "Break down a research topic into different investigative tasks",
+    "de": "Zerlegen Sie ein Forschungsthema in verschiedene investigative Aufgaben"
+  },
+  "script": "researchPlanner.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "question": {
+        "type": "string",
+        "description": {
+          "en": "Research topic",
+          "de": "Forschungsthema"
+        }
+      },
+      "teamSize": {
+        "type": "integer",
+        "description": {
+          "en": "Number of tasks to generate",
+          "de": "Anzahl der zu generierenden Aufgaben"
+        },
+        "default": 3,
+        "minimum": 1,
+        "maximum": 10
+      },
+      "soundBites": {
+        "type": "string",
+        "description": {
+          "en": "Additional context",
+          "de": "Zusätzlicher Kontext"
+        }
+      }
+    },
+    "required": ["question"]
+  }
+}

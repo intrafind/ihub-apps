@@ -4,6 +4,7 @@ import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
 import { loadAllWorkflows } from './workflowsLoader.js';
 import { loadAllAgentProfiles } from './agentsLoader.js';
+import { loadAllTools } from './toolsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -385,6 +386,19 @@ class ConfigCache {
           return;
         }
 
+        // Special handling for tools.json - load from both sources
+        if (configPath === 'config/tools.json') {
+          const allTools = await loadAllTools(true);
+          const expanded = expandToolFunctions(allTools);
+          this.setCacheEntry(configPath, expanded);
+          logger.info('Cached tools', {
+            component: 'ConfigCache',
+            configPath,
+            count: expanded.length
+          });
+          return;
+        }
+
         // Special handling for agents.json — load agent profiles
         if (configPath === 'config/agents.json') {
           try {
@@ -454,9 +468,7 @@ class ConfigCache {
 
         const data = await loadJson(configPath);
         if (data !== null) {
-          // Expand tool functions into individual entries
-          const finalData = configPath === 'config/tools.json' ? expandToolFunctions(data) : data;
-          this.setCacheEntry(configPath, finalData);
+          this.setCacheEntry(configPath, data);
           logger.info('Cached config', { component: 'ConfigCache', configPath });
         } else {
           logger.warn('Failed to load config', { component: 'ConfigCache', configPath });
@@ -674,6 +686,23 @@ class ConfigCache {
         return;
       }
 
+      // Special handling for tools.json - load from both sources
+      if (key === 'config/tools.json') {
+        const allTools = await loadAllTools(true, false);
+        const expanded = expandToolFunctions(allTools);
+        const newEtag = this.generateETag(expanded);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, expanded);
+          logger.info('Cached tools on refresh', {
+            component: 'ConfigCache',
+            configPath: key,
+            count: expanded.length
+          });
+        }
+        return;
+      }
+
       // Special handling for groups.json - load and resolve inheritance
       if (key === 'config/groups.json') {
         const groupsConfig = await loadJson(key, { useCache: false });
@@ -734,8 +763,7 @@ class ConfigCache {
 
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
-        const finalData = key === 'config/tools.json' ? expandToolFunctions(data) : data;
-        this.setCacheEntry(key, finalData);
+        this.setCacheEntry(key, data);
       }
     } catch (error) {
       reloadError = error;
@@ -1277,6 +1305,24 @@ class ConfigCache {
       logger.info('Prompts cache refreshed', { component: 'ConfigCache', count: prompts.length });
     } catch (error) {
       logger.error('Error refreshing prompts cache', { component: 'ConfigCache', error });
+    }
+  }
+
+  /**
+   * Refresh tools cache (both enabled and all tools)
+   * Should be called when tools are modified (create, update, delete, toggle)
+   */
+  async refreshToolsCache() {
+    logger.info('Refreshing tools cache', { component: 'ConfigCache' });
+
+    try {
+      const tools = await loadAllTools(true);
+      const expanded = expandToolFunctions(tools);
+      this.setCacheEntry('config/tools.json', expanded);
+
+      logger.info('Tools cache refreshed', { component: 'ConfigCache', count: expanded.length });
+    } catch (error) {
+      logger.error('Error refreshing tools cache', { component: 'ConfigCache', error });
     }
   }
 

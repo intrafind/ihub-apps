@@ -1,0 +1,201 @@
+{
+  "id": "iFinder",
+  "name": {
+    "en": "iFinder Document Management",
+    "de": "iFinder Dokumentenverwaltung"
+  },
+  "description": {
+    "en": "Comprehensive document search, content retrieval, and management for the iFinder system",
+    "de": "Umfassende Dokumentensuche, Inhaltsabruf und -verwaltung für das iFinder-System"
+  },
+  "script": "iFinder.js",
+  "functions": {
+    "search": {
+      "description": {
+        "en": "Search for documents in the iFinder system",
+        "de": "Nach Dokumenten im iFinder-System suchen"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
+              "de": "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'"
+            }
+          },
+          "maxResults": {
+            "type": "integer",
+            "description": {
+              "en": "Maximum number of search results to return (default: 10, max: 100)",
+              "de": "Maximale Anzahl der zurückzugebenden Suchergebnisse (Standard: 10, max: 100)"
+            },
+            "default": 10,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "searchProfile": {
+            "type": "string",
+            "description": {
+              "en": "Search profile ID (optional, uses default if not specified)",
+              "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+            }
+          },
+          "returnFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Fields to return in search results (optional)",
+              "de": "In Suchergebnissen zurückzugebende Felder (optional)"
+            }
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    "getContent": {
+      "description": {
+        "en": "Fetch document content from iFinder for LLM processing",
+        "de": "Dokumentinhalt aus iFinder für LLM-Verarbeitung abrufen"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": {
+              "en": "Document ID to fetch content for. Example: 'doc123456'",
+              "de": "Dokument-ID für die Inhalte abgerufen werden sollen. Beispiel: 'doc123456'"
+            }
+          },
+          "searchProfile": {
+            "type": "string",
+            "description": {
+              "en": "Search profile ID (optional, uses default if not specified)",
+              "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+            }
+          },
+          "maxLength": {
+            "type": "integer",
+            "description": {
+              "en": "Maximum content length in characters (default: 50000)",
+              "de": "Maximale Inhaltslänge in Zeichen (Standard: 50000)"
+            },
+            "default": 50000,
+            "minimum": 1000,
+            "maximum": 100000
+          }
+        },
+        "required": ["documentId"]
+      }
+    },
+    "discover": {
+      "description": {
+        "en": "Probe an iFinder search profile and return a markdown corpus map (facets, sources, sample titles). Intended for admin-driven memory population — NOT for agent runtime use.",
+        "de": "Ein iFinder-Suchprofil untersuchen und eine Markdown-Korpusübersicht zurückgeben (Facetten, Quellen, Beispieltitel). Für admin-gesteuerten Memory-Aufbau gedacht — NICHT für Agent-Laufzeit."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "searchProfile": {
+            "type": "string",
+            "description": {
+              "en": "iFinder search profile ID to probe (required)",
+              "de": "Zu untersuchende iFinder-Suchprofil-ID (erforderlich)"
+            }
+          },
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Optional query to scope the probe. Defaults to '*:*'.",
+              "de": "Optionale Anfrage zur Eingrenzung der Untersuchung. Standard: '*:*'."
+            },
+            "default": "*:*"
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Facet fields to request from iFinder. iFinder typically requires `.keyword` suffixes on string fields.",
+              "de": "Von iFinder anzufordernde Facetten-Felder. iFinder erwartet üblicherweise `.keyword`-Suffixe für String-Felder."
+            },
+            "default": [
+              "sourceName.keyword",
+              "application.keyword",
+              "language.keyword",
+              "creators.keyword",
+              "navigationTree"
+            ]
+          },
+          "sampleSize": {
+            "type": "integer",
+            "description": {
+              "en": "Maximum number of sample documents to list in the markdown output.",
+              "de": "Maximale Anzahl Beispiel-Dokumente in der Markdown-Ausgabe."
+            },
+            "default": 10,
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": ["searchProfile"]
+      }
+    },
+    "getMetadata": {
+      "description": {
+        "en": "Fetch detailed metadata for a specific document from iFinder using search endpoint",
+        "de": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder über Suchendpunkt abrufen"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": {
+              "en": "Document ID to fetch metadata for. Example: 'onedrive-d4HF8X5AZOWTbeGW'",
+              "de": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'onedrive-d4HF8X5AZOWTbeGW'"
+            }
+          },
+          "searchProfile": {
+            "type": "string",
+            "description": {
+              "en": "Search profile ID (optional, uses default if not specified)",
+              "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+            }
+          },
+          "returnFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Fields to return in metadata response. Default: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']",
+              "de": "In Metadatenantwort zurückzugebende Felder. Standard: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']"
+            },
+            "default": [
+              "title",
+              "language",
+              "accessInfo.*",
+              "mediaType",
+              "sourceType",
+              "file.*",
+              "sourceLocations.*",
+              "navigationTree",
+              "modificationDate",
+              "indexingDate",
+              "application",
+              "contentLength",
+              "sourceName"
+            ]
+          }
+        },
+        "required": ["documentId"]
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "answerReducer",
+  "name": {
+    "en": "Answer Reducer",
+    "de": "Antwort-Reduzierer"
+  },
+  "description": {
+    "en": "Consolidate multiple text passages into a single concise article.",
+    "de": "Führen Sie mehrere Textpassagen zu einem einzigen prägnanten Artikel zusammen."
+  },
+  "script": "answerReducer.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "answers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": {
+          "en": "Text passages to consolidate",
+          "de": "Zu vereinende Texte"
+        }
+      }
+    },
+    "required": ["answers"]
+  }
+}
