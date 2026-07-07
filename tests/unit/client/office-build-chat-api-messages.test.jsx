@@ -282,7 +282,11 @@ describe('buildFileDataFromMailAttachments', () => {
     expect(out[0].displayType).toBe('application/pdf');
   });
 
-  test('skips cloud file attachments (format: url)', async () => {
+  test('sends cloud attachments (format: url) as a link reference instead of dropping them', async () => {
+    // Office only exposes the share link for OneDrive/SharePoint attachments,
+    // not the file bytes — there's nothing to extract, but silently dropping
+    // it (the old behavior) left the model with no idea the attachment
+    // existed at all. See issue #1451.
     const out = await buildFileDataFromMailAttachments([
       {
         id: 'a1',
@@ -290,6 +294,59 @@ describe('buildFileDataFromMailAttachments', () => {
         contentType: 'application/pdf',
         size: 100_000,
         content: { format: 'url', content: 'https://onedrive.live.com/.../invoice.pdf' }
+      }
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].fileName).toBe('invoice.pdf');
+    expect(out[0].content).toContain('https://onedrive.live.com/.../invoice.pdf');
+  });
+
+  test('parses an attached/forwarded email (format: eml) into readable content', async () => {
+    // Base64 of a plain-text RFC 5322 message (headers + body); see
+    // emailAttachmentParsers.test.js for the full parser test suite.
+    const emlBase64 =
+      'RnJvbTogSmFuZSBEb2UgPGphbmVAZXhhbXBsZS5jb20+DQpUbzogQm9iIFNtaXRoIDxib2JAZXhhbXBsZS5jb20+DQpTdWJqZWN0OiBSZTogUTMgbnVtYmVycw0KRGF0ZTogTW9uLCAxNSBKdWwgMjAyNiAwOTowMDowMCArMDAwMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PVVURi04DQoNCkhpIEJvYiwNCg0KUGxlYXNlIHNlZSB0aGUgYXR0YWNoZWQgZmlndXJlcyBmb3IgUTMuDQoNClRoYW5rcywNCkphbmUNCg==';
+    const out = await buildFileDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'Fwd Q3 report.eml',
+        contentType: 'message/rfc822',
+        size: 1000,
+        content: { format: 'eml', content: emlBase64 }
+      }
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].displayType).toBe('Email');
+    expect(out[0].content).toContain('Subject: Re: Q3 numbers');
+    expect(out[0].content).toContain('Please see the attached figures for Q3.');
+  });
+
+  test('parses a meeting invite (format: icalendar) into a readable summary', async () => {
+    const icsBase64 =
+      'QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0KQkVHSU46VkVWRU5UDQpTVU1NQVJZOlF1YXJ0ZXJseSBQbGFubmluZw0KRFRTVEFSVDoyMDI2MDcxNVQwOTAwMDBaDQpEVEVORDoyMDI2MDcxNVQxMDAwMDBaDQpMT0NBVElPTjpDb25mZXJlbmNlIFJvb20gQQ0KT1JHQU5JWkVSO0NOPUphbmUgRG9lOm1haWx0bzpqYW5lQGV4YW1wbGUuY29tDQpFTkQ6VkVWRU5UDQpFTkQ6VkNBTEVOREFSDQo=';
+    const out = await buildFileDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'invite.ics',
+        contentType: 'text/calendar',
+        size: 500,
+        content: { format: 'icalendar', content: icsBase64 }
+      }
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].displayType).toBe('Calendar invite');
+    expect(out[0].content).toContain('Meeting: Quarterly Planning');
+    expect(out[0].content).toContain('Location: Conference Room A');
+  });
+
+  test('skips attachments with an unrecognized, non-base64 content format', async () => {
+    const out = await buildFileDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'mystery.dat',
+        contentType: 'application/octet-stream',
+        size: 100,
+        content: { format: 'some-future-format', content: 'whatever' }
       }
     ]);
     expect(out).toBeNull();
