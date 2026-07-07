@@ -26,20 +26,14 @@ function truncateForLog(value, max = 200) {
 
 /**
  * Convert generic tools to Google format
- * Filters out provider-specific special tools from other providers (webSearch, etc.)
+ * Filters out provider-specific special tools from other providers (webSearch, etc.) —
+ * Google's own native Search grounding is injected directly by the adapter (see
+ * google.js), not routed through this generic tool-calling pipeline.
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Google formatted tools
  */
 export function convertGenericToolsToGoogle(genericTools = []) {
-  const tools = [];
-
-  // Separate Google Search tool from regular function-based tools
-  const googleSearchTool = genericTools.find(tool => tool.id === 'googleSearch');
-
-  // Filter tools for function declarations
   const functionTools = genericTools.filter(tool => {
-    // Keep googleSearch separate for special handling
-    if (tool.id === 'googleSearch') return false;
     // If tool specifies this provider, always include it
     if (tool.provider === 'google') {
       return true;
@@ -65,35 +59,17 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     return true;
   });
 
-  // Add Google Search grounding if present
-  if (googleSearchTool) {
-    tools.push({ google_search: {} });
+  if (functionTools.length === 0) return [];
 
-    // Google API limitation: google_search cannot be combined with functionDeclarations
-    // If both are present, prioritize google_search and warn about skipped function tools
-    if (functionTools.length > 0) {
-      logger.warn(
-        'Google API limitation: cannot combine google_search with function calling, skipping function tools',
-        {
-          component: 'GoogleConverter',
-          skippedToolCount: functionTools.length,
-          skippedTools: functionTools.map(t => t.name)
-        }
-      );
-    }
-  }
-  // Only add regular function declarations if google_search is NOT present
-  else if (functionTools.length > 0) {
-    tools.push({
+  return [
+    {
       functionDeclarations: functionTools.map(tool => ({
         name: normalizeToolName(tool.id),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))
-    });
-  }
-
-  return tools;
+    }
+  ];
 }
 
 /**

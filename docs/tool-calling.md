@@ -12,6 +12,7 @@ This comprehensive guide covers how to implement and use tool calling in iHub Ap
 - [Practical Examples](#practical-examples)
 - [Troubleshooting & Best Practices](#troubleshooting--best-practices)
 - [Tool Configuration Reference](#tool-configuration-reference)
+- [Native Web Search Resolution](#native-web-search-resolution)
 - [Built-in Tools Reference](#built-in-tools-reference)
 
 ## Quick Start
@@ -934,50 +935,27 @@ Each tool file in `contents/tools/` (named `<toolId>.json`) uses the following f
 
 ### Provider-Handled Tools (`isSpecialTool`)
 
-Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider.
+Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider. This is a general mechanism admins can use to register an arbitrary provider-handled tool with no script.
 
-This is used for native capabilities such as:
-- Google Search grounding in Gemini models
-- Web search in OpenAI Responses API models
-- Web search in Anthropic Claude models
+Native web search (Google Search grounding, OpenAI Web Search, Anthropic Web Search) does **not** use this mechanism — see [Native Web Search Resolution](#native-web-search-resolution) below.
 
 These tools do not have a `script` file because no server-side code runs.
+
+## Native Web Search Resolution
+
+Native (provider-handled) web search is resolved directly by `toolLoader.resolveNativeWebSearchProvider()` / `resolveAppNativeWebSearch()` from the app's unified `websearch` config (see [Web Tools](web-tools.md)) or a workflow node's generic `webSearch` tool id — it is never a tool file in `contents/tools/` and never flows through the generic tool-calling converters. When native search applies, the adapter (`anthropic.js`, `google.js`, or `openai-responses.js`) injects the provider's native tool block directly into the request:
+
+| Provider | Native tool injected |
+|----------|----------------------|
+| `google` | `{ google_search: {} }` — mutually exclusive with function calling (Gemini API limitation); function tools are dropped when native search is active |
+| `openai-responses` | `{ type: 'web_search' }` — combinable with function tools |
+| `anthropic` | `{ type: 'web_search_20250305', name: 'web_search' }` — combinable with function tools; billed separately by Anthropic per search |
+
+For any other provider, `websearch` config falls back to the real, script-backed `braveSearch` tool. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge and (for workflow agent nodes) the synthesizer's citation ledger.
 
 ## Built-in Tools Reference
 
 iHub Apps ships with a set of pre-configured built-in tools that cover the most common integration scenarios.
-
-### `webSearch`
-
-- **Provider**: OpenAI GPT-5 and compatible models via the Responses API
-- **Description**: Enables the model to search the web for up-to-date information, providing answers with citations and sources
-- **Type**: Provider-handled (`isSpecialTool: true`)
-- **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured OpenAI API key; no additional setup required
-- **Response**: Returns responses with inline citations, annotations, and web search metadata (queries, domains, sources)
-- **Use Cases**: Current events, latest news, real-time data, fact-checking
-
-### `googleSearch`
-
-- **Provider**: Google Gemini models only
-- **Description**: Grounds Gemini responses with real-time information from Google Search, providing verifiable and up-to-date answers with citations
-- **Type**: Provider-handled (`isSpecialTool: true`)
-- **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured Google Gemini API key; no additional setup required
-- **Response**: Returns grounding metadata with search queries, sources, and citations
-- **How it works**: When enabled in an app's tools array, Gemini models automatically invoke Google Search when they detect queries requiring current information. The search is performed directly by Google's infrastructure and results are incorporated into the response with citations.
-- **Use Cases**: Current events, fact-checking with authoritative sources, questions requiring real-time information
-
-### `anthropicWebSearch`
-
-- **Provider**: Anthropic Claude models only
-- **Description**: Enables Claude to search the web using Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool), returning answers with citations and sources
-- **Type**: Provider-handled (`isSpecialTool: true`)
-- **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured Anthropic API key; no additional setup required
-- **Response**: Search results and citations are surfaced as grounding metadata (same "Grounding" answer-source badge used for Google Search)
-- **How it works**: Claude decides when to search, runs the search server-side (billed separately by Anthropic per search), and returns the final answer with citations in the same turn — unlike `braveSearch`, no tool round-trip through iHub is required
-- **Use Cases**: Current events, latest news, real-time data, fact-checking
 
 ### `braveSearch`
 

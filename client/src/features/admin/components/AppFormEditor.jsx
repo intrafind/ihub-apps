@@ -1286,8 +1286,6 @@ function AppFormEditor({
                     excludeToolIds={[
                       'braveSearch',
                       'enhancedWebSearch',
-                      'googleSearch',
-                      'webSearch',
                       'webContentExtractor',
                       ...mcpToolIds
                     ]}

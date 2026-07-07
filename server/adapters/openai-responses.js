@@ -114,8 +114,15 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
    * Create a completion request for OpenAI Responses API
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
-      this.extractRequestOptions(options);
+    const {
+      stream,
+      tools,
+      toolChoice,
+      responseFormat,
+      responseSchema,
+      maxTokens,
+      nativeWebSearch
+    } = this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI Responses');
@@ -184,9 +191,17 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     }
 
     // Add tools if present - function calling API shape is different in Responses
-    if (tools && tools.length > 0) {
-      // Convert tools to Responses API format (internally-tagged vs externally-tagged)
-      body.tools = convertToolsFromGeneric(tools, 'openai-responses');
+    const responsesTools =
+      tools && tools.length > 0 ? convertToolsFromGeneric(tools, 'openai-responses') : [];
+
+    // OpenAI's server-side web search tool. Like Anthropic (and unlike Google),
+    // it can be combined with client-defined function tools in the same request.
+    if (nativeWebSearch?.provider === 'openai-responses') {
+      responsesTools.unshift({ type: 'web_search' });
+    }
+
+    if (responsesTools.length > 0) {
+      body.tools = responsesTools;
     }
     if (toolChoice) body.tool_choice = toolChoice;
 

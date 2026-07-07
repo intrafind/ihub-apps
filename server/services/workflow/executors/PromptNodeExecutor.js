@@ -19,7 +19,7 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import ChatService from '../../chat/ChatService.js';
 import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { actionTracker } from '../../../actionTracker.js';
-import { getToolsForApp, runTool } from '../../../toolLoader.js';
+import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
@@ -296,51 +296,69 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // Provider-native search resolution. `webSearch` is configured as an
-      // openai-responses-only tool; for Google models the GoogleConverter
-      // strips it (then results are pure hallucination because the model
-      // has no real search). Swap to `googleSearch` (native grounding).
+      // Provider-native search resolution. The generic `webSearch` tool id
+      // means "give this node web search" — it is never a real tool. For
+      // models with native (provider-handled) search (Google, OpenAI
+      // Responses, Anthropic) it resolves to that native capability, passed
+      // straight to the adapter as `nativeWebSearch`. For everything else it
+      // falls back to the real, script-backed `braveSearch` tool.
       //
       // Gemini API limitation: google_search CANNOT be combined with
-      // function calling. If we register both, the converter silently
-      // drops all function tools and the node loses memory/inbox/task
-      // capabilities. So the swap is node-scoped:
+      // function calling. If we sent both, the API would silently drop all
+      // function tools and the node would lose memory/inbox/task
+      // capabilities. So when native search resolves to Google, every other
+      // configured tool is dropped node-scoped:
       //
       //   - Materialized planner tasks (`_isPlannerTask: true`) become
       //     search-only when grounding is needed. They return text/JSON;
       //     the finalize orchestrator persists the work via
       //     write_artifact / write_inbox afterwards.
       //   - Orchestrator nodes (load-inbox, finalize) don't list webSearch
-      //     in their tools so the swap never triggers there; they keep
-      //     their function tools.
+      //     in their tools so this never triggers there; they keep their
+      //     function tools.
       //   - Other (non-agent) nodes that explicitly list webSearch on
-      //     Google get the same search-only swap. Authors who want both
+      //     Google get the same search-only behavior. Authors who want both
       //     should split into separate nodes.
-      // Track the swap so we can record it on the step log (and tell
+      // Track the drop so we can record it on the step log (and tell
       // operators why function tools + apps didn't run on this step).
       let groundingSwapDropped = null;
-      if (model?.provider === 'google' && configuredToolIds.includes('webSearch')) {
-        const droppedFunctionTools = configuredToolIds.filter(
-          id => id !== 'webSearch' && id !== 'googleSearch'
-        );
-        configuredToolIds = ['googleSearch'];
-        groundingSwapDropped = droppedFunctionTools;
-        this.logger.info('Swapped webSearch → googleSearch (Google native grounding)', {
-          component: 'PromptNodeExecutor',
-          modelId: model.id,
-          droppedFunctionTools,
-          nodeId: node.id
-        });
+      let nativeWebSearch = null;
+      if (configuredToolIds.includes('webSearch')) {
+        configuredToolIds = configuredToolIds.filter(id => id !== 'webSearch');
+        nativeWebSearch = resolveNativeWebSearchProvider(model?.provider);
+
+        if (nativeWebSearch?.provider === 'google') {
+          // Apps are implemented as function tools too, so they're just as
+          // incompatible with native grounding — flag the drop (even when
+          // empty) so the app-registration check below skips them.
+          groundingSwapDropped = configuredToolIds;
+          if (configuredToolIds.length > 0) {
+            this.logger.info(
+              'Native Google Search grounding requested — dropping function tools (Gemini API limitation)',
+              {
+                component: 'PromptNodeExecutor',
+                modelId: model.id,
+                droppedFunctionTools: configuredToolIds,
+                nodeId: node.id
+              }
+            );
+          }
+          configuredToolIds = [];
+        } else if (!nativeWebSearch) {
+          // No native search capability for this provider — fall back to
+          // the real, script-backed braveSearch tool.
+          configuredToolIds.push('braveSearch');
+        }
       }
       let tools = [];
       if (configuredToolIds.length > 0) {
         tools = await this.getAgentTools(configuredToolIds, language, context);
       }
 
-      // Append App-as-tool synthetic tools when enabled — BUT NOT after the
-      // googleSearch swap fired. Gemini cannot combine native grounding
-      // with function calling; if we re-add the app__* tools here, the
-      // Google adapter silently drops them anyway, the model never sees
+      // Append App-as-tool synthetic tools when enabled — BUT NOT when native
+      // Google Search grounding is active. Gemini cannot combine native
+      // grounding with function calling; if we re-add the app__* tools here,
+      // the Google adapter silently drops them anyway, the model never sees
       // them, and operators are left wondering why their apps were never
       // invoked. Skip the append, record the dropped apps on the step
       // log, and surface a clear warning in the UI.
@@ -491,15 +509,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Record any tools that got dropped before the LLM call so operators
       // can see *why* their apps / function tools didn't run. The grounding
       // swap is the common case: on Gemini, configuring webSearch knocks
-      // every other tool off the request because google_search can't be
-      // combined with function calling.
+      // every other tool off the request because native Google Search
+      // grounding can't be combined with function calling.
       if (groundingSwapDropped && groundingSwapDropped.length > 0) {
         stepLog.groundingSwap = {
           from: 'webSearch + function tools',
-          to: 'googleSearch (native grounding)',
+          to: 'native Google Search grounding',
           droppedToolIds: groundingSwapDropped,
           reason:
-            'Google models cannot combine native googleSearch with function calling — function tools were not registered for this call.'
+            'Google models cannot combine native Google Search grounding with function calling — function tools were not registered for this call.'
         };
       }
       if (droppedApps && droppedApps.length > 0) {
@@ -1529,6 +1547,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             temperature,
             maxTokens,
             tools: availableTools.length > 0 && !forceFinish ? availableTools : undefined,
+            nativeWebSearch: !forceFinish ? nativeWebSearch : null,
             responseSchema,
             responseFormat,
             // Per-node thinking override: lets a node disable or dial down the
@@ -3125,16 +3144,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Extract citation URLs from a Gemini grounding metadata block and
-   * append them to `state.data._citations`. Gemini's native googleSearch
-   * grounding produces a `groundingMetadata.groundingChunks[]` array
-   * where each entry has shape `{ web: { uri, title } }`. Optionally a
-   * `webSearchQueries: [string]` array carries the queries that produced
-   * the chunks — we use the first query as the captured `query` field.
+   * Extract citation URLs from a provider's native-web-search grounding
+   * metadata block and append them to `state.data._citations`. Dispatches by
+   * shape since Google and Anthropic (the two providers that currently
+   * attach `groundingMetadata`) use different result shapes.
    *
-   * Without this, agents whose webSearch was auto-swapped to googleSearch
-   * (every Gemini run with webSearch configured) collect zero citations
-   * and the synthesizer's References section comes out empty.
+   * Without this, agents whose `webSearch` resolved to native provider
+   * search collect zero citations and the synthesizer's References section
+   * comes out empty.
    *
    * @private
    */
@@ -3142,6 +3159,28 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (!state || !state.data) return;
     if (!groundingMetadata || typeof groundingMetadata !== 'object') return;
 
+    if (Array.isArray(groundingMetadata.groundingChunks)) {
+      await this._captureGoogleGroundingCitations({ groundingMetadata, state, taskId });
+    }
+    if (
+      Array.isArray(groundingMetadata.searchResults) ||
+      Array.isArray(groundingMetadata.citations)
+    ) {
+      this._captureAnthropicWebSearchCitations({ groundingMetadata, state, taskId });
+    }
+  }
+
+  /**
+   * Extract citation URLs from a Gemini grounding metadata block. Gemini's
+   * native Google Search grounding produces a
+   * `groundingMetadata.groundingChunks[]` array where each entry has shape
+   * `{ web: { uri, title } }`. Optionally a `webSearchQueries: [string]`
+   * array carries the queries that produced the chunks — we use the first
+   * query as the captured `query` field.
+   *
+   * @private
+   */
+  async _captureGoogleGroundingCitations({ groundingMetadata, state, taskId }) {
     const chunks = Array.isArray(groundingMetadata.groundingChunks)
       ? groundingMetadata.groundingChunks
       : [];
@@ -3184,6 +3223,44 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         capturedAt: new Date().toISOString()
       });
     }
+    if (newEntries.length > 0) {
+      state.data._citations = [...(state.data._citations || []), ...newEntries];
+    }
+  }
+
+  /**
+   * Extract citation URLs from Anthropic's native web search grounding
+   * metadata (see AnthropicConverter.js's `ensureWebSearchMetadata`):
+   * `groundingMetadata.searchResults[]` (raw `web_search_result` items) and
+   * `groundingMetadata.citations[]` (`web_search_result_location` citations
+   * attached to the model's answer text). Both carry `url`/`title` directly —
+   * no redirect resolution needed, unlike Gemini's grounding URLs.
+   *
+   * @private
+   */
+  _captureAnthropicWebSearchCitations({ groundingMetadata, state, taskId }) {
+    const results = Array.isArray(groundingMetadata.searchResults)
+      ? groundingMetadata.searchResults
+      : [];
+    const citations = Array.isArray(groundingMetadata.citations) ? groundingMetadata.citations : [];
+
+    const seen = new Set((state.data._citations || []).map(c => c.url).filter(Boolean));
+    const newEntries = [];
+    const addEntry = (url, title) => {
+      if (typeof url !== 'string' || !url || seen.has(url)) return;
+      seen.add(url);
+      newEntries.push({
+        url,
+        title: typeof title === 'string' ? title : undefined,
+        toolId: 'anthropicWebSearch',
+        taskId: taskId || undefined,
+        capturedAt: new Date().toISOString()
+      });
+    };
+
+    for (const result of results) addEntry(result?.url, result?.title);
+    for (const citation of citations) addEntry(citation?.url, citation?.title);
+
     if (newEntries.length > 0) {
       state.data._citations = [...(state.data._citations || []), ...newEntries];
     }
@@ -3285,9 +3362,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // match contributes nothing anyway.
     if (id.includes('search') || id === 'webcontentextractor') return true;
     if (id.startsWith('source_')) return true;
-    // Provider-native grounding (googleSearch) doesn't appear in the tool
-    // call loop — Gemini emits it as grounding metadata in the assistant
-    // message — so we don't try to capture from a tool result here.
+    // Native provider search (Google, Anthropic) doesn't appear in the tool
+    // call loop — it rides alongside the assistant message as grounding
+    // metadata instead — so we don't try to capture from a tool result here.
     return false;
   }
 

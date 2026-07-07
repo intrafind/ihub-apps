@@ -108,7 +108,7 @@ When web search is enabled for an app, users see a toggle in the chat input area
 
 Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
 
-- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, `anthropicWebSearch`, or `webContentExtractor` in their `tools` array
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
 - Infers the provider and content extraction settings from the tools used
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
@@ -176,32 +176,17 @@ Native search providers (Google Search, OpenAI Web Search, and Anthropic Web Sea
 
 **Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
 
-### Google Search (`googleSearch`)
+### Native Search Providers (Google, OpenAI, Anthropic)
 
-**Purpose**: Ground Gemini model responses with real-time Google Search results.
+Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not** tools — there is no `googleSearch`, `webSearch`, or `anthropicWebSearch` entry in `contents/tools/`. Each is a provider capability resolved automatically from the app's `websearch` config (see [Unified Web Search Configuration](#unified-web-search-configuration) above) and injected directly into the request by the model adapter:
 
-- **Provider**: Google Gemini models only
-- **Type**: Provider-handled (native)
-- **Parameters**: None — automatically enabled
-- **Authentication**: Uses configured Gemini API key
+| Provider | Native capability | How it works |
+|----------|--------------------|--------------|
+| Google Gemini | Google Search grounding | Mutually exclusive with function calling (Gemini API limitation) — function tools are dropped when native search is active for that request |
+| OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
+| Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
-### OpenAI Web Search (`webSearch`)
-
-**Purpose**: Enable web search for OpenAI models via the Responses API.
-
-- **Provider**: OpenAI GPT models only
-- **Type**: Provider-handled (native)
-- **Parameters**: None — automatically enabled
-- **Authentication**: Uses configured OpenAI API key
-
-### Anthropic Web Search (`anthropicWebSearch`)
-
-**Purpose**: Enable Claude to search the web natively and cite sources, using Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool).
-
-- **Provider**: Anthropic Claude models only
-- **Type**: Provider-handled (native) — Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub
-- **Parameters**: None — automatically enabled
-- **Authentication**: Uses configured Anthropic API key
+None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them. Search results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge.
 
 ### Web Content Extractor (`webContentExtractor`)
 

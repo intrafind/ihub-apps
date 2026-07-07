@@ -19,20 +19,14 @@ import { parseJsonAsync } from '../../utils/asyncJson.js';
 /**
  * Convert generic tools to Anthropic format
  * Anthropic requires tool names to match pattern ^[a-zA-Z0-9_-]{1,128}$
- * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
- * The anthropicWebSearch special tool is converted into Anthropic's native
- * server-side web search tool instead of a regular function tool.
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.) —
+ * Anthropic's own native web search tool is injected directly by the adapter
+ * (see anthropic.js), not routed through this generic tool-calling pipeline.
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Anthropic formatted tools
  */
 export function convertGenericToolsToAnthropic(genericTools = []) {
-  const webSearchTool = genericTools.find(tool => tool.id === 'anthropicWebSearch');
-
   const filteredTools = genericTools.filter(tool => {
-    // Native web search is handled separately below
-    if (tool.id === 'anthropicWebSearch') {
-      return false;
-    }
     // If tool specifies this provider, always include it
     if (tool.provider === 'anthropic') {
       return true;
@@ -58,40 +52,11 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
     return true;
   });
 
-  const tools = [];
-
-  // Add Anthropic's native web search tool if requested. See
-  // https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
-  if (webSearchTool) {
-    const webSearchConfig = {
-      type: 'web_search_20250305',
-      name: 'web_search'
-    };
-
-    if (typeof webSearchTool.max_uses === 'number') {
-      webSearchConfig.max_uses = webSearchTool.max_uses;
-    }
-    if (Array.isArray(webSearchTool.allowed_domains)) {
-      webSearchConfig.allowed_domains = webSearchTool.allowed_domains;
-    } else if (Array.isArray(webSearchTool.blocked_domains)) {
-      webSearchConfig.blocked_domains = webSearchTool.blocked_domains;
-    }
-    if (webSearchTool.user_location) {
-      webSearchConfig.user_location = webSearchTool.user_location;
-    }
-
-    tools.push(webSearchConfig);
-  }
-
-  tools.push(
-    ...filteredTools.map(tool => ({
-      name: tool.id || tool.name,
-      description: tool.description,
-      input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')
-    }))
-  );
-
-  return tools;
+  return filteredTools.map(tool => ({
+    name: tool.id || tool.name,
+    description: tool.description,
+    input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')
+  }));
 }
 
 /**
