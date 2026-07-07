@@ -164,7 +164,7 @@ export class StateManager {
    * @param {string} executionId - The execution identifier
    * @param {Object} updates - Partial state updates to apply
    * @returns {Promise<Object>} The updated execution state
-   * @throws {Error} If execution state is not found or size limit exceeded
+   * @throws {Error} If execution state is not found
    *
    * @example
    * const updatedState = await stateManager.update('exec-123', {
@@ -191,9 +191,6 @@ export class StateManager {
     if (updates.data) {
       updatedState.data = deepMerge(state.data, updates.data);
     }
-
-    // Validate state size after update
-    this._validateStateSize(updatedState);
 
     this.activeStates.set(executionId, updatedState);
 
@@ -288,6 +285,9 @@ export class StateManager {
     const checkpointDir = path.join(this.stateDir, executionId);
     await fs.mkdir(checkpointDir, { recursive: true });
 
+    // Validate state size before writing to disk
+    this._validateStateSize(state);
+
     // Write latest checkpoint file using atomic write
     const latestPath = path.join(checkpointDir, 'latest.json');
     await atomicWriteJSON(latestPath, state);
@@ -371,9 +371,6 @@ export class StateManager {
 
     state.history.push(historyEntry);
     state.updatedAt = historyEntry.timestamp;
-
-    // Check state size after adding history
-    this._validateStateSize(state);
 
     logger.debug('Added step to execution history', {
       component: 'StateManager',
@@ -652,7 +649,9 @@ export class StateManager {
   }
 
   /**
-   * Validates that state size is within limits
+   * Validates that state size is within limits.
+   * Called on checkpoint (disk write) and initial creation — not on every
+   * in-memory mutation — to avoid an O(N^2) serialization cost on long runs.
    * @param {Object} state - The state object to validate
    * @throws {Error} If state exceeds size limit
    * @private
