@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { fetchAuthStatus, fetchUIConfig, fetchPlatformConfig } from '../../api/api';
+import { fetchAuthStatus, fetchUIConfig, fetchPlatformConfig } from '../../api';
 
 const PlatformConfigContext = createContext({
   platformConfig: null,

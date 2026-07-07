@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api/api';
+import { fetchAppDetails } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import AppChat from '../pages/AppChat';

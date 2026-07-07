@@ -16,7 +16,7 @@ import {
   fetchToolScript,
   updateToolScript
 } from '../../../api/adminApi';
-import { clearApiCache } from '../../../api/api';
+import { clearApiCache } from '../../../api';
 
 function AdminToolEditPage() {
   const { t } = useTranslation();

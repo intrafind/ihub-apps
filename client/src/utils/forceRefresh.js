@@ -17,7 +17,7 @@
  * salt matches.
  */
 
-import { fetchUIConfig } from '../api/api';
+import { fetchUIConfig } from '../api';
 
 const REFRESH_SALT_KEY = 'ihub-refresh-salt';
 const DISCLAIMER_KEY = 'ihub-disclaimer-acknowledged';
