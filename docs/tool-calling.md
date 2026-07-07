@@ -96,7 +96,7 @@ graph LR
 
 Tools are registered through three methods:
 
-1. **Static Configuration** (`contents/config/tools.json`)
+1. **Static Configuration** (one JSON file per tool under `contents/tools/`)
 2. **MCP Server Discovery** (Model Context Protocol)
 3. **Dynamic Registration** (Runtime API)
 
@@ -104,7 +104,7 @@ Tools are registered through three methods:
 
 ### 1. Tool Definition
 
-Create a tool definition in `contents/config/tools.json`:
+Create a tool definition file at `contents/tools/weatherLookup.json`:
 
 ```json
 {
@@ -778,7 +778,7 @@ function calculateTotals(invoice) {
 Error: Tool 'myTool' not found in configuration
 ```
 **Solution**: 
-- Verify tool is defined in `contents/config/tools.json`
+- Verify a tool file exists at `contents/tools/<toolId>.json`
 - Check tool ID matches exactly (case-sensitive)
 - Restart server after adding new tools
 
@@ -902,7 +902,7 @@ Test complete workflow from chat interface through tool execution.
 
 ### Tool Development Checklist
 
-- [ ] Tool definition in `contents/config/tools.json`
+- [ ] Tool definition file in `contents/tools/`
 - [ ] Implementation script in `server/tools/`
 - [ ] Parameter validation implemented
 - [ ] Error handling for all edge cases
@@ -917,9 +917,9 @@ Test complete workflow from chat interface through tool execution.
 
 ## Tool Configuration Reference
 
-### `tools.json` Field Reference
+### Tool File Field Reference
 
-Each entry in `contents/config/tools.json` uses the following fields:
+Each tool file in `contents/tools/` (named `<toolId>.json`) uses the following fields:
 
 | Field | Description |
 |-------|-------------|

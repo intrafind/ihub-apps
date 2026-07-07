@@ -3,8 +3,9 @@
  *
  * Returns the list of tool IDs that should be auto-registered for an agent
  * run, based on the Profile's capabilities and the current node's role in
- * the lifecycle. The actual tool definitions live in `config/tools.json`
- * (added by migration V042 / V045 / V046) and the implementation lives in
+ * the lifecycle. The actual tool definitions live in `contents/tools/`
+ * (originally added by migration V042 / V045 / V046, now shipped as
+ * individual default files) and the implementation lives in
  * `server/tools/agentTools.js`.
  *
  * Lifecycle redesign (V047+): deterministic lifecycle operations are owned

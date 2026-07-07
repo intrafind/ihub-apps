@@ -14,7 +14,7 @@ export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 
 ```bash
 # Start server and check logs for:
-✓ Cached: config/tools.json
+✓ Cached: contents/tools/*.json
 ✅ Loaded ifinder-document-explorer (enabled)
 ```
 
@@ -52,8 +52,8 @@ server/
 contents/
 ├── apps/
 │   └── ifinder-document-explorer.json  # App configuration
-└── config/
-    └── tools.json                # Tool definitions
+└── tools/
+    └── iFinder.json                   # Tool definition
 docs/
 ├── iFinder-Integration.md        # Full documentation
 └── iFinder-Quick-Reference.md    # This file

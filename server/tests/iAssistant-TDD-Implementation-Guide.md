@@ -128,7 +128,7 @@ Based on the tests, here's what needs to be implemented:
 - [ ] Add to `server/adapters/index.js` registry
 - [ ] Create `contents/models/iassistant-enterprise.json`
 - [ ] Update `contents/config/platform.json` with iAssistant settings
-- [ ] Add to `contents/config/tools.json`
+- [ ] Add a tool file under `contents/tools/`
 
 ### Phase 5: Applications
 

@@ -1,0 +1,30 @@
+{
+  "id": "write_artifact",
+  "name": {
+    "en": "Write Artifact"
+  },
+  "description": {
+    "en": "Persist an artifact file to the current run output directory. Returns when saved."
+  },
+  "script": "agentTools.js",
+  "method": "writeArtifact",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Simple filename (no slashes)"
+      },
+      "content": {
+        "type": "string",
+        "description": "File contents"
+      },
+      "contentType": {
+        "type": "string",
+        "default": "text/markdown"
+      }
+    },
+    "required": ["name", "content"]
+  }
+}

@@ -133,7 +133,7 @@ Labels and translations are the most common customization, but the same
 | Writing styles / output formatting                | `contents/config/styles.json`      | [Styles](styles.md)                        |
 | Custom pages (Markdown or React)                  | `contents/pages/{lang}/{id}.md`/`.jsx` | [Content Management](content-management.md) |
 | Knowledge sources                                 | `contents/config/sources.json`     | [Sources System](sources.md)               |
-| Available tools                                   | `contents/config/tools.json`       | [Tools](tools.md)                          |
+| Available tools                                   | `contents/tools/*.json`            | [Tools](tools.md)                          |
 
 > **Config reload:** Apps, models, UI, groups, styles, sources, and tools reload
 > automatically via the config cache. Changes to `platform.json` (server
