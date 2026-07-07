@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { debugLog } from '../../../utils/debugLog';
 
 /**
  * Custom hook for managing chat messages
@@ -23,11 +24,11 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
     if (ephemeral) return [];
     try {
       const storedData = sessionStorage.getItem(storageKey);
-      console.log(
-        '📂 Raw sessionStorage data for key',
+      debugLog(
+        '📂 Loading messages from sessionStorage for key',
         storageKey,
         ':',
-        storedData ? storedData.substring(0, 200) + '...' : 'null'
+        storedData ? `${storedData.length} bytes` : 'null'
       );
 
       const messages = storedData ? JSON.parse(storedData) : [];
@@ -35,7 +36,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
       // Debug logging for loaded images
       const messagesWithImages = messages.filter(m => m.images && m.images.length > 0);
       if (messagesWithImages.length > 0) {
-        console.log('📂 Loading messages from sessionStorage:', {
+        debugLog('📂 Loading messages from sessionStorage:', {
           totalMessages: messages.length,
           messagesWithImages: messagesWithImages.length,
           imageDetails: messagesWithImages.map(m => ({
@@ -46,7 +47,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
           }))
         });
       } else if (messages.length > 0) {
-        console.log('📂 Loading messages (no images):', {
+        debugLog('📂 Loading messages (no images):', {
           totalMessages: messages.length,
           messageIds: messages.map(m => ({ id: m.id, role: m.role, loading: m.loading }))
         });
@@ -64,7 +65,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
   // Load messages when chatId changes (app switching)
   useEffect(() => {
     if (prevChatIdRef.current !== chatId && prevChatIdRef.current !== null) {
-      console.log(
+      debugLog(
         '[useChatMessages] ChatId changed from',
         prevChatIdRef.current,
         'to',
@@ -85,7 +86,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
         // Debug logging for loaded images on chatId change
         const messagesWithImages = newMessages.filter(m => m.images && m.images.length > 0);
         if (messagesWithImages.length > 0) {
-          console.log('📂 Loading messages for new chatId:', {
+          debugLog('📂 Loading messages for new chatId:', {
             chatId,
             totalMessages: newMessages.length,
             messagesWithImages: messagesWithImages.length,
@@ -149,18 +150,15 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
       // Debug logging for image persistence
       const messagesWithImages = persistableMessages.filter(m => m.images && m.images.length > 0);
       if (messagesWithImages.length > 0) {
-        console.log(
-          '💾 Saving messages to sessionStorage (images excluded to avoid quota issues):',
-          {
-            totalMessages: messagesWithoutImageData.length,
-            messagesWithImages: messagesWithImages.length,
-            imageDetails: messagesWithImages.map(m => ({
-              id: m.id,
-              imageCount: m.images.length,
-              loading: m.loading
-            }))
-          }
-        );
+        debugLog('💾 Saving messages to sessionStorage (images excluded to avoid quota issues):', {
+          totalMessages: messagesWithoutImageData.length,
+          messagesWithImages: messagesWithImages.length,
+          imageDetails: messagesWithImages.map(m => ({
+            id: m.id,
+            imageCount: m.images.length,
+            loading: m.loading
+          }))
+        });
       }
 
       // Only save if we have messages
@@ -250,7 +248,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
    */
   const updateAssistantMessage = useCallback((id, content, isLoading = true, extra = {}) => {
     if (isLoading === false) {
-      console.log('✅ Setting message to completed state:', {
+      debugLog('✅ Setting message to completed state:', {
         id,
         contentLength: content?.length || 0,
         hasImages: !!extra.images,
@@ -276,7 +274,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
       // Debug logging to track image persistence
       const updatedMsg = updatedMessages.find(m => m.id === id);
       if (currentMsg?.images || extra.images || updatedMsg?.images) {
-        console.log('🖼️ Image update for message', id, ':', {
+        debugLog('🖼️ Image update for message', id, ':', {
           previousImages: currentMsg?.images?.length || 0,
           extraImages: extra.images?.length || 0,
           resultImages: updatedMsg?.images?.length || 0,
