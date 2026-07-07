@@ -10,7 +10,7 @@ import { setupMiddleware } from '../serverHelpers.js';
 import registerAuthRoutes from '../routes/auth.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
-import registerSessionRoutes from '../routes/sessionRoutes.js';
+import registerAppSessionStartRoute from '../routes/appSessionRoutes.js';
 import { getLocalizedError } from '../serverHelpers.js';
 import logger from '../utils/logger.js';
 
@@ -64,7 +64,7 @@ function createTestApp(platformConfig = mockPlatformConfig) {
   registerAuthRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
-  registerSessionRoutes(app);
+  registerAppSessionStartRoute(app);
 
   return app;
 }
