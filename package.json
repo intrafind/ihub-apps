@@ -115,8 +115,7 @@
     "chatbot",
     "applications"
   ],
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@babel/preset-env": "^7.29.7",

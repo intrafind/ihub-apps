@@ -41,6 +41,7 @@ next fresh install, while already-migrated installations retain the old result.
 2. **Inline or snapshot** any transformation logic the migration needs.
    Copy the relevant helper functions directly into the migration file and
    annotate them with a comment like:
+
    ```js
    // Snapshot of buildDefaultWorkflowForProfile() as of V052 (2025-xx-xx).
    // Do NOT replace with an import — migrations must be self-contained.
@@ -59,34 +60,34 @@ next fresh install, while already-migrated installations retain the old result.
 
 ### Acceptable imports inside a migration
 
-| Allowed | Why |
-|---------|-----|
-| Node.js built-ins (`fs`, `path`, `crypto`, …) | Stable, versioned with Node |
-| `../migrations/utils.js` | Stable migration-utility helpers only |
-| `ctx.*` methods from the migration context | Injected by the runner |
+| Allowed                                       | Why                                   |
+| --------------------------------------------- | ------------------------------------- |
+| Node.js built-ins (`fs`, `path`, `crypto`, …) | Stable, versioned with Node           |
+| `../migrations/utils.js`                      | Stable migration-utility helpers only |
+| `ctx.*` methods from the migration context    | Injected by the runner                |
 
 ---
 
 ## Migration context API (`ctx`)
 
-| Method | Description |
-|--------|-------------|
-| `ctx.readJson(path)` | Read JSON from `contents/{path}` |
-| `ctx.writeJson(path, data)` | Atomically write JSON to `contents/{path}` |
-| `ctx.fileExists(path)` | Check if `contents/{path}` exists |
-| `ctx.deleteFile(path)` | Delete `contents/{path}` |
-| `ctx.moveFile(from, to)` | Move file within `contents/` |
-| `ctx.listFiles(dir, pattern)` | List files in `contents/{dir}` |
-| `ctx.readDefaultJson(path)` | Read JSON from `server/defaults/{path}` |
-| `ctx.setDefault(obj, dotPath, value)` | Set value only if path is missing |
-| `ctx.removeKey(obj, dotPath)` | Remove key at dot-path |
-| `ctx.renameKey(obj, oldPath, newPath)` | Move key from old to new dot-path |
-| `ctx.mergeDefaults(existing, defaults)` | Deep merge; existing values win |
-| `ctx.addIfMissing(array, item, idField)` | Push item if no match on `idField` |
-| `ctx.removeById(array, id, idField)` | Remove first item matching `id` |
-| `ctx.transformWhere(array, pred, fn)` | Apply `fn` to items matching `pred` |
-| `ctx.log(msg)` | Structured info log (prefixed with version) |
-| `ctx.warn(msg)` | Structured warn log (prefixed with version) |
+| Method                                   | Description                                 |
+| ---------------------------------------- | ------------------------------------------- |
+| `ctx.readJson(path)`                     | Read JSON from `contents/{path}`            |
+| `ctx.writeJson(path, data)`              | Atomically write JSON to `contents/{path}`  |
+| `ctx.fileExists(path)`                   | Check if `contents/{path}` exists           |
+| `ctx.deleteFile(path)`                   | Delete `contents/{path}`                    |
+| `ctx.moveFile(from, to)`                 | Move file within `contents/`                |
+| `ctx.listFiles(dir, pattern)`            | List files in `contents/{dir}`              |
+| `ctx.readDefaultJson(path)`              | Read JSON from `server/defaults/{path}`     |
+| `ctx.setDefault(obj, dotPath, value)`    | Set value only if path is missing           |
+| `ctx.removeKey(obj, dotPath)`            | Remove key at dot-path                      |
+| `ctx.renameKey(obj, oldPath, newPath)`   | Move key from old to new dot-path           |
+| `ctx.mergeDefaults(existing, defaults)`  | Deep merge; existing values win             |
+| `ctx.addIfMissing(array, item, idField)` | Push item if no match on `idField`          |
+| `ctx.removeById(array, id, idField)`     | Remove first item matching `id`             |
+| `ctx.transformWhere(array, pred, fn)`    | Apply `fn` to items matching `pred`         |
+| `ctx.log(msg)`                           | Structured info log (prefixed with version) |
+| `ctx.warn(msg)`                          | Structured warn log (prefixed with version) |
 
 ---
 
