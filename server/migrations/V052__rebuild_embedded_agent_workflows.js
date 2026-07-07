@@ -95,7 +95,7 @@ const DEFAULT_PLANNER_SYSTEM =
   'description back: if you find the word "and" joining two research ' +
   'subjects, or a comma-separated list of distinct angles/entities, the ' +
   'task is too broad — split it. Examples of tasks that MUST be split:\n' +
-  "    × \"Research Rowan Curran's background, publications, AI views, and quotes\" (4 angles → 4 tasks)\n" +
+  '    × "Research Rowan Curran\'s background, publications, AI views, and quotes" (4 angles → 4 tasks)\n' +
   '    × "Research Franz and Daniel" (2 people → 2 tasks)\n' +
   '    × "Research iFinder, iAssistant and iHub" (3 products → 3 tasks)\n' +
   '- Prefer 3–8 narrowly-scoped tasks over 1–2 broad ones. Each task ' +
@@ -207,8 +207,8 @@ const DEFAULT_MEMORY_COMPOSER_SYSTEM = {
     '  - "content" (string): the markdown to add (or replace with). ' +
     'Be CONCRETE — durable facts, names, identifiers, stable preferences, ' +
     'recurring context. Include provenance: which tool/app produced the ' +
-    "fact, which URL backs it. Example: \"Found via app__intrafind-websites: " +
-    "X is Y's lead engineer (source: https://...)\".\n" +
+    'fact, which URL backs it. Example: "Found via app__intrafind-websites: ' +
+    'X is Y\'s lead engineer (source: https://...)".\n' +
     '  - "summary" (string): one short caption for the memory frontmatter.\n\n' +
     'Rules:\n' +
     '1. Only durable signal goes into memory. Skip ephemeral or task-specific ' +
@@ -591,8 +591,7 @@ function _v052_buildPlannerWorkflow(profile) {
       'data._reviewOutput.needs_more_work === true && ' +
       `data._reviewRound < ${maxRounds})`;
     const REVIEWER_BUDGET_PER_ROUND_MS = 120_000;
-    const perRoundTimeoutMs =
-      _v052_plannerNodeTimeoutMs(profile) + REVIEWER_BUDGET_PER_ROUND_MS;
+    const perRoundTimeoutMs = _v052_plannerNodeTimeoutMs(profile) + REVIEWER_BUDGET_PER_ROUND_MS;
     const loopTimeoutMs = Math.max(perRoundTimeoutMs, perRoundTimeoutMs * maxRounds);
     nodes.push({
       id: reviewLoopId,
@@ -920,7 +919,9 @@ export async function up(ctx) {
           );
         }
       } catch (err) {
-        ctx.warn(`rebuildEmbeddedWorkflow failed for ${profile.id}: ${err.message} — leaving as-is`);
+        ctx.warn(
+          `rebuildEmbeddedWorkflow failed for ${profile.id}: ${err.message} — leaving as-is`
+        );
         failed++;
       }
     }
