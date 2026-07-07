@@ -30,13 +30,11 @@
         let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
 
         // Known React routes - these are app routes, not deployment subpaths
-        // IMPORTANT: Keep in sync with runtimeBasePath.js
+        // IMPORTANT: Keep in sync with KNOWN_ROUTES in runtimeBasePath.js
         const knownRoutes = [
           'apps',
           'admin',
-          'auth',
           'login',
-          'chat',
           'pages',
           'prompts',
           'settings',
@@ -44,7 +42,12 @@
           'workflows',
           's',
           'setup',
-          'tools'
+          'tools',
+          'office',
+          'nextcloud',
+          'unauthorized',
+          'forbidden',
+          'server-error'
         ];
 
         // Split path into segments and find the first known route
