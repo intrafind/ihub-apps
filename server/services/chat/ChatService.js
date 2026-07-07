@@ -2,7 +2,6 @@ import RequestBuilder from './RequestBuilder.js';
 import NonStreamingHandler from './NonStreamingHandler.js';
 import StreamingHandler from './StreamingHandler.js';
 import ToolExecutor from './ToolExecutor.js';
-import ErrorHandler from '../../utils/ErrorHandler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,219 +14,22 @@ class ChatService {
     this.nonStreamingHandler = options.nonStreamingHandler || new NonStreamingHandler();
     this.streamingHandler = options.streamingHandler || new StreamingHandler();
     this.toolExecutor = options.toolExecutor || new ToolExecutor();
-    this.errorHandler = options.errorHandler || new ErrorHandler();
   }
 
   async prepareChatRequest(params) {
-    const {
-      appId,
-      modelId,
-      messages,
-      temperature,
-      style,
-      outputFormat,
-      language,
-      bypassAppPrompts,
-      thinkingEnabled,
-      thinkingBudget,
-      thinkingThoughts,
-      enabledTools,
-      websearchEnabled,
-      imageAspectRatio,
-      imageQuality,
-      requestedSkill,
-      documentIds,
-      res,
-      clientRes,
-      user,
-      chatId
-    } = params;
-
-    return await this.requestBuilder.prepareChatRequest({
-      appId,
-      modelId,
-      messages,
-      temperature,
-      style,
-      outputFormat,
-      language,
-      bypassAppPrompts,
-      thinkingEnabled,
-      thinkingBudget,
-      thinkingThoughts,
-      enabledTools,
-      websearchEnabled,
-      imageAspectRatio,
-      imageQuality,
-      requestedSkill,
-      documentIds,
-      processMessageTemplates,
-      res,
-      clientRes,
-      user,
-      chatId
-    });
+    return await this.requestBuilder.prepareChatRequest({ ...params, processMessageTemplates });
   }
 
   async processNonStreamingChat(params) {
-    const {
-      request,
-      res,
-      buildLogData,
-      messageId,
-      model,
-      llmMessages,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage
-    } = params;
-
-    return await this.nonStreamingHandler.executeNonStreamingResponse({
-      request,
-      res,
-      buildLogData,
-      messageId,
-      model,
-      llmMessages,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage
-    });
+    return await this.nonStreamingHandler.executeNonStreamingResponse(params);
   }
 
   async processStreamingChat(params) {
-    const {
-      request,
-      chatId,
-      clientRes,
-      buildLogData,
-      model,
-      llmMessages,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage
-    } = params;
-
-    return await this.streamingHandler.executeStreamingResponse({
-      request,
-      chatId,
-      clientRes,
-      buildLogData,
-      model,
-      llmMessages,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage
-    });
+    return await this.streamingHandler.executeStreamingResponse(params);
   }
 
   async processChatWithTools(params) {
-    const { prep, chatId, buildLogData, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage, user } =
-      params;
-
-    return await this.toolExecutor.processChatWithTools({
-      prep,
-      chatId,
-      buildLogData,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage,
-      user
-    });
-  }
-
-  async processChat(params) {
-    const {
-      appId,
-      modelId,
-      messages,
-      temperature,
-      style,
-      outputFormat,
-      language,
-      bypassAppPrompts,
-      res,
-      clientRes,
-      chatId,
-      buildLogData,
-      messageId,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage,
-      hasTools = false,
-      user
-    } = params;
-
-    try {
-      const prepResult = await this.prepareChatRequest({
-        appId,
-        modelId,
-        messages,
-        temperature,
-        style,
-        outputFormat,
-        language,
-        bypassAppPrompts,
-        res,
-        clientRes,
-        user,
-        chatId
-      });
-
-      if (!prepResult.success) {
-        if (res && !clientRes) {
-          return res.status(400).json(this.errorHandler.formatErrorResponse(prepResult.error));
-        }
-        return { success: false, error: prepResult.error };
-      }
-
-      const { model, llmMessages, request, tools } = prepResult.data;
-
-      if (!clientRes) {
-        return await this.processNonStreamingChat({
-          request,
-          res,
-          buildLogData,
-          messageId,
-          model,
-          llmMessages,
-          DEFAULT_TIMEOUT
-        });
-      }
-
-      if (hasTools && tools && tools.length > 0) {
-        return await this.processChatWithTools({
-          prep: prepResult.data,
-          chatId,
-          buildLogData,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage,
-          user
-        });
-      }
-
-      return await this.processStreamingChat({
-        request,
-        chatId,
-        clientRes,
-        buildLogData,
-        model,
-        llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
-    } catch (error) {
-      logger.error('Error in processChat', { component: 'ChatService', error });
-
-      const errorResponse = this.errorHandler.formatErrorResponse(error);
-      if (res && !clientRes) {
-        return res.status(500).json(errorResponse);
-      }
-
-      return { success: false, error: errorResponse };
-    }
+    return await this.toolExecutor.processChatWithTools(params);
   }
 
   /**
