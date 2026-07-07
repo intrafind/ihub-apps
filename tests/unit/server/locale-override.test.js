@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { ConfigCache } from '../configCache.js';
+import { ConfigCache } from '../../../server/configCache.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.join(__dirname, '../../');
+// Jest transpiles this file to CommonJS via Babel, which does not support
+// the raw `import.meta` syntax, so __dirname is used directly rather than
+// deriving it from import.meta.url.
+const rootDir = path.join(__dirname, '../../../');
 
 describe('Locale Override Feature', () => {
   let configCache;
