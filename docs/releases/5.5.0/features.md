@@ -175,3 +175,15 @@ the URL.
 - No configuration change is required — existing OpenAI-adapter models work as configured.
 - When a request URL genuinely cannot be resolved, the error now names the offending URL (with any
   embedded secrets redacted) so misconfiguration is easier to diagnose.
+
+## Chat Exports Are Now Protected Against Spreadsheet Formula Injection
+
+CSV and XLSX chat exports now neutralize cell values that would otherwise be interpreted as
+formulas by Excel or LibreOffice. Chat transcripts can contain model output or pasted text a user
+doesn't fully control, and a value beginning with `=`, `+`, `-`, or `@` (for example
+`=HYPERLINK("http://evil","click")`) previously executed as a formula the moment the exported file
+was opened.
+
+- Affected cell values are now prefixed with a single quote before being written, which forces
+  spreadsheet applications to render them as plain text.
+- Applies to both the CSV and XLSX chat export formats; no configuration change is required.
