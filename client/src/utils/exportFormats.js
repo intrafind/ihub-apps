@@ -11,6 +11,18 @@ import PptxGenJS from 'pptxgenjs';
  * readable date.
  */
 
+/**
+ * Neutralize spreadsheet formula injection (OWASP CSV injection guidance).
+ * Values starting with =, +, -, @, tab, or CR are interpreted as formulas by
+ * Excel/LibreOffice; prefixing with a single quote forces them to render as
+ * plain text instead of executing.
+ */
+export const sanitizeForSpreadsheet = value => {
+  if (value === null || value === undefined) return '';
+  const stringValue = String(value);
+  return /^[=+\-@\t\r]/.test(stringValue) ? `'${stringValue}` : stringValue;
+};
+
 /** Strip markdown noise, collapse whitespace, ASCII-kebab-case, cap length. */
 export const slugifyForFilename = (text, maxChars = 40) => {
   if (!text || typeof text !== 'string') return '';
@@ -667,7 +679,7 @@ export const exportToXLSX = async (
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
     const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
-    const content = msg.content || '';
+    const content = sanitizeForSpreadsheet(msg.content || '');
     data.push([{ value: role }, { value: timestamp }, { value: content }]);
   });
 
@@ -719,8 +731,7 @@ export const exportToCSV = async (
 
   // Helper function to escape CSV values
   const escapeCSV = value => {
-    if (value === null || value === undefined) return '';
-    const stringValue = String(value);
+    const stringValue = sanitizeForSpreadsheet(value);
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
       return `"${stringValue.replace(/"/g, '""')}"`;
