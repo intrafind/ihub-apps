@@ -115,11 +115,11 @@ describe('Admin tools script path traversal protection (#1806)', () => {
     await fs.rm(sentinelDir, { recursive: true, force: true });
   });
 
-  test('GET script rejects a tool.script that traverses outside server/tools', async () => {
+  test('GET script rejects a tool.script that traverses outside server/tools, indistinguishably from a missing file', async () => {
     const app = createTestApp();
     const response = await request(app).get('/api/admin/tools/evilTool/script');
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     expect(existsSync(sentinelFile)).toBe(true);
   });
 
@@ -131,13 +131,13 @@ describe('Admin tools script path traversal protection (#1806)', () => {
     expect(response.body.content).toContain('legitTool');
   });
 
-  test('PUT script rejects a tool.script that traverses outside server/tools', async () => {
+  test('PUT script rejects a tool.script that traverses outside server/tools, indistinguishably from a missing file', async () => {
     const app = createTestApp();
     const response = await request(app)
       .put('/api/admin/tools/evilTool/script')
       .send({ content: 'pwned' });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
     const sentinelContent = await fs.readFile(sentinelFile, 'utf-8');
     expect(sentinelContent).not.toBe('pwned');
   });

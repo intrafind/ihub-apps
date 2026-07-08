@@ -811,7 +811,14 @@ export default function registerAdminToolsRoutes(app) {
       const scriptsBaseDir = join(rootDir, 'server', 'tools');
       const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
       if (!scriptPath) {
-        return sendBadRequest(res, 'Invalid script path');
+        // Respond identically to "script file not found" so an invalid/traversal
+        // path can't be distinguished from a merely missing file by the caller.
+        logger.warn('Rejected out-of-bounds script path', {
+          component: 'AdminTools',
+          toolId,
+          script: tool.script
+        });
+        return sendNotFound(res, 'Script file');
       }
 
       if (!existsSync(scriptPath)) {
@@ -920,7 +927,14 @@ export default function registerAdminToolsRoutes(app) {
       const scriptsBaseDir = join(rootDir, 'server', 'tools');
       const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
       if (!scriptPath) {
-        return sendBadRequest(res, 'Invalid script path');
+        // Respond identically to "script file not found" so an invalid/traversal
+        // path can't be distinguished from a merely missing file by the caller.
+        logger.warn('Rejected out-of-bounds script path', {
+          component: 'AdminTools',
+          toolId,
+          script: tool.script
+        });
+        return sendNotFound(res, 'Script file');
       }
 
       if (!existsSync(scriptPath)) {
