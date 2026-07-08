@@ -187,3 +187,33 @@ was opened.
 - Affected cell values are now prefixed with a single quote before being written, which forces
   spreadsheet applications to render them as plain text.
 - Applies to both the CSV and XLSX chat export formats; no configuration change is required.
+
+## Admin Tool Script Paths Are Now Validated Against Traversal
+
+The admin Tools API now validates a tool's `script` filename before reading, writing, or deleting
+it on disk. Previously a crafted or hand-edited `script` value (e.g. `../../server/server.js`)
+could make the read/update/delete script endpoints touch files outside `server/tools/`.
+
+- Reading, updating, or deleting a tool's script now rejects any path that resolves outside
+  `server/tools/`.
+- Creating or updating a tool now rejects a `script` value that isn't a bare `<name>.js` filename.
+
+## Marketplace Skill Installs Now Use a Stricter Directory Boundary Check
+
+Installing a multi-file skill package from the marketplace now uses the same separator-aware
+boundary check as other content installers, closing a gap where a companion filename could
+resolve into a sibling directory that merely shared the skill's directory name as a prefix
+(e.g. `foo-evil` next to `foo`).
+
+- No admin action required; existing skill packages install exactly as before.
+
+## Chat No Longer Crashes When a Response Finishes
+
+Chat responses now complete cleanly instead of failing with an "Add-in Error" (`setSearchStatus is
+not defined`) the moment the model finished answering. The crash surfaced in the Outlook add-in but
+came from the shared chat used across the platform, so any app could be affected.
+
+- Fixes the error thrown at the end of every response, so answers now display and finalize normally.
+- Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
+  answer feedback), which previously interrupted the reply the same way.
+- No configuration or admin action required.

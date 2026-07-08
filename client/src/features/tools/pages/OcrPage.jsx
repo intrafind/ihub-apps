@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { apiClient } from '../../../api/client';
 import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
+import StatusBadge from '../../../shared/components/StatusBadge';
+import ProgressBar from '../../../shared/components/ProgressBar';
 
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
 const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp'];
@@ -30,43 +32,6 @@ function isAcceptedFile(file) {
   if (ACCEPTED_TYPES.includes(file.type)) return true;
   const ext = file.name.split('.').pop()?.toLowerCase();
   return ACCEPTED_EXTENSIONS.includes(ext);
-}
-
-function ProgressBar({ value, max, label }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="w-full">
-      {label && <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</div>}
-      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-        <div
-          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
-        {value} / {max} ({pct}%)
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  const colors = {
-    queued: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    building: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    cancelled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-  };
-
-  return (
-    <span
-      className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${colors[status] || colors.queued}`}
-    >
-      {status}
-    </span>
-  );
 }
 
 function JobCard({ job, onCancel }) {

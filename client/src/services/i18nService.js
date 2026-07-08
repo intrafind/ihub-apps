@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { fetchTranslations } from '../api/api';
+import { fetchTranslations } from '../api';
 import { apiClient } from '../api/client';
 // Import core translations statically to avoid Firefox dynamic import issues
 import enCoreTranslations from '../../../shared/i18n/en.json';

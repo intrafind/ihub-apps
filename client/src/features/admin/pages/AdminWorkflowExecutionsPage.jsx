@@ -15,6 +15,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminExecutions, cancelAdminExecution } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import StatusBadge from '../../workflows/components/StatusBadge';
 
 /**
  * Auto-refresh polling interval in milliseconds (5 seconds)
@@ -514,7 +515,6 @@ function AdminWorkflowExecutionsPage() {
                   </thead>
                   <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                     {executions.map(execution => {
-                      const badgeClasses = getStatusBadgeClasses(execution.status);
                       return (
                         <tr
                           key={execution.executionId}
@@ -546,17 +546,7 @@ function AdminWorkflowExecutionsPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${badgeClasses.bg} ${badgeClasses.text}`}
-                            >
-                              {execution.status === 'running' && (
-                                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                              )}
-                              {t(
-                                `admin.workflowExecutions.status.${execution.status}`,
-                                execution.status
-                              )}
-                            </span>
+                            <StatusBadge status={execution.status} />
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             {formatDateTime(execution.startedAt)}

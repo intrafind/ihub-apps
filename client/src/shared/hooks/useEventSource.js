@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { checkAppChatStatus, stopAppChatStream } from '../../api/api';
+import { checkAppChatStatus, stopAppChatStream } from '../../api';
 import { parseSseStream } from '../utils/parseSseStream';
 import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/office/api/officeAuth';
 

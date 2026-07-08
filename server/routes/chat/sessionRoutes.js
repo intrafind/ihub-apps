@@ -3,6 +3,7 @@ import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
+import { createSseChannel } from '../../utils/sseChannel.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import {
   authRequired,
@@ -345,15 +346,34 @@ export default function registerSessionRoutes(
     async (req, res) => {
       try {
         const { appId, chatId } = req.params;
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-        clients.set(chatId, { response: res, lastActivity: new Date(), appId });
-        // Pin this registration so a stale close handler from a previous SSE on the
-        // same chatId can't delete a fresh entry (or abort a fresh active request)
-        // after the client reconnects.
-        const myEntry = clients.get(chatId);
+        const channel = createSseChannel({
+          req,
+          res,
+          id: chatId,
+          map: clients,
+          component: 'sessionRoutes',
+          onClose: ({ isCurrent }) => {
+            if (!isCurrent) return;
+            if (activeRequests.has(chatId)) {
+              try {
+                const controller = activeRequests.get(chatId);
+                controller.abort();
+                activeRequests.delete(chatId);
+                logger.info('Aborted request', { component: 'sessionRoutes', chatId });
+              } catch (error) {
+                logger.error('Error aborting request', {
+                  component: 'sessionRoutes',
+                  chatId,
+                  error: error.message
+                });
+              }
+            }
+            logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
+          }
+        });
+        // appId is carried on the entry for parity with the previous shape;
+        // nothing currently reads it back off the map, but keep it available.
+        channel.entry.appId = appId;
         actionTracker.trackConnected(chatId);
 
         // --- Workflow disconnect resilience ---
@@ -418,43 +438,6 @@ export default function registerSessionRoutes(
             error: replayError.message
           });
         }
-
-        // Heartbeat: write an SSE comment every 30s so reverse proxies (nginx
-        // default idle timeout is 60s) don't silently kill the connection.
-        // If the write throws, the socket is dead — clear the interval and
-        // let req.on('close') handle the rest of the cleanup.
-        const heartbeatInterval = setInterval(() => {
-          if (clients.get(chatId) !== myEntry) {
-            clearInterval(heartbeatInterval);
-            return;
-          }
-          try {
-            res.write(': heartbeat\n\n');
-          } catch {
-            clearInterval(heartbeatInterval);
-          }
-        }, 30000);
-
-        req.on('close', () => {
-          clearInterval(heartbeatInterval);
-          if (clients.get(chatId) !== myEntry) return;
-          if (activeRequests.has(chatId)) {
-            try {
-              const controller = activeRequests.get(chatId);
-              controller.abort();
-              activeRequests.delete(chatId);
-              logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-            } catch (error) {
-              logger.error('Error aborting request', {
-                component: 'sessionRoutes',
-                chatId,
-                error: error.message
-              });
-            }
-          }
-          clients.delete(chatId);
-          logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
-        });
       } catch (error) {
         logger.error('Error establishing SSE connection', { component: 'sessionRoutes', error });
         if (!res.headersSent) {

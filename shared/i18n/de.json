@@ -2035,6 +2035,66 @@
         "addComment": "Sind Sie sicher, dass Sie diesen Kommentar hinzufügen möchten?",
         "transitionTicket": "Sind Sie sicher, dass Sie den Ticket-Status ändern möchten?"
       }
+    },
+    "page": {
+      "title": "Integrationen",
+      "subtitle": "Verbinden Sie Ihre externen Konten, um Ihre KI-Anwendungen zu erweitern",
+      "loading": "Integrationen werden geladen...",
+      "authRequiredTitle": "Authentifizierung erforderlich",
+      "authRequiredBody": "Bitte melden Sie sich an, um Ihre Integrationen zu verwalten.",
+      "card": {
+        "connected": "Verbunden",
+        "notConnected": "Nicht verbunden",
+        "availableFeatures": "Verfügbare Funktionen:",
+        "connectAccount": "{{name}}-Konto verbinden",
+        "disconnect": "Trennen",
+        "tokenExpiring": "Token läuft bald ab - erneute Verbindung empfohlen"
+      },
+      "jira": {
+        "description": "Atlassian-JIRA-Integration für Ticketverwaltung und Projekteinblicke",
+        "features": {
+          "search": "JIRA-Tickets suchen und abrufen",
+          "create": "Neue Tickets und Vorgänge erstellen",
+          "update": "Bestehende Tickets aktualisieren",
+          "info": "Projekt- und Benutzerinformationen abrufen"
+        },
+        "connected": "JIRA-Konto erfolgreich verbunden! Sie können jetzt JIRA-Funktionen in Ihren Apps nutzen.",
+        "connectionFailed": "Verbindung fehlgeschlagen: {{message}}",
+        "disconnected": "JIRA-Konto erfolgreich getrennt",
+        "disconnectFailed": "Trennen von JIRA fehlgeschlagen: {{message}}",
+        "testSuccess": "JIRA-Verbindungstest erfolgreich! {{count}} zugängliche Tickets gefunden.",
+        "testFailed": "JIRA-Verbindungstest fehlgeschlagen: {{message}}"
+      },
+      "cloud": {
+        "description": {
+          "office365": "Microsoft-Office-365-Integration für Cloud-Dateizugriff",
+          "googleDrive": "Google-Drive-Integration für Cloud-Dateizugriff"
+        },
+        "features": {
+          "browseOffice365": "OneDrive- und SharePoint-Dateien durchsuchen",
+          "browseGoogleDrive": "Google-Drive-Dateien durchsuchen",
+          "upload": "Cloud-Dateien zu Chats hinzufügen",
+          "oauth": "Sicheres OAuth 2.0 mit PKCE"
+        },
+        "connected": "{{name}}-Konto erfolgreich verbunden! Sie können jetzt Dateien aus {{name}} auswählen.",
+        "connectionFailed": "{{name}}-Verbindung fehlgeschlagen: {{message}}",
+        "disconnected": "{{name}}-Konto erfolgreich getrennt",
+        "disconnectFailed": "Trennen von {{name}} fehlgeschlagen: {{message}}"
+      },
+      "office": {
+        "available": "Verfügbar",
+        "deployHint": "Stellen Sie dieses Manifest im Microsoft 365 Admin Center bereit, um das Add-in für Ihre Organisation verfügbar zu machen.",
+        "copy": "Kopieren",
+        "download": "Herunterladen"
+      },
+      "empty": {
+        "title": "Keine Integrationen konfiguriert",
+        "body": "Wenden Sie sich an Ihren Administrator, um externe Integrationen zu aktivieren."
+      },
+      "comingSoon": {
+        "title": "Weitere Integrationen folgen in Kürze",
+        "body": "Wir arbeiten daran, weitere Integrationen hinzuzufügen, um Ihre KI-Anwendungen zu erweitern"
+      }
     }
   },
   "workflow": {

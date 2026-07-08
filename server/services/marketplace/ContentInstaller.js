@@ -23,7 +23,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
-import { isValidId } from '../../utils/pathSecurity.js';
+import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
 import config from '../../config.js';
 import registryService from './RegistryService.js';
@@ -529,10 +529,9 @@ class ContentInstaller {
       if (typeof content === 'object' && content !== null && content.files) {
         // Multi-file skill package
         for (const [filename, fileContent] of Object.entries(content.files)) {
-          const filePath = path.join(skillDir, filename);
-          const resolvedPath = path.resolve(filePath);
           // Guard against path traversal within the skill's own file list
-          if (!resolvedPath.startsWith(path.resolve(skillDir))) {
+          const filePath = await resolveAndValidatePath(filename, skillDir);
+          if (!filePath) {
             throw new Error(`Path traversal detected in skill file: ${filename}`);
           }
           // Ensure parent directory exists (companion files may live in subdirs)

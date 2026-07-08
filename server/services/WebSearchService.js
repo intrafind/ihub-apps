@@ -202,9 +202,6 @@ class BraveSearchProvider extends SearchProvider {
     // Cache only successful responses (errors throw above and never reach here),
     // so a transient 429 is never cached. TTL is configurable; default 10 min —
     // long enough to dedupe within a multi-round run, short enough to stay fresh.
-    // `config.SEARCH_CACHE_TTL_MS` arrives via the `{...process.env}` spread and
-    // is a string when set, so coerce it (Number.isFinite would reject a string
-    // and silently pin the default, making the override dead config).
     const parsedTtl = Number(config.SEARCH_CACHE_TTL_MS);
     const ttlMs = Number.isFinite(parsedTtl) && parsedTtl > 0 ? parsedTtl : 600000;
     setCachedSearch(cacheKey, payload, ttlMs);

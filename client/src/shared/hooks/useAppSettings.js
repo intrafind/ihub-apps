@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
-import { fetchModels, fetchStyles } from '../../api/api';
+import { fetchModels, fetchStyles } from '../../api';
 import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
 import { useUIConfig } from '../contexts/UIConfigContext';
 

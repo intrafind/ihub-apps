@@ -11,8 +11,7 @@ import {
   updatePrompt,
   fetchAdminApps
 } from '../../../api/adminApi';
-import { clearApiCache } from '../../../api/api';
-import { fetchUIConfig } from '../../../api';
+import { clearApiCache, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';

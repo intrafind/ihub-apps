@@ -80,16 +80,6 @@ npm run docker:clean         # Clean unused Docker resources
 npm run docker:clean:all     # Clean all Docker resources (destructive)
 ```
 
-### Electron App
-
-```bash
-# Development
-npm run electron:dev         # Run Electron app in development mode
-
-# Build desktop application
-npm run electron:build       # Build Electron app for distribution
-```
-
 ## Architecture Overview
 
 ### High-Level Structure

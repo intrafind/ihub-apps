@@ -3,9 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
-import { sendAppChatMessage } from '../../../api/api';
+import { sendAppChatMessage } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
+import { debugLog } from '../../../utils/debugLog';
 
 /**
  * High level hook combining chat message management with streaming
@@ -88,7 +89,7 @@ function useAppChat({
                     'error.sessionExpired',
                     'Your session has expired. Please log in again to continue.'
                   );
-                  console.log('🔐 Session expired during chat message send');
+                  debugLog('🔐 Session expired during chat message send');
                   // The authTokenExpired event should already be dispatched by the API client
                   // which will trigger the auto-redirect flow in AuthContext
                 } else {
@@ -154,7 +155,7 @@ function useAppChat({
           break;
         case 'clarification':
           if (lastMessageIdRef.current && data) {
-            console.log('📝 Clarification event received:', data);
+            debugLog('📝 Clarification event received:', data);
             // Store the clarification data and set pending state
             activeClarificationRef.current = data;
             setClarificationPending(true);
@@ -271,18 +272,19 @@ function useAppChat({
           }
           break;
         case 'response.message.id':
-          // Store the iFinder message ID for feedback submission
+          // Store the iFinder message ID for feedback submission. This event
+          // is emitted before 'done', so the message is still streaming —
+          // preserve its current content and loading state and only attach
+          // the id via the shared updater (there is no standalone setMessages).
           if (data?.messageId && lastMessageIdRef.current) {
-            const currentMessages = messagesRef.current;
-            const messageIndex = currentMessages.findIndex(m => m.id === lastMessageIdRef.current);
-            if (messageIndex !== -1) {
-              const updatedMessages = [...currentMessages];
-              updatedMessages[messageIndex] = {
-                ...updatedMessages[messageIndex],
-                ifinderMessageId: data.messageId
-              };
-              setMessages(updatedMessages);
-              messagesRef.current = updatedMessages;
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            if (currentMessage) {
+              updateAssistantMessage(
+                lastMessageIdRef.current,
+                currentMessage.content || '',
+                currentMessage.loading,
+                { ifinderMessageId: data.messageId }
+              );
             }
           }
           break;
@@ -307,7 +309,7 @@ function useAppChat({
 
             // Check if this is a clarification finish reason
             if (data?.finishReason === 'clarification') {
-              console.log('📝 Done event with clarification finish reason');
+              debugLog('📝 Done event with clarification finish reason');
               // Keep the message in awaiting input state, don't mark as complete
               updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
                 ...metadata,
@@ -325,7 +327,6 @@ function useAppChat({
             }
           }
           setProcessing(false);
-          setSearchStatus(null);
           // Reset clarification state when done normally
           setClarificationPending(false);
           activeClarificationRef.current = null;
@@ -350,7 +351,7 @@ function useAppChat({
           // if (data?.message) {
           //   addSystemMessage('🔍 ' + data.message, false);
           // }
-          console.log('🔍 Unknown event type:', type, data);
+          debugLog('🔍 Unknown event type:', type, data);
       }
     },
     [
@@ -574,7 +575,7 @@ function useAppChat({
    */
   const submitClarificationResponse = useCallback(
     (rawResponse, params = {}) => {
-      console.log('📝 Submitting clarification response:', rawResponse);
+      debugLog('📝 Submitting clarification response:', rawResponse);
 
       if (!activeClarificationRef.current) {
         console.warn('No active clarification to respond to');
