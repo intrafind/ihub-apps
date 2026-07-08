@@ -211,9 +211,8 @@ class AnthropicAdapterClass extends BaseAdapter {
       url: model.url,
       method: 'POST',
       headers: {
-        ...this.createRequestHeaders(apiKey),
+        'Content-Type': 'application/json',
         'x-api-key': apiKey || '', // Anthropic uses x-api-key instead of Authorization
-        Authorization: undefined, // Remove Authorization header for Anthropic
         'anthropic-version': '2023-06-01' // TODO check if still accurate
       },
       body: requestBody
