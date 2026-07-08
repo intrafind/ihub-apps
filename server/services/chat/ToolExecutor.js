@@ -382,6 +382,10 @@ class ToolExecutor {
     let args = {};
 
     try {
+      args = JSON.parse(toolCall.function.arguments);
+    } catch {
+      // Raw string wasn't valid JSON — attempt repairs for known streaming artifacts
+      // (concatenated fragments like `{...}{...}`, or a truncated leading/trailing brace).
       let finalArgs = toolCall.function.arguments.replace(/}{/g, ',');
       try {
         args = JSON.parse(finalArgs);
@@ -400,13 +404,6 @@ class ToolExecutor {
           args = {};
         }
       }
-    } catch (error) {
-      logger.error('Failed to parse tool arguments', {
-        component: 'ToolExecutor',
-        toolId,
-        arguments: toolCall.function.arguments,
-        error: error
-      });
     }
 
     logger.info('executeToolCall invoked', {
