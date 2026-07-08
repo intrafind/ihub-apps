@@ -2,6 +2,7 @@ import PromptService from './services/PromptService.js';
 import { clients, activeRequests } from './sse.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
+import { startInactiveClientSweep } from './utils/sseChannel.js';
 import logger from './utils/logger.js';
 
 const errorHandler = new ErrorHandler();
@@ -52,38 +53,21 @@ export async function processMessageTemplates(
 }
 
 export function cleanupInactiveClients() {
-  setInterval(() => {
-    const now = new Date();
-    for (const [chatId, client] of clients.entries()) {
-      if (now - client.lastActivity > 5 * 60 * 1000) {
-        if (activeRequests.has(chatId)) {
-          try {
-            const controller = activeRequests.get(chatId);
-            controller.abort();
-            activeRequests.delete(chatId);
-          } catch (error) {
-            logger.error('Error aborting request for chat', {
-              component: 'SSE',
-              chatId,
-              error: error?.message || String(error)
-            });
-          }
-        }
-        try {
-          client.response.end();
-        } catch (endErr) {
-          // The socket may already be dead — end() can throw on an already
-          // destroyed stream. We're cleaning up anyway, so just log and
-          // continue.
-          logger.warn('Error ending inactive client response', {
-            component: 'SSE',
-            chatId,
-            error: endErr?.message || String(endErr)
-          });
-        }
-        clients.delete(chatId);
-        logger.info('Removed inactive client', { component: 'SSE', chatId });
+  startInactiveClientSweep(clients, {
+    component: 'SSE',
+    onEvict: chatId => {
+      if (!activeRequests.has(chatId)) return;
+      try {
+        const controller = activeRequests.get(chatId);
+        controller.abort();
+        activeRequests.delete(chatId);
+      } catch (error) {
+        logger.error('Error aborting request for chat', {
+          component: 'SSE',
+          chatId,
+          error: error?.message || String(error)
+        });
       }
     }
-  }, 60 * 1000);
+  });
 }

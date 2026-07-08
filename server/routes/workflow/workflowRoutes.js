@@ -17,6 +17,7 @@ import { WorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
+import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { getRootDir } from '../../pathUtils.js';
@@ -47,6 +48,7 @@ const checkWorkflowsFeature = requireFeature('workflows');
  * @type {Map<string, {response: object, lastActivity: Date}>}
  */
 const workflowClients = new Map();
+startInactiveClientSweep(workflowClients, { component: 'WorkflowRoutes' });
 
 /**
  * Filters workflows based on user permissions from groups.json.
@@ -1589,27 +1591,16 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     (req, res) => {
       const { executionId } = req.params;
 
-      // Set up SSE headers
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-
-      // Store client connection
-      workflowClients.set(executionId, {
-        response: res,
-        lastActivity: new Date()
+      const channel = createSseChannel({
+        req,
+        res,
+        id: executionId,
+        map: workflowClients,
+        component: 'WorkflowRoutes',
+        onClose: () => actionTracker.off('fire-sse', handleWorkflowEvent)
       });
-      // Pin this registration: if a fresh SSE GET reconnects on the same
-      // executionId, the Map entry is replaced. We don't want this connection's
-      // close handler to then delete the new entry (or remove the new
-      // listener) and we don't want the new connection to delete THIS entry
-      // when it registers. Identity-pinning lets the close handler bail out
-      // when it's stale.
-      const myEntry = workflowClients.get(executionId);
 
-      // Send initial connection event
-      res.write(`event: connected\ndata: ${JSON.stringify({ executionId })}\n\n`);
+      channel.send('connected', { executionId });
 
       logger.info('SSE connection established for workflow execution', {
         component: 'WorkflowRoutes',
@@ -1656,12 +1647,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return;
         }
 
-        // Update last activity timestamp
-        const client = workflowClients.get(executionId);
-        if (client) {
-          client.lastActivity = new Date();
-        }
-
         // Log event details for debugging
         logger.debug('Sending SSE event to client', {
           component: 'WorkflowRoutes',
@@ -1671,73 +1656,21 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           iteration: eventData.iteration
         });
 
-        try {
-          // Send event to client
-          res.write(`event: ${eventType}\ndata: ${JSON.stringify(eventData)}\n\n`);
+        const sent = channel.send(eventType, eventData);
 
-          // Log successful send for important events
-          if (eventType === 'workflow.node.complete' || eventType === 'workflow.complete') {
-            logger.info('SSE event sent', {
-              component: 'WorkflowRoutes',
-              executionId,
-              eventType,
-              nodeId: eventData.nodeId
-            });
-          }
-        } catch (error) {
-          logger.error('Error sending SSE event', {
+        // Log successful send for important events
+        if (sent && (eventType === 'workflow.node.complete' || eventType === 'workflow.complete')) {
+          logger.info('SSE event sent', {
             component: 'WorkflowRoutes',
             executionId,
             eventType,
-            error: error.message
+            nodeId: eventData.nodeId
           });
         }
       };
 
       // Register event handler
       actionTracker.on('fire-sse', handleWorkflowEvent);
-
-      // Send periodic heartbeat to keep connection alive
-      const heartbeatInterval = setInterval(() => {
-        // Only this connection's heartbeat operates on its own entry — if a
-        // newer SSE replaced us, stop heartbeating (the new one has its own).
-        if (workflowClients.get(executionId) !== myEntry) {
-          clearInterval(heartbeatInterval);
-          return;
-        }
-
-        try {
-          res.write(`: heartbeat\n\n`);
-        } catch (_err) {
-          clearInterval(heartbeatInterval);
-          // Only delete if this is still our entry — don't wipe a successor.
-          if (workflowClients.get(executionId) === myEntry) {
-            workflowClients.delete(executionId);
-          }
-        }
-      }, 30000); // 30 second heartbeat
-
-      // Handle client disconnect. Combined into one handler so cleanup is
-      // atomic — both the actionTracker listener removal and the Map deletion
-      // are gated by the identity check.
-      req.on('close', () => {
-        clearInterval(heartbeatInterval);
-        // Always remove THIS connection's listener — it's tied to this closure
-        // and would otherwise leak with each reconnect.
-        actionTracker.off('fire-sse', handleWorkflowEvent);
-
-        // Only remove the Map entry if it's still ours. A fresh SSE GET on
-        // the same executionId would have already replaced it; deleting now
-        // would orphan the new connection.
-        if (workflowClients.get(executionId) === myEntry) {
-          workflowClients.delete(executionId);
-        }
-
-        logger.info('SSE connection closed for workflow execution', {
-          component: 'WorkflowRoutes',
-          executionId
-        });
-      });
     }
   );
 
