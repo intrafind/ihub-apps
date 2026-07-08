@@ -6,6 +6,7 @@ import useEventSource from '../../../shared/hooks/useEventSource';
 import { sendAppChatMessage } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
+import { debugLog } from '../../../utils/debugLog';
 
 /**
  * High level hook combining chat message management with streaming
@@ -88,7 +89,7 @@ function useAppChat({
                     'error.sessionExpired',
                     'Your session has expired. Please log in again to continue.'
                   );
-                  console.log('🔐 Session expired during chat message send');
+                  debugLog('🔐 Session expired during chat message send');
                   // The authTokenExpired event should already be dispatched by the API client
                   // which will trigger the auto-redirect flow in AuthContext
                 } else {
@@ -154,7 +155,7 @@ function useAppChat({
           break;
         case 'clarification':
           if (lastMessageIdRef.current && data) {
-            console.log('📝 Clarification event received:', data);
+            debugLog('📝 Clarification event received:', data);
             // Store the clarification data and set pending state
             activeClarificationRef.current = data;
             setClarificationPending(true);
@@ -307,7 +308,7 @@ function useAppChat({
 
             // Check if this is a clarification finish reason
             if (data?.finishReason === 'clarification') {
-              console.log('📝 Done event with clarification finish reason');
+              debugLog('📝 Done event with clarification finish reason');
               // Keep the message in awaiting input state, don't mark as complete
               updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
                 ...metadata,
@@ -350,7 +351,7 @@ function useAppChat({
           // if (data?.message) {
           //   addSystemMessage('🔍 ' + data.message, false);
           // }
-          console.log('🔍 Unknown event type:', type, data);
+          debugLog('🔍 Unknown event type:', type, data);
       }
     },
     [
@@ -574,7 +575,7 @@ function useAppChat({
    */
   const submitClarificationResponse = useCallback(
     (rawResponse, params = {}) => {
-      console.log('📝 Submitting clarification response:', rawResponse);
+      debugLog('📝 Submitting clarification response:', rawResponse);
 
       if (!activeClarificationRef.current) {
         console.warn('No active clarification to respond to');
