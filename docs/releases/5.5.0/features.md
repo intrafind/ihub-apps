@@ -175,3 +175,13 @@ the URL.
 - No configuration change is required — existing OpenAI-adapter models work as configured.
 - When a request URL genuinely cannot be resolved, the error now names the offending URL (with any
   embedded secrets redacted) so misconfiguration is easier to diagnose.
+
+## Admin Tool Script Paths Are Now Validated Against Traversal
+
+The admin Tools API now validates a tool's `script` filename before reading, writing, or deleting
+it on disk. Previously a crafted or hand-edited `script` value (e.g. `../../server/server.js`)
+could make the read/update/delete script endpoints touch files outside `server/tools/`.
+
+- Reading, updating, or deleting a tool's script now rejects any path that resolves outside
+  `server/tools/`.
+- Creating or updating a tool now rejects a `script` value that isn't a bare `<name>.js` filename.

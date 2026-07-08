@@ -129,6 +129,13 @@ import {
  * `method` is the canonical reference to the exported function and must
  * survive admin round-trips.
  */
+/**
+ * Tool script filenames must be a bare `.js` filename — no path separators
+ * or `..` segments — since they are joined onto server/tools/ without
+ * further sanitization by the create/update handlers.
+ */
+const SCRIPT_FILENAME_PATTERN = /^[a-zA-Z0-9_-]+\.js$/;
+
 function filterExpandedTools(tools) {
   return tools.filter(tool => {
     if (!tool.method) return true;
@@ -356,6 +363,10 @@ export default function registerAdminToolsRoutes(app) {
         return sendBadRequest(res, 'Tool ID cannot be changed');
       }
 
+      if (updatedTool.script && !SCRIPT_FILENAME_PATTERN.test(updatedTool.script)) {
+        return sendBadRequest(res, 'Invalid script filename');
+      }
+
       // Validate OpenAPI tool definitions against their schema
       if (updatedTool.type === 'openapi') {
         const { validateOpenApiToolDef } = await import('../../validators/openApiToolDefSchema.js');
@@ -460,6 +471,10 @@ export default function registerAdminToolsRoutes(app) {
       // Validate toolId for security
       if (!validateIdForPath(newTool.id, 'tool', res)) {
         return;
+      }
+
+      if (newTool.script && !SCRIPT_FILENAME_PATTERN.test(newTool.script)) {
+        return sendBadRequest(res, 'Invalid script filename');
       }
 
       // Validate OpenAPI tool definitions against their schema
@@ -589,9 +604,15 @@ export default function registerAdminToolsRoutes(app) {
 
       // Delete the script file if it exists (only for non-special tools)
       if (tool.script && !tool.isSpecialTool && !tool.provider) {
-        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+        const scriptsBaseDir = join(rootDir, 'server', 'tools');
         try {
-          if (existsSync(scriptPath)) {
+          const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+          if (!scriptPath) {
+            logger.warn('Skipping script deletion: invalid script path', {
+              component: 'AdminTools',
+              script: tool.script
+            });
+          } else if (existsSync(scriptPath)) {
             await fs.unlink(scriptPath);
             logger.info('Deleted script file', { component: 'AdminTools', script: tool.script });
           }
@@ -787,7 +808,11 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+      const scriptsBaseDir = join(rootDir, 'server', 'tools');
+      const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+      if (!scriptPath) {
+        return sendBadRequest(res, 'Invalid script path');
+      }
 
       if (!existsSync(scriptPath)) {
         return sendNotFound(res, 'Script file');
@@ -892,7 +917,11 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+      const scriptsBaseDir = join(rootDir, 'server', 'tools');
+      const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+      if (!scriptPath) {
+        return sendBadRequest(res, 'Invalid script path');
+      }
 
       if (!existsSync(scriptPath)) {
         return sendNotFound(res, 'Script file');
