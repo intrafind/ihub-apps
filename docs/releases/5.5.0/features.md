@@ -217,3 +217,19 @@ came from the shared chat used across the platform, so any app could be affected
 - Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
+
+## Workflow Search and Quote-Validation Steps Now Use the Configured Model
+
+The query-planning ("seed plan") and quote-validation steps in workflows now honor the same model
+selection as every other step. Previously these steps silently ran on the platform's global default
+model, ignoring both the model chosen in the chat/app and the workflow's own default — so a workflow
+pinned to one model could still run parts of a run on a different one.
+
+- Affects the corpus-search planning step (used by the Stellungnahmen / law-consultation review
+  workflows) and the quote-validation step.
+- Model precedence is now consistent across workflow steps: a per-step model wins, then the model
+  selected in the chat/app, then the workflow's default model, then the global default.
+- To pin a workflow step to a specific model regardless of the chat selection, set that step's model
+  in the workflow editor; this now takes effect for the planning and quote-validation steps too.
+- No configuration or admin action required; existing workflows pick up the corrected behavior
+  automatically.

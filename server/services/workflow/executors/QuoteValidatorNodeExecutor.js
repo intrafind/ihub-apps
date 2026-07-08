@@ -46,7 +46,6 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
       recordsVar = '_records',
       coverageVar = '_coverage',
       corpusVar = '_corpus',
-      modelId,
       maxSourceChars = 30000
     } = config;
     const language = context?.language || 'en';
@@ -124,7 +123,13 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
 
         // Lazily resolve model + key on first LLM need.
         if (!model) {
-          const resolved = await this.resolveModelAndKey(modelId, language);
+          const resolved = await this.resolveModelAndKey({
+            config,
+            context,
+            state,
+            nodeId: node.id,
+            language
+          });
           if (!resolved.ok) {
             // Mark remaining quotes unvalidated and stop trying further LLM calls
             // for this run — the lack of a valid model is a run-level problem.
@@ -224,10 +229,12 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     );
   }
 
-  async resolveModelAndKey(modelId, language) {
+  async resolveModelAndKey({ config, context, state, nodeId, language }) {
     const { data: models } = configCache.getModels();
-    const model =
-      models?.find(m => m.id === modelId) || models?.find(m => m.default) || models?.[0];
+    // Shared prompt-node precedence (config.modelId → _modelOverride → workflow
+    // defaultModelId → context → global default) so quote validation runs on the
+    // same model the rest of the workflow uses, not the global default.
+    const model = this.resolveModel(models, config, context, state, nodeId);
     if (!model) {
       return { ok: false, error: 'No model available for quote validation' };
     }
