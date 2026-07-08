@@ -73,9 +73,10 @@ export class FeatureFlags {
       return value;
     }
 
-    // For non-boolean values (like objects), treat anything but explicit
-    // `false` as enabled, regardless of defaultValue.
-    return value !== false;
+    // Explicit `false` is already handled above; any other non-boolean value
+    // (objects, strings, numbers, etc.) counts as enabled, regardless of
+    // defaultValue.
+    return true;
   }
 
   /**
