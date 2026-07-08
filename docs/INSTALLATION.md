@@ -13,7 +13,6 @@ This guide provides comprehensive installation instructions for iHub Apps across
   - [Method 1: Binary Installation (Recommended for Evaluation)](#method-1-binary-installation-recommended-for-evaluation)
   - [Method 2: Docker Installation (Recommended for Production)](#method-2-docker-installation-recommended-for-production)
   - [Method 3: npm Installation (For Development)](#method-3-npm-installation-for-development)
-  - [Method 4: Electron Desktop Application](#method-4-electron-desktop-application)
 - [Post-Installation Setup](#post-installation-setup)
 - [Configuration](#configuration)
 - [Update Procedures](#update-procedures)
@@ -33,7 +32,7 @@ That's it! No dependencies, no complex setup required.
 
 ## Installation Methods Overview
 
-iHub Apps offers four installation methods designed for different use cases:
+iHub Apps offers three installation methods designed for different use cases:
 
 ### Method Comparison
 
@@ -42,7 +41,6 @@ iHub Apps offers four installation methods designed for different use cases:
 | **🚀 Binary** | Quick evaluation, demos | 2 minutes | None | Manual download | OS-level | Limited |
 | **🐳 Docker** | Production, CI/CD | 3 minutes | Docker Engine | Container restart | Full isolation | Via volumes |
 | **📦 npm** | Development, contributions | 5 minutes | Node.js, npm | Git pull | None | Full access |
-| **🖥️ Electron** | Desktop app, offline use | 5 minutes | Node.js (build) | Manual rebuild | App sandbox | Build-time |
 
 ### When to Choose Each Method
 
@@ -66,12 +64,6 @@ iHub Apps offers four installation methods designed for different use cases:
 - Want hot reloading during development
 - Are comfortable with Node.js development
 - Need access to the full source code
-
-**Choose Electron if you:**
-- Want a native desktop application experience
-- Need offline capability
-- Require system integration (notifications, file associations)
-- Prefer desktop app UX over web interface
 
 ## System Requirements
 
@@ -104,11 +96,6 @@ iHub Apps offers four installation methods designed for different use cases:
 - **Python**: 3.8+ (for some native dependencies)
 - **Build tools**: Platform-specific C++ compiler
 - **Git**: For cloning repository and updates
-
-#### Electron Application
-- **Build requirements**: Same as npm installation
-- **Runtime**: Packaged app has no external dependencies
-- **Platforms**: Windows 10+, macOS 10.15+, Ubuntu 18.04+
 
 ### Network Requirements
 
@@ -472,65 +459,6 @@ npm run prod:build    # Complete production build
 npm run build:binary  # Build standalone binary (Node.js 20+ required)
 ```
 
-### Method 4: Electron Desktop Application
-
-**Perfect for:** Desktop app experience, offline usage, system integration
-
-#### Prerequisites
-
-- Node.js 24.0+ and npm 8.0+ (same as npm installation)
-- Platform-specific build tools
-
-#### Installation Steps
-
-1. **Clone and install dependencies:**
-```bash
-git clone https://github.com/intrafind/ihub-apps.git
-cd ihub-apps
-npm run install:all
-```
-
-2. **Configure environment:**
-```bash
-cp .env.example .env
-# Edit .env with your API keys and configuration
-```
-
-3. **Run in development mode:**
-```bash
-# Start Electron app with local server
-npm run electron:dev
-```
-
-4. **Build desktop installers:**
-```bash
-# Create platform-specific installers
-npm run electron:build
-
-# Find installers in dist-electron/ directory
-ls dist-electron/
-```
-
-#### Electron Features
-
-✅ **Native desktop experience** - System tray, notifications  
-✅ **Offline capable** - Local processing when possible  
-✅ **Cross-platform** - Windows, macOS, Linux applications  
-✅ **Remote server support** - Connect to existing deployments  
-✅ **Auto-updater** - Built-in update mechanism  
-✅ **System integration** - File associations, protocol handlers  
-
-#### Remote Server Connection
-
-Connect to existing iHub Apps deployment:
-```bash
-# Set remote server URL
-export REMOTE_SERVER_URL=https://your-ihub-server.com
-
-# Start Electron app connected to remote server
-npm run electron:dev
-```
-
 ## Post-Installation Setup
 
 ### Initial Configuration
@@ -777,19 +705,6 @@ npm run install:all
 
 # Restart development server
 npm run dev
-```
-
-### Electron Application Updates
-
-```bash
-# Update source code
-git pull origin main
-
-# Update dependencies
-npm run install:all
-
-# Rebuild application
-npm run electron:build
 ```
 
 ### Version Management
@@ -1152,7 +1067,6 @@ This installation guide provides comprehensive instructions for deploying iHub A
 - **Binary** for quick evaluation and simple deployments
 - **Docker** for production environments and containerized deployments  
 - **npm** for development and customization
-- **Electron** for desktop application experience
 
 For additional help, consult the method-specific documentation or create an issue on GitHub.
 

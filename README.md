@@ -161,7 +161,7 @@ Multi-mode authentication: Anonymous, Local, OIDC (Google, Microsoft, custom), a
 
 ### 🚀 Deploy in Minutes, Scale Infinitely
 
-Standalone binary, Docker, npm, or Electron. Auto-configuration on first run. Multi-worker clustering for production. No database required.
+Standalone binary, Docker, npm, or PWA. Auto-configuration on first run. Multi-worker clustering for production. No database required.
 
 ### 🎨 Modern, Responsive Interface
 

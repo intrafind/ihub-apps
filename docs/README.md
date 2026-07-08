@@ -78,7 +78,6 @@ This book contains configuration details and user instructions for the iHub Apps
 - [React Component Feature](react-component-feature.md) - Dynamic React page rendering
 - [Server Configuration](server-config.md) - Server setup and tuning
 - [Environment Variables](environment-variables.md) - Environment configuration
-- [Electron Desktop Application](electron-app.md) - Desktop app deployment
 
 ## Operations
 
