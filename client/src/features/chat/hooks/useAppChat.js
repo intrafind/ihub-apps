@@ -272,18 +272,19 @@ function useAppChat({
           }
           break;
         case 'response.message.id':
-          // Store the iFinder message ID for feedback submission
+          // Store the iFinder message ID for feedback submission. This event
+          // is emitted before 'done', so the message is still streaming —
+          // preserve its current content and loading state and only attach
+          // the id via the shared updater (there is no standalone setMessages).
           if (data?.messageId && lastMessageIdRef.current) {
-            const currentMessages = messagesRef.current;
-            const messageIndex = currentMessages.findIndex(m => m.id === lastMessageIdRef.current);
-            if (messageIndex !== -1) {
-              const updatedMessages = [...currentMessages];
-              updatedMessages[messageIndex] = {
-                ...updatedMessages[messageIndex],
-                ifinderMessageId: data.messageId
-              };
-              setMessages(updatedMessages);
-              messagesRef.current = updatedMessages;
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            if (currentMessage) {
+              updateAssistantMessage(
+                lastMessageIdRef.current,
+                currentMessage.content || '',
+                currentMessage.loading,
+                { ifinderMessageId: data.messageId }
+              );
             }
           }
           break;
@@ -326,7 +327,6 @@ function useAppChat({
             }
           }
           setProcessing(false);
-          setSearchStatus(null);
           // Reset clarification state when done normally
           setClarificationPending(false);
           activeClarificationRef.current = null;
