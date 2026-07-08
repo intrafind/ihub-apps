@@ -77,7 +77,6 @@
     - [OpenAI-Compatible API](openai-compatible-api.md)
     - [Server Configuration](server-config.md)
     - [Environment Variables](environment-variables.md)
-    - [Electron Desktop Application](electron-app.md)
   - [Operations]()
     - [Proxy Configuration](proxy-configuration.md)
     - [Proxy Testing Guide](proxy-testing-guide.md)

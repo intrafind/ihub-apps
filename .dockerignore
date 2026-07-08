@@ -20,7 +20,6 @@ logs/
 *.log
 contents/
 concepts/
-electron/
 docker/docker-compose.*
 
 # Development and test files
@@ -95,8 +94,6 @@ rollup.config.js
 jest.config.js
 tsconfig.json
 
-# Electron specific
-electron/
 *.dmg
 *.exe
 *.deb
