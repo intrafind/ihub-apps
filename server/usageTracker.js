@@ -107,14 +107,7 @@ function migrateLegacyFeedback(feedbackObj) {
     feedbackObj.ratings[5] += good;
     feedbackObj.ratings[1] += bad;
     feedbackObj.total = legacyTotal;
-
-    // Calculate weighted average: (5*good + 1*bad) / total
-    if (feedbackObj.total > 0) {
-      const weightedSum = 5 * good + 1 * bad;
-      feedbackObj.averageRating = weightedSum / feedbackObj.total;
-    } else {
-      feedbackObj.averageRating = 0;
-    }
+    feedbackObj.averageRating = computeAverageRating(feedbackObj.ratings);
   }
 
   // Keep legacy fields for backward compatibility
@@ -169,7 +162,7 @@ function scheduleSave() {
     try {
       await saveUsage();
     } catch (error) {
-      logger.error('Failed to save usage data', { component: 'UsageTracker', error: e });
+      logger.error('Failed to save usage data', { component: 'UsageTracker', error });
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -178,6 +171,41 @@ function inc(map, key, amount) {
   if (!key) return;
   if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
   map[key] = (map[key] || 0) + amount;
+}
+
+function computeAverageRating(ratings) {
+  const totalRatings = Object.values(ratings).reduce((sum, count) => sum + count, 0);
+  if (totalRatings === 0) return 0;
+  const weightedSum = Object.entries(ratings).reduce(
+    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    0
+  );
+  return weightedSum / totalRatings;
+}
+
+function applyRating(bucket, rating) {
+  // Handle numeric ratings (1-5)
+  if (typeof rating === 'number') {
+    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
+    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
+
+    if (ratingKey >= 1 && ratingKey <= 5) {
+      bucket.ratings[ratingKey] += 1;
+      bucket.total += 1;
+      bucket.averageRating = computeAverageRating(bucket.ratings);
+
+      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
+      if (ratingKey >= 4) {
+        bucket.good += 1;
+      } else {
+        bucket.bad += 1;
+      }
+    }
+  } else {
+    // Handle legacy string format for backward compatibility
+    const legacyRating = rating === 'positive' ? 'good' : 'bad';
+    bucket[legacyRating] = (bucket[legacyRating] || 0) + 1;
+  }
 }
 
 function incFeedback(map, key, rating) {
@@ -191,43 +219,15 @@ function incFeedback(map, key, rating) {
     good: 0,
     bad: 0
   };
-
-  // Handle numeric ratings (1-5)
-  if (typeof rating === 'number') {
-    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
-    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
-
-    if (ratingKey >= 1 && ratingKey <= 5) {
-      map[key].ratings[ratingKey] += 1;
-      map[key].total += 1;
-
-      // Calculate new average rating
-      const totalRatings = Object.values(map[key].ratings).reduce((sum, count) => sum + count, 0);
-      const weightedSum = Object.entries(map[key].ratings).reduce(
-        (sum, [rating, count]) => sum + parseInt(rating) * count,
-        0
-      );
-      map[key].averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
-
-      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
-      if (ratingKey >= 4) {
-        map[key].good += 1;
-      } else {
-        map[key].bad += 1;
-      }
-    }
-  } else {
-    // Handle legacy string format for backward compatibility
-    const legacyRating = rating === 'positive' ? 'good' : 'bad';
-    map[key][legacyRating] = (map[key][legacyRating] || 0) + 1;
-  }
+  applyRating(map[key], rating);
 }
 
 export function estimateTokens(text) {
   return estimateTokensShared(text);
 }
 
-export async function recordChatRequest({
+async function recordChatMessage({
+  direction,
   userId,
   appId,
   modelId,
@@ -249,64 +249,32 @@ export async function recordChatRequest({
   inc(data.tokens.perUser, resolvedUser, tokens);
   inc(data.tokens.perApp, appId, tokens);
   inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.prompt.perUser, resolvedUser, tokens);
-  inc(data.tokens.prompt.perApp, appId, tokens);
-  inc(data.tokens.prompt.perModel, modelId, tokens);
-  inc(data.tokens.prompt, 'total', tokens);
+  const directionBucket = data.tokens[direction];
+  inc(directionBucket.perUser, resolvedUser, tokens);
+  inc(directionBucket.perApp, appId, tokens);
+  inc(directionBucket.perModel, modelId, tokens);
+  inc(directionBucket, 'total', tokens);
   if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
   data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
   recordTokenUsage(tokens);
   logUsageEvent({
-    type: 'chat_request',
+    type: direction === 'prompt' ? 'chat_request' : 'chat_response',
     userId: resolvedUser,
     appId,
     modelId,
-    promptTokens: tokens,
+    ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
     tokenSource
   });
   dirty = true;
   scheduleSave();
 }
 
-export async function recordChatResponse({
-  userId,
-  appId,
-  modelId,
-  tokens = 0,
-  tokenSource = 'estimate',
-  user
-}) {
-  await loadConfig();
-  if (!trackingEnabled) return;
-  const resolvedUser =
-    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
-  const data = await loadUsage();
-  data.messages.total += 1;
-  inc(data.messages.perUser, resolvedUser, 1);
-  inc(data.messages.perApp, appId, 1);
-  inc(data.messages.perModel, modelId, 1);
+export async function recordChatRequest(args) {
+  return recordChatMessage({ ...args, direction: 'prompt' });
+}
 
-  data.tokens.total += tokens;
-  inc(data.tokens.perUser, resolvedUser, tokens);
-  inc(data.tokens.perApp, appId, tokens);
-  inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.completion.perUser, resolvedUser, tokens);
-  inc(data.tokens.completion.perApp, appId, tokens);
-  inc(data.tokens.completion.perModel, modelId, tokens);
-  inc(data.tokens.completion, 'total', tokens);
-  if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
-  data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
-  recordTokenUsage(tokens);
-  logUsageEvent({
-    type: 'chat_response',
-    userId: resolvedUser,
-    appId,
-    modelId,
-    completionTokens: tokens,
-    tokenSource
-  });
-  dirty = true;
-  scheduleSave();
+export async function recordChatResponse(args) {
+  return recordChatMessage({ ...args, direction: 'completion' });
 }
 
 export async function recordFeedback({ userId, appId, modelId, rating, user }) {
@@ -316,38 +284,7 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
     trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
 
-  // Handle numeric ratings (1-5)
-  if (typeof rating === 'number') {
-    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
-    const ratingKey = Math.ceil(roundedRating); // Round up for indexing
-
-    if (ratingKey >= 1 && ratingKey <= 5) {
-      data.feedback.ratings[ratingKey] += 1;
-      data.feedback.total += 1;
-
-      // Calculate new average rating
-      const totalRatings = Object.values(data.feedback.ratings).reduce(
-        (sum, count) => sum + count,
-        0
-      );
-      const weightedSum = Object.entries(data.feedback.ratings).reduce(
-        (sum, [rating, count]) => sum + parseInt(rating) * count,
-        0
-      );
-      data.feedback.averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
-
-      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
-      if (ratingKey >= 4) {
-        data.feedback.good += 1;
-      } else {
-        data.feedback.bad += 1;
-      }
-    }
-  } else {
-    // Handle legacy string format for backward compatibility
-    const r = rating === 'positive' ? 'good' : 'bad';
-    data.feedback[r] += 1;
-  }
+  applyRating(data.feedback, rating);
 
   incFeedback(data.feedback.perUser, resolvedUser, rating);
   incFeedback(data.feedback.perApp, appId, rating);
