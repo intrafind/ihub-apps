@@ -73,9 +73,9 @@ export class FeatureFlags {
       return value;
     }
 
-    // For non-boolean values (like objects), check if they're truthy
-    // and not explicitly false
-    return value !== false && value !== undefined && value !== null ? defaultValue : defaultValue;
+    // For non-boolean values (like objects), treat anything but explicit
+    // `false` as enabled, regardless of defaultValue.
+    return value !== false;
   }
 
   /**
@@ -129,15 +129,4 @@ export class FeatureFlags {
 
     return value ?? defaultValue;
   }
-}
-
-/**
- * Create a FeatureFlags instance from platform configuration.
- * Convenience function for one-off checks.
- *
- * @param {Object} platformConfig - Platform configuration object
- * @returns {FeatureFlags} A new FeatureFlags instance
- */
-export function createFeatureFlags(platformConfig) {
-  return new FeatureFlags(platformConfig);
 }
