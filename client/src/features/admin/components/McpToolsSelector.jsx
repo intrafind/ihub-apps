@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
-import { fetchMcpToolCatalog } from '../../../api/api';
+import { fetchMcpToolCatalog } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**

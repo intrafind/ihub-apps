@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../shared/components/LoadingSpinner';
-import { fetchPageContent } from '../api/api';
+import { fetchPageContent } from '../api';
 import { renderMarkdown } from '../config/marked.config';
 import ReactComponentRenderer from '../shared/components/ReactComponentRenderer';
 

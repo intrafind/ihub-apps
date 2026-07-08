@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
-import { fetchApps } from '../../api/api';
+import { fetchApps } from '../../api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { createFavoriteItemHelpers } from '../../utils/favoriteItems';
 import { getRecentAppIds } from '../../utils/recentApps';
