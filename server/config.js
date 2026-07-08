@@ -22,17 +22,6 @@ const env = cleanEnv(
     CONTENTS_DIR: str({ default: 'contents', optional: true }),
     DATA_DIR: str({ default: 'data', optional: true }),
     APP_ROOT_DIR: str({ optional: true }),
-    BRAVE_SEARCH_API_KEY: str({ optional: true }),
-    BRAVE_SEARCH_ENDPOINT: str({
-      default: 'https://api.search.brave.com/res/v1/web/search',
-      optional: true
-    }),
-    OPENAI_API_KEY: str({ optional: true }),
-    ANTHROPIC_API_KEY: str({ optional: true }),
-    MISTRAL_API_KEY: str({ optional: true }),
-    GOOGLE_API_KEY: str({ optional: true }),
-    LOCAL_API_KEY: str({ optional: true }),
-    DEFAULT_API_KEY: str({ optional: true }),
     AUTH_MODE: str({ default: 'proxy', optional: true }),
     PROXY_AUTH_ENABLED: str({ optional: true }),
     PROXY_AUTH_USER_HEADER: str({ optional: true }),
@@ -41,7 +30,9 @@ const env = cleanEnv(
     PROXY_AUTH_JWT_HEADER: str({ optional: true }),
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
-    NO_PROXY: str({ optional: true })
+    NO_PROXY: str({ optional: true }),
+    USE_HTTPS: str({ default: 'false', optional: true }),
+    NODE_ENV: str({ default: 'development', optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -49,8 +40,18 @@ const env = cleanEnv(
   }
 );
 
+// Provider- and model-specific API keys (e.g. COHERE_API_KEY, GPT_4_AZURE1_API_KEY for
+// model id "gpt-4-azure1") are looked up dynamically by name in utils.js and can't be
+// enumerated in the schema above, since the set of providers/models is defined in JSON
+// config rather than known statically. Pass through only vars matching that one pattern
+// instead of the entire process environment, so undeclared/unrelated env vars stay out
+// of the exported config.
+const dynamicApiKeys = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.endsWith('_API_KEY'))
+);
+
 const config = Object.freeze({
-  ...process.env,
+  ...dynamicApiKeys,
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
@@ -61,14 +62,6 @@ const config = Object.freeze({
   CONTENTS_DIR: env.CONTENTS_DIR,
   DATA_DIR: env.DATA_DIR,
   APP_ROOT_DIR: env.APP_ROOT_DIR,
-  BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
-  BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
-  OPENAI_API_KEY: env.OPENAI_API_KEY,
-  ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-  MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-  GOOGLE_API_KEY: env.GOOGLE_API_KEY,
-  LOCAL_API_KEY: env.LOCAL_API_KEY,
-  DEFAULT_API_KEY: env.DEFAULT_API_KEY,
   AUTH_MODE: env.AUTH_MODE,
   PROXY_AUTH_ENABLED: env.PROXY_AUTH_ENABLED,
   PROXY_AUTH_USER_HEADER: env.PROXY_AUTH_USER_HEADER,
@@ -77,7 +70,9 @@ const config = Object.freeze({
   PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
-  NO_PROXY: env.NO_PROXY
+  NO_PROXY: env.NO_PROXY,
+  USE_HTTPS: env.USE_HTTPS,
+  NODE_ENV: env.NODE_ENV
 });
 
 export default config;
