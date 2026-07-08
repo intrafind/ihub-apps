@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchApps } from '../../api/api';
+import { fetchApps } from '../../api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import AppCard from './AppCard';
 import Icon from './Icon';

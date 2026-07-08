@@ -7,11 +7,12 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api/api';
+import { fetchAppDetails } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
 
@@ -364,7 +365,7 @@ function AppChat({ preloadedApp = null }) {
    */
   const shouldAutoRedirectToCanvas = useCallback(
     (response, userInput) => {
-      console.log('🔍 shouldAutoRedirectToCanvas check:', {
+      debugLog('🔍 shouldAutoRedirectToCanvas check:', {
         hasResponse: !!response,
         responseLength: response?.length || 0,
         hasUserInput: !!userInput,
@@ -375,7 +376,7 @@ function AppChat({ preloadedApp = null }) {
       if (!response || !userInput || !app) return false;
       const shouldRedirect = response.length > 200 && app?.features?.canvas === true;
 
-      console.log('📋 Auto-redirect decision:', {
+      debugLog('📋 Auto-redirect decision:', {
         shouldRedirect,
         responseLength: response.length,
         canvasEnabled: app?.features?.canvas
@@ -399,7 +400,7 @@ function AppChat({ preloadedApp = null }) {
   // Handle auto-redirect to canvas when message is completed
   const handleMessageComplete = useCallback(
     (aiResponse, userInput) => {
-      console.log('🎯 handleMessageComplete called:', {
+      debugLog('🎯 handleMessageComplete called:', {
         responseLength: aiResponse?.length || 0,
         userInput,
         canvasEnabled: app?.features?.canvas,
@@ -408,7 +409,7 @@ function AppChat({ preloadedApp = null }) {
 
       // Check if we should auto-redirect to canvas mode
       if (shouldAutoRedirectToCanvas(aiResponse, userInput)) {
-        console.log('🎨 Auto-redirecting to canvas mode with response:', {
+        debugLog('🎨 Auto-redirecting to canvas mode with response:', {
           responseLength: aiResponse?.length,
           userInput
         });
@@ -615,7 +616,7 @@ function AppChat({ preloadedApp = null }) {
       app.variables; // Variables are initialized
 
     if (shouldAutoStart) {
-      console.log('Auto-starting conversation for app:', appId);
+      debugLog('Auto-starting conversation for app:', appId);
       autoStartTriggered.current = true;
 
       // Send an empty message to trigger the LLM
@@ -820,7 +821,7 @@ function AppChat({ preloadedApp = null }) {
         // Only proceed if still mounted
         if (!isMounted) return;
 
-        console.log('Fetching app data for:', appId);
+        debugLog('Fetching app data for:', appId);
         const appData = await fetchAppDetails(appId);
 
         // Safety check for component unmounting during async operations
@@ -869,7 +870,7 @@ function AppChat({ preloadedApp = null }) {
       const savedSettings = loadAppSettings(appId);
       if (savedSettings && savedSettings.variables) {
         setVariables(savedSettings.variables);
-        console.log('Restored app variables from sessionStorage:', savedSettings.variables);
+        debugLog('Restored app variables from sessionStorage:', savedSettings.variables);
       }
     }
   }, [app, loading, appId]);
@@ -1401,7 +1402,7 @@ function AppChat({ preloadedApp = null }) {
       ...(documentId ? { documentIds: [documentId] } : {})
     };
 
-    console.log('📤 Sending message with params:', params);
+    debugLog('📤 Sending message with params:', params);
 
     // Validate variables: fall back to defaults if empty or whitespace-only
     const validatedVariables = {};

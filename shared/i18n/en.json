@@ -2070,6 +2070,66 @@
         "addComment": "Are you sure you want to add this comment?",
         "transitionTicket": "Are you sure you want to change the ticket status?"
       }
+    },
+    "page": {
+      "title": "Integrations",
+      "subtitle": "Connect your external accounts to enhance your AI applications",
+      "loading": "Loading integrations...",
+      "authRequiredTitle": "Authentication Required",
+      "authRequiredBody": "Please log in to manage your integrations.",
+      "card": {
+        "connected": "Connected",
+        "notConnected": "Not Connected",
+        "availableFeatures": "Available Features:",
+        "connectAccount": "Connect {{name}} Account",
+        "disconnect": "Disconnect",
+        "tokenExpiring": "Token expires soon - consider reconnecting"
+      },
+      "jira": {
+        "description": "Atlassian JIRA integration for ticket management and project insights",
+        "features": {
+          "search": "Search and retrieve JIRA tickets",
+          "create": "Create new tickets and issues",
+          "update": "Update existing tickets",
+          "info": "Get project and user information"
+        },
+        "connected": "JIRA account connected successfully! You can now use JIRA features in your apps.",
+        "connectionFailed": "Connection failed: {{message}}",
+        "disconnected": "JIRA account disconnected successfully",
+        "disconnectFailed": "Failed to disconnect JIRA: {{message}}",
+        "testSuccess": "JIRA connection test successful! Found {{count}} accessible tickets.",
+        "testFailed": "JIRA connection test failed: {{message}}"
+      },
+      "cloud": {
+        "description": {
+          "office365": "Microsoft Office 365 integration for cloud file access",
+          "googleDrive": "Google Drive integration for cloud file access"
+        },
+        "features": {
+          "browseOffice365": "Browse OneDrive and SharePoint files",
+          "browseGoogleDrive": "Browse Google Drive files",
+          "upload": "Upload cloud files to chats",
+          "oauth": "Secure OAuth 2.0 with PKCE"
+        },
+        "connected": "{{name}} account connected successfully! You can now select files from {{name}}.",
+        "connectionFailed": "{{name}} connection failed: {{message}}",
+        "disconnected": "{{name}} account disconnected successfully",
+        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}"
+      },
+      "office": {
+        "available": "Available",
+        "deployHint": "Deploy this manifest in Microsoft 365 Admin Center to make the add-in available to your organization.",
+        "copy": "Copy",
+        "download": "Download"
+      },
+      "empty": {
+        "title": "No Integrations Configured",
+        "body": "Contact your administrator to enable external integrations."
+      },
+      "comingSoon": {
+        "title": "More Integrations Coming Soon",
+        "body": "We're working on adding more integrations to enhance your AI applications"
+      }
     }
   },
   "workflow": {

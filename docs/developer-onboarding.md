@@ -214,7 +214,6 @@ ihub-apps/
 ├── 📁 shared/          # Code shared between client/server
 ├── 📁 docs/           # Documentation (mdBook format)
 ├── 📁 docker/         # Docker configuration
-├── 📁 electron/       # Electron app wrapper
 └── 📁 teams/          # Microsoft Teams integration
 ```
 

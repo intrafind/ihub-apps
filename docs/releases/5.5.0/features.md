@@ -185,3 +185,14 @@ could make the read/update/delete script endpoints touch files outside `server/t
 - Reading, updating, or deleting a tool's script now rejects any path that resolves outside
   `server/tools/`.
 - Creating or updating a tool now rejects a `script` value that isn't a bare `<name>.js` filename.
+
+## Chat No Longer Crashes When a Response Finishes
+
+Chat responses now complete cleanly instead of failing with an "Add-in Error" (`setSearchStatus is
+not defined`) the moment the model finished answering. The crash surfaced in the Outlook add-in but
+came from the shared chat used across the platform, so any app could be affected.
+
+- Fixes the error thrown at the end of every response, so answers now display and finalize normally.
+- Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
+  answer feedback), which previously interrupted the reply the same way.
+- No configuration or admin action required.

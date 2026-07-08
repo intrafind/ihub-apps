@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchToolsBasic } from '../../../api/api';
+import { fetchToolsBasic } from '../../../api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';

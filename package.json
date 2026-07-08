@@ -67,9 +67,6 @@
     "docker:prod:shell": "docker-compose -f docker/docker-compose.prod.yml exec ihub-app sh",
     "docker:clean": "docker system prune -f && docker volume prune -f",
     "docker:clean:all": "docker system prune -af && docker volume prune -f",
-    "// === ELECTRON ===": "",
-    "electron:dev": "concurrently \"npm run dev\" \"electron electron/main.js\"",
-    "electron:build": "npm run prod:build && electron-builder",
     "// === TESTING ===": "",
     "test:all": "npm run test:quick && npm run test:integration && npm run test:e2e",
     "test:quick": "npm run test:unit && npm run test:adapters && npm run test:token-stats",
@@ -130,8 +127,6 @@
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
-    "electron": "^42.5.2",
-    "electron-builder": "^26.15.3",
     "eslint": "^10.6.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.7.0",
@@ -159,21 +154,5 @@
       "eslint --fix",
       "prettier --write"
     ]
-  },
-  "build": {
-    "asar": true,
-    "files": [
-      "dist/**/*",
-      "electron/**/*"
-    ],
-    "mac": {
-      "target": "dmg"
-    },
-    "linux": {
-      "target": "AppImage"
-    },
-    "win": {
-      "target": "nsis"
-    }
   }
 }

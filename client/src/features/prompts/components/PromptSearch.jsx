@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Fuse from 'fuse.js';
 import Icon from '../../../shared/components/Icon';
-import { fetchPrompts } from '../../../api/api';
+import { fetchPrompts } from '../../../api';
 import { fetchSkills } from '../../../api/endpoints/skills';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentPromptIds, recordPromptUsage } from '../../../utils/recentPrompts';

@@ -18,7 +18,7 @@ import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useCanvas from '../hooks/useCanvas';
-import { fetchAppDetails } from '../../../api/api';
+import { fetchAppDetails } from '../../../api';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
 
