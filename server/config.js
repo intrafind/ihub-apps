@@ -22,17 +22,6 @@ const env = cleanEnv(
     CONTENTS_DIR: str({ default: 'contents', optional: true }),
     DATA_DIR: str({ default: 'data', optional: true }),
     APP_ROOT_DIR: str({ optional: true }),
-    BRAVE_SEARCH_API_KEY: str({ optional: true }),
-    BRAVE_SEARCH_ENDPOINT: str({
-      default: 'https://api.search.brave.com/res/v1/web/search',
-      optional: true
-    }),
-    OPENAI_API_KEY: str({ optional: true }),
-    ANTHROPIC_API_KEY: str({ optional: true }),
-    MISTRAL_API_KEY: str({ optional: true }),
-    GOOGLE_API_KEY: str({ optional: true }),
-    LOCAL_API_KEY: str({ optional: true }),
-    DEFAULT_API_KEY: str({ optional: true }),
     AUTH_MODE: str({ default: 'proxy', optional: true }),
     PROXY_AUTH_ENABLED: str({ optional: true }),
     PROXY_AUTH_USER_HEADER: str({ optional: true }),
@@ -42,17 +31,8 @@ const env = cleanEnv(
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
     NO_PROXY: str({ optional: true }),
-    JWT_SECRET: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
-    NODE_ENV: str({ default: 'development', optional: true }),
-    IASSISTANT_TIMEOUT: num({ default: 60000 }),
-    IFINDER_API_URL: str({ optional: true }),
-    IFINDER_DOWNLOAD_DIR: str({ default: '/tmp/ifinder-downloads', optional: true }),
-    IFINDER_PRIVATE_KEY: str({ optional: true }),
-    IFINDER_TIMEOUT: num({ default: 30000 }),
-    MAGIC_PROMPT_MODEL: str({ optional: true }),
-    MAGIC_PROMPT_PROMPT: str({ optional: true }),
-    SEARCH_CACHE_TTL_MS: num({ optional: true })
+    NODE_ENV: str({ default: 'development', optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -82,14 +62,6 @@ const config = Object.freeze({
   CONTENTS_DIR: env.CONTENTS_DIR,
   DATA_DIR: env.DATA_DIR,
   APP_ROOT_DIR: env.APP_ROOT_DIR,
-  BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
-  BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
-  OPENAI_API_KEY: env.OPENAI_API_KEY,
-  ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-  MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-  GOOGLE_API_KEY: env.GOOGLE_API_KEY,
-  LOCAL_API_KEY: env.LOCAL_API_KEY,
-  DEFAULT_API_KEY: env.DEFAULT_API_KEY,
   AUTH_MODE: env.AUTH_MODE,
   PROXY_AUTH_ENABLED: env.PROXY_AUTH_ENABLED,
   PROXY_AUTH_USER_HEADER: env.PROXY_AUTH_USER_HEADER,
@@ -99,17 +71,8 @@ const config = Object.freeze({
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
   NO_PROXY: env.NO_PROXY,
-  JWT_SECRET: env.JWT_SECRET,
   USE_HTTPS: env.USE_HTTPS,
-  NODE_ENV: env.NODE_ENV,
-  IASSISTANT_TIMEOUT: env.IASSISTANT_TIMEOUT,
-  IFINDER_API_URL: env.IFINDER_API_URL,
-  IFINDER_DOWNLOAD_DIR: env.IFINDER_DOWNLOAD_DIR,
-  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY,
-  IFINDER_TIMEOUT: env.IFINDER_TIMEOUT,
-  MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
-  MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
-  SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
+  NODE_ENV: env.NODE_ENV
 });
 
 export default config;
