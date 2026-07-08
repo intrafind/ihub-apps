@@ -942,9 +942,10 @@ export class WorkflowEngine {
 
     try {
       result = await this._executeWithTimeout(
-        () => executor.execute(node, updatedState, context),
+        signal => executor.execute(node, updatedState, { ...context, abortSignal: signal }),
         timeout,
-        `Node ${nodeId} execution timed out after ${timeout}ms`
+        `Node ${nodeId} execution timed out after ${timeout}ms`,
+        context.abortSignal
       );
     } catch (error) {
       // Re-throw to be handled by caller
@@ -1545,29 +1546,47 @@ export class WorkflowEngine {
 
   /**
    * Executes a function with a timeout
-   * @param {Function} fn - The async function to execute
+   * @param {Function} fn - The async function to execute; receives an AbortSignal
+   *   that fires when the timeout elapses (or the outer signal aborts) so callers
+   *   that respect it can actually tear down their in-flight work
    * @param {number} timeout - Timeout in milliseconds
    * @param {string} timeoutMessage - Error message on timeout
+   * @param {AbortSignal} [outerSignal] - Signal (e.g. workflow-level cancellation)
+   *   that should also abort the signal passed to fn
    * @returns {Promise<*>} The function result
    * @private
    */
-  async _executeWithTimeout(fn, timeout, timeoutMessage) {
-    return new Promise(async (resolve, reject) => {
-      const timeoutId = setTimeout(() => {
+  async _executeWithTimeout(fn, timeout, timeoutMessage, outerSignal) {
+    const timeoutController = new AbortController();
+    const onOuterAbort = () => timeoutController.abort();
+
+    if (outerSignal) {
+      if (outerSignal.aborted) {
+        timeoutController.abort();
+      } else {
+        outerSignal.addEventListener('abort', onOuterAbort, { once: true });
+      }
+    }
+
+    let timeoutId;
+    const timeoutPromise = new Promise((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
         const error = new Error(timeoutMessage);
         error.code = 'NODE_TIMEOUT';
+        // Settle the race with the NODE_TIMEOUT error first so callers keep
+        // seeing that contract even if fn() also rejects (e.g. because it
+        // observes the abort below) in the same tick.
         reject(error);
+        timeoutController.abort();
       }, timeout);
-
-      try {
-        const result = await fn();
-        clearTimeout(timeoutId);
-        resolve(result);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        reject(error);
-      }
     });
+
+    try {
+      return await Promise.race([fn(timeoutController.signal), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+      outerSignal?.removeEventListener('abort', onOuterAbort);
+    }
   }
 
   /**
