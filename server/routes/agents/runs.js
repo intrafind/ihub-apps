@@ -24,6 +24,7 @@ import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
+import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import logger from '../../utils/logger.js';
 
 // Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
@@ -510,6 +511,7 @@ export default function registerAgentRunRoutes(app) {
   // detail page gets live updates without forcing operators to enable the
   // workflows feature flag.
   const agentClients = new Map();
+  startInactiveClientSweep(agentClients, { component: 'AgentRuns' });
 
   app.get(
     buildServerPath('/api/agents/runs/:runId/stream'),
@@ -520,15 +522,16 @@ export default function registerAgentRunRoutes(app) {
       if (!validateIdForPath(runId, 'run', res)) return;
       if (!(await authorizeRunAccess(req, res, runId))) return;
 
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no');
+      const channel = createSseChannel({
+        req,
+        res,
+        id: runId,
+        map: agentClients,
+        component: 'AgentRuns',
+        onClose: () => actionTracker.off('fire-sse', handleEvent)
+      });
 
-      agentClients.set(runId, { response: res, lastActivity: new Date() });
-      const myEntry = agentClients.get(runId);
-
-      res.write(`event: connected\ndata: ${JSON.stringify({ runId })}\n\n`);
+      channel.send('connected', { runId });
 
       logger.info('SSE connection established for agent run', {
         component: 'AgentRuns',
@@ -586,45 +589,12 @@ export default function registerAgentRunRoutes(app) {
           (eventData.executionId && trackedIds.has(eventData.executionId));
         if (!matchesRun) return;
 
-        const client = agentClients.get(runId);
-        if (client) client.lastActivity = new Date();
-
-        try {
-          // Always tag the event with the parent runId so the client can route
-          // it consistently regardless of which (sub)workflow emitted it.
-          const payload = { ...eventData, _parentRunId: runId };
-          res.write(`event: ${eventType}\ndata: ${JSON.stringify(payload)}\n\n`);
-        } catch (error) {
-          logger.error('Error sending agent SSE event', {
-            component: 'AgentRuns',
-            runId,
-            eventType,
-            error: error.message
-          });
-        }
+        // Always tag the event with the parent runId so the client can route
+        // it consistently regardless of which (sub)workflow emitted it.
+        channel.send(eventType, { ...eventData, _parentRunId: runId });
       };
 
       actionTracker.on('fire-sse', handleEvent);
-
-      const heartbeatInterval = setInterval(() => {
-        if (agentClients.get(runId) !== myEntry) {
-          clearInterval(heartbeatInterval);
-          return;
-        }
-        try {
-          res.write(`: heartbeat\n\n`);
-        } catch (_err) {
-          clearInterval(heartbeatInterval);
-          if (agentClients.get(runId) === myEntry) agentClients.delete(runId);
-        }
-      }, 30000);
-
-      req.on('close', () => {
-        clearInterval(heartbeatInterval);
-        actionTracker.off('fire-sse', handleEvent);
-        if (agentClients.get(runId) === myEntry) agentClients.delete(runId);
-        logger.info('SSE connection closed for agent run', { component: 'AgentRuns', runId });
-      });
     }
   );
 
