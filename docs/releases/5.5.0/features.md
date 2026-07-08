@@ -186,6 +186,15 @@ could make the read/update/delete script endpoints touch files outside `server/t
   `server/tools/`.
 - Creating or updating a tool now rejects a `script` value that isn't a bare `<name>.js` filename.
 
+## Marketplace Skill Installs Now Use a Stricter Directory Boundary Check
+
+Installing a multi-file skill package from the marketplace now uses the same separator-aware
+boundary check as other content installers, closing a gap where a companion filename could
+resolve into a sibling directory that merely shared the skill's directory name as a prefix
+(e.g. `foo-evil` next to `foo`).
+
+- No admin action required; existing skill packages install exactly as before.
+
 ## Chat No Longer Crashes When a Response Finishes
 
 Chat responses now complete cleanly instead of failing with an "Add-in Error" (`setSearchStatus is
