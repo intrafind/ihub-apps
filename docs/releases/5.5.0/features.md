@@ -217,3 +217,15 @@ came from the shared chat used across the platform, so any app could be affected
 - Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
+
+## Tool Arguments Are No Longer Corrupted by a Stray Repair Step
+
+Tool calls whose arguments legitimately contained the text `}{` — for example a code snippet or a
+regular expression passed as a string value — could be silently corrupted before being handed to
+the tool, or fail to parse entirely and run with empty arguments. A repair step meant to patch
+concatenated streaming fragments was applied to every tool call before the arguments were even
+checked for validity.
+
+- Valid tool arguments are now parsed as-is; the fragment-repair heuristic only kicks in as a
+  fallback when the arguments aren't valid JSON on their own.
+- No configuration or admin action required.
