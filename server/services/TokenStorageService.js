@@ -502,34 +502,6 @@ class TokenStorageService {
   }
 
   /**
-   * List all services that have tokens for a user
-   */
-  async getUserServices(userId) {
-    try {
-      const services = [];
-      const integrationDir = await fs.readdir(this.storageBasePath);
-
-      for (const serviceName of integrationDir) {
-        const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
-        try {
-          await fs.access(tokenFile);
-          services.push(serviceName);
-        } catch (error) {
-          // File doesn't exist, skip
-        }
-      }
-
-      return services;
-    } catch (error) {
-      logger.error('Error listing user services', {
-        component: 'TokenStorage',
-        error
-      });
-      return [];
-    }
-  }
-
-  /**
    * Get token metadata without decrypting the actual tokens
    */
   async getTokenMetadata(userId, serviceName, providerId = null) {
@@ -602,8 +574,8 @@ class TokenStorageService {
 
   /**
    * Generic decryption for simple strings (e.g., API keys)
-   * Supports both new ENC[...] format and legacy base64 format
-   * @param {string} encryptedData - Encrypted data in ENC[...] format or legacy base64
+   * Supports the ENC[...] format only
+   * @param {string} encryptedData - Encrypted data in ENC[...] format
    * @returns {string} Decrypted plaintext
    */
   decryptString(encryptedData) {
@@ -671,7 +643,7 @@ class TokenStorageService {
 
   /**
    * Check if a string appears to be encrypted
-   * Supports both ENC[...] format and legacy base64 format
+   * Supports the ENC[...] format only
    * @param {string} value - The value to check
    * @returns {boolean} True if the value appears to be encrypted
    */

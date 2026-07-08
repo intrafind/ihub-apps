@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import { fetchUIConfig } from '../../api/api';
+import { fetchUIConfig } from '../../api';
 import { buildPath, buildAssetUrl } from '../../utils/runtimeBasePath';
 
 // Default header color as a fallback if config is not loaded

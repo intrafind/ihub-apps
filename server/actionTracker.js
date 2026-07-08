@@ -5,17 +5,24 @@ import logger from './utils/logger.js';
 export class ActionTracker extends EventEmitter {
   constructor() {
     super();
-    this.steps = 0;
+    this.stepCounts = new Map();
+    // Every listener attached below (InMemorySink, agents/runs.js, workflowRoutes.js,
+    // workflowRunner.js) is request/connection-scoped and pairs its on() with an off()
+    // in a cleanup path, so concurrent chats/connections legitimately exceed the
+    // default 10-listener warning threshold without leaking.
+    this.setMaxListeners(0);
   }
 
   trackAction(chatId, action = {}) {
-    this.steps += 1;
-    this.emit('fire-sse', { event: 'action', steps: this.steps, chatId, ...action });
+    const steps = (this.stepCounts.get(chatId) || 0) + 1;
+    this.stepCounts.set(chatId, steps);
+    this.emit('fire-sse', { event: 'action', steps, chatId, ...action });
   }
 
   trackError(chatId, error = {}) {
     const stacktrace = new Error().stack;
     logger.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
+    this.stepCounts.delete(chatId);
     this.emit('fire-sse', { event: 'error', chatId, ...error });
   }
 
@@ -24,10 +31,12 @@ export class ActionTracker extends EventEmitter {
   }
 
   trackDisconnected(chatId, reason = {}) {
+    this.stepCounts.delete(chatId);
     this.emit('fire-sse', { event: 'disconnected', chatId, ...reason });
   }
 
   trackDone(chatId, finishReason = {}) {
+    this.stepCounts.delete(chatId);
     this.emit('fire-sse', { event: UnifiedEvents.DONE, chatId, ...finishReason });
   }
 

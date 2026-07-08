@@ -7,7 +7,7 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api/api';
+import { fetchAppDetails } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
-import { sendAppChatMessage } from '../../../api/api';
+import { sendAppChatMessage } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';

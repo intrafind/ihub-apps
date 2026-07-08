@@ -38,7 +38,7 @@ import {
 } from '../utilities/officeCapabilities';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
-import { fetchApps } from '../../../api/api';
+import { fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import './OfficeChatPanel.css';

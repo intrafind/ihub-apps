@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { getLocalizedContent } from '../../utils/localizeContent';
-import { fetchAppDetails } from '../../api/api';
+import { fetchAppDetails } from '../../api';
 
 /**
  * DocumentTitle component manages the browser tab title dynamically

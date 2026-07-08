@@ -1,5 +1,4 @@
 import configCache from '../configCache.js';
-import { createSourceManager } from '../sources/index.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -11,14 +10,11 @@ import logger from '../utils/logger.js';
  * Key Features:
  * - Resolves source ID string references to configured sources
  * - Unifies admin and app source schemas
- * - Provides caching and error handling
+ * - Provides error handling
  */
 class SourceResolutionService {
   constructor() {
     this.configCache = configCache;
-    this.sourceManager = createSourceManager();
-    this.resolutionCache = new Map();
-    this.cacheTimeout = 5 * 60 * 1000; // 5 minutes cache TTL
   }
 
   /**
@@ -35,21 +31,6 @@ class SourceResolutionService {
         appId: app.id
       });
       return [];
-    }
-
-    // Generate cache key for resolution caching
-    const cacheKey = this.generateCacheKey(app.id, app.sources);
-
-    // Check cache first
-    if (this.resolutionCache.has(cacheKey)) {
-      const cached = this.resolutionCache.get(cacheKey);
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        logger.info('Using cached source resolution for app', {
-          component: 'SourceResolutionService',
-          appId: app.id
-        });
-        return cached.sources;
-      }
     }
 
     logger.info('Resolving source references for app', {
@@ -91,12 +72,6 @@ class SourceResolutionService {
         // Continue processing other sources
       }
     }
-
-    // Cache the resolved sources
-    this.resolutionCache.set(cacheKey, {
-      sources: resolvedSources,
-      timestamp: Date.now()
-    });
 
     logger.info('Resolved sources for app', {
       component: 'SourceResolutionService',
@@ -202,52 +177,6 @@ class SourceResolutionService {
       return value[language] || value['en'] || Object.values(value)[0] || null;
     }
     return null;
-  }
-
-  /**
-   * Generate cache key for source resolution
-   *
-   * @param {string} appId - Application ID
-   * @param {Array} sources - Source references array (all strings)
-   * @returns {string} Cache key
-   */
-  generateCacheKey(appId, sources) {
-    const sourceSignature = sources.filter(source => typeof source === 'string').join('|');
-    return `${appId}:${sourceSignature}`;
-  }
-
-  /**
-   * Clear resolution cache (useful for testing or config changes)
-   */
-  clearCache() {
-    this.resolutionCache.clear();
-    logger.info('Source resolution cache cleared', { component: 'SourceResolutionService' });
-  }
-
-  /**
-   * Get cache statistics for monitoring
-   *
-   * @returns {object} Cache statistics
-   */
-  getCacheStats() {
-    const now = Date.now();
-    let validEntries = 0;
-    let expiredEntries = 0;
-
-    for (const [_key, value] of this.resolutionCache.entries()) {
-      if (now - value.timestamp < this.cacheTimeout) {
-        validEntries++;
-      } else {
-        expiredEntries++;
-      }
-    }
-
-    return {
-      totalEntries: this.resolutionCache.size,
-      validEntries,
-      expiredEntries,
-      cacheTimeout: this.cacheTimeout
-    };
   }
 }
 
