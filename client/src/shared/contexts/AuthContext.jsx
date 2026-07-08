@@ -79,6 +79,21 @@ function authReducer(state, action) {
   }
 }
 
+// Redirect to a stored return URL after successful authentication, skipping the
+// redirect if we're already on the target page (e.g. embedded login in setup wizard).
+function redirectToReturnUrl(logContext) {
+  const returnUrl = sessionStorage.getItem('authReturnUrl');
+  if (!returnUrl) return;
+
+  sessionStorage.removeItem('authReturnUrl');
+  const currentPath = window.location.pathname;
+  const returnPath = new URL(returnUrl, window.location.origin).pathname;
+  if (currentPath !== returnPath) {
+    console.log(`↩️ Redirecting to stored return URL after ${logContext}:`, returnUrl);
+    window.location.href = returnUrl;
+  }
+}
+
 // Create context
 const AuthContext = createContext();
 
@@ -237,18 +252,7 @@ export function AuthProvider({ children }) {
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
 
         // Check for stored return URL and redirect (for all auth methods)
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after token login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
+        redirectToReturnUrl('token login');
 
         return { success: true };
       } else {
@@ -407,17 +411,12 @@ export function AuthProvider({ children }) {
     };
   }, [handleOidcCallback, loadAuthStatus]);
 
-  // Login with username/password using local authentication only
-  const loginLocal = async (username, password) => {
+  // Shared login flow for username/password based auth methods (local, LDAP)
+  const loginWithCredentials = async (endpoint, requestBody, errorContext) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
-      const requestBody = {
-        username,
-        password
-      };
-
-      const response = await apiClient.post('/auth/local/login', requestBody);
+      const response = await apiClient.post(endpoint, requestBody);
 
       const data = response.data;
 
@@ -444,18 +443,7 @@ export function AuthProvider({ children }) {
         await loadAuthStatus();
 
         // Check for stored return URL and redirect
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
+        redirectToReturnUrl('login');
 
         return { success: true };
       } else {
@@ -464,82 +452,28 @@ export function AuthProvider({ children }) {
         return { success: false, error };
       }
     } catch (error) {
-      console.error('Local login error:', error);
+      console.error(`${errorContext} error:`, error);
       // Extract the error message from the response
-      const errorMessage = error.response?.data?.error || error.message || 'Local login failed';
+      const errorMessage = error.response?.data?.error || error.message || `${errorContext} failed`;
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
   };
 
+  // Login with username/password using local authentication only
+  const loginLocal = async (username, password) =>
+    loginWithCredentials('/auth/local/login', { username, password }, 'Local login');
+
   // Login with username/password using LDAP authentication only
   const loginLdap = async (username, password, provider = null) => {
-    try {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+    const requestBody = { username, password };
 
-      const requestBody = {
-        username,
-        password
-      };
-
-      // Add provider if specified (for LDAP provider selection)
-      if (provider) {
-        requestBody.provider = provider;
-      }
-
-      const response = await apiClient.post('/auth/ldap/login', requestBody);
-
-      const data = response.data;
-
-      if (data.success) {
-        // Token is set as HTTP-only cookie by the server for security (XSS protection)
-        // Store token in localStorage only if provided (for backward compatibility)
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-        }
-
-        // Clear any existing cached data to prevent permission leakage
-        try {
-          const { clearApiCache } = await import('../../api/utils/cache');
-          clearApiCache();
-        } catch (error) {
-          // Cache clearing is optional, don't fail login
-          console.warn('Could not clear API cache on login:', error);
-        }
-
-        // Set user
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
-
-        // Refresh auth status to ensure all components are updated
-        await loadAuthStatus();
-
-        // Check for stored return URL and redirect
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
-
-        return { success: true };
-      } else {
-        const error = data.error || 'Login failed';
-        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
-        return { success: false, error };
-      }
-    } catch (error) {
-      console.error('LDAP login error:', error);
-      // Extract the error message from the response
-      const errorMessage = error.response?.data?.error || error.message || 'LDAP login failed';
-      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      return { success: false, error: errorMessage };
+    // Add provider if specified (for LDAP provider selection)
+    if (provider) {
+      requestBody.provider = provider;
     }
+
+    return loginWithCredentials('/auth/ldap/login', requestBody, 'LDAP login');
   };
 
   // OIDC login - redirect to provider
@@ -578,7 +512,7 @@ export function AuthProvider({ children }) {
       console.error('Logout API error:', error);
     } finally {
       // Comprehensive cleanup
-      performLogoutCleanup();
+      await performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
 
       // Redirect to apps home page with logout parameter to prevent auto redirect
@@ -588,7 +522,7 @@ export function AuthProvider({ children }) {
   };
 
   // Comprehensive logout cleanup function
-  const performLogoutCleanup = () => {
+  const performLogoutCleanup = async () => {
     try {
       // Clear authentication token
       localStorage.removeItem('authToken');
@@ -602,7 +536,7 @@ export function AuthProvider({ children }) {
 
       // Clear API cache if available
       try {
-        const { clearApiCache } = require('../../api/utils/cache');
+        const { clearApiCache } = await import('../../api/utils/cache');
         clearApiCache();
       } catch (error) {
         // Cache clearing is optional, don't fail logout
