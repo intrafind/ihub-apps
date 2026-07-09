@@ -1249,6 +1249,16 @@ class ToolExecutor {
         actionTracker.trackError(chatId, { ...errMsg });
       }
 
+      // Every successful exit path above (no-tool-call turn, clarification,
+      // passthrough, or continueWithToolExecution's own paths) already emits a
+      // terminal 'done' event before returning, so reaching this catch means
+      // none did. Without this, a failed tool-loop request leaves the client
+      // stream open with no terminal event at all (see StreamingHandler's
+      // doneEmitted guard for the equivalent non-tool-calling path).
+      actionTracker.trackDone(chatId, {
+        finishReason: error.name === 'AbortError' ? 'connection_closed' : 'error'
+      });
+
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }
@@ -1565,31 +1575,13 @@ class ToolExecutor {
       } catch (error) {
         clearTimeout(timeoutId);
 
-        if (error.name !== 'AbortError') {
-          const errorDetails = getErrorDetails(error, model);
-          let localizedMessage = errorDetails.message;
-
-          if (error.code) {
-            const translated = await getLocalizedError(error.code, {}, clientLanguage);
-            if (translated && !translated.startsWith('Error:')) {
-              localizedMessage = translated;
-            }
-          }
-
-          const errMsg = {
-            message: localizedMessage,
-            code: error.code || errorDetails.code,
-            details: error.details || error.message
-          };
-
-          actionTracker.trackError(chatId, { ...errMsg });
-        }
-
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);
         }
         // Clear source bookkeeping so a failed turn can't leak sources into the
-        // next turn on this chatId. The caller handles the error/done event.
+        // next turn on this chatId. The caller (processChatWithTools) is the
+        // single place that tracks the error/done event for this failure —
+        // tracking it here too would emit a duplicate 'error' event.
         this.resetKnowledgeSources(chatId);
         throw error; // Re-throw to let the calling method handle it
       }
