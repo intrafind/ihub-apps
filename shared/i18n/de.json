@@ -421,6 +421,7 @@
     "markdown": "Markdown",
     "plainText": "Klartext",
     "json": "JSON",
+    "html": "HTML",
     "toolsSettings": "Werkzeuge",
     "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
     "imageGeneration": "Bilderzeugungseinstellungen",

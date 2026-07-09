@@ -20,6 +20,13 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from './formValidationContext';
 
+// parseInt/parseFloat return NaN for cleared/invalid input; NaN serializes to
+// null in JSON and is rejected by the strict server schema, so fall back to undefined.
+function parseNumberOrUndefined(value, parser = parseFloat) {
+  const n = parser(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /**
  * AppFormEditor - Form-based editor for app configuration
  * This component contains all the form fields for editing app configuration
@@ -549,7 +556,10 @@ function AppFormEditor({
                     step="0.1"
                     value={app.preferredTemperature || 0.7}
                     onChange={e =>
-                      handleInputChange('preferredTemperature', parseFloat(e.target.value))
+                      handleInputChange(
+                        'preferredTemperature',
+                        parseNumberOrUndefined(e.target.value)
+                      )
                     }
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
@@ -567,6 +577,7 @@ function AppFormEditor({
                     <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
                     <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
                     <option value="json">{t('appConfig.json', 'JSON')}</option>
+                    <option value="html">{t('appConfig.html', 'HTML')}</option>
                   </select>
                 </div>
 
@@ -1741,7 +1752,10 @@ function AppFormEditor({
                                       ...app.upload,
                                       imageUpload: {
                                         ...app.upload.imageUpload,
-                                        maxFileSizeMB: parseInt(e.target.value)
+                                        maxFileSizeMB: parseNumberOrUndefined(
+                                          e.target.value,
+                                          parseInt
+                                        )
                                       }
                                     })
                                   }
@@ -1843,7 +1857,10 @@ function AppFormEditor({
                                       ...app.upload,
                                       fileUpload: {
                                         ...app.upload.fileUpload,
-                                        maxFileSizeMB: parseInt(e.target.value)
+                                        maxFileSizeMB: parseNumberOrUndefined(
+                                          e.target.value,
+                                          parseInt
+                                        )
                                       }
                                     })
                                   }
@@ -1925,7 +1942,10 @@ function AppFormEditor({
                                       ...app.upload,
                                       audioUpload: {
                                         ...app.upload.audioUpload,
-                                        maxFileSizeMB: parseInt(e.target.value)
+                                        maxFileSizeMB: parseNumberOrUndefined(
+                                          e.target.value,
+                                          parseInt
+                                        )
                                       }
                                     })
                                   }
@@ -2250,7 +2270,7 @@ function AppFormEditor({
                           onChange={e =>
                             handleInputChange('inputMode', {
                               ...app.inputMode,
-                              rows: parseInt(e.target.value)
+                              rows: parseNumberOrUndefined(e.target.value, parseInt)
                             })
                           }
                           className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
