@@ -21,13 +21,19 @@ import { debugLog } from '../../../utils/debugLog';
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
  * @param {boolean} options.ephemeral - When true, chat is never persisted to browser storage
  *   and no conversationId is stored.
+ * @param {Function} [options.getAuthHeaders] - Forwarded to useEventSource; lets a host
+ *   adapter (e.g. Office) supply its own SSE auth headers.
+ * @param {Function} [options.onUnauthorized] - Forwarded to useEventSource; lets a host
+ *   adapter attempt a silent token refresh on a 401 and request a retry.
  */
 function useAppChat({
   appId,
   chatId: initialChatId,
   onMessageComplete,
   persistConversationId = true,
-  ephemeral = false
+  ephemeral = false,
+  getAuthHeaders,
+  onUnauthorized
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
@@ -370,7 +376,9 @@ function useAppChat({
     appId,
     chatId: chatId,
     onEvent: handleEvent,
-    onProcessingChange: setProcessing
+    onProcessingChange: setProcessing,
+    getAuthHeaders,
+    onUnauthorized
   });
 
   // Store cleanup function in ref for access in callbacks
