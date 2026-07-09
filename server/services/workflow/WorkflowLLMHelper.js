@@ -566,24 +566,28 @@ export class WorkflowLLMHelper {
           usage = result.usage;
         }
 
-        // Capture grounding metadata (Gemini native googleSearch). Each
-        // chunk may carry partial metadata; merge groundingChunks across
-        // chunks so we don't drop URLs.
+        // Capture native-web-search grounding metadata. Each chunk may carry
+        // partial metadata — Gemini splits groundingChunks across chunks, and
+        // Anthropic streams one citations_delta / web_search_tool_result per
+        // event — so merge every known array shape instead of keeping only
+        // the first chunk's arrays.
         if (result.groundingMetadata) {
           if (!groundingMetadata) {
             groundingMetadata = { ...result.groundingMetadata };
           } else {
-            if (Array.isArray(result.groundingMetadata.groundingChunks)) {
-              groundingMetadata.groundingChunks = [
-                ...(groundingMetadata.groundingChunks || []),
-                ...result.groundingMetadata.groundingChunks
-              ];
-            }
-            if (Array.isArray(result.groundingMetadata.webSearchQueries)) {
-              groundingMetadata.webSearchQueries = [
-                ...(groundingMetadata.webSearchQueries || []),
-                ...result.groundingMetadata.webSearchQueries
-              ];
+            // groundingChunks/webSearchQueries: Google; searchResults/citations: Anthropic
+            for (const key of [
+              'groundingChunks',
+              'webSearchQueries',
+              'searchResults',
+              'citations'
+            ]) {
+              if (Array.isArray(result.groundingMetadata[key])) {
+                groundingMetadata[key] = [
+                  ...(groundingMetadata[key] || []),
+                  ...result.groundingMetadata[key]
+                ];
+              }
             }
           }
         }

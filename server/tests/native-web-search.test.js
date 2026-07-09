@@ -17,6 +17,7 @@ import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
 import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
+import { WorkflowLLMHelper } from '../services/workflow/WorkflowLLMHelper.js';
 
 describe('resolveNativeWebSearchProvider', () => {
   it('returns a provider directive for google, openai-responses, and anthropic', () => {
@@ -356,5 +357,139 @@ describe('convertAnthropicResponseToGeneric - native web search response handlin
     assert.ok(result.groundingMetadata);
     assert.strictEqual(result.groundingMetadata.searchResults.length, 1);
     assert.strictEqual(result.groundingMetadata.citations.length, 1);
+  });
+});
+
+describe('WorkflowLLMHelper.processStreamingResponse — grounding metadata accumulation', () => {
+  /** Build a fake fetch Response streaming the given events as SSE. */
+  function sseResponse(events) {
+    const payload = events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
+    return {
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload));
+          controller.close();
+        }
+      })
+    };
+  }
+
+  it('merges Anthropic searchResults and citations arriving across many chunks', async () => {
+    // Anthropic streams one web_search_tool_result block per search and one
+    // citations_delta per citation — the accumulator must merge them all, not
+    // keep only the arrays from the first metadata-bearing chunk.
+    const events = [
+      { type: 'message_start', message: { id: 'msg_1', role: 'assistant' } },
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+          type: 'server_tool_use',
+          id: 'srvtoolu_1',
+          name: 'web_search',
+          input: {}
+        }
+      },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_1',
+          content: [
+            { type: 'web_search_result', url: 'https://a.example', title: 'A' },
+            { type: 'web_search_result', url: 'https://b.example', title: 'B' }
+          ]
+        }
+      },
+      {
+        type: 'content_block_delta',
+        index: 2,
+        delta: { type: 'text_delta', text: 'Answer with sources.' }
+      },
+      {
+        type: 'content_block_delta',
+        index: 2,
+        delta: {
+          type: 'citations_delta',
+          citation: {
+            type: 'web_search_result_location',
+            url: 'https://a.example',
+            title: 'A',
+            cited_text: 'quote a'
+          }
+        }
+      },
+      {
+        type: 'content_block_delta',
+        index: 2,
+        delta: {
+          type: 'citations_delta',
+          citation: {
+            type: 'web_search_result_location',
+            url: 'https://b.example',
+            title: 'B',
+            cited_text: 'quote b'
+          }
+        }
+      },
+      {
+        type: 'content_block_start',
+        index: 3,
+        content_block: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_2',
+          content: [{ type: 'web_search_result', url: 'https://c.example', title: 'C' }]
+        }
+      },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5 } },
+      { type: 'message_stop' }
+    ];
+
+    const helper = new WorkflowLLMHelper();
+    const collected = await helper.processStreamingResponse(sseResponse(events), {
+      provider: 'anthropic'
+    });
+
+    assert.strictEqual(collected.content, 'Answer with sources.');
+    assert.ok(collected.groundingMetadata);
+    assert.deepStrictEqual(
+      collected.groundingMetadata.searchResults.map(r => r.url),
+      ['https://a.example', 'https://b.example', 'https://c.example']
+    );
+    assert.deepStrictEqual(
+      collected.groundingMetadata.citations.map(c => c.url),
+      ['https://a.example', 'https://b.example']
+    );
+  });
+
+  it('still merges Gemini groundingChunks split across chunks', async () => {
+    const chunk = (uri, title) => ({
+      candidates: [
+        {
+          content: { parts: [{ text: '' }], role: 'model' },
+          groundingMetadata: {
+            groundingChunks: [{ web: { uri, title } }],
+            webSearchQueries: [`q ${title}`]
+          }
+        }
+      ]
+    });
+    const finish = {
+      candidates: [{ content: { parts: [{ text: 'done' }], role: 'model' }, finishReason: 'STOP' }]
+    };
+
+    const helper = new WorkflowLLMHelper();
+    const collected = await helper.processStreamingResponse(
+      sseResponse([chunk('https://g1.example', 'G1'), chunk('https://g2.example', 'G2'), finish]),
+      { provider: 'google' }
+    );
+
+    assert.ok(collected.groundingMetadata);
+    assert.deepStrictEqual(
+      collected.groundingMetadata.groundingChunks.map(c => c.web.uri),
+      ['https://g1.example', 'https://g2.example']
+    );
+    assert.deepStrictEqual(collected.groundingMetadata.webSearchQueries, ['q G1', 'q G2']);
   });
 });

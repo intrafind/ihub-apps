@@ -656,8 +656,8 @@ Each task should be independently executable by an AI agent.
 Return a structured JSON plan.`;
 
     // Per-task tool selection guidance — important on Gemini, harmless on
-    // other providers. On Gemini, the `webSearch` tool (native grounding,
-    // swapped to googleSearch at runtime) is mutually exclusive with all
+    // other providers. On Gemini, the `webSearch` marker (resolved to native
+    // Google Search grounding at request time) is mutually exclusive with all
     // function tools (memory writes, app calls, create_task, …). If a task
     // is assigned BOTH on the same step, every function tool is silently
     // dropped. The planner is the only place we can prevent that — once a
