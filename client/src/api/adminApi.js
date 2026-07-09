@@ -1,5 +1,4 @@
 import { apiClient } from './client.js';
-import { buildPath } from '../utils/runtimeBasePath';
 
 const isPlainObjectForBody = value =>
   value !== null &&
@@ -91,11 +90,15 @@ export const makeAdminApiCall = async (url, options = {}) => {
         // Dispatching is idempotent: handleTokenExpired guards against re-entry
         // and the auth gate won't re-show while it is already visible.
         window.dispatchEvent(new CustomEvent('authTokenExpired'));
-      } else if (window.location.pathname.startsWith('/admin')) {
-        // 403: authenticated but lacking admin permission. Send the user to the
-        // admin root, which renders an "Admin Access Required" message.
-        window.location.href = buildPath('/admin');
       }
+      // 403 (authenticated but not permitted for THIS endpoint) is intentionally
+      // NOT handled with a redirect. Entry to the admin area is already gated by
+      // AdminLayout via /admin/auth/status; individual endpoints are permission-
+      // scoped (e.g. content admins may call /admin/apps but not /admin/usage).
+      // A hard `window.location` redirect here caused an infinite reload loop for
+      // content admins: the Overview page fires full-admin-only calls that 403,
+      // the redirect reloaded /admin, which re-fired them, and so on (issue #1923).
+      // Let the 403 propagate so the calling component can handle it locally.
     }
     throw error;
   }
