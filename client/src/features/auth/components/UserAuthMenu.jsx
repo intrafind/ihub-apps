@@ -117,8 +117,12 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
     setShowAllGroups(false);
   };
 
-  // Use the backend-calculated isAdmin flag instead of hardcoded group names
+  // Use the backend-calculated isAdmin flag instead of hardcoded group names.
+  // Content admins (permissions.contentAdmin) aren't full admins (isAdmin) but
+  // must still reach the admin area to manage apps/prompts/sources (issue #1923).
   const isAdmin = user?.isAdmin === true;
+  const isContentAdmin = user?.permissions?.contentAdmin === true;
+  const canAccessAdmin = isAdmin || isContentAdmin;
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -268,7 +272,7 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
                   )}
 
                 {/* Admin Panel */}
-                {isAdmin && (
+                {canAccessAdmin && (
                   <Link
                     to="/admin"
                     role="menuitem"

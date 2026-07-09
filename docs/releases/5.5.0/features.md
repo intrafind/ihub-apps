@@ -281,3 +281,17 @@ right group and harder to introduce typos.
 - On the user editor, entries that do not match a defined group are highlighted so you can spot a
   mistyped group at a glance.
 - No admin action is required — the change is purely in the admin UI.
+
+## Content Admins Can Now Use the Admin Area
+
+Members of the **Content Admins** group (the `contentAdmin` permission, without full admin access)
+can now open and use the admin area to manage Apps, Prompts, and Sources. Previously they had no
+way in: the **Admin Panel** link was missing from the user menu, and opening `/admin` directly
+trapped the page in an endless reload loop.
+
+- The **Admin Panel** link now appears in the user menu for content admins, not just full admins.
+- Opening `/admin` no longer reloads endlessly. A per-request permission denial (403) on an
+  admin-only endpoint is now handled where it happens instead of hard-redirecting the whole page.
+- Content admins get a focused admin experience: the sidebar and the overview dashboard show only
+  Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
+- No admin action is required — the fix takes effect automatically on upgrade.
