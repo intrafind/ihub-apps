@@ -9,6 +9,7 @@ import {
 } from '../../../utils/schemaValidation';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from './formValidationContext';
+import GroupMultiSelect from './GroupMultiSelect';
 
 /**
  * UserFormEditor - Form-based editor for user configuration
@@ -18,7 +19,8 @@ function UserFormEditor({
   onChange,
   onValidationChange,
   isNewUser = false,
-  jsonSchema
+  jsonSchema,
+  availableGroups = []
 }) {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
@@ -117,12 +119,7 @@ function UserFormEditor({
     onChange(updatedUser);
   };
 
-  const handleGroupsChange = groupsString => {
-    const groupsArray = groupsString
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-
+  const handleGroupsChange = groupsArray => {
     handleInputChange('internalGroups', groupsArray);
   };
 
@@ -423,45 +420,26 @@ function UserFormEditor({
                 {t('admin.users.groupMembership', 'Group Membership')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Assign this user to groups to control their permissions and access levels
+                {t(
+                  'admin.users.groupMembershipDescription',
+                  'Assign this user to groups to control their permissions and access levels'
+                )}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Groups (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={(user.internalGroups || []).join(', ')}
-                  onChange={e => handleGroupsChange(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="admin, users, editors"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Enter group names separated by commas. Users inherit permissions from all assigned
-                  groups.
-                </p>
-
-                {user.internalGroups && user.internalGroups.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Current Groups:
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {user.internalGroups.map((group, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                        >
-                          <Icon name="users" size="xs" className="mr-1" />
-                          {group}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+              <GroupMultiSelect
+                id="user-internal-groups"
+                label={t('admin.users.groups', 'Groups')}
+                value={user.internalGroups || []}
+                onChange={handleGroupsChange}
+                availableGroups={availableGroups}
+                placeholder={t('admin.users.groupsPlaceholder', 'Search groups or type a name…')}
+                emptyMessage={t('admin.users.groupsEmpty', 'No groups assigned yet')}
+                helpText={t(
+                  'admin.users.groupsHelp',
+                  'Search and select defined groups, or type a name and press Enter to add an external group mapping. Users inherit permissions from all assigned groups.'
                 )}
-              </div>
+              />
             </div>
           </div>
         </div>

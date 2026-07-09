@@ -410,6 +410,36 @@
     }
   },
   "admin": {
+    "voiceInput": {
+      "title": "Voice Input (Speech-to-Text)",
+      "description": "Configure the speech-to-text backends available to apps. Enable a backend here, then select it per app under the app editor’s Speech Recognition Service.",
+      "loadError": "Failed to load voice input settings",
+      "saveSuccess": "Voice input settings saved.",
+      "saveError": "Failed to save voice input settings",
+      "realtime": {
+        "title": "vLLM Realtime (server-proxied)",
+        "description": "Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Select \"vLLM Realtime\" as an app’s Speech Recognition Service to use it.",
+        "enabled": "Enable vLLM realtime transcription",
+        "url": "Realtime WebSocket URL",
+        "model": "Model",
+        "apiKey": "API Key (optional)",
+        "apiKeyPlaceholder": "Leave blank if none",
+        "apiKeyHint": "Stored encrypted at rest. Local vLLM usually needs no key. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testHint": "Tests connectivity from the iHub server to the vLLM realtime endpoint using the values above (the saved key is used when the field shows ***REDACTED***)."
+      },
+      "azure": {
+        "title": "Azure Speech",
+        "description": "Azure Cognitive Services Speech runs in the browser via a short-lived token. The subscription key is stored encrypted on the server and exchanged for a token per session, so it never reaches the browser. Host/region are the defaults used when an app does not set its own host.",
+        "enabled": "Enable Azure Speech",
+        "host": "Default host / endpoint",
+        "region": "Region",
+        "subscriptionKey": "Subscription Key",
+        "subscriptionKeyPlaceholder": "Azure Speech key",
+        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it."
+      }
+    },
     "agents": {
       "memory": {
         "builder": {
@@ -1202,7 +1232,13 @@
         "cancel": "Cancel",
         "save": "Save User",
         "saving": "Saving..."
-      }
+      },
+      "groups": "Groups",
+      "groupsPlaceholder": "Search groups or type a name…",
+      "groupsEmpty": "No groups assigned yet",
+      "groupsHelp": "Search and select defined groups, or type a name and press Enter to add an external group mapping. Users inherit permissions from all assigned groups.",
+      "groupMembership": "Group Membership",
+      "groupMembershipDescription": "Assign this user to groups to control their permissions and access levels"
     },
     "logging": {
       "loadError": "Failed to load logging configuration",
@@ -1258,7 +1294,8 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "mcpServers": "MCP servers",
-      "telemetry": "Telemetry"
+      "telemetry": "Telemetry",
+      "voiceInput": "Voice Input"
     },
     "mcp": {
       "common": {
@@ -1593,6 +1630,24 @@
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
         }
       }
+    },
+    "groupSelect": {
+      "placeholder": "Search groups or type a name…",
+      "empty": "No groups selected yet",
+      "knownGroup": "Defined group",
+      "customGroup": "Not a defined group — treated as an external group mapping",
+      "addCustom": "Add \"{{name}}\"",
+      "remove": "Remove {{name}}",
+      "noMatches": "No matching groups",
+      "startTyping": "Start typing to search groups…"
+    },
+    "groups": {
+      "externalMappings": "External Group Mappings",
+      "externalMappingsDescription": "Map external groups from OIDC, LDAP, or other providers to this internal group",
+      "externalGroupNames": "External Group Names",
+      "externalMappingsPlaceholder": "Type a group name and press Enter…",
+      "externalMappingsEmpty": "No external mappings yet",
+      "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group."
     }
   },
   "cloudStorage": {
@@ -1793,6 +1848,7 @@
     "markdown": "Markdown",
     "plainText": "Plain text",
     "json": "JSON",
+    "html": "HTML",
     "toolsSettings": "Tools",
     "toolsSettingsHelp": "Enable or disable individual tools for this session",
     "imageGeneration": "Image Generation Settings",
@@ -2437,12 +2493,14 @@
     "tooltipManual": "Voice input (Ctrl+M) - manual",
     "tooltipAutomatic": "Voice input (Ctrl+M) - automatic",
     "ariaLabel": "Toggle voice input",
+    "errorTitle": "Voice input error",
     "error": {
       "notSupported": "Speech recognition not supported in this browser",
       "permissionDenied": "Please allow microphone access and try again.",
       "noSpeech": "No speech detected. Please try again.",
       "noMicrophone": "No microphone found. Please check your device settings.",
       "network": "Network error. Please check your connection.",
+      "service": "Transcription service unavailable. Please try again.",
       "general": "Voice input error. Please try again.",
       "startError": "Error starting voice input. Please try again."
     }

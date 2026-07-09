@@ -483,9 +483,11 @@ function AppChat({ preloadedApp = null }) {
     if (shouldAutoSend && !autoSendTriggered.current && prefillMessage && app && !processing) {
       autoSendTriggered.current = true;
 
-      // Clean up the send parameter from URL
+      // Clean up the send and prefill parameters from URL so a later reload
+      // doesn't repopulate the input with the already-sent message
       const newSearch = new URLSearchParams(searchParams);
       newSearch.delete('send');
+      newSearch.delete('prefill');
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
 
       // Trigger the form submission after a short delay to ensure everything is initialized

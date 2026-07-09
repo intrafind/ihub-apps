@@ -674,6 +674,12 @@ export default function registerAuthRoutes(app) {
               name: req.user.name,
               email: req.user.email,
               groups: req.user.groups,
+              // Expose resolved permissions so the client can distinguish a
+              // content admin (permissions.contentAdmin) from a full admin
+              // (isAdmin). Without this the admin sidebar can't filter its
+              // sections and the user menu can't show the admin link for
+              // content-admin-only users (issue #1923). Mirrors /api/auth/user.
+              permissions: req.user.permissions,
               isAdmin: req.user.isAdmin,
               authMethod: req.user.authMethod
             }

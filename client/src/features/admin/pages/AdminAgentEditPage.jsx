@@ -109,8 +109,10 @@ export default function AdminAgentEditPage() {
   const { profileId } = useParams();
   const isNew = !profileId || profileId === 'new';
 
-  const [profile, setProfile] = useState(BLANK_PROFILE);
-  const [initialData, setInitialData] = useState(isNew ? BLANK_PROFILE : null);
+  const [profile, setProfile] = useState(() => structuredClone(BLANK_PROFILE));
+  const [initialData, setInitialData] = useState(() =>
+    isNew ? structuredClone(BLANK_PROFILE) : null
+  );
   const [models, setModels] = useState([]);
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(!isNew);
@@ -144,7 +146,7 @@ export default function AdminAgentEditPage() {
         // editing an older profile.
         const mergedProfile = { ...BLANK_PROFILE, ...loaded };
         setProfile(mergedProfile);
-        setInitialData(mergedProfile);
+        setInitialData(structuredClone(mergedProfile));
       } catch (err) {
         setError(err.message);
       } finally {
@@ -231,7 +233,7 @@ export default function AdminAgentEditPage() {
     setError(null);
     setSaving(true);
     try {
-      const payload = { ...profile };
+      const payload = structuredClone(profile);
       const name = cleanLocalized(payload.name);
       if (!name || Object.keys(name).length === 0) {
         setError(t('admin.agents.edit.nameRequired', 'Name is required (at least one language).'));
