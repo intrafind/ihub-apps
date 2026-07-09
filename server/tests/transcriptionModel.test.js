@@ -12,7 +12,8 @@ import { getTranscriptionProvider } from '../transcription/index.js';
 import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
 import {
   resolveTranscriptionUpstream,
-  hasEnabledTranscriptionModel
+  hasEnabledTranscriptionModel,
+  extractTranscriptText
 } from '../websocket/realtimeTranscription.js';
 import configCache from '../configCache.js';
 
@@ -94,6 +95,31 @@ describe('appConfigSchema — videoUpload / transcription blocks', () => {
     expect(r.data.transcription.streaming).toBe(true);
     expect(r.data.transcription.maxDurationSeconds).toBe(900);
     expect(r.data.transcription.inputs).toEqual({ upload: true, record: true, video: true });
+  });
+});
+
+describe('extractTranscriptText', () => {
+  test('reads the documented delta/done fields', () => {
+    expect(extractTranscriptText({ type: 'transcription.delta', delta: 'he' }, ['delta'])).toBe('he');
+    expect(extractTranscriptText({ type: 'transcription.done', text: 'hello' }, ['text'])).toBe(
+      'hello'
+    );
+  });
+
+  test('tolerates field-name variants (text on a delta frame)', () => {
+    expect(
+      extractTranscriptText({ type: 'transcription.delta', text: 'hi' }, ['delta', 'text'])
+    ).toBe('hi');
+    expect(extractTranscriptText({ transcript: 'yo' }, ['delta', 'text', 'transcript'])).toBe('yo');
+  });
+
+  test('reads a nested .text field', () => {
+    expect(extractTranscriptText({ delta: { text: 'nested' } }, ['delta'])).toBe('nested');
+  });
+
+  test('returns empty string when no text field is present', () => {
+    expect(extractTranscriptText({ type: 'session.created' })).toBe('');
+    expect(extractTranscriptText({})).toBe('');
   });
 });
 

@@ -334,6 +334,27 @@ export function diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, r
   return null;
 }
 
+/**
+ * Extract the transcript text from a vLLM realtime transcription frame,
+ * tolerating field-name variants across vLLM versions. The documented shapes
+ * are `transcription.delta` → `{ delta }` and `transcription.done` → `{ text }`,
+ * but some builds use `text` on delta or nest it under `.text`, so we look
+ * across the known field names (in preference order for the given event) and
+ * fall back to a nested `.text`.
+ *
+ * @param {Object} msg - Parsed upstream JSON frame.
+ * @param {string[]} [preferred] - Field names to try first, in order.
+ * @returns {string}
+ */
+export function extractTranscriptText(msg = {}, preferred = ['delta', 'text', 'transcript']) {
+  for (const field of preferred) {
+    const val = msg[field];
+    if (typeof val === 'string' && val.length) return val;
+    if (val && typeof val === 'object' && typeof val.text === 'string') return val.text;
+  }
+  return '';
+}
+
 function sendJson(ws, obj) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
@@ -512,22 +533,32 @@ function bridgeConnection(clientWs, user, limiter) {
       } catch {
         return; // vLLM realtime frames are JSON; ignore anything else
       }
-      logger.debug('Realtime STT: upstream message', {
-        component: 'RealtimeSTT',
-        userId: user.id,
-        upstreamType: msg.type
-      });
       switch (msg.type) {
-        case 'transcription.delta':
+        case 'transcription.delta': {
           gotTranscription = true;
-          sendJson(clientWs, { type: 'delta', text: msg.delta || '' });
+          const text = extractTranscriptText(msg, ['delta', 'text', 'transcript']);
+          logger.debug('Realtime STT: transcription.delta', {
+            component: 'RealtimeSTT',
+            userId: user.id,
+            textLen: text.length,
+            keys: Object.keys(msg)
+          });
+          sendJson(clientWs, { type: 'delta', text });
           // A file blasted at once can produce many segments after `stop`;
           // keep the completion window open while segments are still arriving.
           if (stopRequested) armPostStopSettle();
           break;
-        case 'transcription.done':
+        }
+        case 'transcription.done': {
           gotTranscription = true;
-          sendJson(clientWs, { type: 'final', text: msg.text || '' });
+          const text = extractTranscriptText(msg, ['text', 'transcript', 'delta']);
+          logger.debug('Realtime STT: transcription.done', {
+            component: 'RealtimeSTT',
+            userId: user.id,
+            textLen: text.length,
+            keys: Object.keys(msg)
+          });
+          sendJson(clientWs, { type: 'final', text });
           // Completion signaling (G8): vLLM emits one transcription.done per VAD
           // segment, and a whole file streamed faster than realtime produces
           // several after `stop`. Closing on the FIRST would truncate the
@@ -536,6 +567,15 @@ function bridgeConnection(clientWs, user, limiter) {
           // upstream has gone quiet. Dictation clients ignore the `done` frame
           // (default switch branch), so this stays backward-compatible.
           if (stopRequested) armPostStopSettle();
+          break;
+        }
+        case 'session.created':
+        case 'session.updated':
+          logger.debug('Realtime STT: upstream control frame', {
+            component: 'RealtimeSTT',
+            userId: user.id,
+            upstreamType: msg.type
+          });
           break;
         case 'error':
           notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
