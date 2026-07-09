@@ -10,7 +10,7 @@ import {
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in

@@ -18,7 +18,7 @@ import {
 } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 
 // parseInt/parseFloat return NaN for cleared/invalid input; NaN serializes to
 // null in JSON and is rejected by the strict server schema, so fall back to undefined.

@@ -1,7 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { checkAppChatStatus, stopAppChatStream } from '../../api';
 import { parseSseStream } from '../utils/parseSseStream';
-import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/office/api/officeAuth';
 
 /**
  * Hook for handling Server Sent Events via fetch + ReadableStream.
@@ -17,8 +16,22 @@ import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/off
  * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
  * @param {Function} options.onEvent - Called for each SSE event: ({ type, data, fullContent })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
+ * @param {Function} [options.getAuthHeaders] - Returns auth headers object for the SSE fetch.
+ *   Defaults to reading `authToken` from localStorage. Callers with their own token
+ *   lifecycle (e.g. the Office add-in) can supply their own.
+ * @param {Function} [options.onUnauthorized] - Called when the SSE fetch returns 401.
+ *   Should attempt a silent refresh and return `true` to retry the request once,
+ *   or `false`/undefined to report the 401 as a terminal error. Defaults to no-op.
  */
-function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
+function useEventSource({
+  appId,
+  chatId,
+  timeoutDuration = 60000,
+  onEvent,
+  onProcessingChange,
+  getAuthHeaders: getAuthHeadersOption,
+  onUnauthorized
+}) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
   // Exposed as eventSourceRef for backward-compatible isConnected check by callers
@@ -93,15 +106,14 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
 
   /**
    * Build auth headers for the SSE fetch request.
-   * Mirrors the behavior of apiClient's request interceptor:
-   * - Reads `authToken` from localStorage (main app session)
-   * - Falls back to `office_ihubtoken` (Office add-in PKCE token)
+   * Default mirrors apiClient's request interceptor: reads `authToken` from
+   * localStorage (main app session). Callers may override via options.
    */
-  const getAuthHeaders = useCallback(() => {
-    const token =
-      localStorage.getItem('office_ihubtoken') || localStorage.getItem('authToken') || null;
+  const defaultGetAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('authToken') || null;
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
+  const getAuthHeaders = getAuthHeadersOption || defaultGetAuthHeaders;
 
   /**
    * Open the SSE stream to the given URL.
@@ -158,13 +170,9 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
           signal: ac.signal
         });
 
-        // For the Office add-in: attempt a silent token refresh on 401 and retry once.
-        // Keyed off getRefreshToken() so the refresh is attempted even when the
-        // access token is already gone (expired and removed) but a refresh token exists.
-        // refreshTokenOrExpireSession() invokes the session-expired callback and throws
-        // if the refresh itself fails, letting the outer catch report the error.
-        if (res.status === 401 && getRefreshToken()) {
-          await refreshTokenOrExpireSession();
+        // On 401, let the caller attempt a silent token refresh (e.g. the Office
+        // add-in's PKCE refresh flow) and retry once if it reports success.
+        if (res.status === 401 && onUnauthorized && (await onUnauthorized())) {
           res = await fetch(url, {
             method: 'GET',
             headers: {
@@ -272,7 +280,8 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       onEvent,
       startHeartbeat,
       timeoutDuration,
-      getAuthHeaders
+      getAuthHeaders,
+      onUnauthorized
     ]
   );
 

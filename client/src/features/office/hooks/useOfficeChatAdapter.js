@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
+import { getRefreshToken, refreshTokenOrExpireSession, OFFICE_TOKEN_KEY } from '../api/officeAuth';
 import {
   combineUserTextWithEmailContext,
   combineUserTextWithAppointmentContext,
@@ -58,7 +59,25 @@ function combineUploadData(manualData, mailData) {
  * @param {Function} [options.onMessageComplete] - Forwarded to useAppChat
  */
 function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
-  const chat = useAppChat({ appId, chatId, onMessageComplete });
+  // Mirrors apiClient's request interceptor for the Office add-in: prefers the
+  // PKCE-issued Office token, falling back to the main app session token.
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem(OFFICE_TOKEN_KEY) || localStorage.getItem('authToken');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
+
+  // Attempt a silent token refresh on a 401 and let useEventSource retry once.
+  // Keyed off getRefreshToken() so the refresh is attempted even when the access
+  // token is already gone (expired and removed) but a refresh token exists.
+  // refreshTokenOrExpireSession() invokes the session-expired callback and throws
+  // if the refresh itself fails, letting useEventSource's outer catch report it.
+  const onUnauthorized = useCallback(async () => {
+    if (!getRefreshToken()) return false;
+    await refreshTokenOrExpireSession();
+    return true;
+  }, []);
+
+  const chat = useAppChat({ appId, chatId, onMessageComplete, getAuthHeaders, onUnauthorized });
   const host = useEmbeddedHost();
 
   const sendMessage = useCallback(
