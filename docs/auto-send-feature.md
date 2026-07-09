@@ -222,8 +222,8 @@ Both the `send` and `prefill` parameters should be automatically removed once th
 ## Technical Details
 
 For technical implementation details, see:
-- [Concept Document](../concepts/auto-send-feature/2026-02-02%20auto-send-query-parameter.md)
-- [Implementation Summary](../concepts/auto-send-feature/IMPLEMENTATION_SUMMARY_AUTO_SEND.md)
+- [Concept Document](../concepts/archive/auto-send-feature/2026-02-02%20auto-send-query-parameter.md)
+- [Implementation Summary](../concepts/archive/auto-send-feature/IMPLEMENTATION_SUMMARY_AUTO_SEND.md)
 
 ## Related Features
 
