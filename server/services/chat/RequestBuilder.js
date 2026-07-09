@@ -1,6 +1,6 @@
 import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
-import { getToolsForApp } from '../../toolLoader.js';
+import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import logger from '../../utils/logger.js';
@@ -349,6 +349,7 @@ class RequestBuilder {
         websearchEnabled
       };
       const tools = await getToolsForApp(app, language, context);
+      const nativeWebSearch = resolveAppNativeWebSearch(app, model.provider, websearchEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
@@ -381,6 +382,7 @@ class RequestBuilder {
         maxTokens: finalTokens,
         stream: !!clientRes,
         tools,
+        nativeWebSearch,
         responseFormat: outputFormat,
         responseSchema: app.outputSchema,
         user,

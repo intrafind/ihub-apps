@@ -1800,7 +1800,7 @@
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
         "websearchUseNative": "Native Suche verwenden",
-        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI)",
+        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
         "websearchExtractContent": "Inhalt extrahieren",
         "websearchExtractContentDesc": "Vollständigen Seiteninhalt aus Suchergebnissen abrufen und extrahieren",

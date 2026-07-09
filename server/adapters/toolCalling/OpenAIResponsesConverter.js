@@ -83,30 +83,17 @@ function addStrictModeToSchema(schema) {
 
 /**
  * Convert generic tools to OpenAI Responses API format
- * Filters out provider-specific special tools from other providers (googleSearch, etc.)
+ * Filters out provider-specific special tools from other providers (googleSearch, etc.) —
+ * OpenAI's own native web search tool is injected directly by the adapter (see
+ * openai-responses.js), not routed through this generic tool-calling pipeline.
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} OpenAI Responses API formatted tools
  */
 export function convertGenericToolsToOpenaiResponses(genericTools = []) {
-  const tools = [];
-  const functionTools = [];
-  let webSearchTool = null;
-
-  // Check if webSearch is present
-  const hasWebSearch = genericTools.some(t => t.id === 'webSearch');
-  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'googleSearch'];
-
-  // Single pass to separate web search from regular tools
-  for (const tool of genericTools) {
-    // Handle webSearch specially
-    if (tool.id === 'webSearch') {
-      webSearchTool = tool;
-      continue;
-    }
+  const functionTools = genericTools.filter(tool => {
     // If tool specifies this provider (or compatible), always include it
     if (tool.provider === 'openai-responses' || tool.provider === 'openai') {
-      functionTools.push(tool);
-      continue;
+      return true;
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
@@ -115,7 +102,7 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
         toolId: tool.id || tool.name,
         provider: tool.provider
       });
-      continue;
+      return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
@@ -123,45 +110,13 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
         component: 'OpenAIResponsesConverter',
         toolId: tool.id || tool.name
       });
-      continue;
-    }
-    // If webSearch is present, filter out other web search tools (but not webSearch itself)
-    if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
-      logger.info('Filtering out web search tool because native webSearch is available', {
-        component: 'OpenAIResponsesConverter',
-        toolId: tool.id
-      });
-      continue;
+      return false;
     }
     // Universal tool - include it
-    functionTools.push(tool);
-  }
+    return true;
+  });
 
-  // Add web search if present
-  if (webSearchTool) {
-    const webSearchConfig = { type: 'web_search' };
-
-    // Add optional parameters if provided in tool metadata
-    // Note: These are typically set at the app level, not per-invocation
-    if (webSearchTool.filters?.allowed_domains) {
-      webSearchConfig.filters = {
-        allowed_domains: webSearchTool.filters.allowed_domains
-      };
-    }
-
-    if (webSearchTool.user_location) {
-      webSearchConfig.user_location = webSearchTool.user_location;
-    }
-
-    if (webSearchTool.external_web_access !== undefined) {
-      webSearchConfig.external_web_access = webSearchTool.external_web_access;
-    }
-
-    tools.push(webSearchConfig);
-  }
-
-  // Add regular function tools
-  const regularTools = functionTools.map(tool => {
+  return functionTools.map(tool => {
     const sanitizedParams = sanitizeSchemaForProvider(tool.parameters, 'openai-responses');
     const strictParams = addStrictModeToSchema(sanitizedParams);
 
@@ -173,10 +128,6 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
       strict: true // Explicitly enable strict mode for tool calling
     };
   });
-
-  tools.push(...regularTools);
-
-  return tools;
 }
 
 /**
