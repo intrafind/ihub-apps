@@ -345,9 +345,12 @@ function extractResourceType(source) {
  * Helper function to create a schema validation function
  * @param {Object} schema - Zod schema object
  * @param {Array} knownKeys - Array of known valid keys
+ * @param {Object} [lenientSchema] - Same schema with unknown keys passed through instead of
+ *   rejected. Used as a fallback when `schema` fails validation only because of a stray/unknown
+ *   key, so Zod defaults are still applied instead of silently falling back to the raw item.
  * @returns {Function} Schema validation function that returns the validated/parsed item
  */
-export function createSchemaValidator(schema, knownKeys = []) {
+export function createSchemaValidator(schema, knownKeys = [], lenientSchema) {
   return function (item, source) {
     const resourceType = extractResourceType(source);
     const resourceId = item.id || 'unknown';
@@ -357,19 +360,34 @@ export function createSchemaValidator(schema, knownKeys = []) {
     // Validate with schema if provided
     if (schema) {
       const result = schema.safeParse(item);
-      if (!result.success) {
+      if (result.success) {
+        // Apply the parsed data which includes Zod defaults
+        validatedItem = result.data;
+      } else {
         const messages = result.error.errors
           .map(e => `${e.path.join('.')}: ${e.message}`)
           .join('; ');
-        logger.warn('Resource validation issues', {
-          component: 'ResourceLoader',
-          resourceType,
-          resourceId,
-          messages
-        });
-      } else {
-        // Apply the parsed data which includes Zod defaults
-        validatedItem = result.data;
+
+        const lenientResult = lenientSchema?.safeParse(item);
+        if (lenientResult?.success) {
+          // Strict validation failed only because of unknown/legacy keys - fall back to the
+          // lenient parse so defaults still apply, and keep the unknown keys around (the
+          // separate knownKeys check below will warn about them).
+          validatedItem = lenientResult.data;
+          logger.warn('Resource has unknown/invalid keys; applied defaults via lenient fallback', {
+            component: 'ResourceLoader',
+            resourceType,
+            resourceId,
+            messages
+          });
+        } else {
+          logger.warn('Resource validation issues', {
+            component: 'ResourceLoader',
+            resourceType,
+            resourceId,
+            messages
+          });
+        }
       }
     }
 

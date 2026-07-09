@@ -1,5 +1,9 @@
 import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
-import { appConfigSchema, knownAppKeys } from './validators/appConfigSchema.js';
+import {
+  appConfigSchema,
+  appConfigSchemaLenient,
+  knownAppKeys
+} from './validators/appConfigSchema.js';
 
 /**
  * Enhanced Apps Loader Service
@@ -15,7 +19,7 @@ const appsLoader = createResourceLoader({
   resourceName: 'Apps',
   legacyPath: 'config/apps.json',
   individualPath: 'apps',
-  validateItem: createSchemaValidator(appConfigSchema, knownAppKeys)
+  validateItem: createSchemaValidator(appConfigSchema, knownAppKeys, appConfigSchemaLenient)
 });
 
 /**
