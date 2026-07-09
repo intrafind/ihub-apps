@@ -22,7 +22,7 @@ class SourceDependencyTracker {
    */
   static getSourceUsage(sourceId) {
     try {
-      const apps = configCache.getApps() || [];
+      const { data: apps = [] } = configCache.getApps() || {};
       const usedBy = [];
 
       for (const app of apps) {
@@ -168,7 +168,7 @@ class SourceDependencyTracker {
   static getAllSourceDependencies() {
     try {
       const { data: sources } = configCache.getSources() || { data: [] };
-      const apps = configCache.getApps() || [];
+      const { data: apps = [] } = configCache.getApps() || {};
       const dependencies = {};
 
       // Initialize dependency map
@@ -304,7 +304,7 @@ class SourceDependencyTracker {
   static findOrphanedSources() {
     try {
       const { data: adminSources } = configCache.getSources() || { data: [] };
-      const apps = configCache.getApps() || [];
+      const { data: apps = [] } = configCache.getApps() || {};
       const adminSourceIds = new Set(adminSources.map(s => s.id));
       const orphaned = [];
 
