@@ -1,5 +1,15 @@
 # Features — 5.5.0
 
+## Agent Profile Editor No Longer Corrupts Shared State on Save
+
+Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
+page.
+
+- Creating a new agent no longer strips fields (like planner/synthesizer system prompts) from the
+  blank template used for subsequent "New Agent" sessions.
+- If a save fails, the editor no longer mistakenly reports the form as "no unsaved changes,"
+  preventing accidental loss of edits when navigating away.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
@@ -218,6 +228,44 @@ came from the shared chat used across the platform, so any app could be affected
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
 
+## Workflow Search and Quote-Validation Steps Now Use the Configured Model
+
+The query-planning ("seed plan") and quote-validation steps in workflows now honor the same model
+selection as every other step. Previously these steps silently ran on the platform's global default
+model, ignoring both the model chosen in the chat/app and the workflow's own default — so a workflow
+pinned to one model could still run parts of a run on a different one.
+
+- Affects the corpus-search planning step (used by the Stellungnahmen / law-consultation review
+  workflows) and the quote-validation step.
+- Model precedence is now consistent across workflow steps: a per-step model wins, then the model
+  selected in the chat/app, then the workflow's default model, then the global default.
+- To pin a workflow step to a specific model regardless of the chat selection, set that step's model
+  in the workflow editor; this now takes effect for the planning and quote-validation steps too.
+- No configuration or admin action required; existing workflows pick up the corrected behavior
+  automatically.
+  
+## App Editor No Longer Corrupts Numeric Fields When Cleared, and Supports HTML Output Format
+
+Clearing a numeric field (Temperature, upload file-size limits, textarea rows) in the app editor
+form previously left an invalid value in the saved configuration, which could cause the save to be
+rejected by the server without a clear reason. The Output Format dropdown was also missing the
+`html` option, so apps configured for HTML output silently displayed and re-saved as Markdown.
+
+- Clearing a numeric field now omits it from the saved config instead of storing an invalid value.
+- The Output Format dropdown now includes `HTML`, matching what the server already accepts.
+
+## Usage Statistics No Longer Lose Events During Cleanup
+
+The hourly usage-data retention cleanup could silently drop token-usage events that were flushed
+to disk at the same moment cleanup ran, causing usage/billing numbers in the admin dashboard to
+undercount without any error being logged.
+
+- Cleanup and the periodic flush of pending usage events are now serialized so an in-flight flush
+  can never be overwritten by a concurrent cleanup pass.
+- Flush and cleanup failures are now actually logged instead of throwing an unrelated internal
+  error that masked the real cause.
+- No configuration or admin action required.
+
 ## Realtime Voice Input via Self-Hosted vLLM (Voxtral)
 
 Apps can now use a new speech-to-text backend that streams microphone audio to the iHub
@@ -268,6 +316,21 @@ stream always ends with a proper terminal event.
 
 - No admin action required.
 
+## Auto-Send Links Now Survive Login and No Longer Leave a Stale Message Behind
+
+Answer links built with the documented `?prefill={message}&send=true` pattern are now reliable in
+two previously broken cases:
+
+- **Already logged in:** once the message auto-sends, both `prefill` and `send` are now removed
+  from the URL. Previously only `send` was removed, so a later reload of the same link
+  re-populated the chat input with the already-sent message and left it looking unsent.
+- **Logged out with SSO auto-redirect enabled:** the `prefill`/`send` parameters now survive the
+  OIDC/NTLM login round trip instead of being dropped, so the message still auto-sends after
+  signing in.
+
+Applies to shared support/FAQ links, ticket-reply templates, and any other one-click "answer link"
+workflow built on the auto-send feature. No configuration or admin action required.
+
 ## Outlook Add-in: Manifest Download Restored
 
 Downloading the Outlook add-in manifest works again. The manifest endpoint had started returning a
@@ -275,4 +338,32 @@ server error, which blocked installing or sideloading the add-in.
 
 - The generated manifest now uses the correct localized add-in name, task-pane button label, and
   description, with English defaults and German (`de-DE`) overrides.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Group Assignment Is Now a Searchable Picker
+
+Assigning groups on the user editor and adding external group mappings on the group editor now use
+a searchable picker instead of a plain comma-separated text field, so it is easier to pick the
+right group and harder to introduce typos.
+
+- Start typing to search your defined groups by name or id and add them with a click or the Enter
+  key; selected groups appear as removable chips.
+- You can still type a name that is not a defined group and press Enter to add it — needed for
+  external identity-provider group names used in mappings.
+- On the user editor, entries that do not match a defined group are highlighted so you can spot a
+  mistyped group at a glance.
+- No admin action is required — the change is purely in the admin UI.
+
+## Content Admins Can Now Use the Admin Area
+
+Members of the **Content Admins** group (the `contentAdmin` permission, without full admin access)
+can now open and use the admin area to manage Apps, Prompts, and Sources. Previously they had no
+way in: the **Admin Panel** link was missing from the user menu, and opening `/admin` directly
+trapped the page in an endless reload loop.
+
+- The **Admin Panel** link now appears in the user menu for content admins, not just full admins.
+- Opening `/admin` no longer reloads endlessly. A per-request permission denial (403) on an
+  admin-only endpoint is now handled where it happens instead of hard-redirecting the whole page.
+- Content admins get a focused admin experience: the sidebar and the overview dashboard show only
+  Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.

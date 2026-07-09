@@ -21,6 +21,7 @@ function AdminUserEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
 
   const isNewUser = userId === 'new';
 
@@ -31,6 +32,7 @@ function AdminUserEditPage() {
 
   useEffect(() => {
     loadSchema();
+    loadGroups();
 
     if (isNewUser) {
       // Initialize new user with generated ID
@@ -84,6 +86,16 @@ function AdminUserEditPage() {
       setJsonSchema(schema);
     } catch (error) {
       console.error('Failed to load user schema:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -244,7 +256,8 @@ function AdminUserEditPage() {
             formComponent={UserFormEditor}
             formProps={{
               isNewUser,
-              jsonSchema
+              jsonSchema,
+              availableGroups
             }}
             jsonSchema={jsonSchema}
             title={

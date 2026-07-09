@@ -884,9 +884,10 @@
   // Resolve the returnUrl to forward to OIDC/NTLM. If the current URL already
   // carries a returnUrl query parameter (e.g. from /api/oauth/authorize
   // redirecting to /login?returnUrl=...), preserve it so the post-auth flow
-  // lands back on the original request. Falls back to the current URL minus
-  // its query string. Same-origin only to avoid open-redirect via the auth
-  // provider.
+  // lands back on the original request. Otherwise falls back to the current
+  // URL including its query string, so params like ?prefill=...&send=true
+  // (auto-send links) survive an OIDC/NTLM round trip for logged-out users.
+  // Same-origin only to avoid open-redirect via the auth provider.
   function getEffectiveReturnUrl() {
     try {
       var params = new URLSearchParams(window.location.search);
@@ -904,7 +905,7 @@
     } catch (e) {
       /* ignore */
     }
-    return window.location.href.split('?')[0];
+    return window.location.href;
   }
 
   // =========================================================================

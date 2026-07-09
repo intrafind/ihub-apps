@@ -357,6 +357,69 @@ export class BaseNodeExecutor {
   }
 
   /**
+   * Resolve which model an LLM node should run on, using the SAME precedence as
+   * `prompt` nodes (`PromptNodeExecutor`). This is the shared default for every
+   * executor that calls an LLM; it is what makes `query-plan`, `quote-validator`
+   * and `prompt` nodes agree on model selection instead of each rolling its own
+   * (which previously left `query-plan`/`quote-validator` ignoring both the
+   * chat-selected model and the workflow-level default).
+   *
+   * Precedence (first match wins):
+   *   1. Node-level model — explicit `config.modelId`, else the DURABLE per-node
+   *      agent model (`_agentModelConfig.nodeModels[nodeId]`). A non-empty
+   *      `config.modelId` short-circuits before the durable lookup, matching the
+   *      prompt node exactly.
+   *   2. `_modelOverride` — the chat/app-selected model, injected into initial
+   *      data by `workflowRunner`. This is why the app's model overrides the
+   *      workflow's `defaultModelId` on chat-triggered runs.
+   *   3. Workflow-level `config.defaultModelId`, else the durable RUN-WIDE agent
+   *      default (`_agentModelConfig.defaultModelId`).
+   *   4. Execution-context model (`context.modelId`).
+   *   5. Global default (`models.find(m => m.default)`), else the first model.
+   *
+   * Pure w.r.t. config I/O — `models` is passed in, so this is unit-testable
+   * without mocking `configCache`. Returns null only when no models exist.
+   *
+   * NOTE: `VerifierNodeExecutor` intentionally overrides this with a different
+   * order (workflow default ahead of the durable per-node override); do not
+   * assume every node shares this exact precedence.
+   *
+   * @param {Array<Object>} models - Enabled model list (from configCache.getModels())
+   * @param {Object} [config] - Node config (may carry `modelId`)
+   * @param {Object} [context] - Execution context (carries `workflow.config`, `modelId`)
+   * @param {Object} [state] - Workflow state (reads `_modelOverride`, `_agentModelConfig`)
+   * @param {string} [nodeId] - Node id, for the per-node durable override lookup
+   * @returns {Object|null} Resolved model object, or null if no models are available
+   */
+  resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {
+    if (!Array.isArray(models) || models.length === 0) return null;
+    const byId = id => (id ? models.find(m => m.id === id) : undefined);
+
+    // 1. Node-level model: explicit config.modelId, else the durable per-node
+    //    agent model. `config.modelId || …` matches the prompt node — a set-but-
+    //    invalid config.modelId falls through to _modelOverride, NOT to durable.
+    const nodeModel = byId(config?.modelId || this.resolveConfiguredModelId(state, nodeId));
+    if (nodeModel) return nodeModel;
+
+    // 2. Chat/app-selected model, injected as _modelOverride by workflowRunner.
+    const overrideModel = byId(state?.data?._modelOverride);
+    if (overrideModel) return overrideModel;
+
+    // 3. Workflow-level default, else the durable run-wide agent default.
+    const workflowModel = byId(
+      context?.workflow?.config?.defaultModelId || this.resolveConfiguredModelId(state)
+    );
+    if (workflowModel) return workflowModel;
+
+    // 4. Execution-context model.
+    const contextModel = byId(context?.modelId);
+    if (contextModel) return contextModel;
+
+    // 5. Global default.
+    return models.find(m => m.default) || models[0] || null;
+  }
+
+  /**
    * Build the state updates that record a node's step transcript for auditing,
    * preserving EVERY iteration instead of overwriting.
    *
