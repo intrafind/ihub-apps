@@ -9,7 +9,8 @@
     "azure": {
       "enabled": false,
       "host": "",
-      "region": ""
+      "region": "",
+      "subscriptionKey": ""
     }
   },
   "skills": {

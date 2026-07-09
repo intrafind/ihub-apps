@@ -217,7 +217,9 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       const usesTextEventShape = recognition.usesTextEventShape === true;
 
       if (recognition instanceof AzureSpeechRecognition) {
-        recognition.initRecognizer();
+        // Async: fetches a short-lived Azure token from the server before
+        // building the recognizer (the subscription key stays server-side).
+        await recognition.initRecognizer();
       }
 
       recognition.onstart = () => {

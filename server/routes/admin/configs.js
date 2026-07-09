@@ -243,6 +243,17 @@ export default function registerAdminConfigRoutes(app) {
         };
       }
 
+      // Sanitize the Azure Speech subscription key (server-side secret).
+      if (sanitizedConfig.speech?.azure?.subscriptionKey) {
+        sanitizedConfig.speech = {
+          ...sanitizedConfig.speech,
+          azure: {
+            ...sanitizedConfig.speech.azure,
+            subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
+          }
+        };
+      }
+
       // Sanitize proxy auth JWT provider secrets
       if (sanitizedConfig.proxyAuth?.jwtProviders) {
         sanitizedConfig.proxyAuth = {
@@ -343,6 +354,17 @@ export default function registerAdminConfigRoutes(app) {
           existingConfig.speech?.realtime?.apiKey
         );
         mergedConfig.speech.realtime.apiKey = encryptSecretIfNeeded(restored);
+      }
+
+      // Azure Speech subscription key: same restore-or-encrypt handling.
+      if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
+        if (!mergedConfig.speech) mergedConfig.speech = {};
+        if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
+        const restored = restoreSecretIfRedacted(
+          newConfig.speech.azure.subscriptionKey,
+          existingConfig.speech?.azure?.subscriptionKey
+        );
+        mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
       }
 
       // Save to file

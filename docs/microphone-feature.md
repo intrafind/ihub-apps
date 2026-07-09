@@ -76,12 +76,20 @@ Admins can configure the platform-level speech backends under **Admin → Voice 
 (`/admin/voice-input`) instead of editing `platform.json` by hand:
 
 - **vLLM Realtime** — enable/disable, WebSocket URL, model, and an optional API key
-  (stored encrypted at rest; a localhost vLLM usually needs none).
-- **Azure Speech** — enable/disable, default host/endpoint, and region. The Azure
-  subscription **key** is provided via the `VITE_AZURE_SUBSCRIPTION_ID` environment
-  variable (baked into the client at build time) and is intentionally **not** stored in
-  platform config. When an app selects the Azure service without its own
+  (stored encrypted at rest; a localhost vLLM usually needs none). Optional resource
+  guards live alongside these under `speech.realtime`: `maxConnections` (global cap,
+  default 50), `maxConnectionsPerUser` (default 3), and `maxFrameBytes` (max inbound
+  audio frame, default 256 KB). The proxy also opens the upstream vLLM socket only on
+  the first audio frame and closes idle / no-audio connections automatically.
+- **Azure Speech** — enable/disable, default host/endpoint, region, and the subscription
+  **key**. The key is stored **encrypted at rest** on the server and exchanged for a
+  short-lived authorization token per session via `/api/voice/azure/token`, so it never
+  reaches the browser. When an app selects the Azure service without its own
   `settings.speechRecognition.host`, it falls back to the platform host configured here.
+
+  > **Migrating from `VITE_AZURE_SUBSCRIPTION_ID`:** earlier builds baked the Azure key
+  > into the client bundle via this env var. It is no longer used — set the key under
+  > **Admin → Voice Input** (`speech.azure.subscriptionKey`) instead.
 
 Per-app selection of which backend to use still happens in the app editor's
 **Speech Recognition Service** dropdown.

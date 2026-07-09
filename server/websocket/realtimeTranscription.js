@@ -9,6 +9,15 @@
  * stay server-side (`platform.speech.realtime`); the browser never talks to vLLM
  * directly.
  *
+ * Resource guards (a transcription session pins a GPU-backed upstream socket):
+ *   - The upstream socket opens LAZILY on the first audio frame, not on connect,
+ *     so an idle/abandoned browser socket never pins an upstream session.
+ *   - A short no-audio grace timeout closes sockets that connect but never speak.
+ *   - Per-user and global concurrent-connection caps (ConnectionLimiter) bound
+ *     the number of simultaneous upstream sessions one user (or the whole
+ *     instance) can hold.
+ *   - `maxPayload` caps the size of a single inbound audio frame.
+ *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
  *   client -> server: JSON `{type:'start', lang?}`, then binary PCM16 frames,
  *                     then JSON `{type:'stop'}`
@@ -30,12 +39,62 @@ import { buildApiPath } from '../utils/basePath.js';
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
 const IDLE_TIMEOUT_MS = 60_000;
+// A connection that opens but never sends an audio frame is closed after this,
+// so abandoned sockets don't sit holding a limiter slot.
+const NO_AUDIO_GRACE_MS = 15_000;
+
+// Defaults for the concurrent-connection caps. Overridable via
+// platform.speech.realtime.{maxConnections,maxConnectionsPerUser}.
+const DEFAULT_MAX_TOTAL_CONNECTIONS = 50;
+const DEFAULT_MAX_CONNECTIONS_PER_USER = 3;
+// Largest single inbound audio frame we accept. The browser sends ~4 KB PCM16
+// frames; 256 KB is generous headroom while bounding per-frame memory.
+const DEFAULT_MAX_FRAME_BYTES = 256 * 1024;
+// Cap on audio frames buffered while the upstream socket is still connecting,
+// so a fast talker can't grow memory unbounded during the (brief) handshake.
+const MAX_PENDING_FRAMES = 250;
+
+/**
+ * Tracks concurrent bridge connections and enforces a per-user and a global cap
+ * so no single user (and no single instance) can pin an unbounded number of
+ * GPU-backed upstream transcription sessions.
+ */
+export class ConnectionLimiter {
+  constructor({
+    maxTotal = DEFAULT_MAX_TOTAL_CONNECTIONS,
+    maxPerUser = DEFAULT_MAX_CONNECTIONS_PER_USER
+  } = {}) {
+    this.maxTotal = maxTotal;
+    this.maxPerUser = maxPerUser;
+    this.total = 0;
+    this.perUser = new Map();
+  }
+
+  /** Reserve a slot for `userId`. Returns false (and reserves nothing) if a cap is hit. */
+  tryAcquire(userId) {
+    const used = this.perUser.get(userId) || 0;
+    if (this.total >= this.maxTotal) return false;
+    if (used >= this.maxPerUser) return false;
+    this.total += 1;
+    this.perUser.set(userId, used + 1);
+    return true;
+  }
+
+  /** Free a previously-acquired slot. A release without a matching acquire is a no-op. */
+  release(userId) {
+    const used = this.perUser.get(userId) || 0;
+    if (used <= 0) return;
+    if (used === 1) this.perUser.delete(userId);
+    else this.perUser.set(userId, used - 1);
+    this.total = Math.max(0, this.total - 1);
+  }
+}
 
 /**
  * Strip a trailing slash / path from an origin so comparison is scheme+host(+port),
  * the form a browser sends in the Origin header.
  */
-function normalizeOrigin(origin) {
+export function normalizeOrigin(origin) {
   if (typeof origin !== 'string') return origin;
   const trimmed = origin.trim();
   const schemeEnd = trimmed.indexOf('://');
@@ -78,7 +137,7 @@ function resolveConfiguredOrigins(platform) {
  * victim (same-origin policy is a browser concept), so a missing Origin is
  * allowed.
  */
-function isAllowedOrigin(req) {
+export function isAllowedOrigin(req, platform = configCache.getPlatform() || {}) {
   const origin = req.headers.origin;
   if (!origin) return true; // non-browser caller — not a CSWSH vector
 
@@ -95,7 +154,7 @@ function isAllowedOrigin(req) {
     }
   }
 
-  const configured = resolveConfiguredOrigins(configCache.getPlatform() || {}).map(normalizeOrigin);
+  const configured = resolveConfiguredOrigins(platform).map(normalizeOrigin);
   if (configured.includes('*')) return true;
   return configured.includes(normalized);
 }
@@ -104,7 +163,7 @@ function isAllowedOrigin(req) {
  * Extract the authToken from a raw upgrade request (Bearer header or cookie).
  * The upgrade request never went through Express, so cookies aren't parsed.
  */
-function extractToken(req) {
+export function extractToken(req) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
@@ -130,8 +189,7 @@ function extractToken(req) {
  * Authenticate an upgrade request. Returns a minimal user object, or null when
  * authentication is required but missing/invalid.
  */
-function authenticateUpgrade(req) {
-  const platform = configCache.getPlatform() || {};
+export function authenticateUpgrade(req, platform = configCache.getPlatform() || {}) {
   const token = extractToken(req);
 
   if (token) {
@@ -161,43 +219,73 @@ function getRealtimeConfig() {
   return cfg;
 }
 
+// --- Upstream error diagnostics (pure, unit-tested) ---
+
+/**
+ * Client-facing message for a socket-level upstream failure (ECONNREFUSED,
+ * ETIMEDOUT, ENOTFOUND, TLS errors…). `err.message` is often empty, so `err.code`
+ * usually carries the actionable detail.
+ */
+export function diagnoseSocketError(err = {}) {
+  const detail = [err.code, err.message].filter(Boolean).join(': ') || 'connection error';
+  return `Transcription service unreachable: ${detail}`;
+}
+
+/**
+ * Client-facing message when the upstream rejected the WS upgrade with an HTTP
+ * response (404 wrong path, 401/403 auth, 502 bad gateway…).
+ */
+export function diagnoseUnexpectedResponse(res = {}) {
+  return `Transcription service rejected the connection (HTTP ${res.statusCode} ${res.statusMessage || ''})`.trim();
+}
+
+/**
+ * Client-facing message for an upstream close, or null when the close is
+ * expected. A clean close (code 1000) is expected; so is a clean close after we
+ * already delivered transcription. Report only genuinely-abnormal closes:
+ * before the handshake completed, or a non-normal code with nothing transcribed.
+ */
+export function diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, reason } = {}) {
+  if (!gotTranscription && (!upstreamReady || code !== 1000)) {
+    return `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`;
+  }
+  return null;
+}
+
 function sendJson(ws, obj) {
-  if (ws.readyState === WebSocket.OPEN) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
   }
 }
 
 /**
- * Bridge a single accepted browser connection to a fresh upstream vLLM socket.
+ * Bridge a single accepted browser connection to a vLLM upstream socket. The
+ * limiter slot has already been acquired by the caller; this function owns
+ * releasing it exactly once on teardown.
  */
-function bridgeConnection(clientWs, user) {
+function bridgeConnection(clientWs, user, limiter) {
   const cfg = getRealtimeConfig();
   if (!cfg) {
     sendJson(clientWs, { type: 'error', message: 'Realtime transcription is not configured' });
     clientWs.close();
+    limiter.release(user.id);
     return;
   }
 
-  const headers = {};
-  if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-
-  let upstream;
-  try {
-    upstream = new WebSocket(cfg.url, { headers });
-  } catch (err) {
-    logger.error('Realtime STT: failed to open upstream socket', {
-      component: 'RealtimeSTT',
-      error: err.message
-    });
-    sendJson(clientWs, { type: 'error', message: 'Failed to reach transcription service' });
-    clientWs.close();
-    return;
-  }
-
+  let upstream = null; // opened lazily on the first audio frame
   let upstreamReady = false; // handshake complete, audio may flow
   let gotTranscription = false; // at least one delta/final was received
   let errorSent = false; // guard so we report a failure at most once
+  let released = false; // guard so we release the limiter slot at most once
   let idleTimer = null;
+  let graceTimer = null;
+  const pending = []; // base64 audio frames buffered until upstream opens
+
+  const releaseSlot = () => {
+    if (released) return;
+    released = true;
+    limiter.release(user.id);
+  };
 
   const resetIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
@@ -210,6 +298,8 @@ function bridgeConnection(clientWs, user) {
   const cleanup = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = null;
+    if (graceTimer) clearTimeout(graceTimer);
+    graceTimer = null;
     if (upstream && upstream.readyState <= WebSocket.OPEN) {
       try {
         upstream.close();
@@ -224,6 +314,7 @@ function bridgeConnection(clientWs, user) {
         /* ignore */
       }
     }
+    releaseSlot();
   };
 
   // Report an upstream failure to the browser (once) with a diagnostic message
@@ -242,88 +333,123 @@ function bridgeConnection(clientWs, user) {
     cleanup();
   };
 
-  // --- Upstream (vLLM) -> iHub ---
-  upstream.on('open', () => {
-    // Handshake: identify the model, then open the audio buffer.
-    sendJson(upstream, { type: 'session.update', model: cfg.model });
-    sendJson(upstream, { type: 'input_audio_buffer.commit' });
-    upstreamReady = true;
-    sendJson(clientWs, { type: 'ready' });
-    resetIdle();
-  });
+  // Open the upstream vLLM socket on demand (first audio frame). Everything the
+  // bridge does upstream lives here so no upstream session exists until the
+  // browser actually starts speaking.
+  const openUpstream = () => {
+    if (upstream) return;
+    if (graceTimer) {
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
 
-  upstream.on('message', data => {
-    resetIdle();
-    let msg;
+    const headers = {};
+    if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+
     try {
-      msg = JSON.parse(data.toString());
-    } catch {
-      return; // vLLM realtime frames are JSON; ignore anything else
-    }
-    switch (msg.type) {
-      case 'transcription.delta':
-        gotTranscription = true;
-        sendJson(clientWs, { type: 'delta', text: msg.delta || '' });
-        break;
-      case 'transcription.done':
-        gotTranscription = true;
-        sendJson(clientWs, { type: 'final', text: msg.text || '' });
-        break;
-      case 'error':
-        notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
-          reason: 'upstream error frame',
-          upstreamError: msg.error
-        });
-        break;
-      // session.created and other control frames need no client action
-      default:
-        break;
-    }
-  });
-
-  // The vLLM server rejected the WebSocket upgrade with an HTTP response
-  // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
-  upstream.on('unexpected-response', (_req, res) => {
-    notifyUpstreamError(
-      `Transcription service rejected the connection (HTTP ${res.statusCode} ${res.statusMessage || ''})`.trim(),
-      { reason: 'unexpected-response', statusCode: res.statusCode }
-    );
-  });
-
-  upstream.on('error', err => {
-    // Socket-level failures (ECONNREFUSED, ETIMEDOUT, ENOTFOUND, TLS errors…).
-    // err.message is often empty, so include err.code which usually is not.
-    const detail = [err.code, err.message].filter(Boolean).join(': ') || 'connection error';
-    notifyUpstreamError(`Transcription service unreachable: ${detail}`, {
-      reason: 'socket error',
-      error: err.message,
-      code: err.code
-    });
-  });
-
-  upstream.on('close', (code, reasonBuf) => {
-    const reason = reasonBuf ? reasonBuf.toString() : '';
-    // A clean close (code 1000) after we delivered transcription is expected.
-    // Report only genuinely-abnormal closes: before the handshake completed, or
-    // a non-normal code with nothing transcribed.
-    if (!errorSent && !gotTranscription && (!upstreamReady || code !== 1000)) {
-      notifyUpstreamError(
-        `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`,
-        { reason: 'abnormal close', code, closeReason: reason, upstreamReady }
-      );
+      upstream = new WebSocket(cfg.url, { headers });
+    } catch (err) {
+      notifyUpstreamError('Failed to reach transcription service', {
+        reason: 'construct error',
+        error: err.message
+      });
       return;
     }
-    cleanup();
-  });
+
+    // Arm the idle timer for the connecting phase too, so a handshake that hangs
+    // in CONNECTING (no 'open', no 'error') can't leave the bridge timer-less.
+    // It is reset on 'open' and on every subsequent frame.
+    resetIdle();
+
+    upstream.on('open', () => {
+      // Handshake: identify the model, then open the audio buffer.
+      sendJson(upstream, { type: 'session.update', model: cfg.model });
+      sendJson(upstream, { type: 'input_audio_buffer.commit' });
+      upstreamReady = true;
+      sendJson(clientWs, { type: 'ready' });
+      // Flush any audio captured during the handshake.
+      for (const audio of pending) {
+        sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+      }
+      pending.length = 0;
+      resetIdle();
+    });
+
+    upstream.on('message', data => {
+      resetIdle();
+      let msg;
+      try {
+        msg = JSON.parse(data.toString());
+      } catch {
+        return; // vLLM realtime frames are JSON; ignore anything else
+      }
+      switch (msg.type) {
+        case 'transcription.delta':
+          gotTranscription = true;
+          sendJson(clientWs, { type: 'delta', text: msg.delta || '' });
+          break;
+        case 'transcription.done':
+          gotTranscription = true;
+          sendJson(clientWs, { type: 'final', text: msg.text || '' });
+          break;
+        case 'error':
+          notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
+            reason: 'upstream error frame',
+            upstreamError: msg.error
+          });
+          break;
+        // session.created and other control frames need no client action
+        default:
+          break;
+      }
+    });
+
+    // The vLLM server rejected the WebSocket upgrade with an HTTP response
+    // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
+    upstream.on('unexpected-response', (_req, res) => {
+      notifyUpstreamError(diagnoseUnexpectedResponse(res), {
+        reason: 'unexpected-response',
+        statusCode: res.statusCode
+      });
+    });
+
+    upstream.on('error', err => {
+      notifyUpstreamError(diagnoseSocketError(err), {
+        reason: 'socket error',
+        error: err.message,
+        code: err.code
+      });
+    });
+
+    upstream.on('close', (code, reasonBuf) => {
+      const reason = reasonBuf ? reasonBuf.toString() : '';
+      const message = errorSent
+        ? null
+        : diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, reason });
+      if (message) {
+        notifyUpstreamError(message, {
+          reason: 'abnormal close',
+          code,
+          closeReason: reason,
+          upstreamReady
+        });
+        return;
+      }
+      cleanup();
+    });
+  };
 
   // --- iHub <- browser ---
   clientWs.on('message', (data, isBinary) => {
-    resetIdle();
     if (isBinary) {
-      // Raw PCM16 frame — base64-wrap into the vLLM realtime protocol.
+      // Raw PCM16 frame. Open the upstream on the first frame, then forward.
+      if (!upstream) openUpstream();
+      if (upstreamReady) resetIdle();
+      const audio = Buffer.from(data).toString('base64');
       if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
-        const audio = Buffer.from(data).toString('base64');
         sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+      } else if (pending.length < MAX_PENDING_FRAMES) {
+        pending.push(audio);
       }
       return;
     }
@@ -352,11 +478,33 @@ function bridgeConnection(clientWs, user) {
     cleanup();
   });
 
-  resetIdle();
+  // Wait for the first audio frame; close the connection if none arrives.
+  graceTimer = setTimeout(() => {
+    logger.info('Realtime STT: no audio received within grace window, closing', {
+      component: 'RealtimeSTT',
+      userId: user.id
+    });
+    cleanup();
+  }, NO_AUDIO_GRACE_MS);
+
   logger.info('Realtime STT: bridge established', {
     component: 'RealtimeSTT',
     userId: user.id
   });
+}
+
+/**
+ * Read the connection-cap / frame-size settings from platform config, falling
+ * back to sane defaults.
+ */
+function getConnectionLimits() {
+  const cfg = (configCache.getPlatform() || {}).speech?.realtime || {};
+  const toPositiveInt = (val, fallback) => (Number.isInteger(val) && val > 0 ? val : fallback);
+  return {
+    maxTotal: toPositiveInt(cfg.maxConnections, DEFAULT_MAX_TOTAL_CONNECTIONS),
+    maxPerUser: toPositiveInt(cfg.maxConnectionsPerUser, DEFAULT_MAX_CONNECTIONS_PER_USER),
+    maxFrameBytes: toPositiveInt(cfg.maxFrameBytes, DEFAULT_MAX_FRAME_BYTES)
+  };
 }
 
 /**
@@ -368,7 +516,12 @@ function bridgeConnection(clientWs, user) {
  * @param {import('http').Server|import('https').Server} httpServer
  */
 export function attachRealtimeTranscription(httpServer) {
-  const wss = new WebSocketServer({ noServer: true });
+  const limits = getConnectionLimits();
+  const limiter = new ConnectionLimiter({
+    maxTotal: limits.maxTotal,
+    maxPerUser: limits.maxPerUser
+  });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: limits.maxFrameBytes });
 
   httpServer.on('upgrade', (req, socket, head) => {
     let pathname;
@@ -408,14 +561,29 @@ export function attachRealtimeTranscription(httpServer) {
       return;
     }
 
+    // Enforce the concurrent-connection caps before completing the handshake, so
+    // a flood of upgrades can't pin unbounded upstream sessions.
+    if (!limiter.tryAcquire(user.id)) {
+      logger.warn('Realtime STT: connection cap reached, rejecting upgrade', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        activeTotal: limiter.total
+      });
+      socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
     wss.handleUpgrade(req, socket, head, ws => {
-      bridgeConnection(ws, user);
+      bridgeConnection(ws, user, limiter);
     });
   });
 
   logger.info('Realtime transcription WebSocket handler attached', {
     component: 'RealtimeSTT',
-    path: buildApiPath('/voice/realtime')
+    path: buildApiPath('/voice/realtime'),
+    maxConnections: limits.maxTotal,
+    maxConnectionsPerUser: limits.maxPerUser
   });
 }
 

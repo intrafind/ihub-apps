@@ -5,15 +5,15 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 
 const DEFAULT_SPEECH = {
   realtime: { enabled: false, url: 'ws://localhost:8080/v1/realtime', model: '', apiKey: '' },
-  azure: { enabled: false, host: '', region: '' }
+  azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
 };
 
 /**
  * Admin page for configuring voice-input / speech-to-text backends stored in
  * platform.json under `speech`:
  *   - vLLM Realtime (server-proxied, e.g. Voxtral) — fully managed here.
- *   - Azure Speech — platform-level host/region defaults. The subscription KEY
- *     is provided via the VITE_AZURE_SUBSCRIPTION_ID env var, not stored here.
+ *   - Azure Speech — host/region plus the subscription key, which is stored
+ *     encrypted server-side and brokered to the browser as a short-lived token.
  */
 function AdminVoiceInputPage() {
   const { t } = useTranslation();
@@ -273,7 +273,7 @@ function AdminVoiceInputPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {t(
                 'admin.voiceInput.azure.description',
-                'Azure Cognitive Services Speech runs in the browser. These platform-level defaults are used when an app does not set its own host. The subscription key is provided via the VITE_AZURE_SUBSCRIPTION_ID environment variable and is not stored here.'
+                'Azure Cognitive Services Speech runs in the browser via a short-lived token. The subscription key is stored encrypted on the server and exchanged for a token per session, so it never reaches the browser. Host/region are the defaults used when an app does not set its own host.'
               )}
             </p>
           </div>
@@ -304,7 +304,7 @@ function AdminVoiceInputPage() {
 
           <div>
             <label className={labelClass} htmlFor="azure-region">
-              {t('admin.voiceInput.azure.region', 'Region (optional)')}
+              {t('admin.voiceInput.azure.region', 'Region')}
             </label>
             <input
               id="azure-region"
@@ -314,6 +314,30 @@ function AdminVoiceInputPage() {
               placeholder="westeurope"
               className={inputClass}
             />
+          </div>
+
+          <div>
+            <label className={labelClass} htmlFor="azure-key">
+              {t('admin.voiceInput.azure.subscriptionKey', 'Subscription Key')}
+            </label>
+            <input
+              id="azure-key"
+              type="password"
+              value={config.azure.subscriptionKey || ''}
+              onChange={e => setAzure('subscriptionKey', e.target.value)}
+              autoComplete="new-password"
+              placeholder={t(
+                'admin.voiceInput.azure.subscriptionKeyPlaceholder',
+                'Azure Speech key'
+              )}
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.voiceInput.azure.subscriptionKeyHint',
+                'Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.'
+              )}
+            </p>
           </div>
         </div>
 

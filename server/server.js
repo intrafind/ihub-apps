@@ -36,6 +36,7 @@ import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
 import { attachRealtimeTranscription } from './websocket/realtimeTranscription.js';
+import registerVoiceRoutes from './routes/voiceRoutes.js';
 import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
@@ -473,6 +474,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerWorkflowRoutes(app, { getLocalizedError });
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
+  registerVoiceRoutes(app);
   registerSetupRoutes(app);
 
   // --- Integration Routes ---

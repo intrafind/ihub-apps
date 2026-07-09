@@ -226,20 +226,28 @@ export const platformConfigSchema = z
             model: z.string().default(''),
             // Optional. Supports plaintext, ${ENV_VAR} placeholders, and
             // ENC[...] encrypted values (decrypted by configCache on load).
-            apiKey: z.string().default('')
+            apiKey: z.string().default(''),
+            // Resource guards for the WS proxy (each session pins a GPU-backed
+            // upstream socket). Optional; sane defaults applied in code.
+            maxConnections: z.number().int().positive().optional(),
+            maxConnectionsPerUser: z.number().int().positive().optional(),
+            maxFrameBytes: z.number().int().positive().optional()
           })
           .passthrough()
           .default({}),
-        // Azure Speech runs in the browser via the Speech SDK. The subscription
-        // KEY is provided via the VITE_AZURE_SUBSCRIPTION_ID env var (baked into
-        // the client) and is intentionally NOT stored here. These are the
-        // platform-level defaults the client falls back to when an app does not
-        // set its own settings.speechRecognition.host.
+        // Azure Speech runs in the browser via the Speech SDK, but the
+        // subscription KEY is a server-side secret: the server exchanges it for
+        // a short-lived authorization token (see /api/voice/azure/token) so the
+        // key never reaches the browser. host/region are the platform-level
+        // defaults the client uses when an app sets no host of its own.
         azure: z
           .object({
             enabled: z.boolean().default(false),
             host: z.string().default(''),
-            region: z.string().default('')
+            region: z.string().default(''),
+            // Server-side secret. Supports plaintext, ${ENV_VAR} placeholders,
+            // and ENC[...] encrypted values (decrypted by configCache on load).
+            subscriptionKey: z.string().default('')
           })
           .passthrough()
           .default({})
