@@ -259,6 +259,15 @@ admins no longer need to edit `platform.json` by hand.
 > Existing deployments that relied on the env var must set the key server-side for Azure to keep
 > working.
 
+## Tool-Enabled Chats No Longer Show a Duplicated Error or Hang When a Follow-Up Call Fails
+
+When an app with tools enabled hit a provider error (for example a rate limit) on a follow-up
+call after a tool ran, the error text could appear twice in the assistant bubble, and the chat
+stream sometimes never closed cleanly. Both are fixed: the error is now reported once, and the
+stream always ends with a proper terminal event.
+
+- No admin action required.
+
 ## Outlook Add-in: Manifest Download Restored
 
 Downloading the Outlook add-in manifest works again. The manifest endpoint had started returning a
