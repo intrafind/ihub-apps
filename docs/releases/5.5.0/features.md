@@ -269,15 +269,20 @@ admins no longer need to edit `platform.json` by hand.
 > Existing deployments that relied on the env var must set the key server-side for Azure to keep
 > working.
 
-## Auto-Send Links No Longer Leave a Stale Message in the Input Box
+## Auto-Send Links Now Survive Login and No Longer Leave a Stale Message Behind
 
-Answer links built with the documented `?prefill={message}&send=true` pattern now clean up both
-URL parameters once the message is sent. Previously only `send` was removed, so a later reload of
-the same link re-populated the chat input with the already-sent message and left it looking unsent.
+Answer links built with the documented `?prefill={message}&send=true` pattern are now reliable in
+two previously broken cases:
 
-- Applies to shared support/FAQ links, ticket-reply templates, and any other one-click "answer
-  link" workflow built on the auto-send feature.
-- No configuration or admin action required.
+- **Already logged in:** once the message auto-sends, both `prefill` and `send` are now removed
+  from the URL. Previously only `send` was removed, so a later reload of the same link
+  re-populated the chat input with the already-sent message and left it looking unsent.
+- **Logged out with SSO auto-redirect enabled:** the `prefill`/`send` parameters now survive the
+  OIDC/NTLM login round trip instead of being dropped, so the message still auto-sends after
+  signing in.
+
+Applies to shared support/FAQ links, ticket-reply templates, and any other one-click "answer link"
+workflow built on the auto-send feature. No configuration or admin action required.
 
 ## Outlook Add-in: Manifest Download Restored
 
