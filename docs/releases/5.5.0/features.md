@@ -1,5 +1,15 @@
 # Features — 5.5.0
 
+## Agent Profile Editor No Longer Corrupts Shared State on Save
+
+Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
+page.
+
+- Creating a new agent no longer strips fields (like planner/synthesizer system prompts) from the
+  blank template used for subsequent "New Agent" sessions.
+- If a save fails, the editor no longer mistakenly reports the form as "no unsaved changes,"
+  preventing accidental loss of edits when navigating away.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
