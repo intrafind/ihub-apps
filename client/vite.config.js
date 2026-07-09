@@ -139,11 +139,24 @@ export default defineConfig({
             target: 'http://localhost:3000',
             changeOrigin: true,
             xfwd: true,
+            // Proxy WebSocket upgrades for the API (e.g. the realtime
+            // speech-to-text endpoint at /api/voice/realtime). Scoped to /api
+            // so Vite's own HMR socket is untouched.
+            ws: path === '/api/',
             configure: proxy => {
               // xfwd adds X-Forwarded-For/Port/Proto but NOT X-Forwarded-Host.
               // changeOrigin replaces Host with the target, so Express can't see
               // the original browser-facing host without this header.
               proxy.on('proxyReq', (proxyReq, req) => {
+                if (req.headers.host) {
+                  proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+                }
+              });
+              // The proxyReq handler above fires for HTTP only. WebSocket
+              // upgrades (e.g. /api/voice/realtime) need the same header set via
+              // proxyReqWs, otherwise the server sees the rewritten target host
+              // and can't verify the browser-facing origin.
+              proxy.on('proxyReqWs', (proxyReq, req) => {
                 if (req.headers.host) {
                   proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
                 }

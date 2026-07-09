@@ -217,6 +217,27 @@ export const buildApiUrl = endpoint => {
 };
 
 /**
+ * Build an absolute WebSocket URL for an API endpoint.
+ * Uses ws:// or wss:// to match the current page protocol and respects the
+ * runtime base path (and any absolute API base override).
+ * @param {string} endpoint - API endpoint (e.g., "/voice/realtime")
+ * @returns {string} Complete ws(s):// URL
+ */
+export const buildWsUrl = endpoint => {
+  const apiPath = buildApiUrl(endpoint); // handles base path + override
+
+  // Already absolute (http/https override) → just swap the scheme.
+  if (/^https?:\/\//i.test(apiPath)) {
+    return apiPath.replace(/^http/i, 'ws');
+  }
+
+  const { protocol, host } = window.location;
+  const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+  return `${wsProtocol}//${host}${path}`;
+};
+
+/**
  * Build an asset URL (images, fonts, etc.)
  * @param {string} asset - Asset path
  * @returns {string} Complete asset URL

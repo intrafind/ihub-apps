@@ -105,7 +105,10 @@ const settingsSchema = z
       .optional(),
     speechRecognition: z
       .object({
-        service: z.enum(['default', 'custom']).optional().default('default'),
+        service: z
+          .enum(['default', 'azure', 'custom', 'vllm-realtime'])
+          .optional()
+          .default('default'),
         host: z.string().url().optional()
       })
       .optional()

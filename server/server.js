@@ -35,6 +35,8 @@ import registerAgentRoutes from './routes/agents/index.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
+import { attachRealtimeTranscription } from './websocket/realtimeTranscription.js';
+import registerVoiceRoutes from './routes/voiceRoutes.js';
 import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
@@ -472,6 +474,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerWorkflowRoutes(app, { getLocalizedError });
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
+  registerVoiceRoutes(app);
   registerSetupRoutes(app);
 
   // --- Integration Routes ---
@@ -555,6 +558,12 @@ if (cluster.isPrimary && workerCount > 1) {
       message: 'Starting HTTP server (no SSL configuration provided)'
     });
   }
+
+  // Attach the realtime speech-to-text WebSocket handler. Works in both
+  // single-process and sticky-cluster worker modes — WS upgrades ride the same
+  // TCP connection the primary hands to the worker, so no extra coordination is
+  // needed.
+  attachRealtimeTranscription(server);
 
   if (cluster.isWorker) {
     // Inside a sticky cluster the primary owns the public port; this worker

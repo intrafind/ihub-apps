@@ -327,7 +327,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     async (req, res) => {
       try {
         const { appId } = req.params;
-        const { data: platform } = configCache.getPlatform() || {};
+        const platform = configCache.getPlatform() || {};
         const defaultLang = platform?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 

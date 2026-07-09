@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
+import GroupMultiSelect from './GroupMultiSelect';
 import {
   validateWithSchema,
   errorsToFieldErrors,
@@ -93,12 +94,7 @@ function GroupFormEditor({
     onChange(updatedGroup);
   };
 
-  const handleMappingChange = mappings => {
-    const mappingArray = mappings
-      .split(',')
-      .map(m => m.trim())
-      .filter(m => m.length > 0);
-
+  const handleMappingChange = mappingArray => {
     handleInputChange('mappings', mappingArray);
   };
 
@@ -274,29 +270,32 @@ function GroupFormEditor({
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                External Group Mappings
+                {t('admin.groups.externalMappings', 'External Group Mappings')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Map external groups from OIDC, LDAP, or other providers to this internal group
+                {t(
+                  'admin.groups.externalMappingsDescription',
+                  'Map external groups from OIDC, LDAP, or other providers to this internal group'
+                )}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  External Group Names (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={(group.mappings || []).join(', ')}
-                  onChange={e => handleMappingChange(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="IT-Admin, Platform-Admins, HR-Team"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Enter external group names that should be mapped to this group. Users with these
-                  external groups will automatically be assigned to this internal group.
-                </p>
-              </div>
+              <GroupMultiSelect
+                id="group-external-mappings"
+                label={t('admin.groups.externalGroupNames', 'External Group Names')}
+                value={group.mappings || []}
+                onChange={handleMappingChange}
+                warnOnCustom={false}
+                placeholder={t(
+                  'admin.groups.externalMappingsPlaceholder',
+                  'Type a group name and press Enter…'
+                )}
+                emptyMessage={t('admin.groups.externalMappingsEmpty', 'No external mappings yet')}
+                helpText={t(
+                  'admin.groups.externalMappingsHelp',
+                  'Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.'
+                )}
+              />
             </div>
           </div>
         </div>

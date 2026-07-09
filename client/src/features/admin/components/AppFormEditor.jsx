@@ -2350,13 +2350,31 @@ function AppFormEditor({
                         <option value="default">
                           {t('admin.apps.edit.defaultService', 'Default (Browser)')}
                         </option>
+                        <option value="azure">
+                          {t('admin.apps.edit.azureService', 'Azure Speech')}
+                        </option>
+                        <option value="vllm-realtime">
+                          {t(
+                            'admin.apps.edit.vllmRealtimeService',
+                            'vLLM Realtime (server-proxied)'
+                          )}
+                        </option>
                         <option value="custom">
                           {t('admin.apps.edit.customService', 'Custom Service')}
                         </option>
                       </select>
+                      {app.settings?.speechRecognition?.service === 'vllm-realtime' && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.apps.edit.vllmRealtimeHint',
+                            'Streams microphone audio to the iHub server, which proxies it to the vLLM realtime endpoint configured in platform.json (speech.realtime).'
+                          )}
+                        </p>
+                      )}
                     </div>
 
-                    {app.settings?.speechRecognition?.service === 'custom' && (
+                    {(app.settings?.speechRecognition?.service === 'custom' ||
+                      app.settings?.speechRecognition?.service === 'azure') && (
                       <div className="pl-6">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
