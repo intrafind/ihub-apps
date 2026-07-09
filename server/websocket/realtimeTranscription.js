@@ -53,6 +53,11 @@ const NO_AUDIO_GRACE_MS = 15_000;
 // has been quiet for this long following the last segment, rather than closing
 // on the first post-stop segment (which truncates multi-segment transcripts).
 const POST_STOP_SETTLE_MS = 2_500;
+// The vLLM realtime protocol sends `session.created` on connect; we defer our
+// session.update + initial commit (which starts transcription generation) until
+// then, so the client only streams into a fully-initialized session. If a build
+// doesn't emit session.created, initialize anyway after this fallback window.
+const SESSION_CREATED_FALLBACK_MS = 2_000;
 
 // Defaults for the concurrent-connection caps. Overridable via
 // platform.speech.realtime.{maxConnections,maxConnectionsPerUser}.
@@ -389,6 +394,8 @@ function bridgeConnection(clientWs, user, limiter) {
   let idleTimer = null;
   let graceTimer = null;
   let postStopSettleTimer = null; // fires once the upstream goes quiet after `stop`
+  let sessionInitTimer = null; // fallback if the upstream never sends session.created
+  let sessionInitDone = false; // guard so the upstream session is initialized once
   const pending = []; // base64 audio frames buffered until upstream opens
 
   const releaseSlot = () => {
@@ -412,6 +419,8 @@ function bridgeConnection(clientWs, user, limiter) {
     graceTimer = null;
     if (postStopSettleTimer) clearTimeout(postStopSettleTimer);
     postStopSettleTimer = null;
+    if (sessionInitTimer) clearTimeout(sessionInitTimer);
+    sessionInitTimer = null;
     if (upstream && upstream.readyState <= WebSocket.OPEN) {
       try {
         upstream.close();
@@ -475,6 +484,39 @@ function bridgeConnection(clientWs, user, limiter) {
     cleanup();
   };
 
+  // Initialize the upstream session once it can accept commands: identify the
+  // model and send the initial input_audio_buffer.commit (which starts
+  // transcription generation), then release the client to stream by sending
+  // `ready`. Deferred until the upstream's `session.created` (or a fallback
+  // timer) so a fast/short clip can't dump audio + commit into a not-yet-created
+  // session and transcribe nothing. The spurious empty transcription.done the
+  // initial commit can emit is handled by the post-stop settle timer, not by
+  // closing on the first `done`.
+  const initUpstreamSession = trigger => {
+    if (sessionInitDone || !upstream || upstream.readyState !== WebSocket.OPEN) return;
+    sessionInitDone = true;
+    if (sessionInitTimer) {
+      clearTimeout(sessionInitTimer);
+      sessionInitTimer = null;
+    }
+    sendJson(upstream, { type: 'session.update', model: cfg.model });
+    sendJson(upstream, { type: 'input_audio_buffer.commit' });
+    upstreamReady = true;
+    logger.info('Realtime STT: upstream ready', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      model: cfg.model,
+      trigger
+    });
+    sendJson(clientWs, { type: 'ready' });
+    // Flush any audio captured during the handshake.
+    for (const audio of pending) {
+      sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+    }
+    pending.length = 0;
+    resetIdle();
+  };
+
   // Open the upstream vLLM socket. Requires `cfg` (resolved upstream details) to
   // already be set. The no-audio grace timer is cleared on the first audio
   // frame — not here — so a socket that opens but never receives audio is still
@@ -501,28 +543,14 @@ function bridgeConnection(clientWs, user, limiter) {
     resetIdle();
 
     upstream.on('open', () => {
-      // Handshake: identify the model, then open the audio buffer. The initial
-      // commit is required for BOTH dictation and buffer/model sessions — vLLM
-      // needs the buffer opened before it accepts appended audio; skipping it
-      // caused appends to be dropped (the buffer/model session then received
-      // only `stop`, transcribed nothing, and the client hung). The spurious
-      // empty transcription.done this can emit is handled by the post-stop
-      // settle timer below, not by closing on the first `done`.
-      sendJson(upstream, { type: 'session.update', model: cfg.model });
-      sendJson(upstream, { type: 'input_audio_buffer.commit' });
-      upstreamReady = true;
-      logger.info('Realtime STT: upstream ready', {
-        component: 'RealtimeSTT',
-        userId: user.id,
-        model: cfg.model
-      });
-      sendJson(clientWs, { type: 'ready' });
-      // Flush any audio captured during the handshake.
-      for (const audio of pending) {
-        sendJson(upstream, { type: 'input_audio_buffer.append', audio });
-      }
-      pending.length = 0;
+      // Wait for the upstream's `session.created` before initializing (per the
+      // vLLM realtime protocol) — see initUpstreamSession. Arm a fallback so we
+      // still initialize if a build doesn't emit session.created.
       resetIdle();
+      sessionInitTimer = setTimeout(() => {
+        sessionInitTimer = null;
+        initUpstreamSession('fallback');
+      }, SESSION_CREATED_FALLBACK_MS);
     });
 
     upstream.on('message', data => {
@@ -570,6 +598,14 @@ function bridgeConnection(clientWs, user, limiter) {
           break;
         }
         case 'session.created':
+          logger.debug('Realtime STT: upstream control frame', {
+            component: 'RealtimeSTT',
+            userId: user.id,
+            upstreamType: msg.type
+          });
+          // Session exists now — safe to configure it and start transcription.
+          initUpstreamSession('session.created');
+          break;
         case 'session.updated':
           logger.debug('Realtime STT: upstream control frame', {
             component: 'RealtimeSTT',
