@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat } from '../../../api/endpoints/apps';
+import { exportChatToFormat } from '../utils/chatExport';
 import {
   exportToXLSX,
   exportToCSV,

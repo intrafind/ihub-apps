@@ -389,6 +389,16 @@ trapped the page in an endless reload loop.
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Markdown Chat Export No Longer Drops Links, Lists, and Headings
+
+Exporting a chat as Markdown now correctly preserves formatting instead of silently losing it.
+Previously, plain-text assistant replies were converted to Markdown with a hand-rolled
+converter that stripped links, bullet/numbered lists, and headings on the way out.
+
+- Markdown export now reuses the same HTML-to-Markdown conversion already used elsewhere in the
+  app, so links, lists, and headings survive the export.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
