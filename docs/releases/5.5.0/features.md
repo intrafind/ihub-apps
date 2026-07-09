@@ -388,3 +388,18 @@ trapped the page in an endless reload loop.
 - Content admins get a focused admin experience: the sidebar and the overview dashboard show only
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## No More Silent Empty Answers from Gemini (Web Search Off)
+
+Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
+occasionally return a blank answer — most often when resending a message that worked before. This
+is now both prevented and, if it still happens, reported clearly instead of showing an empty bubble.
+
+- When an app supports web search but it is turned off for the turn, iHub now tells the model that
+  web search is unavailable so it answers from its own knowledge instead of trying to call a search
+  tool that isn't there. That phantom tool call was what made Gemini return an empty response
+  (`MALFORMED_FUNCTION_CALL`).
+- If a model still returns an incomplete response with no answer, the user now sees a clear message
+  ("The AI model returned an incomplete response… please try sending your message again") rather
+  than a silent blank reply.
+- No admin action is required — the fix takes effect automatically on upgrade.
