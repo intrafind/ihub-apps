@@ -100,7 +100,9 @@ describe('appConfigSchema — videoUpload / transcription blocks', () => {
 
 describe('extractTranscriptText', () => {
   test('reads the documented delta/done fields', () => {
-    expect(extractTranscriptText({ type: 'transcription.delta', delta: 'he' }, ['delta'])).toBe('he');
+    expect(extractTranscriptText({ type: 'transcription.delta', delta: 'he' }, ['delta'])).toBe(
+      'he'
+    );
     expect(extractTranscriptText({ type: 'transcription.done', text: 'hello' }, ['text'])).toBe(
       'hello'
     );
