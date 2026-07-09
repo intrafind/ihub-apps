@@ -71,6 +71,47 @@ function preprocessMessagesWithFileData(messages) {
 }
 
 /**
+ * When an app supports web search but it is disabled for this turn, append a
+ * short directive to the system prompt clarifying that web search is
+ * unavailable. Apps that advertise web search generally instruct the model to
+ * "use the web search tool"; without this note the model is told to call a tool
+ * that isn't in the request, which can produce empty/malformed responses (e.g.
+ * Gemini's MALFORMED_FUNCTION_CALL). No-op when web search is on for the turn,
+ * when the app has no web search configured, or when there is no system message
+ * to amend.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use app default
+ * @returns {boolean} true when a notice was appended
+ */
+export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled) {
+  if (!app?.websearch?.enabled) return false;
+
+  const enabledByDefault = app.websearch.enabledByDefault ?? false;
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (effectiveEnabled) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  const notice =
+    'Note: Web search is currently turned off for this conversation, so you cannot ' +
+    'search the web or browse external websites right now. Answer using your existing ' +
+    'knowledge and do not attempt to call a web search tool or claim that you are ' +
+    'searching the web.';
+
+  if (systemMessage.content.includes(notice)) return false;
+
+  systemMessage.content = systemMessage.content ? `${systemMessage.content}\n\n${notice}` : notice;
+  logger.info('Appended web-search-disabled notice to system prompt', {
+    component: 'RequestBuilder',
+    appId: app.id
+  });
+  return true;
+}
+
+/**
  * Filter models based on app requirements
  * @param {Array} models - All available models
  * @param {Object} app - App configuration
@@ -350,6 +391,18 @@ class RequestBuilder {
       };
       const tools = await getToolsForApp(app, language, context);
       const nativeWebSearch = resolveAppNativeWebSearch(app, model.provider, websearchEnabled);
+
+      // A web-search-enabled app's system prompt typically instructs the model
+      // to "use the web search tool". When web search is toggled OFF for the
+      // turn, no such tool is sent — leaving the prompt telling the model to
+      // call a tool that isn't there. Some models (notably Gemini with thinking
+      // enabled) react by emitting a function call that can't be validated
+      // against any declaration, which Google returns as
+      // finishReason: MALFORMED_FUNCTION_CALL — i.e. an empty answer, seen
+      // intermittently and especially on a resend. Appending a short directive
+      // that web search is unavailable removes the contradiction so the model
+      // answers directly instead of attempting a phantom tool call.
+      appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
