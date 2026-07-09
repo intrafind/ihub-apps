@@ -45,6 +45,11 @@ function ChatInputActionsMenu({
   // Websearch props
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Transcription toggle props (Voxtral): available = admin enabled it; enabled
+  // = the per-chat user toggle state.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
   // Host-context toggles (Outlook taskpane / browser-extension side panel).
   // The host adapter declares which toggles to render via
   // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
@@ -191,6 +196,7 @@ function ChatInputActionsMenu({
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const hasTranscription = transcriptionAvailable === true && onTranscriptionEnabledChange !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
   // providers are rendered separately so they must remain available even when
@@ -208,7 +214,12 @@ function ChatInputActionsMenu({
   // Check if we have any actions to show
   const hasHostContextToggles = hostContextToggles.length > 0;
   const hasActions =
-    hasTools || hasWebsearch || hasHostContextToggles || hasCloudProviders || quickActionCount > 0;
+    hasTools ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasHostContextToggles ||
+    hasCloudProviders ||
+    quickActionCount > 0;
 
   if (!hasActions) return null;
 
@@ -218,6 +229,7 @@ function ChatInputActionsMenu({
     quickActionCount +
     (hasTools ? 1 : 0) +
     (hasWebsearch ? 1 : 0) +
+    (hasTranscription ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
@@ -298,7 +310,11 @@ function ChatInputActionsMenu({
   // Quick Actions and Image Generation are hidden on desktop with md:hidden
   // So only Cloud Storage, Web Search, and Tools remain visible on desktop
   const hasDesktopMenuContent =
-    enabledCloudProviders.length > 0 || hasWebsearch || hasTools || hasHostContextToggles;
+    enabledCloudProviders.length > 0 ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasTools ||
+    hasHostContextToggles;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -521,6 +537,36 @@ function ChatInputActionsMenu({
                     type="checkbox"
                     checked={websearchEnabled}
                     onChange={e => onWebsearchEnabledChange?.(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Transcription Section (Voxtral) */}
+          {hasTranscription && (
+            <div
+              className={`p-3 ${hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0 mr-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t('transcription.toggleLabel', 'Transcription')}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'transcription.toggleDescription',
+                      'Transcribe uploaded audio/video with the transcription model instead of the chat model'
+                    )}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transcriptionEnabled}
+                    onChange={e => onTranscriptionEnabledChange?.(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>

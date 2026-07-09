@@ -199,6 +199,15 @@ describe('resolveTranscriptionUpstream / hasEnabledTranscriptionModel', () => {
     expect(r.error).toMatch(/not permitted/i);
   });
 
+  test('fails closed when permissions could not be computed (no permissions object)', async () => {
+    const r = await resolveTranscriptionUpstream({
+      modelId: 'voxtral-mini-realtime',
+      user: { id: 'u', name: 'u' } // enhanceUserWithPermissions threw → no permissions
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/not permitted/i);
+  });
+
   test('rejects an unknown model', async () => {
     const r = await resolveTranscriptionUpstream({ modelId: 'does-not-exist', user: wildcard });
     expect(r.ok).toBe(false);

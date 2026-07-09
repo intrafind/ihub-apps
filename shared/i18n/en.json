@@ -1592,7 +1592,8 @@
         "enableVideoUpload": "Enable Video Upload",
         "extractAudioFromVideo": "Extract audio track (for transcription / audio models)",
         "maxVideoSize": "Max Video File Size (MB)",
-        "supportedVideoFormats": "Supported Video Formats"
+        "supportedVideoFormats": "Supported Video Formats",
+        "transcriptionDefaultEnabled": "On by default (users can toggle it per chat)"
       }
     },
     "features": {
@@ -2572,6 +2573,8 @@
       "generic": "Transcription failed. Please try again.",
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
       "mic": "Could not access the microphone. Please grant permission and try again."
-    }
+    },
+    "toggleLabel": "Transcription",
+    "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"
   }
 }

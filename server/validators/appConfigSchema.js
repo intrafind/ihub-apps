@@ -149,7 +149,7 @@ const uploadSchema = z
     audioUpload: z
       .object({
         enabled: z.boolean().optional().default(false),
-        maxFileSizeMB: z.number().int().min(1).max(100).optional().default(20),
+        maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(20),
         supportedFormats: z
           .array(z.string().regex(/^audio\//))
           .optional()
@@ -163,7 +163,7 @@ const uploadSchema = z
       .object({
         enabled: z.boolean().optional().default(false),
         extractAudio: z.boolean().optional().default(true),
-        maxFileSizeMB: z.number().int().min(1).max(500).optional().default(50),
+        maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(50),
         supportedFormats: z
           .array(z.string().regex(/^video\//))
           .optional()
@@ -215,6 +215,10 @@ const uploadSchema = z
 const transcriptionSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
+    // Whether the per-chat transcription toggle starts on. When on, audio/video
+    // submissions are transcribed by the transcription model; when off they fall
+    // through to the multimodal chat path. Users can flip it per conversation.
+    defaultEnabled: z.boolean().optional().default(true),
     // Id of the transcription model (modelType: 'transcription') to route to.
     modelId: z.string().optional().default(''),
     inputs: z

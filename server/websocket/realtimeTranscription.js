@@ -47,6 +47,12 @@ const IDLE_TIMEOUT_MS = 60_000;
 // A connection that opens but never sends an audio frame is closed after this,
 // so abandoned sockets don't sit holding a limiter slot.
 const NO_AUDIO_GRACE_MS = 15_000;
+// After the client sends `stop`, the upstream may emit several transcription
+// segments (one per VAD utterance) before it goes quiet — a whole file blasted
+// at once produces many. We consider transcription complete once the upstream
+// has been quiet for this long following the last segment, rather than closing
+// on the first post-stop segment (which truncates multi-segment transcripts).
+const POST_STOP_SETTLE_MS = 2_500;
 
 // Defaults for the concurrent-connection caps. Overridable via
 // platform.speech.realtime.{maxConnections,maxConnectionsPerUser}.
@@ -275,9 +281,11 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
     return { ok: false, error: `Transcription model "${modelId}" is disabled` };
   }
 
-  // Enforce the same group-permission filtering chat models get.
+  // Enforce the same group-permission filtering chat models get. Fail CLOSED:
+  // if permissions could not be computed (e.g. enhanceUserWithPermissions threw
+  // at upgrade time), deny rather than granting an unpermitted model.
   const allowed = user?.permissions?.models;
-  if (allowed && !(allowed.has('*') || allowed.has(modelId))) {
+  if (!allowed || !(allowed.has('*') || allowed.has(modelId))) {
     return { ok: false, error: `Not permitted to use transcription model: ${modelId}` };
   }
 
@@ -354,10 +362,12 @@ function bridgeConnection(clientWs, user, limiter) {
   let gotTranscription = false; // at least one delta/final was received
   let stopRequested = false; // client sent {type:'stop'} — arm completion signal (G8)
   let firstAudioSeen = false; // first inbound audio frame observed
+  let isModelSession = false; // start frame carried a modelId (buffer/model transcription)
   let errorSent = false; // guard so we report a failure at most once
   let released = false; // guard so we release the limiter slot at most once
   let idleTimer = null;
   let graceTimer = null;
+  let postStopSettleTimer = null; // fires once the upstream goes quiet after `stop`
   const pending = []; // base64 audio frames buffered until upstream opens
 
   const releaseSlot = () => {
@@ -379,6 +389,8 @@ function bridgeConnection(clientWs, user, limiter) {
     idleTimer = null;
     if (graceTimer) clearTimeout(graceTimer);
     graceTimer = null;
+    if (postStopSettleTimer) clearTimeout(postStopSettleTimer);
+    postStopSettleTimer = null;
     if (upstream && upstream.readyState <= WebSocket.OPEN) {
       try {
         upstream.close();
@@ -394,6 +406,20 @@ function bridgeConnection(clientWs, user, limiter) {
       }
     }
     releaseSlot();
+  };
+
+  // (Re)arm the post-stop quiet timer. Called on each transcription segment that
+  // arrives after the client's `stop`; when the upstream stays quiet for
+  // POST_STOP_SETTLE_MS we treat the transcript as complete, tell the client,
+  // and close. This is what allows multi-segment file transcripts to finish in
+  // full instead of being cut off at the first segment.
+  const armPostStopSettle = () => {
+    if (postStopSettleTimer) clearTimeout(postStopSettleTimer);
+    postStopSettleTimer = setTimeout(() => {
+      postStopSettleTimer = null;
+      sendJson(clientWs, { type: 'done' });
+      cleanup();
+    }, POST_STOP_SETTLE_MS);
   };
 
   // Report an upstream failure to the browser (once) with a diagnostic message
@@ -454,9 +480,17 @@ function bridgeConnection(clientWs, user, limiter) {
     resetIdle();
 
     upstream.on('open', () => {
-      // Handshake: identify the model, then open the audio buffer.
+      // Handshake: identify the model.
       sendJson(upstream, { type: 'session.update', model: cfg.model });
-      sendJson(upstream, { type: 'input_audio_buffer.commit' });
+      // Dictation opens with an initial (empty) commit — kept for backward
+      // compatibility. It is SKIPPED for model/buffer transcription sessions:
+      // a whole buffer is dumped then committed once via `stop`, and an initial
+      // empty commit there can make vLLM emit a spurious empty transcription.done
+      // that races the client's fast `stop`, yielding an empty ("no speech")
+      // result before the real audio is transcribed.
+      if (!isModelSession) {
+        sendJson(upstream, { type: 'input_audio_buffer.commit' });
+      }
       upstreamReady = true;
       sendJson(clientWs, { type: 'ready' });
       // Flush any audio captured during the handshake.
@@ -479,20 +513,21 @@ function bridgeConnection(clientWs, user, limiter) {
         case 'transcription.delta':
           gotTranscription = true;
           sendJson(clientWs, { type: 'delta', text: msg.delta || '' });
+          // A file blasted at once can produce many segments after `stop`;
+          // keep the completion window open while segments are still arriving.
+          if (stopRequested) armPostStopSettle();
           break;
         case 'transcription.done':
           gotTranscription = true;
           sendJson(clientWs, { type: 'final', text: msg.text || '' });
-          // Completion signaling (G8): vLLM may emit multiple transcription.done
-          // segments mid-stream, so a `done` is only terminal once the client has
-          // committed the buffer with `stop`. On the first post-stop segment,
-          // signal completion and close cleanly. Dictation clients ignore the
-          // unknown `done` frame (their switch has a default branch), so this is
-          // backward-compatible.
-          if (stopRequested) {
-            sendJson(clientWs, { type: 'done' });
-            cleanup();
-          }
+          // Completion signaling (G8): vLLM emits one transcription.done per VAD
+          // segment, and a whole file streamed faster than realtime produces
+          // several after `stop`. Closing on the FIRST would truncate the
+          // transcript, so instead we (re)arm a short quiet timer on each
+          // post-stop segment and only send {type:'done'} + close once the
+          // upstream has gone quiet. Dictation clients ignore the `done` frame
+          // (default switch branch), so this stays backward-compatible.
+          if (stopRequested) armPostStopSettle();
           break;
         case 'error':
           notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
@@ -612,6 +647,7 @@ function bridgeConnection(clientWs, user, limiter) {
       // audio flows. A modelId selects a first-class transcription model and
       // opens the upstream immediately (client waits for {type:'ready'}); no
       // modelId falls back to the platform dictation backend (lazy open).
+      isModelSession = msg.modelId != null;
       resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
     } else if (msg.type === 'stop') {
       stopRequested = true;

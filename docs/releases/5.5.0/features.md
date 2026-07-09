@@ -402,8 +402,14 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
   realtime endpoint. Existing installations are seeded automatically on upgrade (migration V073),
   carrying over any configured realtime dictation settings.
 - Configure it per app under **Admin → Apps → Transcription**: pick the transcription model, choose
-  which inputs are offered (audio upload, video upload, record), toggle streaming, and set a max
-  duration. A new **Video Upload** section was also added to the app upload configuration.
+  which inputs are offered (audio upload, video upload, record), decide whether it is on by default,
+  toggle streaming, and set a max duration. A new **Video Upload** section was also added to the app
+  upload configuration.
+- Users get a **Transcription toggle** in the chat actions menu (like Web Search) that makes it
+  clear audio/video is handled by a separate transcription model; a long transcription can be
+  **stopped** with the same Stop button used to cancel a chat.
+- Audio and video upload size limits are now configurable up to 2 GB (previously 100 MB for audio /
+  500 MB for video), so longer recordings and meeting videos can be transcribed.
 - The vLLM endpoint URL and API key stay server-side — the public models API strips them, so they
   never reach the browser. Transcription models are subject to the same group permissions as chat
   models and are hidden from the chat model selector.

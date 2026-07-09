@@ -1844,7 +1844,8 @@
         "enableVideoUpload": "Video-Upload aktivieren",
         "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
         "maxVideoSize": "Maximale Videodateigröße (MB)",
-        "supportedVideoFormats": "Unterstützte Videoformate"
+        "supportedVideoFormats": "Unterstützte Videoformate",
+        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)"
       }
     },
     "features": {
@@ -2537,6 +2538,8 @@
       "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
       "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut."
-    }
+    },
+    "toggleLabel": "Transkription",
+    "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"
   }
 }

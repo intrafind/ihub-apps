@@ -165,7 +165,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
           return sendFailedOperationError(res, 'load models configuration');
         }
         const model = models.find(m => m.id === modelId);
-        if (!model) {
+        // Transcription models are not exposed through this public chat-model
+        // route (G9); their internal ws:// url / apiKey must never reach the
+        // browser. Treat them as not-found here.
+        if (!model || model.modelType === 'transcription') {
           const errorMessage = await getLocalizedError('modelNotFound', {}, language);
           return sendNotFound(res, errorMessage);
         }
@@ -179,9 +182,8 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
           }
         }
 
-        // Transform model to OpenAI API compliant format
-        const transformedModel = transformModelToOpenAIFormat(model);
-        res.json(transformedModel);
+        // Strip server-side secrets (encrypted apiKey) before returning.
+        res.json(sanitizeModelForPublic(model));
       } catch (error) {
         sendInternalError(res, error, 'fetching model details');
       }

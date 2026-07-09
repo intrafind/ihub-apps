@@ -1950,7 +1950,7 @@ function AppFormEditor({
                                 <input
                                   type="number"
                                   min="1"
-                                  max="100"
+                                  max="2000"
                                   value={app.upload?.audioUpload?.maxFileSizeMB || 20}
                                   onChange={e =>
                                     handleInputChange('upload', {
@@ -2058,7 +2058,7 @@ function AppFormEditor({
                                 <input
                                   type="number"
                                   min="1"
-                                  max="500"
+                                  max="2000"
                                   value={app.upload?.videoUpload?.maxFileSizeMB || 50}
                                   onChange={e =>
                                     handleInputChange('upload', {
@@ -2183,6 +2183,25 @@ function AppFormEditor({
 
                     {app.transcription?.enabled && (
                       <div className="space-y-4 pl-6">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={app.transcription?.defaultEnabled !== false}
+                            onChange={e =>
+                              handleInputChange('transcription', {
+                                ...app.transcription,
+                                defaultEnabled: e.target.checked
+                              })
+                            }
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                          />
+                          <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                            {t(
+                              'admin.apps.edit.transcriptionDefaultEnabled',
+                              'On by default (users can toggle it per chat)'
+                            )}
+                          </label>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.apps.edit.transcriptionModel', 'Transcription model')}

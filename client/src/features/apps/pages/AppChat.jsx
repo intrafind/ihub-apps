@@ -321,6 +321,19 @@ function AppChat({ preloadedApp = null }) {
   // video / recording → assistant message). Used to gate the input.
   const [isTranscribing, setIsTranscribing] = useState(false);
 
+  // Per-chat transcription toggle (like websearch). When on, audio/video
+  // submissions are transcribed by the transcription model; when off they fall
+  // through to the multimodal chat path. Seeded from the app's default.
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+  useEffect(() => {
+    if (app?.transcription?.enabled) {
+      setTranscriptionEnabled(app.transcription.defaultEnabled !== false);
+    }
+  }, [app?.transcription?.enabled, app?.transcription?.defaultEnabled]);
+
+  // Aborts an in-flight upload/video transcription (the Stop button).
+  const transcribeAbortRef = useRef(null);
+
   // Auto-attach files selected in Nextcloud (no-op outside the Nextcloud embed).
   const currentModelObject = useMemo(
     () => models?.find(m => m.id === selectedModel) || null,
@@ -1357,10 +1370,12 @@ function AppChat({ preloadedApp = null }) {
       const maxDurationSeconds = transcription.maxDurationSeconds || 900;
       const sources = Array.isArray(audioSources) ? audioSources : [audioSources];
 
+      const abortController = new AbortController();
+      transcribeAbortRef.current = abortController;
       setIsTranscribing(true);
       try {
         for (const source of sources) {
-          if (!source) continue;
+          if (!source || abortController.signal.aborted) continue;
           const sourceName = source.extractedFromVideo
             ? source.originalVideoName || source.fileName
             : source.fileName;
@@ -1392,6 +1407,7 @@ function AppChat({ preloadedApp = null }) {
 
             const transcript = await transcribeAudioBuffer(audioBuffer, {
               modelId,
+              signal: abortController.signal,
               onDelta: streaming
                 ? text => updateAssistantMessage(assistantId, text, true)
                 : undefined
@@ -1409,10 +1425,16 @@ function AppChat({ preloadedApp = null }) {
         }
       } finally {
         setIsTranscribing(false);
+        transcribeAbortRef.current = null;
       }
     },
     [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
   );
+
+  // Cancel an in-flight upload/video transcription (wired to the Stop button).
+  const cancelTranscription = useCallback(() => {
+    if (transcribeAbortRef.current) transcribeAbortRef.current.abort();
+  }, []);
 
   // --- Record → transcribe control ---
   const recorderRef = useRef(null);
@@ -1483,7 +1505,12 @@ function AppChat({ preloadedApp = null }) {
     // the selection contains audio (uploaded audio, or audio extracted from an
     // uploaded video), transcribe it into an assistant turn instead of shipping
     // audioData to the chat model. Not applied in compare mode.
-    if (!compareModeActive && app?.transcription?.enabled && fileUploadHandler.selectedFile) {
+    if (
+      !compareModeActive &&
+      app?.transcription?.enabled &&
+      transcriptionEnabled &&
+      fileUploadHandler.selectedFile
+    ) {
       const selected = Array.isArray(fileUploadHandler.selectedFile)
         ? fileUploadHandler.selectedFile
         : [fileUploadHandler.selectedFile];
@@ -1786,10 +1813,15 @@ function AppChat({ preloadedApp = null }) {
     const currentModel = models.find(m => m.id === selectedModel);
 
     // In compare mode, processing/cancel must reflect every panel — not the regular chat.
-    const effectiveProcessing = compareModeActive ? compareIsProcessing : processing;
-    const effectiveCancel = compareModeActive
-      ? () => compareViewRef.current?.cancelAll()
-      : cancelGeneration;
+    // A running transcription also counts as "processing" so the Send button
+    // becomes a Stop button that cancels it.
+    const effectiveProcessing =
+      (compareModeActive ? compareIsProcessing : processing) || isTranscribing;
+    const effectiveCancel = isTranscribing
+      ? cancelTranscription
+      : compareModeActive
+        ? () => compareViewRef.current?.cancelAll()
+        : cancelGeneration;
 
     const commonProps = {
       app,
@@ -1807,14 +1839,23 @@ function AppChat({ preloadedApp = null }) {
           ? handleVoiceCommand
           : undefined,
       // Voxtral record → transcribe control (separate from dictation mic above).
+      // Shown only when transcription is available AND the per-chat toggle is on.
       transcriptionRecordEnabled:
         !compareModeActive &&
         app?.transcription?.enabled === true &&
+        transcriptionEnabled &&
         !!app?.transcription?.modelId &&
         app?.transcription?.inputs?.record !== false,
       onRecordTranscription: isTranscribing ? undefined : handleRecordTranscription,
       isRecordingTranscription,
       recordTranscriptionElapsed: recordElapsed,
+      // Per-chat transcription toggle (actions menu).
+      transcriptionAvailable: !compareModeActive && app?.transcription?.enabled === true,
+      transcriptionEnabled,
+      onTranscriptionEnabledChange:
+        !compareModeActive && app?.transcription?.enabled === true
+          ? setTranscriptionEnabled
+          : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
       allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,
