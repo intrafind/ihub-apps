@@ -634,6 +634,36 @@
     }
   },
   "admin": {
+    "voiceInput": {
+      "title": "Spracheingabe (Speech-to-Text)",
+      "description": "Konfigurieren Sie die für Apps verfügbaren Speech-to-Text-Backends. Aktivieren Sie hier ein Backend und wählen Sie es dann pro App im App-Editor unter „Spracherkennungsdienst“ aus.",
+      "loadError": "Spracheingabe-Einstellungen konnten nicht geladen werden",
+      "saveSuccess": "Spracheingabe-Einstellungen gespeichert.",
+      "saveError": "Spracheingabe-Einstellungen konnten nicht gespeichert werden",
+      "realtime": {
+        "title": "vLLM Realtime (serverseitig)",
+        "description": "Streamt Mikrofon-Audio über den iHub-Server an einen vLLM-Realtime-Endpunkt (z. B. Voxtral). URL und API-Schlüssel verbleiben auf dem Server. Wählen Sie „vLLM Realtime“ als Spracherkennungsdienst einer App, um ihn zu nutzen.",
+        "enabled": "vLLM-Realtime-Transkription aktivieren",
+        "url": "Realtime-WebSocket-URL",
+        "model": "Modell",
+        "apiKey": "API-Schlüssel (optional)",
+        "apiKeyPlaceholder": "Leer lassen, falls keiner",
+        "apiKeyHint": "Verschlüsselt gespeichert. Lokales vLLM benötigt meist keinen Schlüssel. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten.",
+        "test": "Verbindung testen",
+        "testing": "Teste…",
+        "testHint": "Testet die Verbindung vom iHub-Server zum vLLM-Realtime-Endpunkt mit den obigen Werten (der gespeicherte Schlüssel wird verwendet, wenn das Feld ***REDACTED*** anzeigt)."
+      },
+      "azure": {
+        "title": "Azure Speech",
+        "description": "Azure Cognitive Services Speech läuft im Browser über ein kurzlebiges Token. Der Abonnementschlüssel wird verschlüsselt auf dem Server gespeichert und pro Sitzung gegen ein Token getauscht, sodass er den Browser nie erreicht. Host/Region sind die Standardwerte, wenn eine App keinen eigenen Host festlegt.",
+        "enabled": "Azure Speech aktivieren",
+        "host": "Standard-Host / -Endpunkt",
+        "region": "Region",
+        "subscriptionKey": "Abonnementschlüssel",
+        "subscriptionKeyPlaceholder": "Azure-Speech-Schlüssel",
+        "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten."
+      }
+    },
     "agents": {
       "memory": {
         "builder": {
@@ -1508,7 +1538,8 @@
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
-      "telemetry": "Telemetrie"
+      "telemetry": "Telemetrie",
+      "voiceInput": "Spracheingabe"
     },
     "mcp": {
       "common": {
@@ -2402,12 +2433,14 @@
     "tooltipManual": "Spracheingabe (Strg+M) - manuell",
     "tooltipAutomatic": "Spracheingabe (Strg+M) - automatisch",
     "ariaLabel": "Spracheingabe umschalten",
+    "errorTitle": "Fehler bei der Spracheingabe",
     "error": {
       "notSupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
       "permissionDenied": "Bitte erlauben Sie den Mikrofonzugriff und versuchen Sie es erneut.",
       "noSpeech": "Keine Sprache erkannt. Bitte versuchen Sie es erneut.",
       "noMicrophone": "Kein Mikrofon gefunden. Bitte überprüfen Sie Ihre Geräteeinstellungen.",
       "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+      "service": "Transkriptionsdienst nicht verfügbar. Bitte versuchen Sie es erneut.",
       "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut.",
       "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut."
     }

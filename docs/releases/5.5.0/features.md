@@ -217,3 +217,44 @@ came from the shared chat used across the platform, so any app could be affected
 - Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
+
+## Realtime Voice Input via Self-Hosted vLLM (Voxtral)
+
+Apps can now use a new speech-to-text backend that streams microphone audio to the iHub
+server, which proxies it to a self-hosted vLLM realtime endpoint (for example Voxtral) and
+streams the transcription back live. Unlike the browser and Azure backends, the model URL
+and any API key stay on the server and never reach the browser.
+
+- Configure the endpoint under **Admin → Voice Input** (or `platform.json` → `speech.realtime`):
+  `enabled`, `url`, `model`, optional `apiKey`; disabled by default.
+- Enable it per app by setting the app's Speech Recognition Service to **vLLM Realtime**
+  (`settings.speechRecognition.service: "vllm-realtime"`) — no per-app host needed.
+- Supports both manual (push-to-talk) and automatic (stops when you pause) microphone modes,
+  and works in browsers without the Web Speech API (including Firefox). Requires HTTPS or
+  localhost for microphone access.
+- **Resource guards** protect the GPU-backed upstream: the vLLM socket opens only once the
+  browser sends its first audio frame (an abandoned connection never pins a session), idle and
+  no-audio connections are closed automatically, and per-user / global concurrent-connection
+  caps bound how many sessions can run at once. Tune them under `speech.realtime`:
+  `maxConnections` (default 50), `maxConnectionsPerUser` (default 3), `maxFrameBytes`
+  (default 256 KB).
+
+## Admin Page for Voice Input (Speech-to-Text)
+
+A new **Admin → Voice Input** page centralizes speech-to-text backend configuration, so
+admins no longer need to edit `platform.json` by hand.
+
+- **vLLM Realtime**: toggle, WebSocket URL, model, and an optional API key (stored encrypted
+  at rest).
+- **Azure Speech**: toggle, default host/endpoint, region, and the subscription key. The key is
+  stored **encrypted at rest** on the server and exchanged for a short-lived authorization token
+  per session (`/api/voice/azure/token`), so it never reaches the browser. Apps that select
+  Azure without their own host fall back to the platform default host.
+- The app editor's **Speech Recognition Service** dropdown now also lists Azure alongside the
+  browser default, vLLM Realtime, and custom options.
+
+> **Breaking change:** The Azure subscription key is no longer read from the
+> `VITE_AZURE_SUBSCRIPTION_ID` build-time client env var (which baked the key into the browser
+> bundle). Move the key into **Admin → Voice Input** (`platform.json` → `speech.azure.subscriptionKey`).
+> Existing deployments that relied on the env var must set the key server-side for Azure to keep
+> working.

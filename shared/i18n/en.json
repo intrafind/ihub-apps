@@ -410,6 +410,36 @@
     }
   },
   "admin": {
+    "voiceInput": {
+      "title": "Voice Input (Speech-to-Text)",
+      "description": "Configure the speech-to-text backends available to apps. Enable a backend here, then select it per app under the app editor’s Speech Recognition Service.",
+      "loadError": "Failed to load voice input settings",
+      "saveSuccess": "Voice input settings saved.",
+      "saveError": "Failed to save voice input settings",
+      "realtime": {
+        "title": "vLLM Realtime (server-proxied)",
+        "description": "Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Select \"vLLM Realtime\" as an app’s Speech Recognition Service to use it.",
+        "enabled": "Enable vLLM realtime transcription",
+        "url": "Realtime WebSocket URL",
+        "model": "Model",
+        "apiKey": "API Key (optional)",
+        "apiKeyPlaceholder": "Leave blank if none",
+        "apiKeyHint": "Stored encrypted at rest. Local vLLM usually needs no key. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testHint": "Tests connectivity from the iHub server to the vLLM realtime endpoint using the values above (the saved key is used when the field shows ***REDACTED***)."
+      },
+      "azure": {
+        "title": "Azure Speech",
+        "description": "Azure Cognitive Services Speech runs in the browser via a short-lived token. The subscription key is stored encrypted on the server and exchanged for a token per session, so it never reaches the browser. Host/region are the defaults used when an app does not set its own host.",
+        "enabled": "Enable Azure Speech",
+        "host": "Default host / endpoint",
+        "region": "Region",
+        "subscriptionKey": "Subscription Key",
+        "subscriptionKeyPlaceholder": "Azure Speech key",
+        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it."
+      }
+    },
     "agents": {
       "memory": {
         "builder": {
@@ -1258,7 +1288,8 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "mcpServers": "MCP servers",
-      "telemetry": "Telemetry"
+      "telemetry": "Telemetry",
+      "voiceInput": "Voice Input"
     },
     "mcp": {
       "common": {
@@ -2437,12 +2468,14 @@
     "tooltipManual": "Voice input (Ctrl+M) - manual",
     "tooltipAutomatic": "Voice input (Ctrl+M) - automatic",
     "ariaLabel": "Toggle voice input",
+    "errorTitle": "Voice input error",
     "error": {
       "notSupported": "Speech recognition not supported in this browser",
       "permissionDenied": "Please allow microphone access and try again.",
       "noSpeech": "No speech detected. Please try again.",
       "noMicrophone": "No microphone found. Please check your device settings.",
       "network": "Network error. Please check your connection.",
+      "service": "Transcription service unavailable. Please try again.",
       "general": "Voice input error. Please try again.",
       "startError": "Error starting voice input. Please try again."
     }
