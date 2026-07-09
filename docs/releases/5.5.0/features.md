@@ -268,6 +268,20 @@ server error, which blocked installing or sideloading the add-in.
   description, with English defaults and German (`de-DE`) overrides.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Group Assignment Is Now a Searchable Picker
+
+Assigning groups on the user editor and adding external group mappings on the group editor now use
+a searchable picker instead of a plain comma-separated text field, so it is easier to pick the
+right group and harder to introduce typos.
+
+- Start typing to search your defined groups by name or id and add them with a click or the Enter
+  key; selected groups appear as removable chips.
+- You can still type a name that is not a defined group and press Enter to add it — needed for
+  external identity-provider group names used in mappings.
+- On the user editor, entries that do not match a defined group are highlighted so you can spot a
+  mistyped group at a glance.
+- No admin action is required — the change is purely in the admin UI.
+
 ## Content Admins Can Now Use the Admin Area
 
 Members of the **Content Admins** group (the `contentAdmin` permission, without full admin access)
