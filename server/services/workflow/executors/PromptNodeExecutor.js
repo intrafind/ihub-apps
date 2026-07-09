@@ -253,10 +253,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // config.modelId may have been wiped by a config-cache TTL refresh (it's
       // applied at runtime by mutating the shared cached workflow). Fall back to
       // the durable per-run agent model config so we don't drop to local-vllm.
-      const resolvedModelId = config.modelId || this.resolveConfiguredModelId(state, node.id);
-      const model = await this.getModel(resolvedModelId, context, state);
+      const { data: models } = configCache.getModels();
+      const model = this.resolveModel(models, config, context, state, node.id);
       if (!model) {
-        return this.createErrorResult(`Model not found: ${resolvedModelId || 'default'}`, {
+        const requestedModelId =
+          config.modelId || this.resolveConfiguredModelId(state, node.id) || 'default';
+        return this.createErrorResult(`Model not found: ${requestedModelId}`, {
           nodeId: node.id
         });
       }
@@ -1215,66 +1217,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     }
 
     return result;
-  }
-
-  /**
-   * Get model configuration by ID or use default.
-   *
-   * Priority order:
-   * 1. Model specified in node config (config.modelId)
-   * 2. Model override from initial data (_modelOverride)
-   * 3. Workflow-level defaultModelId from workflow config
-   * 4. Model from execution context
-   * 5. Default model
-   *
-   * @param {string} modelId - Model ID from node config or null
-   * @param {Object} context - Execution context
-   * @param {Object} state - Current workflow state
-   * @returns {Promise<Object|null>} Model configuration or null
-   * @private
-   */
-  async getModel(modelId, context, state) {
-    const { data: models } = configCache.getModels();
-    if (!models) {
-      return null;
-    }
-
-    // 1. Use model from node config if specified. If the configured model
-    //    isn't in the enabled set (e.g. its id was wiped/changed), fall
-    //    through to the durable fallbacks below rather than failing the node.
-    if (modelId) {
-      const configured = models.find(m => m.id === modelId);
-      if (configured) return configured;
-    }
-
-    // 2. Check for model override from initial data (user selection at start)
-    const modelOverride = state?.data?._modelOverride;
-    if (modelOverride) {
-      const overrideModel = models.find(m => m.id === modelOverride);
-      if (overrideModel) {
-        return overrideModel;
-      }
-    }
-
-    // 3. Check workflow-level defaultModelId, then the DURABLE per-run agent
-    //    model config (state survives the config-cache TTL refresh that wipes
-    //    the runtime-applied workflow.config.defaultModelId).
-    const workflowDefaultModelId =
-      context.workflow?.config?.defaultModelId || this.resolveConfiguredModelId(state);
-    if (workflowDefaultModelId) {
-      const workflowModel = models.find(m => m.id === workflowDefaultModelId);
-      if (workflowModel) {
-        return workflowModel;
-      }
-    }
-
-    // 4. Use context model if available
-    if (context.modelId) {
-      return models.find(m => m.id === context.modelId);
-    }
-
-    // 5. Fall back to default model
-    return models.find(m => m.default) || models[0];
   }
 
   /**

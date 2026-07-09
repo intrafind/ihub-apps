@@ -454,15 +454,24 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    * @returns {{ passed: boolean, score: number, feedback: string, verdict: string, failures: string[] }}
    */
   /**
-   * Resolve the verification model with the same precedence the prompt node
-   * uses: explicit per-node `config.modelId` → the run's workflow-level
-   * `defaultModelId` (published from the agent profile's preferredModel) →
-   * the global default → the first available model. Pure, so it's unit-tested
+   * Resolve the verification model. This intentionally OVERRIDES
+   * `BaseNodeExecutor.resolveModel` with a precedence tuned for agent runs:
+   * explicit per-node `config.modelId` → the run's workflow-level
+   * `defaultModelId` (published from the agent profile's preferredModel) → the
+   * DURABLE per-run agent model config → the global default → the first
+   * available model.
+   *
+   * Two deliberate differences from the base (prompt-node) precedence: the
+   * workflow/profile default is preferred OVER the durable per-node override so
+   * a verifier follows the operator-configured run model, and `_modelOverride`
+   * (the chat-selected model) is not consulted. Pure, so it's unit-tested
    * directly without configCache. Returns null when no models are available.
    *
    * @param {Array} models
    * @param {Object} config - node config (may carry modelId)
    * @param {Object} context - execution context (carries workflow.config)
+   * @param {Object} [state] - workflow state (durable agent model config)
+   * @param {string} [nodeId] - node id for the per-node durable lookup
    * @returns {Object|null}
    */
   resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {

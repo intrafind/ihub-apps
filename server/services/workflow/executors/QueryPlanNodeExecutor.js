@@ -35,7 +35,6 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
       questionPath = '$.data.userQuestion',
       seedsPath,
       outputVar = '_queryPlan',
-      modelId,
       maxTopics = 8,
       maxSynonymsPerTopic = 5,
       queryLanguage: configQueryLanguage,
@@ -71,8 +70,11 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
     const seeds = seedsPath ? this.resolveVariable(seedsPath, state) : null;
 
     const { data: models } = configCache.getModels();
-    const model =
-      models?.find(m => m.id === modelId) || models?.find(m => m.default) || models?.[0];
+    // Use the shared prompt-node precedence (config.modelId → _modelOverride →
+    // workflow defaultModelId → context → global default) so the seed-plan step
+    // honors the chat-selected model and the workflow default instead of
+    // silently dropping to the global default model.
+    const model = this.resolveModel(models, config, context, state, node.id);
     if (!model) {
       return this.createErrorResult('No model available for query planning', { nodeId: node.id });
     }
