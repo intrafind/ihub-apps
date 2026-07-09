@@ -213,7 +213,7 @@ This should not happen due to built-in guards. If it does:
 
 ### URL Parameter Persists After Send
 
-The `send` parameter should be automatically removed. If it persists:
+Both the `send` and `prefill` parameters should be automatically removed once the message is sent. If either persists:
 
 1. Check if JavaScript is enabled
 2. Verify navigation is not being blocked

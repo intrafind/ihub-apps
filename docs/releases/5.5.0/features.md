@@ -269,6 +269,16 @@ admins no longer need to edit `platform.json` by hand.
 > Existing deployments that relied on the env var must set the key server-side for Azure to keep
 > working.
 
+## Auto-Send Links No Longer Leave a Stale Message in the Input Box
+
+Answer links built with the documented `?prefill={message}&send=true` pattern now clean up both
+URL parameters once the message is sent. Previously only `send` was removed, so a later reload of
+the same link re-populated the chat input with the already-sent message and left it looking unsent.
+
+- Applies to shared support/FAQ links, ticket-reply templates, and any other one-click "answer
+  link" workflow built on the auto-send feature.
+- No configuration or admin action required.
+
 ## Outlook Add-in: Manifest Download Restored
 
 Downloading the Outlook add-in manifest works again. The manifest endpoint had started returning a
