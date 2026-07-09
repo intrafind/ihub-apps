@@ -1258,7 +1258,8 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "mcpServers": "MCP servers",
-      "telemetry": "Telemetry"
+      "telemetry": "Telemetry",
+      "voiceInput": "Voice Input"
     },
     "mcp": {
       "common": {
@@ -2437,12 +2438,14 @@
     "tooltipManual": "Voice input (Ctrl+M) - manual",
     "tooltipAutomatic": "Voice input (Ctrl+M) - automatic",
     "ariaLabel": "Toggle voice input",
+    "errorTitle": "Voice input error",
     "error": {
       "notSupported": "Speech recognition not supported in this browser",
       "permissionDenied": "Please allow microphone access and try again.",
       "noSpeech": "No speech detected. Please try again.",
       "noMicrophone": "No microphone found. Please check your device settings.",
       "network": "Network error. Please check your connection.",
+      "service": "Transcription service unavailable. Please try again.",
       "general": "Voice input error. Please try again.",
       "startError": "Error starting voice input. Please try again."
     }

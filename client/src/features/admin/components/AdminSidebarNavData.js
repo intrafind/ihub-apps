@@ -23,7 +23,8 @@ import {
   ArrowPathIcon,
   ExclamationTriangleIcon,
   ClipboardDocumentCheckIcon,
-  NewspaperIcon
+  NewspaperIcon,
+  MicrophoneIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -287,6 +288,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/features',
           icon: FlagIcon,
           visible: showAdminPage('features')
+        },
+        {
+          key: 'voice-input',
+          label: t('admin.nav.voiceInput', 'Voice Input'),
+          href: '/admin/voice-input',
+          icon: MicrophoneIcon,
+          visible: showAdminPage('system')
         },
         {
           key: 'security',

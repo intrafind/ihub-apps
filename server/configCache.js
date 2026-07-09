@@ -440,6 +440,13 @@ class ConfigCache {
         if (configPath === 'config/platform.json') {
           const platformData = await loadJson(configPath);
           if (platformData !== null) {
+            // Decrypt the realtime speech API key so the WS proxy receives
+            // plaintext. Env-var placeholders are resolved later in setCacheEntry.
+            if (platformData.speech?.realtime?.apiKey) {
+              platformData.speech.realtime.apiKey = decryptIfEncrypted(
+                platformData.speech.realtime.apiKey
+              );
+            }
             this.setCacheEntry(configPath, platformData);
             logger.info('Cached platform config', { component: 'ConfigCache', configPath });
           } else {

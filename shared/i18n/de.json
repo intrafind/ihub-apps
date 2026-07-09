@@ -1508,7 +1508,8 @@
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
-      "telemetry": "Telemetrie"
+      "telemetry": "Telemetrie",
+      "voiceInput": "Spracheingabe"
     },
     "mcp": {
       "common": {
@@ -2402,12 +2403,14 @@
     "tooltipManual": "Spracheingabe (Strg+M) - manuell",
     "tooltipAutomatic": "Spracheingabe (Strg+M) - automatisch",
     "ariaLabel": "Spracheingabe umschalten",
+    "errorTitle": "Fehler bei der Spracheingabe",
     "error": {
       "notSupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
       "permissionDenied": "Bitte erlauben Sie den Mikrofonzugriff und versuchen Sie es erneut.",
       "noSpeech": "Keine Sprache erkannt. Bitte versuchen Sie es erneut.",
       "noMicrophone": "Kein Mikrofon gefunden. Bitte überprüfen Sie Ihre Geräteeinstellungen.",
       "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+      "service": "Transkriptionsdienst nicht verfügbar. Bitte versuchen Sie es erneut.",
       "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut.",
       "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut."
     }

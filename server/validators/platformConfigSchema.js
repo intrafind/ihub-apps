@@ -212,7 +212,40 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .default({}),
-    usageTracking: usageTrackingRetentionSchema.default({})
+    usageTracking: usageTrackingRetentionSchema.default({}),
+    // Realtime speech-to-text: the browser streams mic audio to iHub over a
+    // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
+    // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with
+    // settings.speechRecognition.service = 'vllm-realtime'.
+    speech: z
+      .object({
+        realtime: z
+          .object({
+            enabled: z.boolean().default(false),
+            url: z.string().default(''),
+            model: z.string().default(''),
+            // Optional. Supports plaintext, ${ENV_VAR} placeholders, and
+            // ENC[...] encrypted values (decrypted by configCache on load).
+            apiKey: z.string().default('')
+          })
+          .passthrough()
+          .default({}),
+        // Azure Speech runs in the browser via the Speech SDK. The subscription
+        // KEY is provided via the VITE_AZURE_SUBSCRIPTION_ID env var (baked into
+        // the client) and is intentionally NOT stored here. These are the
+        // platform-level defaults the client falls back to when an app does not
+        // set its own settings.speechRecognition.host.
+        azure: z
+          .object({
+            enabled: z.boolean().default(false),
+            host: z.string().default(''),
+            region: z.string().default('')
+          })
+          .passthrough()
+          .default({})
+      })
+      .passthrough()
+      .default({})
   })
   .passthrough();
 

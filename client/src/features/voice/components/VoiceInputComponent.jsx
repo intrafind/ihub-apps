@@ -10,8 +10,15 @@ const VoiceInputComponent = ({
   disabled = false,
   onCommand = null
 }) => {
-  const { isListening, transcript, toggleListening, stopListening, microphoneMode } =
-    useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
+  const {
+    isListening,
+    transcript,
+    errorMessage,
+    clearError,
+    toggleListening,
+    stopListening,
+    microphoneMode
+  } = useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
 
   useEffect(() => {
     const handleKeyDown = e => {
@@ -28,12 +35,13 @@ const VoiceInputComponent = ({
 
   const handleOnFeedbackOverlayClose = () => {
     stopListening();
+    clearError();
   };
 
   return (
     <>
       <VoiceFeedback
-        isActive={isListening}
+        isActive={isListening || !!errorMessage}
         setIsActive={handleOnFeedbackOverlayClose}
         transcript={
           app?.inputMode?.microphone?.showTranscript || app?.microphone?.showTranscript
@@ -41,6 +49,7 @@ const VoiceInputComponent = ({
             : ''
         }
         mode={microphoneMode}
+        errorMessage={errorMessage}
       />
       <VoiceInputButton
         isListening={isListening}

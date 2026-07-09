@@ -104,6 +104,9 @@ const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
 const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminVoiceInputPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminVoiceInputPage')
+);
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminAuditLogPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuditLogPage'));
@@ -648,6 +651,12 @@ function App() {
             )}
             {showAdminPage('telemetry') && (
               <Route path="telemetry" element={<LazyAdminRoute component={AdminTelemetryPage} />} />
+            )}
+            {showAdminPage('system') && (
+              <Route
+                path="voice-input"
+                element={<LazyAdminRoute component={AdminVoiceInputPage} />}
+              />
             )}
 
             {/* Observability - Audit Log */}

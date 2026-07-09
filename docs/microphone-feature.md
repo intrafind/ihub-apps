@@ -2,7 +2,7 @@
 
 ## Overview
 
-The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and two speech recognition backends (browser-native and Azure Cognitive Services).
+The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and an iHub-proxied vLLM realtime endpoint such as Voxtral).
 
 ## Modes
 
@@ -19,7 +19,72 @@ Configure which backend to use with `settings.speechRecognition.service`:
 | ----- | -------- |
 | `default` (or omitted) | Uses the browser's built-in `SpeechRecognition` / `webkitSpeechRecognition` API. No additional credentials are required. |
 | `azure` | Uses Azure Cognitive Services Speech SDK. Set `settings.speechRecognition.host` to your Azure Speech endpoint. |
+| `vllm-realtime` | Streams microphone audio to the iHub server over a WebSocket; iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral on `/v1/realtime`) and streams transcription back. The endpoint is configured **server-side** in `platform.json` (see below) — no per-app `host` is needed and the vLLM URL/key never reach the browser. |
 | `custom` | Falls through to the browser default. Reserved for future custom providers. |
+
+### vLLM Realtime (server-proxied)
+
+This mode is for self-hosted realtime speech models served by vLLM's realtime API
+(for example `mistralai/Voxtral-Mini-4B-Realtime-2602`). The data flow is:
+
+```
+browser mic ──(PCM16 16kHz over WebSocket)──▶ iHub /api/voice/realtime
+   iHub ──(vLLM realtime JSON protocol)──▶ vLLM /v1/realtime ──transcription──▶ iHub ──▶ browser
+```
+
+**Platform configuration** (`contents/config/platform.json`):
+
+```json
+{
+  "speech": {
+    "realtime": {
+      "enabled": true,
+      "url": "ws://localhost:8080/v1/realtime",
+      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "apiKey": ""
+    }
+  }
+}
+```
+
+- `enabled` — master switch for the server-side proxy. When `false` (default), the endpoint returns 503.
+- `url` — the vLLM realtime WebSocket URL (`ws://` or `wss://`).
+- `model` — the model id sent in the `session.update` handshake.
+- `apiKey` — optional. Local vLLM usually needs none. Supports plaintext, a `${ENV_VAR}` placeholder, or an encrypted `ENC[...]` value (decrypted on load).
+
+**App configuration** — an app simply opts in:
+
+```json
+{
+  "settings": {
+    "speechRecognition": {
+      "service": "vllm-realtime"
+    }
+  }
+}
+```
+
+Both `manual` (continuous) and `automatic` (silence-detected auto-stop via client-side
+voice-activity detection) microphone modes are supported. Because the browser captures
+raw audio via `getUserMedia` + `AudioContext`/`AudioWorklet`, this mode requires a secure
+context (HTTPS, or `localhost`) and does not depend on the browser's Web Speech API — so
+it also works in Firefox.
+
+### Configuring backends in the Admin UI
+
+Admins can configure the platform-level speech backends under **Admin → Voice Input**
+(`/admin/voice-input`) instead of editing `platform.json` by hand:
+
+- **vLLM Realtime** — enable/disable, WebSocket URL, model, and an optional API key
+  (stored encrypted at rest; a localhost vLLM usually needs none).
+- **Azure Speech** — enable/disable, default host/endpoint, and region. The Azure
+  subscription **key** is provided via the `VITE_AZURE_SUBSCRIPTION_ID` environment
+  variable (baked into the client at build time) and is intentionally **not** stored in
+  platform config. When an app selects the Azure service without its own
+  `settings.speechRecognition.host`, it falls back to the platform host configured here.
+
+Per-app selection of which backend to use still happens in the app editor's
+**Speech Recognition Service** dropdown.
 
 ## Supported Languages
 
