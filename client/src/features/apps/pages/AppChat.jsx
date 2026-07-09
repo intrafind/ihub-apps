@@ -1484,12 +1484,17 @@ function AppChat({ preloadedApp = null }) {
     else startRecordingTranscription();
   }, [startRecordingTranscription, stopRecordingAndTranscribe]);
 
-  // Stop any active recording if the component unmounts.
+  // Stop any active recording and abort an in-flight transcription if the
+  // component unmounts, so no microphone stream or WebSocket is left open.
   useEffect(() => {
     return () => {
       if (recorderRef.current) {
         recorderRef.current.cancel();
         recorderRef.current = null;
+      }
+      if (transcribeAbortRef.current) {
+        transcribeAbortRef.current.abort();
+        transcribeAbortRef.current = null;
       }
     };
   }, []);

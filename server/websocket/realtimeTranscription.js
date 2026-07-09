@@ -832,7 +832,19 @@ export function attachRealtimeTranscription(httpServer) {
       return;
     }
 
+    // The slot is acquired above but `bridgeConnection` (which owns releasing it)
+    // only runs if handleUpgrade completes the handshake. If the socket dies
+    // mid-upgrade the callback never fires, so guard against a leaked slot: once
+    // the bridge takes over, `bridged` is set and this listener is inert (the
+    // bridge's own cleanup releases exactly once); otherwise a pre-bridge close
+    // releases the slot here.
+    let bridged = false;
+    socket.on('close', () => {
+      if (!bridged) limiter.release(user.id);
+    });
+
     wss.handleUpgrade(req, socket, head, ws => {
+      bridged = true;
       bridgeConnection(ws, user, limiter);
     });
   });
