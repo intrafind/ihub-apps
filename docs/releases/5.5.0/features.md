@@ -217,3 +217,13 @@ came from the shared chat used across the platform, so any app could be affected
 - Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
+
+## App Editor No Longer Corrupts Numeric Fields When Cleared, and Supports HTML Output Format
+
+Clearing a numeric field (Temperature, upload file-size limits, textarea rows) in the app editor
+form previously left an invalid value in the saved configuration, which could cause the save to be
+rejected by the server without a clear reason. The Output Format dropdown was also missing the
+`html` option, so apps configured for HTML output silently displayed and re-saved as Markdown.
+
+- Clearing a numeric field now omits it from the saved config instead of storing an invalid value.
+- The Output Format dropdown now includes `HTML`, matching what the server already accepts.
