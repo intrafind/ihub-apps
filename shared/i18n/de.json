@@ -1482,7 +1482,13 @@
         "cancel": "Abbrechen",
         "save": "Benutzer speichern",
         "saving": "Speichern..."
-      }
+      },
+      "groups": "Gruppen",
+      "groupsPlaceholder": "Gruppen suchen oder Namen eingeben…",
+      "groupsEmpty": "Noch keine Gruppen zugewiesen",
+      "groupsHelp": "Definierte Gruppen suchen und auswählen oder einen Namen eingeben und Enter drücken, um eine externe Gruppenzuordnung hinzuzufügen. Benutzer erben die Berechtigungen aller zugewiesenen Gruppen.",
+      "groupMembership": "Gruppenzugehörigkeit",
+      "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern"
     },
     "logging": {
       "loadError": "Fehler beim Laden der Logging-Konfiguration",
@@ -1874,6 +1880,24 @@
           "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         }
       }
+    },
+    "groupSelect": {
+      "placeholder": "Gruppen suchen oder Namen eingeben…",
+      "empty": "Noch keine Gruppen ausgewählt",
+      "knownGroup": "Definierte Gruppe",
+      "customGroup": "Keine definierte Gruppe – wird als externe Gruppenzuordnung behandelt",
+      "addCustom": "„{{name}}“ hinzufügen",
+      "remove": "{{name}} entfernen",
+      "noMatches": "Keine passenden Gruppen",
+      "startTyping": "Zum Suchen von Gruppen tippen…"
+    },
+    "groups": {
+      "externalMappings": "Externe Gruppenzuordnungen",
+      "externalMappingsDescription": "Externe Gruppen von OIDC, LDAP oder anderen Anbietern dieser internen Gruppe zuordnen",
+      "externalGroupNames": "Externe Gruppennamen",
+      "externalMappingsPlaceholder": "Gruppennamen eingeben und Enter drücken…",
+      "externalMappingsEmpty": "Noch keine externen Zuordnungen",
+      "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
     }
   },
   "cloudStorage": {
