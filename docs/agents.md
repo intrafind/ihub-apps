@@ -275,7 +275,7 @@ node.
 
 ## Out of scope for V1
 
-These pieces are explicitly **deferred to V1.5+** — see `concepts/agent-factory/2026-05-20 V1 Slim Scope.md`:
+These pieces are explicitly **deferred to V1.5+** — see `concepts/archive/agent-factory/2026-05-20 V1 Slim Scope.md`:
 
 - Tripartite memory sections (Semantic / Episodic / Procedural)
 - Per-entry `{source: agent|human}` markers and immutability

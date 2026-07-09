@@ -241,7 +241,7 @@ We've added detailed logging to help troubleshoot group mapping:
 
 For more details, see:
 
-1. **Concept Document**: `concepts/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md`
+1. **Concept Document**: `concepts/archive/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md`
    - Complete architecture explanation
    - Configuration guide
    - Security best practices
