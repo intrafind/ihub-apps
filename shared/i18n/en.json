@@ -1549,7 +1549,7 @@
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
         "websearchUseNative": "Use Native Search",
-        "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI)",
+        "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
         "websearchExtractContent": "Extract Content",
         "websearchExtractContentDesc": "Fetch and extract full page content from search results",

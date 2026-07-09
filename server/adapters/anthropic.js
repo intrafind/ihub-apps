@@ -150,7 +150,7 @@ class AnthropicAdapterClass extends BaseAdapter {
    * Create a completion request for Anthropic
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, maxTokens, tools, responseSchema } =
+    const { temperature, stream, maxTokens, tools, responseSchema, nativeWebSearch } =
       this.extractRequestOptions(options);
 
     // Format messages and extract system prompt
@@ -179,8 +179,19 @@ class AnthropicAdapterClass extends BaseAdapter {
       requestBody.tool_choice = { type: 'tool', name: 'json' };
     }
 
-    if (finalTools.length > 0) {
-      requestBody.tools = convertToolsFromGeneric(finalTools, 'anthropic');
+    const anthropicTools =
+      finalTools.length > 0 ? convertToolsFromGeneric(finalTools, 'anthropic') : [];
+
+    // Anthropic's server-side web search tool. Unlike Google, Anthropic allows
+    // combining it with client-defined function tools in the same request, so
+    // it's simply prepended rather than gated on finalTools being empty.
+    // See https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
+    if (nativeWebSearch?.provider === 'anthropic') {
+      anthropicTools.unshift({ type: 'web_search_20250305', name: 'web_search' });
+    }
+
+    if (anthropicTools.length > 0) {
+      requestBody.tools = anthropicTools;
       // // Anthropic-specific instruction to encourage tool use, especially in multi-turn scenarios.
       // const toolInstruction =
       //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";
