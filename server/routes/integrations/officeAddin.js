@@ -450,11 +450,17 @@ function generateManifest({
           <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
         </bt:Urls>
         <bt:ShortStrings>
-          <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
-          <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
+          <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayNameEn)} Add-in">
+            <bt:Override Locale="de-DE" Value="${escapeXml(displayNameDe)} Add-in"/>
+          </bt:String>
+          <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabelEn)}">
+            <bt:Override Locale="de-DE" Value="${escapeXml(showTaskPaneLabelDe)}"/>
+          </bt:String>
         </bt:ShortStrings>
         <bt:LongStrings>
-          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
+          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(descriptionEn)}">
+            <bt:Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+          </bt:String>
         </bt:LongStrings>
       </Resources>
     </VersionOverrides>

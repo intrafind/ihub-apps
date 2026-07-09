@@ -258,3 +258,12 @@ admins no longer need to edit `platform.json` by hand.
 > bundle). Move the key into **Admin → Voice Input** (`platform.json` → `speech.azure.subscriptionKey`).
 > Existing deployments that relied on the env var must set the key server-side for Azure to keep
 > working.
+
+## Outlook Add-in: Manifest Download Restored
+
+Downloading the Outlook add-in manifest works again. The manifest endpoint had started returning a
+server error, which blocked installing or sideloading the add-in.
+
+- The generated manifest now uses the correct localized add-in name, task-pane button label, and
+  description, with English defaults and German (`de-DE`) overrides.
+- No admin action is required — the fix takes effect automatically on upgrade.
