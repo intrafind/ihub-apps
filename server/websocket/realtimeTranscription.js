@@ -195,6 +195,8 @@ function bridgeConnection(clientWs, user) {
   }
 
   let upstreamReady = false; // handshake complete, audio may flow
+  let gotTranscription = false; // at least one delta/final was received
+  let errorSent = false; // guard so we report a failure at most once
   let idleTimer = null;
 
   const resetIdle = () => {
@@ -224,6 +226,22 @@ function bridgeConnection(clientWs, user) {
     }
   };
 
+  // Report an upstream failure to the browser (once) with a diagnostic message
+  // and a structured server log, then tear the bridge down.
+  const notifyUpstreamError = (clientMessage, logMeta = {}) => {
+    logger.warn('Realtime STT: upstream failure', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      url: cfg.url,
+      ...logMeta
+    });
+    if (!errorSent) {
+      errorSent = true;
+      sendJson(clientWs, { type: 'error', message: clientMessage });
+    }
+    cleanup();
+  };
+
   // --- Upstream (vLLM) -> iHub ---
   upstream.on('open', () => {
     // Handshake: identify the model, then open the audio buffer.
@@ -244,13 +262,18 @@ function bridgeConnection(clientWs, user) {
     }
     switch (msg.type) {
       case 'transcription.delta':
+        gotTranscription = true;
         sendJson(clientWs, { type: 'delta', text: msg.delta || '' });
         break;
       case 'transcription.done':
+        gotTranscription = true;
         sendJson(clientWs, { type: 'final', text: msg.text || '' });
         break;
       case 'error':
-        sendJson(clientWs, { type: 'error', message: msg.error || 'Transcription error' });
+        notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
+          reason: 'upstream error frame',
+          upstreamError: msg.error
+        });
         break;
       // session.created and other control frames need no client action
       default:
@@ -258,13 +281,38 @@ function bridgeConnection(clientWs, user) {
     }
   });
 
-  upstream.on('error', err => {
-    logger.warn('Realtime STT: upstream error', { component: 'RealtimeSTT', error: err.message });
-    sendJson(clientWs, { type: 'error', message: 'Transcription service error' });
-    cleanup();
+  // The vLLM server rejected the WebSocket upgrade with an HTTP response
+  // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
+  upstream.on('unexpected-response', (_req, res) => {
+    notifyUpstreamError(
+      `Transcription service rejected the connection (HTTP ${res.statusCode} ${res.statusMessage || ''})`.trim(),
+      { reason: 'unexpected-response', statusCode: res.statusCode }
+    );
   });
 
-  upstream.on('close', () => {
+  upstream.on('error', err => {
+    // Socket-level failures (ECONNREFUSED, ETIMEDOUT, ENOTFOUND, TLS errors…).
+    // err.message is often empty, so include err.code which usually is not.
+    const detail = [err.code, err.message].filter(Boolean).join(': ') || 'connection error';
+    notifyUpstreamError(`Transcription service unreachable: ${detail}`, {
+      reason: 'socket error',
+      error: err.message,
+      code: err.code
+    });
+  });
+
+  upstream.on('close', (code, reasonBuf) => {
+    const reason = reasonBuf ? reasonBuf.toString() : '';
+    // A clean close (code 1000) after we delivered transcription is expected.
+    // Report only genuinely-abnormal closes: before the handshake completed, or
+    // a non-normal code with nothing transcribed.
+    if (!errorSent && !gotTranscription && (!upstreamReady || code !== 1000)) {
+      notifyUpstreamError(
+        `Transcription service closed the connection (code ${code}${reason ? `: ${reason}` : ''})`,
+        { reason: 'abnormal close', code, closeReason: reason, upstreamReady }
+      );
+      return;
+    }
     cleanup();
   });
 
