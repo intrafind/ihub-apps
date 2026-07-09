@@ -17,75 +17,34 @@ import {
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
-import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
+import { getAgentWorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal } from '../../utils/authorization.js';
-import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
-import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
+import {
+  buildAgentRun,
+  applyNodeModels,
+  applyReviewSettings
+} from '../../agents/runtime/buildAgentRun.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import logger from '../../utils/logger.js';
 
-// Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
-// so multiple instances see the same executions; we use one per-worker.
-// 30-minute default node timeout: the phased planner node blocks while its
-// entire sub-workflow runs (up to 6 tasks × several minutes each), so the
-// 5-minute DEFAULT_NODE_TIMEOUT would kill it mid-run. 30 min matches
-// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout allows.
-let _engine = null;
+// WorkflowEngine state lives in StateManager (filesystem), so multiple
+// instances see the same executions; getAgentWorkflowEngine() still gives us
+// one shared instance per-worker (and the same one server.js's boot-time
+// resume path uses) rather than each constructing its own.
 function getEngine() {
-  if (!_engine) _engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
-  return _engine;
+  return getAgentWorkflowEngine();
 }
+
+// Re-exported for server/tests/agent-node-models.test.js and
+// server/tests/agent-review-injection.test.js, which exercise these directly.
+export { applyNodeModels, applyReviewSettings };
 
 function lookupProfile(profileId) {
   const { data: profiles = [] } = configCache.getAgentProfiles(true);
   return profiles.find(p => p.id === profileId) || null;
-}
-
-/**
- * Apply a profile's per-step model overrides onto the resolved workflow.
- * `nodeModels` maps node id → model id; each match sets that node's
- * `config.modelId`, which the executors honor first (above the run-wide
- * default). Mutates and returns the workflow. No-op when nodeModels is empty.
- *
- * @param {Object} workflow
- * @param {Object<string,string>} [nodeModels]
- * @returns {Object} the same workflow
- */
-export function applyNodeModels(workflow, nodeModels) {
-  if (!workflow || !Array.isArray(workflow.nodes) || !nodeModels) return workflow;
-  for (const node of workflow.nodes) {
-    if (node && typeof node.id === 'string' && nodeModels[node.id]) {
-      node.config = { ...(node.config || {}), modelId: nodeModels[node.id] };
-    }
-  }
-  return workflow;
-}
-
-/**
- * Inject resolved review knobs onto every verifier node's config. Mirrors
- * applyNodeModels: external workflows ignore profile flags, so the run-start
- * code wires per-node config. Mutates and returns the workflow.
- * @param {Object} workflow
- * @param {Object} resolved - from resolveReviewSettings()
- */
-export function applyReviewSettings(workflow, resolved) {
-  if (!workflow || !Array.isArray(workflow.nodes) || !resolved) return workflow;
-  for (const node of workflow.nodes) {
-    if (node?.type !== 'verifier') continue;
-    node.config = {
-      ...(node.config || {}),
-      maxRetries: resolved.maxRetries,
-      stallLimit: resolved.stallLimit,
-      acceptPartial: resolved.acceptPartial,
-      acceptPartialAfterStall: resolved.acceptPartialAfterStall,
-      requirePass: resolved.requirePass,
-      ...(resolved.criteria ? { criteria: resolved.criteria } : {})
-    };
-  }
-  return workflow;
 }
 
 function countRunningProfileRuns(profileId) {
@@ -185,30 +144,15 @@ export default function registerAgentRunRoutes(app) {
         }
 
         const { brief, variables } = req.body || {};
-        const serialized = serializeProfile(profile);
 
-        // Resolve workflow: either the profile's embedded definition or a
-        // reference to a hand-authored workflow in contents/workflows/.
-        // External refs let authors wire complex workflows (e.g.
-        // iterative-research-auto) to an agent profile without having to
-        // inline the whole definition into the profile file.
-        let workflow;
-        if (
-          serialized.workflow?.ref === 'external' &&
-          typeof serialized.workflow.workflowId === 'string'
-        ) {
-          const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
-          if (!wf) {
-            return sendBadRequest(
-              res,
-              `External workflow ${serialized.workflow.workflowId} not found`
-            );
-          }
-          workflow = JSON.parse(JSON.stringify(wf));
-        } else {
-          workflow = serialized.workflow.definition || {};
+        let runWiring;
+        try {
+          runWiring = buildAgentRun(profile);
+        } catch (error) {
+          if (error.code === 'WORKFLOW_NOT_FOUND') return sendBadRequest(res, error.message);
+          throw error;
         }
-        workflow.id = workflow.id || `agent:${profileId}`;
+        const { workflow, agentModelConfig, agentReviewConfig } = runWiring;
 
         const principal = buildAgentPrincipal(profile, {
           userId: req.user?.id || 'anonymous',
@@ -246,14 +190,11 @@ export default function registerAgentRunRoutes(app) {
           // refresh) so resolvers always land on the configured model. Copied
           // into child sub-workflows automatically (see PlannerNodeExecutor's
           // childInitial copy), so planner sub-tasks inherit it too.
-          _agentModelConfig: {
-            defaultModelId: profile.preferredModel || null,
-            nodeModels: profile.nodeModels || {}
-          },
+          _agentModelConfig: agentModelConfig,
           // DURABLE review config — stashed in run state so it survives workflow
           // config-cache refreshes and is available to all verifier nodes throughout
           // the run (including in child sub-workflows via PlannerNodeExecutor copy).
-          _agentReviewConfig: resolveReviewSettings(profile.review),
+          _agentReviewConfig: agentReviewConfig,
           // Pre-initialize mutable state slots so they're shared by reference
           // between any state-snapshot that an in-flight async caller (e.g.
           // the fire-and-forget title generator) may have captured before
@@ -267,27 +208,6 @@ export default function registerAgentRunRoutes(app) {
           _stepLogs: {},
           _taskTimings: {}
         };
-
-        // Calculate wall-time deadline via workflow config. Also publish the
-        // profile's preferred model as the run's workflow-level default so EVERY
-        // LLM node inherits it (the prompt/agent node via getModel step 3, and
-        // the verifier via the same defaultModelId) — without this, an EXTERNAL
-        // workflow's nodes fall back to the global default model and the
-        // operator has no single place to set the run's model. A node may still
-        // override per-node with its own `config.modelId`.
-        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
-        workflow.config = {
-          ...(workflow.config || {}),
-          maxExecutionTime: maxWallTimeSec * 1000,
-          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
-        };
-        // Per-step model overrides (profile.nodeModels) win over the run-wide
-        // default for the listed nodes.
-        applyNodeModels(workflow, profile.nodeModels);
-        // Inject resolved review knobs onto every verifier node so EXTERNAL
-        // workflows (which don't reference profile flags directly) pick up the
-        // operator's strictness / retry / acceptance configuration.
-        applyReviewSettings(workflow, initialData._agentReviewConfig);
 
         // Persist a checkpoint after every node completes. Agent runs are
         // long-lived (each task is a multi-minute LLM call) and otherwise
@@ -624,8 +544,9 @@ export default function registerAgentRunRoutes(app) {
   //
   // Unlike standard workflow runs, agent runs don't persist `_workflowDefinition`
   // into state (the embedded workflow can be hefty — full system prompts etc),
-  // so we rebuild it here from the agent profile and pass it via options.
-  // Same logic used at run-start above (lines ~138-161).
+  // so we rebuild it here from the agent profile via buildAgentRun() — the
+  // same resolution the manual-trigger route above and the boot-time resume
+  // path in server.js use — and pass it via options.
   app.post(
     buildServerPath('/api/agents/runs/:runId/resume'),
     authRequired,
@@ -657,37 +578,17 @@ export default function registerAgentRunRoutes(app) {
         const profile = lookupProfile(profileId);
         if (!profile) return sendBadRequest(res, `Agent profile ${profileId} no longer exists`);
 
-        const serialized = serializeProfile(profile);
+        // Refreshes the wall-time budget, model, and review settings from the
+        // (possibly updated) profile so the resumed run uses the operator's
+        // current settings, not whatever was baked in when the run originally
+        // started.
         let workflow;
-        if (
-          serialized.workflow?.ref === 'external' &&
-          typeof serialized.workflow.workflowId === 'string'
-        ) {
-          const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
-          if (!wf) {
-            return sendBadRequest(
-              res,
-              `External workflow ${serialized.workflow.workflowId} not found`
-            );
-          }
-          workflow = JSON.parse(JSON.stringify(wf));
-        } else {
-          workflow = serialized.workflow?.definition || {};
+        try {
+          ({ workflow } = buildAgentRun(profile));
+        } catch (error) {
+          if (error.code === 'WORKFLOW_NOT_FOUND') return sendBadRequest(res, error.message);
+          throw error;
         }
-        workflow.id = workflow.id || `agent:${profileId}`;
-        // Refresh the wall-time budget from the (possibly updated) profile so
-        // the resumed run uses the operator's current setting, not whatever
-        // was baked in when the run originally started.
-        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
-        workflow.config = {
-          ...(workflow.config || {}),
-          maxExecutionTime: maxWallTimeSec * 1000,
-          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
-        };
-        applyNodeModels(workflow, profile.nodeModels);
-        // Re-inject review knobs on resume so the re-fetched workflow's verifier
-        // nodes reflect the operator's current profile settings.
-        applyReviewSettings(workflow, resolveReviewSettings(profile.review));
 
         const newState = await getEngine().resumeFromTerminated(runId, {
           user: req.user,

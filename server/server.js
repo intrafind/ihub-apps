@@ -627,18 +627,15 @@ if (cluster.isPrimary && workerCount > 1) {
   try {
     const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
-    const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+    const { getAgentWorkflowEngine } = await import('./services/workflow/agentEngineSingleton.js');
     const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
     const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
-    const { serializeProfile } = await import('./agents/profile/profileWorkflowSerializer.js');
+    const { buildAgentRun } = await import('./agents/runtime/buildAgentRun.js');
     const { buildAgentPrincipal } = await import('./utils/authorization.js');
-    const { applyNodeModels, applyReviewSettings } = await import('./routes/agents/runs.js');
-    const { resolveReviewSettings } = await import('./agents/profile/reviewSettings.js');
 
-    // 30-minute default node timeout consistent with the agent-run engine in
-    // routes/agents/runs.js — needed so resumed agent runs (including phased
-    // planner nodes) don't hit the 5-minute DEFAULT_NODE_TIMEOUT on recovery.
-    const engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
+    // Shared with routes/agents/runs.js's getEngine() so a resumed run and a
+    // freshly-triggered run see the same in-memory execution state.
+    const engine = getAgentWorkflowEngine();
     const triggerManager = getTriggerManager();
     triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
@@ -652,34 +649,19 @@ if (cluster.isPrimary && workerCount > 1) {
         const { data: profiles } = configCache.getAgentProfiles(true);
         const profile = profiles?.find(p => p.id === profileId);
         if (!profile) return null;
-        const serialized = serializeProfile(profile);
-        // External profiles reference a standalone workflow file by id;
-        // embedded profiles carry the rebuilt definition inline. Deep-clone the
-        // external definition — getWorkflowById returns the SHARED cached object
-        // and we mutate config/nodes below (embedded definitions are already
-        // cloned by serializeProfile).
-        let definition;
-        if (serialized.workflow?.ref === 'external' && serialized.workflow.workflowId) {
-          const cached = configCache.getWorkflowById(serialized.workflow.workflowId);
-          definition = cached ? JSON.parse(JSON.stringify(cached)) : null;
-        } else {
-          definition = serialized.workflow?.definition;
-        }
-        if (!definition) return null;
 
-        // Re-apply the same run-start wiring the request path sets
+        // Re-applies the same run-start wiring the request path sets
         // (routes/agents/runs.js) so a resumed run keeps its wall-time budget
         // and per-step model / review config. Without the wall-time budget,
         // resumeFromCheckpoint falls back to the engine's 5-minute default and
         // the resumed run trips MAX_EXECUTION_TIME shortly after recovery.
-        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
-        definition.config = {
-          ...(definition.config || {}),
-          maxExecutionTime: maxWallTimeSec * 1000,
-          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
-        };
-        applyNodeModels(definition, profile.nodeModels);
-        applyReviewSettings(definition, resolveReviewSettings(profile.review));
+        let definition;
+        try {
+          ({ workflow: definition } = buildAgentRun(profile));
+        } catch (error) {
+          if (error.code === 'WORKFLOW_NOT_FOUND') return null;
+          throw error;
+        }
 
         const principal = buildAgentPrincipal(profile, state.data._agent?.triggeredBy || null);
         return { definition, options: { user: principal } };
