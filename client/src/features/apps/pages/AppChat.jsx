@@ -1382,6 +1382,9 @@ function AppChat({ preloadedApp = null }) {
           const label = `🎙 ${sourceName || t('transcription.recording', 'Recording')}`;
           addUserMessage(label, { rawContent: label });
           const assistantId = addAssistantMessage();
+          // Latest streamed text (declared out here so the catch block can keep
+          // the partial transcript on cancellation).
+          let lastText = '';
 
           try {
             const audioBuffer = source.audioBuffer
@@ -1409,7 +1412,10 @@ function AppChat({ preloadedApp = null }) {
               modelId,
               signal: abortController.signal,
               onDelta: streaming
-                ? text => updateAssistantMessage(assistantId, text, true)
+                ? text => {
+                    lastText = text;
+                    updateAssistantMessage(assistantId, text, true);
+                  }
                 : undefined
             });
             updateAssistantMessage(
@@ -1418,9 +1424,19 @@ function AppChat({ preloadedApp = null }) {
               false
             );
           } catch (err) {
-            updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
-              isError: true
-            });
+            // On cancel, keep the partial transcript and append the notice on a
+            // new line rather than replacing everything with the error text.
+            if (err?.code === 'aborted' && lastText.trim()) {
+              updateAssistantMessage(
+                assistantId,
+                `${lastText.trim()}\n\n_${t('transcription.errors.aborted', 'Transcription was cancelled.')}_`,
+                false
+              );
+            } else {
+              updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
+                isError: true
+              });
+            }
           }
         }
       } finally {
