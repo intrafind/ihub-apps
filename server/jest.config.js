@@ -21,7 +21,7 @@ export default {
   // `npm run test:manual` (tests/run-manual-tests.js) instead.
   testPathIgnorePatterns: [
     '/node_modules/',
-    ...manualTestFiles.map(f => `/tests/${f.replace(/\./g, '\\.')}$`)
+    ...manualTestFiles.map(f => `/tests/${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
   ],
 
   // Setup files
