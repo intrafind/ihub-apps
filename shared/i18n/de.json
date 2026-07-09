@@ -542,7 +542,8 @@
     "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
     "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
-    "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern."
+    "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
+    "malformedModelResponse": "Das KI-Modell hat eine unvollständige Antwort zurückgegeben und es konnte keine Antwort generiert werden. Dies kann gelegentlich auftreten – bitte senden Sie Ihre Nachricht erneut."
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -1808,7 +1809,7 @@
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
         "websearchUseNative": "Native Suche verwenden",
-        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI)",
+        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
         "websearchExtractContent": "Inhalt extrahieren",
         "websearchExtractContentDesc": "Vollständigen Seiteninhalt aus Suchergebnissen abrufen und extrahieren",

@@ -18,6 +18,7 @@ export const VALID_ADAPTER_OPTIONS = [
   'maxTokens',
   'tools',
   'toolChoice',
+  'nativeWebSearch',
   'responseFormat',
   'responseSchema',
   // Per-node thinking overrides (see thinkingOptions.js).

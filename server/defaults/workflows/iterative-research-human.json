@@ -171,7 +171,7 @@
           "de": "[Schritt {{_currentStep}}/{{_totalNodes}}, Iteration {{_currentNodeIteration}}] Recherchieren Sie dieses Thema: {{researchState.currentTopic}}\n\nKontext - Gesamtaufgabe: {{task}}\nRecherche-Ansatz: {{researchPlan.approach}}\n\n{{#if humanResponse_research_checkpoint.data.feedback}}Feedback aus Ihrer Prüfung: {{humanResponse_research_checkpoint.data.feedback}}\nBitte berücksichtigen Sie dieses Feedback.{{/if}}\n\nVerwenden Sie Websuche für aktuelle, zuverlässige Informationen.\n\nJSON zurückgeben:\n{\n  \"topic\": \"{{researchState.currentTopic}}\",\n  \"summary\": \"umfassende Zusammenfassung\",\n  \"keyFacts\": [\"Fakt 1\", \"Fakt 2\", \"Fakt 3\"],\n  \"sources\": [\"Quelle 1\", \"Quelle 2\"]\n}"
         },
         "outputVariable": "currentResearch",
-        "tools": ["googleSearch"],
+        "tools": ["webSearch"],
         "outputSchema": {
           "type": "object",
           "properties": {

@@ -1557,7 +1557,7 @@
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
         "websearchUseNative": "Use Native Search",
-        "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI)",
+        "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
         "websearchExtractContent": "Extract Content",
         "websearchExtractContentDesc": "Fetch and extract full page content from search results",
@@ -1974,7 +1974,8 @@
     "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
     "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",
-    "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access."
+    "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access.",
+    "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",

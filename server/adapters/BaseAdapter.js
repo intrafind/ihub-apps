@@ -42,7 +42,8 @@ export class BaseAdapter {
       tools: options.tools || null,
       toolChoice: options.toolChoice,
       responseFormat: options.responseFormat || null,
-      responseSchema: options.responseSchema || null
+      responseSchema: options.responseSchema || null,
+      nativeWebSearch: options.nativeWebSearch || null
     };
   }
 

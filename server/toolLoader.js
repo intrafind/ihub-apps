@@ -251,10 +251,53 @@ export async function loadTools(language = null) {
 }
 
 /**
- * Resolve the appropriate websearch tool based on app config and model provider.
- * Overrides tool parameter defaults with the values from app.websearch config.
+ * Model providers that can run web search themselves (server-side), without
+ * a script-backed tool. Native search is a request-time capability the
+ * adapter enables directly on the provider request — never a "tool" the
+ * generic tool-calling pipeline has to know about or convert.
+ * @type {Set<string>}
+ */
+const NATIVE_WEB_SEARCH_PROVIDERS = new Set(['google', 'openai-responses', 'anthropic']);
+
+/**
+ * Whether the given model provider can run web search natively.
+ * @param {string} modelProvider - Provider of the selected model
+ * @returns {{provider: string} | null}
+ */
+export function resolveNativeWebSearchProvider(modelProvider) {
+  return NATIVE_WEB_SEARCH_PROVIDERS.has(modelProvider) ? { provider: modelProvider } : null;
+}
+
+/**
+ * Resolve native web search for an app's unified `websearch` config + model provider.
+ * Returns null when native search doesn't apply — the caller (getToolsForApp) falls
+ * back to the script-backed `braveSearch` tool in that case.
  * @param {Object} app - App configuration with optional websearch field
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
+ * @returns {{provider: string} | null}
+ */
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled) {
+  if (!app?.websearch?.enabled) return null;
+
+  const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
+
+  // When websearchEnabled is undefined (client didn't send a toggle value),
+  // fall back to the admin-configured enabledByDefault setting.
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled || !useNativeSearch) return null;
+
+  return resolveNativeWebSearchProvider(modelProvider);
+}
+
+/**
+ * Resolve the braveSearch tool to inject based on app config and model provider.
+ * Only used as a fallback when native search doesn't apply — native search
+ * (Google/OpenAI/Anthropic) is resolved separately by resolveAppNativeWebSearch
+ * and passed straight to the adapter, not through the tools pipeline.
+ * Overrides tool parameter defaults with the values from app.websearch config.
+ * @param {Object} app - App configuration with optional websearch field
+ * @param {string} modelProvider - Provider of the selected model
  * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @returns {Array} Zero or one tool definition to inject
@@ -264,29 +307,23 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
 
   const {
     enabledByDefault = false,
-    useNativeSearch = true,
     maxResults = 5,
     extractContent = true,
     contentMaxLength = 3000
   } = app.websearch;
 
-  // When websearchEnabled is undefined (client didn't send a toggle value),
-  // fall back to the admin-configured enabledByDefault setting.
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
   if (!effectiveEnabled) return [];
 
-  let toolId;
-  if (useNativeSearch && modelProvider === 'google') {
-    toolId = 'googleSearch';
-  } else if (useNativeSearch && modelProvider === 'openai-responses') {
-    toolId = 'webSearch';
-  } else {
-    toolId = 'braveSearch';
-  }
+  // Native search handles this app/model combination — no tool needed.
+  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled)) return [];
 
-  const toolDef = allTools.find(t => t.id === toolId);
+  const toolDef = allTools.find(t => t.id === 'braveSearch');
   if (!toolDef) {
-    logger.warn('Websearch tool definition not found', { component: 'ToolLoader', toolId });
+    logger.warn('Websearch tool definition not found', {
+      component: 'ToolLoader',
+      toolId: 'braveSearch'
+    });
     return [];
   }
 

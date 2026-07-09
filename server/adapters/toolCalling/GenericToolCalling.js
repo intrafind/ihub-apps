@@ -185,6 +185,42 @@ export function createGenericStreamingResponse(
 }
 
 /**
+ * Raw provider finish reasons that mean the model FAILED to produce a usable
+ * answer (as opposed to a normal `stop`/`length`/`content_filter`/`tool_calls`).
+ *
+ * These have no clean cross-provider mapping, so `normalizeFinishReason` passes
+ * them through unchanged. A stream can therefore complete carrying one of these
+ * with empty content — most notably Gemini's `MALFORMED_FUNCTION_CALL`, which
+ * fires intermittently (often on a resend) when the model tries to emit a
+ * function call it cannot form. Handlers use this set to surface a clear error
+ * instead of a silent empty answer.
+ *
+ * Kept uppercase to match the raw provider strings. `SAFETY`/`RECITATION` are
+ * intentionally excluded — they normalize to `content_filter` and are handled
+ * separately.
+ */
+export const FAILURE_FINISH_REASONS = new Set([
+  'MALFORMED_FUNCTION_CALL',
+  'UNEXPECTED_TOOL_CALL',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'IMAGE_SAFETY',
+  'OTHER'
+]);
+
+/**
+ * Whether a (possibly normalized) finish reason indicates the model failed to
+ * produce a usable answer. Accepts any case.
+ * @param {string|null|undefined} finishReason
+ * @returns {boolean}
+ */
+export function isFailureFinishReason(finishReason) {
+  if (!finishReason || typeof finishReason !== 'string') return false;
+  return FAILURE_FINISH_REASONS.has(finishReason.toUpperCase());
+}
+
+/**
  * Normalize finish reasons across providers
  * @param {string} providerFinishReason - Provider-specific finish reason
  * @param {string} provider - Provider name

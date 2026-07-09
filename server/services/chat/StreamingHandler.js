@@ -5,6 +5,7 @@ import { actionTracker } from '../../actionTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
+import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
 import PromptService from '../PromptService.js';
@@ -435,6 +436,12 @@ class StreamingHandler {
       }
 
       let fullResponse = '';
+      // Tracks whether the model produced any user-facing answer output (text
+      // or images) across the whole stream. Thinking/grounding are excluded —
+      // they are not an answer on their own. Used to detect a degenerate
+      // completion (a failure finish reason with nothing to show) so it becomes
+      // a visible error instead of a silent empty bubble.
+      let emittedAnswerOutput = false;
       const adapter = getAdapter(model.provider);
 
       // Adapters expose parseResponseStream(response, ctx) which yields normalized
@@ -461,9 +468,13 @@ class StreamingHandler {
           for (const textContent of result.content) {
             actionTracker.trackChunk(chatId, { content: textContent });
             fullResponse += textContent;
+            if (textContent) emittedAnswerOutput = true;
           }
         }
 
+        if (result.images && result.images.length > 0) {
+          emittedAnswerOutput = true;
+        }
         this.processImages(result, chatId);
         this.processThinking(result, chatId);
         this.processGroundingMetadata(result, chatId);
@@ -494,6 +505,45 @@ class StreamingHandler {
         }
 
         if (result.complete) {
+          // Degenerate completion: the provider signalled a failure finish
+          // reason (e.g. Gemini's MALFORMED_FUNCTION_CALL) and streamed no
+          // answer. Left alone this reaches the client as a clean 'done' with
+          // empty content — a silent blank bubble. Surface a clear error
+          // instead so the user knows to retry. Mirrors the in-stream
+          // result.error path (error event + finally emits the terminal done).
+          if (!emittedAnswerOutput && isFailureFinishReason(finishReason)) {
+            const errorMessage = await getLocalizedError(
+              'malformedModelResponse',
+              {},
+              clientLanguage
+            );
+            logger.warn('Model completed with failure finish reason and no output', {
+              component: 'StreamingHandler',
+              provider: model.provider,
+              modelId: model.id,
+              finishReason
+            });
+            await logInteraction(
+              'chat_error',
+              buildLogData(true, {
+                responseType: 'error',
+                error: {
+                  message: errorMessage,
+                  code: 'MALFORMED_RESPONSE',
+                  details: { finishReason }
+                },
+                response: fullResponse
+              })
+            );
+            errorEmitted = true;
+            actionTracker.trackError(chatId, {
+              message: errorMessage,
+              code: 'MALFORMED_RESPONSE'
+            });
+            finishReason = 'error';
+            break;
+          }
+
           // Emit the answer-source badge before 'done' so the client attaches
           // it to the message. finalizeAnswerSource() also clears the sources.
           this.finalizeAnswerSource(chatId);

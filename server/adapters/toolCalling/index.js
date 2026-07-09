@@ -47,6 +47,8 @@ export {
   createGenericToolResult,
   createGenericStreamingResponse,
   normalizeFinishReason,
+  isFailureFinishReason,
+  FAILURE_FINISH_REASONS,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 

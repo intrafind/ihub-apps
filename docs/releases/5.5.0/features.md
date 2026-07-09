@@ -10,6 +10,27 @@ page.
 - If a save fails, the editor no longer mistakenly reports the form as "no unsaved changes,"
   preventing accidental loss of edits when navigating away.
 
+## Native Web Search for Anthropic Claude Models (and a Cleaner Native Search Architecture)
+
+Apps and agent workflows with web search enabled now use Claude's own built-in web search when the
+selected model is an Anthropic model, instead of falling back to Brave Search — matching the
+existing native-search behavior already available for Gemini and GPT models.
+
+- When `websearch.useNativeSearch` is on (the default) and the app's model is an Anthropic Claude
+  model, Claude searches the web itself and returns answers with citations in the same response.
+- Search results and citations are surfaced through the same "Grounding" answer-source badge used
+  for Google Search grounding, including in agent workflow synthesizer citations.
+- Anthropic bills native web search separately per search, in addition to standard token costs.
+- No configuration changes are required for existing apps that already have `websearch.enabled: true`.
+- Agent workflow nodes that request `webSearch` now also get native search on whichever provider
+  the node's model uses (previously this only worked reliably on Gemini). The bundled research
+  workflows are migrated automatically to the provider-agnostic `webSearch` marker.
+- Under the hood, native web search (Google, OpenAI, Anthropic) is no longer represented as a tool
+  — `googleSearch` and `webSearch` are removed as tool files, and existing installations are
+  migrated automatically. Only Brave Search remains a real, script-backed tool; native search is
+  now resolved directly from the app/workflow configuration and passed straight to the model
+  provider.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
@@ -391,3 +412,18 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
+
+## No More Silent Empty Answers from Gemini (Web Search Off)
+
+Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
+occasionally return a blank answer — most often when resending a message that worked before. This
+is now both prevented and, if it still happens, reported clearly instead of showing an empty bubble.
+
+- When an app supports web search but it is turned off for the turn, iHub now tells the model that
+  web search is unavailable so it answers from its own knowledge instead of trying to call a search
+  tool that isn't there. That phantom tool call was what made Gemini return an empty response
+  (`MALFORMED_FUNCTION_CALL`).
+- If a model still returns an incomplete response with no answer, the user now sees a clear message
+  ("The AI model returned an incomplete response… please try sending your message again") rather
+  than a silent blank reply.
+- No admin action is required — the fix takes effect automatically on upgrade.
