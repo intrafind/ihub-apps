@@ -12,14 +12,39 @@ const FLUSH_INTERVAL_MS = 10000;
 let queue = [];
 let flushTimer = null;
 
-export async function flushQueue() {
+// Single-flight serialization for any operation that touches `usage-events.jsonl`.
+// `flushQueue` (appendFile) and `cleanupEvents` (read + writeFile) must not
+// interleave, otherwise a flush that lands between the cleanup's read and its
+// rewrite would be overwritten — silently losing the just-appended entries.
+let writeLock = Promise.resolve();
+function withWriteLock(fn) {
+  const prev = writeLock;
+  let release;
+  writeLock = new Promise(r => {
+    release = r;
+  });
+  return prev.then(fn).finally(release);
+}
+
+async function appendQueueToDisk() {
   if (queue.length === 0) return 0;
   await fs.mkdir(path.dirname(eventFile), { recursive: true });
-  const count = queue.length;
-  const lines = queue.map(entry => JSON.stringify(entry)).join('\n') + '\n';
+  const pending = queue;
   queue = [];
-  await fs.appendFile(eventFile, lines, 'utf8');
+  const count = pending.length;
+  const lines = pending.map(entry => JSON.stringify(entry)).join('\n') + '\n';
+  try {
+    await fs.appendFile(eventFile, lines, 'utf8');
+  } catch (err) {
+    // Re-buffer on failure so the next flush retries instead of dropping events.
+    queue = pending.concat(queue);
+    throw err;
+  }
   return count;
+}
+
+export async function flushQueue() {
+  return withWriteLock(appendQueueToDisk);
 }
 
 function scheduleFlush() {
@@ -29,7 +54,7 @@ function scheduleFlush() {
     try {
       await flushQueue();
     } catch (error) {
-      logger.error('Failed to flush usage events', { component: 'UsageEventLog', error: e });
+      logger.error('Failed to flush usage events', { component: 'UsageEventLog', error });
     }
   }, FLUSH_INTERVAL_MS);
 }
@@ -126,21 +151,33 @@ export function getMonthlyDir() {
 export async function cleanupEvents(retentionDays = 90) {
   if (retentionDays < 0) return; // -1 means keep forever
   try {
-    const events = await readEvents();
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - retentionDays);
-    const cutoffStr = cutoff.toISOString();
-    const retained = events.filter(e => e.ts >= cutoffStr);
-    if (retained.length < events.length) {
-      const lines = retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
-      await fs.writeFile(eventFile, lines, 'utf8');
-      logger.info('Usage event cleanup completed', {
-        component: 'UsageEventLog',
-        removed: events.length - retained.length
-      });
-    }
+    await withWriteLock(async () => {
+      // Drain any queued events into the on-disk file first so they're
+      // included in the read-filter pass below. Done under the lock so a
+      // new scheduleFlush() can't slip in between drain and rewrite.
+      try {
+        await appendQueueToDisk();
+      } catch {
+        // A drain failure is logged elsewhere; continue with what's on disk.
+      }
+
+      const events = await readEvents();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - retentionDays);
+      const cutoffStr = cutoff.toISOString();
+      const retained = events.filter(e => e.ts >= cutoffStr);
+      if (retained.length < events.length) {
+        const lines =
+          retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
+        await fs.writeFile(eventFile, lines, 'utf8');
+        logger.info('Usage event cleanup completed', {
+          component: 'UsageEventLog',
+          removed: events.length - retained.length
+        });
+      }
+    });
   } catch (error) {
-    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error: e });
+    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error });
   }
 }
 
@@ -148,7 +185,7 @@ export async function cleanupEvents(retentionDays = 90) {
 setInterval(() => {
   if (queue.length > 0) {
     flushQueue().catch(error =>
-      logger.error('Usage event flush error', { component: 'UsageEventLog', error: e })
+      logger.error('Usage event flush error', { component: 'UsageEventLog', error })
     );
   }
 }, FLUSH_INTERVAL_MS);

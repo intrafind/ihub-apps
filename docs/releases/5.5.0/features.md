@@ -217,3 +217,15 @@ came from the shared chat used across the platform, so any app could be affected
 - Also fixes a related crash for iFinder-backed apps that emit a response message id (used for
   answer feedback), which previously interrupted the reply the same way.
 - No configuration or admin action required.
+
+## Usage Statistics No Longer Lose Events During Cleanup
+
+The hourly usage-data retention cleanup could silently drop token-usage events that were flushed
+to disk at the same moment cleanup ran, causing usage/billing numbers in the admin dashboard to
+undercount without any error being logged.
+
+- Cleanup and the periodic flush of pending usage events are now serialized so an in-flight flush
+  can never be overwritten by a concurrent cleanup pass.
+- Flush and cleanup failures are now actually logged instead of throwing an unrelated internal
+  error that masked the real cause.
+- No configuration or admin action required.
