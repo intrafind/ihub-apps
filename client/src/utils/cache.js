@@ -220,7 +220,11 @@ export const CACHE_KEYS = {
   UI_CONFIG: 'ui-config',
   PLATFORM_CONFIG: 'platform-config',
   AUTH_STATUS: 'auth-status',
-  MIMETYPES_CONFIG: 'mimetypes-config'
+  MIMETYPES_CONFIG: 'mimetypes-config',
+  TRANSLATIONS: 'translations',
+  PAGE_CONTENT: 'page-content',
+  TOOLS: 'tools-list',
+  MODEL_DETAILS: 'model-details'
 };
 
 /**
