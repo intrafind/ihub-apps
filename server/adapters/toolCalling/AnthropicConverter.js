@@ -19,7 +19,9 @@ import { parseJsonAsync } from '../../utils/asyncJson.js';
 /**
  * Convert generic tools to Anthropic format
  * Anthropic requires tool names to match pattern ^[a-zA-Z0-9_-]{1,128}$
- * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.) —
+ * Anthropic's own native web search tool is injected directly by the adapter
+ * (see anthropic.js), not routed through this generic tool-calling pipeline.
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Anthropic formatted tools
  */
@@ -158,6 +160,41 @@ export function convertAnthropicToolResultToGeneric(anthropicResult) {
 // Store state across streaming chunks for proper handling
 const streamingState = new Map();
 
+/**
+ * Record native web search results/citations on the generic result object.
+ * Mirrors the groundingMetadata convention used for Google Search grounding
+ * so the chat pipeline surfaces a 'grounding' knowledge source badge.
+ * @param {import('./GenericToolCalling.js').GenericStreamingResponse} result
+ * @returns {{searchResults: Object[], citations: Object[]}}
+ */
+function ensureWebSearchMetadata(result) {
+  if (!result.groundingMetadata) {
+    result.groundingMetadata = { searchResults: [], citations: [] };
+  }
+  return result.groundingMetadata;
+}
+
+/**
+ * Handle a web_search_tool_result content block's `content` field, which is
+ * either an array of web_search_result items or a single
+ * web_search_tool_result_error object.
+ */
+function addWebSearchResult(result, content) {
+  const metadata = ensureWebSearchMetadata(result);
+  if (Array.isArray(content)) {
+    metadata.searchResults.push(...content);
+  } else if (content?.type === 'web_search_tool_result_error') {
+    logger.warn('Anthropic web search returned an error', {
+      component: 'AnthropicConverter',
+      errorCode: content.error_code
+    });
+  }
+}
+
+function addWebSearchCitations(result, citations) {
+  ensureWebSearchMetadata(result).citations.push(...citations);
+}
+
 export async function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
@@ -209,6 +246,9 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       for (const contentBlock of parsed.content) {
         if (contentBlock.type === 'text' && contentBlock.text) {
           result.content.push(contentBlock.text);
+          if (Array.isArray(contentBlock.citations) && contentBlock.citations.length > 0) {
+            addWebSearchCitations(result, contentBlock.citations);
+          }
         } else if (contentBlock.type === 'tool_use') {
           if (
             validateProviderToolName({
@@ -228,7 +268,11 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
               )
             );
           }
+        } else if (contentBlock.type === 'web_search_tool_result') {
+          addWebSearchResult(result, contentBlock.content);
         }
+        // 'server_tool_use' blocks just record the search query Claude issued
+        // server-side; there is nothing for the client to execute.
       }
       result.complete = true;
       if (parsed.stop_reason) {
@@ -276,7 +320,7 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       } catch (error) {
         logger.warn('Failed to parse tool arguments', {
           component: 'AnthropicConverter',
-          error: e
+          error
         });
         parsedArgs = { __raw_arguments: toolCall.arguments };
       }
@@ -305,6 +349,19 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
 
       // Clear the pending tool call from state
       state.pendingToolCall = null;
+    } else if (
+      parsed.type === 'content_block_start' &&
+      parsed.content_block?.type === 'web_search_tool_result'
+    ) {
+      // The full result set (or error) arrives in one shot at content_block_start,
+      // not via deltas.
+      addWebSearchResult(result, parsed.content_block.content);
+    } else if (
+      parsed.type === 'content_block_delta' &&
+      parsed.delta?.type === 'citations_delta' &&
+      parsed.delta.citation
+    ) {
+      addWebSearchCitations(result, [parsed.delta.citation]);
     }
 
     if (parsed.type === 'message_stop') {

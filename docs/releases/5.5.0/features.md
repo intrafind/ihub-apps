@@ -1,5 +1,26 @@
 # Features — 5.5.0
 
+## Native Web Search for Anthropic Claude Models (and a Cleaner Native Search Architecture)
+
+Apps and agent workflows with web search enabled now use Claude's own built-in web search when the
+selected model is an Anthropic model, instead of falling back to Brave Search — matching the
+existing native-search behavior already available for Gemini and GPT models.
+
+- When `websearch.useNativeSearch` is on (the default) and the app's model is an Anthropic Claude
+  model, Claude searches the web itself and returns answers with citations in the same response.
+- Search results and citations are surfaced through the same "Grounding" answer-source badge used
+  for Google Search grounding, including in agent workflow synthesizer citations.
+- Anthropic bills native web search separately per search, in addition to standard token costs.
+- No configuration changes are required for existing apps that already have `websearch.enabled: true`.
+- Agent workflow nodes that request `webSearch` now also get native search on whichever provider
+  the node's model uses (previously this only worked reliably on Gemini). The bundled research
+  workflows are migrated automatically to the provider-agnostic `webSearch` marker.
+- Under the hood, native web search (Google, OpenAI, Anthropic) is no longer represented as a tool
+  — `googleSearch` and `webSearch` are removed as tool files, and existing installations are
+  migrated automatically. Only Brave Search remains a real, script-backed tool; native search is
+  now resolved directly from the app/workflow configuration and passed straight to the model
+  provider.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
