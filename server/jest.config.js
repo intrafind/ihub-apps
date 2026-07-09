@@ -1,3 +1,5 @@
+import { manualTestFiles } from './tests/manual-test-files.js';
+
 export default {
   // Use Node.js environment for testing
   testEnvironment: 'node',
@@ -12,6 +14,15 @@ export default {
 
   // Test file patterns
   testMatch: ['**/tests/**/*.test.js', '**/__tests__/**/*.js'],
+
+  // manualTestFiles are plain node scripts or node:test suites, not Jest
+  // suites — Jest fails them with "must contain at least one test" or crashes
+  // its worker on their process.exit() calls. Run them via
+  // `npm run test:manual` (tests/run-manual-tests.js) instead.
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    ...manualTestFiles.map(f => `/tests/${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+  ],
 
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
