@@ -359,6 +359,62 @@ export const extractAudioFromVideo = async (file, options = {}) => {
 };
 
 /**
+ * Convert a base64 data URL (or bare base64 string) to an ArrayBuffer without
+ * relying on fetch(), which does not handle `data:` URLs consistently across
+ * environments.
+ */
+const dataUrlToArrayBuffer = dataUrl => {
+  const commaIdx = dataUrl.indexOf(',');
+  const meta = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const isBase64 = commaIdx < 0 || /;base64/i.test(meta);
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+};
+
+/**
+ * Decode an uploaded audio source into an AudioBuffer using the Web Audio API.
+ *
+ * Used by the Voxtral transcription flow: the decoded buffer is re-rendered to
+ * 16 kHz mono PCM16 and streamed to the realtime endpoint. Decoding happens in
+ * the browser, so codec support varies (e.g. Safari lacks OGG); an undecodable
+ * source raises `audio-decode-error` so the caller can surface a clear message
+ * (issue #1927 gap G10).
+ *
+ * @param {string|ArrayBuffer|Blob} input - A base64 data URL, an ArrayBuffer, or a Blob/File.
+ * @returns {Promise<AudioBuffer>}
+ */
+export const decodeAudioFileToBuffer = async input => {
+  let arrayBuffer;
+  if (typeof input === 'string') {
+    arrayBuffer = dataUrlToArrayBuffer(input);
+  } else if (input instanceof ArrayBuffer) {
+    arrayBuffer = input;
+  } else if (input && typeof input.arrayBuffer === 'function') {
+    arrayBuffer = await input.arrayBuffer();
+  } else {
+    throw new Error('audio-decode-error');
+  }
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    // decodeAudioData may detach the input buffer, so decode a copy.
+    return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } catch (decodeError) {
+    console.error('Audio decode error:', decodeError);
+    throw new Error('audio-decode-error');
+  } finally {
+    try {
+      await audioContext.close();
+    } catch {
+      /* ignore */
+    }
+  }
+};
+
+/**
  * Convert AudioBuffer to WAV Blob
  * @param {AudioBuffer} audioBuffer - The audio buffer to convert
  * @returns {Blob} WAV file blob

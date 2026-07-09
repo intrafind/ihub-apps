@@ -117,7 +117,7 @@ describe('authenticateUpgrade', () => {
 
   test('falls back to anonymous when anonymous access is enabled and no token', () => {
     const user = authenticateUpgrade({ headers: {} }, anonAllowed);
-    expect(user).toEqual({ id: 'anonymous', name: 'anonymous' });
+    expect(user).toEqual({ id: 'anonymous', name: 'anonymous', groups: ['anonymous'] });
   });
 
   test('rejects (null) when no token and anonymous access is disabled', () => {

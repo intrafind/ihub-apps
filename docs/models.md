@@ -28,7 +28,8 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
-| `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`      |
+| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline) or `transcription` (speech-to-text, routed through the transcription provider registry). See [Transcription Models](#transcription-models) |
+| `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
 | `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
 | `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 4096 at runtime if unset |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
@@ -168,6 +169,39 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 #### Ready-to-import example models
 
 Example configurations for the most common Bedrock models live in `examples/models/bedrock/` and are exposed through the **iHub Examples** marketplace registry. Open Admin → Marketplace → "iHub Examples" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+
+### Transcription Models
+
+Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that is rendered as an assistant chat answer. See [Audio File Support](audio-file-support.md) for how apps use them.
+
+Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
+
+Currently one transcription provider ships:
+
+- **vLLM Realtime** (`provider: "vllm-realtime"`) — a self-hosted vLLM `/v1/realtime` endpoint (e.g. Voxtral). The `url` is a `ws://` / `wss://` WebSocket URL and stays server-side.
+
+```json
+{
+  "id": "voxtral-mini-realtime",
+  "modelId": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+  "name": { "en": "Voxtral Mini (Transcription)" },
+  "description": { "en": "Self-hosted Voxtral realtime speech-to-text." },
+  "url": "ws://localhost:8080/v1/realtime",
+  "provider": "vllm-realtime",
+  "modelType": "transcription",
+  "apiKey": "",
+  "enabled": false
+}
+```
+
+Key points:
+
+- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized) for the app editor's model picker.
+- **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
+- **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
+- **Dictation** (`platform.speech.realtime`, `settings.speechRecognition.service: "vllm-realtime"`) is a separate feature and continues to work unchanged. When a realtime session carries no `modelId` it falls back to the platform dictation backend.
+
+A default `voxtral-mini-realtime` model file ships disabled; enable it and point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
 
 ### Image Generation Defaults
 

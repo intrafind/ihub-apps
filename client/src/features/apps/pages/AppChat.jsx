@@ -37,7 +37,9 @@ import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
-import { processDocumentFile } from '../../upload/utils/fileProcessing';
+import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
+import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
+import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 
 /**
  * Initialize variables with default values from app configuration
@@ -108,6 +110,49 @@ const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
     return <GreetingView welcomeMessage={welcomeMessage} />;
   }
   return <NoMessagesView />;
+};
+
+/**
+ * Map a transcription failure (from decodeAudioFileToBuffer / transcribeAudioBuffer)
+ * to a clear, localized message shown in the assistant bubble.
+ */
+const getTranscriptionErrorMessage = (err, t) => {
+  const code = err?.code || err?.message;
+  switch (code) {
+    case 'audio-decode-error':
+      return t(
+        'transcription.errors.decode',
+        'Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).'
+      );
+    case 'empty-audio':
+      return t('transcription.errors.empty', 'No audio could be read from this file.');
+    case 'not-ready':
+      return t(
+        'transcription.errors.notReady',
+        'The transcription service did not become ready. Please check the model configuration and try again.'
+      );
+    case 'connect':
+    case 'closed':
+      return t(
+        'transcription.errors.connection',
+        'Could not reach the transcription service. Please try again later.'
+      );
+    case 'timeout':
+      return t(
+        'transcription.errors.timeout',
+        'Transcription timed out. The file may be too long.'
+      );
+    case 'aborted':
+      return t('transcription.errors.aborted', 'Transcription was cancelled.');
+    case 'service':
+      return err?.message
+        ? t('transcription.errors.serviceDetail', 'Transcription failed: {{detail}}', {
+            detail: err.message
+          })
+        : t('transcription.errors.service', 'Transcription failed.');
+    default:
+      return t('transcription.errors.generic', 'Transcription failed. Please try again.');
+  }
 };
 
 function AppChat({ preloadedApp = null }) {
@@ -272,6 +317,10 @@ function AppChat({ preloadedApp = null }) {
   const fileUploadHandler = useFileUploadHandler();
   const magicPromptHandler = useMagicPrompt();
 
+  // True while a Voxtral transcription is streaming into the chat (upload /
+  // video / recording → assistant message). Used to gate the input.
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
   // Auto-attach files selected in Nextcloud (no-op outside the Nextcloud embed).
   const currentModelObject = useMemo(
     () => models?.find(m => m.id === selectedModel) || null,
@@ -433,7 +482,10 @@ function AppChat({ preloadedApp = null }) {
     submitClarificationResponse,
     conversationTitle,
     loadServerMessages,
-    resetConversationState
+    resetConversationState,
+    addUserMessage,
+    addAssistantMessage,
+    updateAssistantMessage
   } = useAppChat({
     appId,
     chatId: chatId.current,
@@ -1284,11 +1336,167 @@ function AppChat({ preloadedApp = null }) {
     }
   };
 
+  // Transcribe one or more audio sources with the app's Voxtral transcription
+  // model and render each transcript as an assistant chat turn (streaming the
+  // deltas). A source is either an uploaded/extracted audio selected-file
+  // ({ base64, fileName, ... }) or a recording ({ audioBuffer, fileName }). The
+  // user turn carries only a text label — never raw audio — so follow-up
+  // questions don't ship audio to the (non-audio) chat model.
+  const transcribeToChat = useCallback(
+    async audioSources => {
+      const transcription = app?.transcription || {};
+      const modelId = transcription.modelId;
+      if (!modelId) {
+        addSystemMessage(
+          t('transcription.errors.noModel', 'No transcription model is configured for this app.'),
+          true
+        );
+        return;
+      }
+      const streaming = transcription.streaming !== false;
+      const maxDurationSeconds = transcription.maxDurationSeconds || 900;
+      const sources = Array.isArray(audioSources) ? audioSources : [audioSources];
+
+      setIsTranscribing(true);
+      try {
+        for (const source of sources) {
+          if (!source) continue;
+          const sourceName = source.extractedFromVideo
+            ? source.originalVideoName || source.fileName
+            : source.fileName;
+          const label = `🎙 ${sourceName || t('transcription.recording', 'Recording')}`;
+          addUserMessage(label, { rawContent: label });
+          const assistantId = addAssistantMessage();
+
+          try {
+            const audioBuffer = source.audioBuffer
+              ? source.audioBuffer
+              : await decodeAudioFileToBuffer(source.base64);
+
+            if (audioBuffer?.duration > maxDurationSeconds) {
+              updateAssistantMessage(
+                assistantId,
+                t(
+                  'transcription.errors.tooLong',
+                  'This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.',
+                  {
+                    duration: Math.round(audioBuffer.duration),
+                    max: maxDurationSeconds
+                  }
+                ),
+                false,
+                { isError: true }
+              );
+              continue;
+            }
+
+            const transcript = await transcribeAudioBuffer(audioBuffer, {
+              modelId,
+              onDelta: streaming
+                ? text => updateAssistantMessage(assistantId, text, true)
+                : undefined
+            });
+            updateAssistantMessage(
+              assistantId,
+              transcript || t('transcription.empty', '_(No speech detected)_'),
+              false
+            );
+          } catch (err) {
+            updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
+              isError: true
+            });
+          }
+        }
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
+  );
+
+  // --- Record → transcribe control ---
+  const recorderRef = useRef(null);
+  const [isRecordingTranscription, setIsRecordingTranscription] = useState(false);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    const rec = recorderRef.current;
+    if (!rec) return;
+    recorderRef.current = null;
+    setIsRecordingTranscription(false);
+    try {
+      const { audioBuffer } = await rec.stop();
+      if (audioBuffer && audioBuffer.length) {
+        await transcribeToChat([{ audioBuffer }]);
+      }
+    } catch (err) {
+      addSystemMessage(getTranscriptionErrorMessage(err, t), true);
+    }
+  }, [transcribeToChat, addSystemMessage, t]);
+
+  const startRecordingTranscription = useCallback(async () => {
+    const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 900;
+    const rec = new AudioBufferRecorder({
+      maxDurationSeconds,
+      onTick: setRecordElapsed,
+      onMaxDuration: () => stopRecordingAndTranscribe()
+    });
+    try {
+      await rec.start();
+      recorderRef.current = rec;
+      setIsRecordingTranscription(true);
+      setRecordElapsed(0);
+    } catch {
+      addSystemMessage(
+        t(
+          'transcription.errors.mic',
+          'Could not access the microphone. Please grant permission and try again.'
+        ),
+        true
+      );
+    }
+  }, [app, stopRecordingAndTranscribe, addSystemMessage, t]);
+
+  const handleRecordTranscription = useCallback(() => {
+    if (recorderRef.current) stopRecordingAndTranscribe();
+    else startRecordingTranscription();
+  }, [startRecordingTranscription, stopRecordingAndTranscribe]);
+
+  // Stop any active recording if the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (recorderRef.current) {
+        recorderRef.current.cancel();
+        recorderRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSubmit = async e => {
     e.preventDefault();
 
     if (!input.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
       return;
+    }
+
+    // Voxtral transcription rerouting: when the app opts into transcription and
+    // the selection contains audio (uploaded audio, or audio extracted from an
+    // uploaded video), transcribe it into an assistant turn instead of shipping
+    // audioData to the chat model. Not applied in compare mode.
+    if (!compareModeActive && app?.transcription?.enabled && fileUploadHandler.selectedFile) {
+      const selected = Array.isArray(fileUploadHandler.selectedFile)
+        ? fileUploadHandler.selectedFile
+        : [fileUploadHandler.selectedFile];
+      const audioFiles = selected.filter(f => f?.type === 'audio');
+      if (audioFiles.length > 0) {
+        setInput('');
+        magicPromptHandler.resetMagicPrompt();
+        fileUploadHandler.clearSelectedFile();
+        fileUploadHandler.hideUploader();
+        pendingVariablesRef.current = null;
+        await transcribeToChat(audioFiles);
+        return;
+      }
     }
 
     // Use pending variables from ref if available (for resend operations),
@@ -1598,6 +1806,15 @@ function AppChat({ preloadedApp = null }) {
         (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
           ? handleVoiceCommand
           : undefined,
+      // Voxtral record → transcribe control (separate from dictation mic above).
+      transcriptionRecordEnabled:
+        !compareModeActive &&
+        app?.transcription?.enabled === true &&
+        !!app?.transcription?.modelId &&
+        app?.transcription?.inputs?.record !== false,
+      onRecordTranscription: isTranscribing ? undefined : handleRecordTranscription,
+      isRecordingTranscription,
+      recordTranscriptionElapsed: recordElapsed,
       onFileSelect: fileUploadHandler.handleFileSelect,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
       allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,

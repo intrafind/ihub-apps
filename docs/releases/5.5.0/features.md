@@ -367,3 +367,27 @@ trapped the page in an endless reload loop.
 - Content admins get a focused admin experience: the sidebar and the overview dashboard show only
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Transcribe Audio, Video, and Recordings with Voxtral (Chat Answer)
+
+Apps can now transcribe a whole audio clip with a self-hosted **Voxtral** transcription model and
+render the transcript as an assistant chat answer. Three sources are supported: uploading an audio
+file, uploading a video (its audio track is extracted in the browser), and recording audio directly
+in the chat. This complements the existing live **dictation** (which drops text into the input
+field) and the multimodal audio-upload path (which sends audio to a chat LLM).
+
+- Transcription is a new **first-class model type** (`modelType: "transcription"`). A default
+  `voxtral-mini-realtime` model ships disabled; enable it and point its `ws://` URL at your vLLM
+  realtime endpoint. Existing installations are seeded automatically on upgrade (migration V073),
+  carrying over any configured realtime dictation settings.
+- Configure it per app under **Admin → Apps → Transcription**: pick the transcription model, choose
+  which inputs are offered (audio upload, video upload, record), toggle streaming, and set a max
+  duration. A new **Video Upload** section was also added to the app upload configuration.
+- The vLLM endpoint URL and API key stay server-side — the public models API strips them, so they
+  never reach the browser. Transcription models are subject to the same group permissions as chat
+  models and are hidden from the chat model selector.
+- Errors (unreachable endpoint, unsupported/undecodable format, file too long, connection limits)
+  are surfaced clearly in the chat.
+
+**Before using:** add or enable a transcription model under **Admin → Models** (model type
+"Transcription"), set its realtime URL, then enable transcription on the desired app.

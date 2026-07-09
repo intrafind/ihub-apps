@@ -1,4 +1,10 @@
 import { buildWsUrl } from './runtimeBasePath';
+import {
+  TARGET_SAMPLE_RATE,
+  WORKLET_SOURCE,
+  downsample,
+  floatTo16BitPCM
+} from './realtimeTranscriptionCore';
 
 /**
  * Realtime speech recognition that streams microphone audio to the iHub server
@@ -11,44 +17,14 @@ import { buildWsUrl } from './runtimeBasePath';
  * (same shape as the Azure service), so `usesTextEventShape` is set to true.
  *
  * Audio is captured as mono, downsampled to 16 kHz, and converted to PCM16 — the
- * format the vLLM realtime API expects.
+ * format the vLLM realtime API expects. The PCM/worklet primitives are shared
+ * with the buffer-transcription client via `realtimeTranscriptionCore.js`.
  */
-
-const TARGET_SAMPLE_RATE = 16000;
-const FRAME_SIZE = 2048; // samples per worklet post (~128ms @16k)
 
 // Automatic-mode voice-activity detection thresholds.
 const SPEECH_RMS_THRESHOLD = 0.015; // above this = speech present
 const SILENCE_RMS_THRESHOLD = 0.01; // below this = silence
 const SILENCE_HANG_MS = 1200; // stop after this much trailing silence
-
-// Inline AudioWorklet: accumulates FRAME_SIZE samples then posts a copy to the
-// main thread. Loaded via a Blob URL so no separate asset/bundling is needed.
-const WORKLET_SOURCE = `
-class PCMCaptureProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._size = ${FRAME_SIZE};
-    this._buf = new Float32Array(this._size);
-    this._i = 0;
-  }
-  process(inputs) {
-    const input = inputs[0];
-    if (input && input[0]) {
-      const ch = input[0];
-      for (let n = 0; n < ch.length; n++) {
-        this._buf[this._i++] = ch[n];
-        if (this._i >= this._size) {
-          this.port.postMessage(this._buf.slice(0, this._size));
-          this._i = 0;
-        }
-      }
-    }
-    return true;
-  }
-}
-registerProcessor('pcm-capture-processor', PCMCaptureProcessor);
-`;
 
 class VllmRealtimeRecognition {
   constructor() {
@@ -355,35 +331,6 @@ function computeRms(samples) {
   let sum = 0;
   for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
   return Math.sqrt(sum / samples.length);
-}
-
-/**
- * Linear-interpolation downsample from `inputRate` to 16 kHz.
- * Per-chunk resampling; boundary artifacts are negligible for speech recognition.
- */
-function downsample(samples, inputRate) {
-  if (inputRate === TARGET_SAMPLE_RATE) return samples;
-  const ratio = inputRate / TARGET_SAMPLE_RATE;
-  const outLength = Math.floor(samples.length / ratio);
-  const out = new Float32Array(outLength);
-  for (let i = 0; i < outLength; i++) {
-    const srcPos = i * ratio;
-    const idx = Math.floor(srcPos);
-    const frac = srcPos - idx;
-    const a = samples[idx] || 0;
-    const b = samples[idx + 1] !== undefined ? samples[idx + 1] : a;
-    out[i] = a + (b - a) * frac;
-  }
-  return out;
-}
-
-function floatTo16BitPCM(input) {
-  const out = new Int16Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return out;
 }
 
 export default VllmRealtimeRecognition;

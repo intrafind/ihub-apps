@@ -65,7 +65,7 @@ const hintSchema = z
   })
   .strict();
 
-export const modelConfigSchema = z
+const baseModelConfigSchema = z
   .object({
     // Required fields
     id: z
@@ -82,7 +82,13 @@ export const modelConfigSchema = z
       .string()
       .min(1, 'URL cannot be empty')
       .refine(
-        val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
+        val =>
+          val.includes('${') ||
+          val.startsWith('http://') ||
+          val.startsWith('https://') ||
+          // WebSocket URLs are used by realtime transcription models (vLLM /v1/realtime).
+          val.startsWith('ws://') ||
+          val.startsWith('wss://'),
         'URL must be a valid URI format or environment variable reference'
       )
       .optional(),
@@ -95,15 +101,23 @@ export const modelConfigSchema = z
         'mistral',
         'local',
         'iassistant-conversation',
-        'bedrock'
+        'bedrock',
+        // Realtime speech-to-text via a self-hosted vLLM /v1/realtime endpoint
+        // (e.g. Voxtral). Only valid for modelType: 'transcription'.
+        'vllm-realtime'
       ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime'
         })
       }
     ),
+    // Distinguishes chat models (routed through the LLM adapter pipeline) from
+    // transcription models (routed through the transcription provider registry
+    // and the realtime WebSocket proxy). Existing models default to 'chat', so
+    // no migration is needed for the field itself.
+    modelType: z.enum(['chat', 'transcription']).optional().default('chat'),
     // Total input+output tokens the model supports. Used for fitting documents
     // and showing remaining capacity to the user — NOT sent to the provider.
     contextWindow: z
@@ -168,4 +182,17 @@ export const modelConfigSchema = z
   })
   .strict(); // Use strict instead of passthrough for better validation
 
-export const knownModelKeys = Object.keys(modelConfigSchema.shape);
+// Cross-field validation. Kept as a superRefine on top of the base object so
+// `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`
+// (a ZodEffects wrapper has no `.shape`).
+export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) => {
+  if (data.provider === 'vllm-realtime' && data.modelType !== 'transcription') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provider "vllm-realtime" is only valid for modelType "transcription"',
+      path: ['provider']
+    });
+  }
+});
+
+export const knownModelKeys = Object.keys(baseModelConfigSchema.shape);

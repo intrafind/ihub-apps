@@ -9,6 +9,22 @@ import {
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 
+/**
+ * Strip server-side secrets before a model is sent to the browser.
+ * - `apiKey` (an encrypted ciphertext blob) is removed for EVERY model.
+ * - `url` is removed for transcription models so a self-hosted vLLM endpoint
+ *   never reaches the browser (the acceptance criterion for issue #1927). Chat
+ *   models keep their `url` (the client shows/uses it as today).
+ */
+function sanitizeModelForPublic(model) {
+  const clean = { ...model };
+  delete clean.apiKey;
+  if (clean.modelType === 'transcription') {
+    delete clean.url;
+  }
+  return clean;
+}
+
 export default function registerModelRoutes(app, { getLocalizedError }) {
   /**
    * @swagger
@@ -97,16 +113,31 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         return sendFailedOperationError(res, 'load models configuration');
       }
 
+      // Filter by model type. Default to chat models so transcription models
+      // never leak into the chat model selector, magic prompt, compare mode,
+      // workflows, or the default-model fallback (G9). `?type=transcription`
+      // returns the permitted transcription models (for the app editor picker).
+      const requestedType = req.query.type === 'transcription' ? 'transcription' : 'chat';
+      const typedModels = models.filter(m => (m.modelType || 'chat') === requestedType);
+
+      // Strip server-side secrets (encrypted apiKey for all; url for
+      // transcription models) so they never reach the browser (G2).
+      const sanitizedModels = typedModels.map(sanitizeModelForPublic);
+
+      // Discriminate the ETag by type so the chat and transcription lists don't
+      // collide in the shared conditional-request cache.
+      const typedEtag = userSpecificEtag ? `${userSpecificEtag}-${requestedType}` : null;
+
       // Handle conditional requests with ETag
-      if (userSpecificEtag) {
-        res.setHeader('ETag', userSpecificEtag);
+      if (typedEtag) {
+        res.setHeader('ETag', typedEtag);
         const clientETag = req.headers['if-none-match'];
-        if (clientETag && clientETag === userSpecificEtag) {
+        if (clientETag && clientETag === typedEtag) {
           return res.status(304).end();
         }
       }
 
-      res.json(models);
+      res.json(sanitizedModels);
     } catch (error) {
       sendInternalError(res, error, 'fetching models');
     }

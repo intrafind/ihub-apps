@@ -611,7 +611,8 @@
         "supportsImageGeneration": "Supports Image Generation",
         "aspectRatio": "Aspect Ratio",
         "imageSize": "Image Size",
-        "maxReferenceImages": "Max Reference Images"
+        "maxReferenceImages": "Max Reference Images",
+        "modelType": "Model Type"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -622,14 +623,17 @@
         "supportsVision": "Enable if this model can process image inputs",
         "supportsAudio": "Enable if this model can process audio inputs",
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
-        "maxReferenceImages": "Maximum number of reference images (1-14)"
+        "maxReferenceImages": "Maximum number of reference images (1-14)",
+        "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).",
+        "realtimeUrl": "WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser."
       },
       "placeholders": {
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
         "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
-        "apiKeySet": "API key is set (leave blank to keep current)"
+        "apiKeySet": "API key is set (leave blank to keep current)",
+        "realtimeUrl": "ws://host:8080/v1/realtime"
       },
       "sections": {
         "imageGeneration": "Image Generation Settings",
@@ -637,6 +641,10 @@
       },
       "errors": {
         "invalidJson": "Invalid JSON"
+      },
+      "modelType": {
+        "chat": "Chat",
+        "transcription": "Transcription"
       }
     },
     "auth": {
@@ -1567,7 +1575,24 @@
         "iassistantExtraContext": "Extra Context",
         "iassistantExtraContextDesc": "Additional context to be added to the response state prompt. Use with care as changes can impact answer quality.",
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
-        "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care."
+        "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care.",
+        "transcription": "Transcription",
+        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (Voxtral) and render the result as a chat answer.",
+        "enableTranscription": "Enable transcription",
+        "transcriptionModel": "Transcription model",
+        "selectTranscriptionModel": "Select a model…",
+        "noTranscriptionModels": "No transcription models configured. Add one under Admin → Models (model type \"transcription\").",
+        "transcriptionInputs": "Input sources",
+        "transcriptionUpload": "Audio upload",
+        "transcriptionVideo": "Video upload",
+        "transcriptionRecord": "Record audio",
+        "transcriptionInputsHint": "Audio/video upload also requires the matching upload toggle under Upload Configuration.",
+        "transcriptionStreaming": "Stream transcript as it is produced",
+        "transcriptionMaxDuration": "Max duration (seconds)",
+        "enableVideoUpload": "Enable Video Upload",
+        "extractAudioFromVideo": "Extract audio track (for transcription / audio models)",
+        "maxVideoSize": "Max Video File Size (MB)",
+        "supportedVideoFormats": "Supported Video Formats"
       }
     },
     "features": {
@@ -2527,5 +2552,25 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."
+  },
+  "transcription": {
+    "record": "Record audio to transcribe",
+    "stopRecording": "Stop recording & transcribe",
+    "recording": "Recording",
+    "empty": "_(No speech detected)_",
+    "errors": {
+      "noModel": "No transcription model is configured for this app.",
+      "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
+      "empty": "No audio could be read from this file.",
+      "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
+      "connection": "Could not reach the transcription service. Please try again later.",
+      "timeout": "Transcription timed out. The file may be too long.",
+      "aborted": "Transcription was cancelled.",
+      "service": "Transcription failed.",
+      "serviceDetail": "Transcription failed: {{detail}}",
+      "generic": "Transcription failed. Please try again.",
+      "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
+      "mic": "Could not access the microphone. Please grant permission and try again."
+    }
   }
 }

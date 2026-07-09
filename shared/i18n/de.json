@@ -836,7 +836,8 @@
         "supportsImageGeneration": "Unterstützt Bilderzeugung",
         "aspectRatio": "Seitenverhältnis",
         "imageSize": "Bildgröße",
-        "maxReferenceImages": "Max. Referenzbilder"
+        "maxReferenceImages": "Max. Referenzbilder",
+        "modelType": "Modelltyp"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -847,14 +848,17 @@
         "supportsVision": "Aktivieren, wenn dieses Modell Bildeingaben verarbeiten kann",
         "supportsAudio": "Aktivieren, wenn dieses Modell Audioeingaben verarbeiten kann",
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
-        "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)"
+        "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)",
+        "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um.",
+        "realtimeUrl": "WebSocket-URL des vLLM-Echtzeit-Endpunkts. Sie bleibt serverseitig und erreicht niemals den Browser."
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
         "apiModelId": "z.B. gpt-4, claude-3-opus",
         "apiUrl": "https://api.anbieter.com/v1/chat/completions",
         "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable, wenn nicht gesetzt)",
-        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)"
+        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)",
+        "realtimeUrl": "ws://host:8080/v1/realtime"
       },
       "sections": {
         "imageGeneration": "Bilderzeugungseinstellungen",
@@ -862,6 +866,10 @@
       },
       "errors": {
         "invalidJson": "Ungültiges JSON"
+      },
+      "modelType": {
+        "chat": "Chat",
+        "transcription": "Transkription"
       }
     },
     "chat": {
@@ -1818,7 +1826,24 @@
         "iassistantExtraContext": "Zusätzlicher Kontext",
         "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
-        "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Mit Vorsicht verwenden."
+        "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Mit Vorsicht verwenden.",
+        "transcription": "Transkription",
+        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem selbst gehosteten Transkriptionsmodell (Voxtral) transkribieren und das Ergebnis als Chat-Antwort anzeigen.",
+        "enableTranscription": "Transkription aktivieren",
+        "transcriptionModel": "Transkriptionsmodell",
+        "selectTranscriptionModel": "Modell auswählen…",
+        "noTranscriptionModels": "Keine Transkriptionsmodelle konfiguriert. Fügen Sie eines unter Admin → Modelle hinzu (Modelltyp \"transcription\").",
+        "transcriptionInputs": "Eingabequellen",
+        "transcriptionUpload": "Audio-Upload",
+        "transcriptionVideo": "Video-Upload",
+        "transcriptionRecord": "Audio aufnehmen",
+        "transcriptionInputsHint": "Audio-/Video-Upload erfordert außerdem den entsprechenden Upload-Schalter unter Upload-Konfiguration.",
+        "transcriptionStreaming": "Transkript während der Erstellung streamen",
+        "transcriptionMaxDuration": "Maximale Dauer (Sekunden)",
+        "enableVideoUpload": "Video-Upload aktivieren",
+        "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
+        "maxVideoSize": "Maximale Videodateigröße (MB)",
+        "supportedVideoFormats": "Unterstützte Videoformate"
       }
     },
     "features": {
@@ -2492,5 +2517,25 @@
     "showMore": "Mehr anzeigen",
     "showLess": "Weniger anzeigen",
     "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."
+  },
+  "transcription": {
+    "record": "Audio zum Transkribieren aufnehmen",
+    "stopRecording": "Aufnahme beenden & transkribieren",
+    "recording": "Aufnahme",
+    "empty": "_(Keine Sprache erkannt)_",
+    "errors": {
+      "noModel": "Für diese App ist kein Transkriptionsmodell konfiguriert.",
+      "decode": "Diese Audiodatei konnte im Browser nicht dekodiert werden. Das Format oder der Codec wird möglicherweise nicht unterstützt (z. B. OGG in Safari).",
+      "empty": "Aus dieser Datei konnte kein Audio gelesen werden.",
+      "notReady": "Der Transkriptionsdienst war nicht bereit. Bitte überprüfen Sie die Modellkonfiguration und versuchen Sie es erneut.",
+      "connection": "Der Transkriptionsdienst konnte nicht erreicht werden. Bitte versuchen Sie es später erneut.",
+      "timeout": "Zeitüberschreitung bei der Transkription. Die Datei ist möglicherweise zu lang.",
+      "aborted": "Die Transkription wurde abgebrochen.",
+      "service": "Transkription fehlgeschlagen.",
+      "serviceDetail": "Transkription fehlgeschlagen: {{detail}}",
+      "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",
+      "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
+      "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut."
+    }
   }
 }
