@@ -362,7 +362,7 @@ function bridgeConnection(clientWs, user, limiter) {
   let gotTranscription = false; // at least one delta/final was received
   let stopRequested = false; // client sent {type:'stop'} — arm completion signal (G8)
   let firstAudioSeen = false; // first inbound audio frame observed
-  let isModelSession = false; // start frame carried a modelId (buffer/model transcription)
+  let appendedFrames = 0; // audio frames relayed upstream (diagnostics)
   let errorSent = false; // guard so we report a failure at most once
   let released = false; // guard so we release the limiter slot at most once
   let idleTimer = null;
@@ -480,18 +480,21 @@ function bridgeConnection(clientWs, user, limiter) {
     resetIdle();
 
     upstream.on('open', () => {
-      // Handshake: identify the model.
+      // Handshake: identify the model, then open the audio buffer. The initial
+      // commit is required for BOTH dictation and buffer/model sessions — vLLM
+      // needs the buffer opened before it accepts appended audio; skipping it
+      // caused appends to be dropped (the buffer/model session then received
+      // only `stop`, transcribed nothing, and the client hung). The spurious
+      // empty transcription.done this can emit is handled by the post-stop
+      // settle timer below, not by closing on the first `done`.
       sendJson(upstream, { type: 'session.update', model: cfg.model });
-      // Dictation opens with an initial (empty) commit — kept for backward
-      // compatibility. It is SKIPPED for model/buffer transcription sessions:
-      // a whole buffer is dumped then committed once via `stop`, and an initial
-      // empty commit there can make vLLM emit a spurious empty transcription.done
-      // that races the client's fast `stop`, yielding an empty ("no speech")
-      // result before the real audio is transcribed.
-      if (!isModelSession) {
-        sendJson(upstream, { type: 'input_audio_buffer.commit' });
-      }
+      sendJson(upstream, { type: 'input_audio_buffer.commit' });
       upstreamReady = true;
+      logger.info('Realtime STT: upstream ready', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        model: cfg.model
+      });
       sendJson(clientWs, { type: 'ready' });
       // Flush any audio captured during the handshake.
       for (const audio of pending) {
@@ -509,6 +512,11 @@ function bridgeConnection(clientWs, user, limiter) {
       } catch {
         return; // vLLM realtime frames are JSON; ignore anything else
       }
+      logger.debug('Realtime STT: upstream message', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        upstreamType: msg.type
+      });
       switch (msg.type) {
         case 'transcription.delta':
           gotTranscription = true;
@@ -630,6 +638,7 @@ function bridgeConnection(clientWs, user, limiter) {
       const audio = Buffer.from(data).toString('base64');
       if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
         sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+        appendedFrames += 1;
       } else if (pending.length < MAX_PENDING_FRAMES) {
         pending.push(audio);
       }
@@ -647,10 +656,16 @@ function bridgeConnection(clientWs, user, limiter) {
       // audio flows. A modelId selects a first-class transcription model and
       // opens the upstream immediately (client waits for {type:'ready'}); no
       // modelId falls back to the platform dictation backend (lazy open).
-      isModelSession = msg.modelId != null;
       resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
     } else if (msg.type === 'stop') {
       stopRequested = true;
+      logger.info('Realtime STT: stop received, committing buffer', {
+        component: 'RealtimeSTT',
+        userId: user.id,
+        appendedFrames,
+        pendingFrames: pending.length,
+        upstreamReady
+      });
       if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
         sendJson(upstream, { type: 'input_audio_buffer.commit', final: true });
       }
