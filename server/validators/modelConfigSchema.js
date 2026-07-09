@@ -65,107 +65,109 @@ const hintSchema = z
   })
   .strict();
 
-export const modelConfigSchema = z
-  .object({
-    // Required fields
-    id: z
-      .string()
-      .regex(
-        /^[a-z0-9._-]+$/,
-        'ID must contain only lowercase letters, numbers, underscores, dots, and hyphens'
-      )
-      .min(1, 'ID cannot be empty'),
-    modelId: z.string().min(1, 'Model ID cannot be empty'),
-    name: localizedStringSchema,
-    description: localizedStringSchema,
-    url: z
-      .string()
-      .min(1, 'URL cannot be empty')
-      .refine(
-        val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
-        'URL must be a valid URI format or environment variable reference'
-      )
-      .optional(),
-    provider: z.enum(
-      [
-        'openai',
-        'openai-responses',
-        'anthropic',
-        'google',
-        'mistral',
-        'local',
-        'iassistant-conversation',
-        'bedrock'
-      ],
-      {
-        errorMap: () => ({
-          message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock'
-        })
-      }
-    ),
-    // Total input+output tokens the model supports. Used for fitting documents
-    // and showing remaining capacity to the user — NOT sent to the provider.
-    contextWindow: z
-      .number()
-      .int()
-      .min(CONTEXT_WINDOW_MIN, `Context window must be at least ${CONTEXT_WINDOW_MIN}`)
-      .max(
-        CONTEXT_WINDOW_MAX,
-        `Context window cannot exceed ${CONTEXT_WINDOW_MAX.toLocaleString()}`
-      )
-      .nullable()
-      .optional(),
-    // Provider response cap, sent as max_tokens / maxOutputTokens.
-    maxOutputTokens: z
-      .number()
-      .int()
-      .min(MAX_OUTPUT_TOKENS_MIN, `Max output tokens must be at least ${MAX_OUTPUT_TOKENS_MIN}`)
-      .max(
-        MAX_OUTPUT_TOKENS_MAX,
-        `Max output tokens cannot exceed ${MAX_OUTPUT_TOKENS_MAX.toLocaleString()}`
-      )
-      .nullable()
-      .optional(),
+const baseModelConfigSchema = z.object({
+  // Required fields
+  id: z
+    .string()
+    .regex(
+      /^[a-z0-9._-]+$/,
+      'ID must contain only lowercase letters, numbers, underscores, dots, and hyphens'
+    )
+    .min(1, 'ID cannot be empty'),
+  modelId: z.string().min(1, 'Model ID cannot be empty'),
+  name: localizedStringSchema,
+  description: localizedStringSchema,
+  url: z
+    .string()
+    .min(1, 'URL cannot be empty')
+    .refine(
+      val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
+      'URL must be a valid URI format or environment variable reference'
+    )
+    .optional(),
+  provider: z.enum(
+    [
+      'openai',
+      'openai-responses',
+      'anthropic',
+      'google',
+      'mistral',
+      'local',
+      'iassistant-conversation',
+      'bedrock'
+    ],
+    {
+      errorMap: () => ({
+        message:
+          'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock'
+      })
+    }
+  ),
+  // Total input+output tokens the model supports. Used for fitting documents
+  // and showing remaining capacity to the user — NOT sent to the provider.
+  contextWindow: z
+    .number()
+    .int()
+    .min(CONTEXT_WINDOW_MIN, `Context window must be at least ${CONTEXT_WINDOW_MIN}`)
+    .max(CONTEXT_WINDOW_MAX, `Context window cannot exceed ${CONTEXT_WINDOW_MAX.toLocaleString()}`)
+    .nullable()
+    .optional(),
+  // Provider response cap, sent as max_tokens / maxOutputTokens.
+  maxOutputTokens: z
+    .number()
+    .int()
+    .min(MAX_OUTPUT_TOKENS_MIN, `Max output tokens must be at least ${MAX_OUTPUT_TOKENS_MIN}`)
+    .max(
+      MAX_OUTPUT_TOKENS_MAX,
+      `Max output tokens cannot exceed ${MAX_OUTPUT_TOKENS_MAX.toLocaleString()}`
+    )
+    .nullable()
+    .optional(),
 
-    // Optional fields with validation
-    default: z.boolean().optional().default(false),
-    supportsTools: z.boolean().optional().default(false),
-    concurrency: z
-      .number()
-      .int()
-      .min(1, 'Concurrency must be at least 1')
-      .max(100, 'Concurrency cannot exceed 100')
-      .optional(),
-    requestDelayMs: z
-      .number()
-      .int()
-      .min(0, 'Request delay cannot be negative')
-      .max(10000, 'Request delay cannot exceed 10 seconds')
-      .optional(),
-    enabled: z.boolean().optional().default(true),
-    thinking: thinkingSchema.optional(),
+  // Optional fields with validation
+  default: z.boolean().optional().default(false),
+  supportsTools: z.boolean().optional().default(false),
+  concurrency: z
+    .number()
+    .int()
+    .min(1, 'Concurrency must be at least 1')
+    .max(100, 'Concurrency cannot exceed 100')
+    .optional(),
+  requestDelayMs: z
+    .number()
+    .int()
+    .min(0, 'Request delay cannot be negative')
+    .max(10000, 'Request delay cannot exceed 10 seconds')
+    .optional(),
+  enabled: z.boolean().optional().default(true),
+  thinking: thinkingSchema.optional(),
 
-    // Additional fields for specific providers
-    supportsImages: z.boolean().optional(),
-    supportsVision: z.boolean().optional(),
-    supportsAudio: z.boolean().optional(),
-    supportsStructuredOutput: z.boolean().optional(),
-    supportsUsageTracking: z.boolean().optional(),
-    supportsImageGeneration: z.boolean().optional().default(false),
-    imageGeneration: imageGenerationSchema.optional(),
-    config: z.record(z.any()).optional(), // Allow provider-specific configuration
+  // Additional fields for specific providers
+  supportsImages: z.boolean().optional(),
+  supportsVision: z.boolean().optional(),
+  supportsAudio: z.boolean().optional(),
+  supportsStructuredOutput: z.boolean().optional(),
+  supportsUsageTracking: z.boolean().optional(),
+  supportsImageGeneration: z.boolean().optional().default(false),
+  imageGeneration: imageGenerationSchema.optional(),
+  config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
-    // Hint configuration - display important messages when model is selected
-    hint: hintSchema.optional(),
+  // Hint configuration - display important messages when model is selected
+  hint: hintSchema.optional(),
 
-    // API Key configuration - stored encrypted on server
-    apiKey: z.string().optional(), // Encrypted API key for this model
+  // API Key configuration - stored encrypted on server
+  apiKey: z.string().optional(), // Encrypted API key for this model
 
-    // Model auto-discovery - automatically detect model ID from /v1/models endpoint
-    // Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the active model can change
-    autoDiscovery: z.boolean().optional().default(false)
-  })
-  .strict(); // Use strict instead of passthrough for better validation
+  // Model auto-discovery - automatically detect model ID from /v1/models endpoint
+  // Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the active model can change
+  autoDiscovery: z.boolean().optional().default(false)
+});
 
-export const knownModelKeys = Object.keys(modelConfigSchema.shape);
+export const modelConfigSchema = baseModelConfigSchema.strict(); // Use strict instead of passthrough for better validation
+
+// Lenient variant: same fields/defaults, but unknown keys are passed through instead of
+// causing safeParse to fail — used as a fallback so Zod defaults still apply when a
+// config's only problem is a stray/unknown key.
+export const modelConfigSchemaLenient = baseModelConfigSchema.passthrough();
+
+export const knownModelKeys = Object.keys(baseModelConfigSchema.shape);

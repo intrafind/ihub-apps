@@ -379,30 +379,40 @@ const baseAppConfigSchema = z.object({
 // Export known app keys from base schema before adding refinements
 export const knownAppKeys = Object.keys(baseAppConfigSchema.shape);
 
+function applyAppRefinements(schema) {
+  return schema
+    .refine(
+      data => {
+        // For redirect type apps, redirectConfig is required
+        if (data.type === 'redirect') {
+          return data.redirectConfig !== undefined;
+        }
+        return true;
+      },
+      {
+        message: 'Redirect type apps require redirectConfig with url field'
+      }
+    )
+    .refine(
+      data => {
+        // For iframe type apps, iframeConfig is required
+        if (data.type === 'iframe') {
+          return data.iframeConfig !== undefined;
+        }
+        return true;
+      },
+      {
+        message: 'Iframe type apps require iframeConfig with url field'
+      }
+    );
+}
+
 // Add validation refinements and export the final schema
-export const appConfigSchema = baseAppConfigSchema
-  .strict() // Use strict instead of passthrough for better validation
-  .refine(
-    data => {
-      // For redirect type apps, redirectConfig is required
-      if (data.type === 'redirect') {
-        return data.redirectConfig !== undefined;
-      }
-      return true;
-    },
-    {
-      message: 'Redirect type apps require redirectConfig with url field'
-    }
-  )
-  .refine(
-    data => {
-      // For iframe type apps, iframeConfig is required
-      if (data.type === 'iframe') {
-        return data.iframeConfig !== undefined;
-      }
-      return true;
-    },
-    {
-      message: 'Iframe type apps require iframeConfig with url field'
-    }
-  );
+export const appConfigSchema = applyAppRefinements(
+  baseAppConfigSchema.strict() // Use strict instead of passthrough for better validation
+);
+
+// Lenient variant: same refinements, but unknown keys are passed through instead of
+// causing safeParse to fail — used as a fallback so Zod defaults still apply when a
+// config's only problem is a stray/unknown key.
+export const appConfigSchemaLenient = applyAppRefinements(baseAppConfigSchema.passthrough());

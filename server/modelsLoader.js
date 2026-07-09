@@ -1,5 +1,9 @@
 import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
-import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
+import {
+  modelConfigSchema,
+  modelConfigSchemaLenient,
+  knownModelKeys
+} from './validators/modelConfigSchema.js';
 import logger from './utils/logger.js';
 
 /**
@@ -46,7 +50,7 @@ const modelsLoader = createResourceLoader({
   resourceName: 'Models',
   legacyPath: 'config/models.json',
   individualPath: 'models',
-  validateItem: createSchemaValidator(modelConfigSchema, knownModelKeys),
+  validateItem: createSchemaValidator(modelConfigSchema, knownModelKeys, modelConfigSchemaLenient),
   postProcess: ensureOneDefaultModel
 });
 
