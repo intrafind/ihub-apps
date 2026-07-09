@@ -268,8 +268,10 @@ function GroupMultiSelect({
             type="text"
             role="combobox"
             aria-expanded={showDropdown}
-            aria-controls={listboxId}
-            aria-activedescendant={activeIndex >= 0 ? `${id}-opt-${activeIndex}` : undefined}
+            aria-controls={showDropdown ? listboxId : undefined}
+            aria-activedescendant={
+              showDropdown && activeIndex >= 0 ? `${id}-opt-${activeIndex}` : undefined
+            }
             aria-autocomplete="list"
             autoComplete="off"
             disabled={disabled}
