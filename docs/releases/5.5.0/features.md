@@ -1,5 +1,15 @@
 # Features — 5.5.0
 
+## Agent Profile Editor No Longer Corrupts Shared State on Save
+
+Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
+page.
+
+- Creating a new agent no longer strips fields (like planner/synthesizer system prompts) from the
+  blank template used for subsequent "New Agent" sessions.
+- If a save fails, the editor no longer mistakenly reports the form as "no unsaved changes,"
+  preventing accidental loss of edits when navigating away.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
@@ -227,3 +237,108 @@ rejected by the server without a clear reason. The Output Format dropdown was al
 
 - Clearing a numeric field now omits it from the saved config instead of storing an invalid value.
 - The Output Format dropdown now includes `HTML`, matching what the server already accepts.
+
+## Usage Statistics No Longer Lose Events During Cleanup
+
+The hourly usage-data retention cleanup could silently drop token-usage events that were flushed
+to disk at the same moment cleanup ran, causing usage/billing numbers in the admin dashboard to
+undercount without any error being logged.
+
+- Cleanup and the periodic flush of pending usage events are now serialized so an in-flight flush
+  can never be overwritten by a concurrent cleanup pass.
+- Flush and cleanup failures are now actually logged instead of throwing an unrelated internal
+  error that masked the real cause.
+- No configuration or admin action required.
+
+## Realtime Voice Input via Self-Hosted vLLM (Voxtral)
+
+Apps can now use a new speech-to-text backend that streams microphone audio to the iHub
+server, which proxies it to a self-hosted vLLM realtime endpoint (for example Voxtral) and
+streams the transcription back live. Unlike the browser and Azure backends, the model URL
+and any API key stay on the server and never reach the browser.
+
+- Configure the endpoint under **Admin → Voice Input** (or `platform.json` → `speech.realtime`):
+  `enabled`, `url`, `model`, optional `apiKey`; disabled by default.
+- Enable it per app by setting the app's Speech Recognition Service to **vLLM Realtime**
+  (`settings.speechRecognition.service: "vllm-realtime"`) — no per-app host needed.
+- Supports both manual (push-to-talk) and automatic (stops when you pause) microphone modes,
+  and works in browsers without the Web Speech API (including Firefox). Requires HTTPS or
+  localhost for microphone access.
+- **Resource guards** protect the GPU-backed upstream: the vLLM socket opens only once the
+  browser sends its first audio frame (an abandoned connection never pins a session), idle and
+  no-audio connections are closed automatically, and per-user / global concurrent-connection
+  caps bound how many sessions can run at once. Tune them under `speech.realtime`:
+  `maxConnections` (default 50), `maxConnectionsPerUser` (default 3), `maxFrameBytes`
+  (default 256 KB).
+
+## Admin Page for Voice Input (Speech-to-Text)
+
+A new **Admin → Voice Input** page centralizes speech-to-text backend configuration, so
+admins no longer need to edit `platform.json` by hand.
+
+- **vLLM Realtime**: toggle, WebSocket URL, model, and an optional API key (stored encrypted
+  at rest).
+- **Azure Speech**: toggle, default host/endpoint, region, and the subscription key. The key is
+  stored **encrypted at rest** on the server and exchanged for a short-lived authorization token
+  per session (`/api/voice/azure/token`), so it never reaches the browser. Apps that select
+  Azure without their own host fall back to the platform default host.
+- The app editor's **Speech Recognition Service** dropdown now also lists Azure alongside the
+  browser default, vLLM Realtime, and custom options.
+
+> **Breaking change:** The Azure subscription key is no longer read from the
+> `VITE_AZURE_SUBSCRIPTION_ID` build-time client env var (which baked the key into the browser
+> bundle). Move the key into **Admin → Voice Input** (`platform.json` → `speech.azure.subscriptionKey`).
+> Existing deployments that relied on the env var must set the key server-side for Azure to keep
+> working.
+
+## Auto-Send Links Now Survive Login and No Longer Leave a Stale Message Behind
+
+Answer links built with the documented `?prefill={message}&send=true` pattern are now reliable in
+two previously broken cases:
+
+- **Already logged in:** once the message auto-sends, both `prefill` and `send` are now removed
+  from the URL. Previously only `send` was removed, so a later reload of the same link
+  re-populated the chat input with the already-sent message and left it looking unsent.
+- **Logged out with SSO auto-redirect enabled:** the `prefill`/`send` parameters now survive the
+  OIDC/NTLM login round trip instead of being dropped, so the message still auto-sends after
+  signing in.
+
+Applies to shared support/FAQ links, ticket-reply templates, and any other one-click "answer link"
+workflow built on the auto-send feature. No configuration or admin action required.
+
+## Outlook Add-in: Manifest Download Restored
+
+Downloading the Outlook add-in manifest works again. The manifest endpoint had started returning a
+server error, which blocked installing or sideloading the add-in.
+
+- The generated manifest now uses the correct localized add-in name, task-pane button label, and
+  description, with English defaults and German (`de-DE`) overrides.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Group Assignment Is Now a Searchable Picker
+
+Assigning groups on the user editor and adding external group mappings on the group editor now use
+a searchable picker instead of a plain comma-separated text field, so it is easier to pick the
+right group and harder to introduce typos.
+
+- Start typing to search your defined groups by name or id and add them with a click or the Enter
+  key; selected groups appear as removable chips.
+- You can still type a name that is not a defined group and press Enter to add it — needed for
+  external identity-provider group names used in mappings.
+- On the user editor, entries that do not match a defined group are highlighted so you can spot a
+  mistyped group at a glance.
+- No admin action is required — the change is purely in the admin UI.
+
+## Content Admins Can Now Use the Admin Area
+
+Members of the **Content Admins** group (the `contentAdmin` permission, without full admin access)
+can now open and use the admin area to manage Apps, Prompts, and Sources. Previously they had no
+way in: the **Admin Panel** link was missing from the user menu, and opening `/admin` directly
+trapped the page in an endless reload loop.
+
+- The **Admin Panel** link now appears in the user menu for content admins, not just full admins.
+- Opening `/admin` no longer reloads endlessly. A per-request permission denial (403) on an
+  admin-only endpoint is now handled where it happens instead of hard-redirecting the whole page.
+- Content admins get a focused admin experience: the sidebar and the overview dashboard show only
+  Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
+- No admin action is required — the fix takes effect automatically on upgrade.

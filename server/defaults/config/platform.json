@@ -1,4 +1,18 @@
 {
+  "speech": {
+    "realtime": {
+      "enabled": false,
+      "url": "ws://localhost:8080/v1/realtime",
+      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "apiKey": ""
+    },
+    "azure": {
+      "enabled": false,
+      "host": "",
+      "region": "",
+      "subscriptionKey": ""
+    }
+  },
   "skills": {
     "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
