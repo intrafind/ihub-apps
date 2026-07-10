@@ -34,7 +34,7 @@ export async function removeMarketplaceInstallation(type, itemId) {
       component: 'InstallationCleanup',
       type,
       itemId,
-      error: err
+      error
     });
   }
 }

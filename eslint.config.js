@@ -47,7 +47,8 @@ export default [
           caughtErrorsIgnorePattern: '^_'
         }
       ],
-      'no-console': 'off'
+      'no-console': 'off',
+      'no-undef': 'error'
       // Removed all formatting rules that conflict with Prettier
       // Prettier handles: indent, quotes, semi, no-multiple-empty-lines, eol-last,
       // comma-dangle, object-curly-spacing, array-bracket-spacing, space-before-function-paren,
@@ -105,6 +106,27 @@ export default [
       globals: {
         ...globals.node,
         ...globals.es2024
+      }
+    }
+  },
+  {
+    files: ['tests/**/*.js', 'tests/**/*.jsx', 'server/tests/**/*.js', '**/__tests__/**/*.js'],
+    languageOptions: {
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      },
+      globals: {
+        ...globals.jest
+      }
+    }
+  },
+  {
+    files: ['browser-extension/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.webextensions
       }
     }
   }
