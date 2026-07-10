@@ -24,3 +24,83 @@ updates:
       all-minors:
         update-types:
           - "minor"
+
+  - package-ecosystem: 'npm'
+    directory: '/client'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+      semver-minor-days: 5
+      semver-patch-days: 3
+    groups:
+      all-patches:
+        update-types:
+          - "patch"
+      all-minors:
+        update-types:
+          - "minor"
+
+  - package-ecosystem: 'npm'
+    directory: '/server'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+      semver-minor-days: 5
+      semver-patch-days: 3
+    groups:
+      all-patches:
+        update-types:
+          - "patch"
+      all-minors:
+        update-types:
+          - "minor"
+
+  - package-ecosystem: 'npm'
+    directory: '/nextcloud-app'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+      semver-minor-days: 5
+      semver-patch-days: 3
+    groups:
+      all-patches:
+        update-types:
+          - "patch"
+      all-minors:
+        update-types:
+          - "minor"
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+      semver-minor-days: 5
+      semver-patch-days: 3
+    groups:
+      all-patches:
+        update-types:
+          - "patch"
+      all-minors:
+        update-types:
+          - "minor"
