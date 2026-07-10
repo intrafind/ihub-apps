@@ -110,6 +110,47 @@ export const fetchAdminUsageData = async () => {
   return response.data;
 };
 
+/**
+ * Fetches the platform configuration for admin editing. The response includes
+ * a `_version` field (a content hash) — pass it back to
+ * `updateAdminPlatformConfig` to detect if someone else saved a change in the
+ * meantime, instead of silently overwriting it.
+ *
+ * @returns {Promise<Object>} Sanitized platform config, including `_version`
+ */
+export const fetchAdminPlatformConfig = async () => {
+  const response = await makeAdminApiCall('/admin/configs/platform');
+  return response.data;
+};
+
+/**
+ * Saves the platform configuration. When `baseVersion` is provided (the
+ * `_version` from the last `fetchAdminPlatformConfig`/save response), the
+ * server rejects the save with a conflict instead of overwriting a change
+ * made by another admin session since that version was loaded.
+ *
+ * @param {Object} configData - The full platform config to save
+ * @param {string} [baseVersion] - The `_version` this edit was based on
+ * @returns {Promise<{conflict: boolean, data: Object}>} `conflict: true` means
+ *   the save was rejected (HTTP 409); `data` is either the save result or,
+ *   on conflict, `{ message, config }` describing the current server state.
+ */
+export const updateAdminPlatformConfig = async (configData, baseVersion) => {
+  const body = baseVersion ? { ...configData, _baseVersion: baseVersion } : configData;
+  try {
+    const response = await makeAdminApiCall('/admin/configs/platform', {
+      method: 'POST',
+      body
+    });
+    return { conflict: false, data: response.data };
+  } catch (error) {
+    if (error.response?.status === 409) {
+      return { conflict: true, data: error.response.data };
+    }
+    throw error;
+  }
+};
+
 export const fetchAdminCacheStats = async () => {
   const response = await makeAdminApiCall('/admin/cache/stats');
   return response.data;
@@ -918,6 +959,8 @@ export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
 export const adminApi = {
   // Existing functions
   makeAdminApiCall,
+  fetchAdminPlatformConfig,
+  updateAdminPlatformConfig,
   fetchAdminUsageData,
   fetchAdminUsageTimeline,
   fetchAdminUsageMeta,

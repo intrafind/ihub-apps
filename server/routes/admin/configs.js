@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { createHash } from 'crypto';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
@@ -66,6 +67,82 @@ function encryptSecretIfNeeded(value) {
   if (isEnvVarPlaceholder(value)) return value;
   if (tokenStorageService.isEncrypted(value)) return value;
   return tokenStorageService.encryptString(value);
+}
+
+/**
+ * Compute a short content-hash "version" of a platform config object, used for
+ * optimistic-concurrency checks on the read-modify-write admin save endpoint.
+ * Two admins loading the config at the same moment get the same version; the
+ * first save to succeed changes it, so the second save can detect the conflict
+ * instead of silently overwriting the first admin's change.
+ * @param {Object} config
+ * @returns {string}
+ */
+function computeConfigVersion(config) {
+  return createHash('sha256')
+    .update(JSON.stringify(config ?? {}))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/**
+ * Build the client-facing view of the platform config: strips real secret
+ * values down to '***REDACTED***' (preserving ${ENV_VAR} placeholders) so raw
+ * secrets are never sent to the browser.
+ * @param {Object} platformConfig
+ * @returns {Object}
+ */
+function sanitizePlatformConfigForResponse(platformConfig) {
+  const sanitizedConfig = { ...platformConfig };
+
+  if (sanitizedConfig.auth?.jwtSecret) {
+    sanitizedConfig.auth = {
+      ...sanitizedConfig.auth,
+      jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
+    };
+  }
+
+  if (sanitizedConfig.localAuth?.jwtSecret) {
+    sanitizedConfig.localAuth = {
+      ...sanitizedConfig.localAuth,
+      jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
+    };
+  }
+
+  if (sanitizedConfig.speech?.realtime?.apiKey) {
+    sanitizedConfig.speech = {
+      ...sanitizedConfig.speech,
+      realtime: {
+        ...sanitizedConfig.speech.realtime,
+        apiKey: sanitizeSecret(sanitizedConfig.speech.realtime.apiKey)
+      }
+    };
+  }
+
+  if (sanitizedConfig.speech?.azure?.subscriptionKey) {
+    sanitizedConfig.speech = {
+      ...sanitizedConfig.speech,
+      azure: {
+        ...sanitizedConfig.speech.azure,
+        subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
+      }
+    };
+  }
+
+  if (sanitizedConfig.proxyAuth?.jwtProviders) {
+    sanitizedConfig.proxyAuth = {
+      ...sanitizedConfig.proxyAuth,
+      jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
+        name: provider.name,
+        header: provider.header,
+        issuer: provider.issuer,
+        audience: provider.audience
+        // Exclude jwkUrl and any other potentially sensitive configuration
+      }))
+    };
+  }
+
+  return sanitizedConfig;
 }
 
 /**
@@ -214,61 +291,13 @@ export default function registerAdminConfigRoutes(app) {
       // live in platform.json — they are stored in the central credential store
       // and referenced by *Ref ids, so there is nothing to sanitize for them
       // here. Only the JWT secrets and proxy JWT provider config remain inline.
-      const sanitizedConfig = { ...platformConfig };
+      const sanitizedConfig = sanitizePlatformConfigForResponse(platformConfig);
 
-      // Sanitize JWT secret from auth config
-      if (sanitizedConfig.auth?.jwtSecret) {
-        sanitizedConfig.auth = {
-          ...sanitizedConfig.auth,
-          jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
-        };
-      }
-
-      // Sanitize JWT secret from localAuth config
-      if (sanitizedConfig.localAuth?.jwtSecret) {
-        sanitizedConfig.localAuth = {
-          ...sanitizedConfig.localAuth,
-          jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
-        };
-      }
-
-      // Sanitize the realtime speech API key (server-side secret).
-      if (sanitizedConfig.speech?.realtime?.apiKey) {
-        sanitizedConfig.speech = {
-          ...sanitizedConfig.speech,
-          realtime: {
-            ...sanitizedConfig.speech.realtime,
-            apiKey: sanitizeSecret(sanitizedConfig.speech.realtime.apiKey)
-          }
-        };
-      }
-
-      // Sanitize the Azure Speech subscription key (server-side secret).
-      if (sanitizedConfig.speech?.azure?.subscriptionKey) {
-        sanitizedConfig.speech = {
-          ...sanitizedConfig.speech,
-          azure: {
-            ...sanitizedConfig.speech.azure,
-            subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
-          }
-        };
-      }
-
-      // Sanitize proxy auth JWT provider secrets
-      if (sanitizedConfig.proxyAuth?.jwtProviders) {
-        sanitizedConfig.proxyAuth = {
-          ...sanitizedConfig.proxyAuth,
-          jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
-            name: provider.name,
-            header: provider.header,
-            issuer: provider.issuer,
-            audience: provider.audience
-            // Exclude jwkUrl and any other potentially sensitive configuration
-          }))
-        };
-      }
-
-      res.json(sanitizedConfig);
+      // `_version` is a content hash of the on-disk config at read time. Admin
+      // pages that want conflict detection on save should echo it back as
+      // `_baseVersion` in the POST body (see the POST handler below); pages
+      // that don't send it get the previous, unchecked last-write-wins behavior.
+      res.json({ ...sanitizedConfig, _version: computeConfigVersion(platformConfig) });
     } catch (error) {
       return sendInternalError(res, error, 'get platform configuration');
     }
@@ -279,11 +308,18 @@ export default function registerAdminConfigRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
-      const newConfig = req.body;
-
-      if (!newConfig || typeof newConfig !== 'object') {
+      if (!req.body || typeof req.body !== 'object') {
         return sendBadRequest(res, 'Invalid configuration data');
       }
+
+      // `_baseVersion` (or `_version`, echoed straight back from the GET
+      // response) is an optional optimistic-concurrency token. Callers that
+      // don't send it keep the previous last-write-wins behavior; callers that
+      // do get a 409 instead of silently overwriting a concurrent change.
+      const newConfig = { ...req.body };
+      const baseVersion = newConfig._baseVersion ?? newConfig._version;
+      delete newConfig._baseVersion;
+      delete newConfig._version;
 
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -296,6 +332,21 @@ export default function registerAdminConfigRoutes(app) {
       } catch {
         // File doesn't exist, start with empty config
         logger.info('Creating new platform config file', { component: 'AdminConfigs' });
+      }
+
+      if (baseVersion) {
+        const currentVersion = computeConfigVersion(existingConfig);
+        if (currentVersion !== baseVersion) {
+          return res.status(409).json({
+            error: 'conflict',
+            message:
+              'Platform configuration was changed by someone else since you loaded it. Reload the page to see the latest version and reapply your changes.',
+            config: {
+              ...sanitizePlatformConfigForResponse(existingConfig),
+              _version: currentVersion
+            }
+          });
+        }
       }
 
       // Merge the authentication-related config with existing config
@@ -462,7 +513,7 @@ export default function registerAdminConfigRoutes(app) {
       });
       res.json({
         message: 'Platform configuration updated successfully',
-        config: responseConfig,
+        config: { ...responseConfig, _version: computeConfigVersion(mergedConfig) },
         reconfiguration: {
           reconfigured: reconfigResults.reconfigured,
           requiresRestart: reconfigResults.requiresRestart,

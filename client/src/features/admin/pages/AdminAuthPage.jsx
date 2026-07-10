@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchAdminPlatformConfig, updateAdminPlatformConfig } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -15,6 +15,10 @@ function AdminAuthPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
+  // Content-hash version of the config as last loaded/saved from the server,
+  // used to detect if another admin session saved a change in the meantime
+  // (see updateAdminPlatformConfig).
+  const [configVersion, setConfigVersion] = useState(null);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -98,13 +102,13 @@ function AdminAuthPage() {
 
   const loadConfiguration = async () => {
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform');
-      const data = response.data;
+      const data = await fetchAdminPlatformConfig();
 
       setConfig(prevConfig => ({
         ...prevConfig,
         ...data
       }));
+      setConfigVersion(data._version ?? null);
     } catch (error) {
       setMessage({
         type: 'error',
@@ -120,17 +124,24 @@ function AdminAuthPage() {
 
     setSaving(true);
     setMessage('');
+    let conflictMessage = null;
 
     try {
-      await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: data
-      });
+      const result = await updateAdminPlatformConfig(data, configVersion);
 
-      // Success - axios doesn't have response.ok, successful responses are returned directly
+      if (result.conflict) {
+        // Someone else saved a change since this page loaded its config. The
+        // server rejected the save rather than silently overwriting it —
+        // surface that instead of pretending it succeeded.
+        setConfigVersion(result.data?.config?._version ?? null);
+        conflictMessage =
+          result.data?.message ||
+          'This configuration was changed elsewhere. Reload the page to see the latest version, then reapply your changes.';
+        setMessage({ type: 'error', text: conflictMessage });
+        throw new Error(conflictMessage);
+      }
+
+      setConfigVersion(result.data?.config?._version ?? null);
       setMessage({
         type: 'success',
         text: 'Authentication configuration saved successfully!'
@@ -138,10 +149,12 @@ function AdminAuthPage() {
       // Refresh the platform config context to update navigation
       refreshConfig();
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to save configuration: ${error.message}`
-      });
+      if (!conflictMessage) {
+        setMessage({
+          type: 'error',
+          text: `Failed to save configuration: ${error.message}`
+        });
+      }
       throw error; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
