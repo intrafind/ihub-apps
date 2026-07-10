@@ -723,7 +723,13 @@ function useAppChat({
     addSystemMessage,
     submitClarificationResponse,
     loadServerMessages,
-    resetConversationState
+    resetConversationState,
+    // Exposed so the transcription flow can render a transcript as a
+    // locally-built assistant turn (streaming deltas), without going through the
+    // chat LLM pipeline.
+    addUserMessage,
+    addAssistantMessage,
+    updateAssistantMessage
   };
 }
 

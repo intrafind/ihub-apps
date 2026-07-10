@@ -1,0 +1,18 @@
+{
+  "id": "voxtral-mini-realtime",
+  "modelId": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+  "name": {
+    "en": "Voxtral Mini (Transcription)",
+    "de": "Voxtral Mini (Transkription)"
+  },
+  "description": {
+    "en": "Self-hosted Voxtral realtime speech-to-text. Transcribes uploaded audio, uploaded video, or a browser recording into a chat answer via a vLLM /v1/realtime endpoint.",
+    "de": "Selbst gehostete Voxtral-Echtzeit-Spracherkennung. Transkribiert hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme über einen vLLM-/v1/realtime-Endpunkt in eine Chat-Antwort."
+  },
+  "url": "ws://localhost:8080/v1/realtime",
+  "provider": "vllm-realtime",
+  "modelType": "transcription",
+  "apiKey": "",
+  "enabled": false,
+  "default": false
+}

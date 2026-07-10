@@ -16,6 +16,14 @@ import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import { computeContextUsage } from '../../../shared/utils/tokenEstimatorClient.js';
 import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 
+/** Format elapsed seconds as m:ss for the recording timer. */
+const formatElapsed = seconds => {
+  const total = Math.floor(seconds || 0);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
 /**
  * Chat input component following Claude's design
  * Two-line layout:
@@ -31,6 +39,17 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  // Record→transcribe control (distinct from dictation onVoiceInput):
+  // records audio and renders the transcript as an assistant chat turn.
+  onRecordTranscription = null,
+  transcriptionRecordEnabled = false,
+  isRecordingTranscription = false,
+  recordTranscriptionElapsed = 0,
+  // Per-chat transcription toggle (like websearch): when on, audio/video
+  // uploads are transcribed by the transcription model instead of the chat LLM.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
@@ -601,6 +620,9 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
+              transcriptionAvailable={transcriptionAvailable}
+              transcriptionEnabled={transcriptionEnabled}
+              onTranscriptionEnabledChange={onTranscriptionEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
             />
@@ -657,6 +679,43 @@ function ChatInput({
                   onCommand={onVoiceCommand}
                 />
               </div>
+            )}
+
+            {/* Record → transcribe. Distinct from dictation: the
+                recording is transcribed into an assistant chat message. */}
+            {transcriptionRecordEnabled && onRecordTranscription && (
+              <button
+                type="button"
+                onClick={onRecordTranscription}
+                disabled={isInputDisabled}
+                aria-pressed={isRecordingTranscription}
+                title={
+                  isRecordingTranscription
+                    ? t('transcription.stopRecording', 'Stop recording & transcribe')
+                    : t('transcription.record', 'Record audio to transcribe')
+                }
+                className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                  isRecordingTranscription
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                    : 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {/* Record = red dot; stop = red square (distinct from the
+                    dictation microphone icon). */}
+                <span
+                  className={`inline-block bg-red-600 dark:bg-red-500 ${
+                    isRecordingTranscription
+                      ? 'w-3 h-3 rounded-sm animate-pulse'
+                      : 'w-3.5 h-3.5 rounded-full'
+                  }`}
+                  aria-hidden="true"
+                />
+                {isRecordingTranscription && (
+                  <span className="text-xs tabular-nums">
+                    {formatElapsed(recordTranscriptionElapsed)}
+                  </span>
+                )}
+              </button>
             )}
 
             {/* Image Generation Controls - Show on desktop only if model supports it */}
