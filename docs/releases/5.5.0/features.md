@@ -389,6 +389,18 @@ trapped the page in an endless reload loop.
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Tool-Enabled Apps Now Show Up in Usage and Telemetry Dashboards
+
+Chats with an app that has **tools** enabled now record token usage, OpenTelemetry `gen_ai.*`
+spans, and stream-outcome metrics for every LLM call, the same as ordinary chats. Previously the
+tool-calling path recorded none of this, so any app with tools configured was invisible in usage
+tracking, cost accounting, and telemetry dashboards — and the gap grew with every tool-loop
+iteration, since each iteration is its own billable LLM call.
+
+- Each LLM round-trip in a tool-calling conversation — including every iteration of a multi-step
+  tool loop — is now counted individually, matching how the standard chat path is measured.
+- No configuration or admin action required; historical usage prior to this fix is not backfilled.
+
 ## Transcribe Audio, Video, and Recordings with Voxtral (Chat Answer)
 
 Apps can now transcribe a whole audio clip with a self-hosted **Voxtral** transcription model and
