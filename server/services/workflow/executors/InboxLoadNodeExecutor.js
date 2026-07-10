@@ -21,6 +21,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import inboxStore from '../../../agents/inbox/inboxStore.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { previewToolValue } from './valuePreview.js';
 
 const PRIORITY_RANK = { p1: 1, p2: 2, p3: 3, unprioritized: 4 };
 
@@ -160,8 +161,8 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
       toolCalls: [
         {
           name: 'inbox-store.readInbox',
-          args: this._previewToolValue({ inboxId, status: 'all' }),
-          result: this._previewToolValue({
+          args: previewToolValue({ inboxId, status: 'all' }),
+          result: previewToolValue({
             inboxId,
             version: inbox.version,
             totalItems: inbox.items.length,
@@ -196,15 +197,6 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
     };
 
     return this.createSuccessResult(currentInboxItem, { stateUpdates });
-  }
-
-  _previewToolValue(value) {
-    try {
-      const json = JSON.stringify(value);
-      return json.length > 1024 ? `${json.slice(0, 1024)}…` : json;
-    } catch {
-      return null;
-    }
   }
 }
 
