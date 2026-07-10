@@ -461,6 +461,19 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Authentication Config Save No Longer Silently Overwrites Concurrent Changes
+
+The **Admin → Authentication Configuration** page now detects when the platform configuration was
+changed by another admin session since the page was loaded, instead of silently overwriting it on
+save (a "last write wins" data-loss risk, since this page also holds security-relevant settings
+like SSO and local auth).
+
+- Saving now fails with a clear message ("this configuration was changed elsewhere — reload and
+  reapply your changes") if someone else saved a change in the meantime, rather than silently
+  clobbering it.
+- No admin action is required — the fix takes effect automatically on upgrade. Other admin config
+  pages that write `platform.json` will be migrated to the same protection in follow-up releases.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
