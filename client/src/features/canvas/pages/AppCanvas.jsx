@@ -491,7 +491,6 @@ export default function AppCanvas() {
   useEffect(() => {
     // Load canvas-specific settings from sessionStorage
     // Main app settings are handled by useAppSettings hook
-    // Document content is handled by useCanvasContent hook
     const loadSettings = () => {
       // Load panel sizes
       const savedPanelSizes = sessionStorage.getItem(`canvas_panel_sizes_${appId}`);
