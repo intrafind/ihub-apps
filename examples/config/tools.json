@@ -23,7 +23,9 @@
           }
         }
       },
-      "required": ["query"]
+      "required": [
+        "query"
+      ]
     }
   },
   {
@@ -67,7 +69,9 @@
           }
         }
       },
-      "required": ["url"]
+      "required": [
+        "url"
+      ]
     }
   },
   {
@@ -121,202 +125,9 @@
           "maximum": 10000
         }
       },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "deepResearch",
-    "name": "deepResearch",
-    "title": {
-      "en": "Deep Research",
-      "de": "Tiefgehende Recherche"
-    },
-    "description": {
-      "en": "Perform iterative web research with progress updates through SSE events.",
-      "de": "Führen Sie iterative Webrecherchen mit Fortschrittsupdates über SSE-Ereignisse durch."
-    },
-    "script": "deepResearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": {
-            "en": "Initial search query",
-            "de": "Erste Suchanfrage"
-          }
-        },
-        "maxRounds": {
-          "type": "integer",
-          "description": {
-            "en": "Number of search iterations",
-            "de": "Anzahl der Suchiterationen"
-          },
-          "default": 5,
-          "minimum": 5,
-          "maximum": 10
-        },
-        "maxResults": {
-          "type": "integer",
-          "description": {
-            "en": "Number of results to process per round",
-            "de": "Anzahl der pro Runde zu verarbeitenden Ergebnisse"
-          },
-          "default": 5,
-          "minimum": 1,
-          "maximum": 10
-        },
-        "contentMaxLength": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum length of extracted content per page",
-            "de": "Maximale Länge der extrahierten Inhalte pro Seite"
-          },
-          "default": 5000,
-          "minimum": 500,
-          "maximum": 10000
-        },
-        "chatId": {
-          "type": "string",
-          "description": {
-            "en": "Chat session ID",
-            "de": "Chat-Sitzungs-ID"
-          }
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "researchPlanner",
-    "name": "researchPlanner",
-    "title": {
-      "en": "Research Planner",
-      "de": "Recherche-Planer"
-    },
-    "description": {
-      "en": "Break down a research topic into different investigative tasks",
-      "de": "Zerlegen Sie ein Forschungsthema in verschiedene investigative Aufgaben"
-    },
-    "script": "researchPlanner.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "question": {
-          "type": "string",
-          "description": {
-            "en": "Research topic",
-            "de": "Forschungsthema"
-          }
-        },
-        "teamSize": {
-          "type": "integer",
-          "description": {
-            "en": "Number of tasks to generate",
-            "de": "Anzahl der zu generierenden Aufgaben"
-          },
-          "default": 3,
-          "minimum": 1,
-          "maximum": 10
-        },
-        "soundBites": {
-          "type": "string",
-          "description": {
-            "en": "Additional context",
-            "de": "Zusätzlicher Kontext"
-          }
-        }
-      },
-      "required": ["question"]
-    }
-  },
-  {
-    "id": "evaluator",
-    "name": "evaluator",
-    "title": {
-      "en": "Answer Evaluator",
-      "de": "Antwort-Bewerter"
-    },
-    "description": {
-      "en": "Evaluate answers for certainty, freshness, and completeness.",
-      "de": "Bewerten Sie Antworten auf Bestimmtheit, Aktualität und Vollständigkeit."
-    },
-    "script": "evaluator.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "question": {
-          "type": "string",
-          "description": {
-            "en": "Original user question",
-            "de": "Ursprüngliche Benutzerfrage"
-          }
-        },
-        "answer": {
-          "type": "string",
-          "description": {
-            "en": "Draft answer to evaluate",
-            "de": "Entwurfsantwort zur Bewertung"
-          }
-        },
-        "model": {
-          "type": "string",
-          "description": {
-            "en": "Model ID for evaluation",
-            "de": "Modell-ID für die Bewertung"
-          },
-          "default": "gemini-1.5-flash"
-        }
-      },
-      "required": ["question", "answer"]
-    }
-  },
-  {
-    "id": "queryRewriter",
-    "name": "queryRewriter",
-    "title": {
-      "en": "Query Rewriter",
-      "de": "Anfragen-Umschreiber"
-    },
-    "description": {
-      "en": "Rewrite user search queries into optimized variants.",
-      "de": "Schreiben Sie Benutzersuchanfragen in optimierte Varianten um."
-    },
-    "script": "queryRewriter.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": {
-            "en": "Search query to rewrite",
-            "de": "Suchanfrage zum Umschreiben"
-          }
-        },
-        "think": {
-          "type": "string",
-          "description": {
-            "en": "User motivation",
-            "de": "Benutzermotivation"
-          }
-        },
-        "context": {
-          "type": "string",
-          "description": {
-            "en": "Optional context",
-            "de": "Optionaler Kontext"
-          }
-        },
-        "model": {
-          "type": "string",
-          "description": {
-            "en": "Model ID",
-            "de": "Modell-ID"
-          },
-          "default": "gemini-2.5-flash-preview-05-20"
-        }
-      },
-      "required": ["query"]
+      "required": [
+        "query"
+      ]
     }
   },
   {
@@ -343,7 +154,10 @@
         },
         "format": {
           "type": "string",
-          "enum": ["png", "pdf"],
+          "enum": [
+            "png",
+            "pdf"
+          ],
           "default": "png",
           "description": {
             "en": "Output format (png or pdf)",
@@ -359,34 +173,9 @@
           }
         }
       },
-      "required": ["url"]
-    }
-  },
-  {
-    "id": "answerReducer",
-    "name": "answerReducer",
-    "title": {
-      "en": "Answer Reducer",
-      "de": "Antwort-Reduzierer"
-    },
-    "description": {
-      "en": "Consolidate multiple text passages into a single concise article.",
-      "de": "Führen Sie mehrere Textpassagen zu einem einzigen prägnanten Artikel zusammen."
-    },
-    "script": "answerReducer.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "answers": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": {
-            "en": "Text passages to consolidate",
-            "de": "Zu vereinende Texte"
-          }
-        }
-      },
-      "required": ["answers"]
+      "required": [
+        "url"
+      ]
     }
   },
   {
@@ -413,7 +202,10 @@
         },
         "format": {
           "type": "string",
-          "enum": ["png", "pdf"],
+          "enum": [
+            "png",
+            "pdf"
+          ],
           "default": "png",
           "description": {
             "en": "Output format (png or pdf)",
@@ -429,7 +221,9 @@
           }
         }
       },
-      "required": ["url"]
+      "required": [
+        "url"
+      ]
     }
   },
   {
@@ -461,7 +255,9 @@
               }
             }
           },
-          "required": ["name"]
+          "required": [
+            "name"
+          ]
         }
       },
       "getAllUserDetails": {
@@ -480,7 +276,9 @@
               }
             }
           },
-          "required": ["userId"]
+          "required": [
+            "userId"
+          ]
         }
       },
       "getUserManager": {
@@ -499,7 +297,9 @@
               }
             }
           },
-          "required": ["userId"]
+          "required": [
+            "userId"
+          ]
         }
       },
       "getUserGroups": {
@@ -518,7 +318,9 @@
               }
             }
           },
-          "required": ["userId"]
+          "required": [
+            "userId"
+          ]
         }
       },
       "getTeamMembers": {
@@ -537,7 +339,9 @@
               }
             }
           },
-          "required": ["teamId"]
+          "required": [
+            "teamId"
+          ]
         }
       },
       "getUserPhotoBase64": {
@@ -556,7 +360,9 @@
               }
             }
           },
-          "required": ["userId"]
+          "required": [
+            "userId"
+          ]
         }
       }
     }
@@ -608,14 +414,18 @@
             },
             "returnFields": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": {
                 "en": "Fields to return in search results (optional)",
                 "de": "In Suchergebnissen zurückzugebende Felder (optional)"
               }
             }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       },
       "getContent": {
@@ -651,7 +461,9 @@
               "maximum": 50000
             }
           },
-          "required": ["documentId"]
+          "required": [
+            "documentId"
+          ]
         }
       },
       "getMetadata": {
@@ -677,7 +489,9 @@
               }
             }
           },
-          "required": ["documentId"]
+          "required": [
+            "documentId"
+          ]
         }
       }
     }

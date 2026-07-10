@@ -1,4 +1,8 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createResourceLoader, createValidator } from './utils/resourceLoader.js';
+import logger from './utils/logger.js';
 
 /**
  * Tools Configuration Loader
@@ -8,6 +12,9 @@ import { createResourceLoader, createValidator } from './utils/resourceLoader.js
  * config/tools.json support — installations are migrated to individual files
  * by V068__split_tools_config_into_individual_files.js.
  */
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SCRIPTS_DIR = path.join(__dirname, 'tools');
 
 const toolsLoader = createResourceLoader({
   resourceName: 'Tools',
@@ -35,6 +42,27 @@ function sortTools(a, b) {
 }
 
 /**
+ * Warn (without throwing) about tools whose configured `script` file doesn't
+ * exist under server/tools/. Catches typos or hand-edited contents/tools/*.json
+ * entries at load time instead of failing silently with ERR_MODULE_NOT_FOUND
+ * the first time the tool is invoked.
+ * @param {Array} tools - Loaded tool definitions
+ */
+export function warnAboutMissingToolScripts(tools) {
+  for (const tool of tools) {
+    if (!tool.script) continue;
+    const scriptPath = path.join(SCRIPTS_DIR, tool.script);
+    if (!fs.existsSync(scriptPath)) {
+      logger.warn('Tool references a script file that does not exist', {
+        component: 'ToolsLoader',
+        toolId: tool.id,
+        script: tool.script
+      });
+    }
+  }
+}
+
+/**
  * Load all tools from individual files in contents/tools/.
  * @param {boolean} includeDisabled - Include disabled tools
  * @param {boolean} verbose - Whether to log verbose output
@@ -42,6 +70,7 @@ function sortTools(a, b) {
  */
 export async function loadAllTools(includeDisabled = false, verbose = true) {
   const tools = await toolsLoader.loadFromFiles(verbose);
+  warnAboutMissingToolScripts(tools);
   const filtered = includeDisabled ? tools : tools.filter(tool => tool.enabled !== false);
   return filtered.sort(sortTools);
 }
