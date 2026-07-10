@@ -12,7 +12,7 @@
  * Run directly: `node client/src/utils/exportFormats.test.js`.
  */
 
-import { sanitizeForSpreadsheet } from './exportFormats.js';
+import { sanitizeForSpreadsheet } from './exportNaming.js';
 
 let failures = 0;
 function check(label, cond, details) {
