@@ -568,7 +568,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/configs'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/sessions'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/pages'), rateLimiters.publicApiLimiter);
-  app.use(buildApiPath('/magic-prompts'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/magic-prompt'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/short-links'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
