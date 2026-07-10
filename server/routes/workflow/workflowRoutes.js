@@ -13,7 +13,7 @@ import { join } from 'path';
 import { authRequired } from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { WorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
+import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
@@ -301,7 +301,7 @@ function validateWorkflow(workflow) {
  * @param {WorkflowEngine} deps.workflowEngine - Optional custom workflow engine instance
  */
 export default function registerWorkflowRoutes(app, deps = {}) {
-  const workflowEngine = deps.workflowEngine || new WorkflowEngine();
+  const workflowEngine = deps.workflowEngine || getWorkflowEngine();
 
   // Recover persisted executions from disk on startup
   const registry = getExecutionRegistry();

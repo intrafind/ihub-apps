@@ -17,7 +17,7 @@ import {
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
-import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
+import { getWorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
@@ -27,17 +27,20 @@ import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import logger from '../../utils/logger.js';
 
-// Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
-// so multiple instances see the same executions; we use one per-worker.
-// 30-minute default node timeout: the phased planner node blocks while its
-// entire sub-workflow runs (up to 6 tasks × several minutes each), so the
-// 5-minute DEFAULT_NODE_TIMEOUT would kill it mid-run. 30 min matches
-// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout allows.
-let _engine = null;
+// Shared WorkflowEngine singleton — see getWorkflowEngine() for why this must
+// be shared rather than a per-module instance (abort/cancel coherence).
 function getEngine() {
-  if (!_engine) _engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
-  return _engine;
+  return getWorkflowEngine();
 }
+
+// 30-minute node timeout for agent runs: the phased planner node blocks while
+// its entire sub-workflow runs (up to 6 tasks × several minutes each), so the
+// engine's 5-minute default would kill it mid-run. 30 min matches
+// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout
+// allows. Passed per-call (not via the engine constructor) since the engine
+// instance is now shared with non-agent workflow entry points that should
+// keep the shorter default.
+const AGENT_NODE_TIMEOUT_MS = 30 * 60 * 1000;
 
 function lookupProfile(profileId) {
   const { data: profiles = [] } = configCache.getAgentProfiles(true);
@@ -299,7 +302,8 @@ export default function registerAgentRunRoutes(app) {
         // dominated by the LLM call time, so the I/O is negligible.
         const state = await getEngine().start(workflow, initialData, {
           user: principal,
-          checkpointOnNode: true
+          checkpointOnNode: true,
+          timeout: AGENT_NODE_TIMEOUT_MS
         });
 
         // Register the run in the ExecutionRegistry so the /api/agents/runs
@@ -692,7 +696,8 @@ export default function registerAgentRunRoutes(app) {
         const newState = await getEngine().resumeFromTerminated(runId, {
           user: req.user,
           workflow,
-          checkpointOnNode: true
+          checkpointOnNode: true,
+          timeout: AGENT_NODE_TIMEOUT_MS
         });
         logger.info('Agent run resumed from terminated state', {
           component: 'AgentRunsRoute',
@@ -785,7 +790,15 @@ export default function registerAgentRunRoutes(app) {
           }
         });
 
-        const newState = await getEngine().resume(runId, {}, { user: req.user, workflow });
+        const newState = await getEngine().resume(
+          runId,
+          {},
+          {
+            user: req.user,
+            workflow,
+            timeout: AGENT_NODE_TIMEOUT_MS
+          }
+        );
         res.json({ ok: true, status: newState.status });
       } catch (error) {
         if (error.code === 'EXECUTION_NOT_FOUND') return sendNotFound(res, 'Run');
