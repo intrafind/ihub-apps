@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createResourceLoader, createValidator } from './utils/resourceLoader.js';
+import { getRootDir } from './pathUtils.js';
 import logger from './utils/logger.js';
 
 /**
@@ -12,9 +12,6 @@ import logger from './utils/logger.js';
  * config/tools.json support — installations are migrated to individual files
  * by V068__split_tools_config_into_individual_files.js.
  */
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPTS_DIR = path.join(__dirname, 'tools');
 
 const toolsLoader = createResourceLoader({
   resourceName: 'Tools',
@@ -49,9 +46,10 @@ function sortTools(a, b) {
  * @param {Array} tools - Loaded tool definitions
  */
 export function warnAboutMissingToolScripts(tools) {
+  const scriptsDir = path.join(getRootDir(), 'server', 'tools');
   for (const tool of tools) {
     if (!tool.script) continue;
-    const scriptPath = path.join(SCRIPTS_DIR, tool.script);
+    const scriptPath = path.join(scriptsDir, tool.script);
     if (!fs.existsSync(scriptPath)) {
       logger.warn('Tool references a script file that does not exist', {
         component: 'ToolsLoader',
