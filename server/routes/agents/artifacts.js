@@ -17,13 +17,11 @@ import {
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
-import { WorkflowEngine } from '../../services/workflow/index.js';
+import { getWorkflowEngine } from '../../services/workflow/index.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
-let _engine = null;
 function getEngine() {
-  if (!_engine) _engine = new WorkflowEngine();
-  return _engine;
+  return getWorkflowEngine();
 }
 
 function artifactsRootDir() {

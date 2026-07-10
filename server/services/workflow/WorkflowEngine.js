@@ -58,6 +58,49 @@ const MAX_EXECUTION_ITERATIONS = 10000;
  * const state = await engine.start(workflowDefinition, { userInput: 'Hello' });
  * console.log('Execution ID:', state.executionId);
  */
+/**
+ * Singleton WorkflowEngine instance shared across all entry points
+ * (workflowRunner, workflowRoutes, agents/runs, agents/artifacts, and the
+ * boot-time resume path). `abortControllers` is per-instance state, so a
+ * cancel() routed through a different instance than the one running the
+ * loop cannot fire that run's abort signal — it can only flip the
+ * persisted status, which is only picked up between nodes. Sharing one
+ * instance makes cancellation coherent across every entry point.
+ * @type {WorkflowEngine|null}
+ * @private
+ */
+let _singletonInstance = null;
+
+/**
+ * Returns the shared WorkflowEngine singleton instance.
+ * Creates one on first call. All callers should use this instead of
+ * `new WorkflowEngine()` so abort controllers and cancellation stay
+ * coherent across entry points.
+ *
+ * Do not pass a `defaultTimeout` override here — since the instance is
+ * shared, whichever caller happens to construct it first would silently
+ * decide the default for everyone else. Callers that need a longer
+ * per-run timeout (e.g. agent runs) should pass `timeout` explicitly in
+ * the `options` of each `start`/`resume`/`resumeFromCheckpoint`/
+ * `resumeFromTerminated` call instead — `_normalizeTimeout` already
+ * prefers a per-call `options.timeout` over `this.defaultTimeout`.
+ * @param {Object} [options] - Options passed to constructor on first creation
+ * @returns {WorkflowEngine}
+ */
+export function getWorkflowEngine(options) {
+  if (!_singletonInstance) {
+    _singletonInstance = new WorkflowEngine(options);
+  }
+  return _singletonInstance;
+}
+
+/**
+ * Resets the singleton instance (for testing purposes only).
+ */
+export function resetWorkflowEngine() {
+  _singletonInstance = null;
+}
+
 export class WorkflowEngine {
   /**
    * Creates a new WorkflowEngine instance

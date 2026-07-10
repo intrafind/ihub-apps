@@ -627,7 +627,7 @@ if (cluster.isPrimary && workerCount > 1) {
   try {
     const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
-    const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+    const { getWorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
     const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
     const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
     const { serializeProfile } = await import('./agents/profile/profileWorkflowSerializer.js');
@@ -635,13 +635,17 @@ if (cluster.isPrimary && workerCount > 1) {
     const { applyNodeModels, applyReviewSettings } = await import('./routes/agents/runs.js');
     const { resolveReviewSettings } = await import('./agents/profile/reviewSettings.js');
 
-    // 30-minute default node timeout consistent with the agent-run engine in
-    // routes/agents/runs.js — needed so resumed agent runs (including phased
-    // planner nodes) don't hit the 5-minute DEFAULT_NODE_TIMEOUT on recovery.
-    const engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
+    const engine = getWorkflowEngine();
     const triggerManager = getTriggerManager();
     triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
+
+    // 30-minute node timeout for resumed runs, consistent with the agent-run
+    // engine in routes/agents/runs.js — needed so resumed agent runs
+    // (including phased planner nodes) don't hit the engine's 5-minute
+    // default on recovery. Passed per-call rather than via the (now shared)
+    // engine's constructor so it doesn't leak into non-resume entry points.
+    const RESUME_NODE_TIMEOUT_MS = 30 * 60 * 1000;
 
     // Reconstruct the full definition for a persisted run: agent runs are
     // re-serialized from their profile (with the agent principal restored);
@@ -682,14 +686,17 @@ if (cluster.isPrimary && workerCount > 1) {
         applyReviewSettings(definition, resolveReviewSettings(profile.review));
 
         const principal = buildAgentPrincipal(profile, state.data._agent?.triggeredBy || null);
-        return { definition, options: { user: principal } };
+        return { definition, options: { user: principal, timeout: RESUME_NODE_TIMEOUT_MS } };
       }
       const workflows = await loadWorkflows(false);
       const definition = workflows.find(w => w.id === state.workflowId);
       if (!definition) return null;
       return {
         definition,
-        options: { user: { id: 'system', name: 'System (resumed)', groups: [] } }
+        options: {
+          user: { id: 'system', name: 'System (resumed)', groups: [] },
+          timeout: RESUME_NODE_TIMEOUT_MS
+        }
       };
     };
 
