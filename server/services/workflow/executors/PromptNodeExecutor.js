@@ -534,7 +534,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         tools,
         config,
         context: contextForLLM,
-        nodeId: node.id
+        nodeId: node.id,
+        nativeWebSearch
       });
 
       // Finalise the step transcript with timing + outcome.
@@ -1392,7 +1393,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {Promise<Object>} Final response with content
    * @private
    */
-  async executeLLMWithTools({ model, messages, tools, config, context, nodeId }) {
+  async executeLLMWithTools({ model, messages, tools, config, context, nodeId, nativeWebSearch }) {
     // Budget-driven continuation (Claude Code TOKEN_BUDGET analog). The agent
     // runs as long as the task and budget require, rather than a fixed count.
     // `maxToolRoundsPerNode` is a safety backstop above the token budget; the

@@ -114,7 +114,7 @@ const createRenderer = t => {
   };
 
   // --- Link Renderer ---
-  renderer.link = token => {
+  renderer.link = function (token) {
     // In marked v5+, the renderer receives a token object instead of separate parameters
     // Extract href, title, and text from the token
     let actualHref = token.href;

@@ -51,7 +51,7 @@ function scheduleSave() {
     try {
       await saveLinks();
     } catch (error) {
-      logger.error('Failed to save short link data', { component: 'ShortLinkManager', error: e });
+      logger.error('Failed to save short link data', { component: 'ShortLinkManager', error });
     }
   }, SAVE_INTERVAL_MS);
 }

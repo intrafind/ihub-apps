@@ -14,6 +14,7 @@
  * before DOM insertion. Only static template strings and escaped values
  * are used with innerHTML for rendering the login UI.
  */
+/* global __authGateI18n */
 (function authGate() {
   'use strict';
 

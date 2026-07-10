@@ -344,8 +344,8 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
+      const { appId, chatId } = req.params;
       try {
-        const { appId, chatId } = req.params;
         const channel = createSseChannel({
           req,
           res,
