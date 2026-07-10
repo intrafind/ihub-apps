@@ -3,38 +3,23 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 import configCache from '../../configCache.js';
+import { isPrivateIP, hostMatchesPattern, isAllowedHost } from '../../utils/ssrfGuard.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
+// Re-exported for backward compatibility: callers/tests import this matcher
+// from safeFetch.js. The canonical implementation lives in ssrfGuard.js so
+// all outbound-fetch code paths share one pattern-matching semantics.
+export { hostMatchesPattern };
+
 /**
- * Match a hostname against a single allowlist pattern. Mirrors the pattern
- * semantics used by `ssl.domainWhitelist` (see `utils/httpConfig.js`):
- *   - `*.example.com` matches any subdomain (e.g. `api.example.com`) but NOT
- *     `example.com` itself
- *   - `.example.com` is an alias for `*.example.com` — subdomains only, NOT
- *     `example.com` itself
- *   - everything else is an exact-match hostname (case-insensitive)
- *
- * Kept inline (rather than imported from httpConfig) so this security-critical
- * module stays dependency-light and the matcher can be tested in isolation.
- * Exported for direct unit testing of the matching semantics.
+ * Byte-based private/sensitive IP classifier shared with ssrfGuard.js. Unlike
+ * a dotted-decimal/prefix regex list, this correctly covers CGNAT
+ * (100.64.0.0/10), multicast/reserved (224/4+), and every IPv4-in-IPv6
+ * transition wrapper (mapped, compatible, NAT64) in any serialization,
+ * including the hex-compressed form `::ffff:a9fe:a9fe`.
  */
-export function hostMatchesPattern(hostname, pattern) {
-  if (!hostname || !pattern) return false;
-  const h = hostname.toLowerCase();
-  const p = pattern.toLowerCase().trim();
-  if (!p) return false;
-  if (p.startsWith('*.')) {
-    const base = p.slice(2);
-    return Boolean(base) && h.endsWith('.' + base);
-  }
-  if (p.startsWith('.')) {
-    // Subdomain pattern — bare domain must NOT match (per repo convention)
-    const base = p.slice(1);
-    return Boolean(base) && h.endsWith(p);
-  }
-  return h === p;
-}
+const isPrivateIp = isPrivateIP;
 
 /**
  * Look up the admin-configured global SSRF allowlist from platform.json and
@@ -43,30 +28,7 @@ export function hostMatchesPattern(hostname, pattern) {
  */
 function isInGlobalSsrfAllowlist(hostname) {
   const platform = configCache.getPlatform?.() || {};
-  const list = platform.ssrf?.allowedHosts;
-  if (!Array.isArray(list) || list.length === 0) return false;
-  return list.some(pattern => hostMatchesPattern(hostname, pattern));
-}
-
-const PRIVATE_IP_RE = [
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^0\./,
-  /^::1$/,
-  /^::ffff:127\./i,
-  /^::ffff:10\./i,
-  /^::ffff:192\.168\./i,
-  /^::ffff:172\.(1[6-9]|2\d|3[01])\./i,
-  /^fc/i,
-  /^fd/i,
-  /^fe80:/i
-];
-
-function isPrivateIp(ip) {
-  return PRIVATE_IP_RE.some(re => re.test(ip));
+  return isAllowedHost(hostname, platform.ssrf?.allowedHosts);
 }
 
 /**

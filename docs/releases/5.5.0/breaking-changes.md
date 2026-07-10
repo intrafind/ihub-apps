@@ -30,3 +30,18 @@ the local API server once packaged — so no functioning deployment is affected.
 
 **Before upgrading:** No action needed. If you had scripts or documentation referencing
 `electron:dev`/`electron:build`, remove those references — the commands no longer exist.
+
+## Web Content Extractor Tool Now Uses the SSRF Allowlist, Not the SSL Allowlist
+
+The `webContentExtractor` tool (used for reading web pages during chats) blocked requests to
+private/internal IP addresses using a weaker check than the rest of the platform, and let admins
+bypass that block only via `ssl.domainWhitelist` — a setting meant for certificate validation, not
+SSRF protection. Both are now fixed: the tool uses the same private-IP classifier as every other
+outbound request path (covering carrier-grade NAT and additional IPv6 address forms it previously
+missed), and the bypass now reads from the dedicated `ssrf.allowedHosts` setting.
+
+- If you relied on `ssl.domainWhitelist` to let `webContentExtractor` reach an internal host, add
+  that host to `ssrf.allowedHosts` in Admin → Platform Settings instead.
+
+**Before upgrading:** Move any hosts needed for `webContentExtractor` from `ssl.domainWhitelist` to
+`ssrf.allowedHosts`.
