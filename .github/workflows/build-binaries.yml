@@ -298,7 +298,9 @@ jobs:
     name: Commit Version Changes
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Only commit version changes for real releases; workflow_dispatch inputs
+    # are not guaranteed to be valid release tags (see #1765).
+    if: github.event_name == 'release'
     permissions:
       contents: write
     steps:
@@ -319,11 +321,7 @@ jobs:
 
       - name: Set version for commit job
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          else
-            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
-          fi
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
         shell: bash
 
       - name: Sync and commit version changes

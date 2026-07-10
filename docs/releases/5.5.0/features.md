@@ -389,6 +389,15 @@ trapped the page in an endless reload loop.
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Displayed Version Number Fixed
+
+The version shown in the admin UI and documentation footer is corrected back to a real release
+number. A release-automation run had previously committed a stray branch name as the app version,
+which also broke downstream update checks.
+
+- The release-sync script now rejects any non-semver input, so this cannot recur.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
