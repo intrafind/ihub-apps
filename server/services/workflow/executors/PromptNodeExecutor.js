@@ -24,6 +24,7 @@ import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
+import { resolveTemplateVariables as resolveTemplateVariablesEngine } from './promptTemplateEngine.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -724,16 +725,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             }
           };
 
+    // Hooks the shared template engine defers to for the handful of
+    // placeholders/paths that need PromptNodeExecutor's own state.
+    const templateDeps = {
+      logger: this.logger,
+      formatPreviousTaskResults: (s, o) => this._formatPreviousTaskResults(s, o),
+      formatCitations: s => this._formatCitations(s),
+      resolveVariables: (value, s) => this.resolveVariables(value, s)
+    };
+
     // Add system message if configured
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
       // Resolve global placeholders ({{date}}, {{timezone}}, …) on the RAW
       // template first — resolveTemplateVariables strips unknown {{...}} tokens,
       // so the global pass must run before it, not after.
-      let systemContent = this.resolveTemplateVariables(
+      let systemContent = resolveTemplateVariablesEngine(
         this.applyGlobalPromptVars(systemTemplate, globalVars),
         state,
-        tplOpts
+        tplOpts,
+        templateDeps
       );
 
       // Prepend the temporal block so the date is the first thing the model reads.
@@ -793,10 +804,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     let userContent;
     if (config.prompt) {
       const promptTemplate = this.getLocalizedValue(config.prompt, language);
-      userContent = this.resolveTemplateVariables(
+      userContent = resolveTemplateVariablesEngine(
         this.applyGlobalPromptVars(promptTemplate, globalVars),
         state,
-        tplOpts
+        tplOpts,
+        templateDeps
       );
     } else if (state.data?.input) {
       userContent = state.data.input;
@@ -939,302 +951,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       return value[language] || value['en'] || Object.values(value)[0] || '';
     }
     return String(value || '');
-  }
-
-  /**
-   * Resolve template variables in a string.
-   * Supports multiple syntaxes:
-   * - {{variable}} - Simple Handlebars-style (looks up in state.data)
-   * - {{#if condition}}...{{/if}} - Simple conditional blocks
-   * - {{#each array}}...{{/each}} - Loop over arrays
-   * - {{@index}} - Current loop index (0-based)
-   * - {{this}} and {{this.property}} - Current item reference
-   * - {{#compare val1 "op" val2}}...{{/compare}} - Comparison blocks
-   * - $.path - JSONPath-style (via resolveVariables)
-   * - ${$.path} - Embedded JSONPath-style (via resolveVariables)
-   *
-   * @param {string} template - Template string
-   * @param {Object} state - Workflow state
-   * @returns {string} Resolved template
-   * @private
-   */
-  resolveTemplateVariables(template, state, opts = {}) {
-    if (typeof template !== 'string') {
-      return template;
-    }
-
-    let result = template;
-
-    // Handle {{#each array}}...{{/each}} blocks with proper nesting support
-    // Process from outermost to innermost using balanced matching
-    result = this.processEachBlocks(result, state);
-
-    // Handle {{#compare val1 "op" val2}}...{{/compare}} blocks
-    // Supports operators: <, >, <=, >=, ==, !=
-    result = result.replace(
-      /\{\{#compare\s+([^\s"]+)\s+"([^"]+)"\s+([^\s}]+)\s*\}\}([\s\S]*?)\{\{\/compare\}\}/g,
-      (match, left, operator, right, content) => {
-        // Resolve left value - could be a variable path or literal
-        let leftVal = this.getNestedValue(left.trim(), state.data || {});
-        if (leftVal === undefined) {
-          // Treat as literal if not found in state
-          leftVal = left.trim();
-        }
-
-        // Resolve right value - could be a variable path or literal
-        let rightVal = this.getNestedValue(right.trim(), state.data || {});
-        if (rightVal === undefined) {
-          // Treat as literal if not found in state
-          rightVal = right.trim();
-        }
-
-        let comparisonResult = false;
-
-        switch (operator) {
-          case '<':
-            comparisonResult = Number(leftVal) < Number(rightVal);
-            break;
-          case '>':
-            comparisonResult = Number(leftVal) > Number(rightVal);
-            break;
-          case '<=':
-            comparisonResult = Number(leftVal) <= Number(rightVal);
-            break;
-          case '>=':
-            comparisonResult = Number(leftVal) >= Number(rightVal);
-            break;
-          case '==':
-            comparisonResult = leftVal == rightVal;
-            break;
-          case '===':
-            comparisonResult = leftVal === rightVal;
-            break;
-          case '!=':
-            comparisonResult = leftVal != rightVal;
-            break;
-          case '!==':
-            comparisonResult = leftVal !== rightVal;
-            break;
-          default:
-            this.logger.warn('Unknown comparison operator', {
-              component: 'PromptNodeExecutor',
-              operator
-            });
-        }
-
-        return comparisonResult ? this.resolveTemplateVariables(content, state, opts) : '';
-      }
-    );
-
-    // Handle {{#if condition}}...{{/if}} blocks
-    result = result.replace(
-      /\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
-      (match, condition, content) => {
-        // Resolve the condition variable
-        const conditionValue = this.getNestedValue(condition.trim(), state.data || {});
-        if (conditionValue) {
-          // Recursively resolve variables in the content
-          return this.resolveTemplateVariables(content, state, opts);
-        }
-        return '';
-      }
-    );
-
-    // Handle simple {{variable}} or {{path.to.value}} substitution
-    // Exclude @index and this which are handled in each loops
-    result = result.replace(/\{\{([^#/@}][^}]*)\}\}/g, (match, variable) => {
-      const trimmed = variable.trim();
-
-      // Skip 'this' references outside of each loops (they should be empty)
-      if (trimmed === 'this' || trimmed.startsWith('this.')) {
-        return '';
-      }
-
-      // Special template variable populated by the runtime — formats the
-      // accumulated planner task results into a markdown block so the
-      // synthesizer (and intermediate plan tasks) can see prior work.
-      if (trimmed === 'previousTaskResults') {
-        return this._formatPreviousTaskResults(state, opts.previousTaskResults);
-      }
-
-      // Citations ledger collected from every search/extract tool call
-      // during the run. Renders a numbered list `[1] title — url` that the
-      // synthesizer cites inline. Named `citations` (NOT `sources`) so it
-      // doesn't collide with `profile.sources` — the configured knowledge
-      // bases the agent can look up via `source_*` tools. Citations are
-      // the runtime ledger of URLs the agent actually consulted; sources
-      // is the configured catalog it could consult.
-      if (trimmed === 'citations') {
-        return this._formatCitations(state);
-      }
-
-      // Inbox item — render clean. The state object stores the FULL parsed
-      // checklist line in `.raw`, which accumulates `-- done by …` notes
-      // every time the item gets re-checked. Stringifying the whole object
-      // bleeds that history (including prior hallucinated reports) into the
-      // current run's prompts and the synthesizer's final report. Render
-      // just `(P1) text` so the LLM sees what the user actually wrote.
-      if (trimmed === 'currentInboxItem') {
-        const item = state?.data?.currentInboxItem;
-        if (!item) return '';
-        if (typeof item === 'string') return item;
-        const text = (item.text || '').toString().trim();
-        if (!text) return '';
-        const priority =
-          item.priority && item.priority !== 'unprioritized'
-            ? `(${item.priority.toUpperCase()}) `
-            : '';
-        return `${priority}${text}`;
-      }
-
-      const value = this.getNestedValue(trimmed, state.data || {});
-      if (value !== undefined && value !== null) {
-        // Convert objects to JSON string to avoid [object Object]
-        if (typeof value === 'object') {
-          return JSON.stringify(value);
-        }
-        return String(value);
-      }
-      return ''; // Remove unresolved variables
-    });
-
-    // Finally, handle $.path syntax via existing resolveVariables
-    result = this.resolveVariables(result, state);
-
-    return result;
-  }
-
-  /**
-   * Get a nested value from an object using dot notation.
-   *
-   * @param {string} path - Dot-notation path like "user.name" or "items.0.id"
-   * @param {Object} obj - Object to search
-   * @returns {*} Value at path or undefined
-   * @private
-   */
-  getNestedValue(path, obj) {
-    const parts = path.split('.');
-    let current = obj;
-
-    for (const part of parts) {
-      if (current === undefined || current === null) {
-        return undefined;
-      }
-      current = current[part];
-    }
-
-    return current;
-  }
-
-  /**
-   * Process {{#each}}...{{/each}} blocks with proper nesting support.
-   * Uses balanced matching to correctly handle nested loops.
-   *
-   * @param {string} template - Template string to process
-   * @param {Object} state - Workflow state
-   * @returns {string} Processed template
-   * @private
-   */
-  processEachBlocks(template, state) {
-    let result = template;
-    let iterations = 0;
-    const maxIterations = 20; // Prevent infinite loops
-
-    // Process from outermost to innermost
-    // Find the first {{#each ...}} and its matching {{/each}} with balanced nesting
-    while (iterations < maxIterations) {
-      iterations++;
-
-      const startMatch = result.match(/\{\{#each\s+([^}]+)\}\}/);
-      if (!startMatch) {
-        break; // No more each blocks
-      }
-
-      const startIndex = startMatch.index;
-      const arrayPath = startMatch[1].trim();
-      const afterOpenTag = startIndex + startMatch[0].length;
-
-      // Find the matching closing tag with balanced nesting
-      let depth = 1;
-      let searchPos = afterOpenTag;
-      let closingIndex = -1;
-
-      while (depth > 0 && searchPos < result.length) {
-        const nextOpen = result.indexOf('{{#each', searchPos);
-        const nextClose = result.indexOf('{{/each}}', searchPos);
-
-        if (nextClose === -1) {
-          // No closing tag found - malformed template
-          break;
-        }
-
-        if (nextOpen !== -1 && nextOpen < nextClose) {
-          // Found another opening tag before the closing tag
-          depth++;
-          searchPos = nextOpen + 7; // Move past "{{#each"
-        } else {
-          // Found closing tag
-          depth--;
-          if (depth === 0) {
-            closingIndex = nextClose;
-          }
-          searchPos = nextClose + 9; // Move past "{{/each}}"
-        }
-      }
-
-      if (closingIndex === -1) {
-        // Couldn't find matching closing tag
-        this.logger.warn('Unbalanced {{#each}} block', {
-          component: 'PromptNodeExecutor',
-          arrayPath
-        });
-        break;
-      }
-
-      // Extract the content between opening and closing tags
-      const content = result.substring(afterOpenTag, closingIndex);
-      const fullMatch = result.substring(startIndex, closingIndex + 9);
-
-      // Get the array to iterate over
-      const array = this.getNestedValue(arrayPath, state.data || {});
-
-      let replacement = '';
-      if (Array.isArray(array) && array.length > 0) {
-        replacement = array
-          .map((item, index) => {
-            let itemContent = content;
-
-            // Replace {{@index}} with current index
-            itemContent = itemContent.replace(/\{\{@index\}\}/g, String(index));
-
-            // Replace {{this.property}} with item.property
-            itemContent = itemContent.replace(/\{\{this\.([^}]+)\}\}/g, (_, prop) => {
-              const propPath = prop.trim();
-              const val = this.getNestedValue(propPath, item);
-              if (val !== undefined && val !== null) {
-                return typeof val === 'object' ? JSON.stringify(val) : String(val);
-              }
-              return '';
-            });
-
-            // Replace {{this}} with JSON of item
-            itemContent = itemContent.replace(/\{\{this\}\}/g, () => {
-              return typeof item === 'object' ? JSON.stringify(item) : String(item);
-            });
-
-            // Recursively process any nested each blocks in this iteration
-            itemContent = this.processEachBlocks(itemContent, state);
-
-            return itemContent;
-          })
-          .join('');
-      }
-
-      // Replace the full match with the processed content
-      result = result.substring(0, startIndex) + replacement + result.substring(closingIndex + 9);
-    }
-
-    return result;
   }
 
   /**
