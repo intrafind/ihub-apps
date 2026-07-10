@@ -124,6 +124,33 @@ describe('Admin platform config optimistic concurrency (#1763)', () => {
     expect(response.body._version.length).toBeGreaterThan(0);
   });
 
+  test('_version is computed from the sanitized config, not raw secret material', async () => {
+    // Regression test for a CodeQL "hash of insufficiently protected secret"
+    // finding: the version must be derived from the redacted view (every real
+    // secret collapses to the same '***REDACTED***' placeholder) so two
+    // configs that differ only in their raw secret value hash identically,
+    // proving the raw secret never flows into the hash.
+    await fs.writeFile(
+      path.join(tmpRoot, 'contents', 'config', 'platform.json'),
+      JSON.stringify({ auth: { mode: 'local', jwtSecret: 'super-secret-value-one' } }, null, 2)
+    );
+    const app = createTestApp();
+    const first = await request(app).get('/api/admin/configs/platform');
+    expect(first.body.auth.jwtSecret).toBe('***REDACTED***');
+
+    await fs.writeFile(
+      path.join(tmpRoot, 'contents', 'config', 'platform.json'),
+      JSON.stringify(
+        { auth: { mode: 'local', jwtSecret: 'a-totally-different-secret-value' } },
+        null,
+        2
+      )
+    );
+    const second = await request(app).get('/api/admin/configs/platform');
+
+    expect(second.body._version).toBe(first.body._version);
+  });
+
   test('POST without a base version overwrites unconditionally (back-compat)', async () => {
     const app = createTestApp();
 

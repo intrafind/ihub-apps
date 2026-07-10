@@ -293,11 +293,13 @@ export default function registerAdminConfigRoutes(app) {
       // here. Only the JWT secrets and proxy JWT provider config remain inline.
       const sanitizedConfig = sanitizePlatformConfigForResponse(platformConfig);
 
-      // `_version` is a content hash of the on-disk config at read time. Admin
+      // `_version` is a content hash of the *sanitized* config at read time —
+      // computed after secrets are redacted so the hash never has raw secret
+      // material (JWT/API keys, OAuth client secrets) flowing into it. Admin
       // pages that want conflict detection on save should echo it back as
       // `_baseVersion` in the POST body (see the POST handler below); pages
       // that don't send it get the previous, unchecked last-write-wins behavior.
-      res.json({ ...sanitizedConfig, _version: computeConfigVersion(platformConfig) });
+      res.json({ ...sanitizedConfig, _version: computeConfigVersion(sanitizedConfig) });
     } catch (error) {
       return sendInternalError(res, error, 'get platform configuration');
     }
@@ -335,16 +337,19 @@ export default function registerAdminConfigRoutes(app) {
       }
 
       if (baseVersion) {
-        const currentVersion = computeConfigVersion(existingConfig);
+        // Hash the sanitized (secret-redacted) view, not the raw config — the
+        // version is a change-detection token, not a credential digest, and
+        // must never let secret material flow into a fast hash exposed to
+        // clients (CodeQL: use of password/secret hash with insufficient
+        // computational effort).
+        const sanitizedExisting = sanitizePlatformConfigForResponse(existingConfig);
+        const currentVersion = computeConfigVersion(sanitizedExisting);
         if (currentVersion !== baseVersion) {
           return res.status(409).json({
             error: 'conflict',
             message:
               'Platform configuration was changed by someone else since you loaded it. Reload the page to see the latest version and reapply your changes.',
-            config: {
-              ...sanitizePlatformConfigForResponse(existingConfig),
-              _version: currentVersion
-            }
+            config: { ...sanitizedExisting, _version: currentVersion }
           });
         }
       }
@@ -486,16 +491,11 @@ export default function registerAdminConfigRoutes(app) {
       logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
 
       // Sanitize the remaining inline secrets in the response — the admin UI
-      // should see ***REDACTED*** for JWT secrets, not raw values. Integration
-      // secrets no longer live in platform.json (they are in the credential
-      // store), so only the JWT secrets need sanitizing here.
-      const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
-      if (responseConfig.auth?.jwtSecret) {
-        responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
-      }
-      if (responseConfig.localAuth?.jwtSecret) {
-        responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
-      }
+      // should see ***REDACTED*** for JWT/speech secrets, not raw values.
+      // Integration secrets no longer live in platform.json (they are in the
+      // credential store), so this only needs to handle JWT/speech secrets and
+      // the proxy JWT provider list — the same set the GET handler redacts.
+      const responseConfig = sanitizePlatformConfigForResponse(mergedConfig);
 
       await saveSnapshot({
         resource: 'platform',
@@ -513,7 +513,7 @@ export default function registerAdminConfigRoutes(app) {
       });
       res.json({
         message: 'Platform configuration updated successfully',
-        config: { ...responseConfig, _version: computeConfigVersion(mergedConfig) },
+        config: { ...responseConfig, _version: computeConfigVersion(responseConfig) },
         reconfiguration: {
           reconfigured: reconfigResults.reconfigured,
           requiresRestart: reconfigResults.requiresRestart,
