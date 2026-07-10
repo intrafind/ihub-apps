@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
@@ -608,8 +608,7 @@ export default function registerAdminAppsRoutes(app) {
         return sendBadRequest(res, 'App ID cannot be changed');
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
+      const appsDir = getContentsPath('apps');
       // Ensure directory exists before writing
       await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
@@ -732,8 +731,7 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
+      const appsDir = getContentsPath('apps');
       // Check for duplicate ID via configCache (covers filenames that differ from their ID)
       const { data: existingApps } = configCache.getApps(true);
       if (existingApps.some(a => a.id === newApp.id)) {
@@ -830,8 +828,7 @@ export default function registerAdminAppsRoutes(app) {
       }
       const newEnabledState = !app.enabled;
       app.enabled = newEnabledState;
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
+      const appsDir = getContentsPath('apps');
       // Ensure directory exists before writing
       await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
@@ -946,8 +943,7 @@ export default function registerAdminAppsRoutes(app) {
 
         const { data: apps } = configCache.getApps(true);
         const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
-        const rootDir = getRootDir();
-        const appsDir = join(rootDir, 'contents', 'apps');
+        const appsDir = getContentsPath('apps');
         // Ensure directory exists before writing
         await fs.mkdir(appsDir, { recursive: true });
 
@@ -1049,8 +1045,7 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
+      const appsDir = getContentsPath('apps');
       const filename = await findAppFile(appId, appsDir);
       if (!filename) {
         return sendNotFound(res, 'App');

@@ -1,12 +1,8 @@
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 import logger from './logger.js';
 import configCache from '../configCache.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getContentsPath } from '../pathUtils.js';
 
 /**
  * Resolve group inheritance by merging permissions from parent groups
@@ -181,7 +177,7 @@ export function resolveGroupInheritance(groupsConfig) {
  */
 export function loadGroupsConfiguration() {
   try {
-    const configPath = path.join(__dirname, '../../contents/config/groups.json');
+    const configPath = getContentsPath('config', 'groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance

@@ -1,11 +1,9 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
-import config from '../../config.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
 import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
@@ -155,8 +153,7 @@ export default function registerAdminUsageRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
+      const platformPath = getContentsPath('config', 'platform.json');
       let platform = {};
       try {
         const data = await fs.readFile(platformPath, 'utf8');
@@ -240,9 +237,7 @@ export default function registerAdminUsageRoutes(app) {
       const limitNum = parseInt(limit, 10);
       const offsetNum = parseInt(offset, 10);
 
-      const rootDir = getRootDir();
-      const contentsDir = config.CONTENTS_DIR;
-      const feedbackFile = join(rootDir, contentsDir, 'data', 'feedback.jsonl');
+      const feedbackFile = getContentsPath('data', 'feedback.jsonl');
 
       // Check if feedback file exists
       try {

@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { getUsage } from '../../usageTracker.js';
@@ -60,8 +59,7 @@ export default function registerAdminCacheRoutes(app) {
 
   app.post(buildServerPath('/api/admin/client/_refresh'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+      const platformConfigPath = getContentsPath('config', 'platform.json');
       const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
       const platformConfig = JSON.parse(platformConfigData);
       if (!platformConfig.refreshSalt) {

@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -127,9 +126,8 @@ export default function registerAdminProvidersRoutes(app) {
       }
 
       // Define paths once at the top
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-      const providersDir = join(rootDir, 'contents', 'config');
+      const providersPath = getContentsPath('config', 'providers.json');
+      const providersDir = getContentsPath('config');
 
       // Handle API key encryption
       if (updatedProvider.apiKey) {
@@ -240,9 +238,8 @@ export default function registerAdminProvidersRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-      const providersDir = join(rootDir, 'contents', 'config');
+      const providersPath = getContentsPath('config', 'providers.json');
+      const providersDir = getContentsPath('config');
 
       // Load current providers
       let providers = [];
@@ -347,8 +344,7 @@ export default function registerAdminProvidersRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+      const providersPath = getContentsPath('config', 'providers.json');
 
       // Load current providers
       let providers = [];

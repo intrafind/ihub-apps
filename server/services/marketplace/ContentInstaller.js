@@ -24,21 +24,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
+import { getContentsDir } from '../../pathUtils.js';
 import registryService from './RegistryService.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'ContentInstaller';
-
-/**
- * Return the absolute path to the contents directory.
- *
- * @returns {string}
- */
-function getContentsDir() {
-  return path.join(getRootDir(), config.CONTENTS_DIR);
-}
 
 /**
  * Content type dispatch table.

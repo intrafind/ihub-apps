@@ -14,7 +14,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
 
 let failures = 0;
@@ -28,7 +28,7 @@ async function run() {
   // Use a unique run id under the real artifacts root. The store creates
   // the directory itself; we clean it up at the end.
   const runId = `quota-test-${Date.now()}`;
-  const root = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
+  const root = getContentsPath('data', 'agent-artifacts');
   const runDir = path.join(root, runId);
 
   try {

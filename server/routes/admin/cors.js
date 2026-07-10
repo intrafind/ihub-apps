@@ -3,9 +3,8 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 const DEFAULT_CORS_CONFIG = {
@@ -128,9 +127,7 @@ export default function registerAdminCorsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
+      const platformPath = getContentsPath('config', 'platform.json');
 
       const platformContent = await fs.readFile(platformPath, 'utf8');
       const platformConfig = JSON.parse(platformContent);

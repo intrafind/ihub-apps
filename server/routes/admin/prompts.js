@@ -1,8 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join, resolve } from 'path';
-import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -541,8 +539,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       const { data: currentPrompts } = configCache.getPrompts(true);
       const oldPrompt = currentPrompts.find(p => p.id === promptId);
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      const promptFilePath = getContentsPath('prompts', `${promptId}.json`);
       await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
       await configCache.refreshPromptsCache();
       if (oldPrompt) {
@@ -676,8 +673,7 @@ export default function registerAdminPromptsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
+      const promptFilePath = getContentsPath('prompts', `${newPrompt.id}.json`);
       try {
         readFileSync(promptFilePath, 'utf8');
         return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
@@ -794,8 +790,7 @@ export default function registerAdminPromptsRoutes(app) {
         }
         const newEnabledState = !prompt.enabled;
         prompt.enabled = newEnabledState;
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+        const promptFilePath = getContentsPath('prompts', `${promptId}.json`);
         await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
         await configCache.refreshPromptsCache();
         await logAudit({
@@ -940,14 +935,13 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: prompts } = configCache.getPrompts(true);
         const resolvedIds = ids.includes('*') ? prompts.map(p => p.id) : ids;
-        const rootDir = getRootDir();
 
         for (const id of resolvedIds) {
           const prompt = prompts.find(p => p.id === id);
           if (!prompt) continue;
           if (prompt.enabled !== enabled) {
             prompt.enabled = enabled;
-            const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
+            const promptFilePath = getContentsPath('prompts', `${id}.json`);
             await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
           }
         }
@@ -1059,8 +1053,7 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: currentPrompts } = configCache.getPrompts(true);
         const oldPrompt = currentPrompts.find(p => p.id === promptId);
-        const rootDir = getRootDir();
-        const promptsDir = join(rootDir, 'contents', 'prompts');
+        const promptsDir = getContentsPath('prompts');
         const normalizedPromptFilePath = await resolveAndValidatePath(
           `${promptId}.json`,
           promptsDir

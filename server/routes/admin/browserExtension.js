@@ -2,7 +2,7 @@ import { join } from 'path';
 import { promises as fs } from 'fs';
 import archiver from 'archiver';
 import config from '../../config.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getRootDir, getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -31,12 +31,11 @@ import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/res
 const SIGNING_KEY_FILE = '.browser-extension-key.pem';
 
 function signingKeyPath() {
-  return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
+  return getContentsPath(SIGNING_KEY_FILE);
 }
 
 async function savePlatformConfig(updates) {
-  const rootDir = getRootDir();
-  const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+  const platformConfigPath = getContentsPath('config', 'platform.json');
   const existing = configCache.getPlatform() || {};
   const merged = { ...existing, ...updates };
   await atomicWriteJSON(platformConfigPath, merged);

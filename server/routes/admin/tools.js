@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join, basename } from 'path';
 import { createHash } from 'crypto';
-import { getRootDir } from '../../pathUtils.js';
+import { getRootDir, getContentsPath } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { loadAllTools } from '../../toolsLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -376,9 +376,7 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
+      const toolsDir = getContentsPath('tools');
 
       // Load existing tools (raw, unexpanded) to confirm the tool exists
       const tools = await loadRawTools();
@@ -486,9 +484,7 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
+      const toolsDir = getContentsPath('tools');
 
       // Load existing tools (raw, unexpanded)
       const tools = await loadRawTools();
@@ -590,9 +586,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
+      const toolsDir = getContentsPath('tools');
 
       // Load existing tools (raw, unexpanded) to confirm the tool exists
       const tools = await loadRawTools();
@@ -604,7 +598,7 @@ export default function registerAdminToolsRoutes(app) {
 
       // Delete the script file if it exists (only for non-special tools)
       if (tool.script && !tool.isSpecialTool && !tool.provider) {
-        const scriptsBaseDir = join(rootDir, 'server', 'tools');
+        const scriptsBaseDir = join(getRootDir(), 'server', 'tools');
         try {
           const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
           if (!scriptPath) {
@@ -714,9 +708,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
+      const toolsDir = getContentsPath('tools');
 
       // Load existing tools (raw, unexpanded)
       const tools = await loadRawTools();

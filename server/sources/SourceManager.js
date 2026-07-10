@@ -578,8 +578,7 @@ class SourceManager {
   async testFilesystemSource(config) {
     const { path: filePath, encoding = 'utf-8' } = config;
     const fs = await import('fs');
-    const path = await import('path');
-    const { getRootDir } = await import('../pathUtils.js');
+    const { getContentsPath } = await import('../pathUtils.js');
 
     try {
       if (!filePath) {
@@ -587,7 +586,7 @@ class SourceManager {
       }
 
       // Resolve path relative to contents directory
-      const contentsDir = path.join(getRootDir(), 'contents');
+      const contentsDir = getContentsPath();
       const fullPath = await resolveAndValidatePath(filePath, contentsDir);
       if (!fullPath) {
         throw new Error('Invalid file path: Path must be within contents directory');

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../pathUtils.js';
+import { getRootDir, getContentsPath } from '../pathUtils.js';
 import logger from './logger.js';
 
 /**
@@ -11,7 +11,7 @@ import logger from './logger.js';
 export async function ensureDefaultProviders() {
   try {
     const rootDir = getRootDir();
-    const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+    const providersPath = getContentsPath('config', 'providers.json');
     const defaultProvidersPath = join(rootDir, 'server', 'defaults', 'config', 'providers.json');
 
     // Read default providers

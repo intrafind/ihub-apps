@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -33,7 +32,7 @@ const COMPONENT = 'AdminCredentials';
  * @returns {string}
  */
 function getCredentialsFilePath() {
-  return join(getRootDir(), 'contents', 'config', 'credentials.json');
+  return getContentsPath('config', 'credentials.json');
 }
 
 /**

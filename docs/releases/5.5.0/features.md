@@ -389,6 +389,22 @@ trapped the page in an endless reload loop.
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Admin Edits Now Always Target the Configured `CONTENTS_DIR`
+
+Deployments that set a custom `CONTENTS_DIR` (documented for subpath/custom-storage
+installations) could silently have admin saves, deletes, and backups write to the default
+`contents/` folder instead of the configured directory, while the running server kept reading
+from the correct location. The admin UI reported success, but nothing actually changed for the
+running server.
+
+- All admin routes (apps, models, prompts, groups, users, platform config, sources, tools,
+  workflows, credentials, MCP servers, pages, and more) now resolve paths through a single
+  shared helper that always honors `CONTENTS_DIR`.
+- Configuration backup/export and import now target the same directory the server actually
+  serves from, instead of a hardcoded `contents/` path.
+- No action is required for the default setup (`CONTENTS_DIR` unset); this only affects
+  deployments that explicitly set a custom `CONTENTS_DIR`.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

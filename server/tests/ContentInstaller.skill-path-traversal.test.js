@@ -25,7 +25,9 @@ import path from 'path';
 const state = { rootDir: os.tmpdir() };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
-  getRootDir: () => state.rootDir
+  getRootDir: () => state.rootDir,
+  getContentsDir: () => path.join(state.rootDir, 'contents'),
+  getContentsPath: (...segments) => path.join(state.rootDir, 'contents', ...segments)
 }));
 
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');

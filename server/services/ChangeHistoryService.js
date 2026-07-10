@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 
 const HISTORY_DIR = 'data/change-history';
@@ -10,7 +10,7 @@ const MAX_SNAPSHOTS = 20;
  * Get the directory for a specific resource's change history.
  */
 function getResourceDir(resource, id) {
-  return join(getRootDir(), 'contents', HISTORY_DIR, resource, id);
+  return getContentsPath(HISTORY_DIR, resource, id);
 }
 
 /**

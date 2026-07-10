@@ -11,3 +11,11 @@ export function getRootDir() {
     ? config.APP_ROOT_DIR || path.dirname(process.execPath)
     : path.join(__dirname, '..');
 }
+
+export function getContentsDir() {
+  return path.join(getRootDir(), config.CONTENTS_DIR);
+}
+
+export function getContentsPath(...segments) {
+  return path.join(getContentsDir(), ...segments);
+}

@@ -11,7 +11,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -20,7 +20,7 @@ import { AGENT_PROFILE_ID_PATTERN } from '../../validators/agentProfileSchema.js
 const MEMORY_DIR = 'agents/memory';
 
 function memoryBaseDir() {
-  return path.join(getRootDir(), 'contents', MEMORY_DIR);
+  return getContentsPath(MEMORY_DIR);
 }
 
 // Validate the profile id with a strict regex, run it through `path.basename`
