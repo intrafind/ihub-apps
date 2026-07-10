@@ -2,11 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 const DEFAULT_CORS_CONFIG = {
   origin: [],
@@ -128,17 +124,11 @@ export default function registerAdminCorsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
-
-      platformConfig.cors = { origin, credentials, maxAge, methods, allowedHeaders };
-
-      await atomicWriteJSON(platformPath, platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
+      const newCorsConfig = { origin, credentials, maxAge, methods, allowedHeaders };
+      await configCache.updatePlatformSection(platformConfig => {
+        platformConfig.cors = newCorsConfig;
+        return platformConfig;
+      });
 
       logger.info('CORS configuration updated', {
         component: 'AdminCORS',
@@ -149,7 +139,7 @@ export default function registerAdminCorsRoutes(app) {
 
       res.json({
         message: 'CORS configuration updated successfully',
-        config: platformConfig.cors
+        config: newCorsConfig
       });
     } catch (error) {
       return sendInternalError(res, error, 'update CORS configuration');

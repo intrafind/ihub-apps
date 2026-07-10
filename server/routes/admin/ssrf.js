@@ -2,11 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 export default function registerAdminSsrfRoutes(app) {
   /**
@@ -104,17 +100,10 @@ export default function registerAdminSsrfRoutes(app) {
         cleaned.push(trimmed);
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
-
-      platformConfig.ssrf = { ...(platformConfig.ssrf || {}), allowedHosts: cleaned };
-
-      await atomicWriteJSON(platformPath, platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
+      await configCache.updatePlatformSection(platformConfig => {
+        platformConfig.ssrf = { ...(platformConfig.ssrf || {}), allowedHosts: cleaned };
+        return platformConfig;
+      });
 
       logger.info('SSRF allowlist updated', {
         component: 'AdminSSRF',

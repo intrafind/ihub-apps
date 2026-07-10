@@ -2,11 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 export default function registerAdminLoggingRoutes(app) {
   /**
@@ -89,25 +85,13 @@ export default function registerAdminLoggingRoutes(app) {
 
       // Optionally persist to platform.json
       if (persist) {
-        const rootDir = getRootDir();
-        const contentsDir = process.env.CONTENTS_DIR || 'contents';
-        const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-        // Read current platform config
-        const platformContent = await fs.readFile(platformPath, 'utf8');
-        const platformConfig = JSON.parse(platformContent);
-
-        // Update logging level
-        if (!platformConfig.logging) {
-          platformConfig.logging = {};
-        }
-        platformConfig.logging.level = level;
-
-        // Write back atomically
-        await atomicWriteJSON(platformPath, platformConfig);
-
-        // Refresh config cache
-        await configCache.refreshCacheEntry('config/platform.json');
+        await configCache.updatePlatformSection(platformConfig => {
+          if (!platformConfig.logging) {
+            platformConfig.logging = {};
+          }
+          platformConfig.logging.level = level;
+          return platformConfig;
+        });
 
         // Reconfigure logger to pick up any other changes
         logger.reconfigureLogger();
@@ -194,25 +178,13 @@ export default function registerAdminLoggingRoutes(app) {
     try {
       const newLoggingConfig = req.body;
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      // Read current platform config
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
-
-      // Update logging config
-      platformConfig.logging = {
-        ...platformConfig.logging,
-        ...newLoggingConfig
-      };
-
-      // Write back atomically
-      await atomicWriteJSON(platformPath, platformConfig);
-
-      // Refresh config cache
-      await configCache.refreshCacheEntry('config/platform.json');
+      const { logging: mergedLogging } = await configCache.updatePlatformSection(platformConfig => {
+        platformConfig.logging = {
+          ...platformConfig.logging,
+          ...newLoggingConfig
+        };
+        return platformConfig;
+      });
 
       // Reconfigure logger to pick up changes
       logger.reconfigureLogger();
@@ -221,7 +193,7 @@ export default function registerAdminLoggingRoutes(app) {
 
       res.json({
         success: true,
-        config: platformConfig.logging,
+        config: mergedLogging,
         message: 'Logging configuration updated successfully'
       });
     } catch (error) {

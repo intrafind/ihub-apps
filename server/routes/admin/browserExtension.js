@@ -3,7 +3,6 @@ import { promises as fs } from 'fs';
 import archiver from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -32,16 +31,6 @@ const SIGNING_KEY_FILE = '.browser-extension-key.pem';
 
 function signingKeyPath() {
   return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
-}
-
-async function savePlatformConfig(updates) {
-  const rootDir = getRootDir();
-  const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-  const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
-  await atomicWriteJSON(platformConfigPath, merged);
-  await configCache.refreshCacheEntry('config/platform.json');
-  return merged;
 }
 
 function buildRedirectUrisFromExtensionIds(extensionIds = []) {
@@ -310,7 +299,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         }
       };
 
-      await savePlatformConfig(updates);
+      await configCache.updatePlatformSection(cfg => ({ ...cfg, ...updates }));
 
       const baseUrl = buildPublicBaseUrl(req);
 
@@ -339,13 +328,9 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/browser-extension/disable'), adminAuth, async (req, res) => {
     try {
-      const platform = configCache.getPlatform();
-
-      await savePlatformConfig({
-        browserExtension: {
-          ...(platform?.browserExtension || {}),
-          enabled: false
-        }
+      await configCache.updatePlatformSection(cfg => {
+        cfg.browserExtension = { ...(cfg.browserExtension || {}), enabled: false };
+        return cfg;
       });
 
       logger.info('Browser extension integration disabled', {
@@ -479,8 +464,9 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         }
       }
 
-      await savePlatformConfig({
-        browserExtension: merged
+      await configCache.updatePlatformSection(cfg => {
+        cfg.browserExtension = merged;
+        return cfg;
       });
 
       logger.info('Browser extension integration config updated', {
@@ -562,15 +548,10 @@ export default function registerAdminBrowserExtensionRoutes(app) {
           newSigningKey
         );
 
-        await savePlatformConfig({
-          browserExtension: {
-            ...cfg,
-            signingKey: newSigningKey
-          },
-          cors: {
-            ...corsConfig,
-            origin: updatedCorsOrigin
-          }
+        await configCache.updatePlatformSection(platformCfg => {
+          platformCfg.browserExtension = { ...cfg, signingKey: newSigningKey };
+          platformCfg.cors = { ...corsConfig, origin: updatedCorsOrigin };
+          return platformCfg;
         });
 
         logger.warn('Browser extension signing key rotated', {

@@ -1,6 +1,3 @@
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -8,19 +5,6 @@ import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
-
-async function savePlatformConfig(updates) {
-  const rootDir = getRootDir();
-  const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-  // platform.json no longer stores any at-rest secrets — all integration
-  // secrets live in the central credential store (contents/config/credentials.json)
-  // referenced by `*Ref` fields — so a plain merge is safe here.
-  const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
-  await atomicWriteJSON(platformConfigPath, merged);
-  await configCache.refreshCacheEntry('config/platform.json');
-  return merged;
-}
 
 /**
  * Validate a single `allowedHostOrigins` entry. We accept only well-formed
@@ -156,7 +140,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
         }
       };
 
-      await savePlatformConfig(updates);
+      await configCache.updatePlatformSection(cfg => ({ ...cfg, ...updates }));
 
       logger.info('Nextcloud embed enabled', {
         component: 'AdminNextcloudEmbed',
@@ -189,13 +173,9 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/nextcloud-embed/disable'), adminAuth, async (req, res) => {
     try {
-      const platform = configCache.getPlatform();
-
-      await savePlatformConfig({
-        nextcloudEmbed: {
-          ...(platform?.nextcloudEmbed || {}),
-          enabled: false
-        }
+      await configCache.updatePlatformSection(cfg => {
+        cfg.nextcloudEmbed = { ...(cfg.nextcloudEmbed || {}), enabled: false };
+        return cfg;
       });
 
       logger.info('Nextcloud embed disabled', { component: 'AdminNextcloudEmbed' });
@@ -240,7 +220,6 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
   app.put(buildServerPath('/api/admin/nextcloud-embed/config'), adminAuth, async (req, res) => {
     try {
       const { displayName, description, starterPrompts, allowedHostOrigins } = req.body;
-      const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
       // is rejected to prevent garbage (or attacker-crafted) data from reaching the
@@ -336,11 +315,9 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
         allowed.allowedHostOrigins = sanitized;
       }
 
-      await savePlatformConfig({
-        nextcloudEmbed: {
-          ...(platform?.nextcloudEmbed || {}),
-          ...allowed
-        }
+      await configCache.updatePlatformSection(cfg => {
+        cfg.nextcloudEmbed = { ...(cfg.nextcloudEmbed || {}), ...allowed };
+        return cfg;
       });
 
       logger.info('Nextcloud embed config updated', {
