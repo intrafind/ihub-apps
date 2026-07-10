@@ -23,8 +23,7 @@ import { validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
+import { getContentsDir } from '../../pathUtils.js';
 
 const COMPONENT = 'RegistryService';
 
@@ -133,15 +132,6 @@ function buildAuthHeaders(auth) {
 // ---------------------------------------------------------------------------
 // Helpers — paths
 // ---------------------------------------------------------------------------
-
-/**
- * Return the absolute path to the contents directory.
- *
- * @returns {string}
- */
-function getContentsDir() {
-  return path.join(getRootDir(), config.CONTENTS_DIR);
-}
 
 /**
  * Return the absolute path to the registry catalog cache directory.
