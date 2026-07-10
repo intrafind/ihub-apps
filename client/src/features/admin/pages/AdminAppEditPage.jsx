@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -8,27 +8,20 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
-  const [app, setApp] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [editingMode, setEditingMode] = useState('form');
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
   const [historyOpen, setHistoryOpen] = useState(false);
-
-  const { blocker, markSaved } = useUnsavedChanges(initialData, app);
 
   useEffect(() => {
     // Load available models, UI config, and JSON schema
@@ -65,170 +58,155 @@ function AdminAppEditPage() {
     loadJsonSchema();
   }, []);
 
-  useEffect(() => {
-    if (appId === 'new') {
-      // Initialize new app
-      const defaultApp = {
-        id: '',
-        type: 'chat',
-        order: 0,
-        name: { en: '' },
-        description: { en: '' },
-        color: '#4F46E5',
-        icon: 'chat-bubbles',
-        system: { en: '' },
-        preferredModel: undefined,
-        preferredOutputFormat: 'markdown',
-        preferredStyle: 'keep',
-        preferredTemperature: 0.7,
-        enabled: true,
-        variables: [],
-        starterPrompts: [],
-        tools: [],
-        greeting: {
-          en: {
-            title: '👋 Hello!',
-            subtitle: 'How can I help you today?'
-          },
-          de: {
-            title: '👋 Hallo!',
-            subtitle: 'Wie kann ich Ihnen heute helfen?'
-          }
+  const makeDefault = useCallback(
+    () => ({
+      id: '',
+      type: 'chat',
+      order: 0,
+      name: { en: '' },
+      description: { en: '' },
+      color: '#4F46E5',
+      icon: 'chat-bubbles',
+      system: { en: '' },
+      preferredModel: undefined,
+      preferredOutputFormat: 'markdown',
+      preferredStyle: 'keep',
+      preferredTemperature: 0.7,
+      enabled: true,
+      variables: [],
+      starterPrompts: [],
+      tools: [],
+      greeting: {
+        en: {
+          title: '👋 Hello!',
+          subtitle: 'How can I help you today?'
         },
-        allowEmptyContent: false,
-        sendChatHistory: true,
-        ephemeral: false,
-        category: 'utility',
-        inputMode: {
-          type: 'singleline',
-          rows: 5,
-          microphone: {
-            enabled: true,
-            mode: 'manual',
-            showTranscript: true
-          }
-        },
-        upload: {
+        de: {
+          title: '👋 Hallo!',
+          subtitle: 'Wie kann ich Ihnen heute helfen?'
+        }
+      },
+      allowEmptyContent: false,
+      sendChatHistory: true,
+      ephemeral: false,
+      category: 'utility',
+      inputMode: {
+        type: 'singleline',
+        rows: 5,
+        microphone: {
+          enabled: true,
+          mode: 'manual',
+          showTranscript: true
+        }
+      },
+      upload: {
+        enabled: false,
+        imageUpload: {
           enabled: false,
-          imageUpload: {
-            enabled: false,
-            resizeImages: true,
-            maxFileSizeMB: 10,
-            supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-          },
-          fileUpload: {
-            enabled: false,
-            maxFileSizeMB: 5,
-            supportedFormats: [
-              'text/plain',
-              'text/markdown',
-              'text/csv',
-              'application/json',
-              'text/html',
-              'text/css',
-              'text/javascript',
-              'application/javascript',
-              'text/xml',
-              'message/rfc822',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-outlook',
-              'application/vnd.oasis.opendocument.text',
-              'application/vnd.oasis.opendocument.spreadsheet',
-              'application/vnd.oasis.opendocument.presentation'
-            ]
-          }
-        }
-      };
-      setApp(defaultApp);
-      setInitialData(defaultApp);
-      setLoading(false);
-    } else {
-      loadApp();
-    }
-  }, [appId]); // eslint-disable-line @eslint-react/exhaustive-deps
-
-  const loadApp = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await makeAdminApiCall(`/admin/apps/${appId}`);
-      const data = response.data;
-
-      // Ensure all configuration sections exist with defaults
-      const appWithDefaults = {
-        ...data,
-        tools: data.tools || [],
-        greeting: data.greeting || {
-          en: {
-            title: '👋 Hello!',
-            subtitle: 'How can I help you today?'
-          },
-          de: {
-            title: '👋 Hallo!',
-            subtitle: 'Wie kann ich Ihnen heute helfen?'
-          }
+          resizeImages: true,
+          maxFileSizeMB: 10,
+          supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
         },
-        allowEmptyContent: data.allowEmptyContent ?? false,
-        sendChatHistory: data.sendChatHistory ?? true,
-        ephemeral: data.ephemeral ?? false,
-        inputMode: {
-          type: 'singleline',
-          rows: 5,
-          microphone: {
-            enabled: true,
-            mode: 'manual',
-            showTranscript: true
-          },
-          ...(data.inputMode || {})
-        },
-        upload: {
-          enabled: data.upload?.enabled || false,
-          imageUpload: {
-            enabled: data.upload?.imageUpload?.enabled || false,
-            resizeImages: data.upload?.imageUpload?.resizeImages ?? true,
-            maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || 10,
-            supportedFormats: data.upload?.imageUpload?.supportedFormats || [
-              'image/jpeg',
-              'image/jpg',
-              'image/png',
-              'image/gif',
-              'image/webp'
-            ]
-          },
-          fileUpload: {
-            enabled: data.upload?.fileUpload?.enabled || false,
-            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 5,
-            supportedFormats: data.upload?.fileUpload?.supportedFormats || [
-              'text/plain',
-              'text/markdown',
-              'text/csv',
-              'application/json',
-              'text/html',
-              'text/css',
-              'text/javascript',
-              'application/javascript',
-              'text/xml',
-              'message/rfc822',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-outlook',
-              'application/vnd.oasis.opendocument.text',
-              'application/vnd.oasis.opendocument.spreadsheet',
-              'application/vnd.oasis.opendocument.presentation'
-            ]
-          },
-          ...(data.upload || {})
+        fileUpload: {
+          enabled: false,
+          maxFileSizeMB: 5,
+          supportedFormats: [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml',
+            'message/rfc822',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+          ]
         }
-      };
+      }
+    }),
+    []
+  );
 
-      setApp(appWithDefaults);
-      setInitialData(appWithDefaults);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [appId]);
+  const loadResource = useCallback(async id => {
+    const response = await makeAdminApiCall(`/admin/apps/${id}`);
+    const data = response.data;
+
+    // Ensure all configuration sections exist with defaults
+    const appWithDefaults = {
+      ...data,
+      tools: data.tools || [],
+      greeting: data.greeting || {
+        en: {
+          title: '👋 Hello!',
+          subtitle: 'How can I help you today?'
+        },
+        de: {
+          title: '👋 Hallo!',
+          subtitle: 'Wie kann ich Ihnen heute helfen?'
+        }
+      },
+      allowEmptyContent: data.allowEmptyContent ?? false,
+      sendChatHistory: data.sendChatHistory ?? true,
+      ephemeral: data.ephemeral ?? false,
+      inputMode: {
+        type: 'singleline',
+        rows: 5,
+        microphone: {
+          enabled: true,
+          mode: 'manual',
+          showTranscript: true
+        },
+        ...(data.inputMode || {})
+      },
+      upload: {
+        enabled: data.upload?.enabled || false,
+        imageUpload: {
+          enabled: data.upload?.imageUpload?.enabled || false,
+          resizeImages: data.upload?.imageUpload?.resizeImages ?? true,
+          maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || 10,
+          supportedFormats: data.upload?.imageUpload?.supportedFormats || [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ]
+        },
+        fileUpload: {
+          enabled: data.upload?.fileUpload?.enabled || false,
+          maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 5,
+          supportedFormats: data.upload?.fileUpload?.supportedFormats || [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml',
+            'message/rfc822',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+          ]
+        },
+        ...(data.upload || {})
+      }
+    };
+
+    return appWithDefaults;
+  }, []);
 
   const cleanAppData = appData => {
     // Clean up variables - remove empty defaultValue and predefinedValues
@@ -299,6 +277,29 @@ function AdminAppEditPage() {
     return cleanedApp;
   };
 
+  const saveResource = async (value, id) => {
+    const method = id === 'new' ? 'POST' : 'PUT';
+    const url = id === 'new' ? '/admin/apps' : `/admin/apps/${id}`;
+
+    // Clean the app data before saving
+    const cleanedApp = cleanAppData(value);
+
+    await makeAdminApiCall(url, {
+      method,
+      body: cleanedApp
+    });
+  };
+
+  const {
+    data: app,
+    setData: setApp,
+    loading,
+    error,
+    setError,
+    save,
+    blocker
+  } = useAdminResourceEditor({ resourceId: appId, loadResource, makeDefault, saveResource });
+
   const handleSave = async e => {
     e.preventDefault();
 
@@ -317,18 +318,7 @@ function AdminAppEditPage() {
 
     try {
       setSaving(true);
-      const method = appId === 'new' ? 'POST' : 'PUT';
-      const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
-
-      // Clean the app data before saving
-      const cleanedApp = cleanAppData(app);
-
-      await makeAdminApiCall(url, {
-        method,
-        body: cleanedApp
-      });
-
-      markSaved();
+      await save();
       navigate('/admin/apps');
     } catch (err) {
       setError(err.message);
@@ -348,19 +338,6 @@ function AdminAppEditPage() {
   const handleModeChange = mode => {
     setEditingMode(mode);
   };
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            {t('admin.apps.loading', 'Loading...')}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -396,14 +373,34 @@ function AdminAppEditPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <AdminBreadcrumb
-        crumbs={[
-          { label: 'Admin', href: '/admin' },
-          { label: 'Apps', href: '/admin/apps' },
-          { label: appId === 'new' ? 'New App' : (app?.name?.en ?? appId) }
-        ]}
-      />
+    <AdminEditPageShell
+      loading={loading}
+      loadingFallback={
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              {t('admin.apps.loading', 'Loading...')}
+            </p>
+          </div>
+        </div>
+      }
+      contentClassName="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Apps', href: '/admin/apps' },
+        { label: appId === 'new' ? 'New App' : (app?.name?.en ?? appId) }
+      ]}
+      extra={
+        <ChangeHistoryDrawer
+          isOpen={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          resource="app"
+          resourceId={appId}
+        />
+      }
+      blocker={blocker}
+    >
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
@@ -522,25 +519,7 @@ function AdminAppEditPage() {
           </button>
         </div>
       </form>
-
-      <ChangeHistoryDrawer
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        resource="app"
-        resourceId={appId}
-      />
-
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
-    </div>
+    </AdminEditPageShell>
   );
 }
 

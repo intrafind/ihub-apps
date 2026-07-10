@@ -1,55 +1,80 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import GroupFormEditor from '../components/GroupFormEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
+import AdminEditPageShell, {
+  AdminSaveCancelButtons
+} from '../../../shared/components/AdminEditPageShell';
 
 function AdminGroupEditPage() {
   const { t } = useTranslation();
   const { groupId } = useParams();
   const navigate = useNavigate();
-  const [group, setGroup] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
   const [resources, setResources] = useState({ apps: [], models: [], prompts: [] });
   const [jsonSchema, setJsonSchema] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, group);
+  const loadResource = useCallback(async id => {
+    const response = await makeAdminApiCall('/admin/groups');
+    const data = response.data;
+
+    const groupData = data.groups[id];
+    if (!groupData) {
+      throw new Error('Group not found');
+    }
+
+    return groupData;
+  }, []);
+
+  const makeDefault = useCallback(
+    () => ({
+      id: '',
+      name: '',
+      description: '',
+      permissions: {
+        apps: [],
+        prompts: [],
+        models: [],
+        adminAccess: false
+      },
+      mappings: [],
+      enabled: true
+    }),
+    []
+  );
+
+  const saveResource = useCallback(async (data, id) => {
+    const method = id === 'new' ? 'POST' : 'PUT';
+    const url = id === 'new' ? '/admin/groups' : `/admin/groups/${id}`;
+
+    await makeAdminApiCall(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: data
+    });
+  }, []);
+
+  const {
+    data: group,
+    setData: setGroup,
+    loading,
+    error,
+    setError,
+    save,
+    blocker
+  } = useAdminResourceEditor({ resourceId: groupId, loadResource, makeDefault, saveResource });
 
   useEffect(() => {
     loadResources();
     loadSchema();
-    if (groupId === 'new') {
-      // Initialize new group
-      const defaultGroup = {
-        id: '',
-        name: '',
-        description: '',
-        permissions: {
-          apps: [],
-          prompts: [],
-          models: [],
-          adminAccess: false
-        },
-        mappings: [],
-        enabled: true
-      };
-      setGroup(defaultGroup);
-      setInitialData(defaultGroup);
-      setLoading(false);
-    } else {
-      loadGroup();
-    }
-  }, [groupId]); // eslint-disable-line @eslint-react/exhaustive-deps
+  }, [groupId]);
 
   const loadResources = async () => {
     try {
@@ -70,26 +95,6 @@ function AdminGroupEditPage() {
     }
   };
 
-  const loadGroup = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await makeAdminApiCall('/admin/groups');
-      const data = response.data;
-
-      const groupData = data.groups[groupId];
-      if (!groupData) {
-        throw new Error('Group not found');
-      }
-
-      setGroup(groupData);
-      setInitialData(groupData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId]);
-
   const handleSave = async data => {
     if (!data) data = group;
 
@@ -100,18 +105,7 @@ function AdminGroupEditPage() {
 
     try {
       setSaving(true);
-      const method = groupId === 'new' ? 'POST' : 'PUT';
-      const url = groupId === 'new' ? '/admin/groups' : `/admin/groups/${groupId}`;
-
-      await makeAdminApiCall(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: data
-      });
-
-      markSaved();
+      await save();
       // Success - axios doesn't have response.ok, successful responses are returned directly
       navigate('/admin/groups');
     } catch (err) {
@@ -130,14 +124,6 @@ function AdminGroupEditPage() {
     e.preventDefault();
     await handleSave(group);
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -158,121 +144,94 @@ function AdminGroupEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminBreadcrumb
-          crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Groups', href: '/admin/groups' },
-            { label: groupId === 'new' ? 'New Group' : (group?.name ?? groupId) }
-          ]}
-        />
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {groupId === 'new'
-                  ? t('admin.groups.edit.createTitle', 'Create New Group')
-                  : t('admin.groups.edit.editTitle', 'Edit Group')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {groupId === 'new'
-                  ? t(
-                      'admin.groups.edit.createDesc',
-                      'Create a new user group with permissions and external mappings'
-                    )
-                  : t(
-                      'admin.groups.edit.editDesc',
-                      'Edit group settings, permissions, and external mappings'
-                    )}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              {groupId !== 'new' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(group, null, 2);
-                    const dataUri =
-                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `group-${group.id}.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="download" className="h-4 w-4 mr-2" />
-                  {t('common.download')}
-                </button>
-              )}
+    <AdminEditPageShell
+      loading={loading}
+      outerClassName="min-h-screen bg-gray-50 dark:bg-gray-900"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Groups', href: '/admin/groups' },
+        { label: groupId === 'new' ? 'New Group' : (group?.name ?? groupId) }
+      ]}
+      blocker={blocker}
+    >
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {groupId === 'new'
+                ? t('admin.groups.edit.createTitle', 'Create New Group')
+                : t('admin.groups.edit.editTitle', 'Edit Group')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {groupId === 'new'
+                ? t(
+                    'admin.groups.edit.createDesc',
+                    'Create a new user group with permissions and external mappings'
+                  )
+                : t(
+                    'admin.groups.edit.editDesc',
+                    'Edit group settings, permissions, and external mappings'
+                  )}
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            {groupId !== 'new' && (
               <button
-                onClick={() => navigate('/admin/groups')}
+                type="button"
+                onClick={() => {
+                  const dataStr = JSON.stringify(group, null, 2);
+                  const dataUri =
+                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                  const exportFileDefaultName = `group-${group.id}.json`;
+                  const linkElement = document.createElement('a');
+                  linkElement.setAttribute('href', dataUri);
+                  linkElement.setAttribute('download', exportFileDefaultName);
+                  linkElement.click();
+                }}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('admin.groups.edit.backToList', 'Back to Groups')}
+                <Icon name="download" className="h-4 w-4 mr-2" />
+                {t('common.download')}
               </button>
-            </div>
+            )}
+            <button
+              onClick={() => navigate('/admin/groups')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+              {t('admin.groups.edit.backToList', 'Back to Groups')}
+            </button>
           </div>
         </div>
-
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={group}
-            onChange={handleDataChange}
-            formComponent={GroupFormEditor}
-            formProps={{
-              resources,
-              jsonSchema
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              groupId === 'new'
-                ? t('admin.groups.edit.createTitle', 'Create New Group')
-                : t('admin.groups.edit.editTitle', 'Edit Group')
-            }
-          />
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/groups')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.groups.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.groups.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.groups.edit.save', groupId === 'new' ? 'Create Group' : 'Save Group')
-              )}
-            </button>
-          </div>
-        </form>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
-    </div>
+      <form onSubmit={handleFormSubmit} className="space-y-8">
+        <DualModeEditor
+          value={group}
+          onChange={handleDataChange}
+          formComponent={GroupFormEditor}
+          formProps={{
+            resources,
+            jsonSchema
+          }}
+          jsonSchema={jsonSchema}
+          title={
+            groupId === 'new'
+              ? t('admin.groups.edit.createTitle', 'Create New Group')
+              : t('admin.groups.edit.editTitle', 'Edit Group')
+          }
+        />
+
+        {/* Save buttons */}
+        <AdminSaveCancelButtons
+          onCancel={() => navigate('/admin/groups')}
+          cancelLabel={t('admin.groups.edit.cancel', 'Cancel')}
+          saving={saving}
+          saveLabel={t('admin.groups.edit.save', groupId === 'new' ? 'Create Group' : 'Save Group')}
+          savingLabel={t('admin.groups.edit.saving', 'Saving...')}
+        />
+      </form>
+    </AdminEditPageShell>
   );
 }
 
