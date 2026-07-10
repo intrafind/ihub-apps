@@ -60,6 +60,5 @@ export function resolveUpstream(model) {
 
 export default {
   id: 'vllm-realtime',
-  protocol: 'vllm-realtime',
   resolveUpstream
 };

@@ -39,7 +39,7 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
-  // Voxtral record→transcribe control (distinct from dictation onVoiceInput):
+  // Record→transcribe control (distinct from dictation onVoiceInput):
   // records audio and renders the transcript as an assistant chat turn.
   onRecordTranscription = null,
   transcriptionRecordEnabled = false,
@@ -681,7 +681,7 @@ function ChatInput({
               </div>
             )}
 
-            {/* Record → transcribe (Voxtral). Distinct from dictation: the
+            {/* Record → transcribe. Distinct from dictation: the
                 recording is transcribed into an assistant chat message. */}
             {transcriptionRecordEnabled && onRecordTranscription && (
               <button

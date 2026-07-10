@@ -1,5 +1,11 @@
 import { buildWsUrl } from './runtimeBasePath';
-import { resampleTo16kMono, floatTo16BitPCM } from './realtimeTranscriptionCore';
+import {
+  CHUNK_SAMPLES,
+  TARGET_SAMPLE_RATE,
+  createTranscriptAssembler,
+  resampleTo16kMono,
+  floatTo16BitPCM
+} from './realtimeTranscriptionCore';
 
 /**
  * Stream a complete decoded audio buffer to the iHub `/api/voice/realtime`
@@ -29,15 +35,22 @@ import { resampleTo16kMono, floatTo16BitPCM } from './realtimeTranscriptionCore'
  * @returns {Promise<string>} Resolves with the final transcript.
  */
 
-// ~32 KB PCM16 per frame — well under the server's 256 KB maxPayload.
-const CHUNK_SAMPLES = 16384;
 // Pause streaming while the browser socket has more than this queued, so we
 // don't buffer the whole file client-side.
 const HIGH_WATER_MARK_BYTES = 1_000_000;
-// How long to wait for the upstream to become ready before giving up.
-const READY_TIMEOUT_MS = 20_000;
-// Hard ceiling on the whole session (upstream processing can lag a long file).
-const OVERALL_TIMEOUT_MS = 10 * 60_000;
+// How long to wait for the upstream to become ready before giving up. Generous:
+// the first session after a vLLM (re)start can block on model load.
+const READY_TIMEOUT_MS = 30_000;
+// Base hard ceiling on the whole session. Scaled up for long inputs (see
+// overallTimeoutFor) so a 15-minute recording on a busy GPU isn't cut off by a
+// flat cap shorter than its own audio duration.
+const OVERALL_TIMEOUT_BASE_MS = 10 * 60_000;
+
+// Stuck-session ceiling: generous — 2x the audio duration plus a minute of
+// headroom, never below the base. This is a last-resort guard (normal
+// completion is the server's {type:'done'}), so err on the long side.
+const overallTimeoutFor = durationSeconds =>
+  Math.max(OVERALL_TIMEOUT_BASE_MS, Math.ceil(durationSeconds * 2 * 1000) + 60_000);
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -55,12 +68,10 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
     let settled = false;
     let ready = false;
     let stopSent = false;
-    let committed = '';
-    let partial = '';
     let overallTimer = null;
     let readyTimer = null;
-
-    const currentText = () => `${committed} ${partial}`.replace(/\s+/g, ' ').trim();
+    // Shared committed/partial accumulation (same semantics as dictation).
+    const transcript = createTranscriptAssembler();
 
     const cleanup = () => {
       if (overallTimer) clearTimeout(overallTimer);
@@ -80,7 +91,7 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
     const finish = () => {
       if (settled) return;
       settled = true;
-      const text = currentText();
+      const text = transcript.text();
       cleanup();
       if (typeof onFinal === 'function') onFinal(text);
       resolve(text);
@@ -106,11 +117,14 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
       signal.addEventListener('abort', onAbort);
     }
 
-    overallTimer = setTimeout(() => {
-      // Best-effort: if we have any text, treat the timeout as completion.
-      if (committed || partial) finish();
-      else fail('timeout', 'Transcription timed out');
-    }, OVERALL_TIMEOUT_MS);
+    overallTimer = setTimeout(
+      () => {
+        // A stuck session is an error even with partial text — the caller keeps
+        // the partial transcript (via onDelta) and annotates it as interrupted.
+        fail('timeout', 'Transcription timed out');
+      },
+      overallTimeoutFor(float32.length / TARGET_SAMPLE_RATE)
+    );
 
     try {
       ws = new WebSocket(buildWsUrl('/voice/realtime'));
@@ -159,6 +173,10 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
     };
 
     ws.onmessage = evt => {
+      // Message events already queued when the promise settles (e.g. a delta
+      // racing an abort) must not fire callbacks anymore — a late onDelta would
+      // overwrite the caller's final UI state.
+      if (settled) return;
       let msg;
       try {
         msg = JSON.parse(typeof evt.data === 'string' ? evt.data : '');
@@ -172,19 +190,20 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
           streamAudio();
           break;
         case 'delta':
-          partial = `${partial}${msg.text || ''}`;
-          if (typeof onDelta === 'function') onDelta(currentText());
+          transcript.applyDelta(msg.text);
+          if (typeof onDelta === 'function') onDelta(transcript.text());
           break;
         case 'final':
-          committed = `${committed} ${msg.text || partial}`.trim();
-          partial = '';
-          if (typeof onDelta === 'function') onDelta(currentText());
+          transcript.applyFinal(msg.text);
+          if (typeof onDelta === 'function') onDelta(transcript.text());
           break;
         case 'done':
           finish();
           break;
         case 'error':
-          fail('service', msg.message);
+          // The server sends a stable machine-readable `code` alongside the
+          // message (e.g. 'not-permitted', 'upstream-unreachable', 'session-limit').
+          fail(msg.code || 'service', msg.message);
           break;
         default:
           break;
@@ -197,10 +216,12 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
 
     ws.onclose = () => {
       if (settled) return;
-      // A clean close after streaming completes is treated as completion; a
-      // close before we ever streamed is a failure.
-      if (stopSent || committed || partial) finish();
-      else fail('closed', 'Transcription connection closed unexpectedly');
+      // Completion is only trusted after `stop` was sent — a close mid-stream
+      // means the transcript is TRUNCATED, and silently resolving would present
+      // a partial transcript as complete. The caller keeps the partial text via
+      // its onDelta bookkeeping and can annotate it as interrupted.
+      if (stopSent) finish();
+      else fail('interrupted', 'Transcription connection closed before completion');
     };
   });
 }

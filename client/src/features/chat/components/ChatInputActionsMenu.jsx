@@ -45,7 +45,7 @@ function ChatInputActionsMenu({
   // Websearch props
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
-  // Transcription toggle props (Voxtral): available = admin enabled it; enabled
+  // Transcription toggle props: available = admin enabled it; enabled
   // = the per-chat user toggle state.
   transcriptionAvailable = false,
   transcriptionEnabled = false,
@@ -545,7 +545,7 @@ function ChatInputActionsMenu({
             </div>
           )}
 
-          {/* Transcription Section (Voxtral) */}
+          {/* Transcription Section */}
           {hasTranscription && (
             <div
               className={`p-3 ${hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}

@@ -1577,7 +1577,7 @@
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care.",
         "transcription": "Transcription",
-        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (Voxtral) and render the result as a chat answer.",
+        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.",
         "enableTranscription": "Enable transcription",
         "transcriptionModel": "Transcription model",
         "selectTranscriptionModel": "Select a model…",
@@ -2572,7 +2572,10 @@
       "serviceDetail": "Transcription failed: {{detail}}",
       "generic": "Transcription failed. Please try again.",
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
-      "mic": "Could not access the microphone. Please grant permission and try again."
+      "mic": "Could not access the microphone. Please grant permission and try again.",
+      "busy": "A transcription is already running. Stop it first.",
+      "interrupted": "Transcription was interrupted — the transcript may be incomplete.",
+      "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
     },
     "toggleLabel": "Transcription",
     "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"

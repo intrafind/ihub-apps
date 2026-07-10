@@ -29,6 +29,14 @@ When `app.transcription.enabled` is set and the submission contains audio (uploa
 
 Because transcription bypasses the chat model, the audio/video upload pickers are **not** gated on the chat model's `supportsAudio` for transcription-enabled apps.
 
+**Gate precedence** (what actually decides whether audio/video can be attached and where it goes):
+
+1. `upload.enabled` must not be `false`, and the specific block (`audioUpload` / `videoUpload`) must be enabled. Note the asymmetry: an *absent* `audioUpload` block passes the `enabled !== false` check, while a present block defaults to `enabled: false` in the schema — be explicit in app configs.
+2. The picker is shown when the chat model has `supportsAudio: true` **or** the app has `transcription.enabled` with the matching input (`inputs.upload` / `inputs.video`) allowed.
+3. At submit time, the **per-chat Transcription toggle** decides the route: toggled on → the audio is transcribed into an assistant turn; toggled off → the audio goes to the chat model as multimodal input, which is only permitted when that model has `supportsAudio: true` (otherwise the submission is blocked with guidance to re-enable transcription or remove the attachment).
+
+For deployment-level details (endpoint configuration, reverse proxy, limits), see [Realtime Voice & Transcription](voice-transcription.md).
+
 ### Browser decode caveat (transcription only)
 
 The Voxtral path decodes audio **in the browser** via `AudioContext.decodeAudioData`, so codec support depends on the browser (e.g. Safari cannot decode OGG). Undecodable files surface a clear error in the chat rather than being sent. The multimodal path is unaffected — it ships the raw audio to the provider, which decodes server-side.

@@ -1,5 +1,7 @@
 import {
+  CHUNK_SAMPLES,
   TARGET_SAMPLE_RATE,
+  createTranscriptAssembler,
   downsample,
   floatTo16BitPCM
 } from '../../../client/src/utils/realtimeTranscriptionCore';
@@ -29,9 +31,43 @@ describe('realtimeTranscriptionCore PCM helpers', () => {
     expect(out).toBeInstanceOf(Float32Array);
   });
 
-  test('16-bit PCM frames stay well under the 256 KB server maxPayload for 32k-sample chunks', () => {
-    // The buffer client sends ~16384-sample chunks; two bytes/sample → 32 KB.
-    const bytesPerChunk = 16384 * 2;
+  test('PCM16 stream chunks stay under the 256 KB server maxPayload', () => {
+    // Uses the REAL chunk-size constant so this fails if either side drifts.
+    const bytesPerChunk = CHUNK_SAMPLES * 2; // two bytes per PCM16 sample
     expect(bytesPerChunk).toBeLessThan(256 * 1024);
+  });
+});
+
+describe('createTranscriptAssembler', () => {
+  test('deltas extend the current utterance and text() normalizes whitespace', () => {
+    const asm = createTranscriptAssembler();
+    asm.applyDelta('hel');
+    asm.applyDelta('lo ');
+    asm.applyDelta(' world');
+    expect(asm.text()).toBe('hello world');
+    expect(asm.hasText()).toBe(true);
+  });
+
+  test('final folds the utterance into committed text, preferring the server final', () => {
+    const asm = createTranscriptAssembler();
+    asm.applyDelta('helo'); // deltas contain a typo…
+    asm.applyFinal('hello'); // …the server final wins
+    asm.applyDelta('again');
+    expect(asm.text()).toBe('hello again');
+  });
+
+  test('final without server text falls back to the accumulated deltas', () => {
+    const asm = createTranscriptAssembler();
+    asm.applyDelta('first utterance');
+    asm.applyFinal(undefined);
+    asm.applyDelta('second');
+    asm.applyFinal('second one');
+    expect(asm.text()).toBe('first utterance second one');
+  });
+
+  test('empty assembler reports no text', () => {
+    const asm = createTranscriptAssembler();
+    expect(asm.text()).toBe('');
+    expect(asm.hasText()).toBe(false);
   });
 });

@@ -17,13 +17,21 @@
  *     the number of simultaneous upstream sessions one user (or the whole
  *     instance) can hold.
  *   - `maxPayload` caps the size of a single inbound audio frame.
+ *   - A keepalive ping/pong loop detects dead clients (crashed tab, suspended
+ *     laptop) and keeps reverse-proxy read timeouts from killing quiet sessions.
+ *   - Upstream-leg backpressure: when the iHub->vLLM socket's send buffer
+ *     exceeds a high-water mark the client socket is paused (real TCP flow
+ *     control), bounding per-connection memory instead of buffering the file.
+ *   - A hard session-duration cap (platform.speech.realtime.maxSessionSeconds)
+ *     bounds how LONG one connection can pin an upstream session.
  *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
- *   client -> server: JSON `{type:'start', lang?}`, then binary PCM16 frames,
- *                     then JSON `{type:'stop'}`
- *   server -> client: JSON `{type:'ready'}` once upstream is connected,
- *                     `{type:'delta', text}` (streaming), `{type:'final', text}`,
- *                     `{type:'error', message}`
+ *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
+ *                     frames, then JSON `{type:'stop'}`
+ *   server -> client: JSON `{type:'ready'}` once upstream is initialized,
+ *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
+ *                     per completed segment, `{type:'done'}` once the transcript
+ *                     is complete after `stop`, `{type:'error', message}`
  *
  * iHub <-> vLLM protocol (vLLM realtime API):
  *   see https://docs.vllm.ai/ — session.created / session.update /
@@ -58,6 +66,27 @@ const POST_STOP_SETTLE_MS = 2_500;
 // then, so the client only streams into a fully-initialized session. If a build
 // doesn't emit session.created, initialize anyway after this fallback window.
 const SESSION_CREATED_FALLBACK_MS = 2_000;
+// WebSocket keepalive. Browsers cannot send protocol pings, and reverse proxies
+// (nginx `proxy_read_timeout` defaults to 60s) kill WS connections that go
+// quiet — e.g. while a busy upstream GPU processes a long tail after `stop`.
+// The server pings the browser (which auto-pongs per RFC 6455) every interval;
+// a client that misses a whole interval is considered dead and terminated. The
+// upstream leg is pinged too, purely to generate traffic for intermediaries —
+// its liveness is governed by its own close/error events and the idle timer.
+const KEEPALIVE_INTERVAL_MS = 25_000;
+// Backpressure on the upstream leg. The browser paces itself against ITS socket
+// (`ws.bufferedAmount` toward iHub), but if iHub->vLLM is the slower hop the
+// relayed frames would queue unbounded in the upstream socket's send buffer.
+// When that buffer exceeds the high-water mark we pause the client socket
+// (ws.pause() — real TCP backpressure the browser observes as its own
+// bufferedAmount rising) and resume once the upstream drains.
+const UPSTREAM_HIGH_WATER_BYTES = 4 * 1024 * 1024;
+const UPSTREAM_RESUME_BYTES = 1 * 1024 * 1024;
+const BACKPRESSURE_POLL_MS = 250;
+// Hard ceiling on a single bridge session's lifetime, so a (possibly scripted)
+// client streaming forever can't pin a GPU-backed upstream session
+// indefinitely. Overridable via platform.speech.realtime.maxSessionSeconds.
+const DEFAULT_MAX_SESSION_SECONDS = 3600;
 
 // Defaults for the concurrent-connection caps. Overridable via
 // platform.speech.realtime.{maxConnections,maxConnectionsPerUser}.
@@ -66,9 +95,11 @@ const DEFAULT_MAX_CONNECTIONS_PER_USER = 3;
 // Largest single inbound audio frame we accept. The browser sends ~4 KB PCM16
 // frames; 256 KB is generous headroom while bounding per-frame memory.
 const DEFAULT_MAX_FRAME_BYTES = 256 * 1024;
-// Cap on audio frames buffered while the upstream socket is still connecting,
-// so a fast talker can't grow memory unbounded during the (brief) handshake.
-const MAX_PENDING_FRAMES = 250;
+// Byte cap on audio buffered while the upstream socket is still connecting, so
+// the pre-ready window can't be used to grow memory (a byte bound, not a frame
+// bound — otherwise max-size frames would multiply it). 1 MB ≈ 32 s of PCM16
+// dictation audio, far beyond any realistic handshake.
+const MAX_PENDING_BYTES = 1024 * 1024;
 
 /**
  * Tracks concurrent bridge connections and enforces a per-user and a global cap
@@ -108,11 +139,13 @@ export class ConnectionLimiter {
 
 /**
  * Strip a trailing slash / path from an origin so comparison is scheme+host(+port),
- * the form a browser sends in the Origin header.
+ * the form a browser sends in the Origin header. Lowercased — scheme and host
+ * are case-insensitive per RFC 3986, and a case mismatch must not reject a
+ * legitimate same-origin handshake.
  */
 export function normalizeOrigin(origin) {
   if (typeof origin !== 'string') return origin;
-  const trimmed = origin.trim();
+  const trimmed = origin.trim().toLowerCase();
   const schemeEnd = trimmed.indexOf('://');
   if (schemeEnd === -1) return trimmed.replace(/\/+$/, '');
   const pathStart = trimmed.indexOf('/', schemeEnd + 3);
@@ -163,15 +196,20 @@ export function isAllowedOrigin(req, platform = configCache.getPlatform() || {})
   // proxy (production nginx) and the Vite dev proxy, where `Host` is the
   // internal target but `X-Forwarded-Host` carries the browser-facing host.
   const forwardedHost = (req.headers['x-forwarded-host'] || '').split(',')[0].trim();
-  const hosts = [req.headers.host, forwardedHost].filter(Boolean);
+  const hosts = [req.headers.host, forwardedHost].filter(Boolean).map(h => h.toLowerCase());
   for (const host of hosts) {
     if (normalized === `http://${host}` || normalized === `https://${host}`) {
       return true;
     }
   }
 
-  const configured = resolveConfiguredOrigins(platform).map(normalizeOrigin);
-  if (configured.includes('*')) return true;
+  // Unlike HTTP CORS, a `*` wildcard is deliberately NOT honored here: this
+  // socket is cookie-authenticated, and a wildcard would let any website drive
+  // a visitor's browser into transcription sessions (CSWSH / resource abuse).
+  // Cross-origin use requires explicitly listing the origin in cors.origin.
+  const configured = resolveConfiguredOrigins(platform)
+    .filter(o => o !== '*')
+    .map(normalizeOrigin);
   return configured.includes(normalized);
 }
 
@@ -269,7 +307,13 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
   // No model id → platform-wide dictation backend (unchanged).
   if (!modelId) {
     const cfg = getRealtimeConfig();
-    if (!cfg) return { ok: false, error: 'Realtime transcription is not configured' };
+    if (!cfg) {
+      return {
+        ok: false,
+        code: 'not-configured',
+        error: 'Realtime transcription is not configured'
+      };
+    }
     return {
       ok: true,
       upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model }
@@ -278,12 +322,22 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
 
   const { data: models = [] } = configCache.getModels(true);
   const model = models.find(m => m.id === modelId);
-  if (!model) return { ok: false, error: `Unknown transcription model: ${modelId}` };
+  if (!model) {
+    return { ok: false, code: 'unknown-model', error: `Unknown transcription model: ${modelId}` };
+  }
   if (model.modelType !== 'transcription') {
-    return { ok: false, error: `Model "${modelId}" is not a transcription model` };
+    return {
+      ok: false,
+      code: 'not-transcription-model',
+      error: `Model "${modelId}" is not a transcription model`
+    };
   }
   if (model.enabled === false) {
-    return { ok: false, error: `Transcription model "${modelId}" is disabled` };
+    return {
+      ok: false,
+      code: 'model-disabled',
+      error: `Transcription model "${modelId}" is disabled`
+    };
   }
 
   // Enforce the same group-permission filtering chat models get. Fail CLOSED:
@@ -291,17 +345,29 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
   // at upgrade time), deny rather than granting an unpermitted model.
   const allowed = user?.permissions?.models;
   if (!allowed || !(allowed.has('*') || allowed.has(modelId))) {
-    return { ok: false, error: `Not permitted to use transcription model: ${modelId}` };
+    return {
+      ok: false,
+      code: 'not-permitted',
+      error: `Not permitted to use transcription model: ${modelId}`
+    };
   }
 
   const provider = getTranscriptionProvider(model.provider);
   if (!provider) {
-    return { ok: false, error: `Unsupported transcription provider: ${model.provider}` };
+    return {
+      ok: false,
+      code: 'unsupported-provider',
+      error: `Unsupported transcription provider: ${model.provider}`
+    };
   }
 
   const upstream = await provider.resolveUpstream(model);
   if (!upstream?.url) {
-    return { ok: false, error: `Transcription model "${modelId}" has no endpoint URL` };
+    return {
+      ok: false,
+      code: 'no-endpoint',
+      error: `Transcription model "${modelId}" has no endpoint URL`
+    };
   }
   return { ok: true, upstream };
 }
@@ -310,12 +376,13 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
 
 /**
  * Client-facing message for a socket-level upstream failure (ECONNREFUSED,
- * ETIMEDOUT, ENOTFOUND, TLS errors…). `err.message` is often empty, so `err.code`
- * usually carries the actionable detail.
+ * ETIMEDOUT, ENOTFOUND, TLS errors…). Only the bare error CODE is included:
+ * Node embeds the upstream address in `err.message` (e.g. "connect ECONNREFUSED
+ * 10.0.0.5:8000"), and the internal vLLM host must never reach the browser.
+ * The full message goes to the server log instead.
  */
 export function diagnoseSocketError(err = {}) {
-  const detail = [err.code, err.message].filter(Boolean).join(': ') || 'connection error';
-  return `Transcription service unreachable: ${detail}`;
+  return `Transcription service unreachable: ${err.code || 'connection error'}`;
 }
 
 /**
@@ -379,8 +446,18 @@ function sendJson(ws, obj) {
  * browser socket never pins an upstream GPU session; for model-based
  * transcription the socket opens as soon as config resolves so the client can
  * wait for `{type:'ready'}` and stream a whole buffer with backpressure.
+ *
+ * Terminology used here and in the docs: "transcription" is the feature,
+ * "dictation" is the mic-to-input UX (no modelId), "realtime" is the transport.
+ *
+ * Exported for tests. `options.limiterKey` is the slot key (differs from
+ * user.id for anonymous connections, which are keyed by client IP);
+ * `options.createUpstream` injects the upstream socket factory so the state
+ * machine is testable with fake sockets.
  */
-function bridgeConnection(clientWs, user, limiter) {
+export function bridgeConnection(clientWs, user, limiter, options = {}) {
+  const { limiterKey = user.id, createUpstream = (url, opts) => new WebSocket(url, opts) } =
+    options;
   let cfg = null; // resolved upstream { url, apiKey, model }; set on start/first-audio
   let resolvingCfg = false; // guard so upstream config is resolved at most once
   let upstream = null; // opened once config is resolved
@@ -396,12 +473,18 @@ function bridgeConnection(clientWs, user, limiter) {
   let postStopSettleTimer = null; // fires once the upstream goes quiet after `stop`
   let sessionInitTimer = null; // fallback if the upstream never sends session.created
   let sessionInitDone = false; // guard so the upstream session is initialized once
+  let keepaliveTimer = null; // periodic ping to the browser (and upstream)
+  let clientAlive = true; // pong bookkeeping for the keepalive interval
+  let sessionTimer = null; // hard cap on the whole session's lifetime
+  let backpressureTimer = null; // polls upstream drain while the client is paused
+  let clientPaused = false; // client socket paused due to upstream backpressure
   const pending = []; // base64 audio frames buffered until upstream opens
+  let pendingBytes = 0; // byte-bound on `pending` (see MAX_PENDING_BYTES)
 
   const releaseSlot = () => {
     if (released) return;
     released = true;
-    limiter.release(user.id);
+    limiter.release(limiterKey);
   };
 
   const resetIdle = () => {
@@ -421,6 +504,21 @@ function bridgeConnection(clientWs, user, limiter) {
     postStopSettleTimer = null;
     if (sessionInitTimer) clearTimeout(sessionInitTimer);
     sessionInitTimer = null;
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+    if (sessionTimer) clearTimeout(sessionTimer);
+    sessionTimer = null;
+    if (backpressureTimer) clearInterval(backpressureTimer);
+    backpressureTimer = null;
+    if (clientPaused) {
+      clientPaused = false;
+      // Un-pause before closing so the close handshake can complete.
+      try {
+        if (typeof clientWs.resume === 'function') clientWs.resume();
+      } catch {
+        /* ignore */
+      }
+    }
     if (upstream && upstream.readyState <= WebSocket.OPEN) {
       try {
         upstream.close();
@@ -438,6 +536,39 @@ function bridgeConnection(clientWs, user, limiter) {
     releaseSlot();
   };
 
+  // Pause the client socket while the upstream send buffer is above the
+  // high-water mark, and poll for drain. ws.pause() stops reading the underlying
+  // TCP socket, so kernel flow control propagates to the browser: its own
+  // `bufferedAmount` rises and its pacing loop stops queuing. Bounds this
+  // bridge's memory to roughly UPSTREAM_HIGH_WATER_BYTES per connection instead
+  // of the whole streamed file when the upstream is the slow hop.
+  const applyUpstreamBackpressure = () => {
+    if (clientPaused || !upstream || typeof clientWs.pause !== 'function') return;
+    if (upstream.bufferedAmount <= UPSTREAM_HIGH_WATER_BYTES) return;
+    clientPaused = true;
+    try {
+      clientWs.pause();
+    } catch {
+      clientPaused = false;
+      return;
+    }
+    backpressureTimer = setInterval(() => {
+      const drained =
+        !upstream ||
+        upstream.readyState !== WebSocket.OPEN ||
+        upstream.bufferedAmount <= UPSTREAM_RESUME_BYTES;
+      if (!drained) return;
+      clearInterval(backpressureTimer);
+      backpressureTimer = null;
+      clientPaused = false;
+      try {
+        if (typeof clientWs.resume === 'function') clientWs.resume();
+      } catch {
+        /* ignore */
+      }
+    }, BACKPRESSURE_POLL_MS);
+  };
+
   // (Re)arm the post-stop quiet timer. Called on each transcription segment that
   // arrives after the client's `stop`; when the upstream stays quiet for
   // POST_STOP_SETTLE_MS we treat the transcript as complete, tell the client,
@@ -452,34 +583,22 @@ function bridgeConnection(clientWs, user, limiter) {
     }, POST_STOP_SETTLE_MS);
   };
 
-  // Report an upstream failure to the browser (once) with a diagnostic message
-  // and a structured server log, then tear the bridge down.
-  const notifyUpstreamError = (clientMessage, logMeta = {}) => {
-    logger.warn('Realtime STT: upstream failure', {
+  // Report a failure to the browser (once) as an {type:'error'} frame carrying
+  // a stable machine-readable `code` plus a human-readable message, write a
+  // structured server log, and tear the bridge down. Serves both setup failures
+  // (unknown model, no permission — before any upstream socket exists) and
+  // upstream failures (socket errors, protocol errors, abnormal closes).
+  const failBridge = (code, clientMessage, logMeta = {}) => {
+    logger.warn('Realtime STT: bridge failure', {
       component: 'RealtimeSTT',
       userId: user.id,
+      code,
       url: cfg?.url,
       ...logMeta
     });
     if (!errorSent) {
       errorSent = true;
-      sendJson(clientWs, { type: 'error', message: clientMessage });
-    }
-    cleanup();
-  };
-
-  // Report a setup/resolution failure (unknown model, no permission, unreachable
-  // config) to the browser as an {type:'error'} frame, then tear down. Distinct
-  // from notifyUpstreamError so it can run before any upstream socket exists.
-  const failResolve = (clientMessage, logMeta = {}) => {
-    logger.warn('Realtime STT: transcription setup failed', {
-      component: 'RealtimeSTT',
-      userId: user.id,
-      ...logMeta
-    });
-    if (!errorSent) {
-      errorSent = true;
-      sendJson(clientWs, { type: 'error', message: clientMessage });
+      sendJson(clientWs, { type: 'error', code, message: clientMessage });
     }
     cleanup();
   };
@@ -514,6 +633,13 @@ function bridgeConnection(clientWs, user, limiter) {
       sendJson(upstream, { type: 'input_audio_buffer.append', audio });
     }
     pending.length = 0;
+    pendingBytes = 0;
+    // If the client already said `stop` while the handshake was still in flight
+    // (a very short dictation), the stop handler couldn't send the final commit
+    // — send it now, after the flushed audio, so the tail utterance isn't lost.
+    if (stopRequested) {
+      sendJson(upstream, { type: 'input_audio_buffer.commit', final: true });
+    }
     resetIdle();
   };
 
@@ -528,9 +654,9 @@ function bridgeConnection(clientWs, user, limiter) {
     if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
 
     try {
-      upstream = new WebSocket(cfg.url, { headers });
+      upstream = createUpstream(cfg.url, { headers });
     } catch (err) {
-      notifyUpstreamError('Failed to reach transcription service', {
+      failBridge('upstream-unreachable', 'Failed to reach transcription service', {
         reason: 'construct error',
         error: err.message
       });
@@ -614,7 +740,7 @@ function bridgeConnection(clientWs, user, limiter) {
           });
           break;
         case 'error':
-          notifyUpstreamError(`Transcription error: ${msg.error || 'unknown'}`, {
+          failBridge('upstream-error', `Transcription error: ${msg.error || 'unknown'}`, {
             reason: 'upstream error frame',
             upstreamError: msg.error
           });
@@ -628,17 +754,19 @@ function bridgeConnection(clientWs, user, limiter) {
     // The vLLM server rejected the WebSocket upgrade with an HTTP response
     // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
     upstream.on('unexpected-response', (_req, res) => {
-      notifyUpstreamError(diagnoseUnexpectedResponse(res), {
+      failBridge('upstream-rejected', diagnoseUnexpectedResponse(res), {
         reason: 'unexpected-response',
         statusCode: res.statusCode
       });
     });
 
     upstream.on('error', err => {
-      notifyUpstreamError(diagnoseSocketError(err), {
+      // The full err.message (which may embed the internal upstream address)
+      // goes to the log only; the client gets the bare code via diagnose.
+      failBridge('upstream-unreachable', diagnoseSocketError(err), {
         reason: 'socket error',
         error: err.message,
-        code: err.code
+        errCode: err.code
       });
     });
 
@@ -648,9 +776,9 @@ function bridgeConnection(clientWs, user, limiter) {
         ? null
         : diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, reason });
       if (message) {
-        notifyUpstreamError(message, {
+        failBridge('upstream-closed', message, {
           reason: 'abnormal close',
-          code,
+          closeCode: code,
           closeReason: reason,
           upstreamReady
         });
@@ -676,7 +804,7 @@ function bridgeConnection(clientWs, user, limiter) {
       result = await resolveTranscriptionUpstream({ modelId, user });
     } catch (err) {
       resolvingCfg = false;
-      failResolve('Failed to resolve transcription model', {
+      failBridge('resolve-failed', 'Failed to resolve transcription model', {
         reason: 'resolve error',
         error: err.message
       });
@@ -685,7 +813,10 @@ function bridgeConnection(clientWs, user, limiter) {
     resolvingCfg = false;
     if (errorSent || clientWs.readyState > WebSocket.OPEN) return; // torn down mid-resolve
     if (!result.ok) {
-      failResolve(result.error, { reason: 'resolve rejected', modelId });
+      failBridge(result.code || 'resolve-rejected', result.error, {
+        reason: 'resolve rejected',
+        modelId
+      });
       return;
     }
     cfg = result.upstream;
@@ -715,8 +846,12 @@ function bridgeConnection(clientWs, user, limiter) {
       if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
         sendJson(upstream, { type: 'input_audio_buffer.append', audio });
         appendedFrames += 1;
-      } else if (pending.length < MAX_PENDING_FRAMES) {
+        // If the upstream is the slow hop, stop reading the client socket until
+        // the upstream send buffer drains (bounds per-connection memory).
+        applyUpstreamBackpressure();
+      } else if (pendingBytes + audio.length <= MAX_PENDING_BYTES) {
         pending.push(audio);
+        pendingBytes += audio.length;
       }
       return;
     }
@@ -732,6 +867,8 @@ function bridgeConnection(clientWs, user, limiter) {
       // audio flows. A modelId selects a first-class transcription model and
       // opens the upstream immediately (client waits for {type:'ready'}); no
       // modelId falls back to the platform dictation backend (lazy open).
+      // `msg.lang` is accepted but unused — Voxtral auto-detects the language;
+      // the field is kept in the protocol for future language-pinned backends.
       resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
     } else if (msg.type === 'stop') {
       stopRequested = true;
@@ -765,6 +902,61 @@ function bridgeConnection(clientWs, user, limiter) {
     });
     cleanup();
   }, NO_AUDIO_GRACE_MS);
+
+  // Keepalive: ping the browser every interval (it auto-pongs); a client that
+  // misses a whole interval (crashed tab, suspended laptop, dropped network) is
+  // terminated instead of lingering until the idle timeout. The pings also keep
+  // reverse proxies (nginx proxy_read_timeout) from killing a connection that
+  // goes quiet while the upstream GPU chews on a long tail.
+  clientWs.on('pong', () => {
+    clientAlive = true;
+  });
+  keepaliveTimer = setInterval(() => {
+    if (!clientAlive) {
+      logger.info('Realtime STT: client failed keepalive, terminating', {
+        component: 'RealtimeSTT',
+        userId: user.id
+      });
+      try {
+        clientWs.terminate();
+      } catch {
+        /* ignore */
+      }
+      cleanup();
+      return;
+    }
+    clientAlive = false;
+    try {
+      if (typeof clientWs.ping === 'function') clientWs.ping();
+    } catch {
+      /* ignore */
+    }
+    // Traffic-only ping on the upstream leg (keeps intermediaries open); its
+    // liveness is governed by its own error/close events and the idle timer.
+    if (upstream && upstream.readyState === WebSocket.OPEN) {
+      try {
+        if (typeof upstream.ping === 'function') upstream.ping();
+      } catch {
+        /* ignore */
+      }
+    }
+  }, KEEPALIVE_INTERVAL_MS);
+
+  // Hard cap on the whole session so a client streaming forever can't pin a
+  // GPU-backed upstream session indefinitely (per-user caps bound how many, this
+  // bounds how long). Configurable via platform.speech.realtime.maxSessionSeconds.
+  const platformRealtime = (configCache.getPlatform() || {}).speech?.realtime || {};
+  const maxSessionSeconds =
+    Number.isInteger(platformRealtime.maxSessionSeconds) && platformRealtime.maxSessionSeconds > 0
+      ? platformRealtime.maxSessionSeconds
+      : DEFAULT_MAX_SESSION_SECONDS;
+  sessionTimer = setTimeout(() => {
+    failBridge(
+      'session-limit',
+      `Transcription session exceeded the maximum duration (${maxSessionSeconds}s)`,
+      { maxSessionSeconds }
+    );
+  }, maxSessionSeconds * 1000);
 
   logger.info('Realtime STT: bridge established', {
     component: 'RealtimeSTT',
@@ -856,8 +1048,18 @@ export function attachRealtimeTranscription(httpServer) {
     }
 
     // Enforce the concurrent-connection caps before completing the handshake, so
-    // a flood of upgrades can't pin unbounded upstream sessions.
-    if (!limiter.tryAcquire(user.id)) {
+    // a flood of upgrades can't pin unbounded upstream sessions. Anonymous users
+    // all share the id 'anonymous', which would make the per-user cap a GLOBAL
+    // cap across every anonymous visitor — so key anonymous slots by client IP
+    // instead (first X-Forwarded-For hop behind a proxy, socket address
+    // otherwise). A direct client can spoof the header, which at worst bypasses
+    // its own per-user cap; the global cap still bounds the instance.
+    let limiterKey = user.id;
+    if (user.id === 'anonymous') {
+      const forwardedFor = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+      limiterKey = `anonymous:${forwardedFor || socket.remoteAddress || 'unknown'}`;
+    }
+    if (!limiter.tryAcquire(limiterKey)) {
       logger.warn('Realtime STT: connection cap reached, rejecting upgrade', {
         component: 'RealtimeSTT',
         userId: user.id,
@@ -876,12 +1078,12 @@ export function attachRealtimeTranscription(httpServer) {
     // releases the slot here.
     let bridged = false;
     socket.on('close', () => {
-      if (!bridged) limiter.release(user.id);
+      if (!bridged) limiter.release(limiterKey);
     });
 
     wss.handleUpgrade(req, socket, head, ws => {
       bridged = true;
-      bridgeConnection(ws, user, limiter);
+      bridgeConnection(ws, user, limiter, { limiterKey });
     });
   });
 

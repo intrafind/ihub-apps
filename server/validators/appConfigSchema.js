@@ -205,7 +205,7 @@ const uploadSchema = z
   })
   .optional();
 
-// Transcription configuration schema (Voxtral / vLLM realtime).
+// Transcription configuration schema (routes audio to a modelType:'transcription' model).
 //
 // When enabled, audio sources (uploaded audio, audio extracted from an uploaded
 // video, or a browser recording) are transcribed by the referenced

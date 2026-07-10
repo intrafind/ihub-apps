@@ -1829,7 +1829,7 @@
         "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
         "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Mit Vorsicht verwenden.",
         "transcription": "Transkription",
-        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem selbst gehosteten Transkriptionsmodell (Voxtral) transkribieren und das Ergebnis als Chat-Antwort anzeigen.",
+        "transcriptionDesc": "Hochgeladene Audiodateien, hochgeladene Videos oder eine Browser-Aufnahme mit einem selbst gehosteten Transkriptionsmodell (z. B. Voxtral) transkribieren und das Ergebnis als Chat-Antwort anzeigen.",
         "enableTranscription": "Transkription aktivieren",
         "transcriptionModel": "Transkriptionsmodell",
         "selectTranscriptionModel": "Modell auswählen…",
@@ -2537,7 +2537,10 @@
       "serviceDetail": "Transkription fehlgeschlagen: {{detail}}",
       "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "tooLong": "Diese Audiodatei ist {{duration}} s lang und überschreitet das Limit von {{max}} s für die Transkription.",
-      "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut."
+      "mic": "Auf das Mikrofon konnte nicht zugegriffen werden. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.",
+      "busy": "Es läuft bereits eine Transkription. Bitte zuerst stoppen.",
+      "interrupted": "Die Transkription wurde unterbrochen — das Transkript ist möglicherweise unvollständig.",
+      "audioNeedsTranscription": "Das ausgewählte Chat-Modell kann Audio nicht direkt verarbeiten. Aktivieren Sie die Transkription im Aktionsmenü oder entfernen Sie den Audio-Anhang."
     },
     "toggleLabel": "Transkription",
     "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"

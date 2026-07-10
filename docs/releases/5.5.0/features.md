@@ -416,6 +416,27 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 - Errors (unreachable endpoint, unsupported/undecodable format, file too long, connection limits)
   are surfaced clearly in the chat.
 
+**Enterprise hardening & operations** (applies to dictation and transcription — the shared
+`/api/voice/realtime` endpoint):
+
+- **Keepalive**: the server pings each voice connection every 25 s, detecting dead clients
+  (crashed tab, suspended laptop) and preventing reverse proxies from killing quiet sessions while
+  the GPU processes a long tail.
+- **Backpressure**: when the iHub→vLLM hop is slower than the browser upload, the browser socket is
+  paused via TCP flow control, so server memory stays flat instead of buffering the whole file.
+- **Session cap**: a new `speech.realtime.maxSessionSeconds` (default 3600) bounds how long one
+  connection can pin a GPU-backed upstream session; anonymous users are now capped per client IP
+  rather than as one shared bucket.
+- **Privacy/diagnostics**: upstream connection errors shown to users no longer include the internal
+  vLLM host address (server logs keep the full detail); error frames now carry stable
+  machine-readable codes. A `*` CORS wildcard is no longer honored for the cookie-authenticated
+  voice WebSocket.
+- **Interrupted transcripts are never presented as complete**: if the connection drops mid-file,
+  the partial transcript is kept and annotated as interrupted (same pattern as user cancellation).
+- New documentation: [Realtime Voice & Transcription](../../voice-transcription.md) covers vLLM
+  deployment, model/app/permission configuration, nginx/reverse-proxy WebSocket setup, scaling
+  (per-worker caps), the security model, and troubleshooting.
+
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 

@@ -296,12 +296,10 @@ export const processTiffFile = async (file, options = {}) => {
  * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
  * @returns {Promise<Object>} Object with audioBuffer and metadata
  */
-export const extractAudioFromVideo = async (file, options = {}) => {
-  const { format = 'wav' } = options;
-
+export const extractAudioFromVideo = async file => {
+  let audioContext = null;
   try {
-    // Create audio context
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     // Read video file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -315,38 +313,20 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw new Error('audio-decode-error');
     }
 
-    // Use OfflineAudioContext to render the audio
-    const offlineContext = new OfflineAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-
-    const source = offlineContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineContext.destination);
-    source.start();
-
-    const renderedBuffer = await offlineContext.startRendering();
-
-    // Convert to WAV format
-    const wavBlob = audioBufferToWav(renderedBuffer);
+    // decodeAudioData already yields the fully-decoded PCM. (An earlier version
+    // re-rendered it through a same-rate/same-channel OfflineAudioContext — a
+    // pure copy that doubled peak memory on long videos.)
+    const wavBlob = audioBufferToWav(audioBuffer);
     const wavBase64 = await blobToBase64(wavBlob);
 
-    // Get duration in seconds
-    const duration = renderedBuffer.duration;
-
-    // Clean up
-    await audioContext.close();
-
     return {
-      audioBuffer: renderedBuffer,
+      audioBuffer,
       base64: wavBase64,
       blob: wavBlob,
       format: 'audio/wav',
-      sampleRate: renderedBuffer.sampleRate,
-      channels: renderedBuffer.numberOfChannels,
-      duration,
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+      duration: audioBuffer.duration,
       size: wavBlob.size
     };
   } catch (error) {
@@ -355,6 +335,13 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw error;
     }
     throw new Error('video-audio-extraction-error');
+  } finally {
+    // Close on EVERY path: browsers cap concurrent AudioContexts (~6 in
+    // Chrome), so leaking one per failed decode would break all audio features
+    // (recording, dictation, decoding) until the page reloads.
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => {});
+    }
   }
 };
 

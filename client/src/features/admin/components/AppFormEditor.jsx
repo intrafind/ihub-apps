@@ -2148,7 +2148,7 @@ function AppFormEditor({
               </div>
             </div>
 
-            {/* Transcription Configuration (Voxtral) */}
+            {/* Transcription Configuration */}
             <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
               <div className="md:grid md:grid-cols-3 md:gap-6">
                 <div className="md:col-span-1">
@@ -2158,7 +2158,7 @@ function AppFormEditor({
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.apps.edit.transcriptionDesc',
-                      'Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (Voxtral) and render the result as a chat answer.'
+                      'Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.'
                     )}
                   </p>
                 </div>

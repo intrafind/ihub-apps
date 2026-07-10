@@ -117,7 +117,12 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       // never leak into the chat model selector, magic prompt, compare mode,
       // workflows, or the default-model fallback (G9). `?type=transcription`
       // returns the permitted transcription models (for the app editor picker).
-      const requestedType = req.query.type === 'transcription' ? 'transcription' : 'chat';
+      // Unknown types are a 400, not a silent fallback to chat — otherwise a
+      // future model type would silently return the wrong list.
+      const requestedType = req.query.type ?? 'chat';
+      if (requestedType !== 'chat' && requestedType !== 'transcription') {
+        return res.status(400).json({ error: `Unknown model type: ${requestedType}` });
+      }
       const typedModels = models.filter(m => (m.modelType || 'chat') === requestedType);
 
       // Strip server-side secrets (encrypted apiKey for all; url for

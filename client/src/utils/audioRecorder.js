@@ -1,12 +1,12 @@
-import { WORKLET_SOURCE } from './realtimeTranscriptionCore';
+import { createPcmCapturePipeline } from './realtimeTranscriptionCore';
 
 /**
  * Records microphone audio in the browser and accumulates it into a single
  * AudioBuffer for one-shot transcription (distinct from live dictation, which
- * streams frame-by-frame). Reuses the shared AudioWorklet PCM capture pipeline
- * so no audio codec / MediaRecorder container is involved — the accumulated
- * Float32 samples are handed straight to `transcribeAudioBuffer()`, which
- * resamples them to 16 kHz mono.
+ * streams frame-by-frame). Uses the shared PCM capture pipeline — no audio
+ * codec / MediaRecorder container is involved; the accumulated Float32 samples
+ * are handed straight to `transcribeAudioBuffer()`, which resamples them to
+ * 16 kHz mono (a no-op when the pipeline already captured at 16 kHz).
  *
  * Usage:
  *   const rec = new AudioBufferRecorder({ maxDurationSeconds: 900, onTick, onMaxDuration });
@@ -20,17 +20,15 @@ export class AudioBufferRecorder {
     this.onTick = onTick;
     this.onMaxDuration = onMaxDuration;
 
-    this._audioContext = null;
+    this._pipeline = null;
     this._mediaStream = null;
-    this._sourceNode = null;
-    this._workletNode = null;
-    this._scriptNode = null;
     this._chunks = [];
     this._totalSamples = 0;
     this._sampleRate = 16000;
     this._tickTimer = null;
     this._startedAt = 0;
     this._recording = false;
+    this._maxDurationFired = false;
   }
 
   get isRecording() {
@@ -40,47 +38,23 @@ export class AudioBufferRecorder {
   async start() {
     this._chunks = [];
     this._totalSamples = 0;
+    this._maxDurationFired = false;
 
     this._mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    this._audioContext = new AudioContextCtor();
-    if (this._audioContext.state === 'suspended') {
-      await this._audioContext.resume();
-    }
-    this._sampleRate = this._audioContext.sampleRate;
-    this._sourceNode = this._audioContext.createMediaStreamSource(this._mediaStream);
-
-    const onFrame = frame => {
-      if (!this._recording) return;
-      // Copy — worklet reuses its buffer between posts.
-      this._chunks.push(new Float32Array(frame));
-      this._totalSamples += frame.length;
-    };
-
-    let usedWorklet = false;
-    if (this._audioContext.audioWorklet) {
-      try {
-        const blob = new Blob([WORKLET_SOURCE], { type: 'application/javascript' });
-        const moduleUrl = URL.createObjectURL(blob);
-        await this._audioContext.audioWorklet.addModule(moduleUrl);
-        URL.revokeObjectURL(moduleUrl);
-        this._workletNode = new AudioWorkletNode(this._audioContext, 'pcm-capture-processor');
-        this._workletNode.port.onmessage = evt => onFrame(evt.data);
-        this._sourceNode.connect(this._workletNode);
-        this._workletNode.connect(this._audioContext.destination);
-        usedWorklet = true;
-      } catch (err) {
-        console.warn('AudioWorklet unavailable, falling back to ScriptProcessor:', err);
-      }
-    }
-
-    if (!usedWorklet) {
-      const node = this._audioContext.createScriptProcessor(4096, 1, 1);
-      node.onaudioprocess = e => onFrame(new Float32Array(e.inputBuffer.getChannelData(0)));
-      this._sourceNode.connect(node);
-      node.connect(this._audioContext.destination);
-      this._scriptNode = node;
+    // Everything after mic acquisition must release the mic on failure —
+    // otherwise an AudioContext/worklet error leaves the recording indicator on.
+    try {
+      this._pipeline = await createPcmCapturePipeline(this._mediaStream, frame => {
+        if (!this._recording) return;
+        // Pipeline frames are owned by the receiver — no copy needed.
+        this._chunks.push(frame);
+        this._totalSamples += frame.length;
+      });
+      this._sampleRate = this._pipeline.sampleRate;
+    } catch (err) {
+      this._teardown();
+      throw err;
     }
 
     this._recording = true;
@@ -88,7 +62,14 @@ export class AudioBufferRecorder {
     this._tickTimer = setInterval(() => {
       const elapsed = (performance.now() - this._startedAt) / 1000;
       if (typeof this.onTick === 'function') this.onTick(elapsed);
-      if (this.maxDurationSeconds && elapsed >= this.maxDurationSeconds) {
+      if (
+        this.maxDurationSeconds &&
+        elapsed >= this.maxDurationSeconds &&
+        !this._maxDurationFired
+      ) {
+        // Fire once — the tick keeps running until stop(), and re-invoking the
+        // caller's stop-and-transcribe handler every 250 ms would race itself.
+        this._maxDurationFired = true;
         if (typeof this.onMaxDuration === 'function') this.onMaxDuration();
       }
     }, 250);
@@ -104,7 +85,6 @@ export class AudioBufferRecorder {
       return { audioBuffer: null, durationSeconds: 0 };
     }
     this._recording = false;
-    const durationSeconds = (performance.now() - this._startedAt) / 1000;
 
     const merged = new Float32Array(this._totalSamples);
     let offset = 0;
@@ -112,12 +92,26 @@ export class AudioBufferRecorder {
       merged.set(chunk, offset);
       offset += chunk.length;
     }
+    // Drop the chunk references immediately — `merged` is the single copy now,
+    // and the recorder instance stays referenced through the whole transcription.
+    this._chunks = [];
+    this._totalSamples = 0;
+
+    // The max-duration tick has ≥250 ms granularity (worse in throttled
+    // background tabs), so the capture can overshoot the cap. Trim to the cap
+    // here so downstream duration checks (which reject over-cap audio outright)
+    // can never discard a recording the recorder itself auto-stopped.
+    const maxSamples = this.maxDurationSeconds
+      ? Math.floor(this.maxDurationSeconds * this._sampleRate)
+      : merged.length;
+    const samples = merged.length > maxSamples ? merged.subarray(0, maxSamples) : merged;
+    const durationSeconds = samples.length / this._sampleRate;
 
     // Build the AudioBuffer with the still-open context (needs a live context).
     let audioBuffer = null;
-    if (this._audioContext && merged.length > 0) {
-      audioBuffer = this._audioContext.createBuffer(1, merged.length, this._sampleRate);
-      audioBuffer.copyToChannel(merged, 0);
+    if (this._pipeline && samples.length > 0) {
+      audioBuffer = this._pipeline.audioContext.createBuffer(1, samples.length, this._sampleRate);
+      audioBuffer.copyToChannel(samples, 0);
     }
 
     this._teardown();
@@ -136,30 +130,14 @@ export class AudioBufferRecorder {
       clearInterval(this._tickTimer);
       this._tickTimer = null;
     }
-    try {
-      if (this._workletNode) {
-        this._workletNode.port.onmessage = null;
-        this._workletNode.disconnect();
-      }
-      if (this._scriptNode) {
-        this._scriptNode.onaudioprocess = null;
-        this._scriptNode.disconnect();
-      }
-      if (this._sourceNode) this._sourceNode.disconnect();
-    } catch {
-      /* ignore */
+    if (this._pipeline) {
+      this._pipeline.stop();
+      this._pipeline = null;
     }
-    this._workletNode = null;
-    this._scriptNode = null;
-    this._sourceNode = null;
     if (this._mediaStream) {
       this._mediaStream.getTracks().forEach(track => track.stop());
       this._mediaStream = null;
     }
-    if (this._audioContext && this._audioContext.state !== 'closed') {
-      this._audioContext.close().catch(() => {});
-    }
-    this._audioContext = null;
   }
 }
 
