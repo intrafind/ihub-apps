@@ -23,6 +23,7 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import inboxStore from '../../../agents/inbox/inboxStore.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { summarizePlanForEvent } from '../../../agents/runtime/taskRecord.js';
+import { previewToolValue } from './valuePreview.js';
 
 function emit(event, payload, chatId) {
   try {
@@ -119,8 +120,8 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
         toolCalls: [
           {
             name: 'inbox-store.markInboxItemDone',
-            args: this._previewToolValue({ inboxId, item: item.text, note }),
-            result: this._previewToolValue({ ok: true, version: result.version }),
+            args: previewToolValue({ inboxId, item: item.text, note }),
+            result: previewToolValue({ ok: true, version: result.version }),
             durationMs
           }
         ],
@@ -198,15 +199,6 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
       return this.createErrorResult(`Failed to mark inbox item done: ${err.message}`, {
         nodeId: node.id
       });
-    }
-  }
-
-  _previewToolValue(value) {
-    try {
-      const json = JSON.stringify(value);
-      return json.length > 1024 ? `${json.slice(0, 1024)}…` : json;
-    } catch {
-      return null;
     }
   }
 }

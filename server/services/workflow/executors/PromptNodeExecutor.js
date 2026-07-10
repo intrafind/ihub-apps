@@ -24,6 +24,7 @@ import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
+import { previewToolValue } from './valuePreview.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -565,13 +566,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         // nodes look like they returned nothing.
         //
         // The UI does `JSON.parse(stepLog.output)` on this string, so the
-        // value MUST be valid JSON. `_previewToolValue` now produces a
+        // value MUST be valid JSON. `previewToolValue` now produces a
         // JSON-parseable string for objects (it truncates long string
         // fields INSIDE the object before JSON.stringify, instead of
         // chopping the serialised string with a `…[truncated]` suffix
         // that breaks JSON.parse).
         try {
-          stepLog.output = this._previewToolValue(output);
+          stepLog.output = previewToolValue(output);
         } catch {
           // best effort — never fail a node on the preview helper
         }
@@ -1944,8 +1945,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             toolId,
             appId,
             modelOverride: callerModelId,
-            args: this._previewToolValue(args),
-            result: this._previewToolValue(result),
+            args: previewToolValue(args),
+            result: previewToolValue(result),
             durationMs: appCallDurationMs
           });
         }
@@ -1969,7 +1970,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             appId: toolId.slice('app__'.length),
             error: 'app_invocation_failed',
             message: error.message,
-            args: this._previewToolValue(args),
+            args: previewToolValue(args),
             durationMs: appCallDurationMs
           });
         }
@@ -2034,8 +2035,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           name: toolCall.function.name,
           toolId,
           ...(isApp ? { appId: toolId.slice('app__'.length) } : {}),
-          args: this._previewToolValue(args),
-          result: this._previewToolValue(result),
+          args: previewToolValue(args),
+          result: previewToolValue(result),
           durationMs: toolCallDurationMs
         });
       }
@@ -2777,7 +2778,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           nodeId: node.id,
           round: priorRound + 1,
           outputType: typeof output,
-          outputPreview: this._previewToolValue(output)
+          outputPreview: previewToolValue(output)
         });
       }
       this.logger.info('Review round completed', {
@@ -2892,77 +2893,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
     }
     return null;
-  }
-
-  _previewToolValue(value) {
-    const MAX_LEN = 1024;
-    const MAX_FIELD_LEN = 320;
-    if (value == null) return null;
-    if (typeof value === 'string') {
-      return value.length > MAX_LEN
-        ? `${value.slice(0, MAX_LEN)}…[truncated ${value.length - MAX_LEN} chars]`
-        : value;
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') return value;
-    // For objects/arrays we walk the structure and shorten long string fields
-    // IN PLACE, then JSON.stringify. The resulting preview stays parseable
-    // (the UI does JSON.parse on reviewer / memory-compose step output to
-    // render verdict details — a "…[truncated]" suffix appended to the JSON
-    // string itself broke that and showed a generic fallback).
-    try {
-      const compact = this._compactStringsForPreview(value, MAX_FIELD_LEN, 0);
-      const json = JSON.stringify(compact);
-      // Final safety net: if the compacted form is still huge, fall back to
-      // truncating the JSON string (and accept that the UI's JSON.parse will
-      // fail for this row — better than spilling MB of state to disk).
-      return json.length > MAX_LEN
-        ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
-        : json;
-    } catch {
-      return '[unserialisable]';
-    }
-  }
-
-  /**
-   * Recursively shorten long string fields inside an object/array so the
-   * JSON.stringify output stays under ~1KB while remaining VALID JSON.
-   * String fields longer than `maxFieldLen` get a `…[+N]` suffix appended
-   * in the cloned copy. Depth is bounded to keep cyclic / pathological
-   * inputs from blowing the stack; arrays are capped at MAX_ARRAY_ITEMS
-   * with a trailing `…[+N items]` placeholder.
-   *
-   * Used by `_previewToolValue` so step-log previews of tool args/results
-   * AND structured-output rows (reviewer, memory-composer) all produce
-   * JSON the UI can `JSON.parse` to render details.
-   *
-   * @private
-   */
-  _compactStringsForPreview(value, maxFieldLen, depth) {
-    const MAX_DEPTH = 6;
-    const MAX_ARRAY_ITEMS = 20;
-    if (depth > MAX_DEPTH) return '[…]';
-    if (typeof value === 'string') {
-      return value.length > maxFieldLen
-        ? `${value.slice(0, maxFieldLen)}…[+${value.length - maxFieldLen}]`
-        : value;
-    }
-    if (Array.isArray(value)) {
-      const limited = value
-        .slice(0, MAX_ARRAY_ITEMS)
-        .map(v => this._compactStringsForPreview(v, maxFieldLen, depth + 1));
-      if (value.length > MAX_ARRAY_ITEMS) {
-        limited.push(`…[+${value.length - MAX_ARRAY_ITEMS} items]`);
-      }
-      return limited;
-    }
-    if (value && typeof value === 'object') {
-      const out = {};
-      for (const [k, v] of Object.entries(value)) {
-        out[k] = this._compactStringsForPreview(v, maxFieldLen, depth + 1);
-      }
-      return out;
-    }
-    return value;
   }
 
   /**

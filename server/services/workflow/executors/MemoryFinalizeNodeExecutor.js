@@ -27,6 +27,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import memoryFile from '../../../agents/memory/memoryFile.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { previewToolValue } from './valuePreview.js';
 
 function emit(event, payload, chatId) {
   try {
@@ -217,8 +218,8 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         });
         toolCalls.push({
           name: 'memory-file.writeMemory',
-          args: this._previewToolValue(args),
-          result: this._previewToolValue({ ok: false, error: err.message }),
+          args: previewToolValue(args),
+          result: previewToolValue({ ok: false, error: err.message }),
           durationMs: Date.now() - writeStartMs
         });
         continue;
@@ -233,8 +234,8 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
       );
       toolCalls.push({
         name: 'memory-file.writeMemory',
-        args: this._previewToolValue(args),
-        result: this._previewToolValue({ ok: true, version: result.version }),
+        args: previewToolValue(args),
+        result: previewToolValue({ ok: true, version: result.version }),
         durationMs: Date.now() - writeStartMs
       });
     }
@@ -295,64 +296,6 @@ export class MemoryFinalizeNodeExecutor extends BaseNodeExecutor {
         }
       }
     );
-  }
-
-  /**
-   * Build a JSON-parseable preview of a tool-call value. Mirrors the helper
-   * in PromptNodeExecutor: we truncate long string fields IN PLACE before
-   * stringifying so the resulting preview stays valid JSON. The UI does
-   * JSON.parse on these previews to render details; truncating the JSON
-   * string itself produced an invalid suffix and broke that rendering.
-   * @private
-   */
-  _previewToolValue(value) {
-    const MAX_LEN = 1024;
-    const MAX_FIELD_LEN = 320;
-    if (value == null) return null;
-    if (typeof value === 'string') {
-      return value.length > MAX_LEN
-        ? `${value.slice(0, MAX_LEN)}…[truncated ${value.length - MAX_LEN} chars]`
-        : value;
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') return value;
-    try {
-      const compact = this._compactStringsForPreview(value, MAX_FIELD_LEN, 0);
-      const json = JSON.stringify(compact);
-      return json.length > MAX_LEN
-        ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
-        : json;
-    } catch {
-      return '[unserialisable]';
-    }
-  }
-
-  /** @private — see PromptNodeExecutor._compactStringsForPreview */
-  _compactStringsForPreview(value, maxFieldLen, depth) {
-    const MAX_DEPTH = 6;
-    const MAX_ARRAY_ITEMS = 20;
-    if (depth > MAX_DEPTH) return '[…]';
-    if (typeof value === 'string') {
-      return value.length > maxFieldLen
-        ? `${value.slice(0, maxFieldLen)}…[+${value.length - maxFieldLen}]`
-        : value;
-    }
-    if (Array.isArray(value)) {
-      const limited = value
-        .slice(0, MAX_ARRAY_ITEMS)
-        .map(v => this._compactStringsForPreview(v, maxFieldLen, depth + 1));
-      if (value.length > MAX_ARRAY_ITEMS) {
-        limited.push(`…[+${value.length - MAX_ARRAY_ITEMS} items]`);
-      }
-      return limited;
-    }
-    if (value && typeof value === 'object') {
-      const out = {};
-      for (const [k, v] of Object.entries(value)) {
-        out[k] = this._compactStringsForPreview(v, maxFieldLen, depth + 1);
-      }
-      return out;
-    }
-    return value;
   }
 }
 
