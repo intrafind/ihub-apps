@@ -389,6 +389,15 @@ trapped the page in an endless reload loop.
   Apps, Prompts, and Sources — the platform-only sections and stats they cannot access are hidden.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Displayed Version Number Fixed
+
+The version shown in the admin UI and documentation footer is corrected back to a real release
+number. A release-automation run had previously committed a stray branch name as the app version,
+which also broke downstream update checks.
+
+- The release-sync script now rejects any non-semver input, so this cannot recur.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## Tool-Enabled Apps Now Show Up in Usage and Telemetry Dashboards
 
 Chats with an app that has **tools** enabled now record token usage, OpenTelemetry `gen_ai.*`
