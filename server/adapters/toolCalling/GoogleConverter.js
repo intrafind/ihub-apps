@@ -180,11 +180,18 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
 /**
  * Convert Google streaming response to generic format
  * @param {string} data - Raw Google response data
- * @param {string} streamId - Stream identifier for stateful processing (unused for Google)
+ * @param {string} streamId - Stream identifier for stateful processing
  * @returns {Promise<import('./GenericToolCalling.js').GenericStreamingResponse>} Generic streaming response
  */
-export async function convertGoogleResponseToGeneric(data, _streamId = 'default') {
+const streamingState = new Map();
+
+export async function convertGoogleResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
+
+  if (!streamingState.has(streamId)) {
+    streamingState.set(streamId, { toolCallIndex: 0 });
+  }
+  const state = streamingState.get(streamId);
 
   if (!data) return result;
 
@@ -252,12 +259,13 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
             if (part.thoughtSignature) {
               metadata.thoughtSignature = part.thoughtSignature;
             }
+            const toolCallIndex = state.toolCallIndex++;
             result.tool_calls.push(
               createGenericToolCall(
-                `call_${result.tool_calls.length}_${Date.now()}`,
+                `call_${toolCallIndex}_${Date.now()}`,
                 part.functionCall.name,
                 part.functionCall.args || {},
-                result.tool_calls.length,
+                toolCallIndex,
                 metadata
               )
             );
@@ -271,6 +279,7 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
         }
       }
       result.complete = true;
+      streamingState.delete(streamId);
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
       // Check both the finishReason flag AND the actual tool_calls array
@@ -325,12 +334,13 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
             if (part.thoughtSignature) {
               metadata.thoughtSignature = part.thoughtSignature;
             }
+            const toolCallIndex = state.toolCallIndex++;
             result.tool_calls.push(
               createGenericToolCall(
-                `call_${result.tool_calls.length}_${Date.now()}`,
+                `call_${toolCallIndex}_${Date.now()}`,
                 part.functionCall.name,
                 part.functionCall.args || {},
-                result.tool_calls.length,
+                toolCallIndex,
                 metadata
               )
             );
@@ -380,6 +390,7 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
         // If we have tool_calls, mark as complete but preserve the tool_calls finish reason
         result.complete = true;
       }
+      streamingState.delete(streamId);
     }
   } catch (jsonError) {
     logger.error('Failed to parse Google response as JSON', {
@@ -402,10 +413,20 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
       result.finishReason = 'stop';
       result.complete = true;
       result.error = false; // Clear error if we could extract some content
+      streamingState.delete(streamId);
     }
   }
 
   return result;
+}
+
+/**
+ * Discard accumulated per-stream state (e.g. tool call index counter) for a stream
+ * that errored or was aborted before reaching its natural completion event.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearGoogleStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
 }
 
 /**
