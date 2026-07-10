@@ -222,7 +222,14 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         await recognition.initRecognizer();
       }
 
+      // Some services (vLLM realtime) end asynchronously: after stop() the old
+      // instance's final result / onend can arrive up to a few seconds later.
+      // If the user restarted dictation in that window, those stale events must
+      // not touch the CURRENT session's state or the input field.
+      const isStale = () => recognitionRef.current && recognitionRef.current !== recognition;
+
       recognition.onstart = () => {
+        if (isStale()) return;
         setIsListening(true);
         setTranscript('');
         if (inputRef?.current) {
@@ -231,6 +238,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       };
 
       recognition.onresult = event => {
+        if (isStale()) return;
         let interimTranscript = '';
         let finalTranscript = '';
 
@@ -304,6 +312,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       };
 
       recognition.onerror = event => {
+        if (isStale()) return;
         let errorMsg = '';
         switch (event.error) {
           case 'no-speech':
@@ -341,6 +350,10 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       };
 
       recognition.onend = () => {
+        // A late onend from a superseded instance must not tear down the new
+        // session (it would null the ref and mark the UI idle while the new
+        // session's mic is still hot).
+        if (isStale()) return;
         setIsListening(false);
         setTranscript('');
         if (inputRef?.current) {

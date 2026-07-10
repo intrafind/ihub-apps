@@ -186,3 +186,16 @@ the Node version.
 | Redis pub/sub fan-out                         | Deferred     | Enables true cross-worker delivery and clean failover. Adds Redis + ~a week of refactor. |
 | PM2 cluster mode                              | Rejected     | PM2's built-in LB is round-robin — same SSE problem.                                     |
 | Multi-instance + nginx cookie stickiness      | Compatible   | Works; recommended when fronting multiple boxes. Orthogonal to this feature.             |
+
+## Realtime voice WebSocket and workers
+
+The realtime voice endpoint (`/api/voice/realtime`, used by dictation and
+transcription — see [Realtime Voice & Transcription](voice-transcription.md))
+attaches per worker and rides the same sticky TCP connections, so no extra
+configuration is needed. One thing to remember when tuning:
+
+- The voice connection caps (`platform.speech.realtime.maxConnections`,
+  default 50, and `maxConnectionsPerUser`, default 3) are enforced **per
+  worker process**. With `WORKERS=4` the instance-wide ceiling is 4 x 50
+  concurrent voice sessions. Size `maxConnections` as *per-GPU budget /
+  worker count*.
