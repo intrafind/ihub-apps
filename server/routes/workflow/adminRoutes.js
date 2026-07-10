@@ -219,7 +219,7 @@ export default function registerAdminRoutes(app, deps = {}) {
           let allExecutions = Array.from(registry.executions.values()).map(e => ({ ...e }));
 
           // Apply status filter (unless 'all')
-          if (status && status !== 'all') {
+          if (status !== 'all') {
             allExecutions = allExecutions.filter(e => e.status === status);
           }
 

@@ -82,21 +82,19 @@ export default function registerVersionRoutes(app) {
 
         let versions = [];
         try {
-          // lgtm[js/path-injection] -- `historyDir` is the result of
-          // resolveAndValidatePath(id, historyRoot) above (path.resolve +
-          // startsWith boundary check); `id` was already vetted by
-          // validateIdForPath() which rejects `..`, `/`, `\` and anything
-          // outside [A-Za-z0-9._-].
-          const files = await fs.readdir(historyDir);
+          // `historyDir` is the result of resolveAndValidatePath(id, historyRoot)
+          // above (path.resolve + startsWith boundary check); `id` was already
+          // vetted by validateIdForPath() which rejects `..`, `/`, `\` and
+          // anything outside [A-Za-z0-9._-].
+          const files = await fs.readdir(historyDir); // lgtm[js/path-injection]
           for (const file of files) {
             if (!file.endsWith('.json')) continue;
             try {
               const filePath = await resolveAndValidatePath(file, historyDir);
               if (!filePath) continue;
-              // lgtm[js/path-injection] -- `filePath` is the result of
-              // resolveAndValidatePath(file, historyDir) which enforces a
-              // path.resolve + startsWith boundary against historyDir.
-              const content = await fs.readFile(filePath, 'utf8');
+              // `filePath` is the result of resolveAndValidatePath(file, historyDir)
+              // which enforces a path.resolve + startsWith boundary against historyDir.
+              const content = await fs.readFile(filePath, 'utf8'); // lgtm[js/path-injection]
               const data = JSON.parse(content);
               versions.push({
                 version: data.version,
@@ -198,9 +196,9 @@ export default function registerVersionRoutes(app) {
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
-        // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
-        // bounded result for an already validateIdForPath-checked id.
-        await fs.mkdir(historyDir, { recursive: true });
+        // `historyDir` is resolveAndValidatePath's bounded result for an
+        // already validateIdForPath-checked id.
+        await fs.mkdir(historyDir, { recursive: true }); // lgtm[js/path-injection]
 
         // version comes from workflow.version which is schema-validated as
         // semver, so it's a safe filename component. timestamp is also safe.
@@ -293,9 +291,9 @@ export default function registerVersionRoutes(app) {
         // Find snapshot file by version prefix
         let snapshotFileName = null;
         try {
-          // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
-          // bounded result for a validateIdForPath-checked id.
-          const files = await fs.readdir(historyDir);
+          // `historyDir` is resolveAndValidatePath's bounded result for a
+          // validateIdForPath-checked id.
+          const files = await fs.readdir(historyDir); // lgtm[js/path-injection]
           snapshotFileName = files.find(
             f => f.startsWith(`${versionParam}-`) && f.endsWith('.json')
           );
