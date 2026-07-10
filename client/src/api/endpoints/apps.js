@@ -2,7 +2,7 @@ import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
+import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportNaming';
 
 // Isolated marked instance for static exports (PDF/HTML). It intentionally does
 // NOT use the shared interactive markdown renderer, which injects toolbar

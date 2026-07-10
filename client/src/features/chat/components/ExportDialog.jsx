@@ -3,13 +3,6 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
-import {
-  exportToXLSX,
-  exportToCSV,
-  exportToDOCX,
-  exportToTXT,
-  exportToPPTX
-} from '../../../utils/exportFormats';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -220,7 +213,8 @@ function ExportDialog({
         case 'html':
           await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
           break;
-        case 'xlsx':
+        case 'xlsx': {
+          const { exportToXLSX } = await import('../../../utils/exportFormats');
           await exportToXLSX(
             filteredMessages,
             exportSettings,
@@ -230,7 +224,9 @@ function ExportDialog({
             isSingleMessage
           );
           break;
-        case 'csv':
+        }
+        case 'csv': {
+          const { exportToCSV } = await import('../../../utils/exportFormats');
           await exportToCSV(
             filteredMessages,
             exportSettings,
@@ -240,7 +236,9 @@ function ExportDialog({
             isSingleMessage
           );
           break;
-        case 'docx':
+        }
+        case 'docx': {
+          const { exportToDOCX } = await import('../../../utils/exportFormats');
           await exportToDOCX(
             filteredMessages,
             exportSettings,
@@ -250,7 +248,9 @@ function ExportDialog({
             isSingleMessage
           );
           break;
-        case 'txt':
+        }
+        case 'txt': {
+          const { exportToTXT } = await import('../../../utils/exportFormats');
           await exportToTXT(
             filteredMessages,
             exportSettings,
@@ -260,7 +260,9 @@ function ExportDialog({
             isSingleMessage
           );
           break;
-        case 'pptx':
+        }
+        case 'pptx': {
+          const { exportToPPTX } = await import('../../../utils/exportFormats');
           await exportToPPTX(
             filteredMessages,
             exportSettings,
@@ -270,6 +272,7 @@ function ExportDialog({
             isSingleMessage
           );
           break;
+        }
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);
       }
