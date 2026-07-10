@@ -4,6 +4,8 @@
 
 The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and an iHub-proxied vLLM realtime endpoint such as Voxtral).
 
+> **Dictation vs. transcription.** This page covers **dictation** — live microphone speech dropped into the **input field** for the user to edit and send. A separate feature, **Voxtral transcription**, records or uploads a whole audio/video clip and renders the transcript as an **assistant chat answer** (a distinct message), using a `modelType: "transcription"` model. Both can be enabled on the same app and share the same authenticated `/api/voice/realtime` WebSocket. See [Transcription Models](models.md#transcription-models) and [Audio File Support](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription).
+
 ## Modes
 
 - `automatic` — Speech recognition stops automatically when the user pauses speaking. The transcribed text is placed in the input field and the listener shuts down. This is the default mode.

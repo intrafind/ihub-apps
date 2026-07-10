@@ -296,12 +296,10 @@ export const processTiffFile = async (file, options = {}) => {
  * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
  * @returns {Promise<Object>} Object with audioBuffer and metadata
  */
-export const extractAudioFromVideo = async (file, options = {}) => {
-  const { format = 'wav' } = options;
-
+export const extractAudioFromVideo = async file => {
+  let audioContext = null;
   try {
-    // Create audio context
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     // Read video file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -315,38 +313,20 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw new Error('audio-decode-error');
     }
 
-    // Use OfflineAudioContext to render the audio
-    const offlineContext = new OfflineAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-
-    const source = offlineContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineContext.destination);
-    source.start();
-
-    const renderedBuffer = await offlineContext.startRendering();
-
-    // Convert to WAV format
-    const wavBlob = audioBufferToWav(renderedBuffer);
+    // decodeAudioData already yields the fully-decoded PCM. (An earlier version
+    // re-rendered it through a same-rate/same-channel OfflineAudioContext — a
+    // pure copy that doubled peak memory on long videos.)
+    const wavBlob = audioBufferToWav(audioBuffer);
     const wavBase64 = await blobToBase64(wavBlob);
 
-    // Get duration in seconds
-    const duration = renderedBuffer.duration;
-
-    // Clean up
-    await audioContext.close();
-
     return {
-      audioBuffer: renderedBuffer,
+      audioBuffer,
       base64: wavBase64,
       blob: wavBlob,
       format: 'audio/wav',
-      sampleRate: renderedBuffer.sampleRate,
-      channels: renderedBuffer.numberOfChannels,
-      duration,
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+      duration: audioBuffer.duration,
       size: wavBlob.size
     };
   } catch (error) {
@@ -355,6 +335,69 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw error;
     }
     throw new Error('video-audio-extraction-error');
+  } finally {
+    // Close on EVERY path: browsers cap concurrent AudioContexts (~6 in
+    // Chrome), so leaking one per failed decode would break all audio features
+    // (recording, dictation, decoding) until the page reloads.
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => {});
+    }
+  }
+};
+
+/**
+ * Convert a base64 data URL (or bare base64 string) to an ArrayBuffer without
+ * relying on fetch(), which does not handle `data:` URLs consistently across
+ * environments.
+ */
+const dataUrlToArrayBuffer = dataUrl => {
+  const commaIdx = dataUrl.indexOf(',');
+  const meta = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const isBase64 = commaIdx < 0 || /;base64/i.test(meta);
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+};
+
+/**
+ * Decode an uploaded audio source into an AudioBuffer using the Web Audio API.
+ *
+ * Used by the Voxtral transcription flow: the decoded buffer is re-rendered to
+ * 16 kHz mono PCM16 and streamed to the realtime endpoint. Decoding happens in
+ * the browser, so codec support varies (e.g. Safari lacks OGG); an undecodable
+ * source raises `audio-decode-error` so the caller can surface a clear message
+ * (issue #1927 gap G10).
+ *
+ * @param {string|ArrayBuffer|Blob} input - A base64 data URL, an ArrayBuffer, or a Blob/File.
+ * @returns {Promise<AudioBuffer>}
+ */
+export const decodeAudioFileToBuffer = async input => {
+  let arrayBuffer;
+  if (typeof input === 'string') {
+    arrayBuffer = dataUrlToArrayBuffer(input);
+  } else if (input instanceof ArrayBuffer) {
+    arrayBuffer = input;
+  } else if (input && typeof input.arrayBuffer === 'function') {
+    arrayBuffer = await input.arrayBuffer();
+  } else {
+    throw new Error('audio-decode-error');
+  }
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    // decodeAudioData may detach the input buffer, so decode a copy.
+    return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } catch (decodeError) {
+    console.error('Audio decode error:', decodeError);
+    throw new Error('audio-decode-error');
+  } finally {
+    try {
+      await audioContext.close();
+    } catch {
+      /* ignore */
+    }
   }
 };
 

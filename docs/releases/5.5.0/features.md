@@ -398,6 +398,69 @@ which also broke downstream update checks.
 - The release-sync script now rejects any non-semver input, so this cannot recur.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Tool-Enabled Apps Now Show Up in Usage and Telemetry Dashboards
+
+Chats with an app that has **tools** enabled now record token usage, OpenTelemetry `gen_ai.*`
+spans, and stream-outcome metrics for every LLM call, the same as ordinary chats. Previously the
+tool-calling path recorded none of this, so any app with tools configured was invisible in usage
+tracking, cost accounting, and telemetry dashboards — and the gap grew with every tool-loop
+iteration, since each iteration is its own billable LLM call.
+
+- Each LLM round-trip in a tool-calling conversation — including every iteration of a multi-step
+  tool loop — is now counted individually, matching how the standard chat path is measured.
+- No configuration or admin action required; historical usage prior to this fix is not backfilled.
+
+## Transcribe Audio, Video, and Recordings with Voxtral (Chat Answer)
+
+Apps can now transcribe a whole audio clip with a self-hosted **Voxtral** transcription model and
+render the transcript as an assistant chat answer. Three sources are supported: uploading an audio
+file, uploading a video (its audio track is extracted in the browser), and recording audio directly
+in the chat. This complements the existing live **dictation** (which drops text into the input
+field) and the multimodal audio-upload path (which sends audio to a chat LLM).
+
+- Transcription is a new **first-class model type** (`modelType: "transcription"`). A default
+  `voxtral-mini-realtime` model ships disabled; enable it and point its `ws://` URL at your vLLM
+  realtime endpoint. Existing installations are seeded automatically on upgrade (migration V073),
+  carrying over any configured realtime dictation settings.
+- Configure it per app under **Admin → Apps → Transcription**: pick the transcription model, choose
+  which inputs are offered (audio upload, video upload, record), decide whether it is on by default,
+  toggle streaming, and set a max duration. A new **Video Upload** section was also added to the app
+  upload configuration.
+- Users get a **Transcription toggle** in the chat actions menu (like Web Search) that makes it
+  clear audio/video is handled by a separate transcription model; a long transcription can be
+  **stopped** with the same Stop button used to cancel a chat.
+- Audio and video upload size limits are now configurable up to 2 GB (previously 100 MB for audio /
+  500 MB for video), so longer recordings and meeting videos can be transcribed.
+- The vLLM endpoint URL and API key stay server-side — the public models API strips them, so they
+  never reach the browser. Transcription models are subject to the same group permissions as chat
+  models and are hidden from the chat model selector.
+- Errors (unreachable endpoint, unsupported/undecodable format, file too long, connection limits)
+  are surfaced clearly in the chat.
+
+**Enterprise hardening & operations** (applies to dictation and transcription — the shared
+`/api/voice/realtime` endpoint):
+
+- **Keepalive**: the server pings each voice connection every 25 s, detecting dead clients
+  (crashed tab, suspended laptop) and preventing reverse proxies from killing quiet sessions while
+  the GPU processes a long tail.
+- **Backpressure**: when the iHub→vLLM hop is slower than the browser upload, the browser socket is
+  paused via TCP flow control, so server memory stays flat instead of buffering the whole file.
+- **Session cap**: a new `speech.realtime.maxSessionSeconds` (default 3600) bounds how long one
+  connection can pin a GPU-backed upstream session; anonymous users are now capped per client IP
+  rather than as one shared bucket.
+- **Privacy/diagnostics**: upstream connection errors shown to users no longer include the internal
+  vLLM host address (server logs keep the full detail); error frames now carry stable
+  machine-readable codes. A `*` CORS wildcard is no longer honored for the cookie-authenticated
+  voice WebSocket.
+- **Interrupted transcripts are never presented as complete**: if the connection drops mid-file,
+  the partial transcript is kept and annotated as interrupted (same pattern as user cancellation).
+- New documentation: [Realtime Voice & Transcription](../../voice-transcription.md) covers vLLM
+  deployment, model/app/permission configuration, nginx/reverse-proxy WebSocket setup, scaling
+  (per-worker caps), the security model, and troubleshooting.
+
+**Before using:** add or enable a transcription model under **Admin → Models** (model type
+"Transcription"), set its realtime URL, then enable transcription on the desired app.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

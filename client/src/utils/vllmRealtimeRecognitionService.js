@@ -1,4 +1,11 @@
 import { buildWsUrl } from './runtimeBasePath';
+import {
+  TARGET_SAMPLE_RATE,
+  createPcmCapturePipeline,
+  createTranscriptAssembler,
+  downsample,
+  floatTo16BitPCM
+} from './realtimeTranscriptionCore';
 
 /**
  * Realtime speech recognition that streams microphone audio to the iHub server
@@ -10,45 +17,19 @@ import { buildWsUrl } from './runtimeBasePath';
  * onend` and calls `start()` / `stop()`. Results are emitted as `{ text, isFinal }`
  * (same shape as the Azure service), so `usesTextEventShape` is set to true.
  *
- * Audio is captured as mono, downsampled to 16 kHz, and converted to PCM16 — the
- * format the vLLM realtime API expects.
+ * Audio is captured as mono 16 kHz PCM16 via the shared capture pipeline
+ * (`realtimeTranscriptionCore.js`), which is also used by the buffer recorder.
  */
-
-const TARGET_SAMPLE_RATE = 16000;
-const FRAME_SIZE = 2048; // samples per worklet post (~128ms @16k)
 
 // Automatic-mode voice-activity detection thresholds.
 const SPEECH_RMS_THRESHOLD = 0.015; // above this = speech present
 const SILENCE_RMS_THRESHOLD = 0.01; // below this = silence
 const SILENCE_HANG_MS = 1200; // stop after this much trailing silence
 
-// Inline AudioWorklet: accumulates FRAME_SIZE samples then posts a copy to the
-// main thread. Loaded via a Blob URL so no separate asset/bundling is needed.
-const WORKLET_SOURCE = `
-class PCMCaptureProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._size = ${FRAME_SIZE};
-    this._buf = new Float32Array(this._size);
-    this._i = 0;
-  }
-  process(inputs) {
-    const input = inputs[0];
-    if (input && input[0]) {
-      const ch = input[0];
-      for (let n = 0; n < ch.length; n++) {
-        this._buf[this._i++] = ch[n];
-        if (this._i >= this._size) {
-          this.port.postMessage(this._buf.slice(0, this._size));
-          this._i = 0;
-        }
-      }
-    }
-    return true;
-  }
-}
-registerProcessor('pcm-capture-processor', PCMCaptureProcessor);
-`;
+// After `stop`, wait this long for the server's `{type:'done'}` completion
+// frame before tearing down anyway. Must exceed the server's post-stop settle
+// window (2.5 s), which is when `done` normally arrives.
+const STOP_TEARDOWN_FALLBACK_MS = 3000;
 
 class VllmRealtimeRecognition {
   constructor() {
@@ -60,28 +41,23 @@ class VllmRealtimeRecognition {
     this.usesTextEventShape = true;
 
     this._ws = null;
-    this._audioContext = null;
+    this._pipeline = null;
     this._mediaStream = null;
-    this._sourceNode = null;
-    this._workletNode = null;
-    this._scriptNode = null;
     this._stopped = false;
-    // `_committed` holds text from completed utterances (transcription.done),
-    // `_partial` accumulates the current utterance's streaming deltas. We emit
-    // these as interim results during the session and commit ONE final result
-    // at the end, so useVoiceRecognition (which appends finals to the input)
-    // never double-counts.
-    this._committed = '';
-    this._partial = '';
+    // Shared committed/partial transcript accumulation. Interim results are
+    // emitted during the session and ONE final result is committed at the end,
+    // so useVoiceRecognition (which appends finals to the input) never
+    // double-counts.
+    this._transcript = createTranscriptAssembler();
     this._finalEmitted = false;
     this._speechStarted = false;
     this._silenceTimer = null;
+    this._teardownTimer = null;
   }
 
   async start() {
     this._stopped = false;
-    this._committed = '';
-    this._partial = '';
+    this._transcript = createTranscriptAssembler();
     this._finalEmitted = false;
     this._speechStarted = false;
 
@@ -101,7 +77,9 @@ class VllmRealtimeRecognition {
     }
 
     try {
-      await this.#startCapture();
+      this._pipeline = await createPcmCapturePipeline(this._mediaStream, (frame, rate) =>
+        this.#onAudioFrame(frame, rate)
+      );
     } catch (err) {
       console.error('Realtime STT capture error:', err);
       this.#emitError('audio-capture');
@@ -123,10 +101,10 @@ class VllmRealtimeRecognition {
         /* ignore */
       }
     }
-    this.#stopCaptureNodes();
-    // Give the server a brief window to deliver the final result before we tear
-    // the socket down; onend fires once the socket closes or the timeout hits.
-    setTimeout(() => this.#cleanup(), 1500);
+    this.#stopCapture();
+    // Completion normally arrives as the server's {type:'done'} frame (after
+    // its post-stop settle); this timer is only the fallback when it doesn't.
+    this._teardownTimer = setTimeout(() => this.#cleanup(), STOP_TEARDOWN_FALLBACK_MS);
   }
 
   // --- WebSocket ---
@@ -176,13 +154,9 @@ class VllmRealtimeRecognition {
     });
   }
 
-  #currentText() {
-    return `${this._committed} ${this._partial}`.replace(/\s+/g, ' ').trim();
-  }
-
   #emitInterim() {
     if (this.interimResults && typeof this.onresult === 'function') {
-      this.onresult({ text: this.#currentText(), isFinal: false });
+      this.onresult({ text: this._transcript.text(), isFinal: false });
     }
   }
 
@@ -193,19 +167,24 @@ class VllmRealtimeRecognition {
         break;
       case 'delta':
         // Incremental token(s) for the current utterance.
-        this._partial = `${this._partial}${msg.text || ''}`;
+        this._transcript.applyDelta(msg.text);
         this.#emitInterim();
         break;
       case 'final':
         // A completed utterance. Fold it into committed text; keep streaming.
-        this._committed = `${this._committed} ${msg.text || this._partial}`.trim();
-        this._partial = '';
+        this._transcript.applyFinal(msg.text);
         this.#emitInterim();
         // In automatic (single-utterance) mode, the first completed utterance
         // ends the session.
         if (!this.continuous) {
           this.stop();
         }
+        break;
+      case 'done':
+        // The server delivered every post-stop segment — finish now instead of
+        // waiting out the teardown fallback timer.
+        this.#finish();
+        this.#cleanup();
         break;
       case 'error':
         // Surface the backend's message and end the session so the UI leaves
@@ -219,59 +198,17 @@ class VllmRealtimeRecognition {
   }
 
   // Commit the accumulated transcription as a single final result. Guarded so it
-  // only fires once (on stop, session end, or socket close).
+  // only fires once (on done, session end, or socket close).
   #finish() {
     if (this._finalEmitted) return;
     this._finalEmitted = true;
-    const text = this.#currentText();
+    const text = this._transcript.text();
     if (text && typeof this.onresult === 'function') {
       this.onresult({ text, isFinal: true });
     }
   }
 
   // --- Audio capture ---
-  async #startCapture() {
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    // Request 16 kHz directly; browsers that honor it save us a resample step.
-    this._audioContext = new AudioContextCtor({ sampleRate: TARGET_SAMPLE_RATE });
-    if (this._audioContext.state === 'suspended') {
-      await this._audioContext.resume();
-    }
-    this._sourceNode = this._audioContext.createMediaStreamSource(this._mediaStream);
-
-    const inputRate = this._audioContext.sampleRate;
-
-    // Prefer AudioWorklet; fall back to ScriptProcessorNode if unavailable.
-    let usedWorklet = false;
-    if (this._audioContext.audioWorklet) {
-      try {
-        const blob = new Blob([WORKLET_SOURCE], { type: 'application/javascript' });
-        const moduleUrl = URL.createObjectURL(blob);
-        await this._audioContext.audioWorklet.addModule(moduleUrl);
-        URL.revokeObjectURL(moduleUrl);
-        this._workletNode = new AudioWorkletNode(this._audioContext, 'pcm-capture-processor');
-        this._workletNode.port.onmessage = evt => this.#onAudioFrame(evt.data, inputRate);
-        this._sourceNode.connect(this._workletNode);
-        // Worklet needs a sink to keep the graph pulling audio.
-        this._workletNode.connect(this._audioContext.destination);
-        usedWorklet = true;
-      } catch (err) {
-        console.warn('AudioWorklet unavailable, falling back to ScriptProcessor:', err);
-      }
-    }
-
-    if (!usedWorklet) {
-      const node = this._audioContext.createScriptProcessor(4096, 1, 1);
-      node.onaudioprocess = e => {
-        const input = e.inputBuffer.getChannelData(0);
-        this.#onAudioFrame(new Float32Array(input), inputRate);
-      };
-      this._sourceNode.connect(node);
-      node.connect(this._audioContext.destination);
-      this._scriptNode = node;
-    }
-  }
-
   #onAudioFrame(float32, inputRate) {
     if (this._stopped) return;
 
@@ -302,22 +239,16 @@ class VllmRealtimeRecognition {
     }
   }
 
-  #stopCaptureNodes() {
-    try {
-      if (this._workletNode) {
-        this._workletNode.port.onmessage = null;
-        this._workletNode.disconnect();
-      }
-      if (this._scriptNode) {
-        this._scriptNode.onaudioprocess = null;
-        this._scriptNode.disconnect();
-      }
-      if (this._sourceNode) this._sourceNode.disconnect();
-    } catch {
-      /* ignore */
+  // Stop capturing immediately (mic indicator off) while the socket may live on
+  // briefly to deliver the final transcription.
+  #stopCapture() {
+    if (this._pipeline) {
+      this._pipeline.stop();
+      this._pipeline = null;
     }
     if (this._mediaStream) {
       this._mediaStream.getTracks().forEach(track => track.stop());
+      this._mediaStream = null;
     }
   }
 
@@ -326,11 +257,11 @@ class VllmRealtimeRecognition {
       clearTimeout(this._silenceTimer);
       this._silenceTimer = null;
     }
-    this.#stopCaptureNodes();
-    if (this._audioContext && this._audioContext.state !== 'closed') {
-      this._audioContext.close().catch(() => {});
+    if (this._teardownTimer) {
+      clearTimeout(this._teardownTimer);
+      this._teardownTimer = null;
     }
-    this._audioContext = null;
+    this.#stopCapture();
     if (this._ws && this._ws.readyState <= WebSocket.OPEN) {
       try {
         this._ws.close();
@@ -355,35 +286,6 @@ function computeRms(samples) {
   let sum = 0;
   for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
   return Math.sqrt(sum / samples.length);
-}
-
-/**
- * Linear-interpolation downsample from `inputRate` to 16 kHz.
- * Per-chunk resampling; boundary artifacts are negligible for speech recognition.
- */
-function downsample(samples, inputRate) {
-  if (inputRate === TARGET_SAMPLE_RATE) return samples;
-  const ratio = inputRate / TARGET_SAMPLE_RATE;
-  const outLength = Math.floor(samples.length / ratio);
-  const out = new Float32Array(outLength);
-  for (let i = 0; i < outLength; i++) {
-    const srcPos = i * ratio;
-    const idx = Math.floor(srcPos);
-    const frac = srcPos - idx;
-    const a = samples[idx] || 0;
-    const b = samples[idx + 1] !== undefined ? samples[idx + 1] : a;
-    out[i] = a + (b - a) * frac;
-  }
-  return out;
-}
-
-function floatTo16BitPCM(input) {
-  const out = new Int16Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return out;
 }
 
 export default VllmRealtimeRecognition;

@@ -11,7 +11,7 @@
  * @module tools/workflowRunner
  */
 
-import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish } from '../services/workflow/chatBridge.js';
 import { actionTracker } from '../actionTracker.js';
@@ -237,7 +237,7 @@ export default async function workflowRunner(params = {}) {
   }
 
   // 4. Start workflow
-  const engine = new WorkflowEngine();
+  const engine = getWorkflowEngine();
   let state;
   try {
     state = await engine.start(workflow, initialData, { user, checkpointOnNode: true });

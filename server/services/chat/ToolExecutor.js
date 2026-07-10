@@ -12,6 +12,12 @@ import StreamingHandler from './StreamingHandler.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
+import {
+  mergeUsage,
+  beginLLMCallTelemetry,
+  recordLLMCallCompletion,
+  finalizeLLMCallTelemetry
+} from './llmCallTelemetry.js';
 
 /**
  * Maximum number of clarification requests allowed per conversation
@@ -894,156 +900,197 @@ class ToolExecutor {
     };
     setupTimeout();
 
+    let telemetryCtx;
+    let assistantContent = '';
+    const collectedToolCalls = [];
+    let finishReason = null;
+    let done = false;
+    let accumulatedUsage = null;
+    let llmCallError = null;
+
     try {
-      const llmResponse = await throttledFetch(model.id, request.url, {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify(request.body),
-        signal: controller.signal
+      telemetryCtx = await beginLLMCallTelemetry({
+        request,
+        chatId,
+        buildLogData,
+        model,
+        llmMessages
       });
 
-      clearTimeout(timeoutId);
-
-      if (!llmResponse.ok) {
-        const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-          llmResponse,
-          model,
-          clientLanguage
-        );
-
-        throw Object.assign(new Error(errorInfo.message), {
-          code: errorInfo.code,
-          details: errorInfo.details
+      try {
+        const llmResponse = await throttledFetch(model.id, request.url, {
+          method: 'POST',
+          headers: request.headers,
+          body: JSON.stringify(request.body),
+          signal: controller.signal
         });
-      }
 
-      // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-      const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-      const reader = readableStream.getReader();
-      const decoder = new TextDecoder();
-      const events = [];
-      const parser = createParser({ onEvent: e => events.push(e) });
+        clearTimeout(timeoutId);
 
-      let assistantContent = '';
-      const collectedToolCalls = [];
-      let finishReason = null;
-      let done = false;
+        if (!llmResponse.ok) {
+          const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
+            llmResponse,
+            model,
+            clientLanguage
+          );
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        if (readerDone || !activeRequests.has(chatId)) {
-          if (!activeRequests.has(chatId)) reader.cancel();
-          break;
+          throw Object.assign(new Error(errorInfo.message), {
+            code: errorInfo.code,
+            details: errorInfo.details
+          });
         }
 
-        const chunk = decoder.decode(value, { stream: true });
-        parser.feed(chunk);
+        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
+        const reader = readableStream.getReader();
+        const decoder = new TextDecoder();
+        const events = [];
+        const parser = createParser({ onEvent: e => events.push(e) });
 
-        while (events.length > 0) {
-          const evt = events.shift();
-          const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-          if (result.error) {
-            throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-              code: 'PROCESSING_ERROR'
-            });
-          }
-
-          // logger.info(`Result for chat ID ${chatId}:`, result);
-          if (result.content?.length > 0) {
-            for (const text of result.content) {
-              assistantContent += text;
-              actionTracker.trackChunk(chatId, { content: text });
-            }
-          }
-
-          // Process images (important for image generation with tools like google_search)
-          this.streamingHandler.processImages(result, chatId);
-
-          // Process thinking content
-          this.streamingHandler.processThinking(result, chatId);
-
-          // Process grounding metadata (for Google Search grounding)
-          this.streamingHandler.processGroundingMetadata(result, chatId);
-
-          // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
-          if (result.tool_calls?.length > 0) {
-            result.tool_calls.forEach(call => {
-              let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-              if (existingCall) {
-                // Merge properties into the existing tool call
-                if (call.id) existingCall.id = call.id;
-                if (call.type) existingCall.type = call.type;
-                // Preserve metadata (critical for thoughtSignature in Gemini 3)
-                if (call.metadata) existingCall.metadata = call.metadata;
-                if (call.function) {
-                  if (call.function.name) existingCall.function.name = call.function.name;
-
-                  // Handle arguments accumulation for streaming
-                  let callArgs = call.function.arguments;
-                  if (call.arguments && call.arguments.__raw_arguments) {
-                    callArgs = call.arguments.__raw_arguments;
-                  }
-                  if (callArgs) {
-                    // Smart concatenation: avoid empty {} + real args pattern
-                    const existing = existingCall.function.arguments;
-                    if (!existing || existing === '{}' || existing.trim() === '') {
-                      // If existing is empty or just {}, replace it entirely
-                      existingCall.function.arguments = callArgs;
-                    } else if (callArgs !== '{}' && callArgs.trim() !== '') {
-                      // Only concatenate if new args aren't empty
-                      existingCall.function.arguments += callArgs;
-                    }
-                  }
-                }
-              } else if (call.index !== undefined) {
-                // Create a new tool call if it doesn't exist
-                let initialArgs = call.function?.arguments || '';
-                if (call.arguments && call.arguments.__raw_arguments) {
-                  initialArgs = call.arguments.__raw_arguments;
-                }
-
-                // Clean up initial args - avoid starting with empty {}
-                if (initialArgs === '{}' || initialArgs.trim() === '') {
-                  initialArgs = '';
-                }
-
-                collectedToolCalls.push({
-                  index: call.index,
-                  id: call.id || null,
-                  type: call.type || 'function',
-                  metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
-                  function: {
-                    name: call.function?.name || '',
-                    arguments: initialArgs
-                  }
-                });
-              }
-            });
-          }
-
-          // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
-          if (result.finishReason) {
-            finishReason = result.finishReason;
-          }
-
-          // logger.info(
-          //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
-          //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-          // );
-          if (result.complete) {
-            done = true;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          if (readerDone || !activeRequests.has(chatId)) {
+            if (!activeRequests.has(chatId)) reader.cancel();
             break;
           }
-        }
-      }
 
-      // Whether the stream finished naturally, was superseded by a newer
-      // request on this chatId, or the reader was cancelled mid-flight,
-      // discard any leftover tool-call accumulation state so it can't be
-      // finalized by a future, unrelated stream reusing this chatId.
-      clearStreamingState(model.provider, chatId);
+          const chunk = decoder.decode(value, { stream: true });
+          parser.feed(chunk);
+
+          while (events.length > 0) {
+            const evt = events.shift();
+            const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
+
+            if (result.error) {
+              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+                code: 'PROCESSING_ERROR'
+              });
+            }
+
+            // Usage may arrive either at the top level or under metadata.usage
+            // depending on which converter emitted it.
+            if (result.usage) {
+              accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+            }
+            if (result.metadata?.usage) {
+              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+            }
+
+            // logger.info(`Result for chat ID ${chatId}:`, result);
+            if (result.content?.length > 0) {
+              for (const text of result.content) {
+                assistantContent += text;
+                actionTracker.trackChunk(chatId, { content: text });
+              }
+            }
+
+            // Process images (important for image generation with tools like google_search)
+            this.streamingHandler.processImages(result, chatId);
+
+            // Process thinking content
+            this.streamingHandler.processThinking(result, chatId);
+
+            // Process grounding metadata (for Google Search grounding)
+            this.streamingHandler.processGroundingMetadata(result, chatId);
+
+            // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
+            if (result.tool_calls?.length > 0) {
+              result.tool_calls.forEach(call => {
+                let existingCall = collectedToolCalls.find(c => c.index === call.index);
+
+                if (existingCall) {
+                  // Merge properties into the existing tool call
+                  if (call.id) existingCall.id = call.id;
+                  if (call.type) existingCall.type = call.type;
+                  // Preserve metadata (critical for thoughtSignature in Gemini 3)
+                  if (call.metadata) existingCall.metadata = call.metadata;
+                  if (call.function) {
+                    if (call.function.name) existingCall.function.name = call.function.name;
+
+                    // Handle arguments accumulation for streaming
+                    let callArgs = call.function.arguments;
+                    if (call.arguments && call.arguments.__raw_arguments) {
+                      callArgs = call.arguments.__raw_arguments;
+                    }
+                    if (callArgs) {
+                      // Smart concatenation: avoid empty {} + real args pattern
+                      const existing = existingCall.function.arguments;
+                      if (!existing || existing === '{}' || existing.trim() === '') {
+                        // If existing is empty or just {}, replace it entirely
+                        existingCall.function.arguments = callArgs;
+                      } else if (callArgs !== '{}' && callArgs.trim() !== '') {
+                        // Only concatenate if new args aren't empty
+                        existingCall.function.arguments += callArgs;
+                      }
+                    }
+                  }
+                } else if (call.index !== undefined) {
+                  // Create a new tool call if it doesn't exist
+                  let initialArgs = call.function?.arguments || '';
+                  if (call.arguments && call.arguments.__raw_arguments) {
+                    initialArgs = call.arguments.__raw_arguments;
+                  }
+
+                  // Clean up initial args - avoid starting with empty {}
+                  if (initialArgs === '{}' || initialArgs.trim() === '') {
+                    initialArgs = '';
+                  }
+
+                  collectedToolCalls.push({
+                    index: call.index,
+                    id: call.id || null,
+                    type: call.type || 'function',
+                    metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
+                    function: {
+                      name: call.function?.name || '',
+                      arguments: initialArgs
+                    }
+                  });
+                }
+              });
+            }
+
+            // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
+            if (result.finishReason) {
+              finishReason = result.finishReason;
+            }
+
+            // logger.info(
+            //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
+            //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
+            // );
+            if (result.complete) {
+              done = true;
+              break;
+            }
+          }
+        }
+
+        // Whether the stream finished naturally, was superseded by a newer
+        // request on this chatId, or the reader was cancelled mid-flight,
+        // discard any leftover tool-call accumulation state so it can't be
+        // finalized by a future, unrelated stream reusing this chatId.
+        clearStreamingState(model.provider, chatId);
+
+        if (done) {
+          await recordLLMCallCompletion(telemetryCtx, {
+            model,
+            accumulatedUsage,
+            fullResponseText: assistantContent
+          });
+        }
+      } catch (innerError) {
+        llmCallError = innerError;
+        throw innerError;
+      } finally {
+        finalizeLLMCallTelemetry(telemetryCtx, {
+          model,
+          finishReason,
+          doneEmitted: done,
+          accumulatedUsage,
+          error: llmCallError
+        });
+      }
 
       if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         logger.info('No tool calls to process', {
@@ -1330,6 +1377,15 @@ class ToolExecutor {
         }
       }, DEFAULT_TIMEOUT);
 
+      let telemetryCtx;
+      let assistantContent = '';
+      const collectedToolCalls = [];
+      const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
+      let finishReason = null;
+      let done = false;
+      let accumulatedUsage = null;
+      let llmCallError = null;
+
       try {
         // Determine HTTP method and body based on adapter requirements
         const fetchOptions = {
@@ -1343,121 +1399,153 @@ class ToolExecutor {
           fetchOptions.body = JSON.stringify(followRequest.body);
         }
 
-        const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
+        telemetryCtx = await beginLLMCallTelemetry({
+          request: followRequest,
+          chatId,
+          buildLogData,
+          model,
+          llmMessages
+        });
 
-        clearTimeout(timeoutId);
+        try {
+          const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
 
-        if (!llmResponse.ok) {
-          const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-            llmResponse,
-            model,
-            clientLanguage
-          );
+          clearTimeout(timeoutId);
 
-          throw Object.assign(new Error(errorInfo.message), {
-            code: errorInfo.code,
-            details: errorInfo.details
-          });
-        }
+          if (!llmResponse.ok) {
+            const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
+              llmResponse,
+              model,
+              clientLanguage
+            );
 
-        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-        const reader = readableStream.getReader();
-        const decoder = new TextDecoder();
-        const events = [];
-        const parser = createParser({ onEvent: e => events.push(e) });
-
-        let assistantContent = '';
-        const collectedToolCalls = [];
-        const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
-        let finishReason = null;
-        let done = false;
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          if (readerDone || !activeRequests.has(chatId)) {
-            if (!activeRequests.has(chatId)) reader.cancel();
-            break;
+            throw Object.assign(new Error(errorInfo.message), {
+              code: errorInfo.code,
+              details: errorInfo.details
+            });
           }
 
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
+          // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+          const readableStream = this.streamingHandler.getReadableStream(llmResponse);
+          const reader = readableStream.getReader();
+          const decoder = new TextDecoder();
+          const events = [];
+          const parser = createParser({ onEvent: e => events.push(e) });
 
-          while (events.length > 0) {
-            const evt = events.shift();
-            const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-            if (result.error) {
-              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                code: 'PROCESSING_ERROR'
-              });
-            }
-
-            if (result.content?.length > 0) {
-              for (const text of result.content) {
-                assistantContent += text;
-                actionTracker.trackChunk(chatId, { content: text });
-              }
-            }
-
-            if (result.tool_calls?.length > 0) {
-              result.tool_calls.forEach(call => {
-                let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                if (existingCall) {
-                  if (call.id) existingCall.id = call.id;
-                  if (call.type) existingCall.type = call.type;
-                  if (call.function) {
-                    if (call.function.name) existingCall.function.name = call.function.name;
-                    if (call.function.arguments)
-                      existingCall.function.arguments += call.function.arguments;
-                  }
-                  // Merge metadata (important for Gemini thoughtSignatures)
-                  if (call.metadata) {
-                    existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
-                  }
-                } else if (call.index !== undefined) {
-                  const toolCall = {
-                    index: call.index,
-                    id: call.id || null,
-                    type: call.type || 'function',
-                    function: {
-                      name: call.function?.name || '',
-                      arguments: call.function?.arguments || ''
-                    },
-                    // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
-                    metadata: call.metadata || {}
-                  };
-                  collectedToolCalls.push(toolCall);
-                }
-              });
-            }
-
-            // Collect thoughtSignatures for Google Gemini thinking models
-            if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
-              collectedThoughtSignatures.push(...result.thoughtSignatures);
-              logger.info('Collected thoughtSignatures from response', {
-                component: 'ToolExecutor',
-                count: result.thoughtSignatures.length
-              });
-            }
-
-            if (result.finishReason) {
-              finishReason = result.finishReason;
-            }
-
-            if (result.complete) {
-              done = true;
+          while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            if (readerDone || !activeRequests.has(chatId)) {
+              if (!activeRequests.has(chatId)) reader.cancel();
               break;
             }
-          }
-        }
 
-        // Whether the stream finished naturally, was superseded by a newer
-        // request on this chatId, or the reader was cancelled mid-flight,
-        // discard any leftover tool-call accumulation state so it can't be
-        // finalized by a future, unrelated stream reusing this chatId.
-        clearStreamingState(model.provider, chatId);
+            const chunk = decoder.decode(value, { stream: true });
+            parser.feed(chunk);
+
+            while (events.length > 0) {
+              const evt = events.shift();
+              const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
+
+              if (result.error) {
+                throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+                  code: 'PROCESSING_ERROR'
+                });
+              }
+
+              // Usage may arrive either at the top level or under metadata.usage
+              // depending on which converter emitted it.
+              if (result.usage) {
+                accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+              }
+              if (result.metadata?.usage) {
+                accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+              }
+
+              if (result.content?.length > 0) {
+                for (const text of result.content) {
+                  assistantContent += text;
+                  actionTracker.trackChunk(chatId, { content: text });
+                }
+              }
+
+              if (result.tool_calls?.length > 0) {
+                result.tool_calls.forEach(call => {
+                  let existingCall = collectedToolCalls.find(c => c.index === call.index);
+
+                  if (existingCall) {
+                    if (call.id) existingCall.id = call.id;
+                    if (call.type) existingCall.type = call.type;
+                    if (call.function) {
+                      if (call.function.name) existingCall.function.name = call.function.name;
+                      if (call.function.arguments)
+                        existingCall.function.arguments += call.function.arguments;
+                    }
+                    // Merge metadata (important for Gemini thoughtSignatures)
+                    if (call.metadata) {
+                      existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
+                    }
+                  } else if (call.index !== undefined) {
+                    const toolCall = {
+                      index: call.index,
+                      id: call.id || null,
+                      type: call.type || 'function',
+                      function: {
+                        name: call.function?.name || '',
+                        arguments: call.function?.arguments || ''
+                      },
+                      // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
+                      metadata: call.metadata || {}
+                    };
+                    collectedToolCalls.push(toolCall);
+                  }
+                });
+              }
+
+              // Collect thoughtSignatures for Google Gemini thinking models
+              if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
+                collectedThoughtSignatures.push(...result.thoughtSignatures);
+                logger.info('Collected thoughtSignatures from response', {
+                  component: 'ToolExecutor',
+                  count: result.thoughtSignatures.length
+                });
+              }
+
+              if (result.finishReason) {
+                finishReason = result.finishReason;
+              }
+
+              if (result.complete) {
+                done = true;
+                break;
+              }
+            }
+          }
+
+          // Whether the stream finished naturally, was superseded by a newer
+          // request on this chatId, or the reader was cancelled mid-flight,
+          // discard any leftover tool-call accumulation state so it can't be
+          // finalized by a future, unrelated stream reusing this chatId.
+          clearStreamingState(model.provider, chatId);
+
+          if (done) {
+            await recordLLMCallCompletion(telemetryCtx, {
+              model,
+              accumulatedUsage,
+              fullResponseText: assistantContent
+            });
+          }
+        } catch (innerError) {
+          llmCallError = innerError;
+          throw innerError;
+        } finally {
+          finalizeLLMCallTelemetry(telemetryCtx, {
+            model,
+            finishReason,
+            doneEmitted: done,
+            accumulatedUsage,
+            error: llmCallError
+          });
+        }
 
         // If no tool calls, this is the final response - stream it back to client
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {

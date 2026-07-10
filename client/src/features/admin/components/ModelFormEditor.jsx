@@ -230,6 +230,8 @@ function ModelFormEditor({
     handleChange(name, type === 'checkbox' ? checked : value);
   };
 
+  const isTranscription = data.modelType === 'transcription';
+
   const providerOptions = [
     { value: 'openai', label: 'OpenAI' },
     { value: 'openai-responses', label: 'OpenAI (Responses API)' },
@@ -239,7 +241,8 @@ function ModelFormEditor({
     { value: 'local', label: 'Local' },
     { value: 'iassistant', label: 'iAssistant' },
     { value: 'iassistant-conversation', label: 'iAssistant Conversation' },
-    { value: 'bedrock', label: 'AWS Bedrock' }
+    { value: 'bedrock', label: 'AWS Bedrock' },
+    { value: 'vllm-realtime', label: 'vLLM Realtime (Transcription)' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
@@ -345,6 +348,33 @@ function ModelFormEditor({
 
                 <div className="col-span-6 sm:col-span-3">
                   <label
+                    htmlFor="modelType"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.modelType', 'Model Type')}
+                  </label>
+                  <select
+                    id="modelType"
+                    name="modelType"
+                    value={data.modelType || 'chat'}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
+                    <option value="transcription">
+                      {t('admin.models.modelType.transcription', 'Transcription')}
+                    </option>
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.models.hints.modelType',
+                      'Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label
                     htmlFor="provider"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
@@ -411,17 +441,29 @@ function ModelFormEditor({
                       {t('admin.models.fields.url')} <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="url"
+                      type={isTranscription ? 'text' : 'url'}
                       name="url"
                       id="url"
                       value={data.url || ''}
                       onChange={handleInputChange}
-                      placeholder={t('admin.models.placeholders.apiUrl')}
+                      placeholder={
+                        isTranscription
+                          ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
+                          : t('admin.models.placeholders.apiUrl')
+                      }
                       className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                         errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                       }`}
                       required
                     />
+                    {isTranscription && (
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.realtimeUrl',
+                          'WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.'
+                        )}
+                      </p>
+                    )}
                     {errors.url && (
                       <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
                     )}
@@ -499,62 +541,66 @@ function ModelFormEditor({
             </div>
             <div className="mt-5 md:mt-0 md:col-span-2">
               <div className="grid grid-cols-6 gap-6">
-                <div className="col-span-6 sm:col-span-2">
-                  <label
-                    htmlFor="contextWindow"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.models.fields.contextWindow', 'Context Window')}
-                    {isFieldRequired('contextWindow', jsonSchema) && (
-                      <span className="text-red-500"> *</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    name="contextWindow"
-                    id="contextWindow"
-                    value={data.contextWindow || ''}
-                    onChange={handleInputChange}
-                    min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.contextWindow ? 'border-red-300 text-red-900' : ''
-                    }`}
-                    required={isFieldRequired('contextWindow', jsonSchema)}
-                  />
-                  {errors.contextWindow && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {errors.contextWindow}
-                    </p>
-                  )}
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  <label
-                    htmlFor="maxOutputTokens"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
-                    {isFieldRequired('maxOutputTokens', jsonSchema) && (
-                      <span className="text-red-500"> *</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    name="maxOutputTokens"
-                    id="maxOutputTokens"
-                    value={data.maxOutputTokens || ''}
-                    onChange={handleInputChange}
-                    min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
-                    }`}
-                    required={isFieldRequired('maxOutputTokens', jsonSchema)}
-                  />
-                  {errors.maxOutputTokens && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {errors.maxOutputTokens}
-                    </p>
-                  )}
-                </div>
+                {!isTranscription && (
+                  <>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="contextWindow"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.contextWindow', 'Context Window')}
+                        {isFieldRequired('contextWindow', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="contextWindow"
+                        id="contextWindow"
+                        value={data.contextWindow || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.contextWindow ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('contextWindow', jsonSchema)}
+                      />
+                      {errors.contextWindow && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.contextWindow}
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="maxOutputTokens"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
+                        {isFieldRequired('maxOutputTokens', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="maxOutputTokens"
+                        id="maxOutputTokens"
+                        value={data.maxOutputTokens || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('maxOutputTokens', jsonSchema)}
+                      />
+                      {errors.maxOutputTokens && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.maxOutputTokens}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 <div className="col-span-6 sm:col-span-2">
                   <label

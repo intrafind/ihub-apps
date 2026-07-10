@@ -31,7 +31,11 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
         storedData ? `${storedData.length} bytes` : 'null'
       );
 
-      const messages = storedData ? JSON.parse(storedData) : [];
+      const stored = storedData ? JSON.parse(storedData) : [];
+      // No message can legitimately still be streaming across a page load —
+      // normalize stale loading flags (e.g. a transcription or LLM stream that
+      // was interrupted by the reload) so nothing spins forever.
+      const messages = stored.map(m => (m?.loading ? { ...m, loading: false } : m));
 
       // Debug logging for loaded images
       const messagesWithImages = messages.filter(m => m.images && m.images.length > 0);
