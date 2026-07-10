@@ -1,83 +1,109 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminBreadcrumb from '../components/AdminBreadcrumb';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
+import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
+import AdminEditPageShell, {
+  AdminSaveCancelButtons
+} from '../../../shared/components/AdminEditPageShell';
+
+// Generate a unique ID for new users
+const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
 
 function AdminUserEditPage() {
   const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
 
   const isNewUser = userId === 'new';
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, user);
+  const makeDefault = useCallback(
+    () => ({
+      id: generateUserId(),
+      username: '',
+      email: null,
+      fullName: '',
+      name: '',
+      password: '',
+      internalGroups: [],
+      authMethods: ['local'],
+      enabled: true,
+      active: true
+    }),
+    []
+  );
 
-  // Generate a unique ID for new users
-  const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
+  const loadResource = useCallback(async id => {
+    const response = await makeAdminApiCall('/admin/auth/users');
+    const data = response.data;
+
+    // Find the user by ID in the users object
+    const userData = Object.values(data.users || {}).find(u => u.id === id);
+    if (!userData) {
+      throw new Error('User not found');
+    }
+
+    return { ...userData, password: '' };
+  }, []);
+
+  const saveResource = useCallback(async (data, id) => {
+    const method = id === 'new' ? 'POST' : 'PUT';
+    const url = id === 'new' ? '/admin/auth/users' : `/admin/auth/users/${id}`;
+
+    // Check if this is a local auth user (needs password)
+    const isLocalAuth =
+      !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
+
+    // Prepare the data for API call
+    const apiData = {
+      username: data.username,
+      email: data.email || null,
+      name: data.fullName || data.name || '',
+      // Use internalGroups, with fallback to groups for backward compatibility
+      internalGroups: data.internalGroups || data.groups || [],
+      active: data.enabled !== false,
+      authMethods: data.authMethods || ['local']
+    };
+
+    // Only include password if it's provided
+    if (data.password) {
+      apiData.password = data.password;
+    }
+
+    // For new local auth users, ensure password is provided
+    if (id === 'new' && isLocalAuth && !data.password) {
+      throw new Error('Password is required for local authentication users');
+    }
+
+    await makeAdminApiCall(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: apiData
+    });
+  }, []);
+
+  const {
+    data: user,
+    setData: setUser,
+    loading,
+    error,
+    setError,
+    save,
+    blocker
+  } = useAdminResourceEditor({ resourceId: userId, loadResource, makeDefault, saveResource });
 
   useEffect(() => {
     loadSchema();
     loadGroups();
-
-    if (isNewUser) {
-      // Initialize new user with generated ID
-      const defaultUser = {
-        id: generateUserId(),
-        username: '',
-        email: null,
-        fullName: '',
-        name: '',
-        password: '',
-        internalGroups: [],
-        authMethods: ['local'],
-        enabled: true,
-        active: true
-      };
-      setUser(defaultUser);
-      setInitialData(defaultUser);
-      setLoading(false);
-      setError(null); // Clear any previous errors
-    } else {
-      // Call loadUser directly for existing users
-      const loadExistingUser = async () => {
-        try {
-          setLoading(true);
-          const response = await makeAdminApiCall('/admin/auth/users');
-          const data = response.data;
-
-          // Find the user by ID in the users object
-          const userData = Object.values(data.users || {}).find(u => u.id === userId);
-          if (!userData) {
-            throw new Error('User not found');
-          }
-
-          const loadedUser = { ...userData, password: '' };
-          setUser(loadedUser);
-          setInitialData(loadedUser);
-        } catch (err) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-      loadExistingUser();
-    }
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [userId]);
 
   const loadSchema = async () => {
@@ -109,43 +135,7 @@ function AdminUserEditPage() {
 
     try {
       setSaving(true);
-      const method = isNewUser ? 'POST' : 'PUT';
-      const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
-
-      // Check if this is a local auth user (needs password)
-      const isLocalAuth =
-        !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
-
-      // Prepare the data for API call
-      const apiData = {
-        username: data.username,
-        email: data.email || null,
-        name: data.fullName || data.name || '',
-        // Use internalGroups, with fallback to groups for backward compatibility
-        internalGroups: data.internalGroups || data.groups || [],
-        active: data.enabled !== false,
-        authMethods: data.authMethods || ['local']
-      };
-
-      // Only include password if it's provided
-      if (data.password) {
-        apiData.password = data.password;
-      }
-
-      // For new local auth users, ensure password is provided
-      if (isNewUser && isLocalAuth && !data.password) {
-        throw new Error('Password is required for local authentication users');
-      }
-
-      await makeAdminApiCall(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: apiData
-      });
-
-      markSaved();
+      await save();
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
@@ -164,14 +154,6 @@ function AdminUserEditPage() {
     e.preventDefault();
     await handleSave(user);
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -192,119 +174,92 @@ function AdminUserEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminBreadcrumb
-          crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Users', href: '/admin/users' },
-            { label: isNewUser ? 'New User' : (user?.username ?? userId) }
-          ]}
-        />
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {isNewUser
-                  ? t('admin.users.edit.createTitle', 'Create New User')
-                  : t('admin.users.edit.editTitle', 'Edit User')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {isNewUser
-                  ? t(
-                      'admin.users.edit.createDesc',
-                      'Create a new user account with permissions and settings'
-                    )
-                  : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              {!isNewUser && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(user, null, 2);
-                    const dataUri =
-                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `user-${user.username}.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="download" className="h-4 w-4 mr-2" />
-                  {t('common.download')}
-                </button>
-              )}
+    <AdminEditPageShell
+      loading={loading}
+      outerClassName="min-h-screen bg-gray-50 dark:bg-gray-900"
+      breadcrumbs={[
+        { label: 'Admin', href: '/admin' },
+        { label: 'Users', href: '/admin/users' },
+        { label: isNewUser ? 'New User' : (user?.username ?? userId) }
+      ]}
+      blocker={blocker}
+    >
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {isNewUser
+                ? t('admin.users.edit.createTitle', 'Create New User')
+                : t('admin.users.edit.editTitle', 'Edit User')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {isNewUser
+                ? t(
+                    'admin.users.edit.createDesc',
+                    'Create a new user account with permissions and settings'
+                  )
+                : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
+            </p>
+          </div>
+          <div className="flex space-x-3">
+            {!isNewUser && (
               <button
-                onClick={() => navigate('/admin/users')}
+                type="button"
+                onClick={() => {
+                  const dataStr = JSON.stringify(user, null, 2);
+                  const dataUri =
+                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                  const exportFileDefaultName = `user-${user.username}.json`;
+                  const linkElement = document.createElement('a');
+                  linkElement.setAttribute('href', dataUri);
+                  linkElement.setAttribute('download', exportFileDefaultName);
+                  linkElement.click();
+                }}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('admin.users.edit.backToList', 'Back to Users')}
+                <Icon name="download" className="h-4 w-4 mr-2" />
+                {t('common.download')}
               </button>
-            </div>
+            )}
+            <button
+              onClick={() => navigate('/admin/users')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+              {t('admin.users.edit.backToList', 'Back to Users')}
+            </button>
           </div>
         </div>
-
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={user}
-            onChange={handleDataChange}
-            formComponent={UserFormEditor}
-            formProps={{
-              isNewUser,
-              jsonSchema,
-              availableGroups
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              isNewUser
-                ? t('admin.users.edit.createTitle', 'Create New User')
-                : t('admin.users.edit.editTitle', 'Edit User')
-            }
-          />
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/users')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.users.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.users.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
-              )}
-            </button>
-          </div>
-        </form>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
-    </div>
+      <form onSubmit={handleFormSubmit} className="space-y-8">
+        <DualModeEditor
+          value={user}
+          onChange={handleDataChange}
+          formComponent={UserFormEditor}
+          formProps={{
+            isNewUser,
+            jsonSchema,
+            availableGroups
+          }}
+          jsonSchema={jsonSchema}
+          title={
+            isNewUser
+              ? t('admin.users.edit.createTitle', 'Create New User')
+              : t('admin.users.edit.editTitle', 'Edit User')
+          }
+        />
+
+        {/* Save buttons */}
+        <AdminSaveCancelButtons
+          onCancel={() => navigate('/admin/users')}
+          cancelLabel={t('admin.users.edit.cancel', 'Cancel')}
+          saving={saving}
+          saveLabel={t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')}
+          savingLabel={t('admin.users.edit.saving', 'Saving...')}
+        />
+      </form>
+    </AdminEditPageShell>
   );
 }
 
