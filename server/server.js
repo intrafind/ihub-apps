@@ -625,7 +625,7 @@ if (cluster.isPrimary && workerCount > 1) {
   //      A non-owner worker must not sweep — it would clobber the owner's runs.
   //   4. Register schedule/webhook triggers.
   try {
-    const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
+    const { loadWorkflows } = await import('./routes/workflow/workflowRouteHelpers.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
     const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
     const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');

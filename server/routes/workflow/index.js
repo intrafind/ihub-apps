@@ -17,7 +17,7 @@ export {
   loadWorkflows,
   findWorkflowFile,
   validateWorkflow
-} from './workflowRoutes.js';
+} from './workflowRouteHelpers.js';
 
 // Default export for compatibility with server.js
 export default registerWorkflowRoutes;
