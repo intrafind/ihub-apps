@@ -1,7 +1,6 @@
 import { readFileSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -51,8 +50,7 @@ export default function registerAdminPagesRoutes(app) {
         return sendNotFound(res, 'Page');
       }
       const content = {};
-      const rootDir = getRootDir();
-      const contentsBase = join(rootDir, 'contents');
+      const contentsBase = getContentsPath();
       for (const [lang, relPath] of Object.entries(page.filePath || {})) {
         try {
           // Validate stored path stays within contents directory
@@ -102,8 +100,7 @@ export default function registerAdminPagesRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
+      const uiPath = getContentsPath('config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       uiConfig.pages = uiConfig.pages || {};
       if (uiConfig.pages[id]) {
@@ -120,10 +117,10 @@ export default function registerAdminPagesRoutes(app) {
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
-        const dir = join(rootDir, 'contents', 'pages', lang);
+        const dir = getContentsPath('pages', lang);
         await fs.mkdir(dir, { recursive: true });
         const rel = `pages/${lang}/${id}.${fileExtension}`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
+        await atomicWriteFile(getContentsPath(rel), contentText);
         uiConfig.pages[id].filePath[lang] = rel;
       }
       await atomicWriteJSON(uiPath, uiConfig);
@@ -154,8 +151,7 @@ export default function registerAdminPagesRoutes(app) {
       if (!id || id !== pageId) {
         return sendBadRequest(res, 'Invalid page ID');
       }
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
+      const uiPath = getContentsPath('config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
@@ -176,10 +172,10 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.filePath = pageEntry.filePath || {};
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
-        const dir = join(rootDir, 'contents', 'pages', lang);
+        const dir = getContentsPath('pages', lang);
         await fs.mkdir(dir, { recursive: true });
         const rel = pageEntry.filePath[lang] || `pages/${lang}/${pageId}.${fileExtension}`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
+        await atomicWriteFile(getContentsPath(rel), contentText);
         pageEntry.filePath[lang] = rel;
       }
       await atomicWriteJSON(uiPath, uiConfig);
@@ -199,14 +195,13 @@ export default function registerAdminPagesRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
+      const uiPath = getContentsPath('config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
         return sendNotFound(res, 'Page');
       }
-      const contentsBase = join(rootDir, 'contents');
+      const contentsBase = getContentsPath();
       for (const rel of Object.values(pageEntry.filePath || {})) {
         try {
           // Validate stored path stays within contents directory

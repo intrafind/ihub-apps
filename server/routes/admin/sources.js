@@ -1,6 +1,5 @@
 import crypto from 'crypto';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
@@ -2026,7 +2025,7 @@ export default function registerAdminSourcesRoutes(app) {
  * @param {Array} sources - Array of source configurations
  */
 async function saveSourcesConfig(sources) {
-  const sourcesPath = join(getRootDir(), 'contents', 'config', 'sources.json');
+  const sourcesPath = getContentsPath('config', 'sources.json');
 
   // Validate entire array
   const validation = validateSourcesArray(sources);

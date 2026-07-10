@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { httpFetch } from '../utils/httpConfig.js';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -61,8 +61,7 @@ async function testApiKey(providerId, apiKey) {
  * Mark setup as completed by setting setup.configured = true in platform.json.
  */
 async function markSetupConfigured() {
-  const rootDir = getRootDir();
-  const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
+  const platformPath = getContentsPath('config', 'platform.json');
   const raw = await fs.readFile(platformPath, 'utf8');
   const platform = JSON.parse(raw);
   platform.setup = { ...(platform.setup || {}), configured: true };
@@ -167,8 +166,7 @@ export default function registerSetupRoutes(app) {
         enabled: true
       };
 
-      const rootDir = getRootDir();
-      const providersDir = join(rootDir, 'contents', 'config');
+      const providersDir = getContentsPath('config');
       const providersPath = join(providersDir, 'providers.json');
 
       await fs.mkdir(providersDir, { recursive: true });

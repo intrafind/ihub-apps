@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { randomUUID } from 'crypto';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';
 import { getContext } from '../utils/requestContext.js';
@@ -150,7 +150,7 @@ export async function flushAuditLog() {
   // thereby duplicate — entries that already landed on disk.
   for (const [date, entries] of byDate) {
     try {
-      const filePath = join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${date}.jsonl`);
+      const filePath = getContentsPath(AUDIT_LOG_DIR, `${date}.jsonl`);
       await fs.mkdir(dirname(filePath), { recursive: true });
       const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
       await fs.appendFile(filePath, lines, 'utf8');
@@ -319,7 +319,7 @@ export async function queryAuditLog({
   const fromDate =
     from || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+  const auditDir = getContentsPath(AUDIT_LOG_DIR);
 
   // Collect all matching JSONL files
   let files;
@@ -400,7 +400,7 @@ export async function cleanupAuditLog(retentionDays) {
     return { deleted: [], retainedFrom: null };
   }
 
-  const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+  const auditDir = getContentsPath(AUDIT_LOG_DIR);
   let files;
   try {
     files = await fs.readdir(auditDir);

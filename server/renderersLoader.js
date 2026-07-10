@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { getRootDir } from './pathUtils.js';
+import { getRootDir, getContentsPath } from './pathUtils.js';
 import logger from './utils/logger.js';
 
 /**
@@ -97,7 +97,7 @@ export async function loadAllRenderers(verbose = true) {
   const defaultRenderers = await loadRenderersFromDirectory(defaultsPath, 'defaults', verbose);
 
   // Load from contents directory (create if doesn't exist)
-  const contentsPath = join(rootDir, 'contents', 'renderers');
+  const contentsPath = getContentsPath('renderers');
 
   // Ensure contents/renderers directory exists
   if (!existsSync(contentsPath)) {

@@ -18,7 +18,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -27,7 +27,7 @@ import { INBOX_ID_PATTERN } from '../../validators/agentInboxSchema.js';
 const INBOX_DIR = 'data/agent-inboxes';
 
 function inboxBaseDir() {
-  return path.join(getRootDir(), 'contents', INBOX_DIR);
+  return getContentsPath(INBOX_DIR);
 }
 
 // Validate inboxId with a strict regex, run through path.basename (a
@@ -79,7 +79,7 @@ function parseChecklistLine(line) {
 }
 
 export async function listInboxes() {
-  const dir = path.join(getRootDir(), 'contents', INBOX_DIR);
+  const dir = inboxBaseDir();
   try {
     const entries = await fs.readdir(dir);
     const inboxes = [];

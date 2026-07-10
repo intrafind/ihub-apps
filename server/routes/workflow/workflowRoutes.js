@@ -20,7 +20,7 @@ import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import {
   isValidWorkflowVersion,
   validateIdForPath,
@@ -174,8 +174,7 @@ function buildModelsList(workflow) {
  * @returns {Promise<Object[]>} Array of workflow definitions
  */
 async function loadWorkflows(includeDisabled = false) {
-  const rootDir = getRootDir();
-  const workflowsDir = join(rootDir, 'contents', 'workflows');
+  const workflowsDir = getContentsPath('workflows');
 
   try {
     // Create directory if it doesn't exist
@@ -561,8 +560,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Check if workflow already exists
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         await fs.mkdir(workflowsDir, { recursive: true });
 
         const existingFile = await findWorkflowFile(workflowData.id, workflowsDir);
@@ -661,8 +659,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find existing workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         const filename = await findWorkflowFile(id, workflowsDir);
 
         if (!filename) {
@@ -738,8 +735,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         const filename = await findWorkflowFile(id, workflowsDir);
 
         if (!filename) {
@@ -1982,8 +1978,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         const filename = await findWorkflowFile(id, workflowsDir);
 
         if (!filename) {
@@ -2191,8 +2186,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         const historyRoot = join(workflowsDir, '.history');
         // Defense-in-depth: resolve the per-workflow history dir and
         // assert it stays inside .history. validateIdForPath already
@@ -2292,8 +2286,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
 
         // Load current workflow
         const filename = await findWorkflowFile(id, workflowsDir);
@@ -2405,8 +2398,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
+        const workflowsDir = getContentsPath('workflows');
         const historyRoot = join(workflowsDir, '.history');
         const historyDir = await resolveAndValidatePath(id, historyRoot);
         if (!historyDir) {

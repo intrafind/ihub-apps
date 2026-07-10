@@ -11,7 +11,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { createSseEmitter } from '../../utils/sseEmitter.js';
@@ -71,7 +71,7 @@ async function resolveRunDir(rawRunId) {
   if (safeRunId !== rawRunId) {
     throw new Error(`writeArtifact: invalid runId: ${rawRunId}`);
   }
-  const artifactsRoot = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
+  const artifactsRoot = getContentsPath('data', 'agent-artifacts');
   await fs.mkdir(artifactsRoot, { recursive: true });
   const dir = await resolveAndValidatePath(safeRunId, artifactsRoot);
   if (!dir) {

@@ -9,13 +9,9 @@ import {
 import mcpClientManager from '../../services/mcp/McpClientManager.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { getContentsPath } from '../../pathUtils.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const MCP_FILE_PATH = path.join(__dirname, '../../../contents/config/mcpServers.json');
+const MCP_FILE_PATH = getContentsPath('config', 'mcpServers.json');
 
 async function readConfig() {
   const { data } = configCache.getMcpServers();

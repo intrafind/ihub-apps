@@ -4,7 +4,7 @@ import SwaggerParser from '@apidevtools/swagger-parser';
 // js-yaml v5 is ESM-only with named exports — a default import throws
 // "does not provide an export named 'default'" at module load time.
 import { load as parseYaml, JSON_SCHEMA } from 'js-yaml';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { safeFetch } from '../mcp/safeFetch.js';
 import { throttledRun } from '../../requestThrottler.js';
 import credentialService from '../CredentialService.js';
@@ -72,8 +72,7 @@ async function _parseSource(source, ssrfOpts) {
     return parseOpenApiText(text);
   }
   if (source.type === 'file') {
-    const root = getRootDir();
-    const contentsDir = normalize(join(root, 'contents'));
+    const contentsDir = normalize(getContentsPath());
     const resolved = normalize(join(contentsDir, source.path));
     // Confine to contentsDir. The trailing-separator check prevents a sibling
     // like `/.../contents2` from passing a naive startsWith(`/.../contents`).

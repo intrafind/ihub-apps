@@ -35,7 +35,8 @@ const mockGroups = {
 const state = { rootDir: null, tools: [] };
 
 jest.unstable_mockModule('../pathUtils.js', () => ({
-  getRootDir: () => state.rootDir
+  getRootDir: () => state.rootDir,
+  getContentsPath: (...segments) => path.join(state.rootDir, 'contents', ...segments)
 }));
 
 jest.unstable_mockModule('../toolsLoader.js', () => ({

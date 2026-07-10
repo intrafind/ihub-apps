@@ -11,8 +11,7 @@ import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 // Accept the platform.json shape exactly: false (off), true (mask),
@@ -200,9 +199,7 @@ export default function registerAdminAuditLogRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
+      const platformPath = getContentsPath('config', 'platform.json');
 
       const platformContent = await fs.readFile(platformPath, 'utf8');
       const platformConfig = JSON.parse(platformContent);

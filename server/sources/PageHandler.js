@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import SourceHandler from './SourceHandler.js';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import { isValidId, isValidLanguageCode } from '../utils/pathSecurity.js';
 
 /**
@@ -14,7 +14,7 @@ import { isValidId, isValidLanguageCode } from '../utils/pathSecurity.js';
 class PageHandler extends SourceHandler {
   constructor(config = {}) {
     super(config);
-    this.pagesBasePath = config.pagesBasePath || path.join(getRootDir(), 'contents', 'pages');
+    this.pagesBasePath = config.pagesBasePath || getContentsPath('pages');
     this.defaultLanguage = config.defaultLanguage || 'en';
     this.baseUrl = config.baseUrl || process.env.BASE_URL || '';
   }

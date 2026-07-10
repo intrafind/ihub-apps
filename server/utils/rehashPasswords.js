@@ -1,10 +1,6 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import logger from './logger.js';
 import { hashPasswordWithUserId, loadUsers, saveUsers } from './userManager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getContentsPath } from '../pathUtils.js';
 
 function parseKnownPasswords() {
   const arg = process.argv.find(value => value.startsWith('--passwords='));
@@ -28,7 +24,7 @@ function parseKnownPasswords() {
  * Rehash existing user passwords with the new method
  */
 async function rehashUserPasswords() {
-  const usersFilePath = path.join(__dirname, '../../contents/config/users.json');
+  const usersFilePath = getContentsPath('config', 'users.json');
 
   try {
     const usersData = loadUsers(usersFilePath);

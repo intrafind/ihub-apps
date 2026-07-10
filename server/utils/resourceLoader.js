@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../pathUtils.js';
 import logger from './logger.js';
 
 /**
@@ -45,8 +45,7 @@ export function createResourceLoader({
    * @returns {Array} Array of resource objects
    */
   async function loadFromFiles(verbose = true) {
-    const rootDir = getRootDir();
-    const resourceDir = join(rootDir, 'contents', individualPath);
+    const resourceDir = getContentsPath(individualPath);
 
     if (!existsSync(resourceDir)) {
       if (verbose) {
@@ -133,8 +132,7 @@ export function createResourceLoader({
    * @returns {Array} Array of resource objects
    */
   async function loadFromLegacyFile(verbose = true) {
-    const rootDir = getRootDir();
-    const legacyFilePath = join(rootDir, 'contents', legacyPath);
+    const legacyFilePath = getContentsPath(legacyPath);
 
     if (!existsSync(legacyFilePath)) {
       if (verbose) {

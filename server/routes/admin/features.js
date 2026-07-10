@@ -1,8 +1,7 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
@@ -85,8 +84,7 @@ export default function registerAdminFeaturesRoutes(app) {
       }
 
       // Read existing features.json
-      const rootDir = getRootDir();
-      const featuresPath = join(rootDir, 'contents', 'config', 'features.json');
+      const featuresPath = getContentsPath('config', 'features.json');
 
       let existing = {};
       try {

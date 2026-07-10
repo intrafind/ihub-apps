@@ -3,8 +3,6 @@ import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import archiver from 'archiver';
 import yauzl from 'yauzl';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -13,12 +11,10 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { getContentsPath } from '../../pathUtils.js';
 
 // Define the contents directory path
-const contentsPath = path.join(__dirname, '../../../contents');
+const contentsPath = getContentsPath();
 
 /**
  * Get all files recursively from a directory

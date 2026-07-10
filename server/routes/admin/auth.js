@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
@@ -252,8 +251,7 @@ export default function registerAdminAuthRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+      const usersFilePath = getContentsPath('config', 'users.json');
 
       let usersData = { users: {}, metadata: {} };
       try {
@@ -370,8 +368,7 @@ export default function registerAdminAuthRoutes(app) {
         return sendBadRequest(res, 'Password must be at least 6 characters long');
       }
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+      const usersFilePath = getContentsPath('config', 'users.json');
 
       // Load existing users
       let usersData = { users: {}, metadata: {} };
@@ -525,8 +522,7 @@ export default function registerAdminAuthRoutes(app) {
 
       const { email, name, password, internalGroups, active } = req.body;
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+      const usersFilePath = getContentsPath('config', 'users.json');
 
       // Load existing users
       let usersData = { users: {}, metadata: {} };
@@ -638,8 +634,7 @@ export default function registerAdminAuthRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+      const usersFilePath = getContentsPath('config', 'users.json');
 
       // Load existing users
       let usersData = { users: {}, metadata: {} };

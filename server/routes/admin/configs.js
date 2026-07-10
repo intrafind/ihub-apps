@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -172,8 +171,7 @@ export default function registerAdminConfigRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+      const platformConfigPath = getContentsPath('config', 'platform.json');
 
       let platformConfig = {};
       try {
@@ -285,8 +283,7 @@ export default function registerAdminConfigRoutes(app) {
         return sendBadRequest(res, 'Invalid configuration data');
       }
 
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+      const platformConfigPath = getContentsPath('config', 'platform.json');
 
       // Load existing config to preserve other fields and track changes
       let existingConfig = {};
