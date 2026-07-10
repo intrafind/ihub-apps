@@ -35,6 +35,22 @@ describe('mcp/safeFetch isPrivateIp', () => {
     expect(isPrivateIp('172.32.0.1')).toBe(false); // just outside 172.16/12
     expect(isPrivateIp('192.169.0.1')).toBe(false);
   });
+
+  it('matches CGNAT / shared address space (100.64.0.0/10)', () => {
+    expect(isPrivateIp('100.64.0.1')).toBe(true);
+    expect(isPrivateIp('100.127.255.255')).toBe(true);
+    expect(isPrivateIp('100.63.255.255')).toBe(false);
+  });
+
+  it('matches multicast and reserved ranges (224/4+)', () => {
+    expect(isPrivateIp('224.0.0.1')).toBe(true);
+    expect(isPrivateIp('240.0.0.1')).toBe(true);
+  });
+
+  it('matches the IPv4-mapped IPv6 hex-compressed form (cloud metadata)', () => {
+    // 169.254.169.254 == a9fe:a9fe -- a dotted-decimal regex misses this form
+    expect(isPrivateIp('::ffff:a9fe:a9fe')).toBe(true);
+  });
 });
 
 describe('mcp/safeFetch assertSafeHost', () => {
