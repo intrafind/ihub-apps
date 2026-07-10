@@ -17,6 +17,9 @@
  */
 
 import logger from '../../utils/logger.js';
+import configCache from '../../configCache.js';
+import { clients } from '../../sse.js';
+import { actionTracker } from '../../actionTracker.js';
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 const MAX_PENDING = 200;
@@ -125,4 +128,116 @@ export function buildReplayStepsFromState(state, workflow, language = 'en') {
   }
 
   return events;
+}
+
+/**
+ * Detect an `@workflow-name` mention in the last user message and, if it
+ * resolves to a chat-runnable workflow, dispatch it (fire-and-forget — the
+ * workflow streams its own progress/result over the chat's SSE channel).
+ *
+ * Returns `{ handled: true, response, statusCode? }` if the mention path
+ * fully handled the request (rejection or dispatch), or `{ handled: false }`
+ * to let the caller fall through to normal chat processing.
+ *
+ * @param {Object} params
+ * @param {Array}  params.messages - Full chat message history for this request.
+ * @param {string} params.chatId
+ * @param {string} params.modelId
+ * @param {Object} params.user
+ * @param {string} params.clientLanguage
+ */
+export async function tryHandleMentionWorkflow({
+  messages,
+  chatId,
+  modelId,
+  user,
+  clientLanguage
+}) {
+  const lastUserMsg = messages[messages.length - 1];
+  const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+  const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
+  if (!mentionMatch) return { handled: false };
+
+  const mentionedId = mentionMatch[1];
+  const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+  if (!mentionedWorkflow) return { handled: false };
+
+  const isDisabled = mentionedWorkflow.enabled === false;
+  const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
+
+  // If the user explicitly @-mentioned a workflow but it is not
+  // chat-runnable, refuse the message instead of falling through to
+  // the LLM (which would happily pick a *different* registered
+  // workflow tool — the @human → @auto switch users have seen).
+  if (isDisabled || noChatIntegration) {
+    const wfName =
+      (typeof mentionedWorkflow.name === 'object'
+        ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
+        : mentionedWorkflow.name) || mentionedId;
+    const reason = isDisabled
+      ? `Workflow "${wfName}" is disabled.`
+      : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
+    actionTracker.trackError(chatId, { message: reason });
+    if (!clients.has(chatId)) {
+      return { handled: true, statusCode: 400, response: { status: 'error', message: reason } };
+    }
+    actionTracker.trackChunk(chatId, { content: reason });
+    actionTracker.trackDone(chatId, { finishReason: 'error' });
+    return { handled: true, response: { status: 'streaming', chatId } };
+  }
+
+  logger.info('@mention workflow triggered', {
+    component: 'ChatBridge',
+    workflowId: mentionedId,
+    chatId
+  });
+
+  // Strip the @mention from the input
+  const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
+
+  // Collect file data from the last message
+  const fileData = lastUserMsg.fileData || null;
+  const imageData = lastUserMsg.imageData || null;
+
+  // Build chat history from all prior messages (excluding the last)
+  const chatHistory = messages.slice(0, -1).map(m => ({
+    role: m.role,
+    content: m.content
+  }));
+
+  try {
+    const workflowRunnerMod = await import('../../tools/workflowRunner.js');
+
+    // Fire-and-forget: start workflow but don't await completion.
+    // The workflowRunner bridge streams step events and final output via SSE.
+    workflowRunnerMod
+      .default({
+        workflowId: mentionedId,
+        chatId,
+        user,
+        input: strippedInput,
+        modelId,
+        _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
+        _fileData: fileData || imageData || undefined,
+        language: clientLanguage
+      })
+      .catch(error => {
+        logger.error('Error running @mention workflow', {
+          component: 'ChatBridge',
+          error
+        });
+        actionTracker.trackError(chatId, {
+          message: `Workflow execution failed: ${error.message}`
+        });
+      });
+
+    // Return immediately — the SSE channel delivers all progress + final output
+    return { handled: true, response: { status: 'streaming', chatId } };
+  } catch (error) {
+    logger.error('Error loading workflow runner', { component: 'ChatBridge', error });
+    actionTracker.trackError(chatId, {
+      message: `Workflow execution failed: ${error.message}`
+    });
+    return { handled: true, response: { status: 'error', message: error.message } };
+  }
 }

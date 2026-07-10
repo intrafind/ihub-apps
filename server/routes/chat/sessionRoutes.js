@@ -25,7 +25,8 @@ import {
 } from '../../utils/responseHelpers.js';
 import {
   buildReplayStepsFromState,
-  drainPendingFinish
+  drainPendingFinish,
+  tryHandleMentionWorkflow
 } from '../../services/workflow/chatBridge.js';
 import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
 
@@ -675,132 +676,47 @@ export default function registerSessionRoutes(
           timestamp: new Date().toISOString()
         });
 
-        // --- @mention workflow detection ---
-        // Check if the last user message contains an @workflow-name mention
-        const lastUserMsg = messages[messages.length - 1];
-        const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
-        const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
-
-        if (mentionMatch) {
-          const mentionedId = mentionMatch[1];
-          const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
-
-          // If the user explicitly @-mentioned a workflow but it is not
-          // chat-runnable, refuse the message instead of falling through to
-          // the LLM (which would happily pick a *different* registered
-          // workflow tool — the @human → @auto switch users have seen).
-          if (mentionedWorkflow) {
-            const isDisabled = mentionedWorkflow.enabled === false;
-            const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
-
-            if (isDisabled || noChatIntegration) {
-              const wfName =
-                (typeof mentionedWorkflow.name === 'object'
-                  ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
-                  : mentionedWorkflow.name) || mentionedId;
-              const reason = isDisabled
-                ? `Workflow "${wfName}" is disabled.`
-                : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
-              actionTracker.trackError(chatId, { message: reason });
-              if (!clients.has(chatId)) {
-                return res.status(400).json({ status: 'error', message: reason });
-              }
-              actionTracker.trackChunk(chatId, { content: reason });
-              actionTracker.trackDone(chatId, { finishReason: 'error' });
-              return res.json({ status: 'streaming', chatId });
-            }
-          }
-
-          if (
-            mentionedWorkflow &&
-            mentionedWorkflow.enabled !== false &&
-            mentionedWorkflow.chatIntegration?.enabled
-          ) {
-            logger.info('@mention workflow triggered', {
-              component: 'sessionRoutes',
-              workflowId: mentionedId,
-              chatId
-            });
-
-            // Strip the @mention from the input
-            const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
-
-            // Collect file data from the last message
-            const fileData = lastUserMsg.fileData || null;
-            const imageData = lastUserMsg.imageData || null;
-
-            // Build chat history from all prior messages (excluding the last)
-            const chatHistory = messages.slice(0, -1).map(m => ({
-              role: m.role,
-              content: m.content
-            }));
-
-            try {
-              const workflowRunnerMod = await import('../../tools/workflowRunner.js');
-
-              // Fire-and-forget: start workflow but don't await completion.
-              // The workflowRunner bridge streams step events and final output via SSE.
-              workflowRunnerMod
-                .default({
-                  workflowId: mentionedId,
-                  chatId,
-                  user: req.user,
-                  input: strippedInput,
-                  modelId,
-                  _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
-                  _fileData: fileData || imageData || undefined,
-                  language: clientLanguage
-                })
-                .catch(error => {
-                  logger.error('Error running @mention workflow', {
-                    component: 'sessionRoutes',
-                    error
-                  });
-                  actionTracker.trackError(chatId, {
-                    message: `Workflow execution failed: ${error.message}`
-                  });
-                });
-
-              // Return immediately — the SSE channel delivers all progress + final output
-              return res.json({ status: 'streaming', chatId });
-            } catch (error) {
-              logger.error('Error loading workflow runner', { component: 'sessionRoutes', error });
-              actionTracker.trackError(chatId, {
-                message: `Workflow execution failed: ${error.message}`
-              });
-              return res.json({ status: 'error', message: error.message });
-            }
-          }
+        const mentionResult = await tryHandleMentionWorkflow({
+          messages,
+          chatId,
+          modelId,
+          user: req.user,
+          clientLanguage
+        });
+        if (mentionResult.handled) {
+          return mentionResult.statusCode
+            ? res.status(mentionResult.statusCode).json(mentionResult.response)
+            : res.json(mentionResult.response);
         }
-        // --- end @mention detection ---
+
+        const chatRequestOptions = {
+          appId,
+          modelId,
+          messages,
+          temperature,
+          style,
+          outputFormat,
+          language: clientLanguage,
+          bypassAppPrompts,
+          thinkingEnabled,
+          thinkingBudget,
+          thinkingThoughts,
+          enabledTools,
+          websearchEnabled,
+          imageAspectRatio,
+          imageQuality,
+          requestedSkill,
+          documentIds,
+          user: req.user,
+          chatId
+        };
 
         if (!clients.has(chatId)) {
           logger.info('No active SSE connection, creating response without streaming', {
             component: 'sessionRoutes',
             chatId
           });
-          const prep = await chatService.prepareChatRequest({
-            appId,
-            modelId,
-            messages,
-            temperature,
-            style,
-            outputFormat,
-            language: clientLanguage,
-            bypassAppPrompts,
-            thinkingEnabled,
-            thinkingBudget,
-            thinkingThoughts,
-            enabledTools,
-            websearchEnabled,
-            imageAspectRatio,
-            imageQuality,
-            requestedSkill,
-            documentIds,
-            res,
-            user: req.user,
-            chatId
-          });
+          const prep = await chatService.prepareChatRequest({ ...chatRequestOptions, res });
           if (!prep.success) {
             const errMsg = await getLocalizedError(
               prep.error.code || 'internalError',
@@ -845,28 +761,7 @@ export default function registerSessionRoutes(
           const clientEntry = clients.get(chatId);
           const clientRes = clientEntry.response;
           clientEntry.lastActivity = new Date();
-          const prep = await chatService.prepareChatRequest({
-            appId,
-            modelId,
-            messages,
-            temperature,
-            style,
-            outputFormat,
-            language: clientLanguage,
-            bypassAppPrompts,
-            thinkingEnabled,
-            thinkingBudget,
-            thinkingThoughts,
-            enabledTools,
-            websearchEnabled,
-            imageAspectRatio,
-            imageQuality,
-            requestedSkill,
-            documentIds,
-            clientRes,
-            user: req.user,
-            chatId
-          });
+          const prep = await chatService.prepareChatRequest({ ...chatRequestOptions, clientRes });
           if (!prep.success) {
             const errMsg = await getLocalizedError(
               prep.error.code || 'internalError',
