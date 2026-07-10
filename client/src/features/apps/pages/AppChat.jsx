@@ -97,6 +97,58 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
+/**
+ * Group an app chat's selectedFile (single object or array) by upload type.
+ * @param {Object|Array|null} selectedFile - fileUploadHandler.selectedFile
+ * @returns {{images: Array, audioFiles: Array, documents: Array}}
+ */
+const classifyFiles = selectedFile => {
+  const files = Array.isArray(selectedFile) ? selectedFile : selectedFile ? [selectedFile] : [];
+  return {
+    images: files.filter(f => f.type === 'image'),
+    audioFiles: files.filter(f => f.type === 'audio'),
+    documents: files.filter(f => f.type === 'document')
+  };
+};
+
+// Matches the apiMessage.{imageData,audioData,fileData} contract: null for none, the bare
+// object for exactly one file, or an array for multiple.
+const toApiFileField = files => (files.length === 1 ? files[0] : files.length > 0 ? files : null);
+
+const renderImageBadge = (image, t) =>
+  `<img src="${image.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+
+const renderAudioBadge = file =>
+  `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${file.fileName}</span>\n      </div>`;
+
+const renderDocumentBadge = file =>
+  `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${file.fileName}</span>\n      </div>`;
+
+/**
+ * Build the display message content/meta for a submitted chat message from its uploaded files.
+ * @param {{images: Array, audioFiles: Array, documents: Array}} classifiedFiles
+ * @param {string} finalInput - trimmed text input
+ * @param {Function} t - translation function
+ * @returns {{messageContent: string, messageData: Object}}
+ */
+const buildMessageFromFiles = ({ images, audioFiles, documents }, finalInput, t) => {
+  const contentParts = [
+    finalInput,
+    images.length > 0 ? images.map(image => renderImageBadge(image, t)).join('\n') : null,
+    audioFiles.length > 0 ? audioFiles.map(renderAudioBadge).join('') : null,
+    documents.length > 0 ? documents.map(renderDocumentBadge).join('') : null
+  ];
+
+  return {
+    messageContent: contentParts.filter(Boolean).join('\n\n'),
+    messageData: {
+      imageData: images.length > 0 ? images : undefined,
+      audioData: audioFiles.length > 0 ? audioFiles : undefined,
+      fileData: documents.length > 0 ? documents : undefined
+    }
+  };
+};
+
 const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   const starterPrompts = app?.starterPrompts || [];
   if (starterPrompts.length > 0) {
@@ -1641,74 +1693,10 @@ function AppChat({ preloadedApp = null }) {
     if (compareModeActive ? compareIsProcessing : processing) return;
 
     let finalInput = input.trim();
-    let messageContent = finalInput;
-    let messageData = {};
-
-    if (fileUploadHandler.selectedFile) {
-      // Handle multiple files
-      if (Array.isArray(fileUploadHandler.selectedFile)) {
-        const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
-        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
-        const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
-
-        let contentParts = [finalInput];
-
-        // Add image previews
-        if (images.length > 0) {
-          const imgPreviews = images
-            .map(
-              img =>
-                `<img src="${img.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`
-            )
-            .join('\n');
-          contentParts.push(imgPreviews);
-        }
-
-        // Add audio file indicators
-        if (audioFiles.length > 0) {
-          const audioIndicators = audioFiles
-            .map(
-              audio =>
-                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${audio.fileName}</span>\n      </div>`
-            )
-            .join('');
-          contentParts.push(audioIndicators);
-        }
-
-        // Add file indicators
-        if (documents.length > 0) {
-          const fileIndicators = documents
-            .map(
-              doc =>
-                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${doc.fileName}</span>\n      </div>`
-            )
-            .join('');
-          contentParts.push(fileIndicators);
-        }
-
-        messageContent = contentParts.filter(Boolean).join('\n\n');
-        messageData = {
-          imageData: images.length > 0 ? images : undefined,
-          audioData: audioFiles.length > 0 ? audioFiles : undefined,
-          fileData: documents.length > 0 ? documents : undefined
-        };
-      } else {
-        // Handle single file (legacy behavior)
-        if (fileUploadHandler.selectedFile.type === 'image') {
-          const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
-          messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: fileUploadHandler.selectedFile };
-        } else if (fileUploadHandler.selectedFile.type === 'audio') {
-          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
-          messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
-          messageData = { audioData: fileUploadHandler.selectedFile };
-        } else {
-          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
-          messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: fileUploadHandler.selectedFile };
-        }
-      }
-    }
+    const classifiedFiles = classifyFiles(fileUploadHandler.selectedFile);
+    const { messageContent, messageData } = fileUploadHandler.selectedFile
+      ? buildMessageFromFiles(classifiedFiles, finalInput, t)
+      : { messageContent: finalInput, messageData: {} };
 
     const params = {
       modelId: selectedModel,
@@ -1769,48 +1757,9 @@ function AppChat({ preloadedApp = null }) {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...validatedVariables },
-        imageData: (() => {
-          // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-            : fileUploadHandler.selectedFile?.type === 'image'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return imageFiles.length === 1
-            ? imageFiles[0]
-            : imageFiles.length > 1
-              ? imageFiles
-              : null;
-        })(),
-        audioData: (() => {
-          // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
-            : fileUploadHandler.selectedFile?.type === 'audio'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return audioFiles.length === 1
-            ? audioFiles[0]
-            : audioFiles.length > 1
-              ? audioFiles
-              : null;
-        })(),
-        fileData: (() => {
-          // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-            : fileUploadHandler.selectedFile?.type === 'document'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return documentFiles.length === 1
-            ? documentFiles[0]
-            : documentFiles.length > 1
-              ? documentFiles
-              : null;
-        })()
+        imageData: toApiFileField(classifiedFiles.images),
+        audioData: toApiFileField(classifiedFiles.audioFiles),
+        fileData: toApiFileField(classifiedFiles.documents)
       },
       params,
       sendChatHistory,
