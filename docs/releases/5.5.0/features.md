@@ -461,6 +461,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Admin Details Popups Are Now Keyboard-Accessible and Consistent
+
+The App, Model, Prompt, and Short Link details popups in the admin area now share one dialog
+component, fixing an inconsistency where only the Prompt popup closed on **Escape**.
+
+- All four popups now close on **Escape** and trap keyboard focus while open (Tab/Shift+Tab cycle
+  within the dialog instead of escaping to the page behind it), and are marked `aria-modal` for
+  screen readers.
+- Clicking the dimmed backdrop now also closes the popup, matching other dialogs in the admin area.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
