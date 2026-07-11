@@ -1,4 +1,6 @@
 import { apiClient } from './client.js';
+import { handleApiResponse } from './utils/requestHandler';
+import { DEFAULT_CACHE_TTL } from '../utils/cache';
 
 const isPlainObjectForBody = value =>
   value !== null &&
@@ -914,6 +916,34 @@ export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
   return response.data;
 };
 
+export const fetchTools = async (options = {}) => {
+  const { skipCache = false, language = null } = options;
+  const cacheKey = skipCache ? null : 'admin_tools';
+
+  const params = {};
+  if (language) {
+    params.language = language;
+  }
+
+  return handleApiResponse(
+    () => apiClient.get('/admin/tools', { params }),
+    cacheKey,
+    DEFAULT_CACHE_TTL.SHORT
+  );
+};
+
+/**
+ * Fetch the per-server MCP tool catalog for the app editor's MCP picker.
+ * Returns an array of { id, name, enabled, tools: [{ name, description }], error }.
+ * Not cached — tool discovery reflects live connection state.
+ *
+ * @returns {Promise<Array>} Array of MCP server entries with their tools
+ */
+export const fetchMcpToolCatalog = async () => {
+  const data = await handleApiResponse(() => apiClient.get('/admin/mcp/tools'), null, null, false);
+  return data?.servers || [];
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -985,6 +1015,8 @@ export const adminApi = {
   fetchToolScript,
   updateToolScript,
   parseOpenApiSpec,
+  fetchTools,
+  fetchMcpToolCatalog,
 
   // Credential store functions
   listCredentials,

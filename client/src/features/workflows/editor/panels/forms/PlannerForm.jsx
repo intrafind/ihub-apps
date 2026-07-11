@@ -3,7 +3,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchTools } from '../../../../../api/endpoints/admin';
+import { fetchTools } from '../../../../../api/adminApi';
 
 function PlannerForm({ config, onChange }) {
   const tt = config.taskTemplate || {};

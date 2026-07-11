@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import FormField from './FormField';
 import ResourcePicker from './ResourcePicker';
-import { fetchTools } from '../../../../../api/endpoints/admin';
+import { fetchTools } from '../../../../../api/adminApi';
 
 function ToolForm({ config, onChange }) {
   const fetchToolsFn = useCallback(() => fetchTools(), []);

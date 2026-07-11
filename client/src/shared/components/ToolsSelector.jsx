@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
-import { fetchTools } from '../../api';
+import { fetchTools } from '../../api/adminApi';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
 function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] }) {
