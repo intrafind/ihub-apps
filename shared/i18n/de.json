@@ -539,6 +539,7 @@
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
+    "modelAccessDeniedForUser": "Sie haben keine Berechtigung, dieses KI-Modell zu verwenden. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
     "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
