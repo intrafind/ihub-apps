@@ -17,6 +17,7 @@ import AppShareModal from '../../apps/components/AppShareModal';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
+import useUrlParamSettings from '../../../shared/hooks/useUrlParamSettings';
 import useCanvas from '../hooks/useCanvas';
 import { fetchAppDetails } from '../../../api';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
@@ -57,68 +58,13 @@ export default function AppCanvas() {
   } = useAppSettings(appId, app);
 
   // Apply settings from query parameters once data is loaded
-  useEffect(() => {
-    if (!app || modelsLoading) return;
-
-    const newVars = {};
-    let changed = false;
-
-    const m = searchParams.get('model');
-    if (m) {
-      setSelectedModel(m);
-      changed = true;
-    }
-    const st = searchParams.get('style');
-    if (st) {
-      setSelectedStyle(st);
-      changed = true;
-    }
-    const out = searchParams.get('outfmt');
-    if (out) {
-      setSelectedOutputFormat(out);
-      changed = true;
-    }
-    const tempParam = searchParams.get('temp');
-    if (tempParam) {
-      setTemperature(parseFloat(tempParam));
-      changed = true;
-    }
-    const hist = searchParams.get('history');
-    if (hist) {
-      setSendChatHistory(hist === 'true');
-      changed = true;
-    }
-
-    searchParams.forEach((value, key) => {
-      if (key.startsWith('var_')) {
-        newVars[key.slice(4)] = value;
-        changed = true;
-      }
-    });
-
-    if (changed) {
-      const newSearch = new URLSearchParams(searchParams);
-      [
-        'model',
-        'style',
-        'outfmt',
-        'temp',
-        'history',
-        ...Object.keys(newVars).map(v => `var_${v}`)
-      ].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-    }
-  }, [
-    app,
-    modelsLoading,
-    navigate,
-    searchParams,
+  useUrlParamSettings(app, modelsLoading, {
     setSelectedModel,
-    setSelectedOutputFormat,
     setSelectedStyle,
-    setSendChatHistory,
-    setTemperature
-  ]);
+    setSelectedOutputFormat,
+    setTemperature,
+    setSendChatHistory
+  });
 
   // Canvas editor states
   const [showExportMenu, setShowExportMenu] = useState(false);
