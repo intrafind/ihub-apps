@@ -20,6 +20,7 @@ import AppShareModal from '../components/AppShareModal';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
+import useUrlParamSettings from '../../../shared/hooks/useUrlParamSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
@@ -233,74 +234,21 @@ function AppChat({ preloadedApp = null }) {
   const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
 
   // Apply settings and variables from URL parameters once app data is loaded
-  useEffect(() => {
-    if (!app || modelsLoading) return;
-
-    const newVars = {};
-    let changed = false;
-
-    const m = searchParams.get('model');
-    if (m) {
-      setSelectedModel(m);
-      changed = true;
-    }
-    const st = searchParams.get('style');
-    if (st) {
-      setSelectedStyle(st);
-      changed = true;
-    }
-    const out = searchParams.get('outfmt');
-    if (out) {
-      setSelectedOutputFormat(out);
-      changed = true;
-    }
-    const tempParam = searchParams.get('temp');
-    if (tempParam) {
-      setTemperature(parseFloat(tempParam));
-      changed = true;
-    }
-    const hist = searchParams.get('history');
-    if (hist) {
-      setSendChatHistory(hist === 'true');
-      changed = true;
-    }
-
-    searchParams.forEach((value, key) => {
-      if (key.startsWith('var_')) {
-        newVars[key.slice(4)] = value;
-        changed = true;
-      }
-    });
-
-    if (Object.keys(newVars).length) {
-      setVariables(v => ({ ...v, ...newVars }));
-    }
-
-    if (changed) {
-      const newSearch = new URLSearchParams(searchParams);
-      [
-        'model',
-        'style',
-        'outfmt',
-        'temp',
-        'history',
-        'prefill',
-        'send',
-        ...Object.keys(newVars).map(v => `var_${v}`)
-      ].forEach(k => newSearch.delete(k));
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-    }
-  }, [
+  useUrlParamSettings(
     app,
     modelsLoading,
-    navigate,
-    searchParams,
-    setSelectedModel,
-    setSelectedOutputFormat,
-    setSelectedStyle,
-    setSendChatHistory,
-    setTemperature
-  ]);
+    {
+      setSelectedModel,
+      setSelectedStyle,
+      setSelectedOutputFormat,
+      setTemperature,
+      setSendChatHistory
+    },
+    {
+      extraParamsToStrip: ['prefill', 'send'],
+      onVariables: newVars => setVariables(v => ({ ...v, ...newVars }))
+    }
+  );
 
   // State for managing parameter changes on mobile
   const [tempVariables, setTempVariables] = useState({});
