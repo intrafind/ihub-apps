@@ -7,7 +7,11 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
-import { sendInternalError, sendAuthRequired, sendErrorResponse } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
@@ -33,7 +37,8 @@ createOAuthIntegrationRouter(router, {
   usesPkce: true,
   authLimiter: jiraAuthLimiter,
   buildAuthUrl: ({ state, codeVerifier }) => JiraService.generateAuthUrl(state, codeVerifier),
-  exchangeCodeForTokens: ({ code, codeVerifier }) => JiraService.exchangeCodeForTokens(code, codeVerifier),
+  exchangeCodeForTokens: ({ code, codeVerifier }) =>
+    JiraService.exchangeCodeForTokens(code, codeVerifier),
   storeUserTokens: (userId, tokens) => JiraService.storeUserTokens(userId, tokens),
   isUserAuthenticated: userId => JiraService.isUserAuthenticated(userId),
   getUserInfo: userId => JiraService.getUserInfo(userId),

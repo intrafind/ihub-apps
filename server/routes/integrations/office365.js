@@ -7,7 +7,12 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
-import { sendInternalError, sendAuthRequired, sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
@@ -49,7 +54,8 @@ createOAuthIntegrationRouter(router, {
   exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
     Office365Service.exchangeCodeForTokens(providerId, code, codeVerifier, req),
   storeUserTokens: (userId, tokens) => Office365Service.storeUserTokens(userId, tokens),
-  isUserAuthenticated: (userId, providerId) => Office365Service.isUserAuthenticated(userId, providerId),
+  isUserAuthenticated: (userId, providerId) =>
+    Office365Service.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => Office365Service.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     Office365Service.getTokenExpirationInfo(userId, providerId),

@@ -137,189 +137,212 @@ export function createOAuthIntegrationRouter(
    * GET /api/integrations/<providerKey>/:providerId/callback (multi-provider)
    * GET /api/integrations/<providerKey>/callback (single-provider)
    */
-  router.get(requiresProviderId ? '/:providerId/callback' : '/callback', authOptional, async (req, res) => {
-    const providerId = requiresProviderId ? req.params.providerId : undefined;
-    try {
-      const { code, state, error: oauthError } = req.query;
+  router.get(
+    requiresProviderId ? '/:providerId/callback' : '/callback',
+    authOptional,
+    async (req, res) => {
+      const providerId = requiresProviderId ? req.params.providerId : undefined;
+      try {
+        const { code, state, error: oauthError } = req.query;
 
-      const sessionKey = sessionKeyFor(providerId);
-      const storedAuth = req.session?.[sessionKey];
-      const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-      const separator = returnUrl.includes('?') ? '&' : '?';
+        const sessionKey = sessionKeyFor(providerId);
+        const storedAuth = req.session?.[sessionKey];
+        const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
+        const separator = returnUrl.includes('?') ? '&' : '?';
 
-      if (oauthError) {
-        logger.error(`${displayName} OAuth error`, { component: displayName, error: oauthError, providerId });
-        // Redirect with a generic error code to avoid exposing raw error details in the URL
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=oauth_failed`);
-      }
+        if (oauthError) {
+          logger.error(`${displayName} OAuth error`, {
+            component: displayName,
+            error: oauthError,
+            providerId
+          });
+          // Redirect with a generic error code to avoid exposing raw error details in the URL
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=oauth_failed`);
+        }
 
-      // Some IdP edge cases (consent denied without `error`, or a manual
-      // hit on the callback URL) can land here with no `code`. Surface a
-      // stable error code instead of throwing inside `exchangeCodeForTokens`
-      // and leaking the raw error into the redirect URL.
-      if (!code) {
-        logger.error(`${displayName} OAuth callback missing code`, { component: displayName, providerId });
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=missing_code`);
-      }
-
-      if (!req.session) {
-        logger.error(`No session available for ${displayName} OAuth callback`, {
-          component: displayName,
-          providerId
-        });
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=no_session`);
-      }
-
-      if (!storedAuth || storedAuth.state !== state) {
-        logger.error(`Invalid ${displayName} OAuth state parameter`, { component: displayName, providerId });
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=invalid_state`);
-      }
-
-      if (requiresProviderId && storedAuth.providerId !== providerId) {
-        logger.error(`Provider ID mismatch in ${displayName} OAuth callback`, {
-          component: displayName,
-          urlProviderId: providerId,
-          sessionProviderId: storedAuth.providerId
-        });
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=provider_mismatch`);
-      }
-
-      // Check session timeout
-      if (Date.now() - storedAuth.timestamp > SESSION_TIMEOUT_MS) {
-        logger.error(`${displayName} OAuth session expired`, { component: displayName, providerId });
-        return res.redirect(`${returnUrl}${separator}${providerKey}_error=session_expired`);
-      }
-
-      // Exchange authorization code for tokens
-      const tokens = await exchangeCodeForTokens({
-        providerId: storedAuth.providerId,
-        code,
-        codeVerifier: storedAuth.codeVerifier,
-        req
-      });
-
-      // Verify we received a refresh token
-      if (!tokens.refreshToken) {
-        if (logMissingRefreshToken) {
-          logMissingRefreshToken(providerId);
-        } else {
-          logger.error(`No refresh token received from ${displayName} OAuth.`, {
+        // Some IdP edge cases (consent denied without `error`, or a manual
+        // hit on the callback URL) can land here with no `code`. Surface a
+        // stable error code instead of throwing inside `exchangeCodeForTokens`
+        // and leaking the raw error into the redirect URL.
+        if (!code) {
+          logger.error(`${displayName} OAuth callback missing code`, {
             component: displayName,
             providerId
           });
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=missing_code`);
         }
-        logger.warn(
-          'Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
-          { component: displayName, providerId }
-        );
+
+        if (!req.session) {
+          logger.error(`No session available for ${displayName} OAuth callback`, {
+            component: displayName,
+            providerId
+          });
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=no_session`);
+        }
+
+        if (!storedAuth || storedAuth.state !== state) {
+          logger.error(`Invalid ${displayName} OAuth state parameter`, {
+            component: displayName,
+            providerId
+          });
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=invalid_state`);
+        }
+
+        if (requiresProviderId && storedAuth.providerId !== providerId) {
+          logger.error(`Provider ID mismatch in ${displayName} OAuth callback`, {
+            component: displayName,
+            urlProviderId: providerId,
+            sessionProviderId: storedAuth.providerId
+          });
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=provider_mismatch`);
+        }
+
+        // Check session timeout
+        if (Date.now() - storedAuth.timestamp > SESSION_TIMEOUT_MS) {
+          logger.error(`${displayName} OAuth session expired`, {
+            component: displayName,
+            providerId
+          });
+          return res.redirect(`${returnUrl}${separator}${providerKey}_error=session_expired`);
+        }
+
+        // Exchange authorization code for tokens
+        const tokens = await exchangeCodeForTokens({
+          providerId: storedAuth.providerId,
+          code,
+          codeVerifier: storedAuth.codeVerifier,
+          req
+        });
+
+        // Verify we received a refresh token
+        if (!tokens.refreshToken) {
+          if (logMissingRefreshToken) {
+            logMissingRefreshToken(providerId);
+          } else {
+            logger.error(`No refresh token received from ${displayName} OAuth.`, {
+              component: displayName,
+              providerId
+            });
+          }
+          logger.warn(
+            'Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
+            { component: displayName, providerId }
+          );
+        }
+
+        // Store encrypted tokens for user
+        await storeUserTokens(storedAuth.userId, tokens);
+
+        // Clear session data
+        delete req.session[sessionKey];
+
+        logger.info(`${displayName} OAuth completed`, {
+          component: displayName,
+          userId: storedAuth.userId,
+          providerId: storedAuth.providerId
+        });
+
+        // Redirect back to the original page with success
+        res.redirect(`${returnUrl}${separator}${providerKey}_connected=true`);
+      } catch (error) {
+        logger.error(`Error handling ${displayName} OAuth callback`, {
+          component: displayName,
+          error: error.message,
+          providerId
+        });
+
+        // Try to get returnUrl from session before clearing
+        let catchReturnUrl = '/settings/integrations';
+        if (req.session) {
+          const catchKey = sessionKeyFor(providerId);
+          catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
+          delete req.session[catchKey];
+        }
+
+        const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
+        // Use a stable error code rather than echoing `error.message` —
+        // some upstream errors interpolate user-influenced strings, and
+        // we don't want those landing in the redirect URL.
+        res.redirect(`${catchReturnUrl}${catchSeparator}${providerKey}_error=callback_failed`);
       }
-
-      // Store encrypted tokens for user
-      await storeUserTokens(storedAuth.userId, tokens);
-
-      // Clear session data
-      delete req.session[sessionKey];
-
-      logger.info(`${displayName} OAuth completed`, {
-        component: displayName,
-        userId: storedAuth.userId,
-        providerId: storedAuth.providerId
-      });
-
-      // Redirect back to the original page with success
-      res.redirect(`${returnUrl}${separator}${providerKey}_connected=true`);
-    } catch (error) {
-      logger.error(`Error handling ${displayName} OAuth callback`, {
-        component: displayName,
-        error: error.message,
-        providerId
-      });
-
-      // Try to get returnUrl from session before clearing
-      let catchReturnUrl = '/settings/integrations';
-      if (req.session) {
-        const catchKey = sessionKeyFor(providerId);
-        catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
-        delete req.session[catchKey];
-      }
-
-      const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-      // Use a stable error code rather than echoing `error.message` —
-      // some upstream errors interpolate user-influenced strings, and
-      // we don't want those landing in the redirect URL.
-      res.redirect(`${catchReturnUrl}${catchSeparator}${providerKey}_error=callback_failed`);
     }
-  });
+  );
 
   /**
    * Get connection status for the current user.
    * GET /api/integrations/<providerKey>/status
    */
-  router.get('/status', authRequired, ...(statusLimiter ? [statusLimiter] : []), async (req, res) => {
-    try {
-      if (!req.user?.id) {
-        return sendAuthRequired(res);
-      }
-
-      const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
-
-      const isAuthenticated = await isUserAuthenticated(req.user.id, providerId);
-
-      if (!isAuthenticated) {
-        return res.json({
-          connected: false,
-          message: `${displayName} account not connected`
-        });
-      }
-
-      let userInfo;
-      if (tolerateUserInfoFailure) {
-        try {
-          userInfo = await getUserInfo(req.user.id, providerId);
-        } catch (userInfoError) {
-          logger.warn(`${displayName} connected but user info lookup failed`, {
-            component: displayName,
-            userId: req.user.id,
-            providerId,
-            error: userInfoError.message
-          });
-          userInfo = null;
+  router.get(
+    '/status',
+    authRequired,
+    ...(statusLimiter ? [statusLimiter] : []),
+    async (req, res) => {
+      try {
+        if (!req.user?.id) {
+          return sendAuthRequired(res);
         }
-      } else {
-        userInfo = await getUserInfo(req.user.id, providerId);
-      }
 
-      const tokenInfo = await getTokenExpirationInfo(req.user.id, providerId);
+        const providerId =
+          typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
-      res.json({
-        connected: true,
-        userInfo: userInfo ? formatUserInfo(userInfo) : null,
-        tokenInfo: {
-          expiresAt: tokenInfo.expiresAt,
-          minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-          isExpiring: tokenInfo.isExpiring,
-          isExpired: tokenInfo.isExpired
-        },
-        message: tokenInfo.isExpiring
-          ? `${displayName} account connected (tokens expiring soon)`
-          : `${displayName} account connected successfully`
-      });
-    } catch (error) {
-      logger.error(`Error getting ${displayName} status`, {
-        component: displayName,
-        error: error.message
-      });
+        const isAuthenticated = await isUserAuthenticated(req.user.id, providerId);
 
-      if (error.message.includes('authentication required')) {
-        return res.json({
-          connected: false,
-          message: `${displayName} authentication expired`
+        if (!isAuthenticated) {
+          return res.json({
+            connected: false,
+            message: `${displayName} account not connected`
+          });
+        }
+
+        let userInfo;
+        if (tolerateUserInfoFailure) {
+          try {
+            userInfo = await getUserInfo(req.user.id, providerId);
+          } catch (userInfoError) {
+            logger.warn(`${displayName} connected but user info lookup failed`, {
+              component: displayName,
+              userId: req.user.id,
+              providerId,
+              error: userInfoError.message
+            });
+            userInfo = null;
+          }
+        } else {
+          userInfo = await getUserInfo(req.user.id, providerId);
+        }
+
+        const tokenInfo = await getTokenExpirationInfo(req.user.id, providerId);
+
+        res.json({
+          connected: true,
+          userInfo: userInfo ? formatUserInfo(userInfo) : null,
+          tokenInfo: {
+            expiresAt: tokenInfo.expiresAt,
+            minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
+            isExpiring: tokenInfo.isExpiring,
+            isExpired: tokenInfo.isExpired
+          },
+          message: tokenInfo.isExpiring
+            ? `${displayName} account connected (tokens expiring soon)`
+            : `${displayName} account connected successfully`
         });
-      }
+      } catch (error) {
+        logger.error(`Error getting ${displayName} status`, {
+          component: displayName,
+          error: error.message
+        });
 
-      return sendInternalError(res, error, `get ${displayName} status`);
+        if (error.message.includes('authentication required')) {
+          return res.json({
+            connected: false,
+            message: `${displayName} authentication expired`
+          });
+        }
+
+        return sendInternalError(res, error, `get ${displayName} status`);
+      }
     }
-  });
+  );
 
   /**
    * Disconnect the integration for the current user.

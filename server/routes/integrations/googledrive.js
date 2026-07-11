@@ -7,7 +7,12 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
-import { sendInternalError, sendAuthRequired, sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
@@ -55,7 +60,8 @@ createOAuthIntegrationRouter(router, {
   exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
     GoogleDriveService.exchangeCodeForTokens(providerId, code, codeVerifier, req),
   storeUserTokens: (userId, tokens) => GoogleDriveService.storeUserTokens(userId, tokens),
-  isUserAuthenticated: (userId, providerId) => GoogleDriveService.isUserAuthenticated(userId, providerId),
+  isUserAuthenticated: (userId, providerId) =>
+    GoogleDriveService.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => GoogleDriveService.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     GoogleDriveService.getTokenExpirationInfo(userId, providerId),

@@ -7,7 +7,12 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
-import { sendInternalError, sendAuthRequired, sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
@@ -45,11 +50,13 @@ createOAuthIntegrationRouter(router, {
   usesPkce: false,
   authLimiter: nextcloudAuthLimiter,
   tolerateUserInfoFailure: true,
-  buildAuthUrl: ({ providerId, state, req }) => NextcloudService.generateAuthUrl(providerId, state, req),
+  buildAuthUrl: ({ providerId, state, req }) =>
+    NextcloudService.generateAuthUrl(providerId, state, req),
   exchangeCodeForTokens: ({ providerId, code, req }) =>
     NextcloudService.exchangeCodeForTokens(providerId, code, req),
   storeUserTokens: (userId, tokens) => NextcloudService.storeUserTokens(userId, tokens),
-  isUserAuthenticated: (userId, providerId) => NextcloudService.isUserAuthenticated(userId, providerId),
+  isUserAuthenticated: (userId, providerId) =>
+    NextcloudService.isUserAuthenticated(userId, providerId),
   getUserInfo: (userId, providerId) => NextcloudService.getUserInfo(userId, providerId),
   getTokenExpirationInfo: (userId, providerId) =>
     NextcloudService.getTokenExpirationInfo(userId, providerId),
