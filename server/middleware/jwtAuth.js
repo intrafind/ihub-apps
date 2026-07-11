@@ -579,7 +579,18 @@ export default function jwtAuthMiddleware(req, res, next) {
           );
         }
 
-        if (userRecord && !isUserActive(userRecord)) {
+        if (!userRecord) {
+          logger.warn('JWT Auth token rejected: OIDC user not found', {
+            component: 'JwtAuth',
+            userId
+          });
+          return res.status(401).json({
+            error: 'invalid_token',
+            error_description: 'User account no longer exists'
+          });
+        }
+
+        if (!isUserActive(userRecord)) {
           logger.warn('JWT Auth token rejected: OIDC user account disabled', {
             component: 'JwtAuth',
             userId: userRecord.id
@@ -590,7 +601,6 @@ export default function jwtAuthMiddleware(req, res, next) {
           });
         }
 
-        // User either doesn't exist (not yet persisted) or is active
         user = {
           id: decoded.sub || decoded.username,
           username: decoded.username || decoded.preferred_username || decoded.sub,
@@ -637,7 +647,18 @@ export default function jwtAuthMiddleware(req, res, next) {
           );
         }
 
-        if (userRecord && !isUserActive(userRecord)) {
+        if (!userRecord) {
+          logger.warn('JWT Auth token rejected: LDAP user not found', {
+            component: 'JwtAuth',
+            userId
+          });
+          return res.status(401).json({
+            error: 'invalid_token',
+            error_description: 'User account no longer exists'
+          });
+        }
+
+        if (!isUserActive(userRecord)) {
           logger.warn('JWT Auth token rejected: LDAP user account disabled', {
             component: 'JwtAuth',
             userId: userRecord.id
@@ -689,7 +710,18 @@ export default function jwtAuthMiddleware(req, res, next) {
           );
         }
 
-        if (userRecord && !isUserActive(userRecord)) {
+        if (!userRecord) {
+          logger.warn('JWT Auth token rejected: Teams user not found', {
+            component: 'JwtAuth',
+            userId
+          });
+          return res.status(401).json({
+            error: 'invalid_token',
+            error_description: 'User account no longer exists'
+          });
+        }
+
+        if (!isUserActive(userRecord)) {
           logger.warn('JWT Auth token rejected: Teams user account disabled', {
             component: 'JwtAuth',
             userId: userRecord.id
@@ -740,7 +772,18 @@ export default function jwtAuthMiddleware(req, res, next) {
           );
         }
 
-        if (userRecord && !isUserActive(userRecord)) {
+        if (!userRecord) {
+          logger.warn('JWT Auth token rejected: NTLM user not found', {
+            component: 'JwtAuth',
+            userId
+          });
+          return res.status(401).json({
+            error: 'invalid_token',
+            error_description: 'User account no longer exists'
+          });
+        }
+
+        if (!isUserActive(userRecord)) {
           logger.warn('JWT Auth token rejected: NTLM user account disabled', {
             component: 'JwtAuth',
             userId: userRecord.id
