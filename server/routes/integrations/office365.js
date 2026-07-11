@@ -2,20 +2,14 @@
 // Handles OAuth2 PKCE flow for Microsoft 365 file access authentication
 
 import express from 'express';
-import crypto from 'crypto';
 import Office365Service from '../../services/integrations/Office365Service.js';
-import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
-import {
-  sendInternalError,
-  sendAuthRequired,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
-import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { sendInternalError, sendAuthRequired, sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
+import { createOAuthIntegrationRouter } from './oauthIntegrationFactory.js';
 
 const router = express.Router();
 
@@ -44,310 +38,28 @@ const office365AuthLimiter = rateLimit({
   legacyHeaders: false
 });
 
-/**
- * Initiate Office 365 OAuth2 flow for Microsoft 365
- * GET /api/integrations/office365/auth?providerId=xxx
- */
-router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
-  try {
-    const { providerId, returnUrl } = req.query;
-
-    if (!providerId) {
-      return sendBadRequest(res, 'providerId query parameter is required');
-    }
-
-    logger.debug('🔍 Office 365 Auth Debug:', {
-      component: 'Office 365',
-      hasUser: !!req.user,
-      userId: req.user?.id,
-      providerId,
-      returnUrl,
-      hasSession: !!req.session
-    });
-
-    // Check if session is available
-    if (!req.session) {
-      return sendErrorResponse(res, 500, 'Session not available');
-    }
-
-    // authRequired only rejects missing `req.user` or anonymous users;
-    // it does NOT guarantee req.user.id is truthy. Refuse to start an
-    // OAuth flow without a real user id — otherwise tokens would land
-    // under a shared sentinel key and could be read by another caller.
-    if (!req.user?.id) {
-      return sendAuthRequired(res);
-    }
-
-    // Generate state for CSRF protection
-    const state = crypto.randomBytes(32).toString('hex');
-
-    // Generate PKCE parameters
-    const codeVerifier = crypto.randomBytes(32).toString('base64url');
-
-    // Validate returnUrl to prevent open redirects
-    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
-      ? returnUrl
-      : '/settings/integrations';
-
-    // Store OAuth parameters in session with provider-specific key
-    // This allows multiple Office 365 providers to have concurrent OAuth flows
-    const sessionKey = `oauth_office365_${providerId}`;
-    req.session[sessionKey] = {
-      state,
-      codeVerifier,
-      providerId,
-      userId: req.user.id,
-      returnUrl: validatedReturnUrl,
-      timestamp: Date.now()
-    };
-
-    // Generate authorization URL (pass request for auto-detection)
-    const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier, req);
-
-    logger.info('Initiating Office 365 OAuth', {
-      component: 'Office 365',
-      userId: req.user?.id,
-      providerId
-    });
-
-    // Redirect to Microsoft OAuth consent screen
-    res.redirect(authUrl);
-  } catch (error) {
-    return sendInternalError(res, error, 'initiate Office 365 OAuth');
-  }
-});
-
-/**
- * Handle Office 365 OAuth callback (provider-specific)
- * GET /api/integrations/office365/:providerId/callback
- */
-router.get('/:providerId/callback', authOptional, async (req, res) => {
-  try {
-    const { code, state, error: oauthError } = req.query;
-    const { providerId } = req.params;
-
-    // Check for OAuth errors
-    if (oauthError) {
-      logger.error('❌ Office 365 OAuth error:', {
-        component: 'Office 365',
-        error: oauthError,
-        providerId
-      });
-      // Redirect with a generic error code to avoid exposing raw error details in the URL
-      return res.redirect('/settings/integrations?office365_error=oauth_failed');
-    }
-
-    // Some IdP edge cases (consent denied without `error`, or a manual
-    // hit on the callback URL) can land here with no `code`. Surface a
-    // stable error code instead of throwing inside `exchangeCodeForTokens`
-    // and leaking the raw error into the redirect URL.
-    if (!code) {
-      logger.error('❌ Office 365 OAuth callback missing code', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect('/settings/integrations?office365_error=missing_code');
-    }
-
-    // Check if session is available
-    if (!req.session) {
-      logger.error('❌ No session available for Office 365 OAuth callback', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect('/settings/integrations?office365_error=no_session');
-    }
-
-    // Validate state parameter
-    const sessionKey = `oauth_office365_${providerId}`;
-    const storedAuth = req.session[sessionKey];
-
-    // Extract returnUrl early for use in all redirects
-    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-    const separator = returnUrl.includes('?') ? '&' : '?';
-
-    if (!storedAuth || storedAuth.state !== state) {
-      logger.error('❌ Invalid Office 365 OAuth state parameter', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=invalid_state`);
-    }
-
-    // Verify providerId matches
-    if (storedAuth.providerId !== providerId) {
-      logger.error('❌ Provider ID mismatch in Office 365 OAuth callback', {
-        component: 'Office 365',
-        urlProviderId: providerId,
-        sessionProviderId: storedAuth.providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=provider_mismatch`);
-    }
-
-    // Check session timeout (15 minutes)
-    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('❌ Office 365 OAuth session expired', {
-        component: 'Office 365',
-        providerId
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
-    }
-
-    // Exchange authorization code for tokens (pass request for auto-detection)
-    const tokens = await Office365Service.exchangeCodeForTokens(
-      storedAuth.providerId,
-      code,
-      storedAuth.codeVerifier,
-      req
-    );
-
-    // Verify we received a refresh token
-    if (!tokens.refreshToken) {
-      logger.error('❌ CRITICAL: No refresh token received from Office 365 OAuth.', {
-        component: 'Office 365',
-        providerId
-      });
-      logger.warn(
-        '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
-        { component: 'Office 365' }
-      );
-    }
-
-    // Store encrypted tokens for user
-    await Office365Service.storeUserTokens(storedAuth.userId, tokens);
-
-    // Clear session data
-    delete req.session[sessionKey];
-
-    logger.info('Office 365 OAuth completed', {
-      component: 'Office 365',
-      userId: storedAuth.userId,
-      providerId: storedAuth.providerId
-    });
-
-    // Redirect back to the original page with success
-    res.redirect(`${returnUrl}${separator}office365_connected=true`);
-  } catch (error) {
-    logger.error('❌ Error handling Office 365 OAuth callback:', {
-      component: 'Office 365',
-      error: error.message,
-      providerId: req.params.providerId
-    });
-
-    // Try to get returnUrl from session before clearing
-    let catchReturnUrl = '/settings/integrations';
-    if (req.session) {
-      const catchKey = `oauth_office365_${req.params.providerId}`;
-      catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
-      delete req.session[catchKey];
-    }
-
-    const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    // Use a stable error code rather than echoing `error.message` —
-    // some upstream errors interpolate user-influenced strings, and
-    // we don't want those landing in the redirect URL.
-    res.redirect(`${catchReturnUrl}${catchSeparator}office365_error=callback_failed`);
-  }
-});
-
-/**
- * Get Office 365 connection status for current user
- * GET /api/integrations/office365/status
- */
-router.get('/status', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id) {
-      return sendAuthRequired(res);
-    }
-
-    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
-
-    const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id, providerId);
-
-    if (!isAuthenticated) {
-      return res.json({
-        connected: false,
-        message: 'Office 365 account not connected'
-      });
-    }
-
-    // Get user info from Microsoft
-    const userInfo = await Office365Service.getUserInfo(req.user.id, providerId);
-
-    // Get token expiration info
-    const tokenInfo = await Office365Service.getTokenExpirationInfo(req.user.id, providerId);
-
-    res.json({
-      connected: true,
-      userInfo: {
-        displayName: userInfo.displayName,
-        mail: userInfo.mail,
-        userPrincipalName: userInfo.userPrincipalName,
-        jobTitle: userInfo.jobTitle
-      },
-      tokenInfo: {
-        expiresAt: tokenInfo.expiresAt,
-        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
-        isExpiring: tokenInfo.isExpiring,
-        isExpired: tokenInfo.isExpired
-      },
-      message: tokenInfo.isExpiring
-        ? 'Office 365 account connected (tokens expiring soon)'
-        : 'Office 365 account connected successfully'
-    });
-  } catch (error) {
-    logger.error('❌ Error getting Office 365 status:', {
-      component: 'Office 365',
-      error: error.message
-    });
-
-    if (error.message.includes('authentication required')) {
-      return res.json({
-        connected: false,
-        message: 'Office 365 authentication expired'
-      });
-    }
-
-    return sendInternalError(res, error, 'get Office 365 status');
-  }
-});
-
-/**
- * Disconnect Office 365 account
- * POST /api/integrations/office365/disconnect
- */
-router.post('/disconnect', authRequired, async (req, res) => {
-  try {
-    if (!req.user?.id) {
-      return sendAuthRequired(res);
-    }
-
-    const providerId =
-      (typeof req.query.providerId === 'string' && req.query.providerId) ||
-      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
-      undefined;
-
-    const success = await Office365Service.deleteUserTokens(req.user.id, providerId);
-
-    if (success) {
-      logger.info('Office 365 disconnected', {
-        component: 'Office 365',
-        userId: req.user.id,
-        providerId
-      });
-      res.json({
-        success: true,
-        message: 'Office 365 account disconnected successfully'
-      });
-    } else {
-      res.json({
-        success: false,
-        message: 'No Office 365 connection found to disconnect'
-      });
-    }
-  } catch (error) {
-    return sendInternalError(res, error, 'disconnect Office 365');
-  }
+createOAuthIntegrationRouter(router, {
+  providerKey: 'office365',
+  displayName: 'Office 365',
+  requiresProviderId: true,
+  usesPkce: true,
+  authLimiter: office365AuthLimiter,
+  buildAuthUrl: ({ providerId, state, codeVerifier, req }) =>
+    Office365Service.generateAuthUrl(providerId, state, codeVerifier, req),
+  exchangeCodeForTokens: ({ providerId, code, codeVerifier, req }) =>
+    Office365Service.exchangeCodeForTokens(providerId, code, codeVerifier, req),
+  storeUserTokens: (userId, tokens) => Office365Service.storeUserTokens(userId, tokens),
+  isUserAuthenticated: (userId, providerId) => Office365Service.isUserAuthenticated(userId, providerId),
+  getUserInfo: (userId, providerId) => Office365Service.getUserInfo(userId, providerId),
+  getTokenExpirationInfo: (userId, providerId) =>
+    Office365Service.getTokenExpirationInfo(userId, providerId),
+  deleteUserTokens: (userId, providerId) => Office365Service.deleteUserTokens(userId, providerId),
+  formatUserInfo: userInfo => ({
+    displayName: userInfo.displayName,
+    mail: userInfo.mail,
+    userPrincipalName: userInfo.userPrincipalName,
+    jobTitle: userInfo.jobTitle
+  })
 });
 
 /**
