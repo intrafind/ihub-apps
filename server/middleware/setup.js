@@ -10,7 +10,7 @@ import jwtAuthMiddleware from './jwtAuth.js';
 import ldapAuthMiddleware from './ldapAuth.js';
 import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
-import { enhanceUserWithPermissions } from '../utils/authorization.js';
+import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import { buildApiPath, buildServerPath } from '../utils/basePath.js';
 import config from '../config.js';
@@ -630,23 +630,21 @@ export function setupMiddleware(app, platformConfig = {}) {
     next();
   });
 
-  // Enhance user with permissions after authentication.
+  // Enhance user with permissions after authentication, synthesizing an
+  // anonymous principal when no user is authenticated but anonymous access is
+  // allowed. Centralized here so every route sees a fully-enhanced req.user
+  // (real or anonymous) without having to remember to do it itself — a
+  // per-route copy of this logic was missing in the chat routes and caused an
+  // anonymous app-access bypass.
   // Read platform config from configCache per-request so that admin saves and
   // IHUB_PLATFORM__* overrides take effect without a server restart.
   app.use((req, res, next) => {
+    const livePlatform = configCache.getPlatform() || platformConfig;
+    const authConfig = livePlatform.auth || {};
     if (req.user && !req.user.permissions) {
-      const livePlatform = configCache.getPlatform() || platformConfig;
-      const authConfig = livePlatform.auth || {};
       req.user = enhanceUserWithPermissions(req.user, authConfig, livePlatform);
-
-      // logger.info('🔍 User permissions enhanced:', {
-      //   userId: req.user.id,
-      //   groups: req.user.groups,
-      //   hasPermissions: !!req.user.permissions,
-      //   appsCount: req.user.permissions?.apps?.size || 0,
-      //   modelsCount: req.user.permissions?.models?.size || 0,
-      //   isAdmin: req.user.isAdmin
-      // });
+    } else if (!req.user && isAnonymousAccessAllowed(livePlatform)) {
+      req.user = enhanceUserWithPermissions(null, authConfig, livePlatform);
     }
     next();
   });

@@ -1,5 +1,4 @@
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { authRequired, modelAccessRequired } from '../middleware/authRequired.js';
 import {
   sendFailedOperationError,
@@ -91,17 +90,6 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get(buildServerPath('/api/models'), authRequired, async (req, res) => {
     try {
       const platformConfig = configCache.getPlatform() || {};
-      const authConfig = platformConfig.auth || {};
-
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
 
       // Use centralized method to get filtered models with user-specific ETag
       const { data: models, etag: userSpecificEtag } = await configCache.getModelsForUser(

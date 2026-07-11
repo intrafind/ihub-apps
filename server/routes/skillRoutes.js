@@ -1,6 +1,5 @@
 import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
@@ -18,15 +17,6 @@ export default function registerSkillRoutes(app) {
     async (req, res) => {
       try {
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-        }
 
         const { data: skills, etag } = await configCache.getSkillsForUser(req.user, platformConfig);
 
@@ -61,11 +51,6 @@ export default function registerSkillRoutes(app) {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
 
         const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
         const skill = skills.find(s => s.name === req.params.name);
@@ -94,11 +79,6 @@ export default function registerSkillRoutes(app) {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
 
         // Verify user has access to this skill
         const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
@@ -144,11 +124,6 @@ export default function registerSkillRoutes(app) {
         }
 
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
 
         // Verify user has access to this skill
         const { data: skills } = await configCache.getSkillsForUser(req.user, platformConfig);
