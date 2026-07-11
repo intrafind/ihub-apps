@@ -92,7 +92,7 @@ async function testClientSecretPreservation() {
     log('   ✓ Test config written', 'green');
 
     // Import the helper functions (we'll simulate them)
-    const { default: configsModule } = await import('../../server/routes/admin/configs.js');
+    await import('../../server/routes/admin/configs.js');
 
     // Test 1: Verify environment variable placeholders are preserved in the file
     log('\n2. Verifying environment variables are preserved in file...', 'blue');
