@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import crypto from 'crypto';
-import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
-import credentialService from '../CredentialService.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
+import OAuthIntegrationBase from './OAuthIntegrationBase.js';
 
 /**
  * Google Drive export MIME type mappings for Google Workspace documents
@@ -34,9 +32,13 @@ const GOOGLE_EXPORT_MIME_TYPES = {
  * Google Drive Service for Google Workspace file access integration
  * Provides OAuth 2.0 authentication with PKCE, secure token storage, and Google Drive API access
  */
-class GoogleDriveService {
+class GoogleDriveService extends OAuthIntegrationBase {
   constructor() {
-    this.serviceName = 'googledrive';
+    super({
+      serviceName: 'googledrive',
+      displayName: 'Google Drive',
+      componentName: 'Google Drive'
+    });
 
     // Google OAuth2 endpoints
     this.authBaseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -48,59 +50,16 @@ class GoogleDriveService {
   }
 
   /**
-   * Build callback URL from request
-   * @param {Object} req - Express request object
-   * @param {string} providerId - Provider ID to include in callback URL
-   * @returns {string} Full callback URL
-   */
-  _buildCallbackUrl(req, providerId) {
-    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
-    const host = req.get('x-forwarded-host') || req.get('host');
-
-    if (!host) {
-      throw new Error('Unable to determine host for callback URL');
-    }
-
-    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
-  }
-
-  /**
    * Get Google Drive provider configuration
    * @param {string} providerId - The provider ID from cloud storage config
    * @returns {Object} Provider configuration
    */
   _getProviderConfig(providerId) {
-    if (!configCache || typeof configCache.get !== 'function') {
-      throw new Error('Platform configuration cache is not initialized');
-    }
-
-    const platformConfig = configCache.getPlatform();
-    const cloudStorage = platformConfig?.cloudStorage;
-
-    if (!cloudStorage?.enabled) {
-      throw new Error('Cloud storage is not enabled');
-    }
-
-    const provider = cloudStorage.providers?.find(
-      p => p.id === providerId && p.type === 'googledrive' && p.enabled !== false
-    );
-
-    if (!provider) {
-      throw new Error(`Google Drive provider '${providerId}' not found or not enabled`);
-    }
-
-    if (!provider.clientId || !provider.clientSecretRef) {
-      throw new Error(
-        `Google Drive provider '${providerId}' missing required configuration (clientId, clientSecretRef)`
-      );
-    }
-
-    // Resolve the client secret from the central credential store so
-    // downstream code works with the plaintext value inline on the provider.
-    return {
-      ...provider,
-      clientSecret: credentialService.resolveSecret(provider.clientSecretRef)
-    };
+    return super._getProviderConfig(providerId, {
+      type: 'googledrive',
+      requiredFields: ['clientId', 'clientSecretRef'],
+      secretFields: ['clientSecretRef']
+    });
   }
 
   /**
@@ -114,24 +73,12 @@ class GoogleDriveService {
   generateAuthUrl(providerId, state, codeVerifier, req = null) {
     const provider = this._getProviderConfig(providerId);
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-
-    let redirectUri = provider.redirectUri || process.env.GOOGLEDRIVE_OAUTH_REDIRECT_URI;
-
-    if (!redirectUri && req) {
-      redirectUri = this._buildCallbackUrl(req, providerId);
-      logger.info('Auto-detected Google Drive callback URL from request', {
-        component: 'Google Drive',
-        redirectUri
-      });
-    }
-
-    if (!redirectUri) {
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-      logger.warn('Using fallback localhost URL for Google Drive callback', {
-        component: 'Google Drive',
-        redirectUri
-      });
-    }
+    const redirectUri = this._resolveRedirectUri(
+      provider,
+      providerId,
+      'GOOGLEDRIVE_OAUTH_REDIRECT_URI',
+      req
+    );
 
     // Google Drive API scopes
     const scopes = [
@@ -166,24 +113,12 @@ class GoogleDriveService {
   async exchangeCodeForTokens(providerId, authCode, codeVerifier, req = null) {
     try {
       const provider = this._getProviderConfig(providerId);
-
-      let redirectUri = provider.redirectUri || process.env.GOOGLEDRIVE_OAUTH_REDIRECT_URI;
-
-      if (!redirectUri && req) {
-        redirectUri = this._buildCallbackUrl(req, providerId);
-        logger.info('Auto-detected Google Drive callback URL for token exchange', {
-          component: 'Google Drive',
-          redirectUri
-        });
-      }
-
-      if (!redirectUri) {
-        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-        logger.warn('Using fallback localhost URL for Google Drive token exchange', {
-          component: 'Google Drive',
-          redirectUri
-        });
-      }
+      const redirectUri = this._resolveRedirectUri(
+        provider,
+        providerId,
+        'GOOGLEDRIVE_OAUTH_REDIRECT_URI',
+        req
+      );
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,
@@ -307,129 +242,6 @@ class GoogleDriveService {
   }
 
   /**
-   * Store encrypted user tokens
-   * @param {string} userId - User ID
-   * @param {Object} tokens - Tokens to store
-   */
-  async storeUserTokens(userId, tokens) {
-    try {
-      if (!tokens.refreshToken) {
-        logger.warn('No refresh token - user will need to reconnect when access token expires', {
-          component: 'Google Drive'
-        });
-      }
-
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
-      logger.info('Google Drive tokens stored for user', {
-        component: 'Google Drive',
-        userId,
-        providerId: tokens.providerId
-      });
-      return true;
-    } catch (error) {
-      logger.error('Error storing user tokens', {
-        component: 'Google Drive',
-        error
-      });
-      throw new Error('Failed to store user tokens');
-    }
-  }
-
-  /**
-   * Retrieve and decrypt user tokens with automatic refresh if expired
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @returns {Promise<Object>} Decrypted tokens
-   */
-  async getUserTokens(userId, providerId) {
-    try {
-      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
-
-      if (expired) {
-        logger.info('Tokens expired for user, attempting refresh', {
-          component: 'Google Drive',
-          userId
-        });
-
-        try {
-          if (!tokens.refreshToken) {
-            logger.error('No refresh token available for user', {
-              component: 'Google Drive',
-              userId
-            });
-            throw new Error(
-              'No refresh token available - user needs to reconnect Google Drive account'
-            );
-          }
-
-          const refreshedTokens = await this.refreshAccessToken(
-            tokens.providerId,
-            tokens.refreshToken
-          );
-
-          await this.storeUserTokens(userId, refreshedTokens);
-          logger.info('Successfully refreshed Google Drive tokens for user', {
-            component: 'Google Drive',
-            userId
-          });
-          return refreshedTokens;
-        } catch (refreshError) {
-          logger.error('Failed to refresh tokens for user', {
-            component: 'Google Drive',
-            userId,
-            error: refreshError
-          });
-
-          await this.deleteUserTokens(userId, providerId);
-          throw new Error('Google Drive authentication expired. Please reconnect your account.');
-        }
-      }
-
-      return tokens;
-    } catch (error) {
-      if (
-        error.message.includes('not authenticated') ||
-        error.message.includes('authentication expired')
-      ) {
-        throw error;
-      }
-      logger.error('Error retrieving user tokens', {
-        component: 'Google Drive',
-        error
-      });
-      throw new Error('Failed to retrieve user tokens');
-    }
-  }
-
-  /**
-   * Delete user tokens (disconnect)
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID
-   * @returns {Promise<boolean>} Success status
-   */
-  async deleteUserTokens(userId, providerId) {
-    try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
-      if (result) {
-        logger.info('Google Drive tokens deleted for user', {
-          component: 'Google Drive',
-          userId,
-          providerId
-        });
-      }
-      return result;
-    } catch (error) {
-      logger.error('Error deleting user tokens', {
-        component: 'Google Drive',
-        error
-      });
-      return false;
-    }
-  }
-
-  /**
    * Make authenticated Google API request
    * @param {string} endpoint - API endpoint
    * @param {string} method - HTTP method
@@ -440,116 +252,15 @@ class GoogleDriveService {
    * @returns {Promise<Object>} API response
    */
   async makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
-    const maxRetries = 1;
-
-    try {
-      const tokens = await this.getUserTokens(userId, providerId);
-
-      const url = endpoint.startsWith('http') ? endpoint : `${this.driveApiUrl}${endpoint}`;
-
-      const fetchOptions = {
-        method,
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: 'application/json'
-        }
-      };
-
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        fetchOptions.headers['Content-Type'] = 'application/json';
-        fetchOptions.body = JSON.stringify(data);
-      }
-
-      const response = await httpFetch(url, fetchOptions);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < maxRetries) {
-          logger.info('Received 401, attempting token refresh and retry', {
-            component: 'Google Drive',
-            attempt: retryCount + 1,
-            maxAttempts: maxRetries + 1
-          });
-
-          try {
-            const expiredTokens = await tokenStorage.getUserTokens(
-              userId,
-              this.serviceName,
-              providerId
-            );
-
-            if (!expiredTokens.refreshToken) {
-              throw new Error('No refresh token available');
-            }
-
-            const refreshedTokens = await this.refreshAccessToken(
-              expiredTokens.providerId,
-              expiredTokens.refreshToken
-            );
-
-            await this.storeUserTokens(userId, refreshedTokens);
-
-            return await this.makeApiRequest(
-              endpoint,
-              method,
-              data,
-              userId,
-              providerId,
-              retryCount + 1
-            );
-          } catch (refreshError) {
-            logger.error('Forced token refresh failed', {
-              component: 'Google Drive',
-              error: refreshError
-            });
-
-            await this.deleteUserTokens(userId, providerId);
-            throw new Error('Google Drive authentication expired. Please reconnect your account.');
-          }
-        } else if (response.status === 401) {
-          throw new Error('Google Drive authentication required. Please reconnect your account.');
-        } else if (response.status === 429) {
-          const retryAfter = response.headers.get('retry-after') || 'unknown';
-          logger.warn('Rate limit exceeded', {
-            component: 'Google Drive',
-            retryAfter,
-            endpoint
-          });
-          throw new Error('Google Drive API rate limit exceeded. Please try again in a moment.');
-        }
-
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 404) {
-          logger.debug('Google Drive API returned 404 (not found)', {
-            component: 'Google Drive',
-            endpoint,
-            errorMessage: errorData?.error?.message || 'Resource not found'
-          });
-          throw new Error(
-            `Google Drive API error: ${errorData?.error?.message || 'Resource not found'}`
-          );
-        }
-
-        logger.error('Google Drive API request failed', {
-          component: 'Google Drive',
-          error: errorData
-        });
-        throw new Error(
-          `Google Drive API error: ${errorData?.error?.message || response.statusText}`
-        );
-      }
-
-      if (response.status === 204) return null;
-      return await response.json();
-    } catch (error) {
-      if (error.message.includes('Google Drive')) {
-        throw error;
-      }
-      logger.error('Google Drive API request failed', {
-        component: 'Google Drive',
-        error
-      });
-      throw new Error(`Google Drive API error: ${error.message}`);
-    }
+    return this._makeApiRequestWithRetry(
+      this.driveApiUrl,
+      endpoint,
+      method,
+      data,
+      userId,
+      providerId,
+      retryCount
+    );
   }
 
   /**
@@ -595,34 +306,6 @@ class GoogleDriveService {
         error
       });
       throw error;
-    }
-  }
-
-  /**
-   * Get token expiration info for monitoring
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Token metadata
-   */
-  async getTokenExpirationInfo(userId, providerId) {
-    try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
-      const now = new Date();
-      const expiresAt = new Date(metadata.expiresAt);
-      const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
-
-      return {
-        expiresAt: metadata.expiresAt,
-        minutesUntilExpiry,
-        isExpiring: minutesUntilExpiry <= 10,
-        isExpired: metadata.expired
-      };
-    } catch (error) {
-      return {
-        expiresAt: null,
-        minutesUntilExpiry: 0,
-        isExpiring: true,
-        isExpired: true
-      };
     }
   }
 

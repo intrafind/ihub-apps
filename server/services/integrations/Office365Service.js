@@ -1,20 +1,21 @@
 import 'dotenv/config';
 import crypto from 'crypto';
-import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
-import credentialService from '../CredentialService.js';
 import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
+import OAuthIntegrationBase from './OAuthIntegrationBase.js';
 
 /**
  * Office 365 Service for Microsoft 365 file access integration
  * Provides OAuth 2.0 authentication with PKCE, secure token storage, and Microsoft Graph API access
  */
-class Office365Service {
+class Office365Service extends OAuthIntegrationBase {
   constructor() {
-    this.serviceName = 'office365';
+    super({
+      serviceName: 'office365',
+      displayName: 'Office 365',
+      componentName: 'Office365Service'
+    });
 
     // Microsoft Identity Platform endpoints
     this.authBaseUrl = 'https://login.microsoftonline.com';
@@ -24,65 +25,16 @@ class Office365Service {
   }
 
   /**
-   * Build callback URL from request
-   * @param {Object} req - Express request object
-   * @param {string} providerId - Provider ID to include in callback URL
-   * @returns {string} Full callback URL
-   */
-  _buildCallbackUrl(req, providerId) {
-    // Resolve protocol + host with proxy-chain awareness (multi-value
-    // X-Forwarded-* lists are reduced to the leftmost / most-trusted
-    // value in publicBaseUrl.js).
-    const protocol = getForwardedProto(req);
-    const host = getForwardedHost(req);
-
-    if (!host) {
-      throw new Error('Unable to determine host for callback URL');
-    }
-
-    // Build full callback URL with provider ID
-    // Note: serviceName is included in the route mount point (/api/integrations/office365)
-    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
-  }
-
-  /**
    * Get Office 365 provider configuration
    * @param {string} providerId - The provider ID from cloud storage config
    * @returns {Object} Provider configuration
    */
   _getProviderConfig(providerId) {
-    if (!configCache || typeof configCache.get !== 'function') {
-      throw new Error('Platform configuration cache is not initialized');
-    }
-
-    const platformConfig = configCache.getPlatform();
-    const cloudStorage = platformConfig?.cloudStorage;
-
-    if (!cloudStorage?.enabled) {
-      throw new Error('Cloud storage is not enabled');
-    }
-
-    const provider = cloudStorage.providers?.find(
-      p => p.id === providerId && p.type === 'office365' && p.enabled !== false
-    );
-
-    if (!provider) {
-      throw new Error(`Office 365 provider '${providerId}' not found or not enabled`);
-    }
-
-    if (!provider.tenantIdRef || !provider.clientId || !provider.clientSecretRef) {
-      throw new Error(
-        `Office 365 provider '${providerId}' missing required configuration (tenantIdRef, clientId, clientSecretRef)`
-      );
-    }
-
-    // Resolve secrets from the central credential store so downstream code
-    // works with plaintext tenantId/clientSecret values inline on the provider.
-    return {
-      ...provider,
-      tenantId: credentialService.resolveSecret(provider.tenantIdRef),
-      clientSecret: credentialService.resolveSecret(provider.clientSecretRef)
-    };
+    return super._getProviderConfig(providerId, {
+      type: 'office365',
+      requiredFields: ['tenantIdRef', 'clientId', 'clientSecretRef'],
+      secretFields: ['tenantIdRef', 'clientSecretRef']
+    });
   }
 
   /**
@@ -146,27 +98,12 @@ class Office365Service {
   generateAuthUrl(providerId, state, codeVerifier, req = null) {
     const provider = this._getProviderConfig(providerId);
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-
-    // Use the provider's redirect URI, environment variable, auto-detected URL, or fallback to localhost
-    let redirectUri = provider.redirectUri || process.env.OFFICE365_OAUTH_REDIRECT_URI;
-
-    if (!redirectUri && req) {
-      // Auto-detect from request if not configured
-      redirectUri = this._buildCallbackUrl(req, providerId);
-      logger.info('Auto-detected Office 365 callback URL from request', {
-        component: 'Office365Service',
-        redirectUri
-      });
-    }
-
-    if (!redirectUri) {
-      // Final fallback to localhost (development)
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-      logger.warn('Using fallback localhost URL for Office 365 callback', {
-        component: 'Office365Service',
-        redirectUri
-      });
-    }
+    const redirectUri = this._resolveRedirectUri(
+      provider,
+      providerId,
+      'OFFICE365_OAUTH_REDIRECT_URI',
+      req
+    );
 
     const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
 
@@ -206,27 +143,12 @@ class Office365Service {
     try {
       const provider = this._getProviderConfig(providerId);
       const tokenUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/token`;
-
-      // Use the provider's redirect URI, environment variable, auto-detected URL, or fallback to localhost
-      let redirectUri = provider.redirectUri || process.env.OFFICE365_OAUTH_REDIRECT_URI;
-
-      if (!redirectUri && req) {
-        // Auto-detect from request if not configured
-        redirectUri = this._buildCallbackUrl(req, providerId);
-        logger.info('Auto-detected Office 365 callback URL from request for token exchange', {
-          component: 'Office365Service',
-          redirectUri
-        });
-      }
-
-      if (!redirectUri) {
-        // Final fallback to localhost (development)
-        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-        logger.warn('Using fallback localhost URL for Office 365 token exchange', {
-          component: 'Office365Service',
-          redirectUri
-        });
-      }
+      const redirectUri = this._resolveRedirectUri(
+        provider,
+        providerId,
+        'OFFICE365_OAUTH_REDIRECT_URI',
+        req
+      );
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,
@@ -352,150 +274,28 @@ class Office365Service {
   }
 
   /**
-   * Store encrypted user tokens
-   * @param {string} userId - User ID
-   * @param {Object} tokens - Tokens to store
+   * Office 365 also treats a 'permissions have been updated' error as a
+   * pass-through condition (surfaced by the outer getUserTokens() catch).
+   * @param {Error} error
+   * @returns {boolean}
    */
-  async storeUserTokens(userId, tokens) {
-    try {
-      if (!tokens.refreshToken) {
-        logger.warn('No refresh token - user will need to reconnect when access token expires', {
-          component: 'Office365Service'
-        });
-      }
-
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
-      logger.info('Office 365 tokens stored for user', {
-        component: 'Office365Service',
-        userId,
-        providerId: tokens.providerId
-      });
-      return true;
-    } catch (error) {
-      logger.error('Error storing user tokens', {
-        component: 'Office365Service',
-        error
-      });
-      throw new Error('Failed to store user tokens');
-    }
+  _isPassthroughTokenError(error) {
+    return (
+      super._isPassthroughTokenError(error) ||
+      error.message.includes('permissions have been updated')
+    );
   }
 
   /**
-   * Retrieve and decrypt user tokens with automatic refresh if expired
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID (omit for legacy single-slot lookup)
-   * @returns {Promise<Object>} Decrypted tokens
+   * Microsoft Graph always expects Content-Type: application/json, even
+   * for GET requests without a body.
    */
-  async getUserTokens(userId, providerId) {
-    try {
-      // First, get the tokens to check their scope
-      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
-
-      // Check if tokens have old scopes that require admin consent (Group.Read.All, ChannelSettings.Read.All)
-      // These tokens need to be invalidated so user can re-authenticate with new scopes
-      if (
-        tokens.scope &&
-        (tokens.scope.includes('Group.Read.All') ||
-          tokens.scope.includes('ChannelSettings.Read.All'))
-      ) {
-        logger.warn(
-          'Detected old Office 365 token with admin-consent scope, invalidating to force re-authentication',
-          {
-            component: 'Office365Service',
-            userId,
-            oldScope: tokens.scope
-          }
-        );
-      }
-
-      // Check if tokens are expired
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
-
-      if (expired) {
-        logger.info('Tokens expired, attempting refresh', {
-          component: 'Office365Service',
-          userId
-        });
-
-        try {
-          if (!tokens.refreshToken) {
-            logger.error('No refresh token available for user', {
-              component: 'Office365Service',
-              userId
-            });
-            throw new Error(
-              'No refresh token available - user needs to reconnect Office 365 account'
-            );
-          }
-
-          const refreshedTokens = await this.refreshAccessToken(
-            tokens.providerId,
-            tokens.refreshToken
-          );
-
-          // Store the refreshed tokens
-          await this.storeUserTokens(userId, refreshedTokens);
-          logger.info('Successfully refreshed and stored Office 365 tokens for user', {
-            component: 'Office365Service',
-            userId
-          });
-          return refreshedTokens;
-        } catch (refreshError) {
-          logger.error('Failed to refresh tokens for user', {
-            component: 'Office365Service',
-            userId,
-            error: refreshError
-          });
-
-          // If refresh fails, delete the invalid tokens so user can reconnect
-          await this.deleteUserTokens(userId, providerId);
-
-          throw new Error('Office 365 authentication expired. Please reconnect your account.');
-        }
-      }
-
-      return tokens;
-    } catch (error) {
-      // Don't wrap specific error messages - pass them through
-      if (
-        error.message.includes('not authenticated') ||
-        error.message.includes('permissions have been updated') ||
-        error.message.includes('authentication expired')
-      ) {
-        throw error;
-      }
-      logger.error('Error retrieving user tokens', {
-        component: 'Office365Service',
-        error
-      });
-      throw new Error('Failed to retrieve user tokens');
-    }
-  }
-
-  /**
-   * Delete user tokens (disconnect)
-   * @param {string} userId - User ID
-   * @param {string} [providerId] - Provider ID (omit for legacy single-slot delete)
-   * @returns {Promise<boolean>} Success status
-   */
-  async deleteUserTokens(userId, providerId) {
-    try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
-      if (result) {
-        logger.info('Office 365 tokens deleted for user', {
-          component: 'Office365Service',
-          userId,
-          providerId
-        });
-      }
-      return result;
-    } catch (error) {
-      logger.error('Error deleting user tokens', {
-        component: 'Office365Service',
-        error
-      });
-      return false;
-    }
+  _buildApiRequestHeaders(tokens) {
+    return {
+      Authorization: `Bearer ${tokens.accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    };
   }
 
   /**
@@ -509,129 +309,15 @@ class Office365Service {
    * @returns {Promise<Object>} API response
    */
   async makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
-    const maxRetries = 1; // Allow one retry for token refresh
-
-    try {
-      const tokens = await this.getUserTokens(userId, providerId);
-
-      const url = endpoint.startsWith('http') ? endpoint : `${this.graphApiUrl}${endpoint}`;
-
-      const fetchOptions = {
-        method,
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json'
-        }
-      };
-
-      if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        fetchOptions.body = JSON.stringify(data);
-      }
-
-      const response = await httpFetch(url, fetchOptions);
-
-      if (!response.ok) {
-        if (response.status === 401 && retryCount < maxRetries) {
-          logger.info('Received 401 error, attempting to force token refresh and retry', {
-            component: 'Office365Service',
-            attempt: retryCount + 1,
-            maxAttempts: maxRetries + 1
-          });
-
-          try {
-            // Force refresh tokens
-            const expiredTokens = await tokenStorage.getUserTokens(
-              userId,
-              this.serviceName,
-              providerId
-            );
-
-            if (!expiredTokens.refreshToken) {
-              throw new Error('No refresh token available');
-            }
-
-            const refreshedTokens = await this.refreshAccessToken(
-              expiredTokens.providerId,
-              expiredTokens.refreshToken
-            );
-
-            await this.storeUserTokens(userId, refreshedTokens);
-
-            logger.info('Forced token refresh successful for user', {
-              component: 'Office365Service',
-              userId,
-              providerId
-            });
-
-            // Retry the request with fresh tokens
-            return await this.makeApiRequest(
-              endpoint,
-              method,
-              data,
-              userId,
-              providerId,
-              retryCount + 1
-            );
-          } catch (refreshError) {
-            logger.error('Forced token refresh failed', {
-              component: 'Office365Service',
-              error: refreshError
-            });
-
-            // Clean up invalid tokens
-            await this.deleteUserTokens(userId, providerId);
-            throw new Error('Office 365 authentication expired. Please reconnect your account.');
-          }
-        } else if (response.status === 401) {
-          throw new Error('Office 365 authentication required. Please reconnect your account.');
-        } else if (response.status === 429) {
-          // Rate limit exceeded - log and throw
-          const retryAfter = response.headers.get('retry-after') || 'unknown';
-          logger.warn('Rate limit exceeded', {
-            component: 'Office365Service',
-            retryAfter,
-            endpoint
-          });
-          throw new Error('Office 365 API rate limit exceeded. Please try again in a moment.');
-        }
-
-        // Log 404 errors as debug (expected for Teams without SharePoint sites, etc.)
-        const errorData = await response.json().catch(() => ({}));
-        if (response.status === 404) {
-          logger.debug('Office 365 API returned 404', {
-            component: 'Office365Service',
-            endpoint,
-            error: errorData?.error?.message || 'Resource not found'
-          });
-          throw new Error(
-            `Office 365 API error: ${errorData?.error?.message || 'Resource not found'}`
-          );
-        }
-
-        // Log other errors as error
-        logger.error('Office 365 API request failed', {
-          component: 'Office365Service',
-          error: errorData
-        });
-        throw new Error(
-          `Office 365 API error: ${errorData?.error?.message || response.statusText}`
-        );
-      }
-
-      if (response.status === 204) return null;
-      return await response.json();
-    } catch (error) {
-      // Re-throw known errors
-      if (error.message.includes('Office 365') || error.message.includes('authentication')) {
-        throw error;
-      }
-      logger.error('Office 365 API request failed', {
-        component: 'Office365Service',
-        error
-      });
-      throw new Error(`Office 365 API error: ${error.message}`);
-    }
+    return this._makeApiRequestWithRetry(
+      this.graphApiUrl,
+      endpoint,
+      method,
+      data,
+      userId,
+      providerId,
+      retryCount
+    );
   }
 
   /**
@@ -688,34 +374,6 @@ class Office365Service {
         error
       });
       throw error;
-    }
-  }
-
-  /**
-   * Get token expiration info for monitoring
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Token metadata
-   */
-  async getTokenExpirationInfo(userId, providerId) {
-    try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
-      const now = new Date();
-      const expiresAt = new Date(metadata.expiresAt);
-      const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
-
-      return {
-        expiresAt: metadata.expiresAt,
-        minutesUntilExpiry,
-        isExpiring: minutesUntilExpiry <= 10, // Consider expiring if less than 10 minutes
-        isExpired: metadata.expired
-      };
-    } catch (error) {
-      return {
-        expiresAt: null,
-        minutesUntilExpiry: 0,
-        isExpiring: true,
-        isExpired: true
-      };
     }
   }
 
@@ -963,7 +621,7 @@ class Office365Service {
           logger.warn('Could not load drives for site', {
             component: 'Office365Service',
             siteName: site.displayName,
-            error: e
+            error
           });
         }
       }
