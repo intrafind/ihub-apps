@@ -219,6 +219,63 @@ export class WorkflowLLMHelper {
   }
 
   /**
+   * Verify the API key, then execute a single non-streaming-loop LLM call and
+   * return a uniform success/error result — the "verify → call → catch"
+   * boilerplate that several node executors (query-plan, quote validator)
+   * used to hand-roll independently.
+   *
+   * Pass an already-resolved `apiKey` to skip verification (e.g. a caller
+   * that verifies once and then calls this in a loop with the same key).
+   * Only use this for genuinely single-shot calls — NOT inside a tool-use
+   * loop, which needs the raw `executeStreamingRequest` result (tool calls,
+   * finish reason, etc.) rather than this helper's collapsed `{content}`.
+   *
+   * @param {Object} params - Request parameters
+   * @param {Object} params.model - Model configuration
+   * @param {Array} params.messages - Messages to send
+   * @param {string} [params.apiKey] - Pre-verified API key; verifies via
+   *   `verifyApiKey` when omitted
+   * @param {Object} [params.options] - Request options (will be filtered)
+   * @param {string} [params.language='en'] - Language for error messages
+   * @param {string} [params.errorLabel='LLM call'] - Prefix used in the
+   *   error message on both verification and call failure
+   * @returns {Promise<{success: true, content: string, response: Object}|{success: false, error: string}>}
+   */
+  async runSingleShotLLM({
+    model,
+    messages,
+    apiKey,
+    options = {},
+    language = 'en',
+    errorLabel = 'LLM call'
+  }) {
+    let resolvedApiKey = apiKey;
+    if (!resolvedApiKey) {
+      const apiKeyResult = await this.verifyApiKey(model, language);
+      if (!apiKeyResult.success) {
+        return {
+          success: false,
+          error: apiKeyResult.error?.message || `API key verification failed for ${errorLabel}`
+        };
+      }
+      resolvedApiKey = apiKeyResult.apiKey;
+    }
+
+    try {
+      const response = await this.executeStreamingRequest({
+        model,
+        messages,
+        apiKey: resolvedApiKey,
+        options,
+        language
+      });
+      return { success: true, content: response?.content || '', response };
+    } catch (err) {
+      return { success: false, error: `${errorLabel} failed: ${err.message}` };
+    }
+  }
+
+  /**
    * Execute a streaming LLM request with proper option filtering and error handling.
    *
    * @param {Object} params - Request parameters
