@@ -287,15 +287,15 @@ const generatePDFHTML = (
     <div class="metadata">
       <h3>Chat Settings</h3>
       <div class="metadata-grid">
-        ${settings.model ? `<div><strong>Model:</strong> ${settings.model}</div>` : ''}
-        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${settings.temperature}</div>` : ''}
-        ${settings.style ? `<div><strong>Style:</strong> ${settings.style}</div>` : ''}
-        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${settings.outputFormat}</div>` : ''}
+        ${settings.model ? `<div><strong>Model:</strong> ${escapeHtml(settings.model)}</div>` : ''}
+        ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${escapeHtml(String(settings.temperature))}</div>` : ''}
+        ${settings.style ? `<div><strong>Style:</strong> ${escapeHtml(settings.style)}</div>` : ''}
+        ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${escapeHtml(settings.outputFormat)}</div>` : ''}
         ${
           settings.variables && Object.keys(settings.variables).length > 0
             ? `
           <div><strong>Variables:</strong> ${Object.entries(settings.variables)
-            .map(([k, v]) => `${k}: ${v}`)
+            .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
             .join(', ')}</div>
         `
             : ''
@@ -321,7 +321,7 @@ const generatePDFHTML = (
   <div class="container">
     <header class="header">
       <h1>${escapeHtml(docTitle)}</h1>
-      ${appName ? `<h2>${appName}</h2>` : ''}
+      ${appName ? `<h2>${escapeHtml(appName)}</h2>` : ''}
       <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
     </header>
     
@@ -331,7 +331,7 @@ const generatePDFHTML = (
       ${messagesHTML}
     </main>
     
-    ${watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
+    ${watermark.text ? `<div class="watermark">${escapeHtml(watermark.text)}</div>` : ''}
   </div>
 </body>
 </html>
