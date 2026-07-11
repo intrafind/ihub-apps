@@ -1,5 +1,6 @@
 import assert from 'assert';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
+import { convertOpenaiResponsesResponseToGeneric } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
 import logger from '../utils/logger.js';
 
 // Test basic adapter functionality
@@ -128,7 +129,7 @@ const nonStreamingResponse = JSON.stringify({
   status: 'completed'
 });
 
-const result = OpenAIResponsesAdapter.processResponseBuffer(nonStreamingResponse);
+const result = await convertOpenaiResponsesResponseToGeneric(nonStreamingResponse);
 assert.strictEqual(result.content.length, 1, 'Should have one content item');
 assert.strictEqual(
   result.content[0],
@@ -158,7 +159,7 @@ const toolCallResponse = JSON.stringify({
   status: 'completed'
 });
 
-const result2 = OpenAIResponsesAdapter.processResponseBuffer(toolCallResponse);
+const result2 = await convertOpenaiResponsesResponseToGeneric(toolCallResponse);
 assert.strictEqual(result2.tool_calls.length, 1, 'Should have one tool call');
 assert.strictEqual(result2.tool_calls[0].function.name, 'get_weather', 'Tool name should match');
 assert.strictEqual(result2.complete, true, 'Response should be complete');

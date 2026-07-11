@@ -9,6 +9,7 @@ import {
   formatToolsForAnthropic,
   formatToolsForGoogle
 } from '../adapters/toolFormatter.js';
+import { convertResponseToGeneric } from '../adapters/toolCalling/index.js';
 
 // Test tool definition
 const testTool = {
@@ -332,10 +333,10 @@ const mockResponses = {
 
 // Test response processing
 try {
-  const openaiProcessed = OpenAIAdapter.processResponseBuffer(mockResponses.openai);
-  const anthropicProcessed = AnthropicAdapter.processResponseBuffer(mockResponses.anthropic);
-  const googleProcessed = GoogleAdapter.processResponseBuffer(mockResponses.google);
-  const mistralProcessed = MistralAdapter.processResponseBuffer(mockResponses.mistral);
+  const openaiProcessed = await convertResponseToGeneric(mockResponses.openai, 'openai');
+  const anthropicProcessed = await convertResponseToGeneric(mockResponses.anthropic, 'anthropic');
+  const googleProcessed = await convertResponseToGeneric(mockResponses.google, 'google');
+  const mistralProcessed = await convertResponseToGeneric(mockResponses.mistral, 'mistral');
 
   logger.info('Response processing results:');
   logger.info('- OpenAI processed:', !!openaiProcessed);
