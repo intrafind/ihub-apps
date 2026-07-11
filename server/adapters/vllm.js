@@ -8,87 +8,19 @@
  * versions accepted the now-removed `guided_json` extra parameter; we don't
  * target those.
  */
-import { convertToolsFromGeneric, withSerializedToolArguments } from './toolCalling/index.js';
-import {
-  modelConsumesThoughtSignature,
-  stripThoughtSignatureExtraContent
-} from './toolCalling/thoughtSignatures.js';
+import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import { formatOpenAICompatibleMessages } from './openaiCompatibleMessages.js';
 import logger from '../utils/logger.js';
 
 class VLLMAdapterClass extends BaseAdapter {
   /**
-   * Format messages for vLLM API (same as OpenAI)
+   * Format messages for vLLM API (same as OpenAI, including audio support —
+   * gated behind `hasAudioData`, itself gated by a model's `supportsAudio`
+   * flag, so this is a no-op unless a vLLM model config explicitly opts in)
    */
   formatMessages(messages, model) {
-    const keepExtraContent = modelConsumesThoughtSignature(model);
-    const formattedMessages = messages.map(message => {
-      const content = message.content;
-
-      // Base message with role and optional tool fields
-      const base = { role: message.role };
-      // Gemini's `extra_content` thought signature is a Google vendor extension.
-      // Strict OpenAI-compatible providers reject a request that carries it, so
-      // drop it unless this model is the one that consumes it — a caller
-      // replaying Gemini-originated history against another model must not have
-      // that field forwarded upstream. A call made without arguments goes back
-      // as `{}`: strict servers (Ollama) reject `"arguments": ""`.
-      if (message.tool_calls) {
-        base.tool_calls = withSerializedToolArguments(
-          keepExtraContent
-            ? message.tool_calls
-            : stripThoughtSignatureExtraContent(message.tool_calls)
-        );
-      }
-      if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
-      if (message.name) base.name = message.name;
-
-      // Handle image data in messages
-      if (!this.hasImageData(message)) {
-        const finalContent =
-          base.tool_calls && (content === undefined || content === '') ? null : content;
-        return { ...base, content: finalContent };
-      }
-
-      // Format messages with image content for vision models.
-      //
-      // Previously this branch only handled the single-image (object) shape
-      // and shipped `message.imageData.base64` straight as the `image_url.url`.
-      // Two bugs in one: the Office / chat client sends `imageData` as an
-      // array, so the property access returned `undefined`; and even when a
-      // legacy single image came through, raw base64 isn't a valid
-      // `image_url.url` value — it must be wrapped in a `data:<mime>;base64,…`
-      // URL. Result: every Outlook image attachment silently failed on vLLM
-      // (issue #1467). Mirror OpenAIAdapter.formatMessages here so arrays
-      // and the data-URL wrapping behave the same way across providers.
-      const contentParts = content ? [{ type: 'text', text: content }] : [];
-
-      if (Array.isArray(message.imageData)) {
-        message.imageData
-          .filter(img => img && img.base64)
-          .forEach(img => {
-            contentParts.push({
-              type: 'image_url',
-              image_url: {
-                url: `data:${img.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(img.base64)}`,
-                detail: 'high'
-              }
-            });
-          });
-      } else {
-        contentParts.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${message.imageData.format || message.imageData.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
-            detail: 'high'
-          }
-        });
-      }
-
-      return { ...base, content: contentParts };
-    });
-
-    return formattedMessages;
+    return formatOpenAICompatibleMessages(messages, model, this);
   }
 
   /**
@@ -181,21 +113,7 @@ class VLLMAdapterClass extends BaseAdapter {
     // tokens. Mirrors the OpenAI adapter, including the `additionalProperties:
     // false` enforcement that some schema backends require.
     if (responseSchema) {
-      const schemaClone = JSON.parse(JSON.stringify(responseSchema));
-      const enforceNoExtras = node => {
-        if (!node || typeof node !== 'object') return;
-        if (node.type === 'object') {
-          node.additionalProperties = false;
-        }
-        if (node.properties) {
-          Object.values(node.properties).forEach(enforceNoExtras);
-        }
-        if (node.items) {
-          const items = Array.isArray(node.items) ? node.items : [node.items];
-          items.forEach(enforceNoExtras);
-        }
-      };
-      enforceNoExtras(schemaClone);
+      const schemaClone = this.enforceSchemaNoExtras(responseSchema);
 
       body.response_format = {
         type: 'json_schema',
