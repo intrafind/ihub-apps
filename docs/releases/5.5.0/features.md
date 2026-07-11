@@ -461,6 +461,16 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Admin User List No Longer Exposes Password Hashes
+
+`GET /api/admin/auth/users` no longer includes each user's bcrypt `passwordHash` in the response.
+The endpoint's own documentation already promised hashes were excluded, but the value was returned
+verbatim — exposing it to the admin browser, devtools, and any HTTP logs or proxy caches.
+
+- User records returned by the admin user list now omit `passwordHash`, matching the create and
+  update endpoints, which already stripped it.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
