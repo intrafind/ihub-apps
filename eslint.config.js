@@ -103,7 +103,8 @@ export default [
           patterns: [
             {
               group: ['**/api/endpoints/admin', '**/api/endpoints/admin.js'],
-              message: "Import from 'api/adminApi' instead — 'api/endpoints/admin' was removed in #1743."
+              message:
+                "Import from 'api/adminApi' instead — 'api/endpoints/admin' was removed in #1743."
             }
           ]
         }
