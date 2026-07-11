@@ -31,6 +31,8 @@
  * @module services/workflow/expressionEvaluator
  */
 
+import { resolveDotPath } from './pathResolver.js';
+
 /* ───────────────────────── Path resolution ───────────────────────── */
 
 /**
@@ -54,20 +56,7 @@ export function resolvePath(path, state) {
     segments = ['data', 'nodeResults', rawParts[1], 'output', ...rawParts.slice(2)];
   }
 
-  let current = state;
-  for (const part of segments) {
-    if (current === null || current === undefined) return undefined;
-    const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
-    if (arrayMatch) {
-      const [, name, idx] = arrayMatch;
-      current = current[name];
-      if (!Array.isArray(current)) return undefined;
-      current = current[Number.parseInt(idx, 10)];
-    } else {
-      current = current[part];
-    }
-  }
-  return current;
+  return resolveDotPath(segments, state);
 }
 
 /* ───────────────────────── Tokenizer ────────────────────────────── */

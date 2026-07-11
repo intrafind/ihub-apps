@@ -148,23 +148,24 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
           apiKey = resolved.apiKey;
         }
 
-        try {
-          const { system, user } = buildLlmVerdictPrompt({
-            quoteText: decision.text,
-            sourceWindow: sourceText
-          });
-          const response = await this.llmHelper.executeStreamingRequest({
-            model,
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: user }
-            ],
-            apiKey,
-            options: { temperature: 0.1 },
-            language
-          });
+        const { system, user } = buildLlmVerdictPrompt({
+          quoteText: decision.text,
+          sourceWindow: sourceText
+        });
+        const llmResult = await this.llmHelper.runSingleShotLLM({
+          model,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+          ],
+          apiKey,
+          options: { temperature: 0.1 },
+          language,
+          errorLabel: `LLM verdict for quote ${decision.index}`
+        });
+        if (llmResult.success) {
           llmCalls++;
-          const verdict = parseLlmQuoteVerdict(response?.content || '');
+          const verdict = parseLlmQuoteVerdict(llmResult.content);
           updatedRecord.quotes[decision.index] = {
             ...original,
             validated: verdict.validated,
@@ -174,7 +175,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
           if (verdict.validated) {
             coverage.quotesValidated = (coverage.quotesValidated || 0) + 1;
           }
-        } catch (err) {
+        } else {
           updatedRecord.quotes[decision.index] = {
             ...original,
             validated: false,
@@ -182,7 +183,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
           };
           updatedRecord.failures.push({
             code: 'QUOTE_LLM_ERROR',
-            message: `LLM verdict failed for quote ${decision.index}: ${err.message}`
+            message: llmResult.error
           });
         }
       }
