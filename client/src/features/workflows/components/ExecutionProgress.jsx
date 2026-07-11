@@ -258,6 +258,90 @@ function ItemDetails({ item, t, showTechnical }) {
 }
 
 /**
+ * Renders one progress item's row: status icon, badges (model/tokens/duration/timestamp),
+ * insight line, truncated output preview, expand chevron, and the expanded ItemDetails panel.
+ * `leading` supplies the call-site-specific "identity" markup (type icon + name for
+ * single-occurrence rows, an iteration badge for grouped sub-rows).
+ */
+function ItemRow({
+  item,
+  showTechnical,
+  currentLanguage,
+  t,
+  leading,
+  indent = '',
+  isExpanded,
+  onToggle
+}) {
+  const hasDetails = item.rawResult || item.outputValue;
+
+  return (
+    <>
+      <button
+        onClick={() => hasDetails && onToggle()}
+        className={`w-full flex items-start gap-3 p-3 ${indent} text-left ${
+          hasDetails ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : ''
+        }`}
+        disabled={!hasDetails}
+      >
+        <NodeStatus status={item.status} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {leading}
+            {showTechnical && item.type === 'prompt' && item.model && (
+              <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                {item.model}
+              </span>
+            )}
+            {showTechnical && item.tokens && (item.tokens.input > 0 || item.tokens.output > 0) && (
+              <span
+                className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
+              >
+                {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
+              </span>
+            )}
+            {item.duration !== undefined && item.duration !== null && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {item.duration >= 1000
+                  ? `${(item.duration / 1000).toFixed(1)}s`
+                  : item.duration > 0
+                    ? `${item.duration}ms`
+                    : '<1ms'}
+              </span>
+            )}
+            {item.timestamp && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
+              </span>
+            )}
+          </div>
+          {item.insight && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
+          )}
+          {item.outputValue && !isExpanded && (
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+              {showTechnical && item.outputVariable && (
+                <span className="font-mono">{item.outputVariable} = </span>
+              )}
+              {summarizeValue(item.outputValue, 80)}
+            </p>
+          )}
+        </div>
+        {hasDetails && (
+          <Icon
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            className="w-5 h-5 text-gray-400 flex-shrink-0"
+            aria-hidden="true"
+          />
+        )}
+      </button>
+      {isExpanded && hasDetails && <ItemDetails item={item} t={t} showTechnical={showTechnical} />}
+    </>
+  );
+}
+
+/**
  * Component for displaying workflow execution progress.
  *
  * @param {Object} props - Component props
@@ -604,84 +688,26 @@ function ExecutionProgress({ state, nodes = [] }) {
                     {items.map(item => {
                       const itemKey = `${item.nodeId}-${item.historyIndex}`;
                       const isItemExpanded = expandedNodes.has(itemKey);
-                      const hasDetails = item.rawResult || item.outputValue;
 
                       return (
                         <div
                           key={itemKey}
                           className="border-b last:border-b-0 border-gray-100 dark:border-gray-700"
                         >
-                          <button
-                            onClick={() => hasDetails && toggleNode(itemKey)}
-                            className={`w-full flex items-start gap-3 p-3 pl-6 text-left ${
-                              hasDetails
-                                ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer'
-                                : ''
-                            }`}
-                            disabled={!hasDetails}
-                          >
-                            <NodeStatus status={item.status} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
-                                  #{item.iteration}
-                                </span>
-                                {showTechnical && item.type === 'prompt' && item.model && (
-                                  <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
-                                    {item.model}
-                                  </span>
-                                )}
-                                {showTechnical &&
-                                  item.tokens &&
-                                  (item.tokens.input > 0 || item.tokens.output > 0) && (
-                                    <span
-                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
-                                      title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
-                                    >
-                                      {(item.tokens.input + item.tokens.output).toLocaleString()}{' '}
-                                      tokens
-                                    </span>
-                                  )}
-                                {item.duration !== undefined && item.duration !== null && (
-                                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                                    {item.duration >= 1000
-                                      ? `${(item.duration / 1000).toFixed(1)}s`
-                                      : item.duration > 0
-                                        ? `${item.duration}ms`
-                                        : '<1ms'}
-                                  </span>
-                                )}
-                                {item.timestamp && (
-                                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                                    {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
-                                  </span>
-                                )}
-                              </div>
-                              {item.insight && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                  {item.insight}
-                                </p>
-                              )}
-                              {item.outputValue && !isItemExpanded && (
-                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                                  {showTechnical && item.outputVariable && (
-                                    <span className="font-mono">{item.outputVariable} = </span>
-                                  )}
-                                  {summarizeValue(item.outputValue, 80)}
-                                </p>
-                              )}
-                            </div>
-                            {hasDetails && (
-                              <Icon
-                                name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
-                                className="w-5 h-5 text-gray-400 flex-shrink-0"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </button>
-                          {isItemExpanded && hasDetails && (
-                            <ItemDetails item={item} t={t} showTechnical={showTechnical} />
-                          )}
+                          <ItemRow
+                            item={item}
+                            showTechnical={showTechnical}
+                            currentLanguage={currentLanguage}
+                            t={t}
+                            leading={
+                              <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
+                                #{item.iteration}
+                              </span>
+                            }
+                            indent="pl-6"
+                            isExpanded={isItemExpanded}
+                            onToggle={() => toggleNode(itemKey)}
+                          />
                         </div>
                       );
                     })}
@@ -695,78 +721,26 @@ function ExecutionProgress({ state, nodes = [] }) {
           const item = firstItem;
           const itemKey = `${item.nodeId}-${item.historyIndex}`;
           const isExpanded = expandedNodes.has(itemKey);
-          const hasDetails = item.rawResult || item.outputValue;
 
           return (
             <div
               key={itemKey}
               className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
             >
-              <button
-                onClick={() => hasDetails && toggleNode(itemKey)}
-                className={`w-full flex items-start gap-3 p-3 text-left ${
-                  hasDetails ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : ''
-                }`}
-                disabled={!hasDetails}
-              >
-                <NodeStatus status={item.status} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+              <ItemRow
+                item={item}
+                showTechnical={showTechnical}
+                currentLanguage={currentLanguage}
+                t={t}
+                leading={
+                  <>
                     <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
-                    {showTechnical && item.type === 'prompt' && item.model && (
-                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
-                        {item.model}
-                      </span>
-                    )}
-                    {showTechnical &&
-                      item.tokens &&
-                      (item.tokens.input > 0 || item.tokens.output > 0) && (
-                        <span
-                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
-                          title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
-                        >
-                          {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
-                        </span>
-                      )}
-                    {item.duration !== undefined && item.duration !== null && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {item.duration >= 1000
-                          ? `${(item.duration / 1000).toFixed(1)}s`
-                          : item.duration > 0
-                            ? `${item.duration}ms`
-                            : '<1ms'}
-                      </span>
-                    )}
-                    {item.timestamp && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
-                      </span>
-                    )}
-                  </div>
-                  {item.insight && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
-                  )}
-                  {item.outputValue && !isExpanded && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                      {showTechnical && item.outputVariable && (
-                        <span className="font-mono">{item.outputVariable} = </span>
-                      )}
-                      {summarizeValue(item.outputValue, 80)}
-                    </p>
-                  )}
-                </div>
-                {hasDetails && (
-                  <Icon
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-              {isExpanded && hasDetails && (
-                <ItemDetails item={item} t={t} showTechnical={showTechnical} />
-              )}
+                  </>
+                }
+                isExpanded={isExpanded}
+                onToggle={() => toggleNode(itemKey)}
+              />
             </div>
           );
         })}
