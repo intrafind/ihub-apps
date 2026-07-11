@@ -207,25 +207,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
 
     // Structured outputs use text.format instead of response_format
     if (responseSchema) {
-      // Deep clone incoming schema and enforce additionalProperties:false on all objects
-      const schemaClone = JSON.parse(JSON.stringify(responseSchema));
-      const enforceNoExtras = node => {
-        logger.info('Enforcing no extras on schema node', {
-          component: 'OpenAIResponsesAdapter',
-          nodeType: node?.type
-        });
-        if (node && node.type === 'object') {
-          node.additionalProperties = false;
-        }
-        if (node.properties) {
-          Object.values(node.properties).forEach(enforceNoExtras);
-        }
-        if (node.items) {
-          const items = Array.isArray(node.items) ? node.items : [node.items];
-          items.forEach(enforceNoExtras);
-        }
-      };
-      enforceNoExtras(schemaClone);
+      const schemaClone = this.enforceSchemaNoExtras(responseSchema);
 
       // Responses API uses text.format instead of response_format
       // Merge with existing text configuration

@@ -147,6 +147,33 @@ export class BaseAdapter {
   }
 
   /**
+   * Deep-clone a JSON Schema and set `additionalProperties: false` on every
+   * object node, recursing through `properties` and `items`. Several
+   * OpenAI-compatible providers (OpenAI, vLLM, OpenAI Responses) require this
+   * for strict structured-output enforcement.
+   * @param {Object} schema - JSON Schema to sanitize
+   * @returns {Object} Sanitized deep clone
+   */
+  enforceSchemaNoExtras(schema) {
+    const schemaClone = JSON.parse(JSON.stringify(schema));
+    const enforceNoExtras = node => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'object') {
+        node.additionalProperties = false;
+      }
+      if (node.properties) {
+        Object.values(node.properties).forEach(enforceNoExtras);
+      }
+      if (node.items) {
+        const items = Array.isArray(node.items) ? node.items : [node.items];
+        items.forEach(enforceNoExtras);
+      }
+    };
+    enforceNoExtras(schemaClone);
+    return schemaClone;
+  }
+
+  /**
    * Format tool response for provider
    * @param {Object} message - Tool message
    * @returns {Object} Formatted tool response
