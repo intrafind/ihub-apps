@@ -461,6 +461,16 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Transient Server Errors No Longer Get Cached and Replayed as Data
+
+A single transient server error (for example a brief hiccup loading styles or UI configuration)
+could previously get cached client-side and served back as if it were successful data for up to a
+minute, causing affected screens to crash or render blank instead of showing an error or retrying.
+
+- Failed requests are no longer written into the client-side response cache; a retry after a
+  transient error always fetches fresh data instead of replaying the earlier failure.
+- No configuration or admin action required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
