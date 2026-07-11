@@ -143,7 +143,7 @@ export function createOAuthIntegrationRouter(
     async (req, res) => {
       const providerId = requiresProviderId ? req.params.providerId : undefined;
       try {
-        const { code, state, error: oauthError } = req.query;
+        const { code, state, error: oauthError } = req.query; // lgtm[js/sensitive-get-query] -- OAuth authorization code and state delivered via callback redirect by design (RFC 6749)
 
         const sessionKey = sessionKeyFor(providerId);
         const storedAuth = req.session?.[sessionKey];
