@@ -127,17 +127,6 @@ export const handleApiResponse = async (
           url: error.config?.url
         });
 
-        // For 5xx server errors, store a minimal placeholder in cache with shorter TTL
-        // to prevent overwhelming the server with retries on error
-        if (error.response?.status >= 500 && cacheKey) {
-          const errorPlaceholder = {
-            error: enhancedError.message,
-            isErrorPlaceholder: true,
-            status: enhancedError.status
-          };
-          cache.set(cacheKey, errorPlaceholder, DEFAULT_CACHE_TTL.SHORT);
-        }
-
         throw enhancedError;
       } finally {
         // Always clear the pending request reference when done
