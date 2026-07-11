@@ -41,25 +41,33 @@ jobs:
         id: check
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           should_run=false
-          
+
           # Always run on releases
           if [[ "${{ github.event_name }}" == "release" ]]; then
             should_run=true
           fi
-          
+
           # Always run on manual workflow dispatch
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             should_run=true
           fi
-          
+
           # Check for comment trigger with proper escaping
+          # GHSA-f79p-xmmr-m7xg: only trusted associations may trigger a build,
+          # since issue_comment always runs against the default branch and
+          # this workflow has packages: write.
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # Use environment variable to safely handle multi-line comments
             echo "$COMMENT_BODY" > comment_body.txt
             if grep -q "@build docker images" comment_body.txt; then
-              should_run=true
+              if [[ "$COMMENT_AUTHOR_ASSOCIATION" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+                should_run=true
+              else
+                echo "Comment matched trigger phrase but author association '$COMMENT_AUTHOR_ASSOCIATION' is not trusted. Skipping."
+              fi
             fi
             rm -f comment_body.txt
           fi
@@ -132,7 +140,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
           labels: |
             org.opencontainers.image.title=iHub Apps
             org.opencontainers.image.description=iHub Applications Platform
