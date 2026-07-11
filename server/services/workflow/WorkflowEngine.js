@@ -556,6 +556,10 @@ export class WorkflowEngine {
             executionId
           });
 
+          // Same plan reconciliation as the success/error paths: a run that
+          // dies by wall-clock timeout shouldn't leave a task spinning either.
+          await this._reconcilePlanOnTerminal(executionId, state);
+
           await this.stateManager.update(executionId, {
             status: WorkflowStatus.FAILED,
             completedAt: new Date().toISOString()
@@ -801,6 +805,10 @@ export class WorkflowEngine {
           maxIterations: MAX_EXECUTION_ITERATIONS
         });
 
+        // Same plan reconciliation as the other terminal paths: a run that
+        // dies by hitting the iteration cap shouldn't leave a task spinning.
+        await this._reconcilePlanOnTerminal(executionId);
+
         await this.stateManager.update(executionId, {
           status: WorkflowStatus.FAILED
         });
@@ -824,6 +832,10 @@ export class WorkflowEngine {
         executionId,
         error
       });
+
+      // Same plan reconciliation as the other terminal paths: a run that
+      // dies with an unexpected error shouldn't leave a task spinning either.
+      await this._reconcilePlanOnTerminal(executionId);
 
       await this.stateManager.update(executionId, {
         status: WorkflowStatus.FAILED
