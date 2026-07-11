@@ -21,6 +21,7 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 /**
  * Initialize source manager singleton
@@ -1553,7 +1554,7 @@ export default function registerAdminSourcesRoutes(app) {
           sourceId: id,
           dependencies: dependencies.map(dep => ({
             appId: dep.id,
-            appName: Object.values(dep.name || {})[0] || dep.id,
+            appName: getLocalizedString(dep.name, 'en', undefined, dep.id),
             type: 'app'
           }))
         });

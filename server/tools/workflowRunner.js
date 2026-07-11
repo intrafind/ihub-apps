@@ -18,20 +18,13 @@ import { actionTracker } from '../actionTracker.js';
 import { clients } from '../sse.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { getLocalizedString } from '../utils/localize.js';
 
 /** Maps chatId → { executionId, engine } for active workflow executions in chat */
 export const activeWorkflowExecutions = new Map();
 
-/**
- * Extract a plain string from a localized object or return as-is
- * @param {string|Object} value - Plain string or { en: "...", de: "..." }
- * @param {string} lang - Preferred language
- * @returns {string}
- */
 function resolveLocalized(value, lang = 'en') {
-  if (!value) return '';
-  if (typeof value === 'string') return value;
-  return value[lang] || value.en || Object.values(value)[0] || '';
+  return getLocalizedString(value, lang);
 }
 
 /**
