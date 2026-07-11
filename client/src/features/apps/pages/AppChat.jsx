@@ -841,14 +841,7 @@ function AppChat({ preloadedApp = null }) {
     sendMessage: text => {
       setInput(text);
       setTimeout(() => {
-        const form = document.querySelector('form');
-        if (form) {
-          const submitEvent = new Event('submit', {
-            cancelable: true,
-            bubbles: true
-          });
-          form.dispatchEvent(submitEvent);
-        }
+        formRef.current?.requestSubmit();
       }, 0);
     },
     isProcessing: processing,
@@ -1182,14 +1175,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     setTimeout(() => {
-      const form = document.querySelector('form');
-      if (form) {
-        const submitEvent = new Event('submit', {
-          cancelable: true,
-          bubbles: true
-        });
-        form.dispatchEvent(submitEvent);
-      }
+      formRef.current?.requestSubmit();
     }, 0);
   };
 
