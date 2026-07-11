@@ -461,6 +461,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Agent Workflow Tasks No Longer Stay Stuck "In Progress" After a Timeout or Iteration-Limit Failure
+
+Agent workflow runs that failed because they ran out of time (`maxExecutionTime`) or hit the
+internal iteration cap previously left their last task showing as still running in the execution
+view, even though the run itself had already stopped. Runs that fail via the normal node-error path
+were already handled correctly.
+
+- Any task still marked "in progress" or "open" when a run ends is now always flipped to
+  "cancelled," regardless of which failure path ended the run.
+- No configuration or admin action required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
