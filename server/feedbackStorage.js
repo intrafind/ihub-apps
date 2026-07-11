@@ -4,29 +4,18 @@ import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';
+import { createJsonlAppender } from './utils/jsonlAppender.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'feedback.jsonl');
-const SAVE_INTERVAL_MS = 10000;
 
 let trackingEnabled = true;
 let configLoaded = false;
-let queue = [];
-let saveTimer = null;
 
-// Single-flight serialization for any operation that touches `feedback.jsonl`.
-// `flushQueue` (appendFile) and `cleanupFeedback` (read + writeFile) must not
-// interleave, otherwise a flush that lands between the cleanup's read and its
-// rewrite would be overwritten — silently losing the just-appended entries.
-let writeLock = Promise.resolve();
-function withWriteLock(fn) {
-  const prev = writeLock;
-  let release;
-  writeLock = new Promise(r => {
-    release = r;
-  });
-  return prev.then(fn).finally(release);
-}
+const appender = createJsonlAppender({
+  getFilePath: () => dataFile,
+  component: 'FeedbackStorage'
+});
 
 async function loadConfig() {
   if (configLoaded) return;
@@ -37,37 +26,6 @@ async function loadConfig() {
     trackingEnabled = true;
   }
   configLoaded = true;
-}
-
-async function appendQueueToDisk() {
-  if (queue.length === 0) return;
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  const pending = queue;
-  queue = [];
-  const lines = pending.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-  try {
-    await fs.appendFile(dataFile, lines, 'utf8');
-  } catch (err) {
-    // Re-buffer on failure so the next flush retries instead of dropping entries.
-    queue = pending.concat(queue);
-    throw err;
-  }
-}
-
-async function flushQueue() {
-  return withWriteLock(appendQueueToDisk);
-}
-
-function scheduleFlush() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(async () => {
-    saveTimer = null;
-    try {
-      await flushQueue();
-    } catch (error) {
-      logger.error('Failed to save feedback data', { component: 'FeedbackStorage', error });
-    }
-  }, SAVE_INTERVAL_MS);
 }
 
 export function storeFeedback({
@@ -103,8 +61,7 @@ export function storeFeedback({
     ifinderMessageId,
     baseUrl
   };
-  queue.push(entry);
-  scheduleFlush();
+  appender.append(entry);
 }
 
 export async function reloadConfig() {
@@ -120,8 +77,8 @@ export async function reloadConfig() {
  * Entries are filtered by their ISO `timestamp` field; malformed lines are
  * preserved verbatim (we can't reason about their age safely) so admins can
  * inspect/repair them out-of-band rather than have cleanup silently delete
- * them. Read-filter-rewrite is serialised against `flushQueue` by an
- * in-process write lock so a concurrent append cannot be overwritten.
+ * them. Read-filter-rewrite is serialised against the appender's flush by a
+ * write lock so a concurrent append cannot be overwritten.
  *
  * @param {number} retentionDays
  * @returns {Promise<{removed: number, kept: number}>}
@@ -130,12 +87,12 @@ export async function cleanupFeedback(retentionDays) {
   if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
     return { removed: 0, kept: 0 };
   }
-  return withWriteLock(async () => {
+  return appender.withWriteLock(async () => {
     // Drain any queued entries into the on-disk file first so they're included
-    // in the read-filter pass below. Done under the lock so a new
-    // scheduleFlush() can't slip in between drain and rewrite.
+    // in the read-filter pass below. Done under the lock so a new append()
+    // can't slip in between drain and rewrite.
     try {
-      await appendQueueToDisk();
+      await appender.drainToDisk();
     } catch {
       // A drain failure is logged elsewhere; continue with what's on disk.
     }
@@ -177,12 +134,3 @@ export async function cleanupFeedback(retentionDays) {
     return { removed, kept: retained.length };
   });
 }
-
-// Start periodic flush interval
-setInterval(() => {
-  if (queue.length > 0) {
-    flushQueue().catch(err =>
-      logger.error('Feedback save error', { component: 'FeedbackStorage', error: err })
-    );
-  }
-}, SAVE_INTERVAL_MS);
