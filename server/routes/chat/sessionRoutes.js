@@ -811,12 +811,14 @@ export default function registerSessionRoutes(
               .status(
                 prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
                   ? 404
-                  : prep.error.code === 'noModelsAvailable' ||
-                      prep.error.code === 'noCompatibleModels' ||
-                      prep.error.code === 'noModelIdProvided' ||
-                      prep.error.code === 'noModelsForUser'
-                    ? 400
-                    : 500
+                  : prep.error.code === 'modelAccessDeniedForUser'
+                    ? 403
+                    : prep.error.code === 'noModelsAvailable' ||
+                        prep.error.code === 'noCompatibleModels' ||
+                        prep.error.code === 'noModelIdProvided' ||
+                        prep.error.code === 'noModelsForUser'
+                      ? 400
+                      : 500
               )
               .json({ error: errMsg, code: prep.error.code });
           }

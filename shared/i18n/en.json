@@ -1972,6 +1972,7 @@
     "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
     "unauthorized": "Invalid API key",
     "modelAccessDenied": "API key is not allowed to use this model",
+    "modelAccessDeniedForUser": "You don't have permission to use this AI model. Please contact your administrator to request access.",
     "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
     "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",

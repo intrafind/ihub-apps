@@ -475,3 +475,17 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Chat Requests Now Enforce Per-User Model Permissions
+
+The model allowlist configured for a user's group (**Admin → Groups → Models**) is now enforced on
+every chat request, closing a gap where it previously only affected which models appeared in the
+app's model picker.
+
+- Requesting a model outside your group's allowed models now returns a clear "not permitted" error
+  instead of silently succeeding.
+- Automatic model selection (when no model is explicitly chosen) now only considers models both the
+  app and the user's group permit, instead of every model the app allows.
+- No admin action is required — groups that already restrict `models` to specific IDs are now fully
+  enforced for chat, matching the behavior already used by the model list and the OpenAI-compatible
+  API endpoints.
