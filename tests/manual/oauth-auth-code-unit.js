@@ -25,7 +25,7 @@ import os from 'os';
 // Resolve the project root so relative source paths work regardless of cwd.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 // ---------------------------------------------------------------------------
 // Tiny test harness – keeps the file self-contained with no extra deps.
@@ -70,7 +70,7 @@ import {
   generateCodeVerifier,
   generateCodeChallenge,
   verifyCodeChallenge
-} from '../server/utils/pkceUtils.js';
+} from '../../server/utils/pkceUtils.js';
 
 section('PKCE Utils (RFC 7636)');
 
@@ -162,7 +162,7 @@ import {
   storeCode,
   consumeCode,
   cleanup
-} from '../server/utils/authorizationCodeStore.js';
+} from '../../server/utils/authorizationCodeStore.js';
 
 section('Authorization Code Store (RFC 6749 §4.1.2)');
 
@@ -248,7 +248,7 @@ await test('cleanup() removes expired entries without affecting valid ones', () 
 // Instead we test the public API by writing to the real path in a temp dir
 // backup-and-restore pattern.
 
-import { hasConsent, grantConsent, revokeConsent } from '../server/utils/consentStore.js';
+import { hasConsent, grantConsent, revokeConsent } from '../../server/utils/consentStore.js';
 
 section('Consent Store');
 

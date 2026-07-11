@@ -18,16 +18,16 @@ import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const rootDir = join(__dirname, '../..');
 
 async function testModelWithProviderKey() {
   console.log('🧪 Testing Model Test Endpoint with Provider-Specific API Key\n');
 
   try {
     // 1. Import required modules
-    const { simpleCompletion } = await import('../server/utils.js');
+    const { simpleCompletion } = await import('../../server/utils.js');
     const { default: tokenStorageService } =
-      await import('../server/services/TokenStorageService.js');
+      await import('../../server/services/TokenStorageService.js');
 
     // 2. Read providers.json to check for provider-specific keys
     const providersPath = join(rootDir, 'contents', 'config', 'providers.json');

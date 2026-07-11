@@ -17,10 +17,10 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import configCache from '../server/configCache.js';
-import tokenStorageService from '../server/services/TokenStorageService.js';
-import webSearchService from '../server/services/WebSearchService.js';
-import config from '../server/config.js';
+import configCache from '../../server/configCache.js';
+import tokenStorageService from '../../server/services/TokenStorageService.js';
+import webSearchService from '../../server/services/WebSearchService.js';
+import config from '../../server/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

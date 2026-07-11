@@ -23,7 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Test configuration
-const TEST_DIR = path.join(__dirname, '../tmp-test-encryption');
+const TEST_DIR = path.join(__dirname, '../../tmp-test-encryption');
 const KEY_FILE = path.join(TEST_DIR, '.encryption-key');
 const PROVIDERS_FILE = path.join(TEST_DIR, 'providers.json');
 const TEST_API_KEY = 'sk-test-openai-key-12345678abcdef';

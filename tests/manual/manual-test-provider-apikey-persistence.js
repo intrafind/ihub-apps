@@ -15,7 +15,7 @@ import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const rootDir = join(__dirname, '../..');
 
 const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
 const testProviderId = 'test-provider';
