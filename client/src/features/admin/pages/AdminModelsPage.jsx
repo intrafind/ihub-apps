@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
+import { useAdminResourceList } from '../hooks/useAdminResourceList';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import { fetchAdminModels, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ModelNameCell({ model, currentLanguage }) {
@@ -53,65 +54,38 @@ function AdminModelsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
-  const [models, setModels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    items: models,
+    loading,
+    error,
+    setError,
+    uploading,
+    toggleOne: toggleModel,
+    toggleAll,
+    remove: removeModel,
+    downloadConfig: downloadModelConfig,
+    uploadConfig: handleUploadConfig
+  } = useAdminResourceList({
+    fetchFn: fetchAdminModels,
+    toggleAllFn: toggleModels,
+    resourcePath: 'models',
+    resourceLabel: 'model',
+    requiredFields: ['id', 'name', 'description', 'provider'],
+    transformOnToggleAll: (model, enabled) => ({
+      ...model,
+      enabled,
+      ...(enabled ? {} : { default: false })
+    })
+  });
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [testingModel, setTestingModel] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
-  const loadModels = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await makeAdminApiCall('/admin/models');
-      const data = response.data;
-      setModels(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err.message);
-      setModels([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadModels();
-  }, []);
-
-  const toggleModel = async modelId => {
-    try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
-        method: 'POST'
-      });
-      const result = response.data;
-      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const enableAllModels = async () => {
-    try {
-      await toggleModels('*', true);
-      setModels(prev => prev.map(m => ({ ...m, enabled: true })));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const disableAllModels = async () => {
-    try {
-      await toggleModels('*', false);
-      setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  const enableAllModels = () => toggleAll(true);
+  const disableAllModels = () => toggleAll(false);
 
   const testModel = async modelId => {
     try {
@@ -142,67 +116,9 @@ function AdminModelsPage() {
   const handleDeleteModel = async modelId => {
     if (!confirm(t('admin.models.deleteConfirm', 'Delete this model?'))) return;
     try {
-      await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
-      setModels(prev => prev.filter(m => m.id !== modelId));
+      await removeModel(modelId);
     } catch (err) {
       setError(err.message);
-    }
-  };
-
-  const downloadModelConfig = async modelId => {
-    try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}`);
-      const model = response.data;
-      const configData = JSON.stringify(model, null, 2);
-      const blob = new Blob([configData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `model-${modelId}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(`Failed to download model config: ${err.message}`);
-    }
-  };
-
-  const handleUploadConfig = async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
-      return;
-    }
-    setUploading(true);
-    let modelConfig;
-    try {
-      const fileContent = await file.text();
-      modelConfig = JSON.parse(fileContent);
-      if (
-        !modelConfig.id ||
-        !modelConfig.name ||
-        !modelConfig.description ||
-        !modelConfig.provider
-      ) {
-        throw new Error(
-          'Invalid model config: missing required fields (id, name, description, provider)'
-        );
-      }
-      await makeAdminApiCall('/admin/models', { method: 'POST', body: modelConfig });
-      await loadModels();
-      event.target.value = '';
-    } catch (err) {
-      if (err.message.includes('already exists')) {
-        setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
-      } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
-      } else {
-        setError(`Failed to upload model config: ${err.message}`);
-      }
-    } finally {
-      setUploading(false);
     }
   };
 

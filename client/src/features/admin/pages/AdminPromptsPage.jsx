@@ -9,6 +9,7 @@ import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api
 import { fetchUIConfig } from '../../../api';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useFilterState } from '../hooks/useFilterState';
+import { useAdminResourceList } from '../hooks/useAdminResourceList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function PromptNameCell({ prompt, currentLanguage }) {
@@ -43,22 +44,34 @@ function AdminPromptsPage() {
   const defaultTab = promptsLibraryEnabled ? 'prompts' : 'variables';
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || defaultTab);
 
-  const [prompts, setPrompts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    items: prompts,
+    loading,
+    error,
+    uploading,
+    toggleOne: toggleOnePrompt,
+    toggleAll,
+    remove: removePrompt,
+    downloadConfig: downloadPromptConfig,
+    uploadConfig: handleUploadConfig
+  } = useAdminResourceList({
+    fetchFn: fetchAdminPrompts,
+    toggleAllFn: togglePrompts,
+    resourcePath: 'prompts',
+    resourceLabel: 'prompt',
+    requiredFields: ['id', 'name', 'prompt'],
+    autoLoad: promptsLibraryEnabled
+  });
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [showPromptDetails, setShowPromptDetails] = useState(false);
   const [uiConfig, setUiConfig] = useState(null);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (promptsLibraryEnabled) loadPrompts();
-    else setLoading(false);
     loadUIConfig();
-  }, [promptsLibraryEnabled]);
+  }, []);
 
   useEffect(() => {
     setSearchParams(
@@ -81,46 +94,8 @@ function AdminPromptsPage() {
     }
   };
 
-  const loadPrompts = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchAdminPrompts();
-      setPrompts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err.message);
-      setPrompts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTogglePrompt = async promptId => {
-    try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, { method: 'POST' });
-      await loadPrompts();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const enableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', true);
-      await loadPrompts();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const disableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', false);
-      await loadPrompts();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  const enableAllPrompts = () => toggleAll(true);
+  const disableAllPrompts = () => toggleAll(false);
 
   const handleDeletePrompt = async promptId => {
     if (
@@ -129,8 +104,7 @@ function AdminPromptsPage() {
       return;
     }
     try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}`, { method: 'DELETE' });
-      await loadPrompts();
+      await removePrompt(promptId);
     } catch (err) {
       alert(err.message || 'Failed to delete prompt');
     }
@@ -138,56 +112,6 @@ function AdminPromptsPage() {
 
   const handleClonePrompt = prompt => {
     navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
-  };
-
-  const downloadPromptConfig = async promptId => {
-    try {
-      const response = await makeAdminApiCall(`/admin/prompts/${promptId}`);
-      const prompt = response.data;
-      const configData = JSON.stringify(prompt, null, 2);
-      const blob = new Blob([configData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `prompt-${promptId}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(`Failed to download prompt config: ${err.message}`);
-    }
-  };
-
-  const handleUploadConfig = async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
-      return;
-    }
-    setUploading(true);
-    let promptConfig;
-    try {
-      const fileContent = await file.text();
-      promptConfig = JSON.parse(fileContent);
-      if (!promptConfig.id || !promptConfig.name || !promptConfig.prompt) {
-        throw new Error('Invalid prompt config: missing required fields (id, name, prompt)');
-      }
-      await makeAdminApiCall('/admin/prompts', { method: 'POST', body: promptConfig });
-      await loadPrompts();
-      event.target.value = '';
-    } catch (err) {
-      if (err.message.includes('already exists')) {
-        setError(`Prompt with ID "${promptConfig?.id || 'unknown'}" already exists`);
-      } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
-      } else {
-        setError(`Failed to upload prompt config: ${err.message}`);
-      }
-    } finally {
-      setUploading(false);
-    }
   };
 
   const filteredPrompts = prompts.filter(prompt => {
@@ -309,7 +233,7 @@ function AdminPromptsPage() {
       label: t('admin.prompts.toggle', 'Toggle enabled'),
       icon: 'eye',
       priority: 'primary',
-      onClick: p => handleTogglePrompt(p.id)
+      onClick: p => toggleOnePrompt(p.id)
     },
     {
       id: 'clone',

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useFilterState } from '../hooks/useFilterState';
+import { useAdminResourceList } from '../hooks/useAdminResourceList';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
 import AppCreationWizard from '../../apps/components/AppCreationWizard';
 import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
+import { fetchAdminApps, toggleApps } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -37,9 +38,25 @@ function AdminAppsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
-  const [apps, setApps] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    items: apps,
+    loading,
+    error,
+    setError,
+    uploading,
+    load: loadApps,
+    toggleOne: toggleApp,
+    toggleAll,
+    remove: removeApp,
+    downloadConfig: downloadAppConfig,
+    uploadConfig: handleUploadConfig
+  } = useAdminResourceList({
+    fetchFn: fetchAdminApps,
+    toggleAllFn: toggleApps,
+    resourcePath: 'apps',
+    resourceLabel: 'app',
+    requiredFields: ['id', 'name', 'description']
+  });
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
@@ -49,11 +66,9 @@ function AdminAppsPage() {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
-  const [uploading, setUploading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
-    loadApps();
     loadUIConfig();
   }, []);
 
@@ -66,47 +81,8 @@ function AdminAppsPage() {
     }
   };
 
-  const loadApps = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchAdminApps();
-      setApps(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleApp = async appId => {
-    try {
-      const response = await makeAdminApiCall(`/admin/apps/${appId}/toggle`, { method: 'POST' });
-      const result = response.data;
-      setApps(prev =>
-        prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
-      );
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const enableAllApps = async () => {
-    try {
-      await toggleApps('*', true);
-      setApps(prev => prev.map(app => ({ ...app, enabled: true })));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const disableAllApps = async () => {
-    try {
-      await toggleApps('*', false);
-      setApps(prev => prev.map(app => ({ ...app, enabled: false })));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+  const enableAllApps = () => toggleAll(true);
+  const disableAllApps = () => toggleAll(false);
 
   const deleteApp = appId => {
     setConfirmDialog({
@@ -116,8 +92,7 @@ function AdminAppsPage() {
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
-          await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
-          setApps(prev => prev.filter(app => app.id !== appId));
+          await removeApp(appId);
         } catch (err) {
           setError(err.message);
         }
@@ -163,56 +138,6 @@ function AdminAppsPage() {
   const handleCloneApp = app => {
     setSelectedTemplate(app);
     setShowCreationWizard(true);
-  };
-
-  const downloadAppConfig = async appId => {
-    try {
-      const response = await makeAdminApiCall(`/admin/apps/${appId}`);
-      const app = response.data;
-      const configData = JSON.stringify(app, null, 2);
-      const blob = new Blob([configData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `app-${appId}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(`Failed to download app config: ${err.message}`);
-    }
-  };
-
-  const handleUploadConfig = async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
-      return;
-    }
-    setUploading(true);
-    let appConfig;
-    try {
-      const fileContent = await file.text();
-      appConfig = JSON.parse(fileContent);
-      if (!appConfig.id || !appConfig.name || !appConfig.description) {
-        throw new Error('Invalid app config: missing required fields (id, name, description)');
-      }
-      await makeAdminApiCall('/admin/apps', { method: 'POST', body: appConfig });
-      await loadApps();
-      event.target.value = '';
-    } catch (err) {
-      if (err.message.includes('already exists')) {
-        setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
-      } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
-      } else {
-        setError(`Failed to upload app config: ${err.message}`);
-      }
-    } finally {
-      setUploading(false);
-    }
   };
 
   const getCategoryLabel = app => {
