@@ -475,3 +475,15 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Deleting an SSO User Now Revokes Access Immediately
+
+Deleting a user who signed in via OIDC, LDAP, Microsoft Teams, or NTLM now immediately invalidates
+their existing session token, matching the behavior already in place for local (username/password)
+accounts. Previously, only local-account deletions took effect right away — a deleted SSO user
+could keep using their app with a valid token until it expired (up to the configured session
+timeout).
+
+- Any request presenting a token for a user no longer found in the user database is now rejected
+  with a 401, for every authentication mode.
+- No admin action is required — the fix takes effect automatically on upgrade.

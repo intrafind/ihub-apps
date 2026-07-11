@@ -248,7 +248,7 @@ const oidcToken = jwt.sign(
 console.log(`  ✓ Generated OIDC JWT for testing`);
 console.log(`  🔍 Note: OIDC users are now validated against users database`);
 console.log(`  - If user exists and is disabled: returns 403`);
-console.log(`  - If user doesn't exist yet: allows (not persisted on first login)`);
+console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
 
 // Test 9: Simulate LDAP user validation
 console.log('\n📋 Test 9: Simulate JWT validation for LDAP users');
@@ -268,7 +268,8 @@ const ldapToken = jwt.sign(
 );
 
 console.log(`  ✓ Generated LDAP JWT for testing`);
-console.log(`  🔍 Note: LDAP users are now validated if persisted to users database`);
+console.log(`  🔍 Note: LDAP users are now validated against users database`);
+console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
 
 // Test 10: Simulate Teams user validation
 console.log('\n📋 Test 10: Simulate JWT validation for Teams users');
@@ -290,21 +291,25 @@ const teamsToken = jwt.sign(
 
 console.log(`  ✓ Generated Teams JWT for testing`);
 console.log(`  🔍 Note: Teams users are now validated against users database`);
+console.log(`  - If user record is missing (deleted after token issuance): returns 401`);
 
 console.log('\n' + '='.repeat(60));
 console.log('\n✅ Manual JWT validation security test completed!\n');
 console.log('Summary:');
 console.log('- The jwtAuth.js middleware now validates ALL auth modes against the database');
-console.log('- Local, OIDC, LDAP, and Teams users are validated for active status');
-console.log('- Deleted users will receive 401 "User account no longer exists" (local only)');
+console.log(
+  '- Local, OIDC, LDAP, Teams, and NTLM users are validated for existence + active status'
+);
+console.log('- Deleted users will receive 401 "User account no longer exists"');
 console.log('- Disabled users will receive 403 "User account has been disabled"');
 console.log('- Database errors will receive 503 "Service unavailable" (prevents bypass)');
 console.log('- This prevents disabled/deleted users from using valid JWT tokens\n');
 console.log('Auth Modes Covered:');
 console.log('- ✅ Local: Full validation (existence + active status)');
-console.log('- ✅ OIDC: Active status validation if user persisted');
-console.log('- ✅ LDAP: Active status validation if user persisted');
-console.log('- ✅ Teams: Active status validation if user persisted');
+console.log('- ✅ OIDC: Full validation (existence + active status)');
+console.log('- ✅ LDAP: Full validation (existence + active status)');
+console.log('- ✅ Teams: Full validation (existence + active status)');
+console.log('- ✅ NTLM: Full validation (existence + active status)');
 console.log('\nSecurity Improvement:');
 console.log('- If the user database cannot be loaded, authentication is REJECTED');
 console.log('- This prevents authentication bypass when the database is unavailable');
