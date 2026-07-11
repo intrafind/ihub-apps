@@ -3,8 +3,7 @@ import FormField from './FormField';
 import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
-import { fetchTools } from '../../../../../api/endpoints/admin';
-import { fetchAdminSources } from '../../../../../api/adminApi';
+import { fetchTools, fetchAdminSources } from '../../../../../api/adminApi';
 
 function PromptForm({ config, onChange }) {
   const [schemaText, setSchemaText] = useState(() => {

@@ -94,7 +94,20 @@ export default [
           // String form: 'error' | 'warn' | 'off'.
           return [rule, setting === 'off' ? 'off' : 'warn'];
         })
-      )
+      ),
+      // client/src/api/endpoints/admin.js was deleted (#1743) in favor of
+      // client/src/api/adminApi.js as the single admin API client layer.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/api/endpoints/admin', '**/api/endpoints/admin.js'],
+              message: "Import from 'api/adminApi' instead — 'api/endpoints/admin' was removed in #1743."
+            }
+          ]
+        }
+      ]
     }
   },
   {
