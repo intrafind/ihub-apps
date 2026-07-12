@@ -475,3 +475,14 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Deadlocked Workflow Runs No Longer Get Stuck in "Running" Forever
+
+Agent workflow runs that hit a deadlock — a step waiting on another step that can never
+complete, typically caused by a misconfigured `dependsOn` in a custom workflow — now fail
+immediately with a clear error instead of silently freezing in "Running" status.
+
+- The run is marked Failed with a `WORKFLOW_DEADLOCK` error identifying the blocked step(s),
+  and the run list/status views update accordingly instead of showing an indefinitely spinning run.
+- No configuration or admin action required; this only affects runs that would previously have
+  hung forever.
