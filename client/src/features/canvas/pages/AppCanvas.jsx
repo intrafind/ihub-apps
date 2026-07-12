@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import DOMPurify from 'dompurify';
 
 // Import components
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -192,7 +193,11 @@ export default function AppCanvas() {
         contextualInput += `\n\nSelected text: "${currentSelectedText}"`;
       }
       if (currentEditorContent.trim()) {
-        contextualInput += `\n\nCurrent document context: ${currentEditorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
+        const plainEditorContent = DOMPurify.sanitize(currentEditorContent, {
+          ALLOWED_TAGS: [],
+          ALLOWED_ATTR: []
+        });
+        contextualInput += `\n\nCurrent document context: ${plainEditorContent.substring(0, 500)}...`;
       }
 
       try {
