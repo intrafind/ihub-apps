@@ -298,6 +298,15 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
   try {
     const parsed = await parseJsonAsync(data);
 
+    // Extract usage data from streaming chunks (requires stream_options.include_usage)
+    if (parsed.usage) {
+      result.metadata.usage = {
+        promptTokens: parsed.usage.prompt_tokens || 0,
+        completionTokens: parsed.usage.completion_tokens || 0,
+        totalTokens: parsed.usage.total_tokens || 0
+      };
+    }
+
     // Handle error responses (vLLM specific)
     if (parsed.error) {
       result.error = true;
@@ -366,9 +375,13 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
       }
     }
 
-    // Handle finish reason
+    // Handle finish reason. Completion is deferred to the '[DONE]' sentinel
+    // (handled above) rather than set here, because vLLM sends a trailing
+    // usage-only chunk after finish_reason when stream_options.include_usage
+    // is set — marking complete here would make the stream consumer stop
+    // before that chunk arrives, silently discarding provider-reported token
+    // usage.
     if (parsed.choices && parsed.choices[0]?.finish_reason) {
-      result.complete = true;
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'vllm');
       result.finishReason = state.finishReason;
 

@@ -1,5 +1,17 @@
 # Features — 5.5.0
 
+## More Accurate Token Usage for OpenAI, Mistral, and vLLM Streaming Chats
+
+Fixed a bug where streaming chat responses from OpenAI, Mistral, and vLLM models reported
+estimated token counts instead of the provider's own usage figures.
+
+- Usage/billing telemetry for these providers now reports `tokenSource: provider` (the real
+  prompt/completion/total token counts from the model) instead of falling back to a rough estimate
+  on nearly every streaming request.
+- vLLM streaming responses now also read token usage from the provider at all — previously usage
+  was never extracted from vLLM streams, streaming or not.
+- No configuration changes are required; this takes effect automatically for existing models.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the

@@ -161,8 +161,12 @@ export async function convertMistralResponseToGeneric(data, _streamId = 'default
       }
     }
 
+    // Completion is deferred to the '[DONE]' sentinel (handled above) rather
+    // than set here, because Mistral sends a trailing usage-only chunk after
+    // finish_reason when stream_options.include_usage is set — marking
+    // complete here would make the stream consumer stop before that chunk
+    // arrives, silently discarding provider-reported token usage.
     if (parsed.choices && parsed.choices[0]?.finish_reason) {
-      result.complete = true;
       result.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'mistral');
     }
   } catch (error) {
