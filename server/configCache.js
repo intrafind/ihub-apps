@@ -571,6 +571,25 @@ class ConfigCache {
   }
 
   /**
+   * Resolve env-var placeholders + IHUB_* overrides for a config key and
+   * compute the resulting ETag. Shared by setCacheEntry (to cache the
+   * resolved data) and refreshCacheEntry (to compare a freshly-loaded value
+   * against the previously cached ETag). Both sides must go through this
+   * same resolution step — comparing a raw, unresolved reload against an
+   * ETag computed from resolved data made the "unchanged" check never match
+   * for any config containing `${VAR}` placeholders (e.g. platform.json,
+   * or model configs with `${OPENAI_API_KEY}`-style entries).
+   */
+  resolveForCache(key, data) {
+    const resolvedData = resolveEnvVarsInObject(data, {
+      skipPaths: ENV_VAR_SKIP_PATHS_BY_KEY[key]
+    });
+    applyIhubEnvOverrides(key, resolvedData);
+    const etag = this.generateETag(resolvedData);
+    return { resolvedData, etag };
+  }
+
+  /**
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
@@ -579,17 +598,7 @@ class ConfigCache {
       clearTimeout(this.refreshTimers.get(key));
     }
 
-    // Resolve environment variables in the data, opting specific fields out
-    // when they contain user-data templates instead of env var references.
-    const resolvedData = resolveEnvVarsInObject(data, {
-      skipPaths: ENV_VAR_SKIP_PATHS_BY_KEY[key]
-    });
-
-    // Apply IHUB_* environment variable overrides
-    applyIhubEnvOverrides(key, resolvedData);
-
-    // Generate ETag for the data
-    const etag = this.generateETag(resolvedData);
+    const { resolvedData, etag } = this.resolveForCache(key, data);
 
     // Set cache entry
     this.cache.set(key, {
@@ -616,7 +625,7 @@ class ConfigCache {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
         const apps = await loadAllApps(true, false);
-        const newEtag = this.generateETag(apps);
+        const { etag: newEtag } = this.resolveForCache(key, apps);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, apps);
@@ -632,7 +641,7 @@ class ConfigCache {
       // Special handling for models.json - load from both sources
       if (key === 'config/models.json') {
         const models = await loadAllModels(true, false);
-        const newEtag = this.generateETag(models);
+        const { etag: newEtag } = this.resolveForCache(key, models);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, models);
@@ -648,7 +657,7 @@ class ConfigCache {
       // Special handling for prompts.json - load from both sources
       if (key === 'config/prompts.json') {
         const prompts = await loadAllPrompts(true, false);
-        const newEtag = this.generateETag(prompts);
+        const { etag: newEtag } = this.resolveForCache(key, prompts);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, prompts);
@@ -664,7 +673,7 @@ class ConfigCache {
       // Special handling for workflows.json - load from both sources
       if (key === 'config/workflows.json') {
         const workflows = await loadAllWorkflows(true, false);
-        const newEtag = this.generateETag(workflows);
+        const { etag: newEtag } = this.resolveForCache(key, workflows);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, workflows);
@@ -681,7 +690,7 @@ class ConfigCache {
       if (key === 'config/agents.json') {
         try {
           const profiles = await loadAllAgentProfiles(true, false);
-          const newEtag = this.generateETag(profiles);
+          const { etag: newEtag } = this.resolveForCache(key, profiles);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, profiles);
@@ -704,7 +713,7 @@ class ConfigCache {
       if (key === 'config/tools.json') {
         const allTools = await loadAllTools(true, false);
         const expanded = expandToolFunctions(allTools);
-        const newEtag = this.generateETag(expanded);
+        const { etag: newEtag } = this.resolveForCache(key, expanded);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, expanded);
@@ -722,7 +731,7 @@ class ConfigCache {
         const groupsConfig = await loadJson(key, { useCache: false });
         if (groupsConfig !== null) {
           const resolvedConfig = resolveGroupInheritance(groupsConfig);
-          const newEtag = this.generateETag(resolvedConfig);
+          const { etag: newEtag } = this.resolveForCache(key, resolvedConfig);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, resolvedConfig);
@@ -740,7 +749,7 @@ class ConfigCache {
       if (key === 'config/platform.json') {
         const platformData = await loadJson(key, { useCache: false });
         if (platformData !== null) {
-          const newEtag = this.generateETag(platformData);
+          const { etag: newEtag } = this.resolveForCache(key, platformData);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
@@ -754,7 +763,7 @@ class ConfigCache {
         const credentialsData = await loadJson(key, { useCache: false });
         const resolved = credentialsData !== null ? credentialsData : { credentials: {} };
         decryptCredentials(resolved);
-        const newEtag = this.generateETag(resolved);
+        const { etag: newEtag } = this.resolveForCache(key, resolved);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, resolved);
@@ -788,6 +797,24 @@ class ConfigCache {
       });
       // Keep the old data in cache on refresh failure
     } finally {
+      // Always re-arm the refresh timer, whether this cycle found changes,
+      // found no changes, or failed to reload. setCacheEntry() only re-arms
+      // when it is actually called, and several branches above skip it when
+      // the ETag comparison says "unchanged" — without this, a single quiet
+      // cycle (or transient read error) permanently stops future refreshes
+      // for this key (see #1707). Re-arming here is a harmless reset even
+      // when setCacheEntry already scheduled a timer moments earlier in the
+      // same tick.
+      if (this.refreshTimers.has(key)) {
+        clearTimeout(this.refreshTimers.get(key));
+      }
+      this.refreshTimers.set(
+        key,
+        setTimeout(() => {
+          this.refreshCacheEntry(key);
+        }, this.cacheTTL)
+      );
+
       // Telemetry: emit reload counter + duration. Lazy-imported because
       // configCache.js is itself imported very early in the boot sequence.
       try {
@@ -1504,7 +1531,7 @@ class ConfigCache {
       const skills = [...discoveredSkills.values()];
 
       // Only update cache and log if content has changed (same pattern as other caches)
-      const newEtag = this.generateETag(skills);
+      const { etag: newEtag } = this.resolveForCache('skills', skills);
       const existing = this.cache.get('skills');
       if (!existing || existing.etag !== newEtag) {
         this.setCacheEntry('skills', skills);
