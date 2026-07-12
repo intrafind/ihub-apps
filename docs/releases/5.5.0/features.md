@@ -461,6 +461,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Fixed Several Broken Links on Subpath Deployments
+
+A handful of client-side actions used a hardcoded `/api/...` URL instead of the deployment's actual
+base path, so they 404'd when iHub is hosted under a subpath (for example `/ihub`) rather than at
+the root.
+
+- Fixed: skill export downloads, the admin provider health test, custom response renderers, agent
+  run artifact viewing, NTLM login, connecting cloud storage (Nextcloud, Office 365, Google Drive),
+  and the JIRA integration's connect/status/disconnect/refresh calls.
+- No configuration or admin action required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
