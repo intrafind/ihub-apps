@@ -475,3 +475,13 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## App-as-Tool Invocations Now Substitute Input Variables
+
+Apps that define input **Variables** and are enabled as an agent tool (App-as-tool) now correctly
+substitute `{{variable}}` placeholders in the system prompt when an agent calls them. Previously
+the variables an agent passed when calling the app were silently dropped, so the app answered
+using its raw, unfilled prompt template instead of the agent-supplied values.
+
+- Affects any app with `variables` defined that is exposed to agents via App-as-tool.
+- No configuration or admin action is required — existing apps pick up the fix automatically.

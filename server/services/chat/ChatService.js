@@ -71,17 +71,32 @@ class ChatService {
     });
 
     try {
+      // `prepareChatRequest`/`processMessageTemplates` read variables off the
+      // last user message (`lastUserMessage.variables`), not from a top-level
+      // request param — attach them here so app-as-tool invocations get the
+      // same `{{variable}}` substitution the chat UI relies on.
+      let effectiveMessages = messages;
+      if (variables && Object.keys(variables).length > 0) {
+        const idx = messages.map(m => m.role).lastIndexOf('user');
+        if (idx !== -1) {
+          effectiveMessages = [...messages];
+          effectiveMessages[idx] = {
+            ...effectiveMessages[idx],
+            variables: { ...effectiveMessages[idx].variables, ...variables }
+          };
+        }
+      }
+
       const prepResult = await this.prepareChatRequest({
         appId,
         modelId: modelOverride,
-        messages,
+        messages: effectiveMessages,
         language,
         // No streaming: pass `res` (the sink) and no `clientRes`.
         res: sink,
         clientRes: null,
         user,
-        chatId,
-        variables
+        chatId
       });
       if (!prepResult.success) {
         sink.stopListening();
