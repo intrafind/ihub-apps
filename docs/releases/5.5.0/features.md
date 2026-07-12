@@ -461,6 +461,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Admin Tools API Writes Are Now Crash-Safe
+
+The admin Tools API (create, update, toggle, and script-content edits) now writes tool files
+atomically instead of writing directly to the target file in place.
+
+- A crash or process kill mid-save can no longer leave a truncated or corrupted tool file on disk.
+- Creating two tools with the same new ID at the same time no longer lets both requests succeed;
+  the second now gets a clear "Tool with this ID already exists" error instead of silently
+  overwriting the first.
+- No configuration or admin action required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
