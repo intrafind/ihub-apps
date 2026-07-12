@@ -354,9 +354,13 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
       }
     }
 
-    // Handle finish reason
+    // Handle finish reason. Completion is deferred to the '[DONE]' sentinel
+    // (handled above) rather than set here, because OpenAI-compatible servers
+    // send a trailing usage-only chunk after finish_reason when
+    // stream_options.include_usage is set — marking complete here would make
+    // BaseAdapter/StreamingHandler stop draining the stream before that chunk
+    // arrives, silently discarding provider-reported token usage.
     if (parsed.choices && parsed.choices[0]?.finish_reason) {
-      result.complete = true;
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
       result.finishReason = state.finishReason;
 
