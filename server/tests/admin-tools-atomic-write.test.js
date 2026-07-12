@@ -108,11 +108,9 @@ describe('Admin tools atomic writes (#1719)', () => {
       'utf-8'
     );
 
-    const renameSpy = jest
-      .spyOn(fs.promises, 'rename')
-      .mockImplementationOnce(async () => {
-        throw new Error('Simulated write failure');
-      });
+    const renameSpy = jest.spyOn(fs.promises, 'rename').mockImplementationOnce(async () => {
+      throw new Error('Simulated write failure');
+    });
 
     const app = createTestApp();
     const response = await request(app)
