@@ -461,6 +461,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Microsoft Teams Sign-In No Longer White-Screens
+
+Opening iHub Apps inside Microsoft Teams (with Teams SSO enabled) previously crashed immediately
+with a blank screen, before any authentication attempt could even start.
+
+- Fixed a rendering bug in the Teams tab and Teams sign-in popup that threw an error on first load.
+- The Teams sign-in popup no longer depends on a client-side build variable that was never set; it
+  now fetches the Azure AD client/tenant ID from the server at sign-in time.
+- No admin action is required for existing `teamsAuth` configuration — the fix takes effect
+  automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
