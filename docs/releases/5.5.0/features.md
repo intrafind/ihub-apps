@@ -475,3 +475,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Configuration Hot-Reload No Longer Silently Stops
+
+Automatic reloading of Apps, Models, Prompts, Workflows, Agents, Tools, Groups, Platform, and
+Credentials configuration could permanently stop after the first refresh cycle that found no
+change, requiring a server restart to pick up any later edit. Separately, `platform.json`'s
+`${VAR}`-style placeholders (e.g. `deployment.environment`) made its change-detection compare
+mismatched data on every cycle, so it reloaded needlessly on every tick instead.
+
+- The periodic refresh timer for each configuration file now always re-arms, whether or not that
+  cycle found a change, so edits made after a quiet period are picked up on the next tick as
+  documented.
+- Change detection now compares the same (environment-resolved) representation on both sides, so
+  configs containing `${VAR}` placeholders no longer produce false "changed" reloads.
+- No admin action is required — the fix takes effect automatically on upgrade.
