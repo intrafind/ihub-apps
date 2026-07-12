@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
 import configCache from '../../configCache.js';
@@ -25,8 +25,11 @@ import {
   ensureDefaultAmongEnabled
 } from '../../modelsLoader.js';
 
+// modelId is validated by validateIdForPath() in every route handler before this is called
+// (no '/', '\\', or '..' allowed); basename() is a CodeQL-recognized sanitizer for
+// js/path-injection and is applied here as defense-in-depth for every call site.
 function modelFilePath(modelId) {
-  return join(getRootDir(), 'contents', 'models', `${modelId}.json`);
+  return join(getRootDir(), 'contents', 'models', basename(`${modelId}.json`));
 }
 
 export default function registerAdminModelsRoutes(app) {
@@ -164,8 +167,10 @@ export default function registerAdminModelsRoutes(app) {
           const existingModelPath = modelFilePath(modelId);
 
           try {
+            // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
             if (existsSync(existingModelPath)) {
               const existingModelFromDisk = JSON.parse(
+                // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
                 await fs.readFile(existingModelPath, 'utf8')
               );
               if (existingModelFromDisk.apiKey) {
@@ -408,9 +413,11 @@ export default function registerAdminModelsRoutes(app) {
         }
       }
       const filePath = modelFilePath(modelId);
+      // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
       if (!existsSync(filePath)) {
         return sendNotFound(res, 'Model file');
       }
+      // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
       await fs.unlink(filePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
