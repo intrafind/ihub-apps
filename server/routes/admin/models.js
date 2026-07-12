@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
 import configCache from '../../configCache.js';
@@ -18,6 +18,19 @@ import {
 } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../../utils/atomicWrite.js';
+import {
+  clearOtherDefaults,
+  promoteNewDefault,
+  ensureDefaultAmongEnabled
+} from '../../modelsLoader.js';
+
+// modelId is validated by validateIdForPath() in every route handler before this is called
+// (no '/', '\\', or '..' allowed); basename() is a CodeQL-recognized sanitizer for
+// js/path-injection and is applied here as defense-in-depth for every call site.
+function modelFilePath(modelId) {
+  return join(getRootDir(), 'contents', 'models', basename(`${modelId}.json`));
+}
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -151,12 +164,15 @@ export default function registerAdminModelsRoutes(app) {
           // Masked value - need to preserve existing key
           // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
           // The cache might not have the apiKey due to TTL expiration or race conditions
-          const rootDir = getRootDir();
-          const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
+          const existingModelPath = modelFilePath(modelId);
 
           try {
-            if (existsSync(modelFilePath)) {
-              const existingModelFromDisk = JSON.parse(await fs.readFile(modelFilePath, 'utf8'));
+            // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
+            if (existsSync(existingModelPath)) {
+              const existingModelFromDisk = JSON.parse(
+                // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
+                await fs.readFile(existingModelPath, 'utf8')
+              );
               if (existingModelFromDisk.apiKey) {
                 // Preserve the existing encrypted API key from disk
                 updatedModel.apiKey = existingModelFromDisk.apiKey;
@@ -183,24 +199,18 @@ export default function registerAdminModelsRoutes(app) {
       delete updatedModel.apiKeySet;
       delete updatedModel.apiKeyMasked;
 
-      if (updatedModel.default === true) {
-        const modelsResponse = configCache.getModels(true);
-        const allModels = modelsResponse.data || modelsResponse;
-        for (const model of allModels) {
-          if (model.id !== modelId && model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
-            model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
-          }
-        }
-      }
       // Capture old model state before writing
       const { data: currentModels } = configCache.getModels(true);
       const oldModel = currentModels.find(m => m.id === modelId);
 
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(updatedModel, null, 2));
+      if (updatedModel.default === true) {
+        const othersCleared = clearOtherDefaults(currentModels, modelId);
+        for (const model of othersCleared) {
+          await atomicWriteJSON(modelFilePath(model.id), model);
+        }
+      }
+
+      await atomicWriteJSON(modelFilePath(modelId), updatedModel);
       await configCache.refreshModelsCache();
       if (oldModel) {
         await saveSnapshot({
@@ -259,26 +269,22 @@ export default function registerAdminModelsRoutes(app) {
       delete newModel.apiKeySet;
       delete newModel.apiKeyMasked;
 
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
       try {
-        readFileSync(modelFilePath, 'utf8');
-        return sendErrorResponse(res, 409, 'Model with this ID already exists');
-      } catch {
-        // file not found, continue
+        await atomicCreateJSON(modelFilePath(newModel.id), newModel);
+      } catch (error) {
+        if (error.code === 'EEXIST') {
+          return sendErrorResponse(res, 409, 'Model with this ID already exists');
+        }
+        throw error;
       }
+
       if (newModel.default === true) {
-        const modelsResponse = configCache.getModels(true);
-        const allModels = modelsResponse.data || modelsResponse;
-        for (const model of allModels) {
-          if (model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
-            model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
-          }
+        const { data: currentModels } = configCache.getModels(true);
+        const othersCleared = clearOtherDefaults(currentModels, newModel.id);
+        for (const model of othersCleared) {
+          await atomicWriteJSON(modelFilePath(model.id), model);
         }
       }
-      await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
       await configCache.refreshModelsCache();
       await logAudit({
         req,
@@ -310,22 +316,13 @@ export default function registerAdminModelsRoutes(app) {
       const newEnabledState = !model.enabled;
       model.enabled = newEnabledState;
       if (!newEnabledState && model.default === true) {
-        const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
-        if (enabledModels.length > 0) {
-          enabledModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${enabledModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
+        const promoted = promoteNewDefault(models, modelId);
+        if (promoted) {
+          await atomicWriteJSON(modelFilePath(promoted.id), promoted);
         }
         model.default = false;
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+      await atomicWriteJSON(modelFilePath(modelId), model);
       await configCache.refreshModelsCache();
       await logAudit({
         req,
@@ -360,7 +357,6 @@ export default function registerAdminModelsRoutes(app) {
 
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
-      const rootDir = getRootDir();
 
       for (const id of resolvedIds) {
         const model = models.find(m => m.id === id);
@@ -369,16 +365,13 @@ export default function registerAdminModelsRoutes(app) {
         if (!enabled) {
           model.default = false;
         }
-        const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
-        await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+        await atomicWriteJSON(modelFilePath(id), model);
       }
 
       // ensure at least one enabled model has default=true
-      const enabledModels = models.filter(m => m.enabled);
-      if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
-        enabledModels[0].default = true;
-        const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
-        await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
+      const promoted = ensureDefaultAmongEnabled(models);
+      if (promoted) {
+        await atomicWriteJSON(modelFilePath(promoted.id), promoted);
       }
 
       await configCache.refreshModelsCache();
@@ -414,24 +407,18 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       if (model.default === true) {
-        const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
-        if (otherModels.length > 0) {
-          otherModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${otherModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
+        const promoted = promoteNewDefault(models, modelId);
+        if (promoted) {
+          await atomicWriteJSON(modelFilePath(promoted.id), promoted);
         }
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      if (!existsSync(modelFilePath)) {
+      const filePath = modelFilePath(modelId);
+      // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
+      if (!existsSync(filePath)) {
         return sendNotFound(res, 'Model file');
       }
-      await fs.unlink(modelFilePath);
+      // lgtm[js/path-injection] -- modelId validated by validateIdForPath; basename()-sanitized in modelFilePath().
+      await fs.unlink(filePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
       if (model) {

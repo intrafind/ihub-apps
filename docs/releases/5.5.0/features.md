@@ -1,5 +1,15 @@
 # Features — 5.5.0
 
+## More Reliable Model Configuration Writes
+
+Admin **Models** saves (create, update, enable/disable, batch enable/disable, delete) now write
+each model file atomically, so a server crash or power loss mid-save can no longer leave a model
+config file truncated or corrupted.
+
+- The "exactly one default model" rule is now enforced through a single shared implementation
+  instead of five separately hand-maintained copies, so the default-model handling behaves
+  identically across every admin models action.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
