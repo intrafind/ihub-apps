@@ -276,18 +276,19 @@ export async function stageAndSwapContents({
   stagingPath,
   backupPath
 }) {
-  // extractedContentsPath is derived from the uploaded file's temp path; validate it
+  // extractedContentsPath is derived from the uploaded file's temp path; verify it
   // resolves within the expected extraction root before using it as a copy source.
-  const safeExtractedContentsPath = await resolveAndValidatePath(
-    path.relative(extractRoot, extractedContentsPath),
-    extractRoot
-  );
-  if (!safeExtractedContentsPath) {
+  const resolvedExtractRoot = path.resolve(extractRoot);
+  const resolvedExtractedContentsPath = path.resolve(extractedContentsPath);
+  const extractRootWithSep = resolvedExtractRoot.endsWith(path.sep)
+    ? resolvedExtractRoot
+    : resolvedExtractRoot + path.sep;
+  if (!resolvedExtractedContentsPath.startsWith(extractRootWithSep)) {
     throw new Error('Refusing to stage imported configuration: source path is invalid.');
   }
 
   try {
-    await fs.cp(safeExtractedContentsPath, stagingPath, { recursive: true });
+    await fs.cp(resolvedExtractedContentsPath, stagingPath, { recursive: true });
   } catch (error) {
     await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
     throw new Error(
