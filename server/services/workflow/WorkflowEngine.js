@@ -648,7 +648,7 @@ export class WorkflowEngine {
 
             while (true) {
               try {
-                result = await this.executeNode(node, workflow, executionId, options);
+                result = await this.executeNode(node, workflow, executionId, options, attempt > 0);
                 break; // Success - exit retry loop
               } catch (executeError) {
                 attempt++;
@@ -858,6 +858,8 @@ export class WorkflowEngine {
    * @param {Object} workflow - The workflow definition
    * @param {string} executionId - The execution identifier
    * @param {Object} options - Execution options
+   * @param {boolean} isRetryAttempt - Whether this call is a retry of an already-counted
+   *   iteration (skips bumping the cycle-guard counter so retries don't consume loop budget)
    * @returns {Promise<*>} The node execution result
    *
    * @example
@@ -868,7 +870,7 @@ export class WorkflowEngine {
    *   { timeout: 30000 }
    * );
    */
-  async executeNode(node, workflow, executionId, options = {}) {
+  async executeNode(node, workflow, executionId, options = {}, isRetryAttempt = false) {
     const { id: nodeId, type: nodeType, config } = node;
 
     logger.info('Executing node', { component: 'WorkflowEngine', executionId, nodeId, nodeType });
@@ -905,9 +907,13 @@ export class WorkflowEngine {
     // 4. Get current state for context
     const state = await this.stateManager.get(executionId);
 
-    // 5. Track node iteration count (for cycle/loop protection)
+    // 5. Track node iteration count (for cycle/loop protection).
+    // Retries of an already-counted attempt reuse that iteration instead of bumping it —
+    // this counter guards against infinite loop-backs, not against configured node retries.
     const nodeIterations = state.data?._nodeIterations || {};
-    const currentIteration = (nodeIterations[nodeId] || 0) + 1;
+    const currentIteration = isRetryAttempt
+      ? nodeIterations[nodeId] || 1
+      : (nodeIterations[nodeId] || 0) + 1;
     const maxIterations = workflow.config?.maxIterations || 10;
 
     if (currentIteration > maxIterations) {
@@ -926,14 +932,16 @@ export class WorkflowEngine {
     const nodeInvocations = Object.keys(state.data?.nodeResults || {}).length + 1;
     const totalNodes = workflow.nodes.filter(n => n.type !== 'start' && n.type !== 'end').length;
 
-    // Update iteration count and step counters in state
+    // Update iteration count and step counters in state (retries don't re-persist the counter)
     await this.stateManager.update(executionId, {
       data: {
         ...state.data,
-        _nodeIterations: {
-          ...nodeIterations,
-          [nodeId]: currentIteration
-        },
+        _nodeIterations: isRetryAttempt
+          ? nodeIterations
+          : {
+              ...nodeIterations,
+              [nodeId]: currentIteration
+            },
         _currentStep: nodeInvocations,
         _currentNodeIteration: currentIteration,
         _totalNodes: totalNodes

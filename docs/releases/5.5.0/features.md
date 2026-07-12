@@ -475,3 +475,16 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Workflow Node Retries No Longer Count Against the Loop-Protection Limit
+
+A workflow node configured with automatic retries (`node.execution.retries`) could previously fail
+the whole run with a misleading "exceeded maximum iterations" error, even though it never actually
+looped. Retries were sharing the same counter used to detect genuine infinite loop-backs, so a node
+retried a few times could exhaust that budget on its own.
+
+- Retry attempts no longer advance the loop-protection counter; only a node that is genuinely
+  re-executed as part of a workflow loop counts toward `maxIterations`.
+- Loop protection itself is unchanged — a workflow with a real infinite loop still fails with the
+  same error and limit as before.
+- No configuration or admin action required.
