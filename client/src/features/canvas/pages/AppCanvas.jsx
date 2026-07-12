@@ -139,6 +139,7 @@ export default function AppCanvas() {
 
   const quillRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId, 'canvas'));
+  const selectionStateRef = useRef({ selectedText: '', editorContent: '' });
 
   useEffect(() => {
     chatId.current = getOrCreateChatId(appId, 'canvas');
@@ -184,12 +185,14 @@ export default function AppCanvas() {
       }
 
       // Add context about selected text and current document
+      const { selectedText: currentSelectedText, editorContent: currentEditorContent } =
+        selectionStateRef.current;
       let contextualInput = textToSubmit;
-      if (selectedText) {
-        contextualInput += `\n\nSelected text: "${selectedText}"`;
+      if (currentSelectedText) {
+        contextualInput += `\n\nSelected text: "${currentSelectedText}"`;
       }
-      if (editorContent.trim()) {
-        contextualInput += `\n\nCurrent document context: ${editorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
+      if (currentEditorContent.trim()) {
+        contextualInput += `\n\nCurrent document context: ${currentEditorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
       }
 
       try {
@@ -198,8 +201,8 @@ export default function AppCanvas() {
             content: textToSubmit,
             meta: {
               rawContent: textToSubmit,
-              selectedText: selectedText || null,
-              hasDocumentContext: !!editorContent.trim(),
+              selectedText: currentSelectedText || null,
+              hasDocumentContext: !!currentEditorContent.trim(),
               ...options
             }
           },
@@ -232,12 +235,9 @@ export default function AppCanvas() {
         );
       }
     },
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
     [
       inputValue,
       processing,
-      selectedText,
-      editorContent,
       sendChatMessage,
       addSystemMessage,
       selectedModel,
@@ -246,6 +246,7 @@ export default function AppCanvas() {
       selectedOutputFormat,
       currentLanguage,
       sendChatHistory,
+      enabledTools,
       t
     ]
   );
@@ -301,6 +302,10 @@ export default function AppCanvas() {
     handleSelectionChange,
     handleEditAction
   } = canvasHook;
+
+  useEffect(() => {
+    selectionStateRef.current = { selectedText, editorContent };
+  }, [selectedText, editorContent]);
 
   // Load app data
   useEffect(() => {

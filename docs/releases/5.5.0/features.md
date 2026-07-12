@@ -461,6 +461,16 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Canvas Mode No Longer Crashes on Load
+
+The Canvas page (an app editor/document view enabled per app via `features.canvas`) no longer
+crashes immediately with a JavaScript error the moment it opens. A component was reading document
+selection state before it was initialized, which threw on first render.
+
+- Opening `/apps/:appId/canvas` for an app with canvas mode enabled now works normally.
+- Submitting a prompt still includes the current text selection and document context, unchanged.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
