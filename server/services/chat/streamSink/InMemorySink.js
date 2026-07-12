@@ -160,49 +160,55 @@ export class InMemorySink {
    * Wait for the chat to finish and return the assembled result.
    */
   async getResult({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-    // If we have a non-streaming JSON body (NonStreamingHandler path), return it directly.
-    if (this.jsonBody && !this.chatId) {
-      return this._assembleNonStreamingResult();
-    }
+    try {
+      // If we have a non-streaming JSON body (NonStreamingHandler path), return it directly.
+      if (this.jsonBody && !this.chatId) {
+        return this._assembleNonStreamingResult();
+      }
 
-    // If we already have a JSON body and no SSE traffic, prefer the JSON body.
-    if (this.jsonBody && this.chunks.length === 0 && !this.done) {
-      return this._assembleNonStreamingResult();
-    }
+      // If we already have a JSON body and no SSE traffic, prefer the JSON body.
+      if (this.jsonBody && this.chunks.length === 0 && !this.done) {
+        return this._assembleNonStreamingResult();
+      }
 
-    // Otherwise wait for streaming completion.
-    if (this._donePromise) {
-      await Promise.race([
-        this._donePromise,
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`InMemorySink timed out after ${timeoutMs}ms`)),
-            timeoutMs
+      // Otherwise wait for streaming completion.
+      if (this._donePromise) {
+        await Promise.race([
+          this._donePromise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`InMemorySink timed out after ${timeoutMs}ms`)),
+              timeoutMs
+            )
           )
-        )
-      ]);
-    }
-    this.stopListening();
+        ]);
+      }
 
-    if (this.errorPayload) {
+      if (this.errorPayload) {
+        return {
+          status: 'error',
+          error: this.errorPayload,
+          finalMessage: null,
+          toolCalls: this.toolCalls
+        };
+      }
+
+      const finalContent = this.chunks.join('');
       return {
-        status: 'error',
-        error: this.errorPayload,
-        finalMessage: null,
-        toolCalls: this.toolCalls
+        status: 'ok',
+        statusCode: this.statusCode,
+        finalMessage: { role: 'assistant', content: finalContent },
+        toolCalls: this.toolCalls,
+        citations: this.citations,
+        usage: this.usage,
+        finishReason: this.finishReason
       };
+    } finally {
+      // Every exit path above (early return or timeout) must release the
+      // actionTracker listener — it's a process-wide singleton, so a leaked
+      // listener here accumulates for the life of the server.
+      this.stopListening();
     }
-
-    const finalContent = this.chunks.join('');
-    return {
-      status: 'ok',
-      statusCode: this.statusCode,
-      finalMessage: { role: 'assistant', content: finalContent },
-      toolCalls: this.toolCalls,
-      citations: this.citations,
-      usage: this.usage,
-      finishReason: this.finishReason
-    };
   }
 
   _assembleNonStreamingResult() {
