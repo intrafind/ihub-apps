@@ -491,6 +491,10 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       ...externalUser,
       id: persistedUser.id,
       groups: mergedGroups,
+      // Snapshot of the manually-assigned groups at token-mint time, so jwtAuth can
+      // later diff against the current users.json record and revoke groups an admin
+      // has since removed, without needing to re-run the external IdP mapping.
+      internalGroups: manualInternalGroups,
       active: persistedUser.active,
       authMethods: persistedUser.authMethods || [authMethod],
       lastActiveDate: persistedUser.lastActiveDate,
@@ -547,6 +551,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     ...externalUser,
     id: persistedUser.id,
     groups: combinedGroups,
+    // Snapshot of the manually-assigned groups at token-mint time (see comment above).
+    internalGroups: manualInternalGroups,
     active: true,
     authMethods: [authMethod],
     lastActiveDate: persistedUser.lastActiveDate,

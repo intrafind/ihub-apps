@@ -475,3 +475,19 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Group Changes Now Take Effect Immediately, Not Just After the Token Expires
+
+Revoking or granting a user's group in **Admin → Users** could previously take up to 8 hours (or up
+to a year for a static API key) to take effect, because a signed-in user's groups were read straight
+from their existing session token instead of being re-checked against the current user record.
+Demoting an admin, for example, did not actually remove their admin access until they logged back in.
+
+- Local, OIDC, LDAP, Microsoft Teams, and NTLM sessions now re-derive the user's manually-assigned
+  groups from the current user record on every request, so a group change made in the admin UI
+  applies to that user's very next request — no logout/login or waiting for token expiry required.
+- Groups mapped from an external identity provider (OIDC/LDAP claims, "authenticated", provider
+  defaults) are unaffected by this change and continue to refresh on the user's next login, as
+  before.
+- No admin action is required — the fix takes effect automatically on upgrade. Tokens issued before
+  upgrading behave as before until they naturally expire.
