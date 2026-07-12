@@ -114,6 +114,10 @@ export function generateJwt(user, options = {}) {
     name: user.name,
     email: user.email,
     groups: user.groups || [],
+    // Snapshot of the manually-assigned (admin-editable) groups at mint time. Used by
+    // jwtAuth to detect and revoke groups an admin has since removed from users.json,
+    // without needing to re-derive externally-mapped groups on every request.
+    internalGroups: user.internalGroups || [],
     provider: user.provider,
     authMode: options.authMode || user.authMethod,
     authProvider: options.authProvider || user.provider,

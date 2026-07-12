@@ -1,10 +1,36 @@
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
-import { loadUsers, isUserActive } from '../utils/userManager.js';
+import { loadUsers, isUserActive, mergeUserGroups } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
+
+/**
+ * Re-hydrate the manually-assigned (admin-editable) portion of a user's groups from the
+ * current users.json record, so that revoking/granting a group in the admin UI takes
+ * effect immediately instead of waiting for the token to expire.
+ *
+ * Externally-mapped/automatic groups (IdP group claims, provider defaults, "authenticated")
+ * are intentionally left as they were at token-mint time — those aren't admin-editable
+ * per-request and re-deriving them would require re-contacting the identity provider. Only
+ * the subset of `decoded.groups` that was captured in `decoded.internalGroups` at mint time
+ * (i.e. the manually-assigned groups) is swapped out for the user's current internalGroups.
+ *
+ * @param {Object} decoded - Decoded JWT payload
+ * @param {Object} [userRecord] - Current user record from users.json, if found
+ * @returns {string[]} Effective groups to use for this request
+ */
+function resolveEffectiveGroups(decoded, userRecord) {
+  const decodedGroups = Array.isArray(decoded.groups) ? decoded.groups : [];
+  const staleManualGroups = Array.isArray(decoded.internalGroups) ? decoded.internalGroups : [];
+  const currentManualGroups = Array.isArray(userRecord?.internalGroups)
+    ? userRecord.internalGroups
+    : [];
+  const baseGroups = decodedGroups.filter(group => !staleManualGroups.includes(group));
+  return mergeUserGroups(baseGroups, currentManualGroups);
+}
 
 /**
  * JWT authentication middleware
@@ -375,13 +401,24 @@ export default function jwtAuthMiddleware(req, res, next) {
             });
           }
 
-          // User exists and is active, create user object from token
+          // User exists and is active, create user object from token. Groups are
+          // re-derived fresh from userRecord on every request (rather than trusting
+          // decoded.groups) so that group/permission changes made via the admin UI take
+          // effect immediately instead of being frozen until the token expires — local
+          // users have no external/IdP-sourced groups, so this can safely be a full
+          // recompute mirroring the login flow in localAuth.js.
+          const localAuthConfigForGroups = platform.auth || {};
+          const freshGroups = enhanceUserGroups(
+            { id: userId, groups: userRecord.internalGroups || ['users'] },
+            localAuthConfigForGroups
+          ).groups;
+
           user = {
             id: userId,
             username: decoded.username || userId,
             name: decoded.name || decoded.username || userId,
             email: decoded.email || '',
-            groups: decoded.groups || [],
+            groups: freshGroups,
             authMode: 'local',
             timestamp: Date.now()
           };
@@ -440,13 +477,16 @@ export default function jwtAuthMiddleware(req, res, next) {
           });
         }
 
-        // User either doesn't exist (not yet persisted) or is active
+        // User either doesn't exist (not yet persisted) or is active. Re-hydrate the
+        // manually-assigned portion of groups from the current record so admin changes
+        // (e.g. revoking an internal group) take effect immediately (see
+        // resolveEffectiveGroups doc comment).
         user = {
           id: decoded.sub || decoded.username,
           username: decoded.username || decoded.preferred_username || decoded.sub,
           name: decoded.name || decoded.given_name || decoded.username,
           email: decoded.email || '',
-          groups: decoded.groups || [],
+          groups: resolveEffectiveGroups(decoded, userRecord),
           authMode: 'oidc',
           timestamp: Date.now()
         };
@@ -501,7 +541,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           username: decoded.username || decoded.sub,
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
-          groups: decoded.groups || [],
+          groups: resolveEffectiveGroups(decoded, userRecord),
           authMode: 'ldap',
           timestamp: Date.now()
         };
@@ -548,7 +588,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           username: decoded.username || decoded.userPrincipalName,
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.userPrincipalName,
-          groups: decoded.groups || [],
+          groups: resolveEffectiveGroups(decoded, userRecord),
           authMode: 'teams',
           timestamp: Date.now()
         };
@@ -597,7 +637,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           username: decoded.username || decoded.id,
           name: decoded.name || decoded.username || decoded.id,
           email: decoded.email || '',
-          groups: decoded.groups || [],
+          groups: resolveEffectiveGroups(decoded, userRecord),
           authMode: 'ntlm',
           domain: decoded.domain,
           timestamp: Date.now()
