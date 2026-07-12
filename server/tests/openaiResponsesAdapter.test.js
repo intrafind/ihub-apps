@@ -128,7 +128,7 @@ const nonStreamingResponse = JSON.stringify({
   status: 'completed'
 });
 
-const result = OpenAIResponsesAdapter.processResponseBuffer(nonStreamingResponse);
+const result = await OpenAIResponsesAdapter.processResponseBuffer(nonStreamingResponse);
 assert.strictEqual(result.content.length, 1, 'Should have one content item');
 assert.strictEqual(
   result.content[0],
@@ -147,20 +147,20 @@ const toolCallResponse = JSON.stringify({
   object: 'response',
   output: [
     {
-      id: 'call_123',
+      id: 'fc_123',
+      call_id: 'call_123',
       type: 'function_call',
-      function: {
-        name: 'get_weather',
-        arguments: '{"location":"San Francisco"}'
-      }
+      name: 'get_weather',
+      arguments: '{"location":"San Francisco"}'
     }
   ],
   status: 'completed'
 });
 
-const result2 = OpenAIResponsesAdapter.processResponseBuffer(toolCallResponse);
+const result2 = await OpenAIResponsesAdapter.processResponseBuffer(toolCallResponse);
 assert.strictEqual(result2.tool_calls.length, 1, 'Should have one tool call');
 assert.strictEqual(result2.tool_calls[0].function.name, 'get_weather', 'Tool name should match');
+assert.strictEqual(result2.tool_calls[0].id, 'call_123', 'call_id should take precedence over id');
 assert.strictEqual(result2.complete, true, 'Response should be complete');
 
 logger.info('✓ Test 5 passed: Tool calls processed correctly');

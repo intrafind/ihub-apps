@@ -440,14 +440,14 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
             }
           }
         }
-        // Handle function calls
-        else if (item.type === 'function_call' && item.function) {
+        // Handle function calls (flat shape: { type, call_id, name, arguments })
+        else if (item.type === 'function_call') {
           toolCalls.push({
-            id: item.id,
+            id: item.call_id || item.id,
             type: 'function',
             function: {
-              name: item.function.name,
-              arguments: item.function.arguments
+              name: item.name,
+              arguments: item.arguments
             }
           });
         }
