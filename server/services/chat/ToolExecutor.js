@@ -1,11 +1,10 @@
-import { createCompletionRequest } from '../../adapters/index.js';
-import { convertResponseToGeneric, clearStreamingState } from '../../adapters/toolCalling/index.js';
+import { createCompletionRequest, getAdapter } from '../../adapters/index.js';
+import { clearStreamingState } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
 import { normalizeToolName } from '../../adapters/toolCalling/index.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
-import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import StreamingHandler from './StreamingHandler.js';
@@ -940,129 +939,117 @@ class ToolExecutor {
           });
         }
 
-        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-        const reader = readableStream.getReader();
-        const decoder = new TextDecoder();
-        const events = [];
-        const parser = createParser({ onEvent: e => events.push(e) });
+        // Adapters expose parseResponseStream(response, ctx) which yields normalized
+        // result chunks. The default in BaseAdapter handles SSE; iAssistant uses the
+        // line-delimited SSE variant; Bedrock parses binary EventStream frames.
+        const adapter = getAdapter(model.provider);
+        const stream = adapter.parseResponseStream(llmResponse, { model, chatId, request });
 
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          if (readerDone || !activeRequests.has(chatId)) {
-            if (!activeRequests.has(chatId)) reader.cancel();
-            break;
+        for await (const result of stream) {
+          if (!activeRequests.has(chatId)) break;
+          if (!result) continue;
+
+          if (result.error) {
+            throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+              code: 'PROCESSING_ERROR'
+            });
           }
 
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
+          // Usage may arrive either at the top level or under metadata.usage
+          // depending on which converter emitted it.
+          if (result.usage) {
+            accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+          }
+          if (result.metadata?.usage) {
+            accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+          }
 
-          while (events.length > 0) {
-            const evt = events.shift();
-            const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-            if (result.error) {
-              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                code: 'PROCESSING_ERROR'
-              });
+          // logger.info(`Result for chat ID ${chatId}:`, result);
+          if (result.content?.length > 0) {
+            for (const text of result.content) {
+              assistantContent += text;
+              actionTracker.trackChunk(chatId, { content: text });
             }
+          }
 
-            // Usage may arrive either at the top level or under metadata.usage
-            // depending on which converter emitted it.
-            if (result.usage) {
-              accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-            }
-            if (result.metadata?.usage) {
-              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
-            }
+          // Process images (important for image generation with tools like google_search)
+          this.streamingHandler.processImages(result, chatId);
 
-            // logger.info(`Result for chat ID ${chatId}:`, result);
-            if (result.content?.length > 0) {
-              for (const text of result.content) {
-                assistantContent += text;
-                actionTracker.trackChunk(chatId, { content: text });
-              }
-            }
+          // Process thinking content
+          this.streamingHandler.processThinking(result, chatId);
 
-            // Process images (important for image generation with tools like google_search)
-            this.streamingHandler.processImages(result, chatId);
+          // Process grounding metadata (for Google Search grounding)
+          this.streamingHandler.processGroundingMetadata(result, chatId);
 
-            // Process thinking content
-            this.streamingHandler.processThinking(result, chatId);
+          // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
+          if (result.tool_calls?.length > 0) {
+            result.tool_calls.forEach(call => {
+              let existingCall = collectedToolCalls.find(c => c.index === call.index);
 
-            // Process grounding metadata (for Google Search grounding)
-            this.streamingHandler.processGroundingMetadata(result, chatId);
+              if (existingCall) {
+                // Merge properties into the existing tool call
+                if (call.id) existingCall.id = call.id;
+                if (call.type) existingCall.type = call.type;
+                // Preserve metadata (critical for thoughtSignature in Gemini 3)
+                if (call.metadata) existingCall.metadata = call.metadata;
+                if (call.function) {
+                  if (call.function.name) existingCall.function.name = call.function.name;
 
-            // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
-            if (result.tool_calls?.length > 0) {
-              result.tool_calls.forEach(call => {
-                let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                if (existingCall) {
-                  // Merge properties into the existing tool call
-                  if (call.id) existingCall.id = call.id;
-                  if (call.type) existingCall.type = call.type;
-                  // Preserve metadata (critical for thoughtSignature in Gemini 3)
-                  if (call.metadata) existingCall.metadata = call.metadata;
-                  if (call.function) {
-                    if (call.function.name) existingCall.function.name = call.function.name;
-
-                    // Handle arguments accumulation for streaming
-                    let callArgs = call.function.arguments;
-                    if (call.arguments && call.arguments.__raw_arguments) {
-                      callArgs = call.arguments.__raw_arguments;
-                    }
-                    if (callArgs) {
-                      // Smart concatenation: avoid empty {} + real args pattern
-                      const existing = existingCall.function.arguments;
-                      if (!existing || existing === '{}' || existing.trim() === '') {
-                        // If existing is empty or just {}, replace it entirely
-                        existingCall.function.arguments = callArgs;
-                      } else if (callArgs !== '{}' && callArgs.trim() !== '') {
-                        // Only concatenate if new args aren't empty
-                        existingCall.function.arguments += callArgs;
-                      }
-                    }
-                  }
-                } else if (call.index !== undefined) {
-                  // Create a new tool call if it doesn't exist
-                  let initialArgs = call.function?.arguments || '';
+                  // Handle arguments accumulation for streaming
+                  let callArgs = call.function.arguments;
                   if (call.arguments && call.arguments.__raw_arguments) {
-                    initialArgs = call.arguments.__raw_arguments;
+                    callArgs = call.arguments.__raw_arguments;
                   }
-
-                  // Clean up initial args - avoid starting with empty {}
-                  if (initialArgs === '{}' || initialArgs.trim() === '') {
-                    initialArgs = '';
-                  }
-
-                  collectedToolCalls.push({
-                    index: call.index,
-                    id: call.id || null,
-                    type: call.type || 'function',
-                    metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
-                    function: {
-                      name: call.function?.name || '',
-                      arguments: initialArgs
+                  if (callArgs) {
+                    // Smart concatenation: avoid empty {} + real args pattern
+                    const existing = existingCall.function.arguments;
+                    if (!existing || existing === '{}' || existing.trim() === '') {
+                      // If existing is empty or just {}, replace it entirely
+                      existingCall.function.arguments = callArgs;
+                    } else if (callArgs !== '{}' && callArgs.trim() !== '') {
+                      // Only concatenate if new args aren't empty
+                      existingCall.function.arguments += callArgs;
                     }
-                  });
+                  }
                 }
-              });
-            }
+              } else if (call.index !== undefined) {
+                // Create a new tool call if it doesn't exist
+                let initialArgs = call.function?.arguments || '';
+                if (call.arguments && call.arguments.__raw_arguments) {
+                  initialArgs = call.arguments.__raw_arguments;
+                }
 
-            // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
-            if (result.finishReason) {
-              finishReason = result.finishReason;
-            }
+                // Clean up initial args - avoid starting with empty {}
+                if (initialArgs === '{}' || initialArgs.trim() === '') {
+                  initialArgs = '';
+                }
 
-            // logger.info(
-            //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
-            //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-            // );
-            if (result.complete) {
-              done = true;
-              break;
-            }
+                collectedToolCalls.push({
+                  index: call.index,
+                  id: call.id || null,
+                  type: call.type || 'function',
+                  metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
+                  function: {
+                    name: call.function?.name || '',
+                    arguments: initialArgs
+                  }
+                });
+              }
+            });
+          }
+
+          // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
+          if (result.finishReason) {
+            finishReason = result.finishReason;
+          }
+
+          // logger.info(
+          //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
+          //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
+          // );
+          if (result.complete) {
+            done = true;
+            break;
           }
         }
 
@@ -1425,99 +1412,91 @@ class ToolExecutor {
             });
           }
 
-          // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-          const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-          const reader = readableStream.getReader();
-          const decoder = new TextDecoder();
-          const events = [];
-          const parser = createParser({ onEvent: e => events.push(e) });
+          // Adapters expose parseResponseStream(response, ctx) which yields normalized
+          // result chunks. The default in BaseAdapter handles SSE; iAssistant uses the
+          // line-delimited SSE variant; Bedrock parses binary EventStream frames.
+          const adapter = getAdapter(model.provider);
+          const stream = adapter.parseResponseStream(llmResponse, {
+            model,
+            chatId,
+            request: followRequest
+          });
 
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            if (readerDone || !activeRequests.has(chatId)) {
-              if (!activeRequests.has(chatId)) reader.cancel();
-              break;
+          for await (const result of stream) {
+            if (!activeRequests.has(chatId)) break;
+            if (!result) continue;
+
+            if (result.error) {
+              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+                code: 'PROCESSING_ERROR'
+              });
             }
 
-            const chunk = decoder.decode(value, { stream: true });
-            parser.feed(chunk);
+            // Usage may arrive either at the top level or under metadata.usage
+            // depending on which converter emitted it.
+            if (result.usage) {
+              accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+            }
+            if (result.metadata?.usage) {
+              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+            }
 
-            while (events.length > 0) {
-              const evt = events.shift();
-              const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-              if (result.error) {
-                throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                  code: 'PROCESSING_ERROR'
-                });
+            if (result.content?.length > 0) {
+              for (const text of result.content) {
+                assistantContent += text;
+                actionTracker.trackChunk(chatId, { content: text });
               }
+            }
 
-              // Usage may arrive either at the top level or under metadata.usage
-              // depending on which converter emitted it.
-              if (result.usage) {
-                accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-              }
-              if (result.metadata?.usage) {
-                accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
-              }
+            if (result.tool_calls?.length > 0) {
+              result.tool_calls.forEach(call => {
+                let existingCall = collectedToolCalls.find(c => c.index === call.index);
 
-              if (result.content?.length > 0) {
-                for (const text of result.content) {
-                  assistantContent += text;
-                  actionTracker.trackChunk(chatId, { content: text });
-                }
-              }
-
-              if (result.tool_calls?.length > 0) {
-                result.tool_calls.forEach(call => {
-                  let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                  if (existingCall) {
-                    if (call.id) existingCall.id = call.id;
-                    if (call.type) existingCall.type = call.type;
-                    if (call.function) {
-                      if (call.function.name) existingCall.function.name = call.function.name;
-                      if (call.function.arguments)
-                        existingCall.function.arguments += call.function.arguments;
-                    }
-                    // Merge metadata (important for Gemini thoughtSignatures)
-                    if (call.metadata) {
-                      existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
-                    }
-                  } else if (call.index !== undefined) {
-                    const toolCall = {
-                      index: call.index,
-                      id: call.id || null,
-                      type: call.type || 'function',
-                      function: {
-                        name: call.function?.name || '',
-                        arguments: call.function?.arguments || ''
-                      },
-                      // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
-                      metadata: call.metadata || {}
-                    };
-                    collectedToolCalls.push(toolCall);
+                if (existingCall) {
+                  if (call.id) existingCall.id = call.id;
+                  if (call.type) existingCall.type = call.type;
+                  if (call.function) {
+                    if (call.function.name) existingCall.function.name = call.function.name;
+                    if (call.function.arguments)
+                      existingCall.function.arguments += call.function.arguments;
                   }
-                });
-              }
+                  // Merge metadata (important for Gemini thoughtSignatures)
+                  if (call.metadata) {
+                    existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
+                  }
+                } else if (call.index !== undefined) {
+                  const toolCall = {
+                    index: call.index,
+                    id: call.id || null,
+                    type: call.type || 'function',
+                    function: {
+                      name: call.function?.name || '',
+                      arguments: call.function?.arguments || ''
+                    },
+                    // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
+                    metadata: call.metadata || {}
+                  };
+                  collectedToolCalls.push(toolCall);
+                }
+              });
+            }
 
-              // Collect thoughtSignatures for Google Gemini thinking models
-              if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
-                collectedThoughtSignatures.push(...result.thoughtSignatures);
-                logger.info('Collected thoughtSignatures from response', {
-                  component: 'ToolExecutor',
-                  count: result.thoughtSignatures.length
-                });
-              }
+            // Collect thoughtSignatures for Google Gemini thinking models
+            if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
+              collectedThoughtSignatures.push(...result.thoughtSignatures);
+              logger.info('Collected thoughtSignatures from response', {
+                component: 'ToolExecutor',
+                count: result.thoughtSignatures.length
+              });
+            }
 
-              if (result.finishReason) {
-                finishReason = result.finishReason;
-              }
+            if (result.finishReason) {
+              finishReason = result.finishReason;
+            }
 
-              if (result.complete) {
-                done = true;
-                break;
-              }
+            if (result.complete) {
+              done = true;
+              break;
             }
           }
 
