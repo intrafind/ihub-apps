@@ -264,17 +264,30 @@ export async function exportConfig(req, res) {
  * @param {object} paths
  * @param {string} paths.contentsPath - Live contents directory to replace.
  * @param {string} paths.extractedContentsPath - Source directory (from the extracted ZIP).
+ * @param {string} paths.extractRoot - Directory extractedContentsPath must resolve within
+ *   (the temp extraction directory) — validated to guard against a tainted/traversal path.
  * @param {string} paths.stagingPath - Sibling of contentsPath to stage the new contents in.
  * @param {string} paths.backupPath - Sibling of contentsPath to move the old contents to.
  */
 export async function stageAndSwapContents({
   contentsPath: liveContentsPath,
   extractedContentsPath,
+  extractRoot,
   stagingPath,
   backupPath
 }) {
+  // extractedContentsPath is derived from the uploaded file's temp path; validate it
+  // resolves within the expected extraction root before using it as a copy source.
+  const safeExtractedContentsPath = await resolveAndValidatePath(
+    path.relative(extractRoot, extractedContentsPath),
+    extractRoot
+  );
+  if (!safeExtractedContentsPath) {
+    throw new Error('Refusing to stage imported configuration: source path is invalid.');
+  }
+
   try {
-    await fs.cp(extractedContentsPath, stagingPath, { recursive: true });
+    await fs.cp(safeExtractedContentsPath, stagingPath, { recursive: true });
   } catch (error) {
     await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
     throw new Error(
@@ -377,6 +390,7 @@ export async function importConfig(req, res) {
       await stageAndSwapContents({
         contentsPath,
         extractedContentsPath,
+        extractRoot: tempExtractPath,
         stagingPath,
         backupPath: currentBackupPath
       });

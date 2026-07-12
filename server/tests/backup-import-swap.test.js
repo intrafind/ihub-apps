@@ -10,6 +10,7 @@ import { stageAndSwapContents } from '../routes/admin/backup.js';
 describe('stageAndSwapContents', () => {
   let workDir;
   let contentsPath;
+  let extractRoot;
   let extractedContentsPath;
   let stagingPath;
   let backupPath;
@@ -22,7 +23,8 @@ describe('stageAndSwapContents', () => {
     await fs.mkdir(workDir, { recursive: true });
 
     contentsPath = join(workDir, 'contents');
-    extractedContentsPath = join(workDir, 'extracted', 'contents');
+    extractRoot = join(workDir, 'extracted');
+    extractedContentsPath = join(extractRoot, 'contents');
     stagingPath = join(workDir, 'contents-staging');
     backupPath = join(workDir, 'contents-backup');
 
@@ -39,7 +41,13 @@ describe('stageAndSwapContents', () => {
   });
 
   it('moves the old contents to the backup path and activates the new contents', async () => {
-    await stageAndSwapContents({ contentsPath, extractedContentsPath, stagingPath, backupPath });
+    await stageAndSwapContents({
+      contentsPath,
+      extractedContentsPath,
+      extractRoot,
+      stagingPath,
+      backupPath
+    });
 
     const liveFiles = await fs.readdir(contentsPath);
     assert.deepStrictEqual(liveFiles, ['new.json']);
@@ -50,14 +58,38 @@ describe('stageAndSwapContents', () => {
     await assert.rejects(() => fs.access(stagingPath));
   });
 
+  it('rejects an extractedContentsPath that escapes the extraction root', async () => {
+    const outsideRoot = join(workDir, 'outside-extract-root');
+    await fs.mkdir(outsideRoot, { recursive: true });
+    await fs.writeFile(join(outsideRoot, 'evil.json'), '{}');
+
+    await assert.rejects(
+      () =>
+        stageAndSwapContents({
+          contentsPath,
+          extractedContentsPath: outsideRoot,
+          extractRoot,
+          stagingPath,
+          backupPath
+        }),
+      /Refusing to stage imported configuration/
+    );
+
+    const liveFiles = await fs.readdir(contentsPath);
+    assert.deepStrictEqual(liveFiles, ['old.json']);
+    await assert.rejects(() => fs.access(backupPath));
+    await assert.rejects(() => fs.access(stagingPath));
+  });
+
   it('aborts without touching the live directory when staging fails', async () => {
-    const missingSource = join(workDir, 'does-not-exist');
+    const missingSource = join(extractRoot, 'does-not-exist');
 
     await assert.rejects(
       () =>
         stageAndSwapContents({
           contentsPath,
           extractedContentsPath: missingSource,
+          extractRoot,
           stagingPath,
           backupPath
         }),
@@ -77,7 +109,14 @@ describe('stageAndSwapContents', () => {
     await fs.writeFile(join(backupPath, 'placeholder.txt'), 'occupied');
 
     await assert.rejects(
-      () => stageAndSwapContents({ contentsPath, extractedContentsPath, stagingPath, backupPath }),
+      () =>
+        stageAndSwapContents({
+          contentsPath,
+          extractedContentsPath,
+          extractRoot,
+          stagingPath,
+          backupPath
+        }),
       /Failed to back up the current configuration/
     );
 
@@ -98,7 +137,14 @@ describe('stageAndSwapContents', () => {
     });
 
     await assert.rejects(
-      () => stageAndSwapContents({ contentsPath, extractedContentsPath, stagingPath, backupPath }),
+      () =>
+        stageAndSwapContents({
+          contentsPath,
+          extractedContentsPath,
+          extractRoot,
+          stagingPath,
+          backupPath
+        }),
       /Failed to activate imported configuration; rolled back/
     );
 
