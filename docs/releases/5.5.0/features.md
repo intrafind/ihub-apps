@@ -475,3 +475,13 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Tool Calls No Longer Silently Dropped for GPT-5 / Responses API Models
+
+Apps using a GPT-5 or other OpenAI Responses API model with tools enabled could silently lose tool
+calls whenever the model answered via the non-streaming path — the model appeared to simply stop
+instead of calling the tool, with no error shown.
+
+- The non-streaming response parser now reads the actual (flat) shape of a `function_call` output
+  item instead of a nested shape that never existed on that API path.
+- No configuration or admin action is required — the fix takes effect automatically on upgrade.
