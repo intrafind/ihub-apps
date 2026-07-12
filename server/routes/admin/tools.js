@@ -8,6 +8,7 @@ import { loadAllTools } from '../../toolsLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { atomicWriteJSON, atomicCreateJSON, atomicWriteFile } from '../../utils/atomicWrite.js';
 import logger from '../../utils/logger.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import {
@@ -394,7 +395,7 @@ export default function registerAdminToolsRoutes(app) {
       if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2));
+      await atomicWriteJSON(toolFilePath, updatedTool);
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -512,7 +513,14 @@ export default function registerAdminToolsRoutes(app) {
       if (!newToolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2));
+      try {
+        await atomicCreateJSON(newToolFilePath, newTool);
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          return sendBadRequest(res, 'Tool with this ID already exists');
+        }
+        throw err;
+      }
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -735,7 +743,7 @@ export default function registerAdminToolsRoutes(app) {
       if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2));
+      await atomicWriteJSON(toolFilePath, tool);
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -942,7 +950,7 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Write the new content
-      await fs.writeFile(scriptPath, content, 'utf-8');
+      await atomicWriteFile(scriptPath, content, 'utf-8');
 
       res.json({ message: 'Script updated successfully' });
     } catch (error) {
