@@ -255,6 +255,55 @@ export async function exportConfig(req, res) {
 }
 
 /**
+ * Stage an extracted configuration directory and atomically swap it in place of
+ * the live contents directory, using renames instead of a destructive
+ * delete-then-copy. Renaming `contentsPath` aside doubles as the safety backup:
+ * if it fails, nothing has been touched yet and the import is aborted. If the
+ * second rename fails, the original directory is restored from the backup.
+ *
+ * @param {object} paths
+ * @param {string} paths.contentsPath - Live contents directory to replace.
+ * @param {string} paths.extractedContentsPath - Source directory (from the extracted ZIP).
+ * @param {string} paths.stagingPath - Sibling of contentsPath to stage the new contents in.
+ * @param {string} paths.backupPath - Sibling of contentsPath to move the old contents to.
+ */
+export async function stageAndSwapContents({
+  contentsPath: liveContentsPath,
+  extractedContentsPath,
+  stagingPath,
+  backupPath
+}) {
+  try {
+    await fs.cp(extractedContentsPath, stagingPath, { recursive: true });
+  } catch (error) {
+    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
+    throw new Error(
+      `Failed to stage imported configuration; the live configuration was not modified: ${error.message}`
+    );
+  }
+
+  try {
+    await fs.rename(liveContentsPath, backupPath);
+  } catch (error) {
+    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
+    throw new Error(
+      `Failed to back up the current configuration; the import was aborted: ${error.message}`
+    );
+  }
+
+  try {
+    await fs.rename(stagingPath, liveContentsPath);
+  } catch (error) {
+    // Restore the original contents directory so the server isn't left without one.
+    await fs.rename(backupPath, liveContentsPath);
+    await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});
+    throw new Error(
+      `Failed to activate imported configuration; rolled back to the previous configuration: ${error.message}`
+    );
+  }
+}
+
+/**
  * Import configuration from uploaded ZIP file
  */
 export async function importConfig(req, res) {
@@ -305,34 +354,36 @@ export async function importConfig(req, res) {
       });
     }
 
-    // Create backup of current configuration
+    // Stage the imported contents next to the live directory (same filesystem as
+    // contentsPath's parent) so the swap can use atomic renames instead of a
+    // destructive delete-then-copy.
     const backupTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const currentBackupPath = path.join(
       path.dirname(contentsPath),
       `contents-backup-${backupTimestamp}`
     );
+    const stagingPath = path.join(
+      path.dirname(contentsPath),
+      `contents-staging-${backupTimestamp}`
+    );
 
-    logger.info('Creating backup of current configuration', {
+    logger.info('Staging and swapping in imported configuration', {
       component: 'AdminBackup',
+      stagingPath,
       currentBackupPath
     });
 
     try {
-      await fs.cp(contentsPath, currentBackupPath, { recursive: true });
-      logger.info('Current configuration backed up', { component: 'AdminBackup' });
+      await stageAndSwapContents({
+        contentsPath,
+        extractedContentsPath,
+        stagingPath,
+        backupPath: currentBackupPath
+      });
     } catch (error) {
-      logger.error('Could not backup current configuration', { component: 'AdminBackup', error });
-      // Continue with import but warn user
+      logger.error('Failed to swap in imported configuration', { component: 'AdminBackup', error });
+      throw error;
     }
-
-    // Replace contents directory with imported one
-    logger.info('Replacing configuration files', { component: 'AdminBackup' });
-
-    // Remove current contents (but keep backup)
-    await fs.rm(contentsPath, { recursive: true, force: true });
-
-    // Copy extracted contents
-    await fs.cp(extractedContentsPath, contentsPath, { recursive: true });
 
     logger.info('Configuration files replaced', { component: 'AdminBackup' });
 

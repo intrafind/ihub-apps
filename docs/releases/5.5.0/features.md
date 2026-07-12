@@ -1,5 +1,18 @@
 # Features — 5.5.0
 
+## Admin Config Backup Restore No Longer Risks Wiping the Configuration
+
+Fixed a data-loss risk in **Admin → Backup → Import**: if the safety backup of the current
+configuration failed partway through (for example due to a full disk), the import used to proceed
+anyway and delete the live configuration directory before copying in the new one.
+
+- The import now stages the imported configuration next to the live one and swaps it in with an
+  atomic rename, so there is no window where a request could see a half-restored configuration.
+- If the safety backup can't be created, or the final swap fails, the import aborts and the
+  original configuration (apps, models, users, groups, encryption key) is left untouched or rolled
+  back automatically — nothing is deleted unless the new configuration is safely in place.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
