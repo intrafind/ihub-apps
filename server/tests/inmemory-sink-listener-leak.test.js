@@ -29,10 +29,7 @@ async function run() {
     const sink = new InMemorySink({ chatId: 'leak-test-nonstreaming' });
     sink.startListening();
     check('listener registered by startListening', sink._listener !== null);
-    check(
-      'listener count bumped by one',
-      actionTracker.listenerCount('fire-sse') === baseline + 1
-    );
+    check('listener count bumped by one', actionTracker.listenerCount('fire-sse') === baseline + 1);
 
     // Simulate the res-shim path (NonStreamingHandler writes the final
     // response directly): no `fire-sse` traffic is ever emitted for this
