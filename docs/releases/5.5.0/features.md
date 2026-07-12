@@ -1,5 +1,18 @@
 # Features — 5.5.0
 
+## Subpath Deployment URLs No Longer Leak Across Concurrent Requests
+
+Fixed a bug where the detected deployment subpath (e.g. `/ihub`) could leak between concurrent
+requests when generating URLs for PWA manifests, Office/browser-extension manifests, OAuth
+callback URLs, and short links.
+
+- The subpath used to be read from a single process-wide value that got overwritten by every
+  incoming request, so under real traffic one request's response could end up built with another
+  request's `X-Forwarded-Prefix` — including a value supplied by an unrelated request.
+- Detection is now request-scoped, so each request always sees its own subpath.
+- No configuration changes are required; subpath deployments behave the same as before, just
+  without the cross-request race.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
