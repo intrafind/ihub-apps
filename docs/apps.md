@@ -644,6 +644,11 @@ The `settings` property controls which configuration options users can adjust fo
   "outputFormat": { "enabled": true },
   "chatHistory": { "enabled": true },
   "imageGeneration": { "enabled": true },
+  "copy": {
+    "enabled": true,
+    "formats": ["text", "markdown", "html"],
+    "defaultFormat": "text"
+  },
   "speechRecognition": {
     "service": "default",
     "host": "https://speech.example.com"
@@ -669,6 +674,9 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
 | `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
 | `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                            |
+| `settings.copy.enabled`               | Show/hide the "copy response" button below chat messages. Default: `true` |
+| `settings.copy.formats`               | Which copy formats are offered: any of `"text"`, `"markdown"`, `"html"`. Default: all three |
+| `settings.copy.defaultFormat`         | Format used by the one-click copy button (must be included in `formats`). Default: `"text"` |
 | `settings.speechRecognition.service`  | Speech recognition backend: `"default"` (browser Web Speech API) or `"azure"` |
 | `settings.speechRecognition.host`     | Host URL for the speech recognition service (required when `service` is `"azure"`) |
 | `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
