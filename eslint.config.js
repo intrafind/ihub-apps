@@ -106,6 +106,20 @@ export default [
         ...globals.node,
         ...globals.es2024
       }
+    },
+    rules: {
+      // Catches copy-pasted catch blocks that log a variable name other than
+      // the bound catch parameter (e.g. `catch (error) { ...error: err }`),
+      // which throws a ReferenceError inside the error handler itself.
+      'no-undef': 'error'
+    }
+  },
+  {
+    files: ['server/tests/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.jest
+      }
     }
   }
 ];

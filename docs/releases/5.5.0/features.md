@@ -461,6 +461,22 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## More Resilient Error Handling Across Auth, Chat, and Background Jobs
+
+A recurring copy-paste bug in ~17 error-logging call sites meant that failures in proxy-auth JWT
+verification, chat prompt building, short links, admin config saves, Office 365 drive listing, and
+marketplace installs could crash the error handler itself instead of failing gracefully and logging
+a useful message.
+
+- Affected failure paths now log correctly and degrade gracefully (e.g. skip a style/skill, fall
+  back to a default) instead of raising an unrelated internal error.
+- Proxy authentication's JWKS key cache (for JWT-based providers) now refreshes every 10 hours
+  instead of caching signing keys forever, so a rotated identity-provider signing key is picked up
+  without a server restart.
+- The server now logs and, for unrecoverable errors, restarts the affected worker instead of
+  silently hanging or dying with no diagnostic trail.
+- No configuration or admin action required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

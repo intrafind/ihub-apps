@@ -171,7 +171,7 @@ export async function generateDailyRollups() {
     logger.info('Generated daily rollups', { component: 'UsageAggregator', daysGenerated });
     return { eventsProcessed: events.length, daysGenerated };
   } catch (error) {
-    logger.error('Failed to generate daily rollups', { component: 'UsageAggregator', error: e });
+    logger.error('Failed to generate daily rollups', { component: 'UsageAggregator', error });
     return { eventsProcessed: 0, daysGenerated: 0 };
   }
 }
@@ -212,7 +212,7 @@ export async function generateMonthlyRollups() {
     logger.info('Generated monthly rollups', { component: 'UsageAggregator', monthsGenerated });
     return { monthsGenerated };
   } catch (error) {
-    logger.error('Failed to generate monthly rollups', { component: 'UsageAggregator', error: e });
+    logger.error('Failed to generate monthly rollups', { component: 'UsageAggregator', error });
     return { monthsGenerated: 0 };
   }
 }
