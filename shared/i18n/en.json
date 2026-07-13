@@ -2095,6 +2095,7 @@
       "TEAMS_SSO_TOKEN_REQUIRED": "SSO token is required",
       "TEAMS_AUTH_NOT_ENABLED": "Teams authentication is not enabled",
       "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Invalid or expired Teams token",
+      "TEAMS_ACCOUNT_DISABLED": "Your account has been disabled. Please contact your administrator.",
       "TEAMS_TAB_CONFIG_SAVED": "Tab configuration saved"
     },
     "manifest": {

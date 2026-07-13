@@ -2060,6 +2060,7 @@
       "TEAMS_SSO_TOKEN_REQUIRED": "SSO-Token ist erforderlich",
       "TEAMS_AUTH_NOT_ENABLED": "Teams-Authentifizierung ist nicht aktiviert",
       "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Ungültiges oder abgelaufenes Teams-Token",
+      "TEAMS_ACCOUNT_DISABLED": "Ihr Konto wurde deaktiviert. Bitte wenden Sie sich an Ihren Administrator.",
       "TEAMS_TAB_CONFIG_SAVED": "Tab-Konfiguration gespeichert"
     },
     "manifest": {
