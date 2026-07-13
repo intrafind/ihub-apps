@@ -22,6 +22,18 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
 import { createParser } from 'eventsource-parser';
 import { filterAdapterOptions as filterAdapterOptionsPure } from './adapterOptions.js';
+import {
+  isTransientHttpStatus,
+  isTransientLlmError,
+  parseRetryAfterMs,
+  computeRetryDelayMs,
+  runWithRetries
+} from '../llm/retryWithBackoff.js';
+
+// Re-exported for backward compatibility — these used to be defined here;
+// the implementation now lives in services/llm/retryWithBackoff.js so other
+// LLM invocation paths (e.g. simpleCompletion) can share it too.
+export { isTransientHttpStatus, isTransientLlmError, parseRetryAfterMs, computeRetryDelayMs };
 
 /**
  * Default number of retries for transient LLM errors. A brief Google 503
@@ -34,99 +46,6 @@ const DEFAULT_TRANSIENT_RETRIES = (() => {
   const fromEnv = Number(process.env.WORKFLOW_LLM_TRANSIENT_RETRIES);
   return Number.isFinite(fromEnv) && fromEnv >= 0 ? fromEnv : 3;
 })();
-
-const NETWORK_ERROR_CODES =
-  /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EPIPE|ECONNABORTED/i;
-const NETWORK_ERROR_MESSAGES = /fetch failed|network|socket hang up|timeout|terminated|aborted/i;
-
-/**
- * Whether an HTTP status from a provider is a TRANSIENT failure worth retrying.
- * 429 (rate limit — honor Retry-After) and any 5xx (server-side / overload).
- * 4xx other than 429 are caller errors (bad request, auth, context window) and
- * must NOT be retried — retrying can't fix them and just wastes the budget.
- *
- * @param {number} status - HTTP status code
- * @returns {boolean}
- */
-export function isTransientHttpStatus(status) {
-  if (typeof status !== 'number') return false;
-  if (status === 429) return true;
-  return status >= 500 && status < 600;
-}
-
-/**
- * Whether a thrown error should be retried. Two transient classes:
- *   1. A classified HTTP error (has `.status`) whose status is transient.
- *   2. A transport/network fault thrown BEFORE any response (no `.status`),
- *      recognized by its node error code or message. We deliberately do NOT
- *      treat an arbitrary status-less error (e.g. a logic bug) as transient,
- *      so we don't silently retry real defects.
- *
- * @param {Error & { status?: number, code?: string }} err
- * @returns {boolean}
- */
-export function isTransientLlmError(err) {
-  if (!err) return false;
-  if (err.status != null) return isTransientHttpStatus(err.status);
-  const code = typeof err.code === 'string' ? err.code : '';
-  const msg = typeof err.message === 'string' ? err.message : '';
-  return NETWORK_ERROR_CODES.test(code) || NETWORK_ERROR_MESSAGES.test(msg);
-}
-
-/**
- * Parse a `Retry-After` header into milliseconds. Supports the integer-seconds
- * form (what Google sends) and an HTTP-date; returns null when absent or
- * unparseable so the caller falls back to exponential backoff.
- *
- * @param {string|number|null|undefined} retryAfter - raw header value
- * @returns {number|null} delay in ms, or null
- */
-export function parseRetryAfterMs(retryAfter) {
-  if (retryAfter == null) return null;
-  const s = String(retryAfter).trim();
-  if (s === '') return null;
-  if (/^\d+$/.test(s)) return Number(s) * 1000;
-  const dateMs = Date.parse(s);
-  if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
-  return null;
-}
-
-/**
- * Compute the delay before the next retry. Honors a server-instructed
- * `Retry-After` (bounded only by `retryAfterCapMs`); otherwise exponential
- * backoff (base · 2^attempt) plus up to `baseMs` of jitter, capped at `capMs`.
- *
- * A server-instructed delay is NOT clamped to the small backoff `capMs`:
- * retrying before the server's stated window has elapsed just re-trips the
- * rate limit and burns the whole retry budget. It is bounded by a separate,
- * larger `retryAfterCapMs` only to guard against an absurd header value.
- *
- * @param {number} attempt - zero-based attempt index that just failed
- * @param {Object} [opts]
- * @param {number|null} [opts.retryAfterMs] - server-instructed delay, if any
- * @param {number} [opts.baseMs=1000]
- * @param {number} [opts.capMs=15000] - cap for computed exponential backoff
- * @param {number} [opts.retryAfterCapMs=60000] - upper bound for an explicit Retry-After
- * @param {() => number} [opts.jitter=Math.random]
- * @returns {number} delay in ms
- */
-export function computeRetryDelayMs(
-  attempt,
-  {
-    retryAfterMs = null,
-    baseMs = 1000,
-    capMs = 15000,
-    retryAfterCapMs = 60000,
-    jitter = Math.random
-  } = {}
-) {
-  if (typeof retryAfterMs === 'number' && retryAfterMs >= 0) {
-    return Math.min(retryAfterMs, retryAfterCapMs);
-  }
-  const exp = baseMs * Math.pow(2, attempt);
-  const jitterMs = Math.floor(jitter() * baseMs);
-  return Math.min(exp + jitterMs, capMs);
-}
 
 /**
  * Helper class for workflow LLM operations.
@@ -179,18 +98,7 @@ export class WorkflowLLMHelper {
    */
   async _runWithRetries(fn, { maxRetries, onRetry } = {}) {
     const budget = Number.isFinite(maxRetries) ? maxRetries : this.maxRetries;
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await fn(attempt);
-      } catch (err) {
-        if (attempt >= budget || !isTransientLlmError(err)) throw err;
-        const delayMs = computeRetryDelayMs(attempt, {
-          retryAfterMs: typeof err?.retryAfterMs === 'number' ? err.retryAfterMs : null
-        });
-        if (onRetry) onRetry({ attempt, err, delayMs });
-        await this._sleep(delayMs);
-      }
-    }
+    return runWithRetries(fn, { maxRetries: budget, onRetry, sleep: ms => this._sleep(ms) });
   }
 
   /**

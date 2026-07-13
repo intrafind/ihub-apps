@@ -8,6 +8,7 @@ import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
+import { runWithRetries, parseRetryAfterMs } from './services/llm/retryWithBackoff.js';
 
 /**
  * Sanitize user-provided input for logging to prevent log injection
@@ -548,16 +549,27 @@ export async function simpleCompletion(
     responseSchema
   });
 
-  const response = await throttledFetch(modelConfig.id, request.url, {
-    method: 'POST',
-    headers: request.headers,
-    body: JSON.stringify(request.body)
-  });
+  // Retry transient provider failures (429 / 5xx / network blips) with
+  // exponential backoff — this path previously had zero retry, unlike the
+  // workflow LLM path, so a single transient 503 failed the whole call.
+  const response = await runWithRetries(async () => {
+    const res = await throttledFetch(modelConfig.id, request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: JSON.stringify(request.body)
+    });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`LLM API request failed with status ${response.status}: ${errorBody}`);
-  }
+    if (!res.ok) {
+      const errorBody = await res.text();
+      const error = new Error(`LLM API request failed with status ${res.status}: ${errorBody}`);
+      error.status = res.status;
+      error.retryAfterMs = parseRetryAfterMs(
+        typeof res.headers?.get === 'function' ? res.headers.get('retry-after') : null
+      );
+      throw error;
+    }
+    return res;
+  });
 
   const responseData = await response.json();
 
