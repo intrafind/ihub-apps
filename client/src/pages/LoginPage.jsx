@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../shared/contexts/AuthContext.jsx';
 import LoginForm from '../features/auth/components/LoginForm.jsx';
+import { resolveSafeReturnUrl } from '../shared/utils/returnUrl.js';
 
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -14,7 +15,7 @@ export default function LoginPage() {
   // Only set if not already stored — preserves the original URL through NTLM multi-step flow.
   useEffect(() => {
     if (returnUrl && !sessionStorage.getItem('authReturnUrl')) {
-      sessionStorage.setItem('authReturnUrl', returnUrl);
+      sessionStorage.setItem('authReturnUrl', resolveSafeReturnUrl(returnUrl));
     }
   }, []); // eslint-disable-line @eslint-react/exhaustive-deps
 
@@ -34,9 +35,9 @@ export default function LoginPage() {
       const storedReturnUrl = sessionStorage.getItem('authReturnUrl');
       if (storedReturnUrl) {
         sessionStorage.removeItem('authReturnUrl');
-        window.location.href = storedReturnUrl;
+        window.location.href = resolveSafeReturnUrl(storedReturnUrl);
       } else if (returnUrl) {
-        window.location.href = returnUrl;
+        window.location.href = resolveSafeReturnUrl(returnUrl);
       } else {
         navigate('/');
       }
