@@ -461,6 +461,19 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Admin Save/Load Errors Now Show the Real Reason
+
+Admin pages (Apps, Prompts, Models, Tools, Workflows, Skills, Users, Groups, Agents, Providers,
+and more) now display the server's actual error message — a validation problem, a duplicate ID, a
+conflict reason — instead of a generic "Request failed with status code 409".
+
+- A shared helper extracts the server-provided error detail everywhere an admin API call fails,
+  across roughly 60 call sites.
+- Saving an app or prompt that fails validation no longer replaces the entire edit form with a
+  full-page error, discarding the in-progress edit — the error now shows as a banner above the
+  still-visible form. The same fix applies to the User and Group editors.
+- No admin action is required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

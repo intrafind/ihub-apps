@@ -5,6 +5,14 @@ const isPlainObjectForBody = value =>
   !Array.isArray(value) &&
   Object.prototype.toString.call(value) === '[object Object]';
 
+// Extracts the server-provided error message from a failed admin API call,
+// falling back to the generic axios message (e.g. network errors with no response).
+export const getAdminApiErrorMessage = err =>
+  err?.response?.data?.error ||
+  err?.response?.data?.message ||
+  err?.message ||
+  'An unexpected error occurred';
+
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
   // Handle admin token for anonymous mode

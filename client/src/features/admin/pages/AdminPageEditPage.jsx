@@ -2,7 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import { fetchAdminPage, createPage, updatePage } from '../../../api/adminApi';
+import {
+  createPage,
+  fetchAdminPage,
+  getAdminApiErrorMessage,
+  updatePage
+} from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -56,7 +61,7 @@ function AdminPageEditPage() {
       setPage(loadedPage);
       setInitialData(loadedPage);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -89,7 +94,7 @@ function AdminPageEditPage() {
       markSaved();
       navigate('/admin/pages');
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }

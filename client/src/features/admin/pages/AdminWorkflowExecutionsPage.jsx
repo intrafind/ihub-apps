@@ -13,7 +13,11 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminExecutions, cancelAdminExecution } from '../../../api/adminApi';
+import {
+  cancelAdminExecution,
+  fetchAdminExecutions,
+  getAdminApiErrorMessage
+} from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import StatusBadge from '../../workflows/components/StatusBadge';
 
@@ -169,7 +173,7 @@ function AdminWorkflowExecutionsPage() {
         // supersedes the previous one or the component unmounts.
         if (err.name === 'CanceledError' || err.name === 'AbortError') return;
         console.error('Error loading executions:', err);
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         if (inFlightAbortRef.current === controller) {
           inFlightAbortRef.current = null;
