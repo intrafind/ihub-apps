@@ -9,9 +9,9 @@
 import {
   createGenericTool,
   createGenericToolCall,
-  createGenericStreamingResponse,
-  sanitizeSchemaForProvider
+  createGenericStreamingResponse
 } from './GenericToolCalling.js';
+import { sanitizeSchema as sanitizeAnthropicSchema } from './AnthropicConverter.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 import logger from '../../utils/logger.js';
@@ -48,10 +48,10 @@ export function convertGenericToolsToBedrock(genericTools = []) {
       name: tool.id || tool.name,
       description: tool.description || '',
       inputSchema: {
-        json: sanitizeSchemaForProvider(
-          tool.parameters || { type: 'object', properties: {} },
-          'anthropic'
-        )
+        // Bedrock's Converse API tool schema shape matches Anthropic's, so
+        // intentionally reuse Anthropic's schema sanitization rather than
+        // duplicating it.
+        json: sanitizeAnthropicSchema(tool.parameters || { type: 'object', properties: {} })
       }
     }
   }));

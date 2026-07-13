@@ -10,11 +10,22 @@ import {
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+/**
+ * Sanitize a JSON Schema for OpenAI's tool `parameters`. OpenAI has no known
+ * schema restrictions today, so this currently only deep-clones the schema —
+ * kept as an explicit hook for future OpenAI-specific rules.
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
+ */
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, () => {});
+}
 
 /**
  * Convert generic tools to OpenAI format
@@ -56,7 +67,7 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
     function: {
       name: tool.id || tool.name,
       description: tool.description,
-      parameters: sanitizeSchemaForProvider(tool.parameters, 'openai')
+      parameters: sanitizeSchema(tool.parameters)
     }
   }));
 }

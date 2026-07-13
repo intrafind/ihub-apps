@@ -10,7 +10,7 @@ import {
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider,
+  cloneAndWalkSchema,
   normalizeToolName
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
@@ -22,6 +22,44 @@ const HALLUCINATION_NOTICE_PREFIX = '[provider:google dropped malformed function
 function truncateForLog(value, max = 200) {
   if (typeof value !== 'string') return value;
   return value.length > max ? `${value.slice(0, max)}…(${value.length})` : value;
+}
+
+/**
+ * Sanitize a JSON Schema for Google's restricted OpenAPI-subset tool schema
+ * support: normalize non-standard `type` values, flatten multilingual
+ * `description` objects to a plain string, and strip keywords Gemini's API
+ * rejects with HTTP 400 ("Unknown name ...").
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
+ */
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, obj => {
+    // Normalize non-standard type values to valid JSON Schema types
+    if (
+      obj.type &&
+      !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
+    ) {
+      obj.type = 'string';
+    }
+    // Ensure description is a plain string (not a multilingual object)
+    if (obj.description && typeof obj.description === 'object') {
+      obj.description = obj.description.en || Object.values(obj.description)[0] || '';
+    }
+    delete obj.exclusiveMaximum;
+    delete obj.exclusiveMinimum;
+    delete obj.title;
+    delete obj.format; // Google has limited format support
+    delete obj.minLength; // Use 'minimum' instead for strings
+    delete obj.maxLength; // Use 'maximum' instead for strings
+    // JSON Schema meta keywords that Google's restricted OpenAPI subset
+    // rejects with HTTP 400 ("Unknown name ..."). MCP tools routinely emit
+    // these ($schema + additionalProperties: false from their JSON Schema
+    // draft), so strip them or every MCP tool call to Gemini fails.
+    delete obj.$schema;
+    delete obj.$id;
+    delete obj.additionalProperties;
+    delete obj.patternProperties;
+  });
 }
 
 /**
@@ -66,7 +104,7 @@ export function convertGenericToolsToGoogle(genericTools = []) {
       functionDeclarations: functionTools.map(tool => ({
         name: normalizeToolName(tool.id),
         description: tool.description,
-        parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
+        parameters: sanitizeSchema(tool.parameters)
       }))
     }
   ];

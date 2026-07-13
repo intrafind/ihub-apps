@@ -171,9 +171,9 @@ Normalize tool names to be compatible with all providers.
 
 Normalize finish reasons across providers (`"stop"`, `"length"`, `"tool_calls"`, `"content_filter"`).
 
-#### `sanitizeSchemaForProvider(schema, provider)`
+#### `cloneAndWalkSchema(schema, visitSchemaNode)`
 
-Clean JSON Schema for provider-specific compatibility.
+Deep-clone a JSON Schema and recursively visit each schema node, skipping `properties` containers. Provider-specific field deletions/normalizations live in each converter's own `sanitizeSchema(schema)` (e.g. `GoogleConverter.sanitizeSchema`, `AnthropicConverter.sanitizeSchema`), which pass their cleanup logic in as `visitSchemaNode`.
 
 ### Error Handling
 

@@ -258,31 +258,37 @@ export function normalizeFinishReason(providerFinishReason, provider) {
 }
 
 /**
- * Sanitize JSON Schema for provider compatibility
+ * Deep-clone a JSON Schema and recursively visit every schema node, letting
+ * `visitSchemaNode` mutate it in place. This is the provider-agnostic part of
+ * schema sanitization; provider-specific field deletions/normalizations live
+ * in each converter's own `sanitizeSchema()` (see AnthropicConverter.js,
+ * GoogleConverter.js, etc.) and are passed in as `visitSchemaNode`.
+ *
+ * A node is a "schema" (where keywords like `title`/`format`/`minLength`
+ * are JSON Schema annotations a provider might want to strip) only if it
+ * declares a `type`. A `properties` container — whose keys ARE property
+ * names — has no `type` of its own, so it is never passed to
+ * `visitSchemaNode`. Otherwise a property literally named
+ * `title`/`format`/`minLength` would get deleted from its parent's
+ * `properties`, and any `required: ['title']` pointing at it would then fail
+ * the provider's strict schema check.
+ *
  * @param {Object} schema - JSON Schema
- * @param {string} provider - Target provider
+ * @param {(node: Object) => void} visitSchemaNode - mutates a schema node in place
  * @returns {Object} Sanitized schema
  */
-//FIXME: This function is used to normalize finish reasons from different providers. the specific handling should be done in the provider-specific adapters.
-export function sanitizeSchemaForProvider(schema, provider) {
+export function cloneAndWalkSchema(schema, visitSchemaNode) {
   if (!schema || typeof schema !== 'object') {
     return { type: 'object', properties: {} };
   }
 
   const sanitized = JSON.parse(JSON.stringify(schema)); // Deep clone
 
-  // A node is a "schema" (where keywords like `title`/`format`/`minLength`
-  // are JSON Schema annotations we want to strip) only if it declares a
-  // `type`. A `properties` container — whose keys ARE property names — has
-  // no `type` of its own, so we must NOT apply the keyword strip there.
-  // Otherwise a property literally named `title`/`format`/`minLength` gets
-  // deleted from its parent's `properties`, then any `required: ['title']`
-  // pointing at it fails the provider's strict schema check.
   function isSchemaNode(obj) {
     return obj && typeof obj === 'object' && typeof obj.type === 'string';
   }
 
-  function cleanObject(obj, parentKey) {
+  function walk(obj, parentKey) {
     if (!obj || typeof obj !== 'object') return obj;
 
     // Inside a `properties` container, each key is a user-defined property
@@ -291,47 +297,16 @@ export function sanitizeSchemaForProvider(schema, provider) {
     const isPropertiesContainer = parentKey === 'properties' && !isSchemaNode(obj);
 
     if (!isPropertiesContainer) {
-      // Remove provider-specific incompatible fields
-      if (provider === 'google') {
-        // Normalize non-standard type values to valid JSON Schema types
-        if (
-          obj.type &&
-          !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
-        ) {
-          obj.type = 'string';
-        }
-        // Ensure description is a plain string (not a multilingual object)
-        if (obj.description && typeof obj.description === 'object') {
-          obj.description = obj.description.en || Object.values(obj.description)[0] || '';
-        }
-        delete obj.exclusiveMaximum;
-        delete obj.exclusiveMinimum;
-        delete obj.title;
-        delete obj.format; // Google has limited format support
-        delete obj.minLength; // Use 'minimum' instead for strings
-        delete obj.maxLength; // Use 'maximum' instead for strings
-        // JSON Schema meta keywords that Google's restricted OpenAPI subset
-        // rejects with HTTP 400 ("Unknown name ..."). MCP tools routinely emit
-        // these ($schema + additionalProperties: false from their JSON Schema
-        // draft), so strip them or every MCP tool call to Gemini fails.
-        delete obj.$schema;
-        delete obj.$id;
-        delete obj.additionalProperties;
-        delete obj.patternProperties;
-      }
-
-      if (provider === 'anthropic') {
-        // Anthropic is generally more flexible, but we might need to add restrictions here
-      }
+      visitSchemaNode(obj);
     }
 
-    // Recursively clean nested objects
+    // Recursively walk nested objects
     for (const key in obj) {
       if (obj[key] && typeof obj[key] === 'object') {
         if (Array.isArray(obj[key])) {
-          obj[key] = obj[key].map(item => cleanObject(item, key));
+          obj[key] = obj[key].map(item => walk(item, key));
         } else {
-          obj[key] = cleanObject(obj[key], key);
+          obj[key] = walk(obj[key], key);
         }
       }
     }
@@ -339,5 +314,5 @@ export function sanitizeSchemaForProvider(schema, provider) {
     return obj;
   }
 
-  return cleanObject(sanitized);
+  return walk(sanitized);
 }
