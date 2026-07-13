@@ -1640,7 +1640,7 @@ export default function registerAdminSourcesRoutes(app) {
         if (!validateIdForPath(id, 'source', res)) {
           return;
         }
-        const { path = '' } = req.query;
+        const { path = 'sources' } = req.query;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
 

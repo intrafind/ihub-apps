@@ -47,7 +47,34 @@ class FileSystemHandler extends SourceHandler {
     if (!resolved) {
       throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
     }
+
+    // Filesystem sources must live under contents/sources — without this,
+    // a path like "config/groups.json" or "../.encryption-key" would still
+    // resolve inside contents/ and grant access to unrelated config/secrets.
+    const sourcesDir = await this._getSourcesDir();
+    const sourcesDirWithSep = sourcesDir.endsWith(path.sep) ? sourcesDir : sourcesDir + path.sep;
+    if (resolved !== sourcesDir && !resolved.startsWith(sourcesDirWithSep)) {
+      throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
+    }
+
     return resolved;
+  }
+
+  /**
+   * Resolve and cache the canonical contents/sources directory used as the
+   * containment boundary for all filesystem-source operations.
+   * @returns {Promise<string>} - Canonical sources directory path
+   */
+  async _getSourcesDir() {
+    if (!this._sourcesDirCache) {
+      const sourcesPath = path.resolve(this.basePath, 'sources');
+      try {
+        this._sourcesDirCache = await fs.realpath(sourcesPath);
+      } catch {
+        this._sourcesDirCache = sourcesPath;
+      }
+    }
+    return this._sourcesDirCache;
   }
 
   /**
@@ -170,6 +197,11 @@ class FileSystemHandler extends SourceHandler {
 
     // Check for suspicious path patterns
     if (filePath.includes('..') || filePath.includes('~') || path.isAbsolute(filePath)) {
+      return false;
+    }
+
+    // Filesystem sources must live under contents/sources
+    if (filePath !== 'sources' && !filePath.startsWith('sources/')) {
       return false;
     }
 
