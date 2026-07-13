@@ -1,0 +1,45 @@
+# Integration Tests CI
+#
+# Runs the subset of tests/integration/** that reliably passes today
+# (test:integration:ci - see tests/README.md for what's excluded and why)
+# on every pull request. Kept as its own job/workflow, separate from
+# unit-tests.yml's test:quick, so this suite growing slower or occasionally
+# flaky doesn't block the fast unit signal.
+
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-integration:
+    runs-on: ubuntu-latest
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Seed contents/ from defaults
+        run: node -e "import('./server/utils/setupUtils.js').then(m => m.performInitialSetup())"
+
+      - name: Run integration test suite
+        run: npm run test:integration:ci
