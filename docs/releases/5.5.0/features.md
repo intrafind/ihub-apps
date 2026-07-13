@@ -475,3 +475,16 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Workflow Executions Are Now Protected Against Cross-User Access
+
+Per-execution workflow endpoints (view status, stream progress, export, resume, restart, cancel,
+and respond to a checkpoint) now verify that the caller owns the execution, not just that they may
+run the underlying workflow. Previously, any user allowed to run a given workflow — including an
+anonymous user when anonymous access is enabled — could read or control another user's in-flight
+or completed run simply by knowing its execution ID.
+
+- Only the execution's owner or an admin can now view its state, stream its live progress, export
+  it, or resume/restart/cancel/respond to it — matching the ownership check already enforced on
+  deleting or archiving an execution.
+- No configuration or admin action is required — the fix takes effect automatically on upgrade.
