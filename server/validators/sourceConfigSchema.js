@@ -223,6 +223,22 @@ function validateFilesystemPath(path) {
       throw new Error(`Invalid file path: Access to ${dangerousPath} not allowed`);
     }
   }
+
+  // Filesystem sources are only ever read/written under contents/sources —
+  // reject anything else so a source config can't be saved with a path
+  // pointing at config/ or other files outside that directory.
+  if (!path.startsWith('/')) {
+    if (path !== 'sources' && !path.startsWith('sources/')) {
+      throw new Error(
+        'Invalid file path: Filesystem sources must be under the "sources/" directory'
+      );
+    }
+
+    // Reject dotfiles/dot-directories anywhere in the path (e.g. "sources/.env").
+    if (path.split('/').some(segment => segment.startsWith('.'))) {
+      throw new Error('Invalid file path: Dotfiles and dot-directories are not allowed');
+    }
+  }
 }
 
 /**

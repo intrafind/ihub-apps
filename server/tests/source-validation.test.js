@@ -24,9 +24,10 @@ describe('Source Validation', () => {
       assert.ok(result.errors.length > 0);
     });
 
-    it('should accept filesystem source with whitespace-only path (Zod validation)', () => {
-      // Note: Zod's min(1) validation doesn't trim strings automatically
-      // The additional server-side validation in sources.js route checks for trim()
+    it('should reject filesystem source with whitespace-only path', () => {
+      // Note: Zod's min(1) validation doesn't trim strings automatically, but
+      // validateFilesystemPath now requires the path to live under "sources/",
+      // which a whitespace-only string never satisfies.
       const source = {
         id: 'test-source',
         name: { en: 'Test Source' },
@@ -41,9 +42,7 @@ describe('Source Validation', () => {
       };
 
       const result = validateSourceConfig(source);
-      // Zod validation passes because string length > 1
-      // But the route handler will reject it with trim() check
-      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.success, false);
     });
 
     it('should accept filesystem source with valid path', () => {
@@ -72,7 +71,7 @@ describe('Source Validation', () => {
         name: { en: 'Test Source' },
         type: 'filesystem',
         config: {
-          path: 'data/file.txt'
+          path: 'sources/file.txt'
         }
       };
 
@@ -81,6 +80,48 @@ describe('Source Validation', () => {
       assert.ok(result.data);
       // Should have default encoding
       assert.strictEqual(result.data.config.encoding, 'utf-8');
+    });
+
+    it('should reject filesystem source with path outside the sources directory', () => {
+      const source = {
+        id: 'test-source',
+        name: { en: 'Test Source' },
+        type: 'filesystem',
+        config: {
+          path: 'data/file.txt'
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, false);
+    });
+
+    it('should reject filesystem source pointing at config/groups.json', () => {
+      const source = {
+        id: 'test-source',
+        name: { en: 'Test Source' },
+        type: 'filesystem',
+        config: {
+          path: 'config/groups.json'
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, false);
+    });
+
+    it('should reject filesystem source pointing at a dotfile under sources/', () => {
+      const source = {
+        id: 'test-source',
+        name: { en: 'Test Source' },
+        type: 'filesystem',
+        config: {
+          path: 'sources/.env'
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, false);
     });
   });
 

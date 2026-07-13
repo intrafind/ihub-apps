@@ -586,11 +586,26 @@ class SourceManager {
         throw new Error('File path is required');
       }
 
-      // Resolve path relative to contents directory
+      // Resolve path relative to contents directory (config.path is stored
+      // with a "sources/" prefix, e.g. "sources/faq.md"), then confirm the
+      // resolved file stays within contents/sources — filesystem sources
+      // must never be able to reference arbitrary files under contents/
+      // (see FileSystemHandler._resolveSafePath, which enforces the same rule).
       const contentsDir = path.join(getRootDir(), 'contents');
       const fullPath = await resolveAndValidatePath(filePath, contentsDir);
       if (!fullPath) {
         throw new Error('Invalid file path: Path must be within contents directory');
+      }
+
+      let sourcesDir = path.join(contentsDir, 'sources');
+      try {
+        sourcesDir = await fs.promises.realpath(sourcesDir);
+      } catch {
+        // Sources directory doesn't exist yet; fall back to the unresolved path.
+      }
+      const sourcesDirWithSep = sourcesDir.endsWith(path.sep) ? sourcesDir : sourcesDir + path.sep;
+      if (fullPath !== sourcesDir && !fullPath.startsWith(sourcesDirWithSep)) {
+        throw new Error('Invalid file path: Path must be within the sources directory');
       }
 
       const stats = await fs.promises.stat(fullPath);

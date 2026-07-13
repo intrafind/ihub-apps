@@ -475,3 +475,17 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Filesystem Sources Are Now Scoped to `contents/sources/`
+
+Closed a privilege-escalation gap where an admin with only the restricted **Content Admin** role
+(not full Admin Access) could use the filesystem-source file browser/editor to read or write files
+anywhere under `contents/` — including `config/groups.json` and the `.encryption-key` file used to
+decrypt stored secrets.
+
+- Reading, writing, deleting, and browsing filesystem-source files, plus the "Test connection"
+  check, are now hard-scoped to `contents/sources/`, regardless of what path is requested.
+- Saving a filesystem source with a `config.path` outside `sources/` (or containing a dotfile
+  segment) is now rejected by validation.
+- Existing filesystem sources are unaffected — all bundled sources already store their path with
+  the `sources/` prefix. No admin action is required.
