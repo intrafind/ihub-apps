@@ -475,3 +475,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Cancelling an Agent Run Now Actually Stops It
+
+Cancelling a workflow/agent run, or hitting its per-node timeout, previously only stopped things
+*between* steps — an agent step already in progress kept calling the model and running tools in
+the background until it finished on its own, even though the run showed as cancelled.
+
+- Cancelling a run (or a timeout firing) now interrupts an in-flight agent step immediately: the
+  in-progress model request is aborted, and the agent stops before starting another model call or
+  another queued tool call in the same turn.
+- This stops wasted LLM spend and background tool activity on runs operators already considered
+  stopped.
+- Also fixed a related bug where a tool-enabled agent step could fail outright with an internal
+  error when native web search was configured, instead of running normally.
+- No admin action is required — the fix takes effect automatically on upgrade.
