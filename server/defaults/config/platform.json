@@ -127,7 +127,7 @@
   "localAuth": {
     "enabled": true,
     "usersFile": "contents/config/users.json",
-    "showDemoAccounts": true
+    "showDemoAccounts": false
   },
   "swagger": {
     "enabled": true,

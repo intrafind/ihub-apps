@@ -505,14 +505,14 @@ Built-in username/password authentication.
   "localAuth": {
     "enabled": true,
     "usersFile": "contents/config/users.json",
-    "showDemoAccounts": true
+    "showDemoAccounts": false
   }
 }
 ```
 
 - **enabled** (boolean) – Enable local authentication. Default: `false`
 - **usersFile** (string) – Path to users configuration file. Default: `"contents/config/users.json"`
-- **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`
+- **showDemoAccounts** (boolean) – Show demo accounts (admin/user) on the login page. Keep disabled in production — the shipped demo password hashes are public. Default: `false`
 
 ### **proxyAuth**
 Header-based authentication for reverse proxy setups.

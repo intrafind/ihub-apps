@@ -248,7 +248,7 @@ For groups to be retrieved:
   "localAuth": {
     "enabled": true,
     "usersFile": "contents/config/users.json",
-    "showDemoAccounts": true,
+    "showDemoAccounts": false,
     "sessionTimeoutMinutes": 480
   }
 }

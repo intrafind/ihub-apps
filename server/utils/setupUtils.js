@@ -1,8 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { atomicWriteJSON } from './atomicWrite.js';
 
 /**
  * Recursively copies files and directories from source to destination,
@@ -191,6 +194,42 @@ export async function syncManagedDefaultFiles() {
 }
 
 /**
+ * Rotates the shipped demo admin account's password on a fresh install.
+ * The default admin/password123 bcrypt hash is committed to the public repo,
+ * so leaving it in place makes any freshly deployed instance trivially
+ * takeover-able. The generated password is logged once — it is not
+ * recoverable afterwards, only resettable via the users.json file or the
+ * admin UI.
+ * @param {string} usersFilePath - Absolute path to the freshly copied users.json
+ * @returns {Promise<void>}
+ */
+async function rotateDefaultAdminPassword(usersFilePath) {
+  try {
+    const raw = await fs.readFile(usersFilePath, 'utf8');
+    const usersConfig = JSON.parse(raw);
+    const adminEntry = Object.values(usersConfig.users || {}).find(u => u.username === 'admin');
+
+    if (!adminEntry) {
+      return;
+    }
+
+    const generatedPassword = crypto.randomBytes(18).toString('base64url');
+    const salt = await bcrypt.genSalt(12);
+    adminEntry.passwordHash = await bcrypt.hash(`${adminEntry.id}:${generatedPassword}`, salt);
+    adminEntry.updatedAt = new Date().toISOString();
+
+    await atomicWriteJSON(usersFilePath, usersConfig);
+
+    logger.warn(
+      `Generated a new local admin password for this fresh install. Username: "${adminEntry.username}", password: "${generatedPassword}". This is shown only once — store it now; it cannot be recovered later, only reset.`,
+      { component: 'Setup' }
+    );
+  } catch (error) {
+    logger.error('Failed to rotate default admin password', { component: 'Setup', error });
+  }
+}
+
+/**
  * Performs initial setup by copying any missing default configuration files
  * This function should be called during server startup
  * @returns {Promise<boolean>} True if any files were copied
@@ -199,12 +238,28 @@ export async function performInitialSetup() {
   try {
     logger.info('Checking for missing default configuration files', { component: 'Setup' });
 
+    const usersFilePath = path.join(getRootDir(), config.CONTENTS_DIR, 'config', 'users.json');
+    let usersFileExistedBefore = true;
+    try {
+      await fs.stat(usersFilePath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      usersFileExistedBefore = false;
+    }
+
     const filesCopied = await copyDefaultConfiguration();
 
     if (filesCopied) {
       logger.info('Initial setup completed - missing default files have been copied', {
         component: 'Setup'
       });
+
+      // Keep the well-known admin/password123 login in development so the
+      // documented local dev/testing flow (CLAUDE.md) keeps working; rotate
+      // it everywhere else, since the shipped hash is public in the repo.
+      if (!usersFileExistedBefore && config.NODE_ENV !== 'development') {
+        await rotateDefaultAdminPassword(usersFilePath);
+      }
     } else {
       logger.info('All default configuration files already exist, no setup needed', {
         component: 'Setup'

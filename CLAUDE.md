@@ -552,7 +552,10 @@ A fresh `contents/` (auto-populated by `performInitialSetup`) ships with a built
 local admin login:
 
 - **Username:** `admin`
-- **Password:** `password123`
+- **Password:** `password123` — **only when `NODE_ENV=development`** (e.g. `npm run dev`).
+  Everywhere else (production builds, Docker images, `npm run start:prod`), `performInitialSetup`
+  rotates this to a randomly generated password on first boot and logs it once — check the
+  server logs for `"Generated a new local admin password"` to find it.
 - **Endpoint:** `POST /api/auth/local/login` → returns a `Set-Cookie: authToken=…` JWT
 - **Groups:** `admins`, `authenticated` (full admin access)
 

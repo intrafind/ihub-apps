@@ -31,6 +31,22 @@ existing native-search behavior already available for Gemini and GPT models.
   now resolved directly from the app/workflow configuration and passed straight to the model
   provider.
 
+## Demo Accounts Are Now Hidden and the Admin Password Is Rotated by Default
+
+Fresh installs no longer expose the well-known `admin` / `password123` login by default outside
+local development, closing off a trivial takeover path on internet-reachable deployments.
+
+- `localAuth.showDemoAccounts` now defaults to `false`. Existing installs that never explicitly
+  changed this setting are switched to `false` automatically on upgrade.
+- The login page's demo-account hint is now only ever shown when the server is running in
+  development — even if `showDemoAccounts` is explicitly set to `true` in your config, it stays
+  hidden in production.
+- On a genuinely fresh install running outside development (a new Docker deployment, for example),
+  the shipped admin account's password is rotated to a randomly generated value on first boot and
+  printed once to the server logs — look for `"Generated a new local admin password"`.
+- Local development (`npm run dev`) is unaffected: the documented `admin` / `password123` login
+  still works so existing test workflows keep working.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it

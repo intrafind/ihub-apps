@@ -7,6 +7,10 @@
 #   docker compose -f docker-compose.quickstart.yml up
 #
 # Then open http://localhost:3000 and go to Admin → Configuration to add your API keys.
+#
+# First boot generates a random admin password and prints it once — run
+# `docker compose -f docker-compose.quickstart.yml logs | grep "admin password"`
+# to find it, then log in at /login as "admin".
 
 services:
   ihub-apps:

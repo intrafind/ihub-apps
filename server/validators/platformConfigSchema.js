@@ -141,7 +141,7 @@ export const platformConfigSchema = z
         enabled: z.boolean().default(false),
         usersFile: z.string().default('contents/config/users.json'),
         sessionTimeoutMinutes: z.number().min(1).default(480),
-        showDemoAccounts: z.boolean().default(true)
+        showDemoAccounts: z.boolean().default(false)
       })
       .default({}),
     oidcAuth: z

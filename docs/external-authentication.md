@@ -453,6 +453,12 @@ The system uses an enhanced bcryptjs hashing method that incorporates the user I
 - Username: `admin`, Password: `password123` (admin group)
 - Username: `user`, Password: `password123` (user group)
 
+These shipped `password123` hashes only remain active when the server runs with
+`NODE_ENV=development` (e.g. `npm run dev`). In production and Docker deployments, the
+admin password is rotated to a randomly generated value on first boot and logged once —
+check the server logs for `"Generated a new local admin password"`. `showDemoAccounts` also
+defaults to `false` and is never shown on the login page outside development.
+
 ### 3. OIDC Mode
 
 OpenID Connect authentication with external providers like Google, Microsoft, Auth0, and others.

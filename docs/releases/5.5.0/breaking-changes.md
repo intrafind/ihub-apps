@@ -18,6 +18,26 @@ now lives in its own file under `contents/tools/`, and there is no fallback to t
 have external tooling that reads or writes `contents/config/tools.json` directly, update it to
 manage individual files under `contents/tools/` instead.
 
+## Demo Accounts No Longer Shown or Usable by Default
+
+`localAuth.showDemoAccounts` now defaults to `false`, and the login page hides the demo-account
+hint outside development regardless of what the config says. If you rely on the demo `admin` /
+`user` accounts in a non-development deployment (e.g. an internal test instance), you'll need to
+log in with the credentials directly — the hint text will no longer be shown.
+
+- A migration flips `showDemoAccounts` to `false` on upgrade for any install that never explicitly
+  changed it from the old default.
+- On a fresh install started outside development, the shipped admin account's password is also
+  rotated to a randomly generated value on first boot (see the Features entry for this release) —
+  the old `admin` / `password123` login will not work on such installs. Check the server logs for
+  the generated password, or reset it via the users file / admin UI.
+
+**Before upgrading:** No action needed for normal use. If you depend on the static
+`admin` / `password123` login outside local development, set `localAuth.showDemoAccounts: true`
+explicitly in `contents/config/platform.json` before upgrading — note this only restores the login
+page hint in development; the account password itself is unaffected on installs that already exist
+(only fresh installs get a rotated password).
+
 ## Electron Desktop App Target Removed
 
 The `npm run electron:dev` and `npm run electron:build` scripts, the `electron/` source directory,

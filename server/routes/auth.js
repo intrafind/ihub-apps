@@ -15,6 +15,7 @@ import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/re
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
+import config from '../config.js';
 
 /**
  * Sanitize and validate authentication input
@@ -692,7 +693,11 @@ export default function registerAuthRoutes(app) {
         },
         local: {
           enabled: localAuthConfig.enabled ?? false,
-          showDemoAccounts: localAuthConfig.showDemoAccounts ?? true
+          // Demo account hints are only ever shown in development, regardless
+          // of the stored config value, since the shipped demo password
+          // hashes are public (issue #1699).
+          showDemoAccounts:
+            config.NODE_ENV === 'development' && (localAuthConfig.showDemoAccounts ?? false)
         },
         oidc: {
           enabled: oidcAuthConfig.enabled ?? false,
