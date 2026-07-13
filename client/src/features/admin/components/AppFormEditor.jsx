@@ -164,6 +164,38 @@ function AppFormEditor({
     onChange(updatedApp);
   };
 
+  // Per-app copy button configuration (which formats are offered, and the one-click default)
+  const copySettings = app.settings?.copy || {};
+  const copyFormats =
+    copySettings.formats && copySettings.formats.length > 0
+      ? copySettings.formats
+      : ['text', 'markdown', 'html'];
+  const copyDefaultFormat = copyFormats.includes(copySettings.defaultFormat)
+    ? copySettings.defaultFormat
+    : copyFormats[0];
+  const copyFormatOptions = [
+    { value: 'text', label: t('canvas.export.copyText', 'as Text') },
+    { value: 'markdown', label: t('canvas.export.copyMarkdown', 'as Markdown') },
+    { value: 'html', label: t('canvas.export.copyHTML', 'as HTML') }
+  ];
+
+  const updateCopySettings = updates =>
+    handleInputChange('settings', {
+      ...app.settings,
+      copy: { ...copySettings, formats: copyFormats, ...updates }
+    });
+
+  const toggleCopyFormat = format => {
+    const nextFormats = copyFormats.includes(format)
+      ? copyFormats.filter(f => f !== format)
+      : [...copyFormats, format];
+    if (nextFormats.length === 0) return; // keep at least one format enabled
+    const nextDefault = nextFormats.includes(copyDefaultFormat)
+      ? copyDefaultFormat
+      : nextFormats[0];
+    updateCopySettings({ formats: nextFormats, defaultFormat: nextDefault });
+  };
+
   const handleLocalizedChange = (field, value) => {
     const updatedApp = {
       ...app,
@@ -2888,6 +2920,65 @@ function AppFormEditor({
                         {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
                       </label>
                     </div>
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={copySettings.enabled !== false}
+                        onChange={e => updateCopySettings({ enabled: e.target.checked })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                        {t('admin.apps.edit.enableCopyControl', 'Enable Copy Response Button')}
+                      </label>
+                    </div>
+
+                    {copySettings.enabled !== false && (
+                      <div className="ml-6 space-y-3">
+                        <div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.apps.edit.copyFormatsLabel', 'Available copy formats')}
+                          </p>
+                          <div className="flex flex-wrap gap-4">
+                            {copyFormatOptions.map(option => (
+                              <div key={option.value} className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={copyFormats.includes(option.value)}
+                                  onChange={() => toggleCopyFormat(option.value)}
+                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                                />
+                                <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                  {option.label}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                            {t(
+                              'admin.apps.edit.copyDefaultFormatLabel',
+                              'Default one-click copy format'
+                            )}
+                          </label>
+                          <select
+                            value={copyDefaultFormat}
+                            onChange={e => updateCopySettings({ defaultFormat: e.target.value })}
+                            className="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          >
+                            {copyFormatOptions
+                              .filter(option => copyFormats.includes(option.value))
+                              .map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

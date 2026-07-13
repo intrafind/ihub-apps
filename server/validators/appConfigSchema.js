@@ -98,6 +98,19 @@ const settingsSchema = z
         enabled: z.boolean().optional().default(true)
       })
       .optional(),
+    copy: z
+      .object({
+        enabled: z.boolean().optional().default(true),
+        formats: z
+          .array(z.enum(['text', 'markdown', 'html']))
+          .optional()
+          .default(['text', 'markdown', 'html']),
+        defaultFormat: z.enum(['text', 'markdown', 'html']).optional().default('text')
+      })
+      .refine(data => !data.formats?.length || data.formats.includes(data.defaultFormat), {
+        message: 'defaultFormat must be included in formats'
+      })
+      .optional(),
     imageGeneration: z
       .object({
         enabled: z.boolean().optional().default(true)

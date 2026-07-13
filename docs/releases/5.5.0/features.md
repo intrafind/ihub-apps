@@ -475,3 +475,17 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Per-App Copy Response Options
+
+Admins can now control which "copy response" formats are offered below each chat message, and
+which one the one-click copy button uses, on a per-app basis — instead of every app always showing
+Text/Markdown/HTML with plain text as the one-click default.
+
+- New **Copy Response Button** controls in **Admin → Apps → [app] → Settings Configuration**:
+  enable/disable the copy control entirely, choose which formats to expose (Text, Markdown, HTML),
+  and pick which one runs on a single click.
+- For example, an app that only needs to paste into Word or Outlook can expose HTML only and make
+  it the one-click default; an app that only needs plain text can hide Markdown/HTML entirely.
+- Existing apps are unaffected — with no `copy` setting configured, behavior is unchanged (all
+  three formats shown, plain text as the one-click default).
