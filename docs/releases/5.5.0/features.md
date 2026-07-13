@@ -475,3 +475,15 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Google/Gemini API Key No Longer Sent in the Request URL
+
+The Google adapter now sends the Gemini API key via the `x-goog-api-key` request header instead of
+appending it to the request URL, closing a gap where the plaintext key could end up in server logs
+whenever a Gemini request failed (quota errors, 4xx/5xx responses).
+
+- Matches the header-based authentication pattern already used by the OpenAI, Anthropic, and
+  Mistral adapters.
+- The setup wizard's "test API key" check for Google now uses the same header instead of a query
+  parameter.
+- No admin action is required — the fix takes effect automatically on upgrade.

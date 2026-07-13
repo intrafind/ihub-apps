@@ -34,9 +34,9 @@ async function testApiKey(providerId, apiKey) {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
       });
     } else if (providerId === 'google') {
-      response = await httpFetch(
-        `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`
-      );
+      response = await httpFetch('https://generativelanguage.googleapis.com/v1/models', {
+        headers: { 'x-goog-api-key': apiKey }
+      });
     } else if (providerId === 'mistral') {
       response = await httpFetch('https://api.mistral.ai/v1/models', {
         headers: { Authorization: `Bearer ${apiKey}` }
