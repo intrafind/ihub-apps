@@ -806,6 +806,172 @@ class ToolExecutor {
     }
   }
 
+  /**
+   * Read one LLM SSE stream turn to completion, shared by both the initial
+   * call (processChatWithTools) and every tool-loop continuation
+   * (continueWithToolExecution). Keeping this in one place ensures both
+   * entry points forward thinking/images/grounding identically, accumulate
+   * tool-call arguments and thoughtSignatures the same way, and filter out
+   * empty-name tool calls (streaming artifacts) consistently.
+   *
+   * @param {Response} llmResponse - The (already ok-checked) fetch response
+   * @param {string} chatId - The conversation/chat ID
+   * @param {Object} model - The model config (used for provider-specific parsing)
+   * @returns {Promise<{assistantContent: string, toolCalls: Array, thoughtSignatures: Array, finishReason: string|null, done: boolean, accumulatedUsage: Object|null}>}
+   */
+  async readToolLoopStreamTurn(llmResponse, chatId, model) {
+    // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+    const readableStream = this.streamingHandler.getReadableStream(llmResponse);
+    const reader = readableStream.getReader();
+    const decoder = new TextDecoder();
+    const events = [];
+    const parser = createParser({ onEvent: e => events.push(e) });
+
+    let assistantContent = '';
+    const collectedToolCalls = [];
+    const collectedThoughtSignatures = [];
+    let finishReason = null;
+    let done = false;
+    let accumulatedUsage = null;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      if (readerDone || !activeRequests.has(chatId)) {
+        if (!activeRequests.has(chatId)) reader.cancel();
+        break;
+      }
+
+      const chunk = decoder.decode(value, { stream: true });
+      parser.feed(chunk);
+
+      while (events.length > 0) {
+        const evt = events.shift();
+        const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
+
+        if (result.error) {
+          throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+            code: 'PROCESSING_ERROR'
+          });
+        }
+
+        // Usage may arrive either at the top level or under metadata.usage
+        // depending on which converter emitted it.
+        if (result.usage) {
+          accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+        }
+        if (result.metadata?.usage) {
+          accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+        }
+
+        if (result.content?.length > 0) {
+          for (const text of result.content) {
+            assistantContent += text;
+            actionTracker.trackChunk(chatId, { content: text });
+          }
+        }
+
+        // Process images (important for image generation with tools like google_search)
+        this.streamingHandler.processImages(result, chatId);
+
+        // Process thinking content
+        this.streamingHandler.processThinking(result, chatId);
+
+        // Process grounding metadata (for Google Search grounding)
+        this.streamingHandler.processGroundingMetadata(result, chatId);
+
+        if (result.tool_calls?.length > 0) {
+          result.tool_calls.forEach(call => {
+            let existingCall = collectedToolCalls.find(c => c.index === call.index);
+
+            if (existingCall) {
+              // Merge properties into the existing tool call
+              if (call.id) existingCall.id = call.id;
+              if (call.type) existingCall.type = call.type;
+              // Preserve metadata (critical for thoughtSignature in Gemini 3)
+              if (call.metadata) {
+                existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
+              }
+              if (call.function) {
+                if (call.function.name) existingCall.function.name = call.function.name;
+
+                // Handle arguments accumulation for streaming
+                let callArgs = call.function.arguments;
+                if (call.arguments && call.arguments.__raw_arguments) {
+                  callArgs = call.arguments.__raw_arguments;
+                }
+                if (callArgs) {
+                  // Smart concatenation: avoid empty {} + real args pattern
+                  const existing = existingCall.function.arguments;
+                  if (!existing || existing === '{}' || existing.trim() === '') {
+                    // If existing is empty or just {}, replace it entirely
+                    existingCall.function.arguments = callArgs;
+                  } else if (callArgs !== '{}' && callArgs.trim() !== '') {
+                    // Only concatenate if new args aren't empty
+                    existingCall.function.arguments += callArgs;
+                  }
+                }
+              }
+            } else if (call.index !== undefined) {
+              // Create a new tool call if it doesn't exist
+              let initialArgs = call.function?.arguments || '';
+              if (call.arguments && call.arguments.__raw_arguments) {
+                initialArgs = call.arguments.__raw_arguments;
+              }
+
+              // Clean up initial args - avoid starting with empty {}
+              if (initialArgs === '{}' || initialArgs.trim() === '') {
+                initialArgs = '';
+              }
+
+              collectedToolCalls.push({
+                index: call.index,
+                id: call.id || null,
+                type: call.type || 'function',
+                metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
+                function: {
+                  name: call.function?.name || '',
+                  arguments: initialArgs
+                }
+              });
+            }
+          });
+        }
+
+        // Collect thoughtSignatures for Google Gemini thinking models
+        if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
+          collectedThoughtSignatures.push(...result.thoughtSignatures);
+          logger.info('Collected thoughtSignatures from response', {
+            component: 'ToolExecutor',
+            count: result.thoughtSignatures.length
+          });
+        }
+
+        if (result.finishReason) {
+          finishReason = result.finishReason;
+        }
+
+        if (result.complete) {
+          done = true;
+          break;
+        }
+      }
+    }
+
+    // Filter out tool calls with empty names (streaming artifacts)
+    const toolCalls = collectedToolCalls.filter(call => {
+      return call.function?.name && call.function.name.trim().length > 0;
+    });
+
+    return {
+      assistantContent,
+      toolCalls,
+      thoughtSignatures: collectedThoughtSignatures,
+      finishReason,
+      done,
+      accumulatedUsage
+    };
+  }
+
   async processChatWithTools({
     prep,
     chatId,
@@ -902,7 +1068,8 @@ class ToolExecutor {
 
     let telemetryCtx;
     let assistantContent = '';
-    const collectedToolCalls = [];
+    let validToolCalls = [];
+    let thoughtSignatures = [];
     let finishReason = null;
     let done = false;
     let accumulatedUsage = null;
@@ -940,131 +1107,13 @@ class ToolExecutor {
           });
         }
 
-        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-        const reader = readableStream.getReader();
-        const decoder = new TextDecoder();
-        const events = [];
-        const parser = createParser({ onEvent: e => events.push(e) });
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          if (readerDone || !activeRequests.has(chatId)) {
-            if (!activeRequests.has(chatId)) reader.cancel();
-            break;
-          }
-
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
-
-          while (events.length > 0) {
-            const evt = events.shift();
-            const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-            if (result.error) {
-              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                code: 'PROCESSING_ERROR'
-              });
-            }
-
-            // Usage may arrive either at the top level or under metadata.usage
-            // depending on which converter emitted it.
-            if (result.usage) {
-              accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-            }
-            if (result.metadata?.usage) {
-              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
-            }
-
-            // logger.info(`Result for chat ID ${chatId}:`, result);
-            if (result.content?.length > 0) {
-              for (const text of result.content) {
-                assistantContent += text;
-                actionTracker.trackChunk(chatId, { content: text });
-              }
-            }
-
-            // Process images (important for image generation with tools like google_search)
-            this.streamingHandler.processImages(result, chatId);
-
-            // Process thinking content
-            this.streamingHandler.processThinking(result, chatId);
-
-            // Process grounding metadata (for Google Search grounding)
-            this.streamingHandler.processGroundingMetadata(result, chatId);
-
-            // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
-            if (result.tool_calls?.length > 0) {
-              result.tool_calls.forEach(call => {
-                let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                if (existingCall) {
-                  // Merge properties into the existing tool call
-                  if (call.id) existingCall.id = call.id;
-                  if (call.type) existingCall.type = call.type;
-                  // Preserve metadata (critical for thoughtSignature in Gemini 3)
-                  if (call.metadata) existingCall.metadata = call.metadata;
-                  if (call.function) {
-                    if (call.function.name) existingCall.function.name = call.function.name;
-
-                    // Handle arguments accumulation for streaming
-                    let callArgs = call.function.arguments;
-                    if (call.arguments && call.arguments.__raw_arguments) {
-                      callArgs = call.arguments.__raw_arguments;
-                    }
-                    if (callArgs) {
-                      // Smart concatenation: avoid empty {} + real args pattern
-                      const existing = existingCall.function.arguments;
-                      if (!existing || existing === '{}' || existing.trim() === '') {
-                        // If existing is empty or just {}, replace it entirely
-                        existingCall.function.arguments = callArgs;
-                      } else if (callArgs !== '{}' && callArgs.trim() !== '') {
-                        // Only concatenate if new args aren't empty
-                        existingCall.function.arguments += callArgs;
-                      }
-                    }
-                  }
-                } else if (call.index !== undefined) {
-                  // Create a new tool call if it doesn't exist
-                  let initialArgs = call.function?.arguments || '';
-                  if (call.arguments && call.arguments.__raw_arguments) {
-                    initialArgs = call.arguments.__raw_arguments;
-                  }
-
-                  // Clean up initial args - avoid starting with empty {}
-                  if (initialArgs === '{}' || initialArgs.trim() === '') {
-                    initialArgs = '';
-                  }
-
-                  collectedToolCalls.push({
-                    index: call.index,
-                    id: call.id || null,
-                    type: call.type || 'function',
-                    metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
-                    function: {
-                      name: call.function?.name || '',
-                      arguments: initialArgs
-                    }
-                  });
-                }
-              });
-            }
-
-            // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
-            if (result.finishReason) {
-              finishReason = result.finishReason;
-            }
-
-            // logger.info(
-            //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
-            //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-            // );
-            if (result.complete) {
-              done = true;
-              break;
-            }
-          }
-        }
+        const streamResult = await this.readToolLoopStreamTurn(llmResponse, chatId, model);
+        assistantContent = streamResult.assistantContent;
+        validToolCalls = streamResult.toolCalls;
+        thoughtSignatures = streamResult.thoughtSignatures;
+        finishReason = streamResult.finishReason;
+        done = streamResult.done;
+        accumulatedUsage = streamResult.accumulatedUsage;
 
         // Whether the stream finished naturally, was superseded by a newer
         // request on this chatId, or the reader was cancelled mid-flight,
@@ -1092,12 +1141,12 @@ class ToolExecutor {
         });
       }
 
-      if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
+      if (finishReason !== 'tool_calls' && validToolCalls.length === 0) {
         logger.info('No tool calls to process', {
           component: 'ToolExecutor',
           chatId,
           finishReason,
-          collectedToolCalls
+          validToolCalls
         });
         clearTimeout(timeoutId);
         // Emit the answer-source badge before 'done' (also resets it). The
@@ -1106,34 +1155,6 @@ class ToolExecutor {
         // continueWithToolExecution() finalizes the multi-iteration paths; this
         // is the first, no-tool-call turn that path never reaches, so without
         // this finalize the answer silently fell back to "Based on AI knowledge".
-        this.finalizeAnswerSource(chatId);
-        actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
-        await logInteraction(
-          'chat_response',
-          buildLogData(true, {
-            responseType: 'success',
-            response: assistantContent.substring(0, 1000)
-          })
-        );
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
-        return;
-      }
-
-      // Filter out tool calls with empty names (streaming artifacts)
-      const validToolCalls = collectedToolCalls.filter(call => {
-        return call.function?.name && call.function.name.trim().length > 0;
-      });
-
-      if (validToolCalls.length === 0) {
-        logger.info('No valid tool calls to process after filtering', {
-          component: 'ToolExecutor',
-          chatId
-        });
-        clearTimeout(timeoutId);
-        // Terminal answer turn — finalize the source badge before 'done' so an
-        // upload/email answer isn't mislabeled "Based on AI knowledge".
         this.finalizeAnswerSource(chatId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
@@ -1171,6 +1192,12 @@ class ToolExecutor {
 
       const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
+
+      // Preserve thoughtSignatures for Gemini 3 models (required for multi-turn function calling)
+      if (thoughtSignatures.length > 0) {
+        assistantMessage.thoughtSignatures = thoughtSignatures;
+      }
+
       llmMessages.push(assistantMessage);
 
       let hasStreamingTools = false;
@@ -1226,6 +1253,12 @@ class ToolExecutor {
             finishReason: 'tool_passthrough_complete',
             toolName: toolResult.message.tool_source
           });
+
+          // Stop processing more tools - this turn is already terminal. Without
+          // this break, a second tool call in the same batch would still run
+          // (wasted work) and, if it were also a passthrough, would emit a
+          // second 'done' event for an already-completed turn.
+          break;
         } else {
           // Regular tool result
           llmMessages.push(toolResult.message);
@@ -1379,8 +1412,8 @@ class ToolExecutor {
 
       let telemetryCtx;
       let assistantContent = '';
-      const collectedToolCalls = [];
-      const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
+      let collectedToolCalls = [];
+      let collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
       let finishReason = null;
       let done = false;
       let accumulatedUsage = null;
@@ -1425,101 +1458,13 @@ class ToolExecutor {
             });
           }
 
-          // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-          const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-          const reader = readableStream.getReader();
-          const decoder = new TextDecoder();
-          const events = [];
-          const parser = createParser({ onEvent: e => events.push(e) });
-
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            if (readerDone || !activeRequests.has(chatId)) {
-              if (!activeRequests.has(chatId)) reader.cancel();
-              break;
-            }
-
-            const chunk = decoder.decode(value, { stream: true });
-            parser.feed(chunk);
-
-            while (events.length > 0) {
-              const evt = events.shift();
-              const result = await convertResponseToGeneric(evt.data, model.provider, chatId);
-
-              if (result.error) {
-                throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                  code: 'PROCESSING_ERROR'
-                });
-              }
-
-              // Usage may arrive either at the top level or under metadata.usage
-              // depending on which converter emitted it.
-              if (result.usage) {
-                accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-              }
-              if (result.metadata?.usage) {
-                accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
-              }
-
-              if (result.content?.length > 0) {
-                for (const text of result.content) {
-                  assistantContent += text;
-                  actionTracker.trackChunk(chatId, { content: text });
-                }
-              }
-
-              if (result.tool_calls?.length > 0) {
-                result.tool_calls.forEach(call => {
-                  let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                  if (existingCall) {
-                    if (call.id) existingCall.id = call.id;
-                    if (call.type) existingCall.type = call.type;
-                    if (call.function) {
-                      if (call.function.name) existingCall.function.name = call.function.name;
-                      if (call.function.arguments)
-                        existingCall.function.arguments += call.function.arguments;
-                    }
-                    // Merge metadata (important for Gemini thoughtSignatures)
-                    if (call.metadata) {
-                      existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
-                    }
-                  } else if (call.index !== undefined) {
-                    const toolCall = {
-                      index: call.index,
-                      id: call.id || null,
-                      type: call.type || 'function',
-                      function: {
-                        name: call.function?.name || '',
-                        arguments: call.function?.arguments || ''
-                      },
-                      // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
-                      metadata: call.metadata || {}
-                    };
-                    collectedToolCalls.push(toolCall);
-                  }
-                });
-              }
-
-              // Collect thoughtSignatures for Google Gemini thinking models
-              if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
-                collectedThoughtSignatures.push(...result.thoughtSignatures);
-                logger.info('Collected thoughtSignatures from response', {
-                  component: 'ToolExecutor',
-                  count: result.thoughtSignatures.length
-                });
-              }
-
-              if (result.finishReason) {
-                finishReason = result.finishReason;
-              }
-
-              if (result.complete) {
-                done = true;
-                break;
-              }
-            }
-          }
+          const streamResult = await this.readToolLoopStreamTurn(llmResponse, chatId, model);
+          assistantContent = streamResult.assistantContent;
+          collectedToolCalls = streamResult.toolCalls;
+          collectedThoughtSignatures = streamResult.thoughtSignatures;
+          finishReason = streamResult.finishReason;
+          done = streamResult.done;
+          accumulatedUsage = streamResult.accumulatedUsage;
 
           // Whether the stream finished naturally, was superseded by a newer
           // request on this chatId, or the reader was cancelled mid-flight,

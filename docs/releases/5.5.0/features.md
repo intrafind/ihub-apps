@@ -461,6 +461,20 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Thinking, Images, and Grounding No Longer Disappear After a Tool Call
+
+Apps with tools enabled now show thinking/reasoning content, generated images, and Google Search
+grounding citations on every follow-up turn, not just the model's very first reply. Previously,
+once a tool call happened, any thinking text, generated image, or grounding metadata produced on
+the *next* turn was silently dropped — the user saw the final text answer with none of that
+supporting content.
+
+- Follow-up turns after a tool call now forward thinking, images, and grounding metadata
+  identically to the first turn.
+- A model response with multiple tool calls in one turn, where the first is a streaming
+  ("passthrough") tool, no longer risks emitting a duplicate completion event for the same turn.
+- No configuration or admin action required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
