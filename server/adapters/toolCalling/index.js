@@ -49,7 +49,7 @@ export {
   normalizeFinishReason,
   isFailureFinishReason,
   FAILURE_FINISH_REASONS,
-  sanitizeSchemaForProvider
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 
 // Export individual provider converters for advanced use cases
