@@ -1,15 +1,25 @@
 /**
  * Executor for workflow code nodes.
  *
- * Code nodes run user-provided JavaScript in a secure VM sandbox.
- * They are useful for data transformation, validation, and computation
- * that is too complex for transform nodes but does not need LLM reasoning.
+ * Code nodes run user-provided JavaScript in a node:vm sandbox. This is
+ * best-effort isolation, NOT a hard security boundary — node:vm shares the
+ * host's heap, event loop, and process, and Node's own docs warn it must
+ * not be relied on to run genuinely untrusted code safely. It blocks the
+ * obvious footguns (prototype pollution, direct access to process/require/
+ * Function) but a sufficiently determined script could still exhaust CPU
+ * within the timeout window or find other V8-level escapes. Treat code
+ * nodes as trusted-author-only, the same way you would treat any other
+ * server-side script.
  *
- * Security measures:
+ * Isolation measures:
  * - Null-prototype sandbox context prevents __proto__ traversal
  * - JSON round-trip on input data breaks prototype chain references
  * - 'use strict' mode prevents `this` escape to global scope
  * - Dangerous globals (Function, setTimeout, process, require) are blocked
+ * - Host-realm built-ins (Array, String, Date, etc.) are never injected into
+ *   the sandbox — the vm context's own realm already provides them, and
+ *   injecting the host's versions would leak the host's Function via
+ *   `.constructor`, enabling `Array.constructor('return process')()`-style escapes
  * - Configurable timeout prevents infinite loops
  *
  * @module services/workflow/executors/CodeNodeExecutor
@@ -92,12 +102,15 @@ export class CodeNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Execute the code node in a secure VM sandbox.
+   * Execute the code node in a node:vm sandbox (best-effort isolation, not a
+   * hard security boundary — see the module docstring above).
    *
    * The code runs in a strict-mode VM context with:
    * - `data` and `input`: Deep-cloned workflow state data (read-only semantics)
    * - `console.log/warn/error`: Captured to logs array
-   * - Standard JS built-ins: JSON, Math, Date, Array, String, Number, RegExp, etc.
+   * - Standard JS built-ins (JSON, Math, Date, Array, String, Number, RegExp,
+   *   etc.) available via the vm context's own realm — never injected from
+   *   the host, to avoid leaking the host's Function constructor
    * - `Object` with safe methods only (keys, values, entries, assign, freeze, etc.)
    * - No access to: Function, setTimeout, process, require, globalThis
    *
@@ -142,31 +155,23 @@ export class CodeNodeExecutor extends BaseNodeExecutor {
       // 4. Block dangerous globals that could escape the sandbox
       sandbox.Function = undefined;
 
-      // 5. Expose safe globals for user code
+      // 5. Expose only workflow data and a restricted Object; JSON, Math, Date,
+      // Array, String, Number, RegExp, Boolean, Map, Set, Promise, parseInt,
+      // parseFloat, isNaN, isFinite etc. are NOT injected here because doing so
+      // would hand the sandbox the *host realm's* intrinsics — whose `.constructor`
+      // is the host's Function, letting code escape via
+      // `Array.constructor('return process')()`. The fresh vm context already
+      // has its own copies of every standard built-in, scoped to this sandbox
+      // realm, so user code can still use them safely without host access.
       Object.assign(sandbox, {
         data: safeData,
         input: safeData,
-        JSON,
-        Math,
-        Date,
-        Array,
-        String,
-        Number,
-        RegExp,
-        Boolean,
-        parseInt,
-        parseFloat,
-        isNaN,
-        isFinite,
         Object: safeObject,
         console: {
           log: (...args) => logs.push(args.map(String).join(' ')),
           warn: (...args) => logs.push(args.map(String).join(' ')),
           error: (...args) => logs.push(args.map(String).join(' '))
         },
-        Map,
-        Set,
-        Promise,
         // Explicitly block async/timer/system APIs
         setTimeout: undefined,
         setInterval: undefined,
