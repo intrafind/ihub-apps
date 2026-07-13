@@ -1,5 +1,17 @@
 # Features — 5.5.0
 
+## Brute-Force Rate Limiting Now Actually Applies to Login and Inference Endpoints
+
+Fixed a bug where the rate limiters intended to protect authentication and inference endpoints
+were mounted on paths that never matched any real request, so they never fired.
+
+- `POST /api/auth/local/login` (and the LDAP/NTLM login endpoints) are now correctly limited to
+  50 requests per 15 minutes per IP, restoring brute-force login protection.
+- The OpenAI-compatible inference proxy (`/api/inference/...`) is now correctly rate-limited,
+  protecting upstream LLM quota and cost from runaway clients.
+- No configuration changes are required; existing `rateLimit.authApi` / `rateLimit.inferenceApi`
+  overrides in `platform.json` now take effect as intended.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
