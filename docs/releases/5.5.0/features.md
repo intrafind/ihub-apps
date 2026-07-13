@@ -1,5 +1,16 @@
 # Features — 5.5.0
 
+## Anonymous Chat Requests Now Enforce Per-App Permissions
+
+Fixed a security gap where, with anonymous access enabled, an anonymous visitor who knew (or
+guessed) an app id could chat with that app even if it was not allowlisted for the anonymous
+group — bypassing the same permission check that already hides that app from the apps list.
+
+- Chat endpoints (send message, stream, stop, status) now check app access for anonymous
+  requests the same way they already do for signed-in users.
+- No configuration changes are required; the anonymous group's existing `apps` permission list
+  in **Admin → Groups** now applies consistently everywhere, including chat.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
