@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
 import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
+import { resolveSafeReturnUrl } from '../utils/returnUrl.js';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -82,10 +83,13 @@ function authReducer(state, action) {
 // Redirect to a stored return URL after successful authentication, skipping the
 // redirect if we're already on the target page (e.g. embedded login in setup wizard).
 function redirectToReturnUrl(logContext) {
-  const returnUrl = sessionStorage.getItem('authReturnUrl');
-  if (!returnUrl) return;
+  const storedReturnUrl = sessionStorage.getItem('authReturnUrl');
+  if (!storedReturnUrl) return;
 
   sessionStorage.removeItem('authReturnUrl');
+  const returnUrl = resolveSafeReturnUrl(storedReturnUrl, null);
+  if (!returnUrl) return;
+
   const currentPath = window.location.pathname;
   const returnPath = new URL(returnUrl, window.location.origin).pathname;
   if (currentPath !== returnPath) {
