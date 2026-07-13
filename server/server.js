@@ -426,20 +426,25 @@ if (cluster.isPrimary && workerCount > 1) {
    */
   // Error localization and API key validation implemented in serverHelpers.js
 
-  // Middleware
-  // Use the resolved platform config from configCache (which applies IHUB_PLATFORM__*
-  // env overrides and decrypts secrets) so boot-time middleware (body-size limit,
-  // rate limiters, sessions, auth chain) picks up all overrides.  Fall back to
-  // the raw JSON value only if configCache failed to initialize.
-  setupMiddleware(app, configCache.getPlatform() || platformConfig);
-
-  // Add base path middleware chain:
+  // Add base path middleware chain BEFORE any other middleware (body parser,
+  // rate limiters, auth chain). This must run first so that every downstream
+  // check sees the rewritten req.url — otherwise a non-stripping reverse proxy
+  // (or a spoofed X-Forwarded-Prefix header) makes the auth-skip heuristic and
+  // path-mounted rate limiters see an un-rewritten path, letting requests slip
+  // through unauthenticated / unlimited.
   // 1. Rewrite: strips X-Forwarded-Prefix from req.url (handles non-stripping proxies)
   // 2. Detection: stores current request for runtime base path resolution
   // 3. Validation: warns on invalid X-Forwarded-Prefix values
   app.use(basePathRewriteMiddleware);
   app.use(basePathDetectionMiddleware);
   app.use(basePathValidationMiddleware);
+
+  // Middleware
+  // Use the resolved platform config from configCache (which applies IHUB_PLATFORM__*
+  // env overrides and decrypts secrets) so boot-time middleware (body-size limit,
+  // rate limiters, sessions, auth chain) picks up all overrides.  Fall back to
+  // the raw JSON value only if configCache failed to initialize.
+  setupMiddleware(app, configCache.getPlatform() || platformConfig);
 
   // Helper to verify API key exists for a model and provide a meaningful error
   // Implemented in serverHelpers.js

@@ -199,9 +199,37 @@ export const toAbsolutePath = relativePath => {
 };
 
 /**
+ * Determine whether the given request arrived through a hop that Express's
+ * own `trust proxy` setting considers trusted. Reuses the app's compiled
+ * trust function so X-Forwarded-Prefix trust stays aligned with whatever
+ * `trust proxy` value (hop count, IP, subnet, etc.) the deployment has
+ * configured for X-Forwarded-For/req.ip — instead of trusting the header
+ * unconditionally from any direct client.
+ *
+ * @param {Object} req - Express request
+ * @returns {boolean} True if the immediate connecting peer is a trusted proxy
+ */
+const isFromTrustedProxy = req => {
+  try {
+    const trustFn = req.app?.get?.('trust proxy fn');
+    if (typeof trustFn === 'function') {
+      return trustFn(req.socket?.remoteAddress, 0);
+    }
+  } catch {
+    // Fall through to untrusted below
+  }
+  return false;
+};
+
+/**
  * Middleware to rewrite request URL by stripping the X-Forwarded-Prefix.
  * This allows non-stripping reverse proxies to work with root-registered routes.
  * Safe no-op when the proxy already strips the prefix or when no header is present.
+ *
+ * Only honors the header when the request comes from a trusted proxy hop
+ * (per Express's `trust proxy` setting) — otherwise a direct client could
+ * forge the header to make downstream auth/rate-limiter path checks see a
+ * different path than the one actually routed.
  *
  * Must be registered BEFORE all other middleware and routes.
  *
@@ -213,7 +241,7 @@ export const basePathRewriteMiddleware = (req, res, next) => {
   const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
   let prefix = req.headers[headerName.toLowerCase()];
 
-  if (prefix) {
+  if (prefix && isFromTrustedProxy(req)) {
     // Normalize: remove trailing slashes
     while (prefix.endsWith('/')) prefix = prefix.slice(0, -1);
 
