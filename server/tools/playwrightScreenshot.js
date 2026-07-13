@@ -5,6 +5,13 @@ import { chromium } from 'playwright';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import { assertSafeHost } from '../services/mcp/safeFetch.js';
+
+function createError(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
 
 /**
  * Take a screenshot or generate a PDF of a web page using Playwright
@@ -23,8 +30,20 @@ export default async function playwrightScreenshot({
   chatId = 'default'
 }) {
   if (!url) {
-    throw new Error('url parameter is required');
+    throw createError('url parameter is required', 'MISSING_URL');
   }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch (error) {
+    throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
+  }
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
+  }
+  await assertSafeHost(parsedUrl.hostname);
+
   const dataDir = config.DATA_DIR;
   const toolId = 'playwrightScreenshot';
   const ext = format === 'pdf' ? 'pdf' : 'png';

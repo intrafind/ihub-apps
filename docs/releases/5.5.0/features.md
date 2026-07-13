@@ -461,6 +461,18 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Screenshot Tools No Longer Navigate to Internal/Private URLs (SSRF Guard)
+
+The **Website Screenshot** tools (Playwright and Selenium) now validate a target URL before
+launching a browser, matching the protection already in place for the web content extractor tool.
+Previously either tool would navigate to any caller-supplied URL with no checks, letting a crafted
+tool call point the server's browser at internal-only hosts or cloud metadata endpoints
+(e.g. `169.254.169.254`) and return the result as a screenshot or extracted PDF text.
+
+- Both tools now reject missing or malformed URLs, non-`http(s)` schemes (e.g. `file:`), and
+  hostnames that resolve to a private, loopback, or link-local IP address.
+- No configuration or admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
