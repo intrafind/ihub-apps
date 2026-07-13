@@ -27,10 +27,7 @@ check(
   resolveSafeReturnUrl('https://evil.example/phish') === '/'
 );
 
-check(
-  'javascript: URI falls back to default',
-  resolveSafeReturnUrl('javascript:alert(1)') === '/'
-);
+check('javascript: URI falls back to default', resolveSafeReturnUrl('javascript:alert(1)') === '/');
 
 check('empty value falls back to default', resolveSafeReturnUrl('') === '/');
 check('null value falls back to default', resolveSafeReturnUrl(null) === '/');
@@ -40,10 +37,7 @@ check(
   resolveSafeReturnUrl('http://[::not-a-valid-host') === '/'
 );
 
-check(
-  'custom fallback is honored',
-  resolveSafeReturnUrl('https://evil.example', null) === null
-);
+check('custom fallback is honored', resolveSafeReturnUrl('https://evil.example', null) === null);
 
 check(
   'same-origin absolute path resolves unchanged',
