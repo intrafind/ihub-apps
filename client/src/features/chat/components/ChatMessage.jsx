@@ -560,7 +560,12 @@ function ChatMessage({
             : contentToRender;
         return (
           <div className="flex flex-col">
-            <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} streaming />
+            <StreamingMarkdown
+              content={mdContent}
+              hasCitations={!!message.citations}
+              citations={message.citations}
+              streaming
+            />
             {message.searchStatus && message.loading && (
               <SearchStatusIndicator status={message.searchStatus} />
             )}
@@ -668,7 +673,13 @@ function ChatMessage({
         }
         mdContent = `\u0060\u0060\u0060json\n${jsonString}\n\u0060\u0060\u0060`;
       }
-      return <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} />;
+      return (
+        <StreamingMarkdown
+          content={mdContent}
+          hasCitations={!!message.citations}
+          citations={message.citations}
+        />
+      );
     }
 
     return (

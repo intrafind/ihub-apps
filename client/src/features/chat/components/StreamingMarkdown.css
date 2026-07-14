@@ -149,6 +149,11 @@
     transform: scale(1.1);
   }
 
+  & .citation-badge:focus-visible {
+    outline: 2px solid rgb(99, 102, 241);
+    outline-offset: 1px;
+  }
+
   & .citation-source {
     background-color: rgb(224, 231, 255);
     color: rgb(67, 56, 202);
@@ -170,6 +175,28 @@
 .streaming-markdown.is-streaming {
   will-change: transform;
   transform: translateZ(0);
+}
+
+/*
+ * Citation hover/focus preview tooltip. Appended once to document.body (not
+ * scoped under .streaming-markdown) since it must render above the message
+ * bubble and any scroll containers, and is positioned in JS via getBoundingClientRect.
+ */
+.citation-tooltip {
+  display: none;
+  position: absolute;
+  z-index: 50;
+  max-width: 20rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: rgb(255, 255, 255);
+  background-color: rgb(31, 41, 55);
+  border-radius: 0.375rem;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  pointer-events: none;
 }
 
 /* Hide interactive UI elements when printing */

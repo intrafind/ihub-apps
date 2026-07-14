@@ -15,12 +15,14 @@ import './StreamingMarkdown.css';
  * @param {Object} props
  * @param {string} props.content - Markdown content to render
  * @param {boolean} [props.hasCitations] - Whether content may contain cite tags
+ * @param {Object} [props.citations] - Message citations ({ references: [], resultItems: [] }),
+ *   used to give each citation badge a short excerpt for its hover/focus preview.
  * @param {boolean} [props.streaming] - Whether the message is actively streaming.
  *   While true the container is GPU-promoted (will-change/translateZ) for smooth
  *   incremental updates; once streaming ends the promotion is dropped so finished
  *   messages don't each hold a permanent compositor layer.
  */
-function StreamingMarkdown({ content, hasCitations, streaming = false }) {
+function StreamingMarkdown({ content, hasCitations, citations, streaming = false }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
   const [renderKey, setRenderKey] = useState(0);
@@ -46,7 +48,9 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
 
     if (contentChanged || needsCitationTransform) {
       try {
-        const transformHtml = hasCitations ? transformCitations : undefined;
+        const transformHtml = hasCitations
+          ? html => transformCitations(html, citations)
+          : undefined;
         const parsedContent = renderMarkdown(content, {
           transformHtml
         });
@@ -62,7 +66,7 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
         console.error('Error parsing markdown:', error);
       }
     }
-  }, [content, hasCitations]);
+  }, [content, hasCitations, citations]);
 
   // Attach citation click handlers after DOM update
   useEffect(() => {
