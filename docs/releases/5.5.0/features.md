@@ -238,6 +238,18 @@ resolve into a sibling directory that merely shared the skill's directory name a
 
 - No admin action required; existing skill packages install exactly as before.
 
+## Tool Calls With Certain Text Arguments No Longer Get Corrupted
+
+Tool-call arguments containing the literal characters `}{` in a text value (for example a code
+snippet, regex, or JSON example) are no longer corrupted before being parsed. A parsing safeguard
+meant to repair concatenated streaming fragments was previously applied to every tool call
+unconditionally, silently mangling otherwise valid arguments or causing the tool to run with no
+arguments at all.
+
+- Tool arguments are now parsed as-is first; the streaming-fragment repair only runs as a fallback
+  when the original arguments aren't valid JSON.
+- No configuration or admin action required.
+
 ## Chat No Longer Crashes When a Response Finishes
 
 Chat responses now complete cleanly instead of failing with an "Add-in Error" (`setSearchStatus is
