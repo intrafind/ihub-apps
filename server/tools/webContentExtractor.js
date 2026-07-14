@@ -1,4 +1,3 @@
-import dns from 'dns';
 import { JSDOM } from 'jsdom';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
@@ -6,43 +5,43 @@ import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 
-const dnsLookupAsync = dns.promises.lookup;
-
-// IPv4 and IPv6 private/internal address patterns
-const PRIVATE_IP_RE = [
-  /^127\./, // 127.0.0.0/8 loopback
-  /^10\./, // 10.0.0.0/8 private
-  /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12 private
-  /^192\.168\./, // 192.168.0.0/16 private
-  /^169\.254\./, // 169.254.0.0/16 link-local (cloud metadata endpoints)
-  /^::1$/, // IPv6 loopback
-  /^fc/i, // IPv6 unique local fc00::/7
-  /^fd/i, // IPv6 unique local fd00::/8
-  /^fe80:/i // IPv6 link-local
-];
-
-function isPrivateIp(ip) {
-  return PRIVATE_IP_RE.some(re => re.test(ip));
-}
-
-async function assertNotPrivateIp(hostname) {
-  let address;
-  try {
-    const result = await dnsLookupAsync(hostname);
-    address = result.address;
-  } catch {
-    throw createError(`Could not resolve hostname: ${hostname}`, 'DNS_RESOLUTION_FAILED');
-  }
-  if (isPrivateIp(address)) {
-    throw createError('Access to private/internal IP addresses is not allowed', 'SSRF_BLOCKED');
-  }
-}
+// Bound manual redirect-following so a malicious/misconfigured server can't
+// force an unbounded hop chain.
+const MAX_REDIRECTS = 5;
 
 function createError(message, code) {
   const err = new Error(message);
   err.code = code;
   return err;
+}
+
+/**
+ * Validate a single URL hop against the SSRF guard, honoring the admin SSL
+ * domain whitelist bypass (kept for backward compatibility with the
+ * pre-existing `webContentExtractor` behavior). Every redirect hop is
+ * revalidated independently so a public initial hostname that redirects to a
+ * private/internal address after the first check is still blocked.
+ *
+ * @param {URL} parsedUrl - The URL for this hop
+ * @param {Object} sslConfig - SSL config (for the domain whitelist bypass)
+ * @returns {Promise<string[]|null>} Validated public addresses to pin the
+ *   connection to, or null when the whitelist bypass applies (no DNS
+ *   resolution/pinning is performed in that case)
+ */
+async function assertHopIsSafe(parsedUrl, sslConfig) {
+  if (isDomainWhitelisted(parsedUrl.hostname, sslConfig.domainWhitelist)) {
+    return null;
+  }
+  const result = await assertPublicTarget(parsedUrl);
+  if (!result.ok) {
+    throw createError(
+      `Access to private/internal IP addresses is not allowed (${result.reason})`,
+      'SSRF_BLOCKED'
+    );
+  }
+  return result.addresses;
 }
 
 /**
@@ -94,11 +93,7 @@ export default async function webContentExtractor({
   }
 
   // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services
-  // Skip check for domains explicitly whitelisted by admin in SSL configuration
   const sslConfig = getSSLConfig();
-  if (!isDomainWhitelisted(validUrl.hostname, sslConfig.domainWhitelist)) {
-    await assertNotPrivateIp(validUrl.hostname);
-  }
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
@@ -106,35 +101,78 @@ export default async function webContentExtractor({
     ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
   try {
-    // Fetch the webpage with appropriate headers and timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    // Fetch the webpage, following redirects manually so every hop is
+    // re-validated against the SSRF guard and DNS is pinned to the validated
+    // address (closing the rebinding window). A public initial hostname can
+    // otherwise redirect to a private/internal address after the first check.
+    let hopUrl = validUrl;
+    let response;
+    for (let redirectCount = 0; ; redirectCount++) {
+      if (redirectCount > MAX_REDIRECTS) {
+        throw createError('Too many redirects while fetching webpage', 'TOO_MANY_REDIRECTS');
+      }
 
-    // Build base fetch options
-    const fetchOptions = {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      },
-      signal: controller.signal
-    };
+      const addresses = await assertHopIsSafe(hopUrl, sslConfig);
+      const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
 
-    // Apply SSL and proxy configuration using the centralized httpConfig utility
-    const enhancedOptions = enhanceFetchOptions(fetchOptions, targetUrl, shouldIgnoreSSL);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const response = await throttledFetch('webContentExtractor', targetUrl, enhancedOptions);
+      // Build base fetch options
+      const fetchOptions = {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          Connection: 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+        },
+        signal: controller.signal,
+        // Follow redirects manually so each hop is re-validated above instead
+        // of letting the fetch implementation resolve/connect to it directly.
+        redirect: 'manual'
+      };
+
+      // Apply SSL and proxy configuration using the centralized httpConfig utility,
+      // pinning DNS resolution to the addresses just validated for this hop.
+      const enhancedOptions = enhanceFetchOptions(
+        fetchOptions,
+        hopUrl.toString(),
+        shouldIgnoreSSL,
+        pinnedLookup
+      );
+
+      try {
+        response = await throttledFetch('webContentExtractor', hopUrl.toString(), enhancedOptions);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) break;
+
+        let nextUrl;
+        try {
+          nextUrl = new URL(location, hopUrl);
+        } catch {
+          throw createError(`Invalid redirect location: ${location}`, 'INVALID_URL');
+        }
+        if (!['http:', 'https:'].includes(nextUrl.protocol)) {
+          throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
+        }
+        hopUrl = nextUrl;
+        continue;
+      }
+      break;
+    }
 
     actionTracker.trackToolCallProgress(chatId, {
       toolName: 'webContentExtractor',
       status: 'parsing'
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (response.status === 404) {
