@@ -113,6 +113,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
         : combineUserTextWithEmailContext({
             userText: apiMessage.content,
             currentBodyText: ctx.bodyText,
+            currentSelectedText: ctx.selectedText,
             currentItemId: ctx.itemId ?? null,
             pinned: pinnedEmails
           });

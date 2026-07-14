@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { fetchCurrentSelectedText } from '../utilities/outlookMailContext';
 
 /**
  * Maintains a live, user-editable snapshot of the current host mail context
@@ -14,8 +15,10 @@ import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
  *  - Tracks per-message edits: a set of attachment ids the user removed via
  *    the banner. The set resets on item change.
  *  - `buildSnapshotOverride()` returns a copy of the live ctx with removed
- *    attachments stripped — chat adapter accepts this as `hostContextOverride`
- *    in params, skipping its own `readMessageContext()` call.
+ *    attachments stripped and `selectedText` freshly re-read (unless the user
+ *    toggled selection off) — chat adapter accepts this as
+ *    `hostContextOverride` in params, skipping its own `readMessageContext()`
+ *    call.
  *  - `confirmSent()` resets removals after a successful send so the next
  *    message starts from a clean snapshot of the same email.
  */
@@ -29,6 +32,11 @@ export function useOutlookMailContextSnapshot() {
   // plumbing (issue #1467) — the OfficeMailContextBanner owns this state now
   // and the contextToggles mechanism is no longer used in the Outlook host.
   const [includeBody, setIncludeBody] = useState(true);
+  // Per-email opt-out for using the highlighted selection instead of the
+  // full body. Defaults to true (prefer the selection whenever one exists)
+  // and resets on ItemChanged alongside `includeBody`, mirroring the same
+  // per-email lifetime.
+  const [useSelection, setUseSelection] = useState(true);
   // Bumped by ItemChanged so the chat panel can reset its edit state too.
   const [generation, setGeneration] = useState(0);
   // Monotonic sequence for context loads. A single click in Outlook fires
@@ -63,6 +71,7 @@ export function useOutlookMailContextSnapshot() {
     function onItemChange() {
       setRemovedAttachmentIds(new Set());
       setIncludeBody(true);
+      setUseSelection(true);
       setGeneration(g => g + 1);
       // Supersede any in-flight load right away and show the loading state,
       // but debounce the actual read: the second event of the double
@@ -114,18 +123,35 @@ export function useOutlookMailContextSnapshot() {
    * mode without an item, etc.) so the adapter can fall back to its own
    * `host.readMessageContext()` call. Honors the "Include body" checkbox in
    * the banner by clearing `bodyText` when the user has opted out.
+   *
+   * Async because the selection is re-read fresh right before send: Office.js
+   * has no "selection changed" event, so the snapshot's `selectedText` (last
+   * refreshed on ItemChanged) can be stale the moment the user changes their
+   * highlight without navigating away. When the user has toggled selection
+   * off (`useSelection === false`), `selectedText` is cleared so
+   * `combineUserTextWithEmailContext` falls back to the body/includeBody
+   * behavior instead.
    */
-  const buildSnapshotOverride = useCallback(() => {
+  const buildSnapshotOverride = useCallback(async () => {
     if (!state.ctx) return null;
     const filtered = { ...state.ctx };
     if (!includeBody) {
       filtered.bodyText = null;
     }
+    if (useSelection && filtered.itemKind !== 'appointment') {
+      try {
+        filtered.selectedText = await fetchCurrentSelectedText();
+      } catch {
+        filtered.selectedText = null;
+      }
+    } else {
+      filtered.selectedText = null;
+    }
     if (removedAttachmentIds.size > 0 && Array.isArray(filtered.attachments)) {
       filtered.attachments = filtered.attachments.filter(a => !removedAttachmentIds.has(a?.id));
     }
     return filtered;
-  }, [state.ctx, removedAttachmentIds, includeBody]);
+  }, [state.ctx, removedAttachmentIds, includeBody, useSelection]);
 
   const visibleAttachments = useMemo(() => {
     const list = Array.isArray(state.ctx?.attachments) ? state.ctx.attachments : [];
@@ -145,6 +171,8 @@ export function useOutlookMailContextSnapshot() {
     buildSnapshotOverride,
     includeBody,
     setIncludeBody,
+    useSelection,
+    setUseSelection,
     generation
   };
 }

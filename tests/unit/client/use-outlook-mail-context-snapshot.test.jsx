@@ -18,6 +18,11 @@ jest.mock('../../../client/src/features/office/contexts/EmbeddedHostContext', ()
   useEmbeddedHost: () => mockHostImpl
 }));
 
+const mockFetchCurrentSelectedText = jest.fn();
+jest.mock('../../../client/src/features/office/utilities/outlookMailContext', () => ({
+  fetchCurrentSelectedText: (...args) => mockFetchCurrentSelectedText(...args)
+}));
+
 const useOutlookMailContextSnapshot =
   require('../../../client/src/features/office/hooks/useOutlookMailContextSnapshot').default;
 
@@ -35,6 +40,7 @@ function dispatchItemChanged() {
 
 beforeEach(() => {
   jest.useFakeTimers();
+  mockFetchCurrentSelectedText.mockReset();
 });
 
 afterEach(() => {
@@ -169,4 +175,83 @@ test('per-email edits (removed attachments, include-body) reset on item change',
   expect(result.current.removedAttachmentIds.size).toBe(0);
   expect(result.current.includeBody).toBe(true);
   expect(result.current.generation).toBe(generationBefore + 1);
+});
+
+describe('buildSnapshotOverride — selection refresh (issue #1448)', () => {
+  test('re-reads the selection fresh at send time instead of trusting the cached snapshot', async () => {
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(async () => ({
+        available: true,
+        itemId: 'A',
+        subject: 'Mail A',
+        bodyText: 'full body',
+        selectedText: 'stale highlight from banner render',
+        attachments: []
+      }))
+    };
+    mockFetchCurrentSelectedText.mockResolvedValue('fresh highlight at send time');
+
+    const { result } = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {});
+
+    const override = await result.current.buildSnapshotOverride();
+    expect(override.selectedText).toBe('fresh highlight at send time');
+    expect(mockFetchCurrentSelectedText).toHaveBeenCalledTimes(1);
+  });
+
+  test('clears selectedText once the user toggles "use selection" off', async () => {
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(async () => ({
+        available: true,
+        itemId: 'A',
+        subject: 'Mail A',
+        bodyText: 'full body',
+        selectedText: 'highlighted text',
+        attachments: []
+      }))
+    };
+    mockFetchCurrentSelectedText.mockResolvedValue('highlighted text');
+
+    const { result } = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {});
+
+    act(() => {
+      result.current.setUseSelection(false);
+    });
+
+    const override = await result.current.buildSnapshotOverride();
+    expect(override.selectedText).toBeNull();
+    expect(mockFetchCurrentSelectedText).not.toHaveBeenCalled();
+  });
+
+  test('defaults useSelection to true and resets it on item change', async () => {
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(async () => ({
+        available: true,
+        itemId: 'A',
+        subject: 'Mail A',
+        bodyText: 'full body',
+        selectedText: 'highlighted text',
+        attachments: []
+      }))
+    };
+    mockFetchCurrentSelectedText.mockResolvedValue('highlighted text');
+
+    const { result } = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {});
+    expect(result.current.useSelection).toBe(true);
+
+    act(() => {
+      result.current.setUseSelection(false);
+    });
+    expect(result.current.useSelection).toBe(false);
+
+    await act(async () => {
+      dispatchItemChanged();
+    });
+    expect(result.current.useSelection).toBe(true);
+  });
 });

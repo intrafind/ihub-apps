@@ -385,6 +385,11 @@ function formatPinnedEmail(p, idx) {
  * @param {string|null} args.currentBodyText        Body of Office.context.mailbox.item
  *                                                  (already stripped by the user's
  *                                                  context-toggle if they turned it off).
+ * @param {string|null} [args.currentSelectedText]  Text the user has highlighted in the
+ *                                                  current email, if any. Takes precedence
+ *                                                  over `currentBodyText` when non-empty —
+ *                                                  the user only cares about the selection,
+ *                                                  not the rest of a possibly-long thread.
  * @param {string|null} [args.currentItemId]        itemId of the current Outlook item —
  *                                                  used to dedupe against pinned[].
  * @param {Array<{subject?: string, bodyText?: string|null, itemId?: string|null}>} [args.pinned]
@@ -395,12 +400,16 @@ function formatPinnedEmail(p, idx) {
 export function combineUserTextWithEmailContext({
   userText,
   currentBodyText,
+  currentSelectedText,
   currentItemId,
   pinned
 }) {
+  const selected = (currentSelectedText || '').trim();
+  const effectiveBodyText = selected || currentBodyText;
+
   const list = Array.isArray(pinned) ? pinned : [];
   if (list.length === 0) {
-    return combineUserTextWithEmailBody(userText, currentBodyText);
+    return combineUserTextWithEmailBody(userText, effectiveBodyText);
   }
 
   const u = (userText || '').trim();
@@ -423,7 +432,7 @@ export function combineUserTextWithEmailContext({
     segments.push(`--- Pinned emails (${dedupedPinned.length}) ---\n${pinnedBlock}`);
   }
 
-  const currentBody = (currentBodyText || '').trim();
+  const currentBody = (effectiveBodyText || '').trim();
   if (currentBody) {
     segments.push(`--- Current email ---\n${currentBody}`);
   }

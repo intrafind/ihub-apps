@@ -51,6 +51,8 @@ function OfficeMailContextBanner({
   onRestoreAttachments,
   includeBody,
   onToggleBody,
+  useSelection,
+  onToggleSelection,
   embedded = false
 }) {
   const attachments = useMemo(
@@ -64,6 +66,9 @@ function OfficeMailContextBanner({
   const removedCount = removedAttachmentIds?.size || 0;
 
   const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
+  const selectedText = (ctx?.selectedText || '').trim();
+  const hasSelection = selectedText.length > 0;
+  const usingSelection = hasSelection && useSelection !== false;
   const hasAttachments = attachments.length > 0;
   // Older Outlook hosts (pre-Mailbox 1.8) fail every attachment fetch with
   // the same "API not available" error — show one explanation instead of
@@ -99,13 +104,13 @@ function OfficeMailContextBanner({
     );
   }
 
-  if (!hasBody && !hasAttachments) {
+  if (!hasBody && !hasSelection && !hasAttachments) {
     return null;
   }
 
   const subject = (ctx?.subject || '').trim() || 'Current email';
-  const bodyPreview = shortenBody(ctx?.bodyText);
-  const bodySent = includeBody !== false && hasBody;
+  const bodyPreview = usingSelection ? shortenBody(selectedText) : shortenBody(ctx?.bodyText);
+  const bodySent = usingSelection || (includeBody !== false && hasBody);
 
   // The outer container is only emitted in standalone mode — when this
   // banner lives inside OfficeContextStrip the strip already wraps the
@@ -129,8 +134,8 @@ function OfficeMailContextBanner({
         </div>
       )}
 
-      {/* Email body card */}
-      {hasBody && (
+      {/* Email body / selection card */}
+      {(hasBody || hasSelection) && (
         <div
           className={`flex items-start gap-2 px-3 py-2 ${
             hasAttachments ? 'border-b border-slate-100' : ''
@@ -144,16 +149,36 @@ function OfficeMailContextBanner({
               <div className="text-sm font-medium text-slate-900 truncate" title={subject}>
                 {subject}
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={bodySent}
-                  onChange={e => onToggleBody?.(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Include body
-              </label>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {hasSelection && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelection?.(!usingSelection)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium whitespace-nowrap"
+                  >
+                    {usingSelection
+                      ? 'Use full email instead'
+                      : `Use selection (${selectedText.length})`}
+                  </button>
+                )}
+                {!usingSelection && hasBody && (
+                  <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bodySent}
+                      onChange={e => onToggleBody?.(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Include body
+                  </label>
+                )}
+              </div>
             </div>
+            {usingSelection && (
+              <div className="mt-0.5 text-[11px] text-indigo-600">
+                Using selected text ({selectedText.length} chars)
+              </div>
+            )}
             {bodyPreview && (
               <div
                 className={`mt-0.5 text-xs ${
@@ -164,7 +189,7 @@ function OfficeMailContextBanner({
                 {bodyPreview}
               </div>
             )}
-            {!bodySent && (
+            {!bodySent && hasBody && (
               <div className="mt-0.5 text-[11px] text-amber-600">Email body will not be sent.</div>
             )}
           </div>

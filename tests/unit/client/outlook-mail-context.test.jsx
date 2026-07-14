@@ -19,7 +19,8 @@ import '@testing-library/jest-dom';
 
 const {
   fetchCurrentMailContext,
-  fetchSelectedItemsContext
+  fetchSelectedItemsContext,
+  fetchCurrentSelectedText
 } = require('../../../client/src/features/office/utilities/outlookMailContext');
 
 const SUCCEEDED = 'succeeded';
@@ -41,7 +42,15 @@ function installOfficeMock() {
  * proxy the call went through — foreign ids fail with the canonical
  * InvalidAttachmentId message.
  */
-function makeMailItem({ itemId, subject, bodyText, attachments = [], onBodyRead }) {
+function makeMailItem({
+  itemId,
+  subject,
+  bodyText,
+  attachments = [],
+  onBodyRead,
+  selectedText,
+  selectedDataFails = false
+}) {
   const item = {
     itemId,
     itemType: 'message',
@@ -61,6 +70,15 @@ function makeMailItem({ itemId, subject, bodyText, attachments = [], onBodyRead 
           cb({ status: SUCCEEDED, value: bodyText });
         }, 0);
       }
+    },
+    getSelectedDataAsync: (_coercion, cb) => {
+      setTimeout(() => {
+        if (selectedDataFails) {
+          cb({ status: FAILED, error: { message: 'getSelectedDataAsync failed' } });
+          return;
+        }
+        cb({ status: SUCCEEDED, value: { data: selectedText ?? '' } });
+      }, 0);
     },
     getAttachmentContentAsync: (id, cb) => {
       setTimeout(() => {
@@ -250,6 +268,77 @@ describe('fetchCurrentMailContext', () => {
     expect(ctx.attachments).toHaveLength(2);
     expect(ctx.attachments[0].content).toBeDefined();
     expect(ctx.attachments[1].error).toBe('AttachmentTypeNotSupported');
+  });
+});
+
+describe('fetchCurrentMailContext — text selection (issue #1448)', () => {
+  test('includes the highlighted selection in the snapshot', async () => {
+    Office.context.mailbox.item = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'the full email body',
+      selectedText: 'just this highlighted sentence'
+    });
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.selectedText).toBe('just this highlighted sentence');
+  });
+
+  test('resolves selectedText to null when nothing is highlighted', async () => {
+    Office.context.mailbox.item = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'the full email body',
+      selectedText: ''
+    });
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.selectedText).toBeNull();
+  });
+
+  test('resolves selectedText to null (never throws) when getSelectedDataAsync fails', async () => {
+    Office.context.mailbox.item = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'the full email body',
+      selectedDataFails: true
+    });
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.available).toBe(true);
+    expect(ctx.selectedText).toBeNull();
+  });
+
+  test('resolves selectedText to null on hosts without the getSelectedDataAsync API', async () => {
+    const item = makeMailItem({ itemId: 'A', subject: 'Mail A', bodyText: 'the full email body' });
+    delete item.getSelectedDataAsync;
+    Office.context.mailbox.item = item;
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.selectedText).toBeNull();
+  });
+});
+
+describe('fetchCurrentSelectedText', () => {
+  test('re-reads the live selection directly, bypassing any cached snapshot', async () => {
+    Office.context.mailbox.item = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'body',
+      selectedText: 'fresh highlight'
+    });
+
+    await expect(fetchCurrentSelectedText()).resolves.toBe('fresh highlight');
+  });
+
+  test('resolves null when there is no mail item available', async () => {
+    Office.context.mailbox.item = null;
+
+    await expect(fetchCurrentSelectedText()).resolves.toBeNull();
   });
 });
 

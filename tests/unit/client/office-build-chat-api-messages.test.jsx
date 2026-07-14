@@ -27,7 +27,8 @@ const {
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
   collectAttachmentsForSend,
-  formatFileDataAsPromptText
+  formatFileDataAsPromptText,
+  combineUserTextWithEmailContext
 } = require('../../../client/src/features/office/utilities/buildChatApiMessages');
 
 // JSDom doesn't implement createObjectURL by default — stub it so the
@@ -411,6 +412,55 @@ describe('collectAttachmentsForSend', () => {
       'currentItem'
     );
     expect(merged.map(a => a.id)).toEqual(['p1a', 'p2a', 'p2b']);
+  });
+});
+
+describe('combineUserTextWithEmailContext — selection precedence (issue #1448)', () => {
+  test('uses the selection instead of the full body when both are present', () => {
+    const result = combineUserTextWithEmailContext({
+      userText: 'Summarize this',
+      currentBodyText: 'The full long email thread body goes here.',
+      currentSelectedText: 'Just this one highlighted paragraph.',
+      currentItemId: 'item-1',
+      pinned: []
+    });
+    expect(result).toContain('Just this one highlighted paragraph.');
+    expect(result).not.toContain('The full long email thread body goes here.');
+  });
+
+  test('falls back to the full body when there is no selection', () => {
+    const result = combineUserTextWithEmailContext({
+      userText: 'Summarize this',
+      currentBodyText: 'The full long email thread body goes here.',
+      currentSelectedText: null,
+      currentItemId: 'item-1',
+      pinned: []
+    });
+    expect(result).toContain('The full long email thread body goes here.');
+  });
+
+  test('falls back to the full body when the selection is whitespace-only', () => {
+    const result = combineUserTextWithEmailContext({
+      userText: 'Summarize this',
+      currentBodyText: 'The full long email thread body goes here.',
+      currentSelectedText: '   ',
+      currentItemId: 'item-1',
+      pinned: []
+    });
+    expect(result).toContain('The full long email thread body goes here.');
+  });
+
+  test('selection wins over the current body even alongside pinned emails', () => {
+    const result = combineUserTextWithEmailContext({
+      userText: 'Summarize this',
+      currentBodyText: 'The full long email thread body goes here.',
+      currentSelectedText: 'Just this one highlighted paragraph.',
+      currentItemId: 'item-1',
+      pinned: [{ subject: 'Older thread', bodyText: 'Older content', itemId: 'item-2' }]
+    });
+    expect(result).toContain('Just this one highlighted paragraph.');
+    expect(result).toContain('Older content');
+    expect(result).not.toContain('The full long email thread body goes here.');
   });
 });
 
