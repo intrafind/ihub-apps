@@ -147,6 +147,8 @@
       "title": "Settings",
       "account": "Account",
       "language": "Language",
+      "replies": "Replies",
+      "autoInsert": "Insert replies into email automatically",
       "cancel": "Cancel",
       "save": "Save"
     }

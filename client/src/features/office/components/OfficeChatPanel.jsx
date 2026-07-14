@@ -21,6 +21,7 @@ import {
   displayReplyFormWithAssistantResponse,
   displayNewEmailFormWithAssistantResponse
 } from '../utilities/replyForm';
+import { isAutoInsertEnabled } from '../utilities/autoInsertSetting';
 import {
   buildPromptTemplate,
   combineUserTextWithEmailContext,
@@ -65,10 +66,21 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // Chat ID: use a stable ref, reset on item change or new chat
   const chatIdRef = useRef(`office-${uuidv4()}`);
   const selectedStarterPromptRef = useRef(null);
+  // Gates the read-mode auto-insert branch (which opens a fresh reply window
+  // per call) to once per conversation; reset alongside chatIdRef wherever a
+  // new conversation begins. See displayReplyFormWithAssistantResponse.
+  const hasAutoInsertedRef = useRef(false);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
-    chatId: chatIdRef.current
+    chatId: chatIdRef.current,
+    onMessageComplete: fullContent => {
+      if (!isAutoInsertEnabled()) return;
+      displayReplyFormWithAssistantResponse(fullContent, {
+        silent: true,
+        autoInsertOnceRef: hasAutoInsertedRef
+      });
+    }
   });
 
   const {
@@ -221,6 +233,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       if (pinnedEmailsRef.current.length === 0) {
         chatIdRef.current = `office-${uuidv4()}`;
         selectedStarterPromptRef.current = null;
+        hasAutoInsertedRef.current = false;
         adapterRef.current.clearMessages();
         setInputValue('');
       }
@@ -484,6 +497,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     newApp => {
       chatIdRef.current = `office-${uuidv4()}`;
       selectedStarterPromptRef.current = null;
+      hasAutoInsertedRef.current = false;
       adapter.clearMessages();
       setInputValue('');
       setPinnedEmails([]);
@@ -496,6 +510,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const handleNewChat = useCallback(() => {
     chatIdRef.current = `office-${uuidv4()}`;
     selectedStarterPromptRef.current = null;
+    hasAutoInsertedRef.current = false;
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
