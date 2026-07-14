@@ -207,6 +207,9 @@
     "winstonMirror": false,
     "anonymizeIp": false
   },
+  "database": {
+    "enabled": false
+  },
   "usageTracking": {
     "eventRetentionDays": 90,
     "dailyRetentionDays": 365,

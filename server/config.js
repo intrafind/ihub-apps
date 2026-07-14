@@ -32,7 +32,8 @@ const env = cleanEnv(
     HTTPS_PROXY: str({ optional: true }),
     NO_PROXY: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
-    NODE_ENV: str({ default: 'development', optional: true })
+    NODE_ENV: str({ default: 'development', optional: true }),
+    DATABASE_URL: str({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -72,7 +73,8 @@ const config = Object.freeze({
   HTTPS_PROXY: env.HTTPS_PROXY,
   NO_PROXY: env.NO_PROXY,
   USE_HTTPS: env.USE_HTTPS,
-  NODE_ENV: env.NODE_ENV
+  NODE_ENV: env.NODE_ENV,
+  DATABASE_URL: env.DATABASE_URL
 });
 
 export default config;

@@ -19,6 +19,7 @@
     - [Mimetype Configuration](mimetypes.md)
     - [Configuration Validation](configuration-validation.md)
     - [Configuration Migrations](configuration-migrations.md)
+    - [Persistence Layer](persistence.md)
     - [Localization](localization.md)
   - [Authentication & Security]()
     - [Authentication Architecture](authentication-architecture.md)
