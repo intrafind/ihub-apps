@@ -127,31 +127,6 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
 }
 
 /**
- * Create a generic tool result
- * @param {string} tool_call_id - ID of the tool call
- * @param {string} name - Tool name
- * @param {*} content - Result content
- * @param {boolean} [is_error] - Whether this is an error
- * @param {Object} [metadata] - Provider-specific metadata
- * @returns {GenericToolResult} Generic tool result
- */
-export function createGenericToolResult(
-  tool_call_id,
-  name,
-  content,
-  is_error = false,
-  metadata = {}
-) {
-  return {
-    tool_call_id,
-    name: normalizeToolName(name),
-    content,
-    is_error,
-    metadata
-  };
-}
-
-/**
  * Create a generic streaming response
  * @param {string[]} content - Content chunks
  * @param {string[]} thinking - Thinking chunks

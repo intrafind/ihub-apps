@@ -4,11 +4,9 @@ import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import MistralAdapter from '../adapters/mistral.js';
 import logger from '../utils/logger.js';
-import {
-  formatToolsForOpenAI,
-  formatToolsForAnthropic,
-  formatToolsForGoogle
-} from '../adapters/toolFormatter.js';
+import { convertGenericToolsToOpenAI } from '../adapters/toolCalling/OpenAIConverter.js';
+import { convertGenericToolsToAnthropic } from '../adapters/toolCalling/AnthropicConverter.js';
+import { convertGenericToolsToGoogle } from '../adapters/toolCalling/GoogleConverter.js';
 
 // Test tool definition
 const testTool = {
@@ -94,9 +92,9 @@ logger.info('🧪 Testing Tool Calling Consistency Across All Adapters\n');
 // Test 1: Tool Formatting Consistency
 logger.info('📋 Test 1: Tool Formatting Consistency');
 
-const openaiTools = formatToolsForOpenAI([testTool]);
-const anthropicTools = formatToolsForAnthropic([testTool]);
-const googleTools = formatToolsForGoogle([testTool]);
+const openaiTools = convertGenericToolsToOpenAI([testTool]);
+const anthropicTools = convertGenericToolsToAnthropic([testTool]);
+const googleTools = convertGenericToolsToGoogle([testTool]);
 
 logger.info('OpenAI tool format:', JSON.stringify(openaiTools[0], null, 2));
 logger.info('Anthropic tool format:', JSON.stringify(anthropicTools[0], null, 2));
