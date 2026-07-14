@@ -69,4 +69,11 @@ describe('FilesystemProvider', () => {
     const escaped = path.join(path.dirname(tmpDir), 'escape.json');
     await expect(fs.access(escaped)).rejects.toThrow();
   });
+
+  it('resolved paths always stay under baseDir, even for nested traversal attempts', async () => {
+    for (const attempt of ['../../etc/passwd', '../../../secret.json', 'a/../../b.json']) {
+      const resolved = await provider._resolve(attempt);
+      expect(resolved.startsWith(path.resolve(tmpDir) + path.sep)).toBe(true);
+    }
+  });
 });
