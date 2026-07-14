@@ -21,34 +21,45 @@ export class FilesystemProvider extends StorageProvider {
 
   async _resolve(relativePath) {
     const resolved = await resolveAndValidatePath(relativePath, this.baseDir);
-    const candidate = resolved || path.join(this.baseDir, path.basename(relativePath));
     if (!resolved) {
       logger.warn(`Path traversal blocked in FilesystemProvider: ${relativePath}`);
+      // Fail closed instead of falling back to some other path derived from
+      // the untrusted input (e.g. joining baseDir with its basename) — that
+      // fallback previously re-introduced the untrusted value into a new
+      // path expression, which is exactly what static path-injection
+      // analysis (correctly) flags as unsafe, regardless of how harmless it
+      // is in practice. Treated as ENOENT by callers: a blocked path is not
+      // meaningfully different from "not found" for this abstraction.
+      const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
+      error.code = 'ENOENT';
+      throw error;
     }
 
-    // Explicit, synchronous containment re-check on the final candidate path,
-    // independent of resolveAndValidatePath's own (fs.realpath-based) guarantee.
-    // This is what actually neutralizes the path for static analysis of the
-    // fs.* calls below, since CodeQL's taint tracking cannot follow the async
+    // Explicit, synchronous containment re-check on the resolved path,
+    // independent of resolveAndValidatePath's own (fs.realpath-based)
+    // guarantee — this is what neutralizes the path for static analysis of
+    // the fs.* calls below, since taint tracking cannot follow the async
     // realpath resolution inside pathSecurity.js.
     const normalizedBase = path.resolve(this.baseDir);
-    const normalizedCandidate = path.resolve(candidate);
+    const normalizedResolved = path.resolve(resolved);
     const isContained =
-      normalizedCandidate === normalizedBase ||
-      normalizedCandidate.startsWith(normalizedBase + path.sep);
+      normalizedResolved === normalizedBase ||
+      normalizedResolved.startsWith(normalizedBase + path.sep);
     if (!isContained) {
-      // Unreachable in practice (the fallback above is always a basename joined
-      // onto baseDir), but fail closed rather than ever touching the filesystem
-      // with an unverified path.
-      throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
+      // Unreachable in practice (resolveAndValidatePath already guarantees
+      // containment), but fail closed rather than ever touching the
+      // filesystem with an unverified path.
+      const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
+      error.code = 'ENOENT';
+      throw error;
     }
 
-    return normalizedCandidate;
+    return normalizedResolved;
   }
 
   async read(relativePath) {
-    const filePath = await this._resolve(relativePath);
     try {
+      const filePath = await this._resolve(relativePath);
       return await fs.readFile(filePath, 'utf8');
     } catch (error) {
       if (error.code === 'ENOENT') {
@@ -76,8 +87,8 @@ export class FilesystemProvider extends StorageProvider {
   }
 
   async exists(relativePath) {
-    const filePath = await this._resolve(relativePath);
     try {
+      const filePath = await this._resolve(relativePath);
       await fs.access(filePath);
       return true;
     } catch {
@@ -86,9 +97,9 @@ export class FilesystemProvider extends StorageProvider {
   }
 
   async list(relativeDir, { pattern } = {}) {
-    const dirPath = await this._resolve(relativeDir);
     let entries;
     try {
+      const dirPath = await this._resolve(relativeDir);
       entries = await fs.readdir(dirPath);
     } catch (error) {
       if (error.code === 'ENOENT') {

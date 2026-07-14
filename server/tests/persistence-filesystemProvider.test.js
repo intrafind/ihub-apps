@@ -62,18 +62,39 @@ describe('FilesystemProvider', () => {
     expect(await provider.list('apps', { pattern: /\.json$/ })).toEqual(['a.json']);
   });
 
-  it('blocks path traversal outside the base directory', async () => {
-    // Mirrors configLoader's previous behavior: a traversal attempt is
-    // clamped to a safe path under baseDir rather than escaping it.
-    await provider.write('../escape.json', '{}');
-    const escaped = path.join(path.dirname(tmpDir), 'escape.json');
-    await expect(fs.access(escaped)).rejects.toThrow();
-  });
+  describe('path traversal', () => {
+    const traversalAttempts = ['../escape.json', '../../etc/passwd', '../../../secret.json'];
 
-  it('resolved paths always stay under baseDir, even for nested traversal attempts', async () => {
-    for (const attempt of ['../../etc/passwd', '../../../secret.json', 'a/../../b.json']) {
-      const resolved = await provider._resolve(attempt);
-      expect(resolved.startsWith(path.resolve(tmpDir) + path.sep)).toBe(true);
-    }
+    it('write() rejects and never creates a file outside baseDir', async () => {
+      for (const attempt of traversalAttempts) {
+        await expect(provider.write(attempt, '{}')).rejects.toThrow();
+      }
+      const escaped = path.join(path.dirname(tmpDir), 'escape.json');
+      await expect(fs.access(escaped)).rejects.toThrow();
+    });
+
+    it('delete() rejects rather than touching anything outside baseDir', async () => {
+      for (const attempt of traversalAttempts) {
+        await expect(provider.delete(attempt)).rejects.toThrow();
+      }
+    });
+
+    it('read() treats a blocked path as not-found (null), same as a missing file', async () => {
+      for (const attempt of traversalAttempts) {
+        expect(await provider.read(attempt)).toBeNull();
+      }
+    });
+
+    it('exists() treats a blocked path as not-found (false)', async () => {
+      for (const attempt of traversalAttempts) {
+        expect(await provider.exists(attempt)).toBe(false);
+      }
+    });
+
+    it('list() treats a blocked directory as not-found (empty array)', async () => {
+      for (const attempt of traversalAttempts) {
+        expect(await provider.list(attempt)).toEqual([]);
+      }
+    });
   });
 });
