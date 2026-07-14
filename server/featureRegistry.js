@@ -155,6 +155,16 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'followUpSuggestions',
+    name: { en: 'Follow-Up Suggestions', de: 'Anschlussvorschläge' },
+    description: {
+      en: 'Suggest contextual follow-up questions as clickable chips after assistant responses',
+      de: 'Kontextbezogene Anschlussfragen als klickbare Chips nach Assistenten-Antworten vorschlagen'
+    },
+    category: 'ai',
+    default: true
   }
 ];
 

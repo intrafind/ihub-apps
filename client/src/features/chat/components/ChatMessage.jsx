@@ -50,6 +50,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
   );
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
+import FollowUpChips from './FollowUpChips';
 import ExportDialog from './ExportDialog';
 import './ChatMessage.css';
 
@@ -74,7 +75,8 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
-  onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
+  onDocumentAction = null, // Callback for citation document actions (preview, download, openInApp)
+  onFollowUpSelect = null // Callback when a follow-up suggestion chip is clicked
 }) {
   const { t } = useTranslation();
 
@@ -920,6 +922,16 @@ function ChatMessage({
           </div>
         )}
       </div>
+
+      {/* Follow-up suggestion chips - only on the latest completed assistant message */}
+      {!isUser &&
+        !isError &&
+        !message.loading &&
+        isLatestAssistantMessage &&
+        onFollowUpSelect &&
+        message.followUpSuggestions?.length > 0 && (
+          <FollowUpChips suggestions={message.followUpSuggestions} onSelect={onFollowUpSelect} />
+        )}
 
       {/*
         Primary insert action (Office taskpane). Renders as a labelled brand-coloured

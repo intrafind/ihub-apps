@@ -71,6 +71,7 @@
     - [Realtime Voice & Transcription](voice-transcription.md)
     - [Web Tools](web-tools.md)
     - [Magic Prompt](magic-prompt-feature.md)
+    - [Follow-Up Suggestions](follow-up-suggestions-feature.md)
     - [Image Upload Feature](image-upload-feature.md)
     - [OCR Feature](ocr-feature.md)
     - [React Component Feature](react-component-feature.md)

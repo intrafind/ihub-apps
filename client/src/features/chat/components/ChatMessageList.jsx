@@ -36,7 +36,9 @@ function ChatMessageList({
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
   onDocumentAction = null,
-  showAvatars = true
+  showAvatars = true,
+  // Called with suggestion text when a follow-up suggestion chip is clicked
+  onFollowUpSelect = null
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -183,6 +185,7 @@ function ChatMessageList({
                 onClarificationSubmit={onClarificationSubmit}
                 onClarificationSkip={onClarificationSkip}
                 onDocumentAction={onDocumentAction}
+                onFollowUpSelect={onFollowUpSelect}
               />
             </div>
           </div>
