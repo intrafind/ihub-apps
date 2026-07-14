@@ -23,6 +23,7 @@ function useAppSettings(appId, app) {
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
   const [websearchEnabled, setWebsearchEnabled] = useState(false);
+  const [documentOnlyEnabled, setDocumentOnlyEnabled] = useState(false);
   // Per-message host-context toggles. The Outlook taskpane and the
   // browser extension declare which toggles to surface via
   // EmbeddedHostAdapter.contextToggles; this is the user-visible state
@@ -93,6 +94,7 @@ function useAppSettings(appId, app) {
       thinkingThoughts: app.thinking?.thoughts ?? null,
       enabledTools: app.tools || [],
       websearchEnabled: app.websearch?.enabledByDefault ?? false,
+      documentOnlyEnabled: false,
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
       imageQuality: app.imageGeneration?.quality || 'Medium'
     };
@@ -109,6 +111,7 @@ function useAppSettings(appId, app) {
     setThinkingThoughts(initialState.thinkingThoughts);
     setEnabledTools(initialState.enabledTools);
     setWebsearchEnabled(initialState.websearchEnabled);
+    setDocumentOnlyEnabled(initialState.documentOnlyEnabled);
     setImageAspectRatio(initialState.imageAspectRatio);
     setImageQuality(initialState.imageQuality);
 
@@ -141,6 +144,8 @@ function useAppSettings(appId, app) {
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
       if (savedSettings.websearchEnabled !== undefined)
         setWebsearchEnabled(savedSettings.websearchEnabled);
+      if (savedSettings.documentOnlyEnabled !== undefined)
+        setDocumentOnlyEnabled(savedSettings.documentOnlyEnabled);
       if (savedSettings.hostContextFlags && typeof savedSettings.hostContextFlags === 'object')
         setHostContextFlags(savedSettings.hostContextFlags);
       if (savedSettings.imageAspectRatio !== undefined)
@@ -164,6 +169,7 @@ function useAppSettings(appId, app) {
         thinkingThoughts,
         enabledTools,
         websearchEnabled,
+        documentOnlyEnabled,
         hostContextFlags,
         imageAspectRatio,
         imageQuality
@@ -183,6 +189,7 @@ function useAppSettings(appId, app) {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    documentOnlyEnabled,
     hostContextFlags,
     imageAspectRatio,
     imageQuality
@@ -201,6 +208,7 @@ function useAppSettings(appId, app) {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    documentOnlyEnabled,
     hostContextFlags,
     imageAspectRatio,
     imageQuality
@@ -219,6 +227,7 @@ function useAppSettings(appId, app) {
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,
+    setDocumentOnlyEnabled,
     setHostContextFlags,
     setImageAspectRatio,
     setImageQuality

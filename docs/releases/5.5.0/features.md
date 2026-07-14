@@ -1155,3 +1155,18 @@ building the loop containers exposed.
   `originalContentLength`, `returnedContentLength` and the `maxLength` it applied, so a workflow
   reads the flag off the result instead of re-deriving it from a length comparison. The iFinder
   review's per-document loop is three steps as a result: fetch, extract, record.
+
+## "Use General Knowledge" Toggle for Document Chats
+
+Users chatting with an uploaded document can now tell the assistant to stick strictly to the
+document instead of blending in the model's general knowledge — addressing feedback that answers
+often included outside information users didn't want.
+
+- For any app with file upload enabled, a new **"Use general knowledge"** toggle appears in the
+  message actions menu, next to the existing Web Search toggle.
+- It defaults to on (today's behavior is unchanged). Turning it off tells the model to answer only
+  from the uploaded document(s) and to say so explicitly if the document doesn't contain the
+  answer, rather than filling the gap with outside knowledge.
+- The choice is remembered per app, like the other chat toggles.
+- No admin action is required — the toggle appears automatically for apps that already have
+  uploads enabled.

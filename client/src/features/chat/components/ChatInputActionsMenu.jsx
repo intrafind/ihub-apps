@@ -45,6 +45,10 @@ function ChatInputActionsMenu({
   // Websearch props
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Document-only props: restrict answers to uploaded document(s) instead of
+  // the model's general knowledge (issue #1662).
+  documentOnlyEnabled = false,
+  onDocumentOnlyEnabledChange = null,
   // Transcription toggle props: available = admin enabled it; enabled
   // = the per-chat user toggle state.
   transcriptionAvailable = false,
@@ -196,6 +200,7 @@ function ChatInputActionsMenu({
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const hasDocumentOnly = app?.upload?.enabled === true && onDocumentOnlyEnabledChange !== null;
   const hasTranscription = transcriptionAvailable === true && onTranscriptionEnabledChange !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
@@ -216,6 +221,7 @@ function ChatInputActionsMenu({
   const hasActions =
     hasTools ||
     hasWebsearch ||
+    hasDocumentOnly ||
     hasTranscription ||
     hasHostContextToggles ||
     hasCloudProviders ||
@@ -229,6 +235,7 @@ function ChatInputActionsMenu({
     quickActionCount +
     (hasTools ? 1 : 0) +
     (hasWebsearch ? 1 : 0) +
+    (hasDocumentOnly ? 1 : 0) +
     (hasTranscription ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
@@ -312,6 +319,7 @@ function ChatInputActionsMenu({
   const hasDesktopMenuContent =
     enabledCloudProviders.length > 0 ||
     hasWebsearch ||
+    hasDocumentOnly ||
     hasTranscription ||
     hasTools ||
     hasHostContextToggles;
@@ -521,7 +529,7 @@ function ChatInputActionsMenu({
           {/* Web Search Section */}
           {hasWebsearch && (
             <div
-              className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+              className={`p-3 ${hasTools || hasDocumentOnly ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
               <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
                 <div className="flex-1 min-w-0 mr-3">
@@ -545,10 +553,40 @@ function ChatInputActionsMenu({
             </div>
           )}
 
+          {/* Document-only Section: restrict answers to uploaded document(s) */}
+          {hasDocumentOnly && (
+            <div
+              className={`p-3 ${hasTools || hasTranscription ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0 mr-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t('documentOnly.toggleLabel', 'Use general knowledge')}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'documentOnly.toggleDescription',
+                      'When off, answers are limited to the uploaded document(s)'
+                    )}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!documentOnlyEnabled}
+                    onChange={e => onDocumentOnlyEnabledChange?.(!e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Transcription Section */}
           {hasTranscription && (
             <div
-              className={`p-3 ${hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+              className={`p-3 ${hasTools || hasWebsearch || hasDocumentOnly ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
               <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
                 <div className="flex-1 min-w-0 mr-3">
