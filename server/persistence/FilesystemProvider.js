@@ -11,12 +11,12 @@ import logger from '../utils/logger.js';
  * existing deployment (no DATABASE_URL set) continues to use.
  *
  * Every method below resolves `this.baseDir` + the caller-supplied relative
- * path with `path.resolve()` directly, inline, and immediately verifies the
- * result is still contained in `this.baseDir` before doing anything with the
- * filesystem — matching CodeQL's own documented fix for path-injection
- * (resolve, then verify with startsWith, right before the sink). A guard
- * performed inside an awaited helper isn't recognized as clearing the taint
- * at the sink in the caller, so this can't be centralized into one method.
+ * path with `path.resolve()` directly, inline, and immediately verifies with
+ * `path.relative()` that the result cannot escape `this.baseDir` before doing
+ * anything with the filesystem. This has to be duplicated per method rather
+ * than centralized in a helper: a guard performed inside an awaited helper
+ * isn't recognized by static path-injection analysis as clearing the taint
+ * at the sink in the caller.
  *
  * `resolveAndValidatePath` (pathSecurity.js, used throughout the rest of the
  * codebase) is layered on top as defense in depth: it additionally follows
@@ -53,12 +53,9 @@ export class FilesystemProvider extends StorageProvider {
   async read(relativePath) {
     try {
       await this._assertNoSymlinkEscape(relativePath);
-      const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(normalizedBase, relativePath);
-      if (
-        normalizedPath !== normalizedBase &&
-        !normalizedPath.startsWith(normalizedBase + path.sep)
-      ) {
+      const normalizedPath = path.resolve(this.baseDir, relativePath);
+      const relative = path.relative(this.baseDir, normalizedPath);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
         const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
         error.code = 'ENOENT';
         throw error;
@@ -74,12 +71,9 @@ export class FilesystemProvider extends StorageProvider {
 
   async write(relativePath, data) {
     await this._assertNoSymlinkEscape(relativePath);
-    const normalizedBase = path.resolve(this.baseDir);
-    const normalizedPath = path.resolve(normalizedBase, relativePath);
-    if (
-      normalizedPath !== normalizedBase &&
-      !normalizedPath.startsWith(normalizedBase + path.sep)
-    ) {
+    const normalizedPath = path.resolve(this.baseDir, relativePath);
+    const relative = path.relative(this.baseDir, normalizedPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
     }
     await fs.mkdir(path.dirname(normalizedPath), { recursive: true });
@@ -88,12 +82,9 @@ export class FilesystemProvider extends StorageProvider {
 
   async delete(relativePath) {
     await this._assertNoSymlinkEscape(relativePath);
-    const normalizedBase = path.resolve(this.baseDir);
-    const normalizedPath = path.resolve(normalizedBase, relativePath);
-    if (
-      normalizedPath !== normalizedBase &&
-      !normalizedPath.startsWith(normalizedBase + path.sep)
-    ) {
+    const normalizedPath = path.resolve(this.baseDir, relativePath);
+    const relative = path.relative(this.baseDir, normalizedPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
     }
     try {
@@ -108,12 +99,9 @@ export class FilesystemProvider extends StorageProvider {
   async exists(relativePath) {
     try {
       await this._assertNoSymlinkEscape(relativePath);
-      const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(normalizedBase, relativePath);
-      if (
-        normalizedPath !== normalizedBase &&
-        !normalizedPath.startsWith(normalizedBase + path.sep)
-      ) {
+      const normalizedPath = path.resolve(this.baseDir, relativePath);
+      const relative = path.relative(this.baseDir, normalizedPath);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
       }
       await fs.access(normalizedPath);
@@ -127,12 +115,9 @@ export class FilesystemProvider extends StorageProvider {
     let entries;
     try {
       await this._assertNoSymlinkEscape(relativeDir);
-      const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(normalizedBase, relativeDir);
-      if (
-        normalizedPath !== normalizedBase &&
-        !normalizedPath.startsWith(normalizedBase + path.sep)
-      ) {
+      const normalizedPath = path.resolve(this.baseDir, relativeDir);
+      const relative = path.relative(this.baseDir, normalizedPath);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
         const error = new Error(`Refusing to access path outside base directory: ${relativeDir}`);
         error.code = 'ENOENT';
         throw error;
