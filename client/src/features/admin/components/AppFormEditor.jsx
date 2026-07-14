@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import ToolsSelector from '../../../shared/components/ToolsSelector';
-import McpToolsSelector from './McpToolsSelector';
-import SkillsSelector from '../../../shared/components/SkillsSelector';
-import WorkflowsSelector from '../../../shared/components/WorkflowsSelector';
+import ToolsConfigSection from './app-form/ToolsConfigSection';
+import McpToolsConfigSection from './app-form/McpToolsConfigSection';
+import SkillsConfigSection from './app-form/SkillsConfigSection';
+import WorkflowsConfigSection from './app-form/WorkflowsConfigSection';
 import SourcePicker from './SourcePicker';
 import ResourceSelector from './ResourceSelector';
 import Icon from '../../../shared/components/Icon';
@@ -1294,106 +1294,33 @@ function AppFormEditor({
             </div>
 
             {/* Tools Configuration */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.tools', 'Tools')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.toolsDesc',
-                      'Configure which tools are available for this app'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:mt-0 md:col-span-2">
-                  <ToolsSelector
-                    selectedTools={app.tools || []}
-                    onToolsChange={tools => handleInputChange('tools', tools)}
-                    excludeToolIds={[
-                      'braveSearch',
-                      'enhancedWebSearch',
-                      'webContentExtractor',
-                      ...mcpToolIds
-                    ]}
-                  />
-                </div>
-              </div>
-            </div>
+            <ToolsConfigSection
+              selectedTools={app.tools || []}
+              onToolsChange={tools => handleInputChange('tools', tools)}
+              mcpToolIds={mcpToolIds}
+            />
 
             {/* MCP Server Tools */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.mcpTools.title', 'MCP server tools')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.mcpTools.desc',
-                      'Enable tools provided by connected MCP servers for this app.'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:mt-0 md:col-span-2">
-                  <McpToolsSelector
-                    selectedTools={app.tools || []}
-                    onToolsChange={tools => handleInputChange('tools', tools)}
-                    onMcpToolIdsChange={setMcpToolIds}
-                  />
-                </div>
-              </div>
-            </div>
+            <McpToolsConfigSection
+              selectedTools={app.tools || []}
+              onToolsChange={tools => handleInputChange('tools', tools)}
+              onMcpToolIdsChange={setMcpToolIds}
+            />
 
             {/* Workflows Configuration */}
             {featureFlags.isEnabled('workflows', true) && (
-              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-                <div className="md:grid md:grid-cols-3 md:gap-6">
-                  <div className="md:col-span-1">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.workflows', 'Workflows')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.apps.edit.workflowsDesc',
-                        'Attach workflows to this app. Users can trigger them in chat with @workflow-id.'
-                      )}
-                    </p>
-                  </div>
-                  <div className="mt-5 md:mt-0 md:col-span-2">
-                    <WorkflowsSelector
-                      selectedWorkflows={app.workflows || []}
-                      onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
-                    />
-                  </div>
-                </div>
-              </div>
+              <WorkflowsConfigSection
+                selectedWorkflows={app.workflows || []}
+                onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
+              />
             )}
 
             {/* Skills Configuration */}
             {featureFlags.isEnabled('skills', false) && (
-              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-                <div className="md:grid md:grid-cols-3 md:gap-6">
-                  <div className="md:col-span-1">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.skills', 'Skills')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.apps.edit.skillsDesc',
-                        'Configure which agent skills are available for this app'
-                      )}
-                    </p>
-                  </div>
-                  <div className="mt-5 md:mt-0 md:col-span-2">
-                    <SkillsSelector
-                      selectedSkills={app.skills || []}
-                      onSkillsChange={skills => handleInputChange('skills', skills)}
-                    />
-                  </div>
-                </div>
-              </div>
+              <SkillsConfigSection
+                selectedSkills={app.skills || []}
+                onSkillsChange={skills => handleInputChange('skills', skills)}
+              />
             )}
 
             {/* Variables Configuration */}
