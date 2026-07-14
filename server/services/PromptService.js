@@ -2,9 +2,6 @@ import { getLocalizedContent } from '../../shared/localize.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import SourceResolutionService from './SourceResolutionService.js';
-import config from '../config.js';
-import { getRootDir } from '../pathUtils.js';
-import path from 'path';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
@@ -293,12 +290,10 @@ class PromptService {
           const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
 
           if (resolvedSources.length > 0) {
-            // Create source manager for content loading
-            const sourceManager = createSourceManager({
-              filesystem: {
-                basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
-              }
-            });
+            // createSourceManager() is a process-wide singleton; config is only
+            // honored on the very first call, so we rely on FileSystemHandler's
+            // own default basePath here instead of passing a redundant override.
+            const sourceManager = createSourceManager();
 
             // Load content from resolved sources
             const result = await sourceManager.loadSources(resolvedSources, context);
