@@ -26,41 +26,40 @@ export class FilesystemProvider extends StorageProvider {
       // Fail closed instead of falling back to some other path derived from
       // the untrusted input (e.g. joining baseDir with its basename) — that
       // fallback previously re-introduced the untrusted value into a new
-      // path expression, which is exactly what static path-injection
-      // analysis (correctly) flags as unsafe, regardless of how harmless it
-      // is in practice. Treated as ENOENT by callers: a blocked path is not
-      // meaningfully different from "not found" for this abstraction.
+      // path expression, which static path-injection analysis (correctly)
+      // flags as unsafe, regardless of how harmless it is in practice.
+      // Treated as ENOENT by callers: a blocked path is not meaningfully
+      // different from "not found" for this abstraction.
       const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
       error.code = 'ENOENT';
       throw error;
     }
-
-    // Explicit, synchronous containment re-check on the resolved path,
-    // independent of resolveAndValidatePath's own (fs.realpath-based)
-    // guarantee — this is what neutralizes the path for static analysis of
-    // the fs.* calls below, since taint tracking cannot follow the async
-    // realpath resolution inside pathSecurity.js.
-    const normalizedBase = path.resolve(this.baseDir);
-    const normalizedResolved = path.resolve(resolved);
-    const isContained =
-      normalizedResolved === normalizedBase ||
-      normalizedResolved.startsWith(normalizedBase + path.sep);
-    if (!isContained) {
-      // Unreachable in practice (resolveAndValidatePath already guarantees
-      // containment), but fail closed rather than ever touching the
-      // filesystem with an unverified path.
-      const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
-      error.code = 'ENOENT';
-      throw error;
-    }
-
-    return normalizedResolved;
+    return resolved;
   }
+
+  // Every method below re-verifies (synchronously, inline, no helper call)
+  // that the path returned by _resolve() is contained in baseDir immediately
+  // before its own fs.* call. This duplicates part of what
+  // resolveAndValidatePath already guarantees, but static path-injection
+  // analysis needs the `startsWith` guard written directly in the same
+  // function as the sink it protects — a check performed inside an awaited
+  // async helper (or even a separate synchronous helper) isn't recognized as
+  // clearing the taint at the sink in the caller.
 
   async read(relativePath) {
     try {
       const filePath = await this._resolve(relativePath);
-      return await fs.readFile(filePath, 'utf8');
+      const normalizedBase = path.resolve(this.baseDir);
+      const normalizedPath = path.resolve(filePath);
+      if (
+        normalizedPath !== normalizedBase &&
+        !normalizedPath.startsWith(normalizedBase + path.sep)
+      ) {
+        const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
+        error.code = 'ENOENT';
+        throw error;
+      }
+      return await fs.readFile(normalizedPath, 'utf8');
     } catch (error) {
       if (error.code === 'ENOENT') {
         return null;
@@ -71,14 +70,30 @@ export class FilesystemProvider extends StorageProvider {
 
   async write(relativePath, data) {
     const filePath = await this._resolve(relativePath);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, data, 'utf8');
+    const normalizedBase = path.resolve(this.baseDir);
+    const normalizedPath = path.resolve(filePath);
+    if (
+      normalizedPath !== normalizedBase &&
+      !normalizedPath.startsWith(normalizedBase + path.sep)
+    ) {
+      throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
+    }
+    await fs.mkdir(path.dirname(normalizedPath), { recursive: true });
+    await fs.writeFile(normalizedPath, data, 'utf8');
   }
 
   async delete(relativePath) {
     const filePath = await this._resolve(relativePath);
+    const normalizedBase = path.resolve(this.baseDir);
+    const normalizedPath = path.resolve(filePath);
+    if (
+      normalizedPath !== normalizedBase &&
+      !normalizedPath.startsWith(normalizedBase + path.sep)
+    ) {
+      throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
+    }
     try {
-      await fs.unlink(filePath);
+      await fs.unlink(normalizedPath);
     } catch (error) {
       if (error.code !== 'ENOENT') {
         throw error;
@@ -89,7 +104,15 @@ export class FilesystemProvider extends StorageProvider {
   async exists(relativePath) {
     try {
       const filePath = await this._resolve(relativePath);
-      await fs.access(filePath);
+      const normalizedBase = path.resolve(this.baseDir);
+      const normalizedPath = path.resolve(filePath);
+      if (
+        normalizedPath !== normalizedBase &&
+        !normalizedPath.startsWith(normalizedBase + path.sep)
+      ) {
+        throw new Error(`Refusing to access path outside base directory: ${relativePath}`);
+      }
+      await fs.access(normalizedPath);
       return true;
     } catch {
       return false;
@@ -100,7 +123,17 @@ export class FilesystemProvider extends StorageProvider {
     let entries;
     try {
       const dirPath = await this._resolve(relativeDir);
-      entries = await fs.readdir(dirPath);
+      const normalizedBase = path.resolve(this.baseDir);
+      const normalizedPath = path.resolve(dirPath);
+      if (
+        normalizedPath !== normalizedBase &&
+        !normalizedPath.startsWith(normalizedBase + path.sep)
+      ) {
+        const error = new Error(`Refusing to access path outside base directory: ${relativeDir}`);
+        error.code = 'ENOENT';
+        throw error;
+      }
+      entries = await fs.readdir(normalizedPath);
     } catch (error) {
       if (error.code === 'ENOENT') {
         return [];
