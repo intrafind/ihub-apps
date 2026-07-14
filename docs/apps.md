@@ -876,6 +876,8 @@ The `upload` property controls file and media upload capabilities:
 | `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
 | `upload.cloudStorageUpload.enabled` | Boolean | `false`  | Enable the cloud storage file picker (requires cloud storage configured in platform.json)|
 
+When `upload.enabled` is `true`, chat users also see a **"Use general knowledge"** toggle in the message actions menu. It defaults to on (current behavior). Turning it off appends a directive to the system prompt telling the model to answer strictly from the uploaded document(s) instead of blending in general/world knowledge — useful when users want the assistant to stick closely to an uploaded document rather than supplementing it with outside information.
+
 #### Skill Settings
 
 The `skills` array specifies which skill identifiers are available for an app. Skills are reusable AI behaviors stored in the `contents/skills/` directory.

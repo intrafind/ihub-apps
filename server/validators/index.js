@@ -79,6 +79,7 @@ export const chatPostSchema = {
     thinkingThoughts: z.boolean().optional(),
     enabledTools: z.array(z.string()).optional(),
     websearchEnabled: z.boolean().optional(),
+    documentOnlyEnabled: z.boolean().optional(),
     imageAspectRatio: z.string().optional(),
     imageQuality: z.string().optional(),
     requestedSkill: z.string().optional(),

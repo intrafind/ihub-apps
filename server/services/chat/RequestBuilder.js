@@ -112,6 +112,41 @@ export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled
 }
 
 /**
+ * When an app has file upload enabled and the user has turned on "document
+ * only" mode for this turn, append a directive to the system prompt telling
+ * the model to answer strictly from the uploaded document(s) rather than its
+ * general/world knowledge. No-op when the app has no upload configured, or
+ * when there is no system message to amend.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} documentOnlyEnabled - User toggle: undefined/false = off
+ * @returns {boolean} true when a notice was appended
+ */
+export function appendDocumentOnlyNotice(llmMessages, app, documentOnlyEnabled) {
+  if (!app?.upload?.enabled) return false;
+  if (!documentOnlyEnabled) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  const notice =
+    'Do not use information from your general knowledge. Answer only using ' +
+    'information contained in the uploaded document(s) provided in this conversation. ' +
+    'If the document(s) do not contain the answer, say so explicitly instead of filling ' +
+    'the gap with outside knowledge.';
+
+  if (systemMessage.content.includes(notice)) return false;
+
+  systemMessage.content = systemMessage.content ? `${systemMessage.content}\n\n${notice}` : notice;
+  logger.info('Appended document-only notice to system prompt', {
+    component: 'RequestBuilder',
+    appId: app.id
+  });
+  return true;
+}
+
+/**
  * Filter models based on app requirements
  * @param {Array} models - All available models
  * @param {Object} app - App configuration
@@ -167,6 +202,7 @@ class RequestBuilder {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    documentOnlyEnabled,
     imageAspectRatio,
     imageQuality,
     requestedSkill,
@@ -403,6 +439,11 @@ class RequestBuilder {
       // that web search is unavailable removes the contradiction so the model
       // answers directly instead of attempting a phantom tool call.
       appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
+
+      // When the user has turned on "document only" mode, tell the model to
+      // stick to the uploaded document(s) instead of blending in general
+      // knowledge (see #1662).
+      appendDocumentOnlyNotice(llmMessages, app, documentOnlyEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
