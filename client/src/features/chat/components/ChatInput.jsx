@@ -68,6 +68,8 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  documentOnlyEnabled = false,
+  onDocumentOnlyEnabledChange = null,
   // Ephemeral (incognito-style) chat. When on, the conversation is never
   // persisted — it disappears on reload or when leaving the app. The toggle
   // renders below the input, aligned with the send button.
@@ -620,6 +622,8 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
+              documentOnlyEnabled={documentOnlyEnabled}
+              onDocumentOnlyEnabledChange={onDocumentOnlyEnabledChange}
               transcriptionAvailable={transcriptionAvailable}
               transcriptionEnabled={transcriptionEnabled}
               onTranscriptionEnabledChange={onTranscriptionEnabledChange}

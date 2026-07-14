@@ -475,3 +475,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## "Use General Knowledge" Toggle for Document Chats
+
+Users chatting with an uploaded document can now tell the assistant to stick strictly to the
+document instead of blending in the model's general knowledge — addressing feedback that answers
+often included outside information users didn't want.
+
+- For any app with file upload enabled, a new **"Use general knowledge"** toggle appears in the
+  message actions menu, next to the existing Web Search toggle.
+- It defaults to on (today's behavior is unchanged). Turning it off tells the model to answer only
+  from the uploaded document(s) and to say so explicitly if the document doesn't contain the
+  answer, rather than filling the gap with outside knowledge.
+- The choice is remembered per app, like the other chat toggles.
+- No admin action is required — the toggle appears automatically for apps that already have
+  uploads enabled.
