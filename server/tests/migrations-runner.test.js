@@ -14,7 +14,12 @@ import {
   removeById,
   transformWhere
 } from '../migrations/utils.js';
-import { scanMigrationFiles, loadHistory, computeChecksum } from '../migrations/runner.js';
+import {
+  scanMigrationFiles,
+  loadHistory,
+  computeChecksum,
+  reconcileRenamedMigrations
+} from '../migrations/runner.js';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -295,6 +300,77 @@ describe('Migration Runner', () => {
       const files = await scanMigrationFiles(tmpDir);
       expect(files).toHaveLength(1);
       expect(files[0].version).toBe('001');
+    });
+
+    it('should throw when two files declare the same version', async () => {
+      await fs.writeFile(
+        path.join(tmpDir, 'V018__add_cookie_settings.js'),
+        'export const version = "018";'
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'V018__add_setup_configured_flag.js'),
+        'export const version = "018";'
+      );
+
+      await expect(scanMigrationFiles(tmpDir)).rejects.toThrow(/Duplicate migration version V018/);
+    });
+
+    it('should not throw when all versions are unique', async () => {
+      await fs.writeFile(path.join(tmpDir, 'V001__first.js'), 'export const version = "001";');
+      await fs.writeFile(path.join(tmpDir, 'V002__second.js'), 'export const version = "002";');
+
+      await expect(scanMigrationFiles(tmpDir)).resolves.toHaveLength(2);
+    });
+  });
+
+  describe('reconcileRenamedMigrations', () => {
+    it('rewrites a history entry recorded under a renamed migration file', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '018',
+            description: 'add_setup_configured_flag',
+            file: 'V018__add_setup_configured_flag.js',
+            checksum: 'abc123',
+            status: 'success'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('075');
+      expect(history.migrations[0].file).toBe('V075__add_setup_configured_flag.js');
+    });
+
+    it('leaves the sibling that kept its original version number untouched', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '018',
+            description: 'add_cookie_settings',
+            file: 'V018__add_cookie_settings.js',
+            checksum: 'abc123',
+            status: 'success'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(false);
+      expect(history.migrations[0].version).toBe('018');
+      expect(history.migrations[0].file).toBe('V018__add_cookie_settings.js');
+    });
+
+    it('is a no-op on a fresh install with no matching history entries', () => {
+      const history = { schemaVersion: '1.0', migrations: [] };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations).toEqual([]);
     });
   });
 

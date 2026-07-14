@@ -477,6 +477,18 @@ a useful message.
   silently hanging or dying with no diagnostic trail.
 - No configuration or admin action required.
 
+## Audit Log Now Covers Tools, Marketplace, and UI Configuration Changes
+
+The admin audit log (Admin → Audit Log) now records explicit, before/after-aware entries for three
+route groups that previously relied only on the coarse URL-derived fallback: **Tools**,
+**Marketplace**, and **UI configuration**.
+
+- Tools: create, update, delete, enable/disable toggle, and script content edits.
+- Marketplace: registry create/update/delete/refresh, and item install/update/uninstall/detach.
+- UI configuration: asset upload/delete, configuration save, and configuration backup.
+- No admin action required — existing audit log filtering, retention, and CSV export apply to
+  these new entries automatically.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
