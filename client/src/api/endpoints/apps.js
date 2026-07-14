@@ -125,6 +125,27 @@ export const checkAppChatStatus = async (appId, chatId) => {
   );
 };
 
+/**
+ * Generate follow-up question suggestions for the most recent exchange.
+ * @param {string} appId - App ID
+ * @param {string} chatId - Chat session ID
+ * @param {Array<{role: string, content: string}>} messages - Recent conversation turns
+ * @param {Object} [options]
+ * @param {string} [options.language] - BCP 47 language code for the suggestions
+ */
+export const fetchFollowUpSuggestions = async (appId, chatId, messages, options = {}) => {
+  return handleApiResponse(
+    () =>
+      apiClient.post(`/apps/${appId}/chat/${chatId}/followup-suggestions`, {
+        messages,
+        ...options
+      }),
+    null, // No caching
+    null,
+    false // Don't deduplicate
+  );
+};
+
 // Print an HTML document via a hidden, same-origin iframe.
 //
 // We deliberately avoid `window.open()` here: inside sandboxed/embedded hosts

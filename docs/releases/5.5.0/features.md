@@ -475,3 +475,16 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Follow-Up Suggestion Chips After Assistant Responses
+
+Chat apps can now suggest 2-3 short follow-up questions as clickable chips below a completed
+assistant response, so users aren't left staring at a blank input box after an answer.
+
+- Clicking a chip sends its text as the next message, using the same model/style/settings as the
+  ongoing conversation.
+- New platform feature flag **Follow-Up Suggestions** (Admin → Platform → Features), enabled by
+  default, with a per-app override under an app's **Follow-Up Suggestions** settings section.
+- Suggestions are generated from the last exchange only and never block or fail the chat — if
+  generation fails or the feature is disabled, no chips are shown.
+- Not yet available in Compare Mode.

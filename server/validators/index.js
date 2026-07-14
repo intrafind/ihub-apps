@@ -61,6 +61,25 @@ export const chatConnectSchema = {
   })
 };
 
+export const followUpSuggestionsSchema = {
+  params: z.object({
+    appId: z.string().min(1),
+    chatId: z.string().min(1)
+  }),
+  body: z.object({
+    messages: z
+      .array(
+        z.object({
+          role: z.enum(['user', 'assistant']),
+          content: z.string()
+        })
+      )
+      .min(1)
+      .max(10),
+    language: z.string().optional()
+  })
+};
+
 export const chatPostSchema = {
   params: z.object({
     appId: z.string().min(1),

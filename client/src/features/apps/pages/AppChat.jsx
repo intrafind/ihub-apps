@@ -7,7 +7,7 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api';
+import { fetchAppDetails, fetchFollowUpSuggestions } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -507,6 +507,108 @@ function AppChat({ preloadedApp = null }) {
     // the chat settings. When on, nothing is persisted to browser storage.
     ephemeral
   });
+
+  // Follow-up suggestion chips: once the latest assistant message finishes
+  // streaming, fetch 2-3 contextual follow-up questions and attach them to
+  // that message. Fire-and-forget — a failure just means no chips render.
+  // Not supported in compare mode (multiple panels, no single "last message").
+  const followUpRequestedRef = useRef(new Set());
+  useEffect(() => {
+    if (compareModeActive) return;
+    if (!app || !featureFlags.isBothEnabled(app, 'followUpSuggestions', true)) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (
+      !lastMessage ||
+      lastMessage.role !== 'assistant' ||
+      lastMessage.loading ||
+      lastMessage.awaitingInput ||
+      lastMessage.error
+    ) {
+      return;
+    }
+    if (followUpRequestedRef.current.has(lastMessage.id)) return;
+    followUpRequestedRef.current.add(lastMessage.id);
+
+    const lastMessageIndex = messages.length - 1;
+    const prevUserMessage = [...messages.slice(0, lastMessageIndex)]
+      .reverse()
+      .find(m => m.role === 'user');
+
+    const contextMessages = [
+      ...(prevUserMessage
+        ? [{ role: 'user', content: prevUserMessage.rawContent || prevUserMessage.content }]
+        : []),
+      { role: 'assistant', content: lastMessage.content }
+    ].filter(m => typeof m.content === 'string' && m.content.trim().length > 0);
+
+    if (contextMessages.length === 0) return;
+
+    fetchFollowUpSuggestions(appId, chatId.current, contextMessages, {
+      language: currentLanguage
+    })
+      .then(response => {
+        if (Array.isArray(response?.suggestions) && response.suggestions.length > 0) {
+          updateAssistantMessage(lastMessage.id, lastMessage.content, false, {
+            followUpSuggestions: response.suggestions
+          });
+        }
+      })
+      .catch(err => console.warn('Failed to fetch follow-up suggestions:', err));
+  }, [
+    messages,
+    compareModeActive,
+    app,
+    featureFlags,
+    appId,
+    currentLanguage,
+    updateAssistantMessage
+  ]);
+
+  const handleFollowUpSelect = useCallback(
+    suggestion => {
+      if (!suggestion || processing) return;
+      sendChatMessage({
+        displayMessage: { content: suggestion },
+        apiMessage: { content: suggestion, promptTemplate: app?.prompt || null, variables: {} },
+        params: {
+          modelId: selectedModel,
+          style: selectedStyle,
+          temperature,
+          outputFormat: selectedOutputFormat,
+          language: currentLanguage,
+          ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+          ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+          ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+          ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+            ? { enabledTools: effectiveEnabledTools }
+            : {}),
+          ...(app?.websearch?.enabled ? { websearchEnabled } : {})
+        },
+        sendChatHistory,
+        messageMetadata: {
+          customResponseRenderer: app?.customResponseRenderer,
+          outputFormat: selectedOutputFormat
+        }
+      });
+    },
+    [
+      processing,
+      sendChatMessage,
+      app,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage,
+      thinkingEnabled,
+      thinkingBudget,
+      thinkingThoughts,
+      effectiveEnabledTools,
+      websearchEnabled,
+      sendChatHistory
+    ]
+  );
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
@@ -2178,6 +2280,7 @@ function AppChat({ preloadedApp = null }) {
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
                         onDocumentAction={handleDocumentAction}
+                        onFollowUpSelect={handleFollowUpSelect}
                       />
                     </div>
                   ) : (
@@ -2219,6 +2322,7 @@ function AppChat({ preloadedApp = null }) {
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
                         onDocumentAction={handleDocumentAction}
+                        onFollowUpSelect={handleFollowUpSelect}
                       />
                     </div>
                   ) : (
@@ -2259,6 +2363,7 @@ function AppChat({ preloadedApp = null }) {
                     onClarificationSubmit={handleClarificationSubmit}
                     onClarificationSkip={handleClarificationSkip}
                     onDocumentAction={handleDocumentAction}
+                    onFollowUpSelect={handleFollowUpSelect}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
@@ -2289,6 +2394,7 @@ function AppChat({ preloadedApp = null }) {
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
                   onDocumentAction={handleDocumentAction}
+                  onFollowUpSelect={handleFollowUpSelect}
                 />
 
                 {renderChatInput()}

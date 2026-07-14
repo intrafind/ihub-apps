@@ -1,6 +1,6 @@
 import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
-import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
+import { getErrorDetails, logInteraction, trackSession, simpleCompletion } from '../../utils.js';
 import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
@@ -10,10 +10,16 @@ import {
   chatAuthRequired,
   modelAccessRequired
 } from '../../middleware/authRequired.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 
 import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
-import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
+import {
+  chatTestSchema,
+  chatPostSchema,
+  chatConnectSchema,
+  followUpSuggestionsSchema
+} from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import {
@@ -1090,4 +1096,175 @@ export default function registerSessionRoutes(
     }
     return res.status(200).json({ active: false });
   });
+
+  /**
+   * @swagger
+   * /apps/{appId}/chat/{chatId}/followup-suggestions:
+   *   post:
+   *     summary: Generate follow-up question suggestions
+   *     description: |
+   *       Generates 2-3 short contextual follow-up questions based on the most recent
+   *       exchange, for display as clickable chips below a completed assistant response.
+   *       Returns an empty list (rather than an error) when the feature is disabled or
+   *       generation fails, since this is a non-critical UX enhancement.
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: chatId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The chat session ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - messages
+   *             properties:
+   *               messages:
+   *                 type: array
+   *                 description: Recent conversation turns (user/assistant), most relevant last
+   *                 items:
+   *                   type: object
+   *                   properties:
+   *                     role:
+   *                       type: string
+   *                       enum: [user, assistant]
+   *                     content:
+   *                       type: string
+   *               language:
+   *                 type: string
+   *                 description: BCP 47 language code for the generated suggestions
+   *     responses:
+   *       200:
+   *         description: Generated suggestions (possibly empty)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 suggestions:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: App not found
+   */
+  app.post(
+    buildServerPath('/api/apps/:appId/chat/:chatId/followup-suggestions'),
+    chatAuthRequired,
+    validate(followUpSuggestionsSchema),
+    async (req, res) => {
+      try {
+        const { appId } = req.params;
+        const { messages, language } = req.body;
+
+        const { data: apps = [] } = configCache.getApps();
+        const app = apps.find(a => a.id === appId);
+        if (!app) {
+          return sendNotFound(res, 'App');
+        }
+
+        const platformEnabled = isFeatureEnabled('followUpSuggestions', configCache.getFeatures());
+        const appFeatureConfig = app.features?.followUpSuggestions;
+        const appEnabled = appFeatureConfig?.enabled !== false;
+        if (!platformEnabled || !appEnabled) {
+          return res.json({ suggestions: [] });
+        }
+
+        const { data: models = [] } = configCache.getModels();
+        if (!models || models.length === 0) {
+          return res.json({ suggestions: [] });
+        }
+        const defaultModelId = models.find(m => m.default)?.id;
+        const configuredModelId = appFeatureConfig?.model;
+        const modelId =
+          (configuredModelId && models.some(m => m.id === configuredModelId)
+            ? configuredModelId
+            : null) ||
+          defaultModelId ||
+          models[0].id;
+
+        const clientLanguage =
+          language ||
+          req.headers['accept-language']?.split(',')[0] ||
+          configCache.getPlatform()?.defaultLanguage ||
+          'en';
+
+        const systemPrompt =
+          `Based on the end of this conversation, suggest 2-3 short follow-up questions the ` +
+          `user might naturally ask next. Reply in language "${clientLanguage}". ` +
+          `Respond with ONLY a JSON array of strings, no other text, no markdown, no numbering. ` +
+          `Each string must be a complete question under 60 characters. Example: ` +
+          `["Can you give an example?", "What are the tradeoffs?"]`;
+
+        const result = await simpleCompletion(
+          [{ role: 'system', content: systemPrompt }, ...messages.slice(-4)],
+          { modelId, temperature: 0.7, maxTokens: 300 }
+        );
+
+        return res.json({ suggestions: parseFollowUpSuggestions(result.content) });
+      } catch (error) {
+        // Non-critical UX enhancement — never fail the chat over this.
+        logger.warn('Error generating follow-up suggestions', {
+          component: 'sessionRoutes',
+          error: error.message
+        });
+        return res.json({ suggestions: [] });
+      }
+    }
+  );
+}
+
+/**
+ * Parse follow-up suggestions out of an LLM completion that was asked to return
+ * a bare JSON array of strings. Tolerates code fences, leading/trailing prose,
+ * and models that ignore the "no numbering" instruction, since not every
+ * provider/model combination honors free-text formatting requests reliably.
+ * @param {string} content - Raw completion text
+ * @returns {string[]} Up to 3 non-empty suggestion strings
+ */
+function parseFollowUpSuggestions(content) {
+  if (!content || typeof content !== 'string') return [];
+
+  const arrayMatch = content.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    try {
+      const parsed = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter(s => typeof s === 'string' && s.trim().length > 0)
+          .map(s => s.trim())
+          .slice(0, 3);
+      }
+    } catch {
+      // Fall through to line-based parsing below
+    }
+  }
+
+  return content
+    .split('\n')
+    .map(line =>
+      line
+        .replace(/^[\s"'\-*\d.)]+/, '')
+        .replace(/["',]+$/, '')
+        .trim()
+    )
+    .filter(line => line.length > 0)
+    .slice(0, 3);
 }

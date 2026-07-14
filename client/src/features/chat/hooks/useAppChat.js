@@ -323,7 +323,7 @@ function useAppChat({
 
             updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
             if (onMessageComplete) {
-              onMessageComplete(fullContent, lastUserMessageRef.current);
+              onMessageComplete(fullContent, lastUserMessageRef.current, lastMessageIdRef.current);
             }
           }
           setProcessing(false);

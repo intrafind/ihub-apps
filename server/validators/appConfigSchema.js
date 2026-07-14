@@ -267,6 +267,13 @@ const featuresSchema = z
         // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
         enabled: z.boolean().optional().default(true)
       })
+      .optional(),
+    followUpSuggestions: z
+      .object({
+        // Opt-out at the app level, same convention as compareMode above.
+        enabled: z.boolean().optional().default(true),
+        model: z.string().optional()
+      })
       .optional()
   })
   .passthrough(); // Allow additional feature flags
