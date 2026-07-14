@@ -475,3 +475,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Citation Badges Now Show a Preview and Are Screen-Reader Friendly
+
+Inline citation badges (the small numbered pills that link an answer back to a source passage or
+document) now give a preview of what they point to, instead of only a plain "Source N" tooltip.
+
+- Hovering or keyboard-focusing a citation badge shows a short excerpt of the cited passage (or the
+  document's title for whole-document citations) in a small popup.
+- The same excerpt is exposed as the badge's accessible name, so screen reader users hear what a
+  citation refers to instead of just its number.
+- The corresponding entry in the source panel below the answer is briefly highlighted while hovering
+  or focusing a badge, without jumping the scroll position — clicking a badge still scrolls to it as
+  before.
+- Citation badges now show a visible focus ring when navigated to with the keyboard.
+- No admin action is required.

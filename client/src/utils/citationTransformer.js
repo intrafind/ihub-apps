@@ -7,33 +7,140 @@
  * - type="r" -> result item/document citation (scrolls to document tile in CitationPanel)
  */
 
+const PREVIEW_MAX_LENGTH = 160;
+
+function escapeHtmlAttribute(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function truncatePreview(text) {
+  if (!text || typeof text !== 'string') return '';
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > PREVIEW_MAX_LENGTH ? `${clean.slice(0, PREVIEW_MAX_LENGTH)}…` : clean;
+}
+
+/**
+ * Build lookup maps from a message's citations object so badges can carry a
+ * short excerpt for the hover/focus preview.
+ * @param {Object} [citations] - { references: [], resultItems: [] }
+ */
+function buildCitationPreviewMaps(citations) {
+  const sourceMap = new Map();
+  const resultMap = new Map();
+
+  const references = citations?.references || [];
+  for (const ref of references) {
+    if (ref?.index != null && ref.content) {
+      sourceMap.set(Number(ref.index), ref.content);
+    }
+  }
+
+  const resultItems = citations?.resultItems || [];
+  resultItems.forEach((item, i) => {
+    const title = item?.title || item?.additional_document_metadata?.title;
+    const text = Array.isArray(title) ? title[0] : title;
+    if (text) resultMap.set(i + 1, text);
+  });
+
+  return { sourceMap, resultMap };
+}
+
+function renderCitationBadge(type, num, rawPreview) {
+  const label = type === 's' ? 'Source' : 'Document';
+  const preview = truncatePreview(rawPreview);
+  const ariaLabel = preview ? `${label} ${num}: ${preview}` : `${label} ${num}`;
+  const cssClass = type === 's' ? 'citation-source' : 'citation-result';
+  const previewAttr = preview ? ` data-citation-preview="${escapeHtmlAttribute(preview)}"` : '';
+
+  return (
+    `<span class="citation-badge ${cssClass}" data-citation-type="${type}" data-citation-num="${num}" ` +
+    `role="button" tabindex="0" aria-label="${escapeHtmlAttribute(ariaLabel)}"${previewAttr}>${num}</span>`
+  );
+}
+
 /**
  * Transform cite tags in HTML string into interactive citation badges.
  * @param {string} html - Rendered HTML string
+ * @param {Object} [citations] - Message citations ({ references: [], resultItems: [] })
+ *   used to embed a short excerpt on each badge for the hover/focus preview.
  * @returns {string} Transformed HTML with interactive citation badges
  */
-export function transformCitations(html) {
+export function transformCitations(html, citations) {
   if (!html || typeof html !== 'string') return html;
 
+  const { sourceMap, resultMap } = buildCitationPreviewMaps(citations);
+
   // Replace <cite type="s">N</cite> with source citation badges
-  let result = html.replace(
-    /<cite\s+type="s"\s*>(\d+)<\/cite>/gi,
-    (_, num) =>
-      `<span class="citation-badge citation-source" data-citation-type="s" data-citation-num="${num}" role="button" tabindex="0" title="Source ${num}">${num}</span>`
+  let result = html.replace(/<cite\s+type="s"\s*>(\d+)<\/cite>/gi, (_, num) =>
+    renderCitationBadge('s', num, sourceMap.get(Number(num)))
   );
 
   // Replace <cite type="r">N</cite> with result item citation badges
-  result = result.replace(
-    /<cite\s+type="r"\s*>(\d+)<\/cite>/gi,
-    (_, num) =>
-      `<span class="citation-badge citation-result" data-citation-type="r" data-citation-num="${num}" role="button" tabindex="0" title="Document ${num}">${num}</span>`
+  result = result.replace(/<cite\s+type="r"\s*>(\d+)<\/cite>/gi, (_, num) =>
+    renderCitationBadge('r', num, resultMap.get(Number(num)))
   );
 
   return result;
 }
 
+let citationTooltipEl = null;
+
+function getCitationTooltipElement() {
+  if (citationTooltipEl && document.body.contains(citationTooltipEl)) return citationTooltipEl;
+  citationTooltipEl = document.createElement('div');
+  citationTooltipEl.className = 'citation-tooltip';
+  citationTooltipEl.setAttribute('role', 'tooltip');
+  document.body.appendChild(citationTooltipEl);
+  return citationTooltipEl;
+}
+
+function showCitationTooltip(badge, text) {
+  if (!text) return;
+  const tooltip = getCitationTooltipElement();
+  tooltip.textContent = text;
+  tooltip.style.visibility = 'hidden';
+  tooltip.style.display = 'block';
+
+  const badgeRect = badge.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+
+  let top = badgeRect.top - tooltipRect.height - 8;
+  if (top < 8) top = badgeRect.bottom + 8;
+
+  let left = badgeRect.left + badgeRect.width / 2 - tooltipRect.width / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tooltipRect.width - 8));
+
+  tooltip.style.top = `${top + window.scrollY}px`;
+  tooltip.style.left = `${left + window.scrollX}px`;
+  tooltip.style.visibility = 'visible';
+}
+
+function hideCitationTooltip() {
+  if (citationTooltipEl) {
+    citationTooltipEl.style.display = 'none';
+  }
+}
+
 /**
- * Attach click handlers to citation badges within a container element.
+ * Briefly highlight a citation's target in the CitationPanel without scrolling
+ * to it — used for hover/focus preview so it doesn't yank the viewport around.
+ * A no-op when the target isn't currently rendered (e.g. a passage whose
+ * parent document is collapsed).
+ */
+function setCitationPeek(type, num, active) {
+  const el = document.getElementById(`citation-${type}-${num}`);
+  if (!el) return;
+  el.classList.toggle('ring-2', active);
+  el.classList.toggle('ring-indigo-400', active);
+}
+
+/**
+ * Attach click and hover/focus preview handlers to citation badges within a
+ * container element.
  * @param {HTMLElement} container - The DOM element containing citation badges
  * @param {Function} onCitationClick - Callback: (type, num) => void
  */
@@ -43,9 +150,10 @@ export function attachCitationHandlers(container, onCitationClick) {
   const badges = container.querySelectorAll('.citation-badge');
   badges.forEach(badge => {
     const type = badge.dataset.citationType;
-    const num = badge.dataset.citationNum;
+    const num = parseInt(badge.dataset.citationNum, 10);
+    const preview = badge.dataset.citationPreview;
 
-    const handler = () => onCitationClick(type, parseInt(num, 10));
+    const handler = () => onCitationClick(type, num);
     badge.addEventListener('click', handler);
     badge.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -53,6 +161,20 @@ export function attachCitationHandlers(container, onCitationClick) {
         handler();
       }
     });
+
+    const showPeek = () => {
+      showCitationTooltip(badge, preview);
+      setCitationPeek(type, num, true);
+    };
+    const hidePeek = () => {
+      hideCitationTooltip();
+      setCitationPeek(type, num, false);
+    };
+
+    badge.addEventListener('mouseenter', showPeek);
+    badge.addEventListener('mouseleave', hidePeek);
+    badge.addEventListener('focus', showPeek);
+    badge.addEventListener('blur', hidePeek);
   });
 }
 
