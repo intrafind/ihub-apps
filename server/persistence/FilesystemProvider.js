@@ -9,6 +9,21 @@ import logger from '../utils/logger.js';
  * on disk. Behavior must stay byte-for-byte identical to what configLoader.js
  * did before the StorageProvider seam existed, since this is what every
  * existing deployment (no DATABASE_URL set) continues to use.
+ *
+ * Every method below resolves `this.baseDir` + the caller-supplied relative
+ * path with `path.resolve()` directly, inline, and immediately verifies the
+ * result is still contained in `this.baseDir` before doing anything with the
+ * filesystem — matching CodeQL's own documented fix for path-injection
+ * (resolve, then verify with startsWith, right before the sink). A guard
+ * performed inside an awaited helper isn't recognized as clearing the taint
+ * at the sink in the caller, so this can't be centralized into one method.
+ *
+ * `resolveAndValidatePath` (pathSecurity.js, used throughout the rest of the
+ * codebase) is layered on top as defense in depth: it additionally follows
+ * symlinks via `fs.realpath` before its own containment check, catching a
+ * symlink planted inside `baseDir` that points back out. It can only make
+ * acceptance stricter here, never looser — the inline lexical check above
+ * still has to pass regardless.
  */
 export class FilesystemProvider extends StorageProvider {
   /**
@@ -19,38 +34,27 @@ export class FilesystemProvider extends StorageProvider {
     this.baseDir = baseDir;
   }
 
-  async _resolve(relativePath) {
+  /**
+   * Symlink-aware defense-in-depth check, layered on top of the inline
+   * lexical guard every call site performs on its own. Returns nothing
+   * useful to callers (deliberately) — callers must keep using their own
+   * locally-resolved, locally-verified path for the actual fs.* call.
+   */
+  async _assertNoSymlinkEscape(relativePath) {
     const resolved = await resolveAndValidatePath(relativePath, this.baseDir);
     if (!resolved) {
       logger.warn(`Path traversal blocked in FilesystemProvider: ${relativePath}`);
-      // Fail closed instead of falling back to some other path derived from
-      // the untrusted input (e.g. joining baseDir with its basename) — that
-      // fallback previously re-introduced the untrusted value into a new
-      // path expression, which static path-injection analysis (correctly)
-      // flags as unsafe, regardless of how harmless it is in practice.
-      // Treated as ENOENT by callers: a blocked path is not meaningfully
-      // different from "not found" for this abstraction.
       const error = new Error(`Refusing to access path outside base directory: ${relativePath}`);
       error.code = 'ENOENT';
       throw error;
     }
-    return resolved;
   }
-
-  // Every method below re-verifies (synchronously, inline, no helper call)
-  // that the path returned by _resolve() is contained in baseDir immediately
-  // before its own fs.* call. This duplicates part of what
-  // resolveAndValidatePath already guarantees, but static path-injection
-  // analysis needs the `startsWith` guard written directly in the same
-  // function as the sink it protects — a check performed inside an awaited
-  // async helper (or even a separate synchronous helper) isn't recognized as
-  // clearing the taint at the sink in the caller.
 
   async read(relativePath) {
     try {
-      const filePath = await this._resolve(relativePath);
+      await this._assertNoSymlinkEscape(relativePath);
       const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(filePath);
+      const normalizedPath = path.resolve(normalizedBase, relativePath);
       if (
         normalizedPath !== normalizedBase &&
         !normalizedPath.startsWith(normalizedBase + path.sep)
@@ -69,9 +73,9 @@ export class FilesystemProvider extends StorageProvider {
   }
 
   async write(relativePath, data) {
-    const filePath = await this._resolve(relativePath);
+    await this._assertNoSymlinkEscape(relativePath);
     const normalizedBase = path.resolve(this.baseDir);
-    const normalizedPath = path.resolve(filePath);
+    const normalizedPath = path.resolve(normalizedBase, relativePath);
     if (
       normalizedPath !== normalizedBase &&
       !normalizedPath.startsWith(normalizedBase + path.sep)
@@ -83,9 +87,9 @@ export class FilesystemProvider extends StorageProvider {
   }
 
   async delete(relativePath) {
-    const filePath = await this._resolve(relativePath);
+    await this._assertNoSymlinkEscape(relativePath);
     const normalizedBase = path.resolve(this.baseDir);
-    const normalizedPath = path.resolve(filePath);
+    const normalizedPath = path.resolve(normalizedBase, relativePath);
     if (
       normalizedPath !== normalizedBase &&
       !normalizedPath.startsWith(normalizedBase + path.sep)
@@ -103,9 +107,9 @@ export class FilesystemProvider extends StorageProvider {
 
   async exists(relativePath) {
     try {
-      const filePath = await this._resolve(relativePath);
+      await this._assertNoSymlinkEscape(relativePath);
       const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(filePath);
+      const normalizedPath = path.resolve(normalizedBase, relativePath);
       if (
         normalizedPath !== normalizedBase &&
         !normalizedPath.startsWith(normalizedBase + path.sep)
@@ -122,9 +126,9 @@ export class FilesystemProvider extends StorageProvider {
   async list(relativeDir, { pattern } = {}) {
     let entries;
     try {
-      const dirPath = await this._resolve(relativeDir);
+      await this._assertNoSymlinkEscape(relativeDir);
       const normalizedBase = path.resolve(this.baseDir);
-      const normalizedPath = path.resolve(dirPath);
+      const normalizedPath = path.resolve(normalizedBase, relativeDir);
       if (
         normalizedPath !== normalizedBase &&
         !normalizedPath.startsWith(normalizedBase + path.sep)
