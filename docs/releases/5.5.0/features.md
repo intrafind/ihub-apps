@@ -461,6 +461,21 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Resumable Chat Streams Survive Brief Network Drops
+
+A brief network hiccup while an assistant response is streaming no longer means losing whatever
+was already generated. The chat stream now briefly buffers what was sent so a client that
+reconnects quickly (page refresh, tab regains focus, WiFi blip) can catch up on exactly what it
+missed instead of the connection just going silent.
+
+- Every chat event is buffered server-side for a few minutes after it's sent; on reconnect, the
+  client replays only what it missed and then resumes receiving live events.
+- Controlled by the **Resumable Streams** feature flag (enabled by default); disabling it restores
+  the previous behavior exactly.
+- Scope: applies to standard chat streaming. Workflow-driven chats keep using their existing,
+  separate reconnect/replay mechanism unchanged.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

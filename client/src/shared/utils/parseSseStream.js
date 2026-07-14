@@ -9,7 +9,7 @@
  * - Handles multi-line data fields (joined with \n)
  *
  * @param {ReadableStream} body - Response body stream
- * @param {Function} onEvent - Callback: (eventName: string, data: object|{raw: string}) => void
+ * @param {Function} onEvent - Callback: (eventName: string, data: object|{raw: string}, id?: string) => void
  * @param {AbortSignal} [signal] - Optional AbortSignal to cancel parsing
  */
 export async function parseSseStream(body, onEvent, signal) {
@@ -17,11 +17,13 @@ export async function parseSseStream(body, onEvent, signal) {
   const decoder = new TextDecoder();
   let buffer = '';
   let currentEvent = '';
+  let currentId;
   const dataLines = [];
 
   const flushEvent = () => {
     if (dataLines.length === 0) {
       currentEvent = '';
+      currentId = undefined;
       return;
     }
     const raw = dataLines.join('\n');
@@ -41,10 +43,11 @@ export async function parseSseStream(body, onEvent, signal) {
         : '');
 
     if (name) {
-      onEvent(name, typeof payload === 'object' && payload !== null ? payload : { raw });
+      onEvent(name, typeof payload === 'object' && payload !== null ? payload : { raw }, currentId);
     }
 
     currentEvent = '';
+    currentId = undefined;
   };
 
   const processLine = line => {
@@ -70,11 +73,18 @@ export async function parseSseStream(body, onEvent, signal) {
       dataLines.push(value);
     } else if (field === 'event') {
       currentEvent = value;
+    } else if (field === 'id') {
+      currentId = value;
     }
-    // id: and retry: fields are intentionally ignored here
+    // retry: field is intentionally ignored here
   };
 
   let completedCleanly = false;
+  // A reader.read() failure (network drop) is reported distinctly from a
+  // genuine parsing bug: it's rethrown to the caller *after* cleanup runs,
+  // without parseSseStream emitting its own 'error' event, so useEventSource
+  // can decide to silently reconnect-and-resume instead of surfacing it.
+  let readFailure = null;
   try {
     while (true) {
       if (signal?.aborted) {
@@ -88,12 +98,9 @@ export async function parseSseStream(body, onEvent, signal) {
       } catch (err) {
         if (err.name === 'AbortError') break;
 
-        // Handle stream reading errors gracefully
         console.error('Error reading SSE stream:', err);
-        onEvent('error', {
-          message: `Stream reading error: ${err.message}. The connection may have been interrupted.`
-        });
-        throw err;
+        readFailure = err;
+        break;
       }
 
       if (done) {
@@ -131,7 +138,7 @@ export async function parseSseStream(body, onEvent, signal) {
         }
       }
     }
-    completedCleanly = true;
+    if (!readFailure) completedCleanly = true;
   } catch (err) {
     // Major parsing error - inform the user
     console.error('Fatal SSE parsing error:', err);
@@ -139,10 +146,10 @@ export async function parseSseStream(body, onEvent, signal) {
       message: `Error parsing server events: ${err.message}. The server may have sent malformed data.`
     });
   } finally {
-    // If we exited via an exception (e.g. consumer's onEvent threw), the
-    // underlying body stream is still flowing — releaseLock alone won't
-    // close the socket. Cancel the reader so the browser releases the
-    // HTTP/1.1 connection slot.
+    // If we exited via an exception (e.g. consumer's onEvent threw) or a
+    // read failure, the underlying body stream is still flowing — releaseLock
+    // alone won't close the socket. Cancel the reader so the browser releases
+    // the HTTP/1.1 connection slot.
     if (!completedCleanly) {
       try {
         await reader.cancel();
@@ -156,4 +163,6 @@ export async function parseSseStream(body, onEvent, signal) {
       // already released (cancel() releases the lock on some implementations)
     }
   }
+
+  if (readFailure) throw readFailure;
 }
