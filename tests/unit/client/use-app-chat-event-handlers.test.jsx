@@ -131,7 +131,9 @@ test("'done' completes the message (no setSearchStatus ReferenceError)", async (
   expect(done.content).toBe('final answer');
   expect(done.loading).toBe(false);
   expect(result.current.processing).toBe(false);
-  expect(onMessageComplete).toHaveBeenCalledWith('final answer', 'hello');
+  // Third arg is the completed message's id, so callers (e.g. follow-up
+  // suggestion generation) can attach results to the right message.
+  expect(onMessageComplete).toHaveBeenCalledWith('final answer', 'hello', assistant.id);
 });
 
 test("a 'response.message.id' then 'done' sequence keeps both effects", async () => {
