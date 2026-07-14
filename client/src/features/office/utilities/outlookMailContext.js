@@ -92,6 +92,26 @@ function getBodyTextAsync(item) {
   });
 }
 
+// Selection-not-supported (older Mailbox requirement sets, compose mode
+// quirks, or simply nothing highlighted) is a soft fallback to the full
+// body, not an error — this never rejects.
+function getSelectedDataAsync(item) {
+  return new Promise(resolve => {
+    if (!item || typeof item.getSelectedDataAsync !== 'function') {
+      resolve(null);
+      return;
+    }
+    item.getSelectedDataAsync(Office.CoercionType.Text, result => {
+      if (result.status === Office.AsyncResultStatus.Failed) {
+        resolve(null);
+        return;
+      }
+      const text = result.value?.data;
+      resolve(typeof text === 'string' && text.trim() ? text : null);
+    });
+  });
+}
+
 // Exported so the review banner can recognize this specific failure and
 // collapse it into a single explanatory line instead of repeating it once
 // per attachment (see issue #1451).
@@ -229,6 +249,11 @@ async function readMailSnapshot(item, itemId) {
     bodyText = await getBodyTextAsync(item);
   } catch {}
 
+  let selectedText = null;
+  try {
+    selectedText = await getSelectedDataAsync(item);
+  } catch {}
+
   let subject = null;
   try {
     subject = await getSubjectAsync(item);
@@ -280,10 +305,31 @@ async function readMailSnapshot(item, itemId) {
       subject,
       itemId,
       bodyText,
+      selectedText,
       attachments
     },
     aborted
   };
+}
+
+/**
+ * Re-read just the current item's text selection, bypassing the cached
+ * snapshot. Office.js has no "selection changed" event for the reading pane
+ * or compose body, so a snapshot taken on mount goes stale the moment the
+ * user changes their highlight without switching emails. Called right
+ * before send so the acceptance criterion "selection is refreshed when the
+ * user re-runs" holds even then. Resolves `null` (never throws) when
+ * there's no mail item, no selection API, or nothing selected.
+ */
+export async function fetchCurrentSelectedText() {
+  return withMailboxLock(async () => {
+    if (!isOutlookMailItemAvailable()) return null;
+    try {
+      return await getSelectedDataAsync(Office.context.mailbox.item);
+    } catch {
+      return null;
+    }
+  });
 }
 
 function getSelectedItemsAsync() {

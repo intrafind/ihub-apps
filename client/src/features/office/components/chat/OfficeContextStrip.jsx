@@ -35,6 +35,8 @@ function OfficeContextStrip({
   onRestoreAttachments,
   includeBody,
   onToggleBody,
+  useSelection,
+  onToggleSelection,
   // Pinned-emails toolbar
   pinned,
   onUnpin,
@@ -58,6 +60,8 @@ function OfficeContextStrip({
   const pinnedList = Array.isArray(pinned) ? pinned : [];
 
   const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
+  const hasSelection = Boolean(ctx?.selectedText && ctx.selectedText.trim().length > 0);
+  const usingSelection = hasSelection && useSelection !== false;
   const hasAttachments = attachments.length > 0;
   // Pinned emails and pin controls are mail-only — they don't apply to a
   // single calendar item, so we suppress them when the user is on an
@@ -149,7 +153,7 @@ function OfficeContextStrip({
 
   // Nothing to surface: no email context, nothing pinned, no pin buttons.
   // Keep the strip out of the DOM entirely so the chat input flushes up.
-  if (!hasBody && !hasAttachments && !hasPinned && !hasPinControls) {
+  if (!hasBody && !hasSelection && !hasAttachments && !hasPinned && !hasPinControls) {
     return null;
   }
 
@@ -162,7 +166,9 @@ function OfficeContextStrip({
   // Build the always-visible summary line — same content in collapsed and
   // expanded states so users always see what's queued at a glance.
   const summaryParts = [];
-  if (hasBody) {
+  if (usingSelection) {
+    summaryParts.push('Using selection');
+  } else if (hasBody) {
     summaryParts.push(includeBody !== false ? 'Email body' : 'Body excluded');
   }
   if (hasAttachments) {
@@ -183,7 +189,7 @@ function OfficeContextStrip({
   // Hide the header subject when the current email is empty (e.g. only
   // pinned items, or no live context at all) so the row doesn't read
   // "Current email" with no real backing.
-  const headerTitle = hasBody || hasAttachments ? subject : 'Email context';
+  const headerTitle = hasBody || hasSelection || hasAttachments ? subject : 'Email context';
 
   return (
     <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -233,7 +239,7 @@ function OfficeContextStrip({
 
       {expanded && (
         <div className="border-t border-slate-100">
-          {(hasBody || hasAttachments) && (
+          {(hasBody || hasSelection || hasAttachments) && (
             <OfficeMailContextBanner
               ctx={ctx}
               loading={false}
@@ -243,6 +249,8 @@ function OfficeContextStrip({
               onRestoreAttachments={onRestoreAttachments}
               includeBody={includeBody}
               onToggleBody={onToggleBody}
+              useSelection={useSelection}
+              onToggleSelection={onToggleSelection}
               embedded
             />
           )}

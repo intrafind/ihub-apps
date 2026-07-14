@@ -461,6 +461,20 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Outlook Add-in: Use Highlighted Text Instead of the Whole Email
+
+Highlighting text in the reading pane before opening the taskpane now sends just that selection to
+the model, instead of always including the full email body — useful for trimming long threads down
+to the one paragraph that matters.
+
+- The context banner shows "Using selected text (N chars)" with a one-click "Use full email
+  instead" toggle, and the reverse toggle to switch back to the selection.
+- With no selection, behavior is unchanged: the full email body is used as before.
+- The selection is re-read immediately before sending, so a highlight made after the taskpane
+  loaded is never sent stale.
+- Applies to the current email only — pinned/multi-selected emails and meeting (calendar) items
+  still use their full body.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

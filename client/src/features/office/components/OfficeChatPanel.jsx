@@ -108,13 +108,17 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // separately by ChatInput).
   const emailContextText = useMemo(() => {
     const currentBodyText = mailSnapshot.includeBody ? mailSnapshot.ctx?.bodyText || '' : '';
+    const currentSelectedText = mailSnapshot.useSelection
+      ? mailSnapshot.ctx?.selectedText || ''
+      : '';
     return combineUserTextWithEmailContext({
       userText: '',
       currentBodyText,
+      currentSelectedText,
       currentItemId: mailSnapshot.ctx?.itemId,
       pinned: pinnedEmails
     });
-  }, [mailSnapshot.includeBody, mailSnapshot.ctx, pinnedEmails]);
+  }, [mailSnapshot.includeBody, mailSnapshot.useSelection, mailSnapshot.ctx, pinnedEmails]);
 
   // Attachment text for the live token estimate. The adapter extracts document
   // attachments (current email + pinned emails) into fileData at send time and
@@ -330,7 +334,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   }, []);
 
   const submitMessage = useCallback(
-    (messageText, overrides = {}) => {
+    async (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
       if (!text && !selectedApp?.allowEmptyContent) return;
 
@@ -353,13 +357,14 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       params.pinnedEmails = pinnedEmails;
 
       // Mail context snapshot — the user can drop individual attachments
-      // and toggle the body off via OfficeContextStrip / its embedded
-      // OfficeMailContextBanner before send. Forwarding the edited
+      // and toggle the body/selection off via OfficeContextStrip / its
+      // embedded OfficeMailContextBanner before send. Forwarding the edited
       // snapshot here avoids a second host.readMessageContext() round-trip
-      // inside the adapter and ensures the user's removals (and body
-      // opt-out) are honored. Null falls back to the adapter's own fetch
-      // (extension side panel, no-context routes).
-      const snapshotOverride = mailSnapshot.buildSnapshotOverride();
+      // inside the adapter and ensures the user's removals (and body/
+      // selection opt-out) are honored. Null falls back to the adapter's
+      // own fetch (extension side panel, no-context routes). Async because
+      // it re-reads the current text selection fresh right before send.
+      const snapshotOverride = await mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
       // Resend can pass a `selectedFile` override to bypass async state updates;
@@ -634,6 +639,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               onRestoreAttachments={mailSnapshot.restoreAttachments}
               includeBody={mailSnapshot.includeBody}
               onToggleBody={mailSnapshot.setIncludeBody}
+              useSelection={mailSnapshot.useSelection}
+              onToggleSelection={mailSnapshot.setUseSelection}
               pinned={pinnedEmails}
               onUnpin={handleUnpin}
               onClearPinned={handleClearPinned}
