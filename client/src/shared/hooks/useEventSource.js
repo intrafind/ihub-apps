@@ -18,6 +18,11 @@ import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/off
  * @param {Function} options.onEvent - Called for each SSE event: ({ type, data, fullContent })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
  */
+// How many times a dropped stream auto-reconnects (with Last-Event-ID) before
+// giving up and surfacing an error to the user, and the backoff between tries.
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_DELAYS_MS = [500, 1500, 3000];
+
 function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
@@ -28,6 +33,15 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
   const heartbeatIntervalRef = useRef(null);
   const fullContentRef = useRef('');
 
+  // Last SSE `id:` seen, sent back as `Last-Event-ID` on an auto-reconnect so
+  // the server can replay whatever was buffered while the connection was down.
+  const lastEventIdRef = useRef(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef(null);
+  // Bumped on every explicit initEventSource()/cleanup so a reconnect that was
+  // scheduled against a now-abandoned stream knows to no-op instead of firing.
+  const generationRef = useRef(0);
+
   // Synchronously release the connection slot: abort the fetch and clear timers.
   // Kept separate from cleanupEventSource so callers (and initEventSource) can
   // tear the slot down without awaiting a 30s axios round-trip — that delay
@@ -36,6 +50,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
   const abortAndClearTimers = useCallback(() => {
     const ac = abortControllerRef.current;
     abortControllerRef.current = null;
+    generationRef.current += 1;
 
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -44,6 +59,10 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
 
     if (ac) {
@@ -103,30 +122,22 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
+  // Holds the latest attemptConnect so a setTimeout-scheduled reconnect always
+  // calls the current closure, not a stale one from the render that scheduled it.
+  const attemptConnectRef = useRef(null);
+
   /**
-   * Open the SSE stream to the given URL.
-   * Caller does not need to await — errors are reported via onEvent.
-   *
-   * @param {string} url - SSE endpoint URL (absolute or relative)
+   * Open (or resume) the SSE stream at url.
+   * `isReconnect: true` sends `Last-Event-ID` (if we have one) so the server
+   * replays whatever was buffered while the connection was down, and skips
+   * resetting fullContentRef/lastEventIdRef so accumulated state carries over.
+   * `generation` is the generationRef snapshot this attempt belongs to — if it
+   * no longer matches generationRef.current when a retry would fire, the
+   * stream has been superseded (new initEventSource call, explicit stop, or
+   * unmount) and the scheduled retry silently no-ops.
    */
-  const initEventSource = useCallback(
-    async url => {
-      // Synchronously tear down any prior stream first. We deliberately do NOT
-      // `await cleanupEventSource()` here — that awaits stopAppChatStream
-      // (axios, 30s timeout), and during that window a re-entrant call would
-      // see abortControllerRef.current === null and proceed in parallel,
-      // orphaning the first controller (no ref left to abort it on unmount).
-      const hadPrior = abortAndClearTimers();
-      if (hadPrior && appId && chatId) {
-        // Notify the server in the background; do not block the new stream.
-        stopAppChatStream(appId, chatId).catch(err =>
-          console.warn('Failed to stop prior chat stream:', err)
-        );
-      }
-
-      fullContentRef.current = '';
-      if (onProcessingChange) onProcessingChange(true);
-
+  const attemptConnect = useCallback(
+    async (url, { isReconnect = false, generation } = {}) => {
       const ac = new AbortController();
       abortControllerRef.current = ac;
 
@@ -148,11 +159,17 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       }, timeoutDuration);
 
       try {
+        const resumeHeaders =
+          isReconnect && lastEventIdRef.current != null
+            ? { 'Last-Event-ID': String(lastEventIdRef.current) }
+            : {};
+
         let res = await fetch(url, {
           method: 'GET',
           headers: {
             Accept: 'text/event-stream',
-            ...getAuthHeaders()
+            ...getAuthHeaders(),
+            ...resumeHeaders
           },
           credentials: 'include',
           signal: ac.signal
@@ -169,7 +186,8 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
             method: 'GET',
             headers: {
               Accept: 'text/event-stream',
-              ...getAuthHeaders()
+              ...getAuthHeaders(),
+              ...resumeHeaders
             },
             credentials: 'include',
             signal: ac.signal
@@ -194,11 +212,17 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
         }
 
         connectionEstablished = true;
+        // A fresh successful connection resets the retry budget — only
+        // *consecutive* drops should count against MAX_RECONNECT_ATTEMPTS.
+        reconnectAttemptRef.current = 0;
         clearTimeout(connectionTimeoutRef.current);
         connectionTimeoutRef.current = null;
         startHeartbeat();
 
-        const handleSseEvent = (name, data) => {
+        const handleSseEvent = (name, data, id) => {
+          if (id !== undefined) {
+            lastEventIdRef.current = id;
+          }
           if (name === 'connected') {
             connectionEstablished = true;
           }
@@ -227,6 +251,26 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       } catch (err) {
         // AbortError means we cancelled intentionally — not an error to report
         if (err.name === 'AbortError') return;
+
+        const stillCurrent = generationRef.current === generation;
+        const canRetry = stillCurrent && reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS;
+
+        if (canRetry) {
+          const attempt = reconnectAttemptRef.current + 1;
+          reconnectAttemptRef.current = attempt;
+          const delay =
+            RECONNECT_DELAYS_MS[attempt - 1] ?? RECONNECT_DELAYS_MS[RECONNECT_DELAYS_MS.length - 1];
+          console.warn(
+            `SSE stream interrupted, reconnecting (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms:`,
+            err.message
+          );
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            if (generationRef.current !== generation) return; // superseded — no-op
+            attemptConnectRef.current?.(url, { isReconnect: true, generation });
+          }, delay);
+          return;
+        }
 
         console.error('SSE stream error:', err);
         if (onEvent) {
@@ -264,9 +308,6 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       }
     },
     [
-      abortAndClearTimers,
-      appId,
-      chatId,
       cleanupEventSource,
       onProcessingChange,
       onEvent,
@@ -274,6 +315,41 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       timeoutDuration,
       getAuthHeaders
     ]
+  );
+
+  useEffect(() => {
+    attemptConnectRef.current = attemptConnect;
+  }, [attemptConnect]);
+
+  /**
+   * Open the SSE stream to the given URL.
+   * Caller does not need to await — errors are reported via onEvent.
+   *
+   * @param {string} url - SSE endpoint URL (absolute or relative)
+   */
+  const initEventSource = useCallback(
+    async url => {
+      // Synchronously tear down any prior stream first. We deliberately do NOT
+      // `await cleanupEventSource()` here — that awaits stopAppChatStream
+      // (axios, 30s timeout), and during that window a re-entrant call would
+      // see abortControllerRef.current === null and proceed in parallel,
+      // orphaning the first controller (no ref left to abort it on unmount).
+      const hadPrior = abortAndClearTimers();
+      if (hadPrior && appId && chatId) {
+        // Notify the server in the background; do not block the new stream.
+        stopAppChatStream(appId, chatId).catch(err =>
+          console.warn('Failed to stop prior chat stream:', err)
+        );
+      }
+
+      fullContentRef.current = '';
+      lastEventIdRef.current = null;
+      reconnectAttemptRef.current = 0;
+      if (onProcessingChange) onProcessingChange(true);
+
+      await attemptConnect(url, { isReconnect: false, generation: generationRef.current });
+    },
+    [abortAndClearTimers, appId, chatId, onProcessingChange, attemptConnect]
   );
 
   // Cleanup on unmount — release the slot synchronously, then notify the server

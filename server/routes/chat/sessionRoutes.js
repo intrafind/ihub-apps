@@ -25,9 +25,13 @@ import {
 } from '../../utils/responseHelpers.js';
 import {
   buildReplayStepsFromState,
-  drainPendingFinish
+  drainPendingFinish,
+  hasPendingFinish
 } from '../../services/workflow/chatBridge.js';
 import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
+import { sendSSE } from '../../sse.js';
+import { streamBufferService } from '../../services/streaming/StreamBufferService.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 
 export default function registerSessionRoutes(
   app,
@@ -374,6 +378,32 @@ export default function registerSessionRoutes(
         // appId is carried on the entry for parity with the previous shape;
         // nothing currently reads it back off the map, but keep it available.
         channel.entry.appId = appId;
+
+        // --- Resumable streams: replay buffered events on reconnect ---
+        // Only for plain chat turns — workflow-driven chats already have
+        // their own bespoke reconnect replay below (drainPendingFinish /
+        // buildReplayStepsFromState), so skip here to avoid delivering the
+        // same workflow step/result twice.
+        const lastEventId = req.headers['last-event-id'];
+        if (
+          lastEventId !== undefined &&
+          isFeatureEnabled('resumableStreams', configCache.getFeatures()) &&
+          !activeWorkflowExecutions.has(chatId) &&
+          !hasPendingFinish(chatId)
+        ) {
+          const missed = streamBufferService.replaySince(chatId, lastEventId);
+          if (missed && missed.length > 0) {
+            for (const ev of missed) {
+              sendSSE(res, ev.event, ev.data, ev.id);
+            }
+            logger.info('Replayed buffered SSE events on reconnect', {
+              component: 'sessionRoutes',
+              chatId,
+              count: missed.length
+            });
+          }
+        }
+
         actionTracker.trackConnected(chatId);
 
         // --- Workflow disconnect resilience ---

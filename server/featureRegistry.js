@@ -155,6 +155,16 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'resumableStreams',
+    name: { en: 'Resumable Streams', de: 'Fortsetzbare Streams' },
+    description: {
+      en: 'Buffer chat SSE events briefly so a dropped connection can reconnect and replay a partial AI response instead of losing it',
+      de: 'Chat-SSE-Ereignisse kurz puffern, damit eine unterbrochene Verbindung wiederhergestellt und eine unvollständige KI-Antwort nachgeliefert statt verloren werden kann'
+    },
+    category: 'ai',
+    default: true
   }
 ];
 

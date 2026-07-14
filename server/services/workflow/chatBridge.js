@@ -54,6 +54,20 @@ export function recordPendingFinish(chatId, payload) {
 }
 
 /**
+ * Non-destructive check for whether a pending finish is stashed for chatId.
+ * Used to decide whether the workflow-specific reconnect replay owns this
+ * chat (vs. the generic resumable-stream buffer) without draining it.
+ *
+ * @param {string} chatId
+ * @returns {boolean}
+ */
+export function hasPendingFinish(chatId) {
+  if (!chatId) return false;
+  evictExpired();
+  return pendingFinish.has(chatId);
+}
+
+/**
  * Pop and return a pending finish payload for the given chatId, if any.
  *
  * @param {string} chatId
