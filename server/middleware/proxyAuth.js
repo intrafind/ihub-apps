@@ -1,47 +1,50 @@
 import jwt from 'jsonwebtoken';
-import { httpFetch } from '../utils/httpConfig.js';
-import * as jose from 'jose';
+import jwksRsa from 'jwks-rsa';
+import { promisify } from 'util';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
-const jwksCache = new Map();
+// JWKS clients per provider jwkUrl, each with its own TTL'd key cache so
+// rotated IdP signing keys are picked up instead of being cached forever.
+const jwksClients = new Map();
 
-async function getJwks(jwkUrl) {
-  if (jwksCache.has(jwkUrl)) return jwksCache.get(jwkUrl);
-  try {
-    const res = await httpFetch(jwkUrl);
-    if (!res.ok) throw new Error(`Failed to load JWKs: ${res.status}`);
-    const jwks = await res.json();
-    jwksCache.set(jwkUrl, jwks);
-    return jwks;
-  } catch (error) {
-    logger.error('Error fetching JWKs', { component: 'ProxyAuth', error: err });
-    return null;
+function getJwksClient(jwkUrl) {
+  if (!jwksClients.has(jwkUrl)) {
+    jwksClients.set(
+      jwkUrl,
+      jwksRsa({
+        jwksUri: jwkUrl,
+        cache: true,
+        cacheMaxEntries: 5,
+        cacheMaxAge: 10 * 60 * 60 * 1000 // 10 hours
+      })
+    );
   }
+  return jwksClients.get(jwkUrl);
 }
 
 async function verifyJwt(token, provider) {
   try {
-    const jwks = await getJwks(provider.jwkUrl);
-    if (!jwks || !jwks.keys?.length) throw new Error('No keys');
     const decoded = jwt.decode(token, { complete: true });
     const kid = decoded?.header?.kid;
-    const jwk = kid ? jwks.keys.find(k => k.kid === kid) : jwks.keys[0];
-    if (!jwk) throw new Error('Key not found');
 
-    // Use jose to import the JWK and verify the JWT
-    const publicKey = await jose.importJWK(jwk, 'RS256');
-    const { payload } = await jose.jwtVerify(token, publicKey, {
+    const client = getJwksClient(provider.jwkUrl);
+    const getSigningKey = promisify(client.getSigningKey);
+    const key = await getSigningKey(kid);
+    const signingKey = key.publicKey || key.rsaPublicKey;
+
+    const payload = jwt.verify(token, signingKey, {
+      algorithms: ['RS256'],
       issuer: provider.issuer,
       audience: provider.audience
     });
 
     return payload;
   } catch (error) {
-    logger.error('JWT verification failed', { component: 'ProxyAuth', error: err });
+    logger.error('JWT verification failed', { component: 'ProxyAuth', error });
     return null;
   }
 }

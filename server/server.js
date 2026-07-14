@@ -77,6 +77,29 @@ dotenv.config();
 
 import config from './config.js';
 
+// Process-level safety net: a rejected promise with no local .catch (or an
+// exception missed by Express's synchronous error handling) would otherwise
+// crash the process silently (or hang the request) with no diagnostic trail.
+process.on('unhandledRejection', reason => {
+  logger.error('Unhandled promise rejection', {
+    component: 'Server',
+    error: reason instanceof Error ? reason.message : reason,
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
+});
+
+process.on('uncaughtException', error => {
+  logger.error('Uncaught exception, exiting', {
+    component: 'Server',
+    error: error.message,
+    stack: error.stack
+  });
+  // The process is now in an undefined state; exit rather than keep serving
+  // requests on a possibly-corrupted worker. Under clustering (WORKERS > 1)
+  // the primary's `exit` handler respawns the worker automatically.
+  process.exit(1);
+});
+
 // ----- Cluster setup -----
 const workerCount = config.WORKERS;
 

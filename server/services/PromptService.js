@@ -375,7 +375,7 @@ class PromptService {
         } catch (error) {
           logger.error('Error loading skills for system prompt', {
             component: 'PromptService',
-            error: err
+            error
           });
         }
       }
@@ -403,7 +403,7 @@ class PromptService {
           logger.error('Error pre-activating skill', {
             component: 'PromptService',
             requestedSkill,
-            error: err
+            error
           });
         }
       }
@@ -422,7 +422,7 @@ class PromptService {
             });
           }
         } catch (error) {
-          logger.error('Error loading styles', { component: 'PromptService', error: err });
+          logger.error('Error loading styles', { component: 'PromptService', error });
         }
       }
 

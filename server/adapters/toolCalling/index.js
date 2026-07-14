@@ -20,6 +20,9 @@
  * // Now you have a uniform response format regardless of provider
  */
 
+import { createUnifiedInterface } from './ToolCallingConverter.js';
+import { normalizeToolName } from './GenericToolCalling.js';
+
 // Export main converter interface
 export {
   convertToolsToGeneric,
