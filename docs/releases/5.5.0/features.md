@@ -461,6 +461,22 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Outlook Add-in: Assistant Replies Insert into the Email Automatically
+
+The Outlook task pane no longer requires an extra click to get the assistant's answer into the
+email — completed replies are inserted automatically, since "put the answer into the email" is the
+whole point of the add-in.
+
+- In compose mode, every completed reply is prepended into the draft body automatically.
+- In read mode, the reply-form window opens automatically for the first completed reply in a
+  conversation; later replies in the same conversation fall back to the manual button so the pane
+  doesn't spawn a new window per turn.
+- A new **"Insert replies into email automatically"** toggle in the add-in's Settings dialog lets
+  users turn this off; it's on by default and persists across sessions. With it off, behavior is
+  unchanged from before.
+- The manual **Insert** button remains available in both modes as a fallback or to re-insert a
+  reply.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

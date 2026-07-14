@@ -168,6 +168,8 @@
       "title": "Einstellungen",
       "account": "Konto",
       "language": "Sprache",
+      "replies": "Antworten",
+      "autoInsert": "Antworten automatisch in die E-Mail einfügen",
       "cancel": "Abbrechen",
       "save": "Speichern"
     }

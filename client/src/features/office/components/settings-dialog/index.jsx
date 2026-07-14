@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { officeLocale, SUPPORTED_LANGUAGES, setOfficeLocale } from '../../utilities/officeLocale';
+import { isAutoInsertEnabled, setAutoInsertEnabled } from '../../utilities/autoInsertSetting';
 
 export default function SettingsDialog({ user, isOpen, onClose }) {
   const { t } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(officeLocale);
+  const [autoInsert, setAutoInsert] = useState(() => isAutoInsertEnabled());
 
   const handleSave = () => {
+    setAutoInsertEnabled(autoInsert);
     if (selectedLanguage !== officeLocale) {
       setOfficeLocale(selectedLanguage);
     } else {
@@ -79,6 +82,23 @@ export default function SettingsDialog({ user, isOpen, onClose }) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              {t('office.settingsDialog.replies', 'Replies')}
+            </p>
+            <label className="flex items-start gap-2 px-2 py-2 sm:px-3 sm:py-2.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoInsert}
+                onChange={e => setAutoInsert(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+              />
+              <span className="text-sm text-slate-900">
+                {t('office.settingsDialog.autoInsert', 'Insert replies into email automatically')}
+              </span>
+            </label>
           </div>
         </div>
 
