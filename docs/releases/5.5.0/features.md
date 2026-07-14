@@ -1,5 +1,16 @@
 # Features — 5.5.0
 
+## Apps and Prompts Are Saved More Safely
+
+Admin saves for **Apps** and **Prompts** (create, update, enable/disable, and batch enable/disable)
+now write to disk atomically instead of overwriting the file in place.
+
+- A server crash or restart in the middle of a save can no longer leave a truncated or corrupted
+  `contents/apps/*.json` or `contents/prompts/*.json` file.
+- Creating a new app or prompt whose ID is claimed by a concurrent request is now reliably rejected
+  with "already exists" instead of one request silently overwriting the other.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the

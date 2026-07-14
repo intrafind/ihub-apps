@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
@@ -748,7 +748,15 @@ export default function registerAdminAppsRoutes(app) {
       }
       // Ensure directory exists before writing
       await fs.mkdir(appsDir, { recursive: true });
-      await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
+      try {
+        // lgtm[js/path-injection] -- newApp.id validated via validateIdForPath above.
+        await atomicCreateJSON(appFilePath, newApp);
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          return sendErrorResponse(res, 409, 'App with this ID already exists');
+        }
+        throw err;
+      }
       await configCache.refreshAppsCache();
       await logAudit({
         req,
@@ -840,7 +848,7 @@ export default function registerAdminAppsRoutes(app) {
         return sendNotFound(res, 'App file');
       }
       const appFilePath = join(appsDir, filename);
-      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+      await atomicWriteJSON(appFilePath, app);
       await configCache.refreshAppsCache();
       await logAudit({
         req,
@@ -963,7 +971,7 @@ export default function registerAdminAppsRoutes(app) {
               continue;
             }
             const appFilePath = join(appsDir, filename);
-            await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+            await atomicWriteJSON(appFilePath, app);
           }
         }
 

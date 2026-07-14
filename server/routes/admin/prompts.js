@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { join, resolve } from 'path';
 import path from 'path';
 import { getRootDir } from '../../pathUtils.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -543,7 +544,7 @@ export default function registerAdminPromptsRoutes(app) {
       const oldPrompt = currentPrompts.find(p => p.id === promptId);
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-      await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      await atomicWriteJSON(promptFilePath, updatedPrompt);
       await configCache.refreshPromptsCache();
       if (oldPrompt) {
         await saveSnapshot({
@@ -684,7 +685,15 @@ export default function registerAdminPromptsRoutes(app) {
       } catch {
         // file not found
       }
-      await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
+      try {
+        // lgtm[js/path-injection] -- newPrompt.id validated via validateIdForPath above.
+        await atomicCreateJSON(promptFilePath, newPrompt);
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
+        }
+        throw err;
+      }
       await configCache.refreshPromptsCache();
       await logAudit({
         req,
@@ -796,7 +805,7 @@ export default function registerAdminPromptsRoutes(app) {
         prompt.enabled = newEnabledState;
         const rootDir = getRootDir();
         const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+        await atomicWriteJSON(promptFilePath, prompt);
         await configCache.refreshPromptsCache();
         await logAudit({
           req,
@@ -948,7 +957,7 @@ export default function registerAdminPromptsRoutes(app) {
           if (prompt.enabled !== enabled) {
             prompt.enabled = enabled;
             const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
-            await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+            await atomicWriteJSON(promptFilePath, prompt);
           }
         }
 
