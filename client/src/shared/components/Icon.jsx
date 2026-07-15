@@ -94,7 +94,8 @@ import {
   ShieldCheckIcon as OutlineShieldCheckIcon,
   CloudArrowUpIcon as OutlineCloudArrowUpIcon,
   ArchiveBoxIcon as OutlineArchiveBoxIcon,
-  PlusIcon as OutlinePlusIcon
+  PlusIcon as OutlinePlusIcon,
+  ViewColumnsIcon as OutlineViewColumnsIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -173,7 +174,8 @@ import {
   ShieldCheckIcon as SolidShieldCheckIcon,
   CloudArrowUpIcon as SolidCloudArrowUpIcon,
   ArchiveBoxIcon as SolidArchiveBoxIcon,
-  PlusIcon as SolidPlusIcon
+  PlusIcon as SolidPlusIcon,
+  ViewColumnsIcon as SolidViewColumnsIcon
 } from '@heroicons/react/24/solid';
 
 // Custom icons not available in Heroicons. They mirror the Heroicons component
@@ -408,7 +410,9 @@ const iconMap = {
   'archive-box': { outline: OutlineArchiveBoxIcon, solid: SolidArchiveBoxIcon },
   MagnifyingGlassIcon: { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
   PlusIcon: { outline: OutlinePlusIcon, solid: SolidPlusIcon },
-  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon }
+  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
+  // App Navigator sidebar toggle — distinct from 'menu' (the mobile nav hamburger)
+  'view-columns': { outline: OutlineViewColumnsIcon, solid: SolidViewColumnsIcon }
 };
 
 const sizeClasses = {

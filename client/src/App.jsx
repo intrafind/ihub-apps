@@ -4,6 +4,7 @@ import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
+import { AppNavigatorProvider } from './shared/contexts/AppNavigatorContext';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
@@ -324,7 +325,14 @@ function App() {
             </Suspense>
           }
         />
-        <Route path="/teams/tab" element={<Layout />}>
+        <Route
+          path="/teams/tab"
+          element={
+            <AppNavigatorProvider>
+              <Layout />
+            </AppNavigatorProvider>
+          }
+        >
           <Route index element={<SafeAppsList />} />
         </Route>
 
@@ -342,7 +350,14 @@ function App() {
         />
 
         {/* Regular application routes */}
-        <Route path="/" element={<Layout />}>
+        <Route
+          path="/"
+          element={
+            <AppNavigatorProvider>
+              <Layout />
+            </AppNavigatorProvider>
+          }
+        >
           <Route
             index
             element={

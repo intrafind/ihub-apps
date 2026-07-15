@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
+import AppNavigator from './AppNavigator';
+import AppNavigatorToggleButton from './AppNavigatorToggleButton';
 import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/integrationSettings';
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
@@ -97,6 +99,9 @@ function Layout() {
       {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
       {!pathnameStartsWith(location.pathname, '/admin') && <SmartSearch />}
 
+      {/* App Navigator sidebar — not shown on admin routes, same as SmartSearch */}
+      {!pathnameStartsWith(location.pathname, '/admin') && <AppNavigator />}
+
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
           <div className="relative flex items-stretch h-16">
@@ -165,6 +170,7 @@ function Layout() {
               </nav>
 
               <div className="flex items-center space-x-2">
+                {!pathnameStartsWith(location.pathname, '/admin') && <AppNavigatorToggleButton />}
                 <DarkModeToggle />
                 {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
                 <UserAuthMenu />

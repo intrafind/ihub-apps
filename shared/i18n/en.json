@@ -31,6 +31,13 @@
     "documentation": "Documentation",
     "github": "GitHub"
   },
+  "appNavigator": {
+    "title": "Apps",
+    "toggle": "Toggle app navigator",
+    "searchPlaceholder": "Search apps...",
+    "otherCategory": "Other",
+    "noResults": "No apps found"
+  },
   "common": {
     "send": "Send",
     "cancel": "Cancel",

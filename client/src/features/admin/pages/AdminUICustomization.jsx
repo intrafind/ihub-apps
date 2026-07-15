@@ -6,6 +6,7 @@ import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
 import ContentEditor from '../components/ContentEditor';
 import PwaCustomization from '../components/PwaCustomization';
+import AppNavigatorCustomization from '../components/AppNavigatorCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -116,7 +117,8 @@ function AdminUICustomization() {
     { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
     { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
     { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' },
-    { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' }
+    { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' },
+    { id: 'appNavigator', label: t('admin.ui.tabs.appNavigator', 'App Navigator'), icon: '🧭' }
   ];
 
   if (loading) {
@@ -296,6 +298,14 @@ function AdminUICustomization() {
             <PwaCustomization
               config={config.pwa || {}}
               onUpdate={updates => updateConfig('pwa', updates)}
+              t={t}
+            />
+          )}
+          {activeTab === 'appNavigator' && (
+            <AppNavigatorCustomization
+              config={config.appNavigator || {}}
+              categories={config.appsList?.categories?.list || []}
+              onUpdate={updates => updateConfig('appNavigator', updates)}
               t={t}
             />
           )}
