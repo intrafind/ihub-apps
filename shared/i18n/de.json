@@ -36,6 +36,7 @@
     "cancel": "Abbrechen",
     "close": "Schließen",
     "save": "Speichern",
+    "saving": "Wird gespeichert...",
     "delete": "Löschen",
     "edit": "Bearbeiten",
     "loading": "Wird geladen...",
@@ -238,6 +239,25 @@
         "nameAsc": "Name A-Z",
         "nameDesc": "Name Z-A",
         "relevance": "Relevanz"
+      },
+      "userPrompts": {
+        "saveNew": "Neuen Prompt speichern",
+        "saveTitle": "Neuen Prompt speichern",
+        "editTitle": "Prompt bearbeiten",
+        "nameLabel": "Name",
+        "namePlaceholder": "z. B. Wochenzusammenfassung",
+        "descriptionLabel": "Beschreibung (optional)",
+        "descriptionPlaceholder": "Wofür ist dieser Prompt gedacht?",
+        "promptLabel": "Prompt",
+        "promptPlaceholder": "Prompt-Text hier eingeben...",
+        "visibilityLabel": "Sichtbarkeit",
+        "visibilityPrivate": "Privat (nur ich)",
+        "visibilityShared": "Geteilt (alle)",
+        "validationError": "Name und Prompt-Text sind erforderlich",
+        "saveError": "Prompt konnte nicht gespeichert werden",
+        "deleteConfirm": "Diesen Prompt löschen? Dies kann nicht rückgängig gemacht werden.",
+        "mine": "Meine",
+        "sharedByOther": "Geteilt"
       }
     },
     "notFound": {

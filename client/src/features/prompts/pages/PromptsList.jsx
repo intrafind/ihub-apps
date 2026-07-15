@@ -1,20 +1,29 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
-import { fetchPrompts } from '../../../api';
+import {
+  fetchPrompts,
+  fetchUserPrompts,
+  createUserPrompt,
+  updateUserPrompt,
+  deleteUserPrompt
+} from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import PromptModal from '../components/PromptModal';
+import UserPromptFormModal from '../components/UserPromptFormModal';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentPromptIds, recordPromptUsage } from '../../../utils/recentPrompts';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { highlightVariables } from '../../../utils/highlightVariables';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const ITEMS_PER_PAGE = 9;
 
 function PromptsList() {
   const { t, i18n } = useTranslation();
+  const { isAuthenticated } = useAuth();
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,6 +33,9 @@ function PromptsList() {
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [editingUserPrompt, setEditingUserPrompt] = useState(null);
+  const [deletingPromptId, setDeletingPromptId] = useState(null);
 
   // Create favorite prompts helpers
   const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } =
@@ -69,29 +81,49 @@ function PromptsList() {
     setSortMethod(sortConfig.default || 'relevance');
   }, [sortConfig]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await fetchPrompts();
-        const localized = (Array.isArray(raw) ? raw : []).map(p => ({
-          ...p,
-          name: getLocalizedContent(p.name, i18n.language),
-          prompt: getLocalizedContent(p.prompt, i18n.language),
-          description: getLocalizedContent(p.description, i18n.language)
-        }));
-        setPrompts(localized);
-        setFavoritePromptIds(getFavoritePrompts());
-        setRecentPromptIds(getRecentPromptIds());
-        setError(null);
-      } catch (err) {
-        console.error('Error loading prompts:', err);
-        setError(t('error.loadingFailed', 'Failed to load prompts'));
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadPrompts = useCallback(async () => {
+    try {
+      const [raw, userRaw] = await Promise.all([
+        fetchPrompts(),
+        // User prompts require an authenticated (non-anonymous) session — skip the
+        // call entirely rather than let it 401 for anonymous/logged-out visitors.
+        isAuthenticated
+          ? fetchUserPrompts().catch(err => {
+              console.error('Error loading user prompts:', err);
+              return [];
+            })
+          : Promise.resolve([])
+      ]);
+      const localize = p => ({
+        ...p,
+        name: getLocalizedContent(p.name, i18n.language),
+        prompt: getLocalizedContent(p.prompt, i18n.language),
+        description: getLocalizedContent(p.description, i18n.language)
+      });
+      const localized = (Array.isArray(raw) ? raw : []).map(p => ({
+        ...localize(p),
+        isUserPrompt: false
+      }));
+      const localizedUser = (Array.isArray(userRaw) ? userRaw : []).map(p => ({
+        ...localize(p),
+        isUserPrompt: true
+      }));
+      setPrompts([...localizedUser, ...localized]);
+      setFavoritePromptIds(getFavoritePrompts());
+      setRecentPromptIds(getRecentPromptIds());
+      setError(null);
+    } catch (err) {
+      console.error('Error loading prompts:', err);
+      setError(t('error.loadingFailed', 'Failed to load prompts'));
+    } finally {
+      setLoading(false);
+    }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [t, i18n.language]);
+  }, [t, i18n.language, isAuthenticated]);
+
+  useEffect(() => {
+    loadPrompts();
+  }, [loadPrompts]);
 
   // Open modal if id parameter is present
   useEffect(() => {
@@ -195,6 +227,36 @@ function PromptsList() {
     setPage(0); // Reset to first page when category changes
   };
 
+  const handleSaveUserPrompt = async data => {
+    if (editingUserPrompt) {
+      await updateUserPrompt(editingUserPrompt.id, data);
+    } else {
+      await createUserPrompt(data);
+    }
+    setShowSaveModal(false);
+    setEditingUserPrompt(null);
+    await loadPrompts();
+  };
+
+  const handleEditUserPrompt = (e, prompt) => {
+    e.stopPropagation();
+    setEditingUserPrompt(prompt);
+    setShowSaveModal(true);
+  };
+
+  const handleDeleteUserPrompt = async (e, promptId) => {
+    e.stopPropagation();
+    try {
+      await deleteUserPrompt(promptId);
+      setDeletingPromptId(null);
+      if (selectedPrompt?.id === promptId) setSelectedPrompt(null);
+      await loadPrompts();
+    } catch (err) {
+      console.error('Error deleting prompt:', err);
+      setDeletingPromptId(null);
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
   }
@@ -218,9 +280,22 @@ function PromptsList() {
       <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-gray-100">
         {t('pages.promptsList.title', 'Prompts')}
       </h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
+      <p className="text-gray-600 dark:text-gray-400 mb-4">
         {t('pages.promptsList.subtitle', 'Browse available prompts')}
       </p>
+
+      {isAuthenticated && (
+        <button
+          onClick={() => {
+            setEditingUserPrompt(null);
+            setShowSaveModal(true);
+          }}
+          className="mb-6 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1.5"
+        >
+          <Icon name="plus" className="w-4 h-4" />
+          {t('pages.promptsList.userPrompts.saveNew', 'Save a new prompt')}
+        </button>
+      )}
 
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mb-8">
         <div className="flex flex-col sm:flex-row items-stretch gap-4">
@@ -373,6 +448,23 @@ function PromptsList() {
                             {t('common.promptSearch.appSpecific', 'app')}
                           </span>
                         )}
+                        {p.isUserPrompt && (
+                          <span
+                            className="ml-1 px-1.5 py-0.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center gap-0.5"
+                            title={
+                              p.mine
+                                ? t('pages.promptsList.userPrompts.mine', 'Mine')
+                                : t('pages.promptsList.userPrompts.sharedByOther', 'Shared')
+                            }
+                          >
+                            {p.visibility === 'shared' && (
+                              <Icon name="users" size="sm" className="w-3 h-3" />
+                            )}
+                            {p.mine
+                              ? t('pages.promptsList.userPrompts.mine', 'Mine')
+                              : t('pages.promptsList.userPrompts.sharedByOther', 'Shared')}
+                          </span>
+                        )}
                       </h3>
                     </div>
                   </div>
@@ -427,6 +519,29 @@ function PromptsList() {
                         {t('pages.promptsList.useInApp', 'Open')}
                       </Link>
                     )}
+                    {p.mine && (
+                      <>
+                        <button
+                          onClick={e => handleEditUserPrompt(e, p)}
+                          className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
+                          aria-label={t('common.edit', 'Edit')}
+                          title={t('common.edit', 'Edit')}
+                        >
+                          <Icon name="pencil" size="sm" />
+                        </button>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setDeletingPromptId(p.id);
+                          }}
+                          className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center"
+                          aria-label={t('common.delete', 'Delete')}
+                          title={t('common.delete', 'Delete')}
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 dark:group-hover:border-indigo-700 transition-colors pointer-events-none"></div>
@@ -476,6 +591,43 @@ function PromptsList() {
           }}
           t={t}
         />
+      )}
+      {showSaveModal && (
+        <UserPromptFormModal
+          prompt={editingUserPrompt}
+          onClose={() => {
+            setShowSaveModal(false);
+            setEditingUserPrompt(null);
+          }}
+          onSave={handleSaveUserPrompt}
+          t={t}
+        />
+      )}
+      {deletingPromptId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm w-full p-6">
+            <p className="text-gray-900 dark:text-gray-100 mb-4">
+              {t(
+                'pages.promptsList.userPrompts.deleteConfirm',
+                'Delete this prompt? This cannot be undone.'
+              )}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeletingPromptId(null)}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                onClick={e => handleDeleteUserPrompt(e, deletingPromptId)}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                {t('common.delete', 'Delete')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

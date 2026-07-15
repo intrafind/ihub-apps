@@ -22,6 +22,7 @@ import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
+import registerUserPromptsRoutes from './routes/userPromptsRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
@@ -461,6 +462,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerRendererRoutes(app);
   registerAppSessionStartRoute(app);
   registerMagicPromptRoutes(app);
+  registerUserPromptsRoutes(app);
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
