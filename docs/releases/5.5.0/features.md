@@ -487,3 +487,20 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Production Docker Compose Now Boots on a Fresh Clone
+
+`docker/docker-compose.prod.yml` previously couldn't start on a clean checkout, and broke
+configuration migrations and admin-UI saves once it did.
+
+- Configuration was bind-mounted from a host `../contents/` folder that doesn't exist until the
+  app generates it on first boot, so a fresh clone started with an empty, broken config.
+- `contents/config` was mounted read-only, so config migrations and any admin-UI save (platform
+  settings, apps, models, etc.) failed once the container did start.
+- Replaced the multi-volume, read-only setup with a single writable volume covering the whole
+  `contents/` tree, matching how the app already manages its own data — no separate init
+  container needed.
+- No admin action is required for new deployments. Existing deployments upgrading their compose
+  file should back up their current volumes first (see `docker/DOCKER.md`'s updated backup/migration
+  steps) since the old per-directory volumes (`ihub-config`, `ihub-data`, `ihub-uploads`, etc.) are
+  replaced by a single `ihub-contents` volume.
