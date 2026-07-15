@@ -10,6 +10,7 @@ import SmartSearch from './SmartSearch';
 import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/integrationSettings';
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
+import NotificationBell from '../../features/notifications/components/NotificationBell';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
@@ -167,6 +168,9 @@ function Layout() {
               <div className="flex items-center space-x-2">
                 <DarkModeToggle />
                 {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
+                {isAuthenticated && featureFlags.isEnabled('notifications', false) && (
+                  <NotificationBell />
+                )}
                 <UserAuthMenu />
                 <button
                   className="md:hidden text-white"

@@ -73,6 +73,7 @@
     - [Magic Prompt](magic-prompt-feature.md)
     - [Image Upload Feature](image-upload-feature.md)
     - [OCR Feature](ocr-feature.md)
+    - [Notification Center](notifications-feature.md)
     - [React Component Feature](react-component-feature.md)
     - [Agent Factory (V1)](agents.md)
     - [OpenAI-Compatible API](openai-compatible-api.md)

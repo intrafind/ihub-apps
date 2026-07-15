@@ -2,5 +2,6 @@
   "skills": false,
   "workflows": false,
   "usageTracking": true,
-  "toolsService": false
+  "toolsService": false,
+  "notifications": false
 }

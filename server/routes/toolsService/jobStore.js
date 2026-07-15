@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import notificationService from '../../services/notifications/NotificationService.js';
 
 // In-memory job store
 const jobs = new Map();
@@ -126,4 +127,21 @@ export function notifyClients(job) {
   }
 
   job.clients = isTerminal ? [] : survivors;
+
+  // Only persist/broadcast a durable notification on terminal states — this
+  // survives even if the user closed the /progress SSE tab, unlike the
+  // per-tick progress events above. Intermediate progress ticks are not
+  // persisted: they're too frequent (e.g. one per OCR page) to be useful as
+  // a notification-center entry.
+  if (isTerminal && job.userId) {
+    notificationService
+      .notify(job.userId, `job.${job.status}`, {
+        jobId: job.id,
+        toolType: job.toolType,
+        error: job.error || null
+      })
+      .catch(() => {
+        // NotificationService already logs failures internally.
+      });
+  }
 }
