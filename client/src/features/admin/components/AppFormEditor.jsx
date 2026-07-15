@@ -5,11 +5,13 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import McpToolsSelector from './McpToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import WorkflowsSelector from '../../../shared/components/WorkflowsSelector';
-import SourcePicker from './SourcePicker';
 import ResourceSelector from './ResourceSelector';
 import Icon from '../../../shared/components/Icon';
 import IconPicker from '../../../shared/components/IconPicker';
 import MimeTypeSelector from './MimeTypeSelector';
+import SystemInstructionsSection from './app-form/SystemInstructionsSection';
+import SourcesConfigSection from './app-form/SourcesConfigSection';
+import SettingsConfigSection from './app-form/SettingsConfigSection';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateWithSchema,
@@ -298,15 +300,6 @@ function AppFormEditor({
     const updatedApp = {
       ...app,
       allowedModels: selectedModelIds
-    };
-    onChange(updatedApp);
-  };
-
-  // Source handling functions
-  const handleSourcesChange = selectedSourceIds => {
-    const updatedApp = {
-      ...app,
-      sources: selectedSourceIds
     };
     onChange(updatedApp);
   };
@@ -666,63 +659,12 @@ function AppFormEditor({
         {(app.type === 'chat' || !app.type) && (
           <>
             {/* System Instructions - Only for chat apps */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.systemInstructions', 'System Instructions')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.systemInstructionsDesc',
-                      'System prompts that define the app behavior'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <DynamicLanguageEditor
-                    label={
-                      <span>
-                        {t('admin.apps.edit.systemInstructions', 'System Instructions')}
-                        <span className="text-red-500 ml-1">*</span>
-                      </span>
-                    }
-                    value={app.system || {}}
-                    onChange={value => handleLocalizedChange('system', value)}
-                    type="textarea"
-                    placeholder={{
-                      en: 'Enter system instructions in English',
-                      de: 'Systeminstruktionen auf Deutsch eingeben'
-                    }}
-                    className="mb-6"
-                    error={validationErrors.system}
-                    name="system"
-                  />
-
-                  <DynamicLanguageEditor
-                    label={t('admin.apps.edit.messagePlaceholder', 'Message Placeholder')}
-                    value={app.messagePlaceholder || {}}
-                    onChange={value => handleLocalizedChange('messagePlaceholder', value)}
-                    placeholder={{
-                      en: 'Enter message placeholder in English',
-                      de: 'Nachrichtenplatzhalter auf Deutsch eingeben'
-                    }}
-                    className="mb-6"
-                  />
-
-                  <DynamicLanguageEditor
-                    label={t('admin.apps.edit.prompt', 'Prompt Template')}
-                    value={app.prompt || {}}
-                    onChange={value => handleLocalizedChange('prompt', value)}
-                    type="textarea"
-                    placeholder={{
-                      en: 'Enter prompt template in English',
-                      de: 'Prompt-Vorlage auf Deutsch eingeben'
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            <SystemInstructionsSection
+              app={app}
+              onChange={onChange}
+              t={t}
+              validationErrors={validationErrors}
+            />
           </>
         )}
 
@@ -2711,187 +2653,10 @@ function AppFormEditor({
             </div>
 
             {/* Sources Configuration - Only show if sources feature is enabled */}
-            {isSourcesEnabled && (
-              <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-                <div className="md:grid md:grid-cols-3 md:gap-6">
-                  <div className="md:col-span-1">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                      {t('admin.apps.edit.sources', 'Sources Configuration')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.apps.edit.sourcesDesc',
-                        'Configure data sources that provide content to this app'
-                      )}
-                    </p>
-                  </div>
-                  <div className="mt-5 md:col-span-2 md:mt-0">
-                    <div className="space-y-6">
-                      {/* Source References */}
-                      <div>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {t(
-                            'admin.apps.edit.sourcesDesc',
-                            'Select data sources configured in the admin interface to provide content to this app'
-                          )}
-                        </p>
-                        <SourcePicker
-                          value={app.sources || []}
-                          onChange={handleSourcesChange}
-                          allowMultiple={true}
-                          className="mb-4"
-                        />
-                      </div>
-
-                      {/* Sources Summary */}
-                      {app.sources && app.sources.length > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
-                            </div>
-                            <div className="ml-3">
-                              <h3 className="text-sm font-medium text-blue-800">
-                                {t('admin.apps.edit.sourcesConfigured', 'Sources Configured')}
-                              </h3>
-                              <div className="mt-2 text-sm text-blue-700">
-                                <p>
-                                  {t(
-                                    'admin.apps.edit.sourcesCount',
-                                    'This app has {{count}} source(s) configured:',
-                                    { count: app.sources.length }
-                                  )}
-                                </p>
-                                <ul className="list-disc list-inside mt-1 space-y-1">
-                                  {app.sources.map((sourceId, index) => (
-                                    <li key={`source-${index}`}>
-                                      <span className="font-mono text-xs bg-blue-100 px-1 rounded">
-                                        {sourceId}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                                <p className="mt-2 text-xs">
-                                  {t(
-                                    'admin.apps.edit.sourcesUsage',
-                                    'Sources will be loaded and their content made available via {{sources}} template in system prompts.'
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            {isSourcesEnabled && <SourcesConfigSection app={app} onChange={onChange} t={t} />}
 
             {/* Settings Configuration */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.settings', 'User Settings')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.apps.edit.settingsDesc', 'Configure which settings users can modify')}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.settings?.model?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('settings', {
-                            ...app.settings,
-                            model: { enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableModelSelection', 'Enable Model Selection')}
-                      </label>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.settings?.temperature?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('settings', {
-                            ...app.settings,
-                            temperature: { enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t(
-                          'admin.apps.edit.enableTemperatureControl',
-                          'Enable Temperature Control'
-                        )}
-                      </label>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.settings?.outputFormat?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('settings', {
-                            ...app.settings,
-                            outputFormat: { enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableOutputFormat', 'Enable Output Format Selection')}
-                      </label>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.settings?.chatHistory?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('settings', {
-                            ...app.settings,
-                            chatHistory: { enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableChatHistory', 'Enable Chat History Control')}
-                      </label>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.settings?.style?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('settings', {
-                            ...app.settings,
-                            style: { enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SettingsConfigSection app={app} onChange={onChange} t={t} />
           </>
         )}
       </div>
