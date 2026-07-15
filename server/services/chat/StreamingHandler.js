@@ -1,5 +1,4 @@
 import { logInteraction } from '../../utils.js';
-import { estimateTokens, recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
@@ -10,29 +9,12 @@ import { getReadableStream } from '../../utils/streamUtils.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
-import { getGenAIInstrumentation } from '../../telemetry.js';
 import {
-  recordAppUsage,
-  recordConversation,
-  recordError,
-  recordStreamOutcome
-} from '../../telemetry/metrics.js';
-import activityTracker from '../../telemetry/ActivityTracker.js';
-import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
-
-/**
- * Merge usage data from streaming chunks, preferring non-zero values from incoming data.
- * Handles Anthropic's split delivery (prompt tokens in message_start, completion in message_delta).
- */
-function mergeUsage(existing, incoming) {
-  if (!incoming) return existing;
-  if (!existing) return { ...incoming };
-  return {
-    promptTokens: incoming.promptTokens || existing.promptTokens,
-    completionTokens: incoming.completionTokens || existing.completionTokens,
-    totalTokens: incoming.totalTokens || existing.totalTokens
-  };
-}
+  mergeUsage,
+  beginLLMCallTelemetry,
+  recordLLMCallCompletion,
+  finalizeLLMCallTelemetry
+} from './llmCallTelemetry.js';
 
 class StreamingHandler {
   constructor() {
@@ -285,60 +267,13 @@ class StreamingHandler {
     }
     activeRequests.set(chatId, controller);
 
-    const baseLog = buildLogData(true);
-    const promptTokens = llmMessages
-      .map(m => estimateTokens(m.content || ''))
-      .reduce((a, b) => a + b, 0);
-    await recordChatRequest({
-      userId: baseLog.userSessionId,
-      appId: baseLog.appId,
-      modelId: model.id,
-      tokens: promptTokens,
-      tokenSource: 'estimate',
-      user: baseLog.user
+    const telemetryCtx = await beginLLMCallTelemetry({
+      request,
+      chatId,
+      buildLogData,
+      model,
+      llmMessages
     });
-
-    // ---- OpenTelemetry instrumentation (streaming) ----
-    activityTracker.recordActivity({
-      userId: baseLog.user?.id || baseLog.userSessionId,
-      chatId
-    });
-    if (baseLog.appId) {
-      // Standard gen_ai.* keys so the metrics.js allow-list passes them
-      // through as labels. Per-user / per-chat / per-message dimensions
-      // are intentionally span-only.
-      const sharedMetricLabels = {
-        'gen_ai.provider.name': resolveProviderName(model.provider),
-        'gen_ai.request.model': model.modelId
-      };
-      recordAppUsage(baseLog.appId, baseLog.user?.id || baseLog.userSessionId, sharedMetricLabels);
-      recordConversation(chatId, llmMessages.length > 2, {
-        'app.id': baseLog.appId,
-        ...sharedMetricLabels
-      });
-    }
-
-    const instrumentation = getGenAIInstrumentation();
-    let llmSpan = null;
-    const spanStart = Date.now();
-    if (instrumentation && instrumentation.isEnabled()) {
-      const operation = resolveOperation(model.provider);
-      const providerName = resolveProviderName(model.provider);
-      llmSpan = instrumentation.createLLMSpan(operation, model, providerName, {
-        appId: baseLog.appId,
-        userId: baseLog.user?.id || baseLog.userSessionId,
-        chatId,
-        messageCount: llmMessages.length,
-        isFollowUp: llmMessages.length > 2
-      });
-      const requestOptions = {
-        temperature: request.body?.temperature,
-        maxTokens: request.body?.max_tokens || request.body?.maxOutputTokens,
-        topP: request.body?.top_p,
-        stream: true
-      };
-      instrumentation.recordRequest(llmSpan, model, llmMessages, requestOptions);
-    }
 
     let timeoutId;
     const setupTimeout = () => {
@@ -368,6 +303,9 @@ class StreamingHandler {
     // Declared up here so the finally block can read accumulated streaming usage
     // for telemetry span/metric finalization.
     let accumulatedUsage = null;
+    // Set in the catch block so the finally block's single finalizeLLMCallTelemetry
+    // call can close the span/record the error metric without a second call site.
+    let caughtError = null;
 
     try {
       const llmResponse = await throttledFetch(model.id, request.url, {
@@ -556,16 +494,10 @@ class StreamingHandler {
             buildLogData(true, { responseType: 'success', response: fullResponse })
           );
 
-          const completionTokens =
-            accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
-          const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
-          await recordChatResponse({
-            userId: baseLog.userSessionId,
-            appId: baseLog.appId,
-            modelId: model.id,
-            tokens: completionTokens,
-            tokenSource,
-            user: baseLog.user
+          await recordLLMCallCompletion(telemetryCtx, {
+            model,
+            accumulatedUsage,
+            fullResponseText: fullResponse
           });
           break;
         }
@@ -576,20 +508,7 @@ class StreamingHandler {
       // failure) surfaces as an error/aborted turn — don't stamp an answer
       // source badge in the finally below.
       errorEmitted = true;
-
-      // End telemetry span with error
-      if (instrumentation && llmSpan) {
-        const duration = (Date.now() - spanStart) / 1000;
-        instrumentation.endSpan(llmSpan, error, duration);
-        llmSpan = null;
-      }
-      if (baseLog.appId) {
-        recordError(error.name || 'Error', 'llm_call_streaming', {
-          'app.id': baseLog.appId,
-          'gen_ai.provider.name': resolveProviderName(model.provider),
-          'gen_ai.request.model': model.modelId
-        });
-      }
+      caughtError = error;
 
       logger.error('Caught error in executeStreamingResponse', {
         component: 'StreamingHandler',
@@ -671,40 +590,16 @@ class StreamingHandler {
         activeRequests.delete(chatId);
       }
 
-      // Stream outcome metric. Aborts come from controller.abort() (client
-      // disconnect or our own timeout), normal completion from the model
-      // emitting a stop finish reason. Translate finishReason into one of
-      // {completed, aborted, error} so dashboards can distinguish "user
-      // closed the tab" from "model returned cleanly."
-      const streamOutcome =
-        finishReason === 'error' ? 'error' : doneEmitted ? 'completed' : 'aborted';
-      if (baseLog.appId) {
-        recordStreamOutcome(streamOutcome, {
-          'app.id': baseLog.appId,
-          'gen_ai.provider.name': resolveProviderName(model.provider),
-          'gen_ai.request.model': model.modelId
-        });
-      }
-
-      // Ensure the telemetry span is always closed, even if no error path was taken
-      if (instrumentation && llmSpan) {
-        const duration = (Date.now() - spanStart) / 1000;
-        const usage = accumulatedUsage
-          ? {
-              inputTokens: accumulatedUsage.promptTokens,
-              outputTokens: accumulatedUsage.completionTokens
-            }
-          : undefined;
-        instrumentation.recordResponse(
-          llmSpan,
-          {
-            finishReasons: finishReason ? [finishReason] : undefined,
-            model: model.modelId
-          },
-          usage
-        );
-        instrumentation.endSpan(llmSpan, null, duration);
-      }
+      // Stream outcome metric, error metric, and telemetry span closure — all
+      // handled by a single call so the two possible closing paths (error vs.
+      // clean/aborted completion) can't double-record.
+      finalizeLLMCallTelemetry(telemetryCtx, {
+        model,
+        finishReason,
+        doneEmitted,
+        accumulatedUsage,
+        error: caughtError
+      });
     }
   }
 }

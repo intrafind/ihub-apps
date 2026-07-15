@@ -84,9 +84,21 @@ export function useFileUploadHandler() {
     // Determine if audio upload should be disabled based on model capabilities
     const isAudioModel = selectedModel?.supportsAudio === true;
 
+    // Transcription (Voxtral) bypasses the chat model entirely — the audio is
+    // sent to a transcription model, not the selected chat model — so audio and
+    // video upload must NOT be gated on the chat model's supportsAudio when the
+    // app opts into transcription (issue #1927 gap: supportsAudio double-gate).
+    const transcription = app?.transcription || {};
+    const transcriptionEnabled = transcription.enabled === true;
+    const transcriptionInputs = transcription.inputs || {};
+    const audioTranscription = transcriptionEnabled && transcriptionInputs.upload !== false;
+    const videoTranscription = transcriptionEnabled && transcriptionInputs.video !== false;
+
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
-    const audioUploadEnabled = audioConfig?.enabled !== false && isAudioModel;
-    const videoUploadEnabled = videoConfig?.enabled !== false && isAudioModel; // Video requires audio support
+    const audioUploadEnabled =
+      audioConfig?.enabled !== false && (isAudioModel || audioTranscription);
+    const videoUploadEnabled =
+      videoConfig?.enabled !== false && (isAudioModel || videoTranscription); // Video requires audio support OR transcription
     const fileUploadEnabled = fileConfig?.enabled !== false;
 
     return {

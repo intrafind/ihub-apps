@@ -1,6 +1,6 @@
 {
   "name": "ihub-apps",
-  "version": "fix-issue-1137-lVuXg",
+  "version": "5.4.13",
   "description": "iHub Applications Platform",
   "type": "module",
   "bin": {

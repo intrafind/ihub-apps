@@ -1,9 +1,10 @@
 import MimeTypeSelector from '../MimeTypeSelector';
 import { updateIn } from '../../utils/nestedUpdate';
 
-// The three file-based upload types (image/file/audio) only differ in the
-// MimeTypeSelector category, translation keys, size defaults/bounds, and
-// whether a "resize images" toggle applies — everything else is identical.
+// The file-based upload types (image/file/audio/video) only differ in the
+// MimeTypeSelector category, translation keys, size defaults/bounds, and an
+// optional extra "on by default unless explicitly false" toggle (resize for
+// images, audio extraction for video) — everything else is identical.
 const UPLOAD_TYPE_CONFIGS = {
   imageUpload: {
     categoryType: 'images',
@@ -13,7 +14,13 @@ const UPLOAD_TYPE_CONFIGS = {
     defaultMaxFileSizeMB: 10,
     maxFileSizeUpperBound: 50,
     defaultFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
-    showResizeImages: true
+    extraToggle: {
+      field: 'resizeImages',
+      label: ['admin.apps.edit.resizeImages', 'Resize Images'],
+      checkboxClassName:
+        'h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded',
+      labelClassName: 'ml-2 block text-xs text-gray-700'
+    }
   },
   fileUpload: {
     categoryType: 'documents',
@@ -37,8 +44,27 @@ const UPLOAD_TYPE_CONFIGS = {
     maxSizeLabel: ['admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)'],
     formatsLabel: ['admin.apps.edit.supportedAudioFormats', 'Supported Audio Formats'],
     defaultMaxFileSizeMB: 20,
-    maxFileSizeUpperBound: 100,
+    maxFileSizeUpperBound: 2000,
     defaultFormats: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg']
+  },
+  videoUpload: {
+    categoryType: 'video',
+    enableLabel: ['admin.apps.edit.enableVideoUpload', 'Enable Video Upload'],
+    maxSizeLabel: ['admin.apps.edit.maxVideoSize', 'Max Video File Size (MB)'],
+    formatsLabel: ['admin.apps.edit.supportedVideoFormats', 'Supported Video Formats'],
+    defaultMaxFileSizeMB: 50,
+    maxFileSizeUpperBound: 2000,
+    defaultFormats: ['video/mp4', 'video/webm', 'video/quicktime'],
+    extraToggle: {
+      field: 'extractAudio',
+      label: [
+        'admin.apps.edit.extractAudioFromVideo',
+        'Extract audio track (for transcription / audio models)'
+      ],
+      checkboxClassName:
+        'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded',
+      labelClassName: 'ml-2 block text-xs font-medium text-gray-700'
+    }
   }
 };
 
@@ -81,16 +107,16 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
               className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
             />
           </div>
-          {config.showResizeImages && (
+          {config.extraToggle && (
             <div className="flex items-center">
               <input
                 type="checkbox"
-                checked={typeConfig.resizeImages !== false}
-                onChange={e => updateTypeConfig({ resizeImages: e.target.checked })}
-                className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                checked={typeConfig[config.extraToggle.field] !== false}
+                onChange={e => updateTypeConfig({ [config.extraToggle.field]: e.target.checked })}
+                className={config.extraToggle.checkboxClassName}
               />
-              <label className="ml-2 block text-xs text-gray-700">
-                {t('admin.apps.edit.resizeImages', 'Resize Images')}
+              <label className={config.extraToggle.labelClassName}>
+                {t(...config.extraToggle.label)}
               </label>
             </div>
           )}
@@ -181,6 +207,13 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                   app={app}
                   onChange={onChange}
                   uploadKey="audioUpload"
+                  t={t}
+                  parseNumberOrUndefined={parseNumberOrUndefined}
+                />
+                <UploadTypeCard
+                  app={app}
+                  onChange={onChange}
+                  uploadKey="videoUpload"
                   t={t}
                   parseNumberOrUndefined={parseNumberOrUndefined}
                 />

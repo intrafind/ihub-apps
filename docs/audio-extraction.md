@@ -22,6 +22,8 @@ When a video file is uploaded:
 ### 3. Model Processing
 The extracted audio is sent to the AI model as if it were a regular audio file upload.
 
+For **transcription-enabled apps** (see [Transcription Models](models.md#transcription-models)), the extracted audio is instead routed to the app's Voxtral transcription model and rendered as an assistant chat answer. Note that `extractAudioFromVideo()` renders at the video's **original** sample rate and channel count; the transcription client re-renders the buffer to 16 kHz mono via an `OfflineAudioContext` before streaming (the vLLM realtime endpoint requires 16 kHz mono PCM16).
+
 ## Browser Compatibility
 
 | Browser | MP4 (AAC) | MP4 (MP3) | WebM | Notes |
