@@ -35,20 +35,20 @@ const escapeHtml = s =>
 
 // Apps
 export const fetchApps = async (options = {}) => {
-  const { language = null } = options;
+  const { language = null, surface = null } = options;
 
   return handleApiResponse(
-    () => apiClient.get('/apps', { params: { language } }),
+    () => apiClient.get('/apps', { params: { language, surface } }),
     null, // no client-side caching for apps list
     null
   );
 };
 
 export const fetchAppDetails = async (appId, options = {}) => {
-  const { language = null } = options;
+  const { language = null, surface = null } = options;
 
   return handleApiResponse(
-    () => apiClient.get(`/apps/${appId}`, { params: { language } }),
+    () => apiClient.get(`/apps/${appId}`, { params: { language, surface } }),
     null, // no client-side caching for app details
     null
   );

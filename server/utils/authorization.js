@@ -454,6 +454,37 @@ export function applyOAuthClientFilter(permissions, user) {
 }
 
 /**
+ * Whether an app is visible on a given integration surface (e.g. 'web', 'outlook').
+ *
+ * `app.restrictToIntegrations` is an app-config-declared allow-list of surfaces the
+ * app should appear on. Absent/empty means "visible everywhere" (default, matches
+ * today's behavior). If the caller doesn't know/pass a surface, the restriction is
+ * not enforced, so internal callers that aren't UI-surface-aware are unaffected.
+ *
+ * @param {Object} app - App config object.
+ * @param {string} [surface] - The requesting surface (e.g. 'web', 'outlook').
+ * @returns {boolean}
+ */
+export function isAppVisibleForSurface(app, surface) {
+  const restriction = app?.restrictToIntegrations;
+  if (!Array.isArray(restriction) || restriction.length === 0) return true;
+  if (!surface) return true;
+  return restriction.includes(surface);
+}
+
+/**
+ * Filter a list of apps down to those visible on the given integration surface.
+ * @param {Array} apps - Apps to filter.
+ * @param {string} [surface] - The requesting surface.
+ * @returns {Array}
+ */
+export function filterAppsBySurface(apps, surface) {
+  if (!Array.isArray(apps)) return [];
+  if (!surface) return apps;
+  return apps.filter(app => isAppVisibleForSurface(app, surface));
+}
+
+/**
  * Filter resources based on user permissions
  * @param {Array} resources - Array of resources to filter
  * @param {Set} allowedResources - Set of allowed resource IDs

@@ -28,6 +28,13 @@ function parseNumberOrUndefined(value, parser = parseFloat) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+// Known integration surfaces an app can be restricted to. Free-form values are
+// still accepted by the server schema; this is just the set the admin UI offers.
+const INTEGRATION_SURFACE_OPTIONS = [
+  { id: 'web', labelKey: 'admin.apps.edit.integrationWeb', labelDefault: 'Web' },
+  { id: 'outlook', labelKey: 'admin.apps.edit.integrationOutlook', labelDefault: 'Outlook' }
+];
+
 /**
  * AppFormEditor - Form-based editor for app configuration
  * This component contains all the form fields for editing app configuration
@@ -302,6 +309,17 @@ function AppFormEditor({
     onChange(updatedApp);
   };
 
+  const handleIntegrationSurfaceToggle = surfaceId => {
+    const current = app.restrictToIntegrations || [];
+    const updated = current.includes(surfaceId)
+      ? current.filter(id => id !== surfaceId)
+      : [...current, surfaceId];
+    onChange({
+      ...app,
+      restrictToIntegrations: updated
+    });
+  };
+
   // Source handling functions
   const handleSourcesChange = selectedSourceIds => {
     const updatedApp = {
@@ -438,6 +456,34 @@ function AppFormEditor({
                         </option>
                       ))}
                   </select>
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.restrictToIntegrations', 'Visible On')}
+                  </label>
+                  <div className="mt-2 space-y-2">
+                    {INTEGRATION_SURFACE_OPTIONS.map(surface => (
+                      <label
+                        key={surface.id}
+                        className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={(app.restrictToIntegrations || []).includes(surface.id)}
+                          onChange={() => handleIntegrationSurfaceToggle(surface.id)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        {t(surface.labelKey, surface.labelDefault)}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.restrictToIntegrationsHint',
+                      'Leave all unchecked to show this app on every surface. Check specific surfaces to hide it everywhere else.'
+                    )}
+                  </p>
                 </div>
 
                 <div className="col-span-6">

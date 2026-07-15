@@ -79,6 +79,7 @@ function SelectPage({ user, onLogout, onSelect }) {
             header={<ChatHeader title="Select App" showCheckmark={false} menuItems={menuItems} />}
             favorites={favorites}
             onToggleFavorite={handleToggleFavorite}
+            surface="outlook"
           />
         </div>
       </div>

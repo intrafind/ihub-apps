@@ -126,6 +126,8 @@ Semantics, in short:
 
 The full design is in [OAuth Client Permission Filter for Authorization Code Flow](../concepts/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md).
 
+**App-level alternative.** The allow-list above is configured per OAuth client and scopes what *that client's* tokens can see. If instead you want a specific app to appear **only** in Outlook (and be hidden from the regular web app) — or vice versa — set `restrictToIntegrations: ["outlook"]` on the app itself in the app editor's **Visible On** field (or directly in the app's JSON config). Leave it empty/unset to keep the app visible everywhere, which is the default. Both mechanisms compose: an app must pass both its own `restrictToIntegrations` check and the OAuth client's allow-list to be visible.
+
 ---
 
 ## Step 6 — Verify the rollout

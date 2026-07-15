@@ -412,6 +412,10 @@ const baseAppConfigSchema = z.object({
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
 
+  // Integration surface visibility - absent/empty means visible everywhere.
+  // Non-empty restricts the app to only the listed surfaces (e.g. 'web', 'outlook').
+  restrictToIntegrations: z.array(z.string()).optional(),
+
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,
 
