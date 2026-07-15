@@ -21,6 +21,7 @@ import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
@@ -340,6 +341,17 @@ function AppChat({ preloadedApp = null }) {
     [models, selectedModel]
   );
   useNextcloudEmbedAttachments(fileUploadHandler, app, currentModelObject);
+
+  // Consume any attachments handed off from the start page. The message text
+  // and auto-send still arrive via the `prefill` / `send=true` query params;
+  // here we only restore the already-processed file payload so the auto-send
+  // includes it.
+  useEffect(() => {
+    const handoff = consumePendingChatStart(appId);
+    if (handoff?.files) {
+      fileUploadHandler.setSelectedFile(handoff.files);
+    }
+  }, [appId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Check document token size against model context window and warn user if needed
   useEffect(() => {
@@ -2026,7 +2038,7 @@ function AppChat({ preloadedApp = null }) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] min-h-0 overflow-hidden pt-4 pb-2">
+    <div className="flex flex-col h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-4 pb-2">
       {/* Shared App Header */}
       <SharedAppHeader
         app={app}

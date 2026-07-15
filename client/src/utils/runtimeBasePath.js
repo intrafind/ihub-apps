@@ -22,6 +22,7 @@ export const KNOWN_ROUTES = [
   'login', // Standalone login page
   'pages', // Dynamic content pages
   'prompts', // Prompts listing
+  'chats', // Chat history overview
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution
