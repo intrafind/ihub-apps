@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { CredentialRefSelect } from './OpenApiToolEditor';
+import GroupMultiSelect from './GroupMultiSelect';
 
 // OIDC Provider Templates
 const OIDC_PROVIDER_TEMPLATES = {
@@ -67,7 +68,7 @@ const OIDC_PROVIDER_TEMPLATES = {
 /**
  * PlatformFormEditor - Form-based editor for platform configuration
  */
-function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
+function PlatformFormEditor({ value: config, onChange, onValidationChange, availableGroups = [] }) {
   const { t } = useTranslation();
   const [showProviderModal, setShowProviderModal] = useState(false);
 
@@ -509,47 +510,42 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Authenticated Groups
-            </label>
-            <input
-              type="text"
-              value={config.auth?.authenticatedGroup || ''}
-              onChange={e => updateNestedConfig('auth', 'authenticatedGroup', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="authenticated"
+            <GroupMultiSelect
+              id="auth-authenticated-group"
+              label={t('admin.auth.groups.authenticatedLabel', 'Authenticated Group')}
+              multiple={false}
+              allowCustom={false}
+              availableGroups={availableGroups}
+              value={config.auth?.authenticatedGroup ? [config.auth.authenticatedGroup] : []}
+              onChange={next =>
+                updateNestedConfig('auth', 'authenticatedGroup', next[next.length - 1] || '')
+              }
+              placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+              emptyMessage={t('admin.auth.groups.emptySingle', 'No group selected yet')}
+              helpText={t(
+                'admin.auth.groups.authenticatedHelp',
+                'Internal group automatically assigned to all authenticated users'
+              )}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Group automatically assigned to all authenticated users
-            </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Anonymous Groups
-            </label>
-            <input
-              type="text"
+            <GroupMultiSelect
+              id="anonymous-default-groups"
+              label={t('admin.auth.groups.anonymousLabel', 'Anonymous Groups')}
+              allowCustom={false}
+              availableGroups={availableGroups}
               value={
                 Array.isArray(config.anonymousAuth?.defaultGroups)
-                  ? config.anonymousAuth.defaultGroups.join(', ')
-                  : ''
+                  ? config.anonymousAuth.defaultGroups
+                  : []
               }
-              onChange={e =>
-                updateNestedConfig(
-                  'anonymousAuth',
-                  'defaultGroups',
-                  e.target.value
-                    .split(',')
-                    .map(g => g.trim())
-                    .filter(g => g)
-                )
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="anonymous, guest"
+              onChange={next => updateNestedConfig('anonymousAuth', 'defaultGroups', next)}
+              placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+              helpText={t(
+                'admin.auth.groups.anonymousHelp',
+                'Internal groups assigned to users who access without authentication'
+              )}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Groups assigned to users who access without authentication (comma-separated)
-            </p>
           </div>
         </div>
       </div>
@@ -981,24 +977,18 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Default Groups (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="google-users, external-users"
-                        value={provider.defaultGroups ? provider.defaultGroups.join(', ') : ''}
-                        onChange={e =>
-                          updateOidcProvider(
-                            index,
-                            'defaultGroups',
-                            e.target.value
-                              .split(',')
-                              .map(s => s.trim())
-                              .filter(s => s)
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      <GroupMultiSelect
+                        id={`oidc-default-groups-${index}`}
+                        label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                        allowCustom={false}
+                        availableGroups={availableGroups}
+                        value={Array.isArray(provider.defaultGroups) ? provider.defaultGroups : []}
+                        onChange={next => updateOidcProvider(index, 'defaultGroups', next)}
+                        placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                        helpText={t(
+                          'admin.auth.groups.oidcHelp',
+                          'Internal groups automatically assigned to users authenticating with this provider'
+                        )}
                       />
                     </div>
                     <div>
@@ -1263,30 +1253,19 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Default Groups (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      Array.isArray(provider.defaultGroups) ? provider.defaultGroups.join(', ') : ''
-                    }
-                    onChange={e =>
-                      updateLdapProvider(
-                        index,
-                        'defaultGroups',
-                        e.target.value
-                          .split(',')
-                          .map(g => g.trim())
-                          .filter(g => g)
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="ldap-users, employees"
+                  <GroupMultiSelect
+                    id={`ldap-default-groups-${index}`}
+                    label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                    allowCustom={false}
+                    availableGroups={availableGroups}
+                    value={Array.isArray(provider.defaultGroups) ? provider.defaultGroups : []}
+                    onChange={next => updateLdapProvider(index, 'defaultGroups', next)}
+                    placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                    helpText={t(
+                      'admin.auth.groups.ldapHelp',
+                      'Internal groups automatically assigned to LDAP users'
+                    )}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Groups automatically assigned to LDAP users
-                  </p>
                 </div>
 
                 <div className="md:col-span-2">
@@ -1422,32 +1401,21 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Default Groups (comma-separated)
-              </label>
-              <input
-                type="text"
+              <GroupMultiSelect
+                id="ntlm-default-groups"
+                label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                allowCustom={false}
+                availableGroups={availableGroups}
                 value={
-                  Array.isArray(config.ntlmAuth?.defaultGroups)
-                    ? config.ntlmAuth.defaultGroups.join(', ')
-                    : ''
+                  Array.isArray(config.ntlmAuth?.defaultGroups) ? config.ntlmAuth.defaultGroups : []
                 }
-                onChange={e =>
-                  updateNestedConfig(
-                    'ntlmAuth',
-                    'defaultGroups',
-                    e.target.value
-                      .split(',')
-                      .map(g => g.trim())
-                      .filter(g => g)
-                  )
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="ntlm-users, domain-users"
+                onChange={next => updateNestedConfig('ntlmAuth', 'defaultGroups', next)}
+                placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                helpText={t(
+                  'admin.auth.groups.ntlmHelp',
+                  'Internal groups automatically assigned to NTLM authenticated users'
+                )}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Groups automatically assigned to NTLM authenticated users
-              </p>
             </div>
             <div>
               <label className="flex items-center">

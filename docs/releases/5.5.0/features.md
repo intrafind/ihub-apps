@@ -1,5 +1,17 @@
 # Features — 5.5.0
 
+## Authentication Admin Now Uses Searchable Group Pickers
+
+The default-group fields in Authentication settings are now searchable group selectors instead of
+free-text inputs, so admins pick from real, defined groups and can no longer introduce typos that
+silently grant no permissions.
+
+- Applies to all default-group fields: the authenticated-users group, anonymous-access groups, and
+  the default groups for each OIDC, LDAP, and NTLM provider.
+- Each field shows the defined groups with their names and descriptions and filters as you type.
+- Any group value that no longer matches a defined group is still shown but visibly flagged, so
+  existing configurations remain visible and can be corrected rather than being dropped.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
