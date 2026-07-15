@@ -487,3 +487,19 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## App Navigator Sidebar
+
+Users can now switch between apps from a searchable, category-grouped sidebar without leaving an
+active chat, instead of having to return to the apps grid.
+
+- Opens from a new header button, the `Ctrl`/`Cmd`+`B` shortcut, or closes via Escape, a backdrop
+  click, or selecting an app.
+- Apps are grouped by category with collapsible sections (collapsed state remembered per browser);
+  apps without a recognized category appear in a trailing "Other" group.
+- Inline search filters apps by name and description as you type.
+- Admins can enable/disable the sidebar and set the category display order under **UI
+  Customization > App Navigator** — category names and colors are still defined in a single place
+  under **UI Customization > Apps List > Categories**.
+- No action required on upgrade — the sidebar is enabled by default and existing installs get the
+  new configuration defaults automatically.

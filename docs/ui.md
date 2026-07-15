@@ -302,6 +302,26 @@ The `appsList.categories` section enables a category filter bar on the apps list
 | `list`             | Array   | Ordered list of category objects. |
 | `list[].id`        | String  | Unique category identifier. Must match the `category` field in app configs. |
 | `list[].name`      | Object  | Localized display name for the category button. |
+
+### App Navigator Sidebar
+
+The `appNavigator` section controls the hamburger-triggered sidebar that lets users search and jump between apps by category without leaving an active chat. It's mounted on every non-admin page and toggled by a header button, the `Ctrl`/`Cmd`+`B` shortcut, or the Escape key/backdrop click while open.
+
+```json
+"appNavigator": {
+  "enabled": true,
+  "categoryOrder": ["coding", "writing", "utility"]
+}
+```
+
+| Property        | Type    | Description |
+| --------------- | ------- | ----------- |
+| `enabled`       | Boolean | Show or hide the App Navigator sidebar and its toggle button globally (default: `true`). |
+| `categoryOrder` | Array   | Ordered list of category `id`s (from `appsList.categories.list`) controlling the display order of category groups in the sidebar. Categories present in apps but missing from this list fall back to their order in `appsList.categories.list`, then alphabetically. Apps whose `category` doesn't match any known category id are grouped into a trailing "Other" section. |
+
+Category metadata (name, color) is defined once in `appsList.categories.list` and reused by the App Navigator — `categoryOrder` only reorders it, it does not redefine categories.
+
+This can also be configured from the admin panel under **UI Customization > App Navigator**.
 | `list[].color`     | String  | Hex color used for the category badge and button accent. |
 
 The same `categories` structure is also available under `promptsList.categories` and follows identical rules for the prompts library.

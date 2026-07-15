@@ -189,6 +189,10 @@
       ]
     }
   },
+  "appNavigator": {
+    "enabled": true,
+    "categoryOrder": []
+  },
   "promptsList": {
     "sort": {
       "enabled": true,
