@@ -14,7 +14,7 @@ import { Link } from 'react-router-dom';
  * @param {string} props.className - Additional CSS classes to apply to the root element
  * @returns {JSX.Element|null} The user authentication menu component
  */
-export default function UserAuthMenu({ variant = 'header', className = '' }) {
+export default function UserAuthMenu({ variant = 'header', className = '', collapsed = false }) {
   const { t } = useTranslation();
   const { user, isAuthenticated, logout, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
@@ -132,7 +132,7 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
         className={
           variant === 'header'
             ? 'flex items-center space-x-2 text-white hover:text-white/80 focus:outline-none'
-            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'
+            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors w-full min-w-0'
         }
         aria-expanded={showDropdown}
         aria-haspopup="true"
@@ -150,15 +150,21 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
               </>
             ) : (
               <>
-                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-none">
                   {initials}
                 </div>
-                <div className="hidden sm:block text-left">
-                  <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                  {user?.email && user.email !== displayName && (
-                    <div className="text-xs text-gray-500">{user.email}</div>
-                  )}
-                </div>
+                {!collapsed && (
+                  <div className="hidden sm:block text-left min-w-0">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {displayName}
+                    </div>
+                    {user?.email && user.email !== displayName && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {user.email}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -176,11 +182,13 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
             </span>
           </>
         )}
-        <Icon
-          name="chevron-down"
-          size="sm"
-          className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''} ${variant === 'header' ? 'text-white' : 'text-gray-500'}`}
-        />
+        {!collapsed && (
+          <Icon
+            name="chevron-down"
+            size="sm"
+            className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''} ${variant === 'header' ? 'text-white' : 'text-gray-500'}`}
+          />
+        )}
       </button>
 
       {/* Dropdown menu */}
@@ -189,7 +197,18 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
           ref={menuRef}
           role="menu"
           aria-label={t('auth.userMenu', 'User menu')}
-          className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+          className={
+            variant === 'sidebar'
+              ? // In the sidebar the trigger sits at the very bottom, so the menu
+                // floats upward instead of pushing the layout (which would happen
+                // if it opened downward off-screen). When the rail is collapsed it
+                // gets a fixed width and floats over the content to the right.
+                // Use a comfortable fixed width anchored to the left so the menu
+                // floats over the page content instead of being squeezed into
+                // the (now narrower) account row.
+                `absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50`
+              : 'absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50'
+          }
         >
           {isAuthenticated ? (
             <>
@@ -233,22 +252,6 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
 
               {/* Menu items */}
               <div className="py-1">
-                {/* Profile (placeholder for sidebar variant) */}
-                {variant === 'sidebar' && (
-                  <button
-                    role="menuitem"
-                    tabIndex={-1}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                    onClick={() => {
-                      setShowDropdown(false);
-                      setShowAllGroups(false);
-                    }}
-                  >
-                    <Icon name="user" className="w-4 h-4 mr-3" />
-                    {t('auth.menu.profile', 'Profile')}
-                  </button>
-                )}
-
                 {/* Integrations */}
                 {featureFlags.isEnabled('integrations', true) &&
                   (platformConfig?.cloudStorage?.enabled || platformConfig?.jira?.enabled) && (

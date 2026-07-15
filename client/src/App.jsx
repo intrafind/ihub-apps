@@ -5,8 +5,10 @@ import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
+import StartPage from './features/apps/pages/StartPage';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
@@ -170,6 +172,7 @@ const TeamsAuthEnd = lazyWithRetry(() => import('./features/teams/TeamsAuthEnd')
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
+const SafeStartPage = withSafeRoute(StartPage);
 const SafeAppRouterWrapper = withSafeRoute(AppRouterWrapper);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
@@ -347,10 +350,23 @@ function App() {
             index
             element={
               <SetupCheck>
-                <SafeAppsList />
+                <SafeStartPage />
               </SetupCheck>
             }
           />
+          {/* Apps browser — full list with search/filter */}
+          <Route path="apps" element={<SafeAppsList />} />
+          {/* Chat history page — feature-flagged, uses mock data */}
+          {featureFlags.isEnabled('chatHistory', false) && (
+            <Route
+              path="chats"
+              element={
+                <Suspense fallback={<AdminLoading />}>
+                  <ChatHistoryPage />
+                </Suspense>
+              }
+            />
+          )}
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />
