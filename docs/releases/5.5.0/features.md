@@ -31,6 +31,19 @@ existing native-search behavior already available for Gemini and GPT models.
   now resolved directly from the app/workflow configuration and passed straight to the model
   provider.
 
+## Agent Workflows No Longer Crash on Their First Prompt Step
+
+Fixed a regression introduced with the native web search rework above that caused agent workflows
+to fail as soon as they reached a prompt step, with the error `Agent execution failed:
+nativeWebSearch is not defined`.
+
+- Every workflow with a prompt/agent node was affected, whether or not the node used web search;
+  the failure surfaced on the first such step (for example, the Stellungnahmen review workflows
+  failed at their `refine-decision` step).
+- Workflows now run their prompt steps normally again, and the native web search directive is
+  correctly applied on steps that request it.
+- No configuration changes are required.
+
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
 The bundled **iHub Support Bot** app now references the built-in iHub Documentation source, so it
