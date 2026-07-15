@@ -500,3 +500,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Customizable Error & Empty-State Messages
+
+Admins can now reword the text shown on error and empty-state screens per language, directly from
+the admin panel — no code change or redeploy required. This is useful for branded deployments that
+need tenant-specific wording, a support contact, or a different tone.
+
+- Covers the generic error screen, the 404 / 500 / 403 / 401 pages, and the "no apps available"
+  state on the apps list.
+- Edit under **Admin → UI Customization → Error Pages**. Each screen has its own title and message
+  fields, with the standard multi-language editor (add languages, auto-translate).
+- Every field is optional — leave one empty to keep the built-in default text. Existing
+  installations get the current wording seeded automatically so there's nothing to fill in unless
+  you want to change it.
+- No admin action is required on upgrade; a migration adds the editable defaults for you.
