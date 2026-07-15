@@ -37,6 +37,7 @@ import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
 import { attachRealtimeTranscription } from './websocket/realtimeTranscription.js';
 import registerVoiceRoutes from './routes/voiceRoutes.js';
+import registerNotificationRoutes from './routes/notifications.js';
 import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
@@ -475,6 +476,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
   registerVoiceRoutes(app);
+  registerNotificationRoutes(app);
   registerSetupRoutes(app);
 
   // --- Integration Routes ---

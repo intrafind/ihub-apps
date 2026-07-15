@@ -155,6 +155,17 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'notifications',
+    name: { en: 'Notifications', de: 'Benachrichtigungen' },
+    description: {
+      en: 'Real-time notification center (SSE) for background job progress and completion',
+      de: 'Echtzeit-Benachrichtigungszentrale (SSE) für Fortschritt und Abschluss von Hintergrundaufgaben'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 

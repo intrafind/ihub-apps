@@ -487,3 +487,19 @@ is now both prevented and, if it still happens, reported clearly instead of show
   ("The AI model returned an incomplete response… please try sending your message again") rather
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
+
+## Notification Center (Preview)
+
+A new bell icon in the header lets signed-in users see when a background job (for example an AI
+OCR job started via the Tools Service) finishes, fails, or is cancelled — even after they've
+navigated away from the tab that started it.
+
+- New **Notifications** feature flag (Admin → Platform → Features, disabled by default).
+- Live updates arrive over a per-user SSE stream and work across multiple open tabs; a REST list
+  also shows anything missed while the browser was closed, capped at the 200 most recent entries
+  per user.
+- v1 scope: only background-job completion/error/cancellation events are surfaced. Broader event
+  types (chat sharing, admin announcements) and durable multi-instance storage are tracked as
+  follow-up work.
+
+**Before using:** enable the **Notifications** feature under Admin → Platform → Features.
