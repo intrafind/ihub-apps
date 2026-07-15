@@ -17,6 +17,8 @@ import Icon from './Icon';
  * @param {React.ReactNode} [header] - Optional header node rendered above the list
  * @param {string[]} [favorites] - Optional list of favorited app IDs (enables favorite UI)
  * @param {Function} [onToggleFavorite] - Called as (event, appId) when the star is clicked
+ * @param {string} [surface] - Integration surface to request (e.g. 'outlook'); apps
+ *   restricted to other surfaces via `restrictToIntegrations` are excluded server-side
  */
 function AppListPanel({
   onSelect,
@@ -24,7 +26,8 @@ function AppListPanel({
   showSearch = 'auto',
   header,
   favorites,
-  onToggleFavorite
+  onToggleFavorite,
+  surface
 }) {
   const { t } = useTranslation();
   const [apps, setApps] = useState([]);
@@ -33,13 +36,13 @@ function AppListPanel({
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   useEffect(() => {
-    fetchApps()
+    fetchApps({ surface })
       .then(data => {
         if (Array.isArray(data)) setApps(data);
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [surface]);
 
   const shouldShowSearch = showSearch === 'auto' ? apps.length > 6 : showSearch === true;
   const favoriteIds = favorites || [];

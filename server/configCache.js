@@ -8,6 +8,7 @@ import { loadAllTools } from './toolsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
+  filterAppsBySurface,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools } from './toolLoader.js';
@@ -1573,7 +1574,7 @@ class ConfigCache {
    * @param {Object} platformConfig - Platform configuration
    * @returns {Promise<Object>} Filtered apps with user-specific ETag
    */
-  async getAppsForUser(user, platformConfig) {
+  async getAppsForUser(user, platformConfig, { surface } = {}) {
     // Get all apps from cache
     let { data: apps = [], etag: appsEtag } = this.getApps();
 
@@ -1583,6 +1584,9 @@ class ConfigCache {
 
     const originalAppsCount = apps.length;
     let userSpecificEtag = appsEtag;
+
+    // Apply integration-surface visibility filtering (e.g. an app restricted to 'outlook')
+    apps = filterAppsBySurface(apps, surface);
 
     // Apply filtering based on user permissions
     if (user && user.permissions) {

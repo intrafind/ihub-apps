@@ -473,6 +473,19 @@ route groups that previously relied only on the coarse URL-derived fallback: **T
 - No admin action required — existing audit log filtering, retention, and CSV export apply to
   these new entries automatically.
 
+## Restrict an App to a Specific Integration Surface
+
+The App Editor now has a **Visible On** option, so admins can maintain a single app definition
+that only appears on a specific surface (for example, the Outlook add-in) instead of duplicating
+near-identical apps for web vs. Outlook.
+
+- Leave all surfaces unchecked to keep the app visible everywhere — this is the default and
+  matches today's behavior for every existing app.
+- Check a specific surface (e.g. **Outlook**) to hide the app from every other surface, including
+  direct navigation to its URL.
+- The Outlook add-in now requests apps for the `outlook` surface automatically; no add-in
+  configuration is required.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

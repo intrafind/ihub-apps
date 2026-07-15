@@ -1,5 +1,9 @@
 import configCache from '../configCache.js';
-import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
+import {
+  enhanceUserWithPermissions,
+  isAnonymousAccessAllowed,
+  isAppVisibleForSurface
+} from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import {
@@ -175,10 +179,15 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
 
+      // Requesting integration surface (e.g. 'outlook' for the Office add-in);
+      // defaults to 'web' so apps restricted to other surfaces are hidden here.
+      const surface = typeof req.query.surface === 'string' ? req.query.surface : 'web';
+
       // Use centralized method to get filtered apps with user-specific ETag
       const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(
         req.user,
-        platformConfig
+        platformConfig,
+        { surface }
       );
 
       if (!apps) {
@@ -343,6 +352,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         }
         const appData = apps.find(a => a.id === appId);
         if (!appData) {
+          const errorMessage = await getLocalizedError('appNotFound', {}, language);
+          return sendErrorResponse(res, 404, errorMessage);
+        }
+
+        // Hide apps that aren't restricted to the requesting integration surface
+        const surface = typeof req.query.surface === 'string' ? req.query.surface : 'web';
+        if (!isAppVisibleForSurface(appData, surface)) {
           const errorMessage = await getLocalizedError('appNotFound', {}, language);
           return sendErrorResponse(res, 404, errorMessage);
         }

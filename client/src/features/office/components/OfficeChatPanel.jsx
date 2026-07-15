@@ -472,7 +472,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   );
 
   const handleOpenSelector = useCallback(() => {
-    fetchApps()
+    fetchApps({ surface: 'outlook' })
       .then(data => {
         if (Array.isArray(data)) setSelectorItems(data);
         setIsSelectorOpen(true);

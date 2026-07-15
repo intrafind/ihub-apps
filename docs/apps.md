@@ -531,6 +531,7 @@ Each app is defined with the following essential properties:
 | `order`                 | Number  | Optional. Display order in the app list                                                                                  |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
+| `restrictToIntegrations`| Array   | Optional. Array of integration surface names (e.g. `["outlook"]`) the app is visible on. Leave empty/unset to show the app everywhere. See [Restricting Apps to Specific Integrations](#restricting-apps-to-specific-integrations) below |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
 | `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
 | `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
@@ -555,6 +556,20 @@ Each app is defined with the following essential properties:
 | `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
 | `inheritanceLevel`      | Number  | Optional. Depth of the inheritance chain                                                                                 |
 | `overriddenFields`      | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                |
+
+### Restricting Apps to Specific Integrations
+
+By default, an app is visible everywhere it's referenced — the main web app, the Outlook add-in, etc. Set `restrictToIntegrations` to a non-empty array to instead show the app **only** on the listed surfaces, hiding it everywhere else (including direct navigation to the app's URL from another surface):
+
+```json
+"restrictToIntegrations": ["outlook"]
+```
+
+- Omit the field, or leave the array empty, to keep the app visible everywhere (the default).
+- Known surface values used by this codebase: `"web"`, `"outlook"`. Other integrations can use their own surface string as long as the client passes it via `?surface=` when calling `GET /api/apps`.
+- This is orthogonal to an OAuth client's `allowedApps` allow-list (see [Outlook Add-in guide](outlook-add-in.md#step-5--optional-restrict-what-the-add-in-can-access)) — an app must pass both checks to be visible.
+- Configurable in the admin app editor under **Visible On**.
+
 ### Advanced Configuration Options
 
 Apps can include additional configuration for user inputs and prompt formatting:
