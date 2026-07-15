@@ -15,6 +15,7 @@ function AdminAuthPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -85,6 +86,7 @@ function AdminAuthPage() {
   useEffect(() => {
     loadConfiguration();
     loadSchema();
+    loadGroups();
   }, []);
 
   const loadSchema = async () => {
@@ -93,6 +95,16 @@ function AdminAuthPage() {
       setJsonSchema(schema);
     } catch (error) {
       console.error('Failed to load platform schema:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -231,6 +243,7 @@ function AdminAuthPage() {
           value={config}
           onChange={handleDataChange}
           formComponent={PlatformFormEditor}
+          formProps={{ availableGroups }}
           jsonSchema={jsonSchema}
           title={t('admin.auth.configuration', 'Authentication Configuration')}
         />
