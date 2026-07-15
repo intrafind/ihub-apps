@@ -1,5 +1,17 @@
 # Features — 5.5.0
 
+## Save Your Own Prompts to the Prompt Library
+
+Any signed-in user can now save a prompt directly to the Prompt Library (`/prompts`) instead of
+relying only on the admin-curated set.
+
+- New "Save a new prompt" button opens a simple form (name, description, prompt text, visibility).
+- Prompts can be **private** (only you) or **shared** (visible to every signed-in user); prompts
+  from other users show a "Shared" badge, your own show "Mine" and can be edited or deleted.
+- Every prompt tracks who created and last modified it, and when.
+- Anonymous sessions don't see the save button — this feature requires being signed in, and is
+  gated behind the existing Prompts Library feature flag.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the

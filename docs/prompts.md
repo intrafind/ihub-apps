@@ -171,3 +171,28 @@ The client UI shows prompts in the prompts library where users can search, filte
 ## Managing Prompts via Admin UI
 
 Prompts can also be created and edited through the admin panel at `/admin/prompts`. Changes made through the admin panel write directly to the corresponding file in `contents/prompts/`.
+
+## User-Owned Prompts (Save to Library)
+
+In addition to the admin-curated library above, any authenticated (non-anonymous) user can save
+their own prompts directly from the Prompts page (`/prompts`) via the "Save a new prompt" button.
+
+- Stored one file per prompt under `contents/data/user-prompts/<userId>/<promptId>.json` — separate
+  from the admin-curated `contents/prompts/` library and not subject to `contentAdminAuth`.
+- Each prompt is **private** (visible only to its owner) or **shared** (visible to every
+  authenticated user), chosen when saving. Owners can edit or delete their own prompts; shared
+  prompts from other users are read-only.
+- Every record tracks `ownerId`, `createdBy`/`createdAt`, and `lastModifiedBy`/`lastModifiedAt`.
+- User prompts are plain strings (no localization, `variables`, or `outputSchema`) — a deliberately
+  simpler shape than admin-curated prompts.
+- Gated behind the same `promptsLibrary` feature flag as `GET /api/prompts` (enabled by default).
+
+### API
+
+- `GET /api/user-prompts` — Returns the caller's own prompts plus every other user's `shared`
+  prompts. Each item includes `mine: true|false`.
+- `POST /api/user-prompts` — Creates a new prompt (`name`, `description?`, `prompt`, `visibility?`).
+- `PUT /api/user-prompts/:promptId` — Updates one of the caller's own prompts.
+- `DELETE /api/user-prompts/:promptId` — Deletes one of the caller's own prompts.
+
+All four endpoints require an authenticated, non-anonymous session.

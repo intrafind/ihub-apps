@@ -37,3 +37,31 @@ export const generateMagicPrompt = async (input, options = {}) => {
     false
   );
 };
+
+// User-owned prompts (save-to-library, #1037/#1038). Not cached — always
+// user-specific and expected to change right after a create/edit/delete.
+export const fetchUserPrompts = async () => {
+  return handleApiResponse(() => apiClient.get('/user-prompts'), null, null, false);
+};
+
+export const createUserPrompt = async data => {
+  return handleApiResponse(() => apiClient.post('/user-prompts', data), null, null, false);
+};
+
+export const updateUserPrompt = async (promptId, data) => {
+  return handleApiResponse(
+    () => apiClient.put(`/user-prompts/${encodeURIComponent(promptId)}`, data),
+    null,
+    null,
+    false
+  );
+};
+
+export const deleteUserPrompt = async promptId => {
+  return handleApiResponse(
+    () => apiClient.delete(`/user-prompts/${encodeURIComponent(promptId)}`),
+    null,
+    null,
+    false
+  );
+};

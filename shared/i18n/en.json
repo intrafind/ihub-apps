@@ -36,6 +36,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "save": "Save",
+    "saving": "Saving...",
     "delete": "Delete",
     "edit": "Edit",
     "loading": "Loading...",
@@ -225,6 +226,25 @@
         "nameAsc": "Name A-Z",
         "nameDesc": "Name Z-A",
         "relevance": "Relevance"
+      },
+      "userPrompts": {
+        "saveNew": "Save a new prompt",
+        "saveTitle": "Save a new prompt",
+        "editTitle": "Edit prompt",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Weekly summary",
+        "descriptionLabel": "Description (optional)",
+        "descriptionPlaceholder": "What is this prompt for?",
+        "promptLabel": "Prompt",
+        "promptPlaceholder": "Write your prompt text here...",
+        "visibilityLabel": "Visibility",
+        "visibilityPrivate": "Private (only me)",
+        "visibilityShared": "Shared (everyone)",
+        "validationError": "Name and prompt text are required",
+        "saveError": "Failed to save prompt",
+        "deleteConfirm": "Delete this prompt? This cannot be undone.",
+        "mine": "Mine",
+        "sharedByOther": "Shared"
       }
     },
     "notFound": {
