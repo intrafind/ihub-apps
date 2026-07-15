@@ -56,31 +56,9 @@ function AdminAuthPage() {
       defaultGroups: [],
       sessionTimeoutMinutes: 480,
       generateJwtToken: true
-    },
-    authDebug: {
-      enabled: false,
-      maskTokens: true,
-      redactPasswords: true,
-      consoleLogging: false,
-      includeRawData: false,
-      providers: {
-        oidc: {
-          enabled: true
-        },
-        local: {
-          enabled: true
-        },
-        proxy: {
-          enabled: true
-        },
-        ldap: {
-          enabled: true
-        },
-        ntlm: {
-          enabled: true
-        }
-      }
     }
+    // Authentication debug logging is configured on the Logging page
+    // (Platform → Logging) under the canonical `auth.debug` key.
   });
 
   useEffect(() => {
