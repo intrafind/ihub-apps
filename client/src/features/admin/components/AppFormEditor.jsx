@@ -17,6 +17,9 @@ import VariablesSection from './app-form/VariablesSection';
 import WebSearchSection from './app-form/WebSearchSection';
 import IAssistantSection from './app-form/IAssistantSection';
 import TranscriptionSection from './app-form/TranscriptionSection';
+import MagicPromptSection from './app-form/MagicPromptSection';
+import ExportConfigSection from './app-form/ExportConfigSection';
+import CompareModeSection from './app-form/CompareModeSection';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateWithSchema,
@@ -685,189 +688,13 @@ function AppFormEditor({
             />
 
             {/* Magic Prompt Configuration */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.magicPrompt', 'Magic Prompt')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.apps.edit.magicPromptDesc', 'AI-powered prompt enhancement feature')}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.features?.magicPrompt?.enabled || false}
-                        onChange={e =>
-                          handleInputChange('features', {
-                            ...app.features,
-                            magicPrompt: { ...app.features?.magicPrompt, enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
-                      </label>
-                    </div>
-
-                    {app.features?.magicPrompt?.enabled && (
-                      <div className="space-y-4 pl-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
-                          </label>
-                          <select
-                            value={app.features?.magicPrompt?.model || ''}
-                            onChange={e =>
-                              handleInputChange('features', {
-                                ...app.features,
-                                magicPrompt: {
-                                  ...app.features?.magicPrompt,
-                                  model: e.target.value || undefined
-                                }
-                              })
-                            }
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          >
-                            <option value="">
-                              {t('admin.apps.edit.selectModel', 'Select model...')}
-                            </option>
-                            {availableModels.map(model => (
-                              <option key={model.id} value={model.id}>
-                                {getLocalizedContent(model.name, currentLanguage)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t(
-                              'admin.apps.edit.magicPromptInstructions',
-                              'Magic Prompt Instructions'
-                            )}
-                          </label>
-                          <textarea
-                            value={
-                              app.features?.magicPrompt?.prompt ||
-                              'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
-                            }
-                            onChange={e =>
-                              handleInputChange('features', {
-                                ...app.features,
-                                magicPrompt: {
-                                  ...app.features?.magicPrompt,
-                                  prompt: e.target.value
-                                }
-                              })
-                            }
-                            rows={3}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            placeholder="Enter instructions for the magic prompt feature..."
-                          />
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {t(
-                              'admin.apps.edit.magicPromptPlaceholder',
-                              "Use {{prompt}} to reference the user's original prompt"
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <MagicPromptSection app={app} onChange={onChange} availableModels={availableModels} />
 
             {/* Export Configuration */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.export', 'Export')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.exportDesc',
-                      'Control whether users can export conversations from this app'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.features?.export !== false}
-                        onChange={e =>
-                          handleInputChange('features', {
-                            ...app.features,
-                            export: e.target.checked
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableExport', 'Enable Export')}
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.apps.edit.exportNote',
-                        'When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.'
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ExportConfigSection app={app} onChange={onChange} />
 
             {/* Compare Mode Configuration */}
-            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-              <div className="md:grid md:grid-cols-3 md:gap-6">
-                <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                    {t('admin.apps.edit.compareMode', 'Compare Mode')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.apps.edit.compareModeDesc',
-                      'Allow users to query two models simultaneously and compare their responses side-by-side'
-                    )}
-                  </p>
-                </div>
-                <div className="mt-5 md:col-span-2 md:mt-0">
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={app.features?.compareMode?.enabled !== false}
-                        onChange={e =>
-                          handleInputChange('features', {
-                            ...app.features,
-                            compareMode: { ...app.features?.compareMode, enabled: e.target.checked }
-                          })
-                        }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                      />
-                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                        {t('admin.apps.edit.enableCompareMode', 'Enable Compare Mode')}
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {t(
-                        'admin.apps.edit.compareModeNote',
-                        'When enabled, users can activate compare mode to send their input to two different models and view the responses side-by-side. The platform-level compare mode feature must also be enabled for this to work.'
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CompareModeSection app={app} onChange={onChange} />
 
             {/* Input Mode & Microphone Configuration */}
             <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
