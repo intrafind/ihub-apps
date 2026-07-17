@@ -538,3 +538,20 @@ need tenant-specific wording, a support contact, or a different tone.
   installations get the current wording seeded automatically so there's nothing to fill in unless
   you want to change it.
 - No admin action is required on upgrade; a migration adds the editable defaults for you.
+
+## Authentication Debug Logging — Fixed and Consolidated
+
+Enabling authentication debug logging now actually works, and all of its controls live in one
+place. Admins can trace OIDC redirects, token exchange, group mapping, and NTLM handshakes to
+diagnose sign-in problems.
+
+- Configure it under **Admin → Platform → Logging → Authentication Debug Logging**. The
+  Authentication page now points here instead of offering a second, disconnected copy.
+- Turning it on is sufficient on its own — traces are written at the `info` level, so they appear
+  at the default log level without also lowering the global log level, and the change applies
+  immediately (no server restart).
+- The **Include raw authentication data** option (off by default) is clearly marked as a security
+  risk; leave it off unless you are actively debugging, and turn it off again afterward.
+- The obsolete "Console logging" toggle was removed (the logger already manages console output).
+- No admin action is required on upgrade: a migration moves any previously saved setting to its new
+  location so your configuration is preserved.
