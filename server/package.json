@@ -36,7 +36,7 @@
     "dotenv": "^16.0.3",
     "envalid": "^7.3.1",
     "eventsource-parser": "^3.0.3",
-    "express": "^4.22.2",
+    "express": "^5.2.1",
     "express-ntlm": "^2.7.0",
     "express-rate-limit": "^8.5.1",
     "express-session": "^1.18.2",
