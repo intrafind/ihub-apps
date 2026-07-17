@@ -35,7 +35,7 @@
     "microsoft-cognitiveservices-speech-sdk": "^1.44.0",
     "pdfjs-dist": "^4.10.38",
     "pptxgenjs": "^4.0.1",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0",
     "react-error-boundary": "^6.0.0",
     "react-i18next": "^15.4.1",
@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@microsoft/office-js": "^1.1.110",
-    "@types/react": "^18.0.28",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.14",
