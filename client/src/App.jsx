@@ -13,7 +13,7 @@ const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = lazyWithRetry(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
-// Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
+// Lazy load canvas (pulls in react-quill-new/ajv — vendor-forms chunk, ~370KB)
 const AppCanvas = lazyWithRetry(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
