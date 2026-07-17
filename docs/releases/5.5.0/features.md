@@ -1,5 +1,28 @@
 # Features — 5.5.0
 
+## Cancelling a Workflow No Longer Crashes the Server
+
+Fixed a crash where stopping or cancelling a running workflow at the moment the chat connection
+dropped could take down the entire server for all users.
+
+- Previously, if the browser's connection closed while a workflow was being cancelled, the stop
+  handler tried to close an already-removed connection and threw an unhandled error, exiting the
+  server process.
+- The stop endpoint now safely handles a connection that has already disconnected, so cancelling a
+  workflow always completes cleanly.
+
+## Authentication Admin Now Uses Searchable Group Pickers
+
+The default-group fields in Authentication settings are now searchable group selectors instead of
+free-text inputs, so admins pick from real, defined groups and can no longer introduce typos that
+silently grant no permissions.
+
+- Applies to all default-group fields: the authenticated-users group, anonymous-access groups, and
+  the default groups for each OIDC, LDAP, and NTLM provider.
+- Each field shows the defined groups with their names and descriptions and filters as you type.
+- Any group value that no longer matches a defined group is still shown but visibly flagged, so
+  existing configurations remain visible and can be corrected rather than being dropped.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
@@ -515,3 +538,20 @@ need tenant-specific wording, a support contact, or a different tone.
   installations get the current wording seeded automatically so there's nothing to fill in unless
   you want to change it.
 - No admin action is required on upgrade; a migration adds the editable defaults for you.
+
+## Authentication Debug Logging — Fixed and Consolidated
+
+Enabling authentication debug logging now actually works, and all of its controls live in one
+place. Admins can trace OIDC redirects, token exchange, group mapping, and NTLM handshakes to
+diagnose sign-in problems.
+
+- Configure it under **Admin → Platform → Logging → Authentication Debug Logging**. The
+  Authentication page now points here instead of offering a second, disconnected copy.
+- Turning it on is sufficient on its own — traces are written at the `info` level, so they appear
+  at the default log level without also lowering the global log level, and the change applies
+  immediately (no server restart).
+- The **Include raw authentication data** option (off by default) is clearly marked as a security
+  risk; leave it off unless you are actively debugging, and turn it off again afterward.
+- The obsolete "Console logging" toggle was removed (the logger already manages console output).
+- No admin action is required on upgrade: a migration moves any previously saved setting to its new
+  location so your configuration is preserved.

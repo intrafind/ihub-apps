@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { CredentialRefSelect } from './OpenApiToolEditor';
+import GroupMultiSelect from './GroupMultiSelect';
 
 // OIDC Provider Templates
 const OIDC_PROVIDER_TEMPLATES = {
@@ -67,7 +68,7 @@ const OIDC_PROVIDER_TEMPLATES = {
 /**
  * PlatformFormEditor - Form-based editor for platform configuration
  */
-function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
+function PlatformFormEditor({ value: config, onChange, onValidationChange, availableGroups = [] }) {
   const { t } = useTranslation();
   const [showProviderModal, setShowProviderModal] = useState(false);
 
@@ -270,32 +271,6 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
       ldapAuth: {
         ...config.ldapAuth,
         providers
-      }
-    });
-  };
-
-  const updateAuthDebugConfig = (field, value) => {
-    onChange({
-      ...config,
-      authDebug: {
-        ...config.authDebug,
-        [field]: value
-      }
-    });
-  };
-
-  const updateAuthDebugProvider = (provider, field, value) => {
-    onChange({
-      ...config,
-      authDebug: {
-        ...config.authDebug,
-        providers: {
-          ...config.authDebug?.providers,
-          [provider]: {
-            ...config.authDebug?.providers?.[provider],
-            [field]: value
-          }
-        }
       }
     });
   };
@@ -509,47 +484,42 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Authenticated Groups
-            </label>
-            <input
-              type="text"
-              value={config.auth?.authenticatedGroup || ''}
-              onChange={e => updateNestedConfig('auth', 'authenticatedGroup', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="authenticated"
+            <GroupMultiSelect
+              id="auth-authenticated-group"
+              label={t('admin.auth.groups.authenticatedLabel', 'Authenticated Group')}
+              multiple={false}
+              allowCustom={false}
+              availableGroups={availableGroups}
+              value={config.auth?.authenticatedGroup ? [config.auth.authenticatedGroup] : []}
+              onChange={next =>
+                updateNestedConfig('auth', 'authenticatedGroup', next[next.length - 1] || '')
+              }
+              placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+              emptyMessage={t('admin.auth.groups.emptySingle', 'No group selected yet')}
+              helpText={t(
+                'admin.auth.groups.authenticatedHelp',
+                'Internal group automatically assigned to all authenticated users'
+              )}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Group automatically assigned to all authenticated users
-            </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Anonymous Groups
-            </label>
-            <input
-              type="text"
+            <GroupMultiSelect
+              id="anonymous-default-groups"
+              label={t('admin.auth.groups.anonymousLabel', 'Anonymous Groups')}
+              allowCustom={false}
+              availableGroups={availableGroups}
               value={
                 Array.isArray(config.anonymousAuth?.defaultGroups)
-                  ? config.anonymousAuth.defaultGroups.join(', ')
-                  : ''
+                  ? config.anonymousAuth.defaultGroups
+                  : []
               }
-              onChange={e =>
-                updateNestedConfig(
-                  'anonymousAuth',
-                  'defaultGroups',
-                  e.target.value
-                    .split(',')
-                    .map(g => g.trim())
-                    .filter(g => g)
-                )
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="anonymous, guest"
+              onChange={next => updateNestedConfig('anonymousAuth', 'defaultGroups', next)}
+              placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+              helpText={t(
+                'admin.auth.groups.anonymousHelp',
+                'Internal groups assigned to users who access without authentication'
+              )}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Groups assigned to users who access without authentication (comma-separated)
-            </p>
           </div>
         </div>
       </div>
@@ -981,24 +951,18 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Default Groups (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="google-users, external-users"
-                        value={provider.defaultGroups ? provider.defaultGroups.join(', ') : ''}
-                        onChange={e =>
-                          updateOidcProvider(
-                            index,
-                            'defaultGroups',
-                            e.target.value
-                              .split(',')
-                              .map(s => s.trim())
-                              .filter(s => s)
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      <GroupMultiSelect
+                        id={`oidc-default-groups-${index}`}
+                        label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                        allowCustom={false}
+                        availableGroups={availableGroups}
+                        value={Array.isArray(provider.defaultGroups) ? provider.defaultGroups : []}
+                        onChange={next => updateOidcProvider(index, 'defaultGroups', next)}
+                        placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                        helpText={t(
+                          'admin.auth.groups.oidcHelp',
+                          'Internal groups automatically assigned to users authenticating with this provider'
+                        )}
                       />
                     </div>
                     <div>
@@ -1263,30 +1227,19 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Default Groups (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      Array.isArray(provider.defaultGroups) ? provider.defaultGroups.join(', ') : ''
-                    }
-                    onChange={e =>
-                      updateLdapProvider(
-                        index,
-                        'defaultGroups',
-                        e.target.value
-                          .split(',')
-                          .map(g => g.trim())
-                          .filter(g => g)
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="ldap-users, employees"
+                  <GroupMultiSelect
+                    id={`ldap-default-groups-${index}`}
+                    label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                    allowCustom={false}
+                    availableGroups={availableGroups}
+                    value={Array.isArray(provider.defaultGroups) ? provider.defaultGroups : []}
+                    onChange={next => updateLdapProvider(index, 'defaultGroups', next)}
+                    placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                    helpText={t(
+                      'admin.auth.groups.ldapHelp',
+                      'Internal groups automatically assigned to LDAP users'
+                    )}
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Groups automatically assigned to LDAP users
-                  </p>
                 </div>
 
                 <div className="md:col-span-2">
@@ -1422,32 +1375,21 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
               </p>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Default Groups (comma-separated)
-              </label>
-              <input
-                type="text"
+              <GroupMultiSelect
+                id="ntlm-default-groups"
+                label={t('admin.auth.groups.defaultLabel', 'Default Groups')}
+                allowCustom={false}
+                availableGroups={availableGroups}
                 value={
-                  Array.isArray(config.ntlmAuth?.defaultGroups)
-                    ? config.ntlmAuth.defaultGroups.join(', ')
-                    : ''
+                  Array.isArray(config.ntlmAuth?.defaultGroups) ? config.ntlmAuth.defaultGroups : []
                 }
-                onChange={e =>
-                  updateNestedConfig(
-                    'ntlmAuth',
-                    'defaultGroups',
-                    e.target.value
-                      .split(',')
-                      .map(g => g.trim())
-                      .filter(g => g)
-                  )
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="ntlm-users, domain-users"
+                onChange={next => updateNestedConfig('ntlmAuth', 'defaultGroups', next)}
+                placeholder={t('admin.auth.groups.searchPlaceholder', 'Search groups…')}
+                helpText={t(
+                  'admin.auth.groups.ntlmHelp',
+                  'Internal groups automatically assigned to NTLM authenticated users'
+                )}
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Groups automatically assigned to NTLM authenticated users
-              </p>
             </div>
             <div>
               <label className="flex items-center">
@@ -1564,129 +1506,24 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
         </div>
       )}
 
-      {/* Authentication Debug Settings */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Debug Settings</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Enable detailed logging for authentication providers to troubleshoot issues.
-            <span className="text-amber-600 font-medium ml-1">
-              Warning: This may log sensitive information.
-            </span>
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-start space-x-3">
-            <div className="flex items-center h-5">
-              <input
-                type="checkbox"
-                checked={config.authDebug?.enabled || false}
-                onChange={e => updateAuthDebugConfig('enabled', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium text-gray-900">
-                Enable Authentication Debug Logging
-              </label>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Log authentication events, token exchanges, and user information for troubleshooting
-              </p>
-            </div>
+      {/* Authentication Debug Settings — consolidated onto the Logging page */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+        <div className="flex items-start">
+          <Icon
+            name="information-circle"
+            className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+          />
+          <div className="text-sm text-blue-800 dark:text-blue-300">
+            <p className="font-medium">
+              {t('admin.auth.debugMovedTitle', 'Authentication debug logging moved')}
+            </p>
+            <p className="mt-1 text-xs">
+              {t(
+                'admin.auth.debugMovedHelp',
+                'All authentication debug settings (OIDC/LDAP/NTLM tracing, token masking, raw data) now live in one place: Platform → Logging → Authentication Debug Logging.'
+              )}
+            </p>
           </div>
-
-          {config.authDebug?.enabled && (
-            <div className="ml-6 space-y-4 pl-4 border-l-2 border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.authDebug?.maskTokens !== false}
-                      onChange={e => updateAuthDebugConfig('maskTokens', e.target.checked)}
-                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Mask Tokens</span>
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Hide sensitive parts of access tokens and secrets
-                  </p>
-                </div>
-
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.authDebug?.redactPasswords !== false}
-                      onChange={e => updateAuthDebugConfig('redactPasswords', e.target.checked)}
-                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Redact Passwords</span>
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Remove passwords and credentials from logs
-                  </p>
-                </div>
-
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.authDebug?.consoleLogging || false}
-                      onChange={e => updateAuthDebugConfig('consoleLogging', e.target.checked)}
-                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Console Logging</span>
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Also output debug logs to console
-                  </p>
-                </div>
-
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.authDebug?.includeRawData || false}
-                      onChange={e => updateAuthDebugConfig('includeRawData', e.target.checked)}
-                      className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Include Raw Data</span>
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Include unsanitized raw data (security risk)
-                  </p>
-                </div>
-              </div>
-
-              {/* Provider-specific settings */}
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Provider Settings</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {['oidc', 'local', 'proxy', 'ldap', 'ntlm'].map(provider => (
-                    <div key={provider} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`debug-${provider}`}
-                        checked={config.authDebug?.providers?.[provider]?.enabled !== false}
-                        onChange={e =>
-                          updateAuthDebugProvider(provider, 'enabled', e.target.checked)
-                        }
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`debug-${provider}`} className="text-sm text-gray-700">
-                        {provider.toUpperCase()}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Enable debug logging per authentication provider
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
