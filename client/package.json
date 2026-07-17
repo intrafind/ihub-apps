@@ -47,7 +47,7 @@
     "turndown": "^7.2.0",
     "utif2": "^4.1.0",
     "uuid": "^14.0.1",
-    "write-excel-file": "^2.3.10",
+    "write-excel-file": "^4.1.1",
     "xlsx": "^0.18.5"
   },
   "overrides": {
