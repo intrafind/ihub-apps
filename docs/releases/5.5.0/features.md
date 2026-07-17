@@ -1,5 +1,16 @@
 # Features — 5.5.0
 
+## Cancelling a Workflow No Longer Crashes the Server
+
+Fixed a crash where stopping or cancelling a running workflow at the moment the chat connection
+dropped could take down the entire server for all users.
+
+- Previously, if the browser's connection closed while a workflow was being cancelled, the stop
+  handler tried to close an already-removed connection and threw an unhandled error, exiting the
+  server process.
+- The stop endpoint now safely handles a connection that has already disconnected, so cancelling a
+  workflow always completes cleanly.
+
 ## Authentication Admin Now Uses Searchable Group Pickers
 
 The default-group fields in Authentication settings are now searchable group selectors instead of
