@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { CredentialRefSelect } from './OpenApiToolEditor';
 import GroupMultiSelect from './GroupMultiSelect';
 import JwtProvidersSection from './platform-form/JwtProvidersSection';
 import OidcProvidersSection from './platform-form/OidcProvidersSection';

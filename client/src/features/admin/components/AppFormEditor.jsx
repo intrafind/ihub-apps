@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import StarterPromptsSection from './app-form/StarterPromptsSection';
 import ToolsConfigSection from './app-form/ToolsConfigSection';
 import McpToolsConfigSection from './app-form/McpToolsConfigSection';
 import SkillsConfigSection from './app-form/SkillsConfigSection';
 import WorkflowsConfigSection from './app-form/WorkflowsConfigSection';
-import ResourceSelector from './ResourceSelector';
 import IframeConfigSection from './app-form/IframeConfigSection';
 import RedirectConfigSection from './app-form/RedirectConfigSection';
 import Icon from '../../../shared/components/Icon';
@@ -21,7 +19,6 @@ import CompareModeSection from './app-form/CompareModeSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
 import SourcesConfigSection from './app-form/SourcesConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
-import { getLocalizedContent } from '../../../utils/localizeContent';
 import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
@@ -166,15 +163,6 @@ function AppFormEditor({
     };
     onChange(updatedApp);
   };
-
-  const handleLocalizedChange = (field, value) => {
-    const updatedApp = {
-      ...app,
-      [field]: value
-    };
-    onChange(updatedApp);
-  };
-
 
   if (!app) {
     return (
