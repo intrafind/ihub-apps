@@ -1,5 +1,28 @@
 # Features — 5.5.0
 
+## Cancelling a Workflow No Longer Crashes the Server
+
+Fixed a crash where stopping or cancelling a running workflow at the moment the chat connection
+dropped could take down the entire server for all users.
+
+- Previously, if the browser's connection closed while a workflow was being cancelled, the stop
+  handler tried to close an already-removed connection and threw an unhandled error, exiting the
+  server process.
+- The stop endpoint now safely handles a connection that has already disconnected, so cancelling a
+  workflow always completes cleanly.
+
+## Authentication Admin Now Uses Searchable Group Pickers
+
+The default-group fields in Authentication settings are now searchable group selectors instead of
+free-text inputs, so admins pick from real, defined groups and can no longer introduce typos that
+silently grant no permissions.
+
+- Applies to all default-group fields: the authenticated-users group, anonymous-access groups, and
+  the default groups for each OIDC, LDAP, and NTLM provider.
+- Each field shows the defined groups with their names and descriptions and filters as you type.
+- Any group value that no longer matches a defined group is still shown but visibly flagged, so
+  existing configurations remain visible and can be corrected rather than being dropped.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
@@ -30,6 +53,19 @@ existing native-search behavior already available for Gemini and GPT models.
   migrated automatically. Only Brave Search remains a real, script-backed tool; native search is
   now resolved directly from the app/workflow configuration and passed straight to the model
   provider.
+
+## Agent Workflows No Longer Crash on Their First Prompt Step
+
+Fixed a regression introduced with the native web search rework above that caused agent workflows
+to fail as soon as they reached a prompt step, with the error `Agent execution failed:
+nativeWebSearch is not defined`.
+
+- Every workflow with a prompt/agent node was affected, whether or not the node used web search;
+  the failure surfaced on the first such step (for example, the Stellungnahmen review workflows
+  failed at their `refine-decision` step).
+- Workflows now run their prompt steps normally again, and the native web search directive is
+  correctly applied on steps that request it.
+- No configuration changes are required.
 
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
@@ -504,3 +540,35 @@ configuration migrations and admin-UI saves once it did.
   file should back up their current volumes first (see `docker/DOCKER.md`'s updated backup/migration
   steps) since the old per-directory volumes (`ihub-config`, `ihub-data`, `ihub-uploads`, etc.) are
   replaced by a single `ihub-contents` volume.
+  
+## Customizable Error & Empty-State Messages
+
+Admins can now reword the text shown on error and empty-state screens per language, directly from
+the admin panel — no code change or redeploy required. This is useful for branded deployments that
+need tenant-specific wording, a support contact, or a different tone.
+
+- Covers the generic error screen, the 404 / 500 / 403 / 401 pages, and the "no apps available"
+  state on the apps list.
+- Edit under **Admin → UI Customization → Error Pages**. Each screen has its own title and message
+  fields, with the standard multi-language editor (add languages, auto-translate).
+- Every field is optional — leave one empty to keep the built-in default text. Existing
+  installations get the current wording seeded automatically so there's nothing to fill in unless
+  you want to change it.
+- No admin action is required on upgrade; a migration adds the editable defaults for you.
+
+## Authentication Debug Logging — Fixed and Consolidated
+
+Enabling authentication debug logging now actually works, and all of its controls live in one
+place. Admins can trace OIDC redirects, token exchange, group mapping, and NTLM handshakes to
+diagnose sign-in problems.
+
+- Configure it under **Admin → Platform → Logging → Authentication Debug Logging**. The
+  Authentication page now points here instead of offering a second, disconnected copy.
+- Turning it on is sufficient on its own — traces are written at the `info` level, so they appear
+  at the default log level without also lowering the global log level, and the change applies
+  immediately (no server restart).
+- The **Include raw authentication data** option (off by default) is clearly marked as a security
+  risk; leave it off unless you are actively debugging, and turn it off again afterward.
+- The obsolete "Console logging" toggle was removed (the logger already manages console output).
+- No admin action is required on upgrade: a migration moves any previously saved setting to its new
+  location so your configuration is preserved.

@@ -407,5 +407,18 @@ export default function registerAdminUIRoutes(app) {
         throw new Error('pwa.shortName must be a string');
       }
     }
+
+    // Validate errorPages section if present. Each screen is an object of
+    // localized `{ lang: value }` fields; unset fields fall back to i18n.
+    if (config.errorPages !== undefined) {
+      if (typeof config.errorPages !== 'object' || Array.isArray(config.errorPages)) {
+        throw new Error('errorPages section must be an object');
+      }
+      for (const [pageKey, page] of Object.entries(config.errorPages)) {
+        if (page !== null && (typeof page !== 'object' || Array.isArray(page))) {
+          throw new Error(`errorPages.${pageKey} must be an object`);
+        }
+      }
+    }
   }
 }
