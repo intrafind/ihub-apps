@@ -509,6 +509,21 @@ route groups that previously relied only on the coarse URL-derived fallback: **T
 - No admin action required — existing audit log filtering, retention, and CSV export apply to
   these new entries automatically.
 
+## Foundation for a PostgreSQL Persistence Backend (Preview)
+
+iHub now reads configuration (apps, models, prompts, groups, platform config, and more) through a
+new storage abstraction instead of talking to the filesystem directly everywhere. This is the
+first step toward optional PostgreSQL-backed storage — needed for running multiple iHub instances
+behind a load balancer.
+
+- No action required for existing deployments: the filesystem remains the default backend and
+  behavior is unchanged.
+- Setting the `DATABASE_URL` environment variable switches configuration reads to a PostgreSQL
+  table instead, created automatically on first use.
+- This is an early preview: admin writes still go to the filesystem regardless of this setting, and
+  there is no tool yet to migrate existing `contents/` data into PostgreSQL. See
+  [Persistence Layer](../../persistence.md) for details.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could

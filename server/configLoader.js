@@ -1,24 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
-import config from './config.js';
 import logger from './utils/logger.js';
 import { resolveAndValidatePath } from './utils/pathSecurity.js';
+import { getStorageProvider } from './persistence/StorageRegistry.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
-
-async function resolvePath(relativePath) {
-  const rootDir = getRootDir();
-  const contentsDir = config.CONTENTS_DIR;
-  const baseDir = path.join(rootDir, contentsDir);
-  const resolved = await resolveAndValidatePath(relativePath, baseDir);
-  if (!resolved) {
-    logger.warn(`Path traversal blocked in configLoader: ${relativePath}`);
-    return path.join(baseDir, path.basename(relativePath));
-  }
-  return resolved;
-}
 
 async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) {
   const cacheKey = `${relativePath}:${parse}`;
@@ -32,8 +20,14 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
       cache.delete(cacheKey);
     }
 
-    const filePath = await resolvePath(relativePath);
-    const data = await fs.readFile(filePath, 'utf8');
+    const provider = await getStorageProvider();
+    const data = await provider.read(relativePath);
+    if (data === null) {
+      // Mirror the previous fs.readFile ENOENT behavior below.
+      const error = new Error(`ENOENT: not found: ${relativePath}`);
+      error.code = 'ENOENT';
+      throw error;
+    }
     const result = parse === 'json' ? JSON.parse(data) : data;
 
     if (useCache) {
