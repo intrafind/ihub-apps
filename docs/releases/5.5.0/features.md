@@ -547,6 +547,16 @@ is now both prevented and, if it still happens, reported clearly instead of show
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Dynamic JSX Pages No Longer Depend on a Public CDN
+
+Custom React pages (`contents/pages/*.jsx`) and app-embedded React components now compile using the
+JSX compiler already bundled with iHub, instead of fetching it from `unpkg.com`/`cdn.jsdelivr.net`
+at runtime. This removes a supply-chain dependency on those CDNs being reachable and trustworthy,
+and fixes JSX pages failing to render on air-gapped or self-hosted deployments that block outbound
+calls to public CDNs.
+
+- No admin action is required — the compiler now loads from iHub's own bundle on first use.
+
 ## Disabling a Teams SSO User Now Actually Blocks Them
 
 Disabling a Microsoft Teams user's account previously had no effect: Teams SSO logins (both the
