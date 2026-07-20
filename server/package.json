@@ -71,7 +71,7 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.6",
+    "@babel/core": "^8.0.1",
     "@babel/preset-env": "^7.29.0",
     "babel-jest": "^29.7.0",
     "jest": "^29.7.0",
