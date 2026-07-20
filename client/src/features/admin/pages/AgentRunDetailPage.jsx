@@ -40,7 +40,7 @@ export default function AgentRunDetailPage() {
   // Controls the cancel-run confirmation dialog.
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   // Live-updating clock for the run progress indicator (only ticks while running).
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   // ArtifactViewer modal target: null when closed, artifact name when open.
   const [viewingArtifact, setViewingArtifact] = useState(null);
   // Long ledgers — start collapsed past N entries.
