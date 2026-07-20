@@ -906,6 +906,18 @@
       "builtInSystem": "Integriertes Benutzername/Passwort-System",
       "anonymousAccess": "Anonymer Zugriff",
       "defaultGroups": "Standardgruppen",
+      "groups": {
+        "authenticatedLabel": "Authentifizierte Gruppe",
+        "authenticatedHelp": "Interne Gruppe, die automatisch allen authentifizierten Benutzern zugewiesen wird",
+        "anonymousLabel": "Anonyme Gruppen",
+        "anonymousHelp": "Interne Gruppen, die Benutzern ohne Authentifizierung zugewiesen werden",
+        "defaultLabel": "Standardgruppen",
+        "oidcHelp": "Interne Gruppen, die Benutzern bei der Authentifizierung über diesen Anbieter automatisch zugewiesen werden",
+        "ldapHelp": "Interne Gruppen, die LDAP-Benutzern automatisch zugewiesen werden",
+        "ntlmHelp": "Interne Gruppen, die über NTLM authentifizierten Benutzern automatisch zugewiesen werden",
+        "searchPlaceholder": "Gruppen suchen…",
+        "emptySingle": "Noch keine Gruppe ausgewählt"
+      },
       "jwtProviders": "JWT-Anbieter",
       "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
       "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren",
@@ -2060,6 +2072,7 @@
       "TEAMS_SSO_TOKEN_REQUIRED": "SSO-Token ist erforderlich",
       "TEAMS_AUTH_NOT_ENABLED": "Teams-Authentifizierung ist nicht aktiviert",
       "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Ungültiges oder abgelaufenes Teams-Token",
+      "TEAMS_ACCOUNT_DISABLED": "Ihr Konto wurde deaktiviert. Bitte wenden Sie sich an Ihren Administrator.",
       "TEAMS_TAB_CONFIG_SAVED": "Tab-Konfiguration gespeichert"
     },
     "manifest": {

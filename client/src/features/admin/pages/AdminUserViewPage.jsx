@@ -12,6 +12,8 @@ function AdminUserViewPage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Captured once per mount — the static "days ago" label needs no live clock
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const loadUser = async () => {
@@ -293,9 +295,7 @@ function AdminUserViewPage() {
                   <div className="flex flex-col">
                     <span>{new Date(user.lastActiveDate).toLocaleString()}</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {Math.floor(
-                        (Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24)
-                      )}{' '}
+                      {Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24))}{' '}
                       {t('admin.users.view.daysAgo', 'days ago')}
                     </span>
                   </div>
