@@ -3,6 +3,7 @@ import jwksClient from 'jwks-rsa';
 import { promisify } from 'util';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
 import logger from '../utils/logger.js';
@@ -20,6 +21,14 @@ const createJwksClient = tenantId => {
 
 // Cache for JWKS clients per tenant
 const jwksClients = new Map();
+
+/**
+ * Detect the disabled-account error thrown by validateAndPersistExternalUser
+ * so it can be rejected explicitly instead of falling into generic error handling.
+ */
+function isAccountDisabledError(error) {
+  return typeof error?.message === 'string' && error.message.includes('account is disabled');
+}
 
 /**
  * Get or create JWKS client for a tenant
@@ -170,7 +179,11 @@ export async function teamsAuthMiddleware(req, res, next) {
     }
 
     // Normalize user data
-    const user = normalizeTeamsUser(tokenData, profile, groups, teamsConfig);
+    const normalizedUser = normalizeTeamsUser(tokenData, profile, groups, teamsConfig);
+
+    // Validate and persist the user like every other external provider (OIDC/LDAP/NTLM/Proxy),
+    // so an administrator can disable a Teams user via users.json
+    const user = await validateAndPersistExternalUser(normalizedUser, platform);
 
     // Generate our JWT token using centralized token service
     const { token } = generateJwt(user, {
@@ -189,6 +202,13 @@ export async function teamsAuthMiddleware(req, res, next) {
     next();
   } catch (error) {
     logger.error('Teams authentication failed', { component: 'TeamsAuth', error });
+
+    if (isAccountDisabledError(error)) {
+      return res.status(403).json({
+        error: 'access_denied',
+        error_description: 'User account has been disabled'
+      });
+    }
 
     // Don't fail the request, just continue without Teams auth
     // This allows fallback to other auth methods
@@ -242,7 +262,11 @@ export async function teamsTokenExchange(req, res) {
     const groups = tokenData.groups || [];
 
     // Normalize user data
-    const user = normalizeTeamsUser(tokenData, null, groups, teamsConfig);
+    const normalizedUser = normalizeTeamsUser(tokenData, null, groups, teamsConfig);
+
+    // Validate and persist the user like every other external provider (OIDC/LDAP/NTLM/Proxy),
+    // so an administrator can disable a Teams user via users.json
+    const user = await validateAndPersistExternalUser(normalizedUser, platform);
 
     // Generate our JWT token using centralized token service
     const { token, expiresIn } = generateJwt(user, {
@@ -271,6 +295,20 @@ export async function teamsTokenExchange(req, res) {
     });
   } catch (error) {
     logger.error('Teams token exchange error', { component: 'TeamsAuth', error });
+
+    if (isAccountDisabledError(error)) {
+      const errorMessage = await errorHandler.getLocalizedError(
+        'TEAMS_ACCOUNT_DISABLED',
+        {},
+        language
+      );
+      return res.status(403).json({
+        success: false,
+        error: errorMessage,
+        errorKey: 'TEAMS_ACCOUNT_DISABLED'
+      });
+    }
+
     const errorMessage = await errorHandler.getLocalizedError(
       'TEAMS_INVALID_OR_EXPIRED_TOKEN',
       {},
