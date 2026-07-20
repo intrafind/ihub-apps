@@ -90,6 +90,19 @@ tests/
 - **Framework**: Jest + Supertest
 - **Coverage**: All API endpoints
 - **Run with**: `npm run test:integration`
+- **CI**: `.github/workflows/integration-tests.yml` runs `npm run test:integration:ci` on every PR,
+  which excludes `tests/integration/api/chat.test.js` and
+  `tests/integration/models/model-integration.test.js`. Both fail to even collect under this
+  Jest config: they transitively pull in real ESM-only server code (`server/server.js`'s
+  top-level await, and `node-fetch`/`http-proxy-agent` deep in the adapter/source-loading graph)
+  that Babel's CommonJS transform cannot represent. Making them run needs a true ESM-mode Jest
+  project (like `server/jest.config.js`'s `--experimental-vm-modules` setup), not a one-off fix -
+  see the comments at the top of each file and
+  [#1705](https://github.com/intrafind/ihub-apps/issues/1705).
+- **Not yet in CI**: `server/tests/` (its own Jest/ESM config, `cd server && npm test`) and
+  `tests/e2e/` beyond `accessibility.spec.js`. A spot-check found the majority of `server/tests/`
+  suites currently failing (worker crashes and stale assertions unrelated to any single fix),
+  which is a larger triage effort than this pass covers.
 
 ### 3. End-to-End Tests (`tests/e2e/`)
 

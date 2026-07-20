@@ -1,5 +1,5 @@
 /**
- * Migration V043 — Fix iFinder.jwtSubjectField template syntax
+ * Migration V076 — Fix iFinder.jwtSubjectField template syntax
  *
  * Background: the JWT subject template in `iFinder.jwtSubjectField` used the
  * `${field}` placeholder syntax (e.g. `"BMG\\${username}"`). configCache's
@@ -21,7 +21,7 @@
  * they are looked up by `iFinderJwt.resolveJwtSubject`, not template-replaced.
  */
 
-export const version = '043';
+export const version = '076';
 export const description = 'fix_ifinder_jwt_subject_template';
 
 const STANDARD_VALUES = new Set(['email', 'username', 'domain\\username']);

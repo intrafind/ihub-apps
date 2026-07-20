@@ -1,4 +1,5 @@
 import { apiClient } from './client.js';
+import { buildApiUrl } from '../utils/runtimeBasePath';
 
 const isPlainObjectForBody = value =>
   value !== null &&
@@ -664,8 +665,7 @@ export const importSkill = async formData => {
  * @param {string} skillName - The unique name identifier of the skill
  */
 export const exportSkill = skillName => {
-  const baseURL = import.meta.env.VITE_API_URL || '/api';
-  window.open(`${baseURL}/admin/skills/${encodeURIComponent(skillName)}/export`, '_blank');
+  window.open(buildApiUrl(`admin/skills/${encodeURIComponent(skillName)}/export`), '_blank');
 };
 
 // Marketplace - Registry management
