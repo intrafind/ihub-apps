@@ -1009,10 +1009,29 @@ export default function registerSessionRoutes(
           }
         }
 
+        // Re-read the client after the awaits above: cancelling the workflow
+        // yields the event loop, and the SSE connection can close in that gap
+        // (its req.on('close') handler deletes the entry from `clients`). The
+        // top-of-handler clients.has() check is therefore stale here, so guard
+        // against a now-missing entry instead of dereferencing undefined — an
+        // unguarded client.response.end() throws a TypeError that crashes the
+        // whole process as an unhandled rejection on Node >= 15.
         const client = clients.get(chatId);
         actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
-        client.response.end();
-        clients.delete(chatId);
+        if (client) {
+          try {
+            client.response.end();
+          } catch (error) {
+            // The socket may already be dead (write-after-end on an already
+            // destroyed stream). We're tearing it down anyway, so just log.
+            logger.warn('Error ending client response on stop', {
+              component: 'sessionRoutes',
+              chatId,
+              error: error?.message || String(error)
+            });
+          }
+          clients.delete(chatId);
+        }
         logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
