@@ -536,6 +536,18 @@ is now both prevented and, if it still happens, reported clearly instead of show
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Disabling a Teams SSO User Now Actually Blocks Them
+
+Disabling a Microsoft Teams user's account previously had no effect: Teams SSO logins (both the
+silent tab/app sign-in and the token-exchange endpoint) never checked or recorded the account's
+active status, unlike every other external login method (OIDC, LDAP, NTLM, proxy).
+
+- Teams users are now persisted to `users.json` and validated on every sign-in the same way as
+  OIDC/LDAP/NTLM/proxy users, so an admin who disables a Teams user's account blocks them from
+  signing in again (`403 Forbidden`).
+- No admin action is required — existing Teams users are picked up automatically on their next
+  sign-in.
+  
 ## Cancelling an Agent Run Now Actually Stops It
 
 Cancelling a workflow/agent run, or hitting its per-node timeout, previously only stopped things
