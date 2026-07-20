@@ -536,6 +536,19 @@ is now both prevented and, if it still happens, reported clearly instead of show
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Web Content Extraction Is Now Protected Against Redirect-Based SSRF
+
+The **webContentExtractor** tool (used directly by apps and internally by Brave Search's page
+extraction) validated only the initial URL before fetching. A page that redirected to an internal
+address — for example a cloud metadata endpoint — could bypass that check entirely and have the
+server fetch it on the tool's behalf.
+
+- Every redirect hop is now re-validated against the same private/internal-address guard as the
+  initial request, and the connection is pinned to the validated address to close a DNS-rebinding
+  window between the check and the fetch.
+- Redirect chains are capped at 5 hops to prevent an unbounded chain.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
 ## Production Docker Compose Now Boots on a Fresh Clone
 
 `docker/docker-compose.prod.yml` previously couldn't start on a clean checkout, and broke
