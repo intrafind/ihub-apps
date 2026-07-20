@@ -26,7 +26,7 @@ const EXCLUDED_SEGMENTS = [
   'inference',
   'session',
   'sessions',
-  'magic-prompts',
+  'magic-prompt',
   'short-links',
   'feedback',
   'translations',
