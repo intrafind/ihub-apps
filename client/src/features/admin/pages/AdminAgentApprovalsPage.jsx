@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchPendingApprovals } from '../../../api/agentsAdminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 export default function AdminAgentApprovalsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function AdminAgentApprovalsPage() {
         const res = await fetchPendingApprovals();
         setPending(res?.data || []);
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }

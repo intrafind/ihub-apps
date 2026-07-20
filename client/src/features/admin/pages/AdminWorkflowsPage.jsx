@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import {
-  fetchAdminWorkflows,
-  toggleAdminWorkflow,
-  deleteAdminWorkflow,
   createAdminWorkflow,
-  makeAdminApiCall
+  deleteAdminWorkflow,
+  fetchAdminWorkflows,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleAdminWorkflow
 } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
@@ -68,7 +69,7 @@ function AdminWorkflowsPage() {
       const data = await fetchAdminWorkflows();
       setWorkflows(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setWorkflows([]);
     } finally {
       setLoading(false);
@@ -80,7 +81,7 @@ function AdminWorkflowsPage() {
       await toggleAdminWorkflow(workflowId);
       await loadWorkflows();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -111,7 +112,7 @@ function AdminWorkflowsPage() {
       await createAdminWorkflow(clonedWorkflow);
       await loadWorkflows();
     } catch (err) {
-      if (err.message?.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         alert(
           t(
             'admin.workflows.cloneExists',
@@ -139,7 +140,7 @@ function AdminWorkflowsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download workflow config: ${err.message}`);
+      setError(`Failed to download workflow config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -162,12 +163,12 @@ function AdminWorkflowsPage() {
       await loadWorkflows();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Workflow with ID "${workflowConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload workflow config: ${err.message}`);
+        setError(`Failed to upload workflow config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);

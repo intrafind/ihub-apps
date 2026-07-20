@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -98,7 +98,7 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to load configuration: ${error.message}`
+        text: `Failed to load configuration: ${getAdminApiErrorMessage(error)}`
       });
     } finally {
       setLoading(false);
@@ -130,9 +130,8 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to save configuration: ${error.message}`
+        text: `Failed to save configuration: ${getAdminApiErrorMessage(error)}`
       });
-      throw error; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
     }

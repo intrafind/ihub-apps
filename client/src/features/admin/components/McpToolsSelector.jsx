@@ -5,6 +5,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { fetchMcpToolCatalog } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 /**
  * Dedicated picker for tools exposed by configured MCP servers. Unlike the
  * generic ToolsSelector (which lists statically configured tools), this groups
@@ -36,7 +37,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
         const ids = data.flatMap(s => (s.tools || []).map(tool => tool.name));
         onMcpToolIdsChange?.(ids);
       } catch (err) {
-        if (active) setError(err.message);
+        if (active) setError(getAdminApiErrorMessage(err));
       } finally {
         if (active) setLoading(false);
       }
