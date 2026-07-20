@@ -509,6 +509,17 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Chat Messages Are Now Sanitized Before Rendering as HTML
+
+User messages that carry an image, file, or audio attachment (or that merely contain text
+resembling an `<img>` tag or a `data:image` value) are now sanitized before being rendered as
+HTML. Previously this render path skipped the sanitization applied everywhere else in the app, so
+a pasted message body could execute arbitrary script in the app's origin.
+
+- No admin action is required — the fix takes effect automatically on upgrade.
+- Legitimate attachments (pasted images, uploaded files, audio) continue to render exactly as
+  before.
+  
 ## Audit Log Now Covers Tools, Marketplace, and UI Configuration Changes
 
 The admin audit log (Admin → Audit Log) now records explicit, before/after-aware entries for three
