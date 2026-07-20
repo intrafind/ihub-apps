@@ -210,7 +210,7 @@ const openaiResponse = convertResponseFromGeneric(genericResponse, 'openai', opt
 
 ### Breaking Changes
 
-1. **`processResponseBuffer` deprecated** - Use `convertResponseToGeneric` instead
+1. **`processResponseBuffer` removed** - Per-adapter response parsing was replaced by `convertResponseToGeneric`. The `iassistant-conversation` adapter keeps its own `processResponseBuffer` for its line-delimited SSE format, which the generic converters don't model.
 2. **Provider-specific formatters deprecated** - Use `convertToolsBetweenProviders` instead
 3. **Manual response transformation removed** - System handles all conversions automatically
 
