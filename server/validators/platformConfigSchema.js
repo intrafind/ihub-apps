@@ -84,6 +84,16 @@ const loggingSchema = z.object({
       maxFiles: z.number().default(5)
     })
     .default({}),
+  // Optional per-component filtering (read by utils/logger.js). When enabled
+  // with a non-empty filter list, only logs from the listed components are
+  // emitted — except authentication components, which are always allowed
+  // through while auth.debug is enabled so the auth-debug toggle keeps working.
+  components: z
+    .object({
+      enabled: z.boolean().default(false),
+      filter: z.array(z.string()).default([])
+    })
+    .default({}),
   anonymizeIp: ipAnonymizationSchema
 });
 

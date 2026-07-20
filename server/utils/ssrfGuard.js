@@ -8,7 +8,7 @@
  * Kept dependency-free (only node:net / node:dns) so it can be unit tested in
  * isolation and reused by any outbound-request code path.
  *
- * @module services/workflow/executors/ssrfGuard
+ * @module utils/ssrfGuard
  */
 
 import dns from 'node:dns/promises';

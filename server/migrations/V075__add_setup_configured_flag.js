@@ -1,4 +1,4 @@
-export const version = '018';
+export const version = '075';
 export const description = 'add_setup_configured_flag';
 
 export async function precondition(ctx) {
