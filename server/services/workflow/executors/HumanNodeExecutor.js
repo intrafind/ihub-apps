@@ -17,6 +17,7 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../../../actionTracker.js';
 import configCache from '../../../configCache.js';
+import { getLocalizedString } from '../../../utils/localize.js';
 
 /**
  * Executor for human checkpoint nodes.
@@ -296,13 +297,7 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   _getLocalizedValue(value, language) {
-    if (typeof value === 'string') {
-      return value;
-    }
-    if (value && typeof value === 'object') {
-      return value[language] || value.en || Object.values(value)[0] || '';
-    }
-    return '';
+    return getLocalizedString(value, language);
   }
 
   /**

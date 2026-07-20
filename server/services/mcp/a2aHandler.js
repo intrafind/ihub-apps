@@ -6,6 +6,7 @@ import { runTool, loadConfiguredTools } from '../../toolLoader.js';
 import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 // Tools that are surfaced as their own A2A skill kinds (apps/workflows) or
 // that wrap filesystem access (skill meta-tools) must never be invocable as
@@ -57,9 +58,7 @@ function rpcError(id, code, message, data) {
 function extractText(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'object') {
-    return value.en || value.de || Object.values(value)[0] || '';
-  }
+  if (typeof value === 'object') return getLocalizedString(value, 'en');
   return String(value);
 }
 

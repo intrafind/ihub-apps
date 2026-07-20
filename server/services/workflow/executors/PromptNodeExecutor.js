@@ -24,6 +24,7 @@ import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
+import { getLocalizedString } from '../../../utils/localize.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -933,13 +934,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   getLocalizedValue(value, language) {
-    if (typeof value === 'string') {
-      return value;
+    if (typeof value !== 'string' && (typeof value !== 'object' || value === null)) {
+      return String(value || '');
     }
-    if (typeof value === 'object' && value !== null) {
-      return value[language] || value['en'] || Object.values(value)[0] || '';
-    }
-    return String(value || '');
+    return getLocalizedString(value, language);
   }
 
   /**

@@ -17,6 +17,7 @@
  */
 
 import logger from '../../utils/logger.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 const MAX_PENDING = 200;
@@ -89,8 +90,7 @@ export function buildReplayStepsFromState(state, workflow, language = 'en') {
   const localize = value => {
     if (value == null) return '';
     if (typeof value === 'string') return value;
-    if (typeof value === 'object')
-      return value[language] || value.en || Object.values(value)[0] || '';
+    if (typeof value === 'object') return getLocalizedString(value, language);
     return String(value);
   };
 
