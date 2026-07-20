@@ -1,59 +1,30 @@
 import crypto from 'crypto';
-import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
-import logger from './utils/logger.js';
+import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
-const SAVE_INTERVAL_MS = 10000;
-
-let links = null;
-let dirty = false;
-let saveTimer = null;
 
 const now = () => new Date().toISOString();
-
-export function isLinkExpired(link) {
-  if (!link || !link.expiresAt) return false;
-  return new Date(link.expiresAt) <= new Date();
-}
 
 function createDefault() {
   return { links: [], lastUpdated: now() };
 }
 
-async function loadLinks() {
-  if (links) return links;
-  try {
-    const data = await fs.readFile(dataFile, 'utf8');
-    links = JSON.parse(data);
-    links.lastUpdated = links.lastUpdated || now();
-  } catch {
-    links = createDefault();
+const store = createDebouncedJsonStore({
+  filePath: dataFile,
+  createDefault,
+  component: 'ShortLinkManager',
+  onBeforeSave: data => {
+    data.lastUpdated = now();
   }
-  return links;
-}
+});
 
-async function saveLinks() {
-  if (!links || !dirty) return;
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  links.lastUpdated = now();
-  await fs.writeFile(dataFile, JSON.stringify(links, null, 2));
-  dirty = false;
-}
-
-function scheduleSave() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(async () => {
-    saveTimer = null;
-    try {
-      await saveLinks();
-    } catch (error) {
-      logger.error('Failed to save short link data', { component: 'ShortLinkManager', error: e });
-    }
-  }, SAVE_INTERVAL_MS);
+export function isLinkExpired(link) {
+  if (!link || !link.expiresAt) return false;
+  return new Date(link.expiresAt) <= new Date();
 }
 
 function generateCode(length = 6) {
@@ -85,7 +56,7 @@ export async function createLink({
   includeParams = false,
   expiresAt = null
 }) {
-  await loadLinks();
+  const links = await store.load();
   let finalCode = code;
   if (finalCode) {
     if (links.links.some(l => l.code === finalCode)) {
@@ -125,64 +96,54 @@ export async function createLink({
     expiresAt
   };
   links.links.push(link);
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
   return link;
 }
 
 export async function getLink(code) {
-  await loadLinks();
+  const links = await store.load();
   return links.links.find(l => l.code === code);
 }
 
 export async function isCodeAvailable(code) {
-  await loadLinks();
+  const links = await store.load();
   return !links.links.some(l => l.code === code);
 }
 
 export async function recordUsage(code) {
-  await loadLinks();
+  const links = await store.load();
   const link = links.links.find(l => l.code === code);
   if (link) {
     link.usage = (link.usage || 0) + 1;
     link.lastUsed = now();
-    dirty = true;
-    scheduleSave();
+    store.markDirty();
   }
   return link;
 }
 
 export async function deleteLink(code) {
-  await loadLinks();
+  const links = await store.load();
   const idx = links.links.findIndex(l => l.code === code);
   if (idx !== -1) {
     links.links.splice(idx, 1);
-    dirty = true;
-    scheduleSave();
+    store.markDirty();
     return true;
   }
   return false;
 }
 
 export async function updateLink(code, data) {
-  await loadLinks();
+  const links = await store.load();
   const link = links.links.find(l => l.code === code);
   if (!link) return null;
   Object.assign(link, data, { code });
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
   return link;
 }
 
 export async function searchLinks({ appId, userId } = {}) {
-  await loadLinks();
+  const links = await store.load();
   return links.links.filter(l => (!appId || l.appId === appId) && (!userId || l.userId === userId));
 }
 
-loadLinks();
-setInterval(() => {
-  if (dirty)
-    saveLinks().catch(e =>
-      logger.error('Short link save error', { component: 'ShortLinkManager', error: e })
-    );
-}, SAVE_INTERVAL_MS);
+store.load();
