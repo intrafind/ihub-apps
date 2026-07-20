@@ -57,6 +57,20 @@ console.log('\n🧪 isTransientLlmError — classified HTTP errors + network fau
   );
   check('plain logic error NOT retryable', isTransientLlmError({ message: 'boom' }) === false);
   check('null NOT retryable', isTransientLlmError(null) === false);
+  // #1683: a deliberate cancellation (engine.cancel() / node timeout) must
+  // never be retried — it would just re-fire the same AbortError and burn the
+  // retry budget on a request nobody wants completed anymore. node-fetch/DOM
+  // AbortController name these errors 'AbortError', and the message often
+  // contains "aborted" — which, without the explicit name/code check, would
+  // otherwise match the NETWORK_ERROR_MESSAGES regex below and be retried.
+  check(
+    "AbortError (by .name) NOT retryable even though its message contains 'aborted'",
+    isTransientLlmError({ name: 'AbortError', message: 'The operation was aborted' }) === false
+  );
+  check(
+    'AbortError (by .code) NOT retryable',
+    isTransientLlmError({ code: 'ABORT_ERR', message: 'This operation was aborted' }) === false
+  );
 }
 
 console.log('\n🧪 parseRetryAfterMs — seconds, zero, garbage\n');

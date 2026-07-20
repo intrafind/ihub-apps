@@ -7,7 +7,11 @@ import {
 } from '../middleware/oidcAuth.js';
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
 import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
-import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.js';
+import {
+  teamsTokenExchange,
+  teamsTabConfigSave,
+  teamsClientConfig
+} from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -820,4 +824,10 @@ export default function registerAuthRoutes(app) {
    * POST /api/auth/teams/config
    */
   app.post(buildServerPath('/api/auth/teams/config'), teamsTabConfigSave);
+
+  /**
+   * Teams client configuration (public Azure AD client/tenant IDs)
+   * GET /api/auth/teams/client-config
+   */
+  app.get(buildServerPath('/api/auth/teams/client-config'), teamsClientConfig);
 }

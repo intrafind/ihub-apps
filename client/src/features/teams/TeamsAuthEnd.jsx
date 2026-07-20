@@ -11,14 +11,6 @@ function TeamsAuthEnd() {
   const [status, setStatus] = useState(t('teams.auth.processing'));
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // Initialize Teams SDK
-    microsoftTeams.initialize();
-
-    // Process the authentication result
-    handleAuthResult();
-  }, [handleAuthResult]);
-
   const handleAuthResult = useCallback(() => {
     // Parse the URL hash to get the access token
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -45,7 +37,7 @@ function TeamsAuthEnd() {
         microsoftTeams.authentication.notifySuccess(accessToken);
       }, 1000);
     } else {
-      // No token or error in the response<<<<<<< ISSUE_209_Microsoft_Teams
+      // No token or error in the response
       setError(t('teams.auth.noResponse'));
       setStatus(t('teams.auth.failed'));
 
@@ -54,6 +46,14 @@ function TeamsAuthEnd() {
       }, 2000);
     }
   }, [t]);
+
+  useEffect(() => {
+    // Initialize Teams SDK
+    microsoftTeams.initialize();
+
+    // Process the authentication result
+    handleAuthResult();
+  }, [handleAuthResult]);
 
   return (
     <div className="flex items-center justify-center h-screen">
