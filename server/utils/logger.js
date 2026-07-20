@@ -115,6 +115,41 @@ function getComponentFilter() {
   }
 }
 
+// Components that emit authentication traces. When auth debug is explicitly
+// enabled these must never be suppressed by component filtering — otherwise the
+// single auth-debug toggle would silently do nothing whenever an admin has a
+// component filter active that happens to exclude them.
+const AUTH_COMPONENTS = new Set([
+  'AuthService',
+  'OidcAuth',
+  'NtlmAuth',
+  'JwtAuth',
+  'LdapAuth',
+  'LdapGroupLookup',
+  'ProxyAuth',
+  'TeamsAuth',
+  'McpAuth',
+  'Authorization',
+  'Auth',
+  'EntraService'
+]);
+
+/**
+ * Whether authentication debug logging is enabled in platform config.
+ * @returns {boolean}
+ */
+function isAuthDebugEnabled() {
+  try {
+    if (configCacheRef) {
+      const platformConfig = configCacheRef.getPlatform();
+      return platformConfig?.auth?.debug?.enabled === true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Custom filter format to filter logs by component
  */
@@ -133,6 +168,12 @@ const componentFilterFormat = winston.format(info => {
 
   // If log has a component and it's in the filter list, allow it
   if (info.component && componentFilter.filter.includes(info.component)) {
+    return info;
+  }
+
+  // Never let component filtering hide authentication logs while auth debug is
+  // switched on, so the single toggle reliably surfaces auth traces.
+  if (info.component && AUTH_COMPONENTS.has(info.component) && isAuthDebugEnabled()) {
     return info;
   }
 

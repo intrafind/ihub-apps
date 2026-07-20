@@ -17,16 +17,6 @@ export default function UnifiedPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load Babel for React component compilation
-  useEffect(() => {
-    if (contentType === 'react' && typeof window.Babel === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, [contentType]);
-
   useEffect(() => {
     const loadPageContent = async () => {
       try {

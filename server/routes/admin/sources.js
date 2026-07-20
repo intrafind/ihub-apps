@@ -499,6 +499,133 @@ export default function registerAdminSourcesRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/sources/_stats:
+   *   get:
+   *     summary: Get sources statistics
+   *     description: Retrieve statistical information about all sources (admin access required)
+   *     tags: [Admin - Sources]
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: Sources statistics retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/SourceStats'
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       403:
+   *         description: Forbidden - Insufficient admin permissions
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  app.get(
+    buildServerPath('/api/admin/sources/_stats'),
+    requireFeature('sources'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { data: sources } = configCache.getSources(true);
+
+        const stats = {
+          total: sources.length,
+          enabled: sources.filter(s => s.enabled !== false).length,
+          disabled: sources.filter(s => s.enabled === false).length,
+          byType: {
+            filesystem: sources.filter(s => s.type === 'filesystem').length,
+            url: sources.filter(s => s.type === 'url').length,
+            ifinder: sources.filter(s => s.type === 'ifinder').length
+          },
+          byExposeAs: {
+            prompt: sources.filter(s => s.exposeAs === 'prompt').length,
+            tool: sources.filter(s => s.exposeAs === 'tool').length
+          }
+        };
+
+        res.json(stats);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source statistics', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/sources/_types:
+   *   get:
+   *     summary: Get available source types
+   *     description: Retrieve all available source types with their configurations (admin access required)
+   *     tags: [Admin - Sources]
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: Source types retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 $ref: '#/components/schemas/SourceType'
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       403:
+   *         description: Forbidden - Insufficient admin permissions
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  app.get(
+    buildServerPath('/api/admin/sources/_types'),
+    requireFeature('sources'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const manager = getSourceManager();
+        const handlerTypes = manager.getHandlerTypes();
+
+        const types = handlerTypes.map(type => ({
+          id: type,
+          name: type.charAt(0).toUpperCase() + type.slice(1),
+          description: getTypeDescription(type),
+          defaultConfig: getDefaultSourceConfig(type)
+        }));
+
+        res.json(types);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source types', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/admin/sources/{id}:
    *   get:
    *     summary: Get specific source
@@ -1360,133 +1487,6 @@ export default function registerAdminSourcesRoutes(app) {
         res.json({ message: `${updatedCount} sources ${enabled ? 'enabled' : 'disabled'}` });
       } catch (error) {
         sendFailedOperationError(res, 'toggle sources', error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/sources/_stats:
-   *   get:
-   *     summary: Get sources statistics
-   *     description: Retrieve statistical information about all sources (admin access required)
-   *     tags: [Admin - Sources]
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     responses:
-   *       200:
-   *         description: Sources statistics retrieved successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/SourceStats'
-   *       401:
-   *         description: Unauthorized - Invalid or missing authentication
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   *       403:
-   *         description: Forbidden - Insufficient admin permissions
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   */
-  app.get(
-    buildServerPath('/api/admin/sources/_stats'),
-    requireFeature('sources'),
-    contentAdminAuth,
-    async (req, res) => {
-      try {
-        const { data: sources } = configCache.getSources(true);
-
-        const stats = {
-          total: sources.length,
-          enabled: sources.filter(s => s.enabled !== false).length,
-          disabled: sources.filter(s => s.enabled === false).length,
-          byType: {
-            filesystem: sources.filter(s => s.type === 'filesystem').length,
-            url: sources.filter(s => s.type === 'url').length,
-            ifinder: sources.filter(s => s.type === 'ifinder').length
-          },
-          byExposeAs: {
-            prompt: sources.filter(s => s.exposeAs === 'prompt').length,
-            tool: sources.filter(s => s.exposeAs === 'tool').length
-          }
-        };
-
-        res.json(stats);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch source statistics', error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /api/admin/sources/_types:
-   *   get:
-   *     summary: Get available source types
-   *     description: Retrieve all available source types with their configurations (admin access required)
-   *     tags: [Admin - Sources]
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     responses:
-   *       200:
-   *         description: Source types retrieved successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: array
-   *               items:
-   *                 $ref: '#/components/schemas/SourceType'
-   *       401:
-   *         description: Unauthorized - Invalid or missing authentication
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   *       403:
-   *         description: Forbidden - Insufficient admin permissions
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/ErrorResponse'
-   */
-  app.get(
-    buildServerPath('/api/admin/sources/_types'),
-    requireFeature('sources'),
-    contentAdminAuth,
-    async (req, res) => {
-      try {
-        const manager = getSourceManager();
-        const handlerTypes = manager.getHandlerTypes();
-
-        const types = handlerTypes.map(type => ({
-          id: type,
-          name: type.charAt(0).toUpperCase() + type.slice(1),
-          description: getTypeDescription(type),
-          defaultConfig: getDefaultSourceConfig(type)
-        }));
-
-        res.json(types);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch source types', error);
       }
     }
   );
