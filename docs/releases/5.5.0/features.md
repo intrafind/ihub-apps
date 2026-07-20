@@ -645,3 +645,18 @@ diagnose sign-in problems.
 - The obsolete "Console logging" toggle was removed (the logger already manages console output).
 - No admin action is required on upgrade: a migration moves any previously saved setting to its new
   location so your configuration is preserved.
+
+## Fixed App Crash Caused by Browser Auto-Translation
+
+Fixed a crash where the entire app would fail to load with a generic "Something went wrong" error
+on browsers configured to automatically translate pages (for example, Chrome or Edge on a German,
+French, or other non-English system).
+
+- The symptom was an unexpected-error screen showing `NotFoundError: Failed to execute
+  'insertBefore' on 'Node'`, often in the browser's own translated wording rather than iHub's.
+- It was most visible right after a fresh installation, because a new install starts in English
+  and a non-English browser would offer to auto-translate it.
+- iHub Apps already ships its own language switcher, so browser translation was both redundant and
+  the source of the crash. The application now instructs browsers not to auto-translate its pages;
+  users should continue to switch languages using the in-app language selector.
+- No admin action is required on upgrade.
