@@ -323,6 +323,26 @@ export async function teamsTokenExchange(req, res) {
 }
 
 /**
+ * Teams client configuration handler
+ * Exposes the (non-secret) Azure AD client/tenant IDs so the Teams auth-start
+ * popup can build the login URL without relying on build-time env vars.
+ */
+export async function teamsClientConfig(req, res) {
+  const platform = configCache.getPlatform() || {};
+  const teamsConfig = platform.teamsAuth || {};
+
+  if (!teamsConfig.enabled) {
+    return res.json({ enabled: false });
+  }
+
+  res.json({
+    enabled: true,
+    clientId: teamsConfig.clientId || null,
+    tenantId: teamsConfig.tenantId || null
+  });
+}
+
+/**
  * Teams tab configuration save handler
  */
 export async function teamsTabConfigSave(req, res) {
