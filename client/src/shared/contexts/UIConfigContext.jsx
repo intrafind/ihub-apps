@@ -1,6 +1,7 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { fetchUIConfig } from '../../api';
 import { buildPath, buildAssetUrl } from '../../utils/runtimeBasePath';
+import { cacheErrorPagesConfig } from '../../utils/errorPagesCache';
 
 // Default header color as a fallback if config is not loaded
 const FALLBACK_COLOR = '#4f46e5'; // indigo-600
@@ -45,6 +46,14 @@ export function UIConfigProvider({ children }) {
   useEffect(() => {
     fetchUiConfig();
   }, []);
+
+  // Cache error-page messages so the context-less generic ErrorBoundary
+  // (mounted above this provider) can still render admin-configured text.
+  // Guard on null so a not-yet-loaded config doesn't wipe a prior snapshot.
+  useEffect(() => {
+    if (uiConfig === null) return;
+    cacheErrorPagesConfig(uiConfig.errorPages);
+  }, [uiConfig]);
 
   // Set header color based on UI config
   useEffect(() => {

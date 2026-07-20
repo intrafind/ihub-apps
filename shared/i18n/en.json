@@ -654,6 +654,18 @@
       "builtInSystem": "Built-in username/password system",
       "anonymousAccess": "Anonymous Access",
       "defaultGroups": "Default Groups",
+      "groups": {
+        "authenticatedLabel": "Authenticated Group",
+        "authenticatedHelp": "Internal group automatically assigned to all authenticated users",
+        "anonymousLabel": "Anonymous Groups",
+        "anonymousHelp": "Internal groups assigned to users who access without authentication",
+        "defaultLabel": "Default Groups",
+        "oidcHelp": "Internal groups automatically assigned to users authenticating with this provider",
+        "ldapHelp": "Internal groups automatically assigned to LDAP users",
+        "ntlmHelp": "Internal groups automatically assigned to NTLM authenticated users",
+        "searchPlaceholder": "Search groups…",
+        "emptySingle": "No group selected yet"
+      },
       "jwtProviders": "JWT Providers",
       "noOidcProviders": "No OIDC providers configured",
       "addProvider": "Add a provider to enable OIDC authentication",
