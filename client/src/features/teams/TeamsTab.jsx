@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
@@ -17,44 +17,6 @@ function TeamsTab() {
   const [error, setError] = useState(null);
   const [, setTeamsContext] = useState(null);
   const { loginWithToken, isAuthenticated } = useAuth();
-
-  // Initialize Teams SDK and handle authentication
-  useEffect(() => {
-    initializeTeams();
-  }, [initializeTeams]);
-
-  // Initialize Microsoft Teams SDK
-  const initializeTeams = useCallback(async () => {
-    try {
-      await microsoftTeams.initialize();
-
-      // Get Teams context
-      microsoftTeams.getContext(context => {
-        setTeamsContext(context);
-        console.log('Teams context:', context);
-
-        // Apply Teams theme
-        applyTeamsTheme(context.theme);
-
-        // Apply Teams language preference
-        applyTeamsLanguage(context.locale);
-
-        // Register theme change handler
-        microsoftTeams.registerOnThemeChangeHandler(applyTeamsTheme);
-
-        setIsInitialized(true);
-
-        // Start authentication if not already authenticated
-        if (!isAuthenticated) {
-          authenticateWithTeams();
-        }
-      });
-    } catch (error) {
-      console.error('Failed to initialize Teams:', error);
-      setError(t('teams.errors.initializationFailed'));
-      setIsInitialized(true);
-    }
-  }, [t, authenticateWithTeams, isAuthenticated]);
 
   // Apply Teams language preference
   const applyTeamsLanguage = locale => {
@@ -105,6 +67,28 @@ function TeamsTab() {
     }
   };
 
+  // Holds the latest authenticateWithTeams so handleInteractiveAuth doesn't
+  // need it as a dependency, avoiding a circular useCallback declaration order.
+  const authenticateWithTeamsRef = useRef(null);
+
+  // Handle interactive authentication if SSO fails
+  const handleInteractiveAuth = useCallback(() => {
+    microsoftTeams.authentication.authenticate({
+      url: `${window.location.origin}/teams/auth-start`,
+      width: 600,
+      height: 535,
+      successCallback: result => {
+        console.log('Interactive auth success:', result);
+        // Try authentication again after interactive consent
+        authenticateWithTeamsRef.current?.();
+      },
+      failureCallback: error => {
+        console.error('Interactive auth failed:', error);
+        setError(t('teams.errors.interactiveAuthFailed'));
+      }
+    });
+  }, [t]);
+
   // Authenticate with Teams SSO
   const authenticateWithTeams = useCallback(async () => {
     if (isAuthenticating) return;
@@ -152,23 +136,47 @@ function TeamsTab() {
     }
   }, [isAuthenticating, loginWithToken, t, handleInteractiveAuth]);
 
-  // Handle interactive authentication if SSO fails
-  const handleInteractiveAuth = useCallback(() => {
-    microsoftTeams.authentication.authenticate({
-      url: `${window.location.origin}/teams/auth-start`,
-      width: 600,
-      height: 535,
-      successCallback: result => {
-        console.log('Interactive auth success:', result);
-        // Try authentication again after interactive consent
-        authenticateWithTeams();
-      },
-      failureCallback: error => {
-        console.error('Interactive auth failed:', error);
-        setError(t('teams.errors.interactiveAuthFailed'));
-      }
-    });
-  }, [authenticateWithTeams, t]);
+  useEffect(() => {
+    authenticateWithTeamsRef.current = authenticateWithTeams;
+  }, [authenticateWithTeams]);
+
+  // Initialize Microsoft Teams SDK
+  const initializeTeams = useCallback(async () => {
+    try {
+      await microsoftTeams.initialize();
+
+      // Get Teams context
+      microsoftTeams.getContext(context => {
+        setTeamsContext(context);
+        console.log('Teams context:', context);
+
+        // Apply Teams theme
+        applyTeamsTheme(context.theme);
+
+        // Apply Teams language preference
+        applyTeamsLanguage(context.locale);
+
+        // Register theme change handler
+        microsoftTeams.registerOnThemeChangeHandler(applyTeamsTheme);
+
+        setIsInitialized(true);
+
+        // Start authentication if not already authenticated
+        if (!isAuthenticated) {
+          authenticateWithTeams();
+        }
+      });
+    } catch (error) {
+      console.error('Failed to initialize Teams:', error);
+      setError(t('teams.errors.initializationFailed'));
+      setIsInitialized(true);
+    }
+  }, [t, authenticateWithTeams, isAuthenticated]);
+
+  // Initialize Teams SDK and handle authentication
+  useEffect(() => {
+    initializeTeams();
+  }, [initializeTeams]);
 
   // Show loading state
   if (!isInitialized || isAuthenticating) {

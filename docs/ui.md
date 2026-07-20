@@ -176,6 +176,70 @@ Setting `enabled` to `false` will completely remove the disclaimer from the appl
 
 **Note:** If `link` is not provided, the hint will be displayed as non-clickable text. If `hint` is not provided, a default hint text will be shown.
 
+### Error & Empty-State Messages
+
+The `errorPages` section lets administrators customize the localized text shown on the
+application's error and empty-state screens. This covers the generic error boundary, the HTTP
+error pages (404 / 500 / 403 / 401), and the "no apps available" state on the apps list.
+
+Every field is a localized object (`{ "en": "…", "de": "…", … }`) and is **optional**. When a
+field is left empty or omitted, the screen falls back to the built-in translation — so behavior is
+unchanged until you fill something in.
+
+```json
+"errorPages": {
+  "generic": {
+    "title": { "en": "Something went wrong", "de": "Etwas ist schiefgelaufen" },
+    "description": {
+      "en": "An unexpected error occurred in the application. The development team has been notified.",
+      "de": "Ein unerwarteter Fehler ist in der Anwendung aufgetreten. Das Entwicklungsteam wurde benachrichtigt."
+    }
+  },
+  "notFound": {
+    "title": { "en": "Page Not Found", "de": "Seite nicht gefunden" },
+    "message": { "en": "We couldn't find the page you're looking for.", "de": "Die gesuchte Seite konnte nicht gefunden werden." }
+  },
+  "serverError": {
+    "title": { "en": "Server Error", "de": "Serverfehler" },
+    "message": { "en": "Something went wrong on our end.", "de": "Auf unserer Seite ist etwas schiefgelaufen." },
+    "subtitle": { "en": "Please try again later.", "de": "Bitte versuchen Sie es später erneut." }
+  },
+  "forbidden": {
+    "title": { "en": "Forbidden", "de": "Zugriff verweigert" },
+    "message": { "en": "Access to this resource is forbidden.", "de": "Der Zugriff auf diese Ressource ist nicht erlaubt." }
+  },
+  "unauthorized": {
+    "title": { "en": "Unauthorized", "de": "Nicht autorisiert" },
+    "message": { "en": "You don't have permission to access this page.", "de": "Sie haben keine Berechtigung, auf diese Seite zuzugreifen." }
+  },
+  "noApps": {
+    "title": { "en": "No apps available from server", "de": "Keine Apps vom Server verfügbar" },
+    "message": { "en": "Check if the server is running and returning data correctly.", "de": "Prüfen Sie, ob der Server läuft und Daten korrekt zurückgibt." }
+  }
+}
+```
+
+| Screen         | Fields                       | Where it appears                                                    |
+| -------------- | ---------------------------- | ------------------------------------------------------------------ |
+| `generic`      | `title`, `description`       | Application error boundary — shown when an unexpected error occurs  |
+| `notFound`     | `title`, `message`           | 404 page                                                           |
+| `serverError`  | `title`, `message`, `subtitle` | 500 page                                                         |
+| `forbidden`    | `title`, `message`           | 403 page                                                           |
+| `unauthorized` | `title`, `message`           | 401 page                                                           |
+| `noApps`       | `title`, `message`           | Apps list, when the server returns no applications                 |
+
+**Editing in the admin panel:** Go to **Admin → UI Customization → Error Pages**. Each screen has
+its own group of fields, and every field uses the multi-language editor (add/remove languages,
+auto-translate). Click **Save Changes** to apply — no restart is needed.
+
+**Action buttons** (e.g. "Return Home", "Retry", "Go Back") are not part of `errorPages`; they
+remain controlled by the application's bundled translations.
+
+> **Note on the generic error boundary:** because it renders above the UI-config provider (the
+> provider itself may be what failed), the generic screen reads its text from a snapshot cached in
+> the browser after the last successful config load. The first time a user visits after a config
+> change, the generic screen may briefly use the bundled defaults until the new config is cached.
+
 ### Icons Configuration
 
 The `icons` section allows overriding which icon is used for certain UI elements. Icon names can

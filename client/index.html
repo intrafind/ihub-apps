@@ -1,7 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Disable browser auto-translation (Google/Chrome Translate, Edge, etc.).
+      iHub Apps ships its own i18n system, so browser translation is redundant.
+      More importantly, in-place translation rewrites/wraps the DOM text nodes
+      that React holds references to; React's reconciler then fails with
+      "NotFoundError: Failed to execute 'insertBefore' on 'Node'" (and similar
+      removeChild errors) and the whole app crashes to the error boundary.
+      This is most visible on a fresh install, which defaults to the English UI
+      and is therefore auto-translated by non-English browsers. See React #11538.
+    -->
+    <meta name="google" content="notranslate" />
     <script>
       // Dynamically set base tag for proper asset loading when deployed at subpath
       // This logic is aligned with client/src/utils/runtimeBasePath.js
