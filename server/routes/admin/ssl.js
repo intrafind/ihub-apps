@@ -2,11 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
 export default function registerAdminSSLRoutes(app) {
   /**
@@ -103,25 +99,13 @@ export default function registerAdminSSLRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      // Read current platform config
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
-
-      // Update SSL configuration
-      platformConfig.ssl = {
-        ignoreInvalidCertificates,
-        domainWhitelist
-      };
-
-      // Write back atomically
-      await atomicWriteJSON(platformPath, platformConfig);
-
-      // Refresh config cache
-      await configCache.refreshCacheEntry('config/platform.json');
+      await configCache.updatePlatformSection(platformConfig => {
+        platformConfig.ssl = {
+          ignoreInvalidCertificates,
+          domainWhitelist
+        };
+        return platformConfig;
+      });
 
       logger.info('SSL configuration updated', {
         component: 'AdminSSL',

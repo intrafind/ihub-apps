@@ -3,7 +3,6 @@ import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import config from '../../config.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
@@ -155,20 +154,11 @@ export default function registerAdminUsageRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
-      let platform = {};
-      try {
-        const data = await fs.readFile(platformPath, 'utf8');
-        platform = JSON.parse(data);
-      } catch {
-        // Start fresh if file doesn't exist
-      }
-
-      if (!platform.features) platform.features = {};
-      platform.features.usageTrackingMode = trackingMode;
-      await atomicWriteJSON(platformPath, platform);
-      await configCache.refreshCacheEntry('config/platform.json');
+      await configCache.updatePlatformSection(platform => {
+        if (!platform.features) platform.features = {};
+        platform.features.usageTrackingMode = trackingMode;
+        return platform;
+      });
       reloadConfig();
 
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });

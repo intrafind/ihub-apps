@@ -1,3 +1,5 @@
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { loadJson, loadBuiltinLocaleJson, listBuiltinLocales } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
@@ -18,6 +20,9 @@ import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
+import { getRootDir } from './pathUtils.js';
+import config from './config.js';
+import { atomicWriteJSON } from './utils/atomicWrite.js';
 
 /**
  * Resolve environment variables in a string
@@ -287,6 +292,9 @@ class ConfigCache {
     this.isInitialized = false;
     this.localeLoadingLocks = new Map();
     this.apiKeyVerifier = new ApiKeyVerifier();
+    // Serializes updatePlatformSection() calls so concurrent admin saves to
+    // different sections of platform.json can't race and clobber each other.
+    this.platformWriteQueue = Promise.resolve();
 
     // Cache TTL in milliseconds (default: 5 minutes for production, shorter for development)
     this.cacheTTL = process.env.NODE_ENV === 'production' ? 5 * 60 * 1000 : 60 * 1000;
@@ -1107,6 +1115,47 @@ class ConfigCache {
    */
   getPlatform() {
     return this.get('config/platform.json').data;
+  }
+
+  /**
+   * Update platform.json under a serialized write queue: reads the file
+   * fresh from disk (not the decrypted in-memory cache, so secrets already
+   * on disk are never round-tripped as plaintext), applies `mutator`,
+   * atomically writes the result, and refreshes the cache entry.
+   *
+   * Concurrent callers are queued one after another so two admin saves to
+   * different sections of platform.json can't race and silently overwrite
+   * each other.
+   *
+   * @param {(platformConfig: object) => (object|void)} mutator - Receives
+   *   the config parsed from disk (defaults to `{}` if the file is
+   *   missing). May mutate it in place or return a replacement object.
+   * @returns {Promise<object>} the platform config as written to disk
+   */
+  async updatePlatformSection(mutator) {
+    const task = this.platformWriteQueue.then(() => this._updatePlatformSection(mutator));
+    // Keep the queue moving even if this update fails; the caller still
+    // gets the rejection via the returned `task` promise.
+    this.platformWriteQueue = task.catch(() => {});
+    return task;
+  }
+
+  async _updatePlatformSection(mutator) {
+    const platformConfigPath = join(getRootDir(), config.CONTENTS_DIR, 'config', 'platform.json');
+    let platformConfig;
+    try {
+      const raw = await fs.readFile(platformConfigPath, 'utf8');
+      platformConfig = JSON.parse(raw);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      platformConfig = {};
+    }
+
+    const mutated = await mutator(platformConfig);
+    const result = mutated ?? platformConfig;
+    await atomicWriteJSON(platformConfigPath, result);
+    await this.refreshCacheEntry('config/platform.json');
+    return result;
   }
 
   /**
