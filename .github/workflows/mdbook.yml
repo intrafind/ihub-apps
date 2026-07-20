@@ -93,20 +93,20 @@ jobs:
           ls -lh docs/book/*.md || echo "No Markdown output"
 
       - name: Upload HTML artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-html
           path: docs/book/html
 
       - name: Upload PDF artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-pdf
           path: docs/book/pdf/*.pdf
         continue-on-error: true
 
       - name: Upload Markdown artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-markdown
           path: docs/book/iHub-Apps-Documentation.md
