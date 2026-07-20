@@ -6,6 +6,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 // Parse a checklist-style markdown body into structured items so the form
 // editor can manipulate them. Lines that don't match the checkbox shape are
 // preserved as a header/footer block so we don't corrupt user-authored
@@ -87,7 +88,7 @@ export default function AdminAgentInboxEditPage() {
         setRawBody(body);
         setVersion(data.version || 0);
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }

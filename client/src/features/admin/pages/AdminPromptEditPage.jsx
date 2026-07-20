@@ -6,10 +6,11 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminPrompts,
   createPrompt,
-  updatePrompt,
-  fetchAdminApps
+  fetchAdminApps,
+  fetchAdminPrompts,
+  getAdminApiErrorMessage,
+  updatePrompt
 } from '../../../api/adminApi';
 import { clearApiCache, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
@@ -43,6 +44,7 @@ function AdminPromptEditPage() {
   const [loading, setLoading] = useState(!isNewPrompt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [apps, setApps] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
@@ -126,7 +128,7 @@ function AdminPromptEditPage() {
       setPromptData(processedPrompt);
       setInitialData(processedPrompt);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -135,6 +137,7 @@ function AdminPromptEditPage() {
   const handleSave = async data => {
     try {
       setSaving(true);
+      setSaveError(null);
 
       if (isNewPrompt) {
         await createPrompt(data);
@@ -150,8 +153,7 @@ function AdminPromptEditPage() {
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
-      console.error('Error saving prompt:', err);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -262,6 +264,20 @@ function AdminPromptEditPage() {
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-4">
+            <div className="flex">
+              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {t('admin.prompts.errorTitle', 'Error')}
+                </h3>
+                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{saveError}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <DualModeEditor

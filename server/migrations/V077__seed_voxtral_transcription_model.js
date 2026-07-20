@@ -1,4 +1,4 @@
-export const version = '073';
+export const version = '077';
 export const description = 'seed_voxtral_transcription_model';
 
 const MODEL_PATH = 'models/voxtral-mini-realtime.json';
