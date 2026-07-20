@@ -186,6 +186,16 @@ indication anything was missing.
 - Meeting invites (`.ics`) are parsed into a short summary: subject, time, location, and organizer.
 - OneDrive/SharePoint attachments (share links, not the file itself) now include the link as a
   reference instead of being dropped without a trace.
+
+## Gemini Apps No Longer Corrupt Parallel Tool Calls
+
+Fixed a bug where Gemini (Google) models calling more than one tool in the same turn could
+silently lose one of the calls. When two tool calls arrived in separate streaming chunks, the
+second one collided with the first instead of being tracked separately, corrupting its arguments
+into invalid JSON and dropping the call entirely — with no error shown to the user.
+
+- Apps and agent workflows on Gemini models that trigger multiple tools per turn (a common pattern
+  for tool-using agents) now execute every tool call correctly.
 - Attachments larger than 20 MB are skipped up front instead of being downloaded into the task
   pane, which could previously stall the pane on a large attachment.
 - On Outlook hosts older than Mailbox 1.8 (which can't fetch attachment content at all), the
