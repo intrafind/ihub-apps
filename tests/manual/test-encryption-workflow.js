@@ -8,7 +8,7 @@
  * 3. Load it back and decrypt automatically
  */
 
-import tokenStorageService from '../server/services/TokenStorageService.js';
+import tokenStorageService from '../../server/services/TokenStorageService.js';
 
 (async () => {
   console.log('='.repeat(60));

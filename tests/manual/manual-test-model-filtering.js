@@ -10,8 +10,8 @@
  * 3. When no compatible models exist, it should return an error
  */
 
-import RequestBuilder from '../server/services/chat/RequestBuilder.js';
-import configCache from '../server/configCache.js';
+import RequestBuilder from '../../server/services/chat/RequestBuilder.js';
+import configCache from '../../server/configCache.js';
 
 const testModelFiltering = async () => {
   console.log('🧪 Testing Model Filtering Logic\n');

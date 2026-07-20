@@ -7,15 +7,6 @@
  * 3. POST config with ***REDACTED*** - verify original values are restored
  */
 
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
-
 // Helper functions from the actual implementation
 function isEnvVarPlaceholder(value) {
   if (typeof value !== 'string') return false;

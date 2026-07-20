@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const rootDir = join(__dirname, '../..');
 
 console.log('🧪 Testing Sources Feature Disabled Fix\n');
 
