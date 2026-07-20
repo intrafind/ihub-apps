@@ -72,6 +72,7 @@
     "test:quick": "npm run test:unit && npm run test:adapters && npm run test:token-stats && npm run test:export-formats && npm run test:feature-flags",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
+    "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
     "test:e2e": "playwright test --config tests/config/playwright.config.js",
     "test:a11y": "npx playwright test --config tests/config/playwright.config.js tests/e2e/accessibility.spec.js",
     "test:api": "jest --config tests/config/jest.config.js tests/integration/api",
