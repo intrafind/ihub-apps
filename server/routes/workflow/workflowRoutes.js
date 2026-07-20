@@ -90,6 +90,40 @@ function isAdmin(user) {
 }
 
 /**
+ * Authorizes the requesting user against a specific execution instance.
+ * `filterByPermissions` only checks whether the caller may access the
+ * *workflow definition* — this additionally verifies the caller owns the
+ * specific *execution* (or is an admin), so per-execution endpoints don't
+ * leak or accept control input from anyone who merely learns an executionId.
+ *
+ * Returns the execution record when access is allowed. When denied, the
+ * response has already been sent (404 if the execution doesn't exist, 403
+ * otherwise) and the caller must return immediately.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {string} executionId
+ * @returns {object|null}
+ */
+function authorizeExecutionAccess(req, res, executionId) {
+  const registry = getExecutionRegistry();
+  const execution = registry.get(executionId);
+
+  if (!execution) {
+    sendNotFound(res, 'Execution');
+    return null;
+  }
+
+  const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
+  if (execution.userId !== currentUserId && !isAdmin(req.user)) {
+    sendInsufficientPermissions(res, 'access execution');
+    return null;
+  }
+
+  return execution;
+}
+
+/**
  * Maximum entries kept in the input preview shown on the executions list.
  */
 const INPUT_PREVIEW_MAX_ENTRIES = 6;
@@ -958,6 +992,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
+
         const state = await workflowEngine.getState(executionId);
 
         if (!state) {
@@ -1069,6 +1105,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
+
         // Build resume data
         const resumeData = {
           ...additionalData
@@ -1151,6 +1189,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!validateIdForPath(executionId, 'executionId')) {
           return sendBadRequest(res, 'Invalid executionId');
         }
+
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user
@@ -1239,6 +1279,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
+
         const state = await workflowEngine.cancel(executionId, reason);
 
         logger.info('Workflow execution cancelled', {
@@ -1310,17 +1352,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
+        const execution = authorizeExecutionAccess(req, res, executionId);
+        if (!execution) return;
+
         const registry = getExecutionRegistry();
-        const execution = registry.get(executionId);
-
-        if (!execution) {
-          return sendNotFound(res, 'Execution');
-        }
-
-        const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-        if (execution.userId !== currentUserId && !isAdmin(req.user)) {
-          return sendInsufficientPermissions(res, 'delete execution');
-        }
 
         if (execution.status === 'running') {
           return res.status(409).json({
@@ -1346,7 +1381,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         logger.info('Workflow execution deleted', {
           component: 'WorkflowRoutes',
           executionId,
-          userId: currentUserId
+          userId: execution.userId
         });
 
         res.json({ success: true });
@@ -1408,25 +1443,17 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'archived must be a boolean');
         }
 
+        const execution = authorizeExecutionAccess(req, res, executionId);
+        if (!execution) return;
+
         const registry = getExecutionRegistry();
-        const execution = registry.get(executionId);
-
-        if (!execution) {
-          return sendNotFound(res, 'Execution');
-        }
-
-        const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-        if (execution.userId !== currentUserId && !isAdmin(req.user)) {
-          return sendInsufficientPermissions(res, 'update execution');
-        }
-
         const updated = registry.setArchived(executionId, archived);
 
         logger.info('Workflow execution archive toggled', {
           component: 'WorkflowRoutes',
           executionId,
           archived,
-          userId: currentUserId
+          userId: execution.userId
         });
 
         res.json(updated);
@@ -1485,6 +1512,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!validateIdForPath(executionId, 'executionId')) {
           return sendBadRequest(res, 'Invalid executionId');
         }
+
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1590,6 +1619,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authRequired,
     (req, res) => {
       const { executionId } = req.params;
+
+      if (!authorizeExecutionAccess(req, res, executionId)) return;
 
       const channel = createSseChannel({
         req,
@@ -1756,6 +1787,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!validateIdForPath(executionId, 'executionId')) {
           return sendBadRequest(res, 'Invalid executionId');
         }
+
+        if (!authorizeExecutionAccess(req, res, executionId)) return;
 
         // Validate required fields
         if (!checkpointId) {
