@@ -1,5 +1,53 @@
 # Features — 5.5.0
 
+## Admin Config Backup Restore No Longer Risks Wiping the Configuration
+
+Fixed a data-loss risk in **Admin → Backup → Import**: if the safety backup of the current
+configuration failed partway through (for example due to a full disk), the import used to proceed
+anyway and delete the live configuration directory before copying in the new one.
+
+- The import now stages the imported configuration next to the live one and swaps it in with an
+  atomic rename, so there is no window where a request could see a half-restored configuration.
+- If the safety backup can't be created, or the final swap fails, the import aborts and the
+  original configuration (apps, models, users, groups, encryption key) is left untouched or rolled
+  back automatically — nothing is deleted unless the new configuration is safely in place.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Brute-Force Rate Limiting Now Actually Applies to Login and Inference Endpoints
+
+Fixed a bug where the rate limiters intended to protect authentication and inference endpoints
+were mounted on paths that never matched any real request, so they never fired.
+
+- `POST /api/auth/local/login` (and the LDAP/NTLM login endpoints) are now correctly limited to
+  50 requests per 15 minutes per IP, restoring brute-force login protection.
+- The OpenAI-compatible inference proxy (`/api/inference/...`) is now correctly rate-limited,
+  protecting upstream LLM quota and cost from runaway clients.
+- No configuration changes are required; existing `rateLimit.authApi` / `rateLimit.inferenceApi`
+  overrides in `platform.json` now take effect as intended.
+  
+## Cancelling a Workflow No Longer Crashes the Server
+
+Fixed a crash where stopping or cancelling a running workflow at the moment the chat connection
+dropped could take down the entire server for all users.
+
+- Previously, if the browser's connection closed while a workflow was being cancelled, the stop
+  handler tried to close an already-removed connection and threw an unhandled error, exiting the
+  server process.
+- The stop endpoint now safely handles a connection that has already disconnected, so cancelling a
+  workflow always completes cleanly.
+
+## Authentication Admin Now Uses Searchable Group Pickers
+
+The default-group fields in Authentication settings are now searchable group selectors instead of
+free-text inputs, so admins pick from real, defined groups and can no longer introduce typos that
+silently grant no permissions.
+
+- Applies to all default-group fields: the authenticated-users group, anonymous-access groups, and
+  the default groups for each OIDC, LDAP, and NTLM provider.
+- Each field shows the defined groups with their names and descriptions and filters as you type.
+- Any group value that no longer matches a defined group is still shown but visibly flagged, so
+  existing configurations remain visible and can be corrected rather than being dropped.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
@@ -30,6 +78,19 @@ existing native-search behavior already available for Gemini and GPT models.
   migrated automatically. Only Brave Search remains a real, script-backed tool; native search is
   now resolved directly from the app/workflow configuration and passed straight to the model
   provider.
+
+## Agent Workflows No Longer Crash on Their First Prompt Step
+
+Fixed a regression introduced with the native web search rework above that caused agent workflows
+to fail as soon as they reached a prompt step, with the error `Agent execution failed:
+nativeWebSearch is not defined`.
+
+- Every workflow with a prompt/agent node was affected, whether or not the node used web search;
+  the failure surfaced on the first such step (for example, the Stellungnahmen review workflows
+  failed at their `refine-decision` step).
+- Workflows now run their prompt steps normally again, and the native web search directive is
+  correctly applied on steps that request it.
+- No configuration changes are required.
 
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
@@ -461,6 +522,29 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Chat Messages Are Now Sanitized Before Rendering as HTML
+
+User messages that carry an image, file, or audio attachment (or that merely contain text
+resembling an `<img>` tag or a `data:image` value) are now sanitized before being rendered as
+HTML. Previously this render path skipped the sanitization applied everywhere else in the app, so
+a pasted message body could execute arbitrary script in the app's origin.
+
+- No admin action is required — the fix takes effect automatically on upgrade.
+- Legitimate attachments (pasted images, uploaded files, audio) continue to render exactly as
+  before.
+  
+## Audit Log Now Covers Tools, Marketplace, and UI Configuration Changes
+
+The admin audit log (Admin → Audit Log) now records explicit, before/after-aware entries for three
+route groups that previously relied only on the coarse URL-derived fallback: **Tools**,
+**Marketplace**, and **UI configuration**.
+
+- Tools: create, update, delete, enable/disable toggle, and script content edits.
+- Marketplace: registry create/update/delete/refresh, and item install/update/uninstall/detach.
+- UI configuration: asset upload/delete, configuration save, and configuration backup.
+- No admin action required — existing audit log filtering, retention, and CSV export apply to
+  these new entries automatically.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
@@ -476,15 +560,116 @@ is now both prevented and, if it still happens, reported clearly instead of show
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
-## Workflow Executions Are Now Protected Against Cross-User Access
+## Dynamic JSX Pages No Longer Depend on a Public CDN
 
-Per-execution workflow endpoints (view status, stream progress, export, resume, restart, cancel,
-and respond to a checkpoint) now verify that the caller owns the execution, not just that they may
-run the underlying workflow. Previously, any user allowed to run a given workflow — including an
-anonymous user when anonymous access is enabled — could read or control another user's in-flight
-or completed run simply by knowing its execution ID.
+Custom React pages (`contents/pages/*.jsx`) and app-embedded React components now compile using the
+JSX compiler already bundled with iHub, instead of fetching it from `unpkg.com`/`cdn.jsdelivr.net`
+at runtime. This removes a supply-chain dependency on those CDNs being reachable and trustworthy,
+and fixes JSX pages failing to render on air-gapped or self-hosted deployments that block outbound
+calls to public CDNs.
 
-- Only the execution's owner or an admin can now view its state, stream its live progress, export
-  it, or resume/restart/cancel/respond to it — matching the ownership check already enforced on
-  deleting or archiving an execution.
-- No configuration or admin action is required — the fix takes effect automatically on upgrade.
+- No admin action is required — the compiler now loads from iHub's own bundle on first use.
+
+## Disabling a Teams SSO User Now Actually Blocks Them
+
+Disabling a Microsoft Teams user's account previously had no effect: Teams SSO logins (both the
+silent tab/app sign-in and the token-exchange endpoint) never checked or recorded the account's
+active status, unlike every other external login method (OIDC, LDAP, NTLM, proxy).
+
+- Teams users are now persisted to `users.json` and validated on every sign-in the same way as
+  OIDC/LDAP/NTLM/proxy users, so an admin who disables a Teams user's account blocks them from
+  signing in again (`403 Forbidden`).
+- No admin action is required — existing Teams users are picked up automatically on their next
+  sign-in.
+  
+## Cancelling an Agent Run Now Actually Stops It
+
+Cancelling a workflow/agent run, or hitting its per-node timeout, previously only stopped things
+*between* steps — an agent step already in progress kept calling the model and running tools in
+the background until it finished on its own, even though the run showed as cancelled.
+
+- Cancelling a run (or a timeout firing) now interrupts an in-flight agent step immediately: the
+  in-progress model request is aborted, and the agent stops before starting another model call or
+  another queued tool call in the same turn.
+- This stops wasted LLM spend and background tool activity on runs operators already considered
+  stopped.
+- Also fixed a related bug where a tool-enabled agent step could fail outright with an internal
+  error when native web search was configured, instead of running normally.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Web Content Extraction Is Now Protected Against Redirect-Based SSRF
+
+The **webContentExtractor** tool (used directly by apps and internally by Brave Search's page
+extraction) validated only the initial URL before fetching. A page that redirected to an internal
+address — for example a cloud metadata endpoint — could bypass that check entirely and have the
+server fetch it on the tool's behalf.
+
+- Every redirect hop is now re-validated against the same private/internal-address guard as the
+  initial request, and the connection is pinned to the validated address to close a DNS-rebinding
+  window between the check and the fetch.
+- Redirect chains are capped at 5 hops to prevent an unbounded chain.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Production Docker Compose Now Boots on a Fresh Clone
+
+`docker/docker-compose.prod.yml` previously couldn't start on a clean checkout, and broke
+configuration migrations and admin-UI saves once it did.
+
+- Configuration was bind-mounted from a host `../contents/` folder that doesn't exist until the
+  app generates it on first boot, so a fresh clone started with an empty, broken config.
+- `contents/config` was mounted read-only, so config migrations and any admin-UI save (platform
+  settings, apps, models, etc.) failed once the container did start.
+- Replaced the multi-volume, read-only setup with a single writable volume covering the whole
+  `contents/` tree, matching how the app already manages its own data — no separate init
+  container needed.
+- No admin action is required for new deployments. Existing deployments upgrading their compose
+  file should back up their current volumes first (see `docker/DOCKER.md`'s updated backup/migration
+  steps) since the old per-directory volumes (`ihub-config`, `ihub-data`, `ihub-uploads`, etc.) are
+  replaced by a single `ihub-contents` volume.
+  
+## Customizable Error & Empty-State Messages
+
+Admins can now reword the text shown on error and empty-state screens per language, directly from
+the admin panel — no code change or redeploy required. This is useful for branded deployments that
+need tenant-specific wording, a support contact, or a different tone.
+
+- Covers the generic error screen, the 404 / 500 / 403 / 401 pages, and the "no apps available"
+  state on the apps list.
+- Edit under **Admin → UI Customization → Error Pages**. Each screen has its own title and message
+  fields, with the standard multi-language editor (add languages, auto-translate).
+- Every field is optional — leave one empty to keep the built-in default text. Existing
+  installations get the current wording seeded automatically so there's nothing to fill in unless
+  you want to change it.
+- No admin action is required on upgrade; a migration adds the editable defaults for you.
+
+## Authentication Debug Logging — Fixed and Consolidated
+
+Enabling authentication debug logging now actually works, and all of its controls live in one
+place. Admins can trace OIDC redirects, token exchange, group mapping, and NTLM handshakes to
+diagnose sign-in problems.
+
+- Configure it under **Admin → Platform → Logging → Authentication Debug Logging**. The
+  Authentication page now points here instead of offering a second, disconnected copy.
+- Turning it on is sufficient on its own — traces are written at the `info` level, so they appear
+  at the default log level without also lowering the global log level, and the change applies
+  immediately (no server restart).
+- The **Include raw authentication data** option (off by default) is clearly marked as a security
+  risk; leave it off unless you are actively debugging, and turn it off again afterward.
+- The obsolete "Console logging" toggle was removed (the logger already manages console output).
+- No admin action is required on upgrade: a migration moves any previously saved setting to its new
+  location so your configuration is preserved.
+
+## Fixed App Crash Caused by Browser Auto-Translation
+
+Fixed a crash where the entire app would fail to load with a generic "Something went wrong" error
+on browsers configured to automatically translate pages (for example, Chrome or Edge on a German,
+French, or other non-English system).
+
+- The symptom was an unexpected-error screen showing `NotFoundError: Failed to execute
+  'insertBefore' on 'Node'`, often in the browser's own translated wording rather than iHub's.
+- It was most visible right after a fresh installation, because a new install starts in English
+  and a non-English browser would offer to auto-translate it.
+- iHub Apps already ships its own language switcher, so browser translation was both redundant and
+  the source of the crash. The application now instructs browsers not to auto-translate its pages;
+  users should continue to switch languages using the in-app language selector.
+- No admin action is required on upgrade.

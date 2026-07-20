@@ -12,7 +12,7 @@ import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
-import { buildApiPath, buildServerPath } from '../utils/basePath.js';
+import { buildApiPath } from '../utils/basePath.js';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
@@ -573,10 +573,10 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
   // Auth API rate limiter for authentication endpoints
-  app.use(buildServerPath('/auth'), rateLimiters.authApiLimiter);
+  app.use(buildApiPath('/auth'), rateLimiters.authApiLimiter);
 
   // Inference API rate limiter for AI inference endpoints
-  app.use(buildServerPath('/inference'), rateLimiters.inferenceApiLimiter);
+  app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);

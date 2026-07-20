@@ -685,34 +685,53 @@ Windows NTLM/Kerberos authentication for domain-joined environments.
 
 For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
 
-### **authDebug**
-Authentication debugging and logging configuration.
+### **auth.debug**
+Authentication debug logging configuration. This lives under the `auth` block
+(`auth.debug`) and is edited from the admin UI at **Platform → Logging →
+Authentication Debug Logging** — the single place for all auth tracing.
 
 ```json
 {
-  "authDebug": {
-    "enabled": false,
-    "maskTokens": true,
-    "redactPasswords": true,
-    "consoleLogging": false,
-    "includeRawData": false,
-    "providers": {
-      "oidc": { "enabled": true },
-      "local": { "enabled": true },
-      "proxy": { "enabled": true },
-      "ldap": { "enabled": true },
-      "ntlm": { "enabled": true }
+  "auth": {
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": { "enabled": true },
+        "local": { "enabled": true },
+        "proxy": { "enabled": true },
+        "ldap": { "enabled": true },
+        "ntlm": { "enabled": true }
+      }
     }
   }
 }
 ```
 
-- **enabled** (boolean) – Enable authentication debugging. Default: `false`
+- **enabled** (boolean) – Enable authentication debug logging. Default: `false`.
+  Traces are emitted at the `info` level, so they appear at the default
+  `logging.level` without any further change, and the toggle applies immediately
+  (no server restart required).
 - **maskTokens** (boolean) – Mask sensitive tokens in logs. Default: `true`
 - **redactPasswords** (boolean) – Redact passwords from logs. Default: `true`
-- **consoleLogging** (boolean) – Enable console logging. Default: `false`
-- **includeRawData** (boolean) – Include raw authentication data. Default: `false`
-- **providers** (object) – Per-provider debugging settings
+- **includeRawData** (boolean) – Log the full, unsanitized user-info payload and
+  raw access token for the OIDC flow. **Security risk** — leave `false` (default)
+  and only enable while actively debugging. The core logger still redacts
+  well-known sensitive keys as a safety net.
+- **providers** (object) – Per-provider toggles (`oidc`, `local`, `proxy`,
+  `ldap`, `ntlm`). Each defaults to enabled when global debug is on.
+
+> **Migration note:** earlier releases wrote a top-level `authDebug` key that the
+> server never read, so the toggle silently did nothing. The value is moved to
+> `auth.debug` automatically on upgrade (migration `V079`), and the dead
+> `consoleLogging` flag is dropped (Winston owns the console transport).
+
+> **NTLM:** the standalone `ntlmAuth.debug` flag still works, and NTLM tracing is
+> now also driven by `auth.debug` (`providers.ntlm`), so a single toggle covers
+> it. When component filtering (`logging.components`) is active, authentication
+> components are never filtered out while `auth.debug.enabled` is `true`.
 
 ## Environment Variables
 

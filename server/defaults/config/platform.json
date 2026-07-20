@@ -99,7 +99,20 @@
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480
+    "sessionTimeoutMinutes": 480,
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": { "enabled": true },
+        "local": { "enabled": true },
+        "proxy": { "enabled": true },
+        "ldap": { "enabled": true },
+        "ntlm": { "enabled": true }
+      }
+    }
   },
   "oauth": {
     "enabled": {

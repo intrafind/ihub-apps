@@ -1,7 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import QuillToolbar from './QuillToolbar';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 
@@ -37,6 +37,8 @@ const CanvasEditor = ({
     []
   );
 
+  // Quill 2 (react-quill-new): 'bullet' is no longer a standalone format —
+  // the 'list' format covers both ordered and bullet values.
   const quillFormats = [
     'header',
     'bold',
@@ -44,7 +46,6 @@ const CanvasEditor = ({
     'underline',
     'strike',
     'list',
-    'bullet',
     'blockquote',
     'code-block',
     'link'

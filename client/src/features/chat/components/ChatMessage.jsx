@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import DOMPurify from 'dompurify';
 import { sendMessageFeedback } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
@@ -609,7 +610,7 @@ function ChatMessage({
       return (
         <div
           className="break-words whitespace-normal"
-          dangerouslySetInnerHTML={{ __html: contentToRender }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentToRender) }}
         />
       );
     }
