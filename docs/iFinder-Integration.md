@@ -77,6 +77,14 @@ Alternatively, configure iFinder in your `platform.json`:
 
 ### 3. JWT Configuration
 
+> **Recommended: keyless authentication.** Instead of generating and exchanging
+> an RSA key pair, enable `iFinder.useOidcKeyPair`. iHub then signs the iFinder
+> JWT with its built-in OIDC signing key and iFinder verifies it by fetching the
+> public key from iHub's JWKS endpoint — no `privateKey`/`IFINDER_PRIVATE_KEY`
+> and no manual key upload into iFinder. See
+> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). The manual
+> key configuration described below is the legacy alternative.
+
 The iFinder integration uses JWT tokens for authentication with the following structure:
 
 ```json
@@ -430,13 +438,14 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-| Setting        | Environment Variable     | Platform Config                | Default                           | Description                          |
-| -------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------ |
-| Base URL       | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                 |
-| Search Profile | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID            |
-| Private Key    | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format) |
-| Timeout        | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)       |
-| Download Dir   | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory             |
+| Setting          | Environment Variable     | Platform Config                | Default                           | Description                                                                    |
+| ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
+| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID                                                      |
+| Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
+| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format); ignored when `useOidcKeyPair` is `true`  |
+| Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
+| Download Dir     | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory                                                       |
 
 ### Error Codes
 

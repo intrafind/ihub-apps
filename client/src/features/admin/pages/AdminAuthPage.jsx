@@ -15,6 +15,7 @@ function AdminAuthPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -55,36 +56,15 @@ function AdminAuthPage() {
       defaultGroups: [],
       sessionTimeoutMinutes: 480,
       generateJwtToken: true
-    },
-    authDebug: {
-      enabled: false,
-      maskTokens: true,
-      redactPasswords: true,
-      consoleLogging: false,
-      includeRawData: false,
-      providers: {
-        oidc: {
-          enabled: true
-        },
-        local: {
-          enabled: true
-        },
-        proxy: {
-          enabled: true
-        },
-        ldap: {
-          enabled: true
-        },
-        ntlm: {
-          enabled: true
-        }
-      }
     }
+    // Authentication debug logging is configured on the Logging page
+    // (Platform → Logging) under the canonical `auth.debug` key.
   });
 
   useEffect(() => {
     loadConfiguration();
     loadSchema();
+    loadGroups();
   }, []);
 
   const loadSchema = async () => {
@@ -93,6 +73,16 @@ function AdminAuthPage() {
       setJsonSchema(schema);
     } catch (error) {
       console.error('Failed to load platform schema:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -231,6 +221,7 @@ function AdminAuthPage() {
           value={config}
           onChange={handleDataChange}
           formComponent={PlatformFormEditor}
+          formProps={{ availableGroups }}
           jsonSchema={jsonSchema}
           title={t('admin.auth.configuration', 'Authentication Configuration')}
         />
