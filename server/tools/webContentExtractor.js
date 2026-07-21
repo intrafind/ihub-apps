@@ -5,7 +5,7 @@ import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions } from '../utils/httpConfig.js';
-import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
+import { assertPublicTarget, createPinnedLookup, isAllowedHost } from '../utils/ssrfGuard.js';
 
 // Bound manual redirect-following so a malicious/misconfigured server can't
 // force an unbounded hop chain.
@@ -110,7 +110,13 @@ export default async function webContentExtractor({
       }
 
       const addresses = await assertHopIsSafe(hopUrl, allowedHosts);
-      const pinnedLookup = createPinnedLookup(addresses);
+      // Skip the pinned lookup's defense-in-depth private-IP re-check for a
+      // hostname explicitly allow-listed by the admin — otherwise a
+      // legitimate internal target would resolve fine in assertHopIsSafe
+      // above but then get silently dropped here, failing with ENOTFOUND.
+      const pinnedLookup = createPinnedLookup(addresses, {
+        allowPrivate: isAllowedHost(hopUrl.hostname, allowedHosts)
+      });
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout

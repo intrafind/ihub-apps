@@ -294,26 +294,33 @@ export async function assertPublicTarget(parsedUrl, options = {}) {
  * boundary, so the lookup is not applied there.
  *
  * @param {string[]} addresses - Validated public IP addresses
+ * @param {Object} [options]
+ * @param {boolean} [options.allowPrivate] - Skip the defense-in-depth private-IP
+ *   re-check. Set this when `addresses` came from an `assertPublicTarget` call
+ *   whose `allowedHosts` matched this hostname — otherwise a legitimately
+ *   allow-listed private/internal address would be silently dropped here and
+ *   the connection would fail with ENOTFOUND, defeating the allowlist.
  * @returns {Function} A `(hostname, options, callback)` lookup function
  */
-export function createPinnedLookup(addresses) {
+export function createPinnedLookup(addresses, options = {}) {
+  const { allowPrivate = false } = options;
   const allowed = [...new Set(addresses || [])];
-  return function pinnedLookup(hostname, options, callback) {
-    if (typeof options === 'function') {
-      callback = options;
-      options = {};
-    } else if (typeof options === 'number') {
-      options = { family: options };
+  return function pinnedLookup(hostname, lookupOptions, callback) {
+    if (typeof lookupOptions === 'function') {
+      callback = lookupOptions;
+      lookupOptions = {};
+    } else if (typeof lookupOptions === 'number') {
+      lookupOptions = { family: lookupOptions };
     }
-    options = options || {};
+    lookupOptions = lookupOptions || {};
 
-    const wantFamily = options.family || 0;
+    const wantFamily = lookupOptions.family || 0;
     const entries = [];
     for (const addr of allowed) {
       const fam = net.isIP(addr);
       if (fam === 0) continue;
       if (wantFamily && wantFamily !== fam) continue;
-      if (isPrivateIP(addr)) continue; // defense-in-depth re-check
+      if (!allowPrivate && isPrivateIP(addr)) continue; // defense-in-depth re-check
       entries.push({ address: addr, family: fam });
     }
 
@@ -323,7 +330,7 @@ export function createPinnedLookup(addresses) {
       return callback(err);
     }
 
-    if (options.all) return callback(null, entries);
+    if (lookupOptions.all) return callback(null, entries);
     return callback(null, entries[0].address, entries[0].family);
   };
 }
