@@ -41,7 +41,7 @@ outbound request path (covering carrier-grade NAT and additional IPv6 address fo
 missed), and the bypass now reads from the dedicated `ssrf.allowedHosts` setting.
 
 - If you relied on `ssl.domainWhitelist` to let `webContentExtractor` reach an internal host, add
-  that host to `ssrf.allowedHosts` in Admin → Platform Settings instead.
+  that host to `ssrf.allowedHosts` in Admin → Security → SSRF Allowlist instead.
 
 **Before upgrading:** Move any hosts needed for `webContentExtractor` from `ssl.domainWhitelist` to
 `ssrf.allowedHosts`.
