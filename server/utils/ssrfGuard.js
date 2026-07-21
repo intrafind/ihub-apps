@@ -163,6 +163,52 @@ export function isPrivateIP(ip) {
 }
 
 /**
+ * Match a hostname against a single allowlist pattern.
+ *   - `*.example.com` matches any subdomain (e.g. `api.example.com`) but NOT
+ *     `example.com` itself
+ *   - `.example.com` is an alias for `*.example.com` — subdomains only, NOT
+ *     `example.com` itself
+ *   - everything else is an exact-match hostname (case-insensitive)
+ *
+ * This is the single canonical matcher for `platform.ssrf.allowedHosts` and
+ * any per-caller allow lists; callers should not maintain their own copy.
+ *
+ * @param {string} hostname
+ * @param {string} pattern
+ * @returns {boolean}
+ */
+export function hostMatchesPattern(hostname, pattern) {
+  if (!hostname || !pattern) return false;
+  const h = hostname.toLowerCase();
+  const p = pattern.toLowerCase().trim();
+  if (!p) return false;
+  if (p.startsWith('*.')) {
+    const base = p.slice(2);
+    return Boolean(base) && h.endsWith('.' + base);
+  }
+  if (p.startsWith('.')) {
+    // Subdomain pattern — bare domain must NOT match (per repo convention)
+    const base = p.slice(1);
+    return Boolean(base) && h.endsWith(p);
+  }
+  return h === p;
+}
+
+/**
+ * Check whether a hostname matches any pattern in an allowlist (e.g. a
+ * per-caller `allowHosts` array merged with the admin-managed
+ * `platform.ssrf.allowedHosts`).
+ *
+ * @param {string} hostname
+ * @param {string[]} allowList
+ * @returns {boolean}
+ */
+export function isAllowedHost(hostname, allowList) {
+  if (!Array.isArray(allowList) || allowList.length === 0) return false;
+  return allowList.some(pattern => hostMatchesPattern(hostname, pattern));
+}
+
+/**
  * SSRF guard: resolve the URL's hostname to one or more IP addresses and
  * verify every resolved IP is in a public range. Catches DNS-based
  * bypasses where an external hostname resolves to a private IP.
@@ -172,24 +218,34 @@ export function isPrivateIP(ip) {
  * DNS-rebinding window between this check and the actual fetch.
  *
  * @param {URL} parsedUrl - The parsed request URL
+ * @param {Object} [options]
+ * @param {string[]} [options.allowedHosts] - Patterns (see {@link hostMatchesPattern})
+ *   that bypass the private-IP veto for this hostname, e.g. the admin-managed
+ *   `platform.ssrf.allowedHosts` merged with any per-caller allow list. DNS is
+ *   still resolved (when applicable) so the caller can pin the connection.
  * @returns {Promise<{ok: boolean, reason?: string, addresses?: string[]}>}
  */
-export async function assertPublicTarget(parsedUrl) {
+export async function assertPublicTarget(parsedUrl, options = {}) {
+  const { allowedHosts = [] } = options;
+
   // Strip IPv6 brackets that URL parsing leaves on the hostname.
   let host = parsedUrl.hostname;
   if (host.startsWith('[') && host.endsWith(']')) {
     host = host.slice(1, -1);
   }
 
+  const allowed = isAllowedHost(host, allowedHosts);
+
   // Block obvious magic hostnames before DNS even runs.
   const lowerHost = host.toLowerCase();
-  if (lowerHost === 'localhost' || lowerHost.endsWith('.localhost')) {
+  if (!allowed && (lowerHost === 'localhost' || lowerHost.endsWith('.localhost'))) {
     return { ok: false, reason: 'localhost is blocked' };
   }
 
   // If the hostname is already an IP literal, check it directly. No DNS is
   // performed for literals, so there is nothing to pin/rebind.
   if (net.isIP(host)) {
+    if (allowed) return { ok: true, addresses: [host] };
     return isPrivateIP(host)
       ? { ok: false, reason: `IP ${host} is private` }
       : { ok: true, addresses: [host] };
@@ -211,9 +267,11 @@ export async function assertPublicTarget(parsedUrl) {
     return { ok: false, reason: 'host did not resolve to any IP' };
   }
 
-  for (const addr of addrs) {
-    if (isPrivateIP(addr)) {
-      return { ok: false, reason: `host resolves to private IP ${addr}` };
+  if (!allowed) {
+    for (const addr of addrs) {
+      if (isPrivateIP(addr)) {
+        return { ok: false, reason: `host resolves to private IP ${addr}` };
+      }
     }
   }
   return { ok: true, addresses: addrs };
@@ -236,26 +294,33 @@ export async function assertPublicTarget(parsedUrl) {
  * boundary, so the lookup is not applied there.
  *
  * @param {string[]} addresses - Validated public IP addresses
+ * @param {Object} [options]
+ * @param {boolean} [options.allowPrivate] - Skip the defense-in-depth private-IP
+ *   re-check. Set this when `addresses` came from an `assertPublicTarget` call
+ *   whose `allowedHosts` matched this hostname — otherwise a legitimately
+ *   allow-listed private/internal address would be silently dropped here and
+ *   the connection would fail with ENOTFOUND, defeating the allowlist.
  * @returns {Function} A `(hostname, options, callback)` lookup function
  */
-export function createPinnedLookup(addresses) {
+export function createPinnedLookup(addresses, options = {}) {
+  const { allowPrivate = false } = options;
   const allowed = [...new Set(addresses || [])];
-  return function pinnedLookup(hostname, options, callback) {
-    if (typeof options === 'function') {
-      callback = options;
-      options = {};
-    } else if (typeof options === 'number') {
-      options = { family: options };
+  return function pinnedLookup(hostname, lookupOptions, callback) {
+    if (typeof lookupOptions === 'function') {
+      callback = lookupOptions;
+      lookupOptions = {};
+    } else if (typeof lookupOptions === 'number') {
+      lookupOptions = { family: lookupOptions };
     }
-    options = options || {};
+    lookupOptions = lookupOptions || {};
 
-    const wantFamily = options.family || 0;
+    const wantFamily = lookupOptions.family || 0;
     const entries = [];
     for (const addr of allowed) {
       const fam = net.isIP(addr);
       if (fam === 0) continue;
       if (wantFamily && wantFamily !== fam) continue;
-      if (isPrivateIP(addr)) continue; // defense-in-depth re-check
+      if (!allowPrivate && isPrivateIP(addr)) continue; // defense-in-depth re-check
       entries.push({ address: addr, family: fam });
     }
 
@@ -265,7 +330,7 @@ export function createPinnedLookup(addresses) {
       return callback(err);
     }
 
-    if (options.all) return callback(null, entries);
+    if (lookupOptions.all) return callback(null, entries);
     return callback(null, entries[0].address, entries[0].family);
   };
 }
