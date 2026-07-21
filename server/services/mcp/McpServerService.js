@@ -8,6 +8,7 @@ import { listMcpResources, readMcpResource } from './resourceAdapter.js';
 import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -330,9 +331,7 @@ function toolErrorResult(message) {
 function extractText(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'object') {
-    return value.en || value.de || Object.values(value)[0] || '';
-  }
+  if (typeof value === 'object') return getLocalizedString(value, 'en');
   return String(value);
 }
 

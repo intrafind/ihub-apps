@@ -18,6 +18,7 @@ import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
+import { getLocalizedString } from './utils/localize.js';
 
 /**
  * Resolve environment variables in a string
@@ -242,8 +243,7 @@ function expandToolFunctions(tools = []) {
         // Always extract string value from name (support both string and multilingual object)
         let toolName = tool.name;
         if (typeof toolName === 'object') {
-          // Extract from multilingual object
-          toolName = toolName.en || toolName.de || Object.values(toolName)[0] || tool.id;
+          toolName = getLocalizedString(toolName, 'en', undefined, tool.id);
         } else if (typeof toolName !== 'string') {
           // Fallback to ID if name is neither string nor object
           toolName = tool.id;

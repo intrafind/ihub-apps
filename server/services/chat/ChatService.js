@@ -6,7 +6,7 @@ import { processMessageTemplates } from '../../serverHelpers.js';
 import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { InMemorySink } from './streamSink/InMemorySink.js';
-import { processResponseBuffer } from '../../adapters/index.js';
+import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 
 class ChatService {
   constructor(options = {}) {
@@ -139,7 +139,10 @@ class ChatService {
       const rawBody = sink.jsonBody;
       if (empty && rawBody && model?.provider) {
         try {
-          const normalized = await processResponseBuffer(model.provider, JSON.stringify(rawBody));
+          const normalized = await convertResponseToGeneric(
+            JSON.stringify(rawBody),
+            model.provider
+          );
           if (normalized) {
             const contentParts = Array.isArray(normalized.content)
               ? normalized.content
@@ -153,7 +156,7 @@ class ChatService {
               result.finalMessage = { role: 'assistant', content: normalizedContent };
             }
             if (normalized.finishReason) result.finishReason = normalized.finishReason;
-            if (normalized.usage) result.usage = normalized.usage;
+            if (normalized.metadata?.usage) result.usage = normalized.metadata.usage;
           }
         } catch (normErr) {
           logger.warn('invokeAppInternal: adapter normalisation failed', {

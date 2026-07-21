@@ -52,17 +52,6 @@ export async function createCompletionRequest(model, messages, apiKey, options =
 }
 
 /**
- * Process a streaming response from the model
- * @param {string} provider - The provider name
- * @param {string} buffer - The response buffer to process
- * @returns {Promise<Object>} Result containing content, completion status and a normalized finish reason
- */
-export async function processResponseBuffer(provider, buffer) {
-  const adapter = getAdapter(provider);
-  return await adapter.processResponseBuffer(buffer);
-}
-
-/**
  * Format messages for the provider's API
  * @param {string} provider - The provider name
  * @param {Array} messages - The messages to format

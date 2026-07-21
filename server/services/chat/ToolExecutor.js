@@ -25,6 +25,14 @@ import {
  */
 const MAX_CLARIFICATIONS = MAX_CLARIFICATIONS_PER_CONVERSATION;
 
+/**
+ * Cap on tracked chatIds in clarificationCounts. ToolExecutor is a process-wide
+ * singleton with no "conversation ended" signal to clear entries on, so the Map
+ * is bounded (insertion-ordered, evict-oldest) instead — mirrors searchCache.js.
+ * @constant {number}
+ */
+const MAX_CHAT_ENTRIES = 5000;
+
 class ToolExecutor {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -58,17 +66,15 @@ class ToolExecutor {
   incrementClarificationCount(chatId) {
     const current = this.getClarificationCount(chatId);
     const newCount = current + 1;
+    if (
+      !this.clarificationCounts.has(chatId) &&
+      this.clarificationCounts.size >= MAX_CHAT_ENTRIES
+    ) {
+      const oldest = this.clarificationCounts.keys().next().value;
+      if (oldest !== undefined) this.clarificationCounts.delete(oldest);
+    }
     this.clarificationCounts.set(chatId, newCount);
     return newCount;
-  }
-
-  /**
-   * Reset the clarification count for a conversation
-   * Called when a conversation ends or is explicitly reset
-   * @param {string} chatId - The conversation/chat ID
-   */
-  resetClarificationCount(chatId) {
-    this.clarificationCounts.delete(chatId);
   }
 
   /**

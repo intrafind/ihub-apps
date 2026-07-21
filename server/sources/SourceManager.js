@@ -6,6 +6,7 @@ import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { resolveAndValidatePath } from '../utils/pathSecurity.js';
 import { recordSourceLoad } from '../telemetry/metrics.js';
+import { getLocalizedString } from '../utils/localize.js';
 
 // Global registry for source tool functions (persists across SourceManager instances)
 const globalSourceToolRegistry = new Map();
@@ -268,26 +269,15 @@ class SourceManager {
           const link = result.link || '';
 
           // Localize description
-          let description = result.description || `Content from ${result.id}`;
-          if (typeof description === 'object') {
-            description =
-              description.en || Object.values(description)[0] || `Content from ${result.id}`;
-          }
+          const description = result.description
+            ? getLocalizedString(result.description, 'en', undefined, `Content from ${result.id}`)
+            : `Content from ${result.id}`;
 
           // Get human-friendly display name
           const language = context.language || 'en';
-          let displayName = result.id; // fallback to ID if no name
-          if (result.name) {
-            if (typeof result.name === 'string') {
-              displayName = result.name;
-            } else if (typeof result.name === 'object' && result.name !== null) {
-              displayName =
-                result.name[language] ||
-                result.name.en ||
-                Object.values(result.name)[0] ||
-                result.id;
-            }
-          }
+          const displayName = result.name
+            ? getLocalizedString(result.name, language, undefined, result.id)
+            : result.id;
 
           sourceEntries.push(
             `  <source id="${result.id}" type="function" name="source_${result.id}" displayName="${displayName}" link="${link}" description="${description}"/>`
@@ -296,11 +286,9 @@ class SourceManager {
           // Prompt-based source - include directly in content (already handled in totalContent)
           // Just add metadata entry to the list
           const link = result.link || '';
-          let description = result.description || `Content from ${result.id}`;
-          if (typeof description === 'object') {
-            description =
-              description.en || Object.values(description)[0] || `Content from ${result.id}`;
-          }
+          const description = result.description
+            ? getLocalizedString(result.description, 'en', undefined, `Content from ${result.id}`)
+            : `Content from ${result.id}`;
 
           sourceEntries.push(
             `  <source id="${result.id}" type="${result.type}" link="${link}" description="${description}"/>`
@@ -347,25 +335,19 @@ class SourceManager {
 
     // Localize description
     const language = context.language || 'en';
-    let description = source.description || `Load content from ${source.type} source: ${source.id}`;
-
-    // Handle multilingual descriptions
-    if (typeof description === 'object' && description[language]) {
-      description = description[language];
-    } else if (typeof description === 'object' && description.en) {
-      description = description.en; // fallback to English
-    }
+    const description = source.description
+      ? getLocalizedString(
+          source.description,
+          language,
+          undefined,
+          `Load content from ${source.type} source: ${source.id}`
+        )
+      : `Load content from ${source.type} source: ${source.id}`;
 
     // Get human-friendly name
-    let displayName = source.id; // fallback to ID if no name
-    if (source.name) {
-      if (typeof source.name === 'string') {
-        displayName = source.name;
-      } else if (typeof source.name === 'object') {
-        displayName =
-          source.name[language] || source.name.en || Object.values(source.name)[0] || source.id;
-      }
-    }
+    const displayName = source.name
+      ? getLocalizedString(source.name, language, undefined, source.id)
+      : source.id;
 
     // Generate tool schema in generic format (will be converted by provider adapters).
     // `id` and `name` both carry the dispatch key so provider formatters that read

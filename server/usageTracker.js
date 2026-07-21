@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
@@ -7,20 +6,17 @@ import { recordTokenUsage } from './telemetry.js';
 import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
-import logger from './utils/logger.js';
+import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
 import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
-const SAVE_INTERVAL_MS = 10000;
 const now = () => new Date().toISOString();
 
-let usage = null;
 let trackingEnabled = true;
 let trackingMode = 'pseudonymous';
 let configLoaded = false;
-let dirty = false;
-let saveTimer = null;
+let migrationChecked = false;
 
 function createDefaultUsage() {
   return {
@@ -58,6 +54,15 @@ function createDefaultUsage() {
   };
 }
 
+const store = createDebouncedJsonStore({
+  filePath: dataFile,
+  createDefault: createDefaultUsage,
+  component: 'UsageTracker',
+  onBeforeSave: data => {
+    data.lastUpdated = now();
+  }
+});
+
 async function loadConfig() {
   if (configLoaded) return;
   try {
@@ -78,7 +83,7 @@ export function reloadConfig() {
 }
 
 function migrateLegacyFeedback(feedbackObj) {
-  if (!feedbackObj || typeof feedbackObj !== 'object') return;
+  if (!feedbackObj || typeof feedbackObj !== 'object') return false;
 
   // Initialize structure if missing
   if (!feedbackObj.ratings) {
@@ -113,58 +118,37 @@ function migrateLegacyFeedback(feedbackObj) {
   // Keep legacy fields for backward compatibility
   feedbackObj.good = feedbackObj.good || 0;
   feedbackObj.bad = feedbackObj.bad || 0;
+
+  return needsMigration;
 }
 
 async function loadUsage() {
-  if (usage) return usage;
-  try {
-    const data = await fs.readFile(dataFile, 'utf8');
-    usage = JSON.parse(data);
-    usage.lastUpdated = usage.lastUpdated || now();
-    usage.lastReset = usage.lastReset || now();
+  const data = await store.load();
+  if (!migrationChecked) {
+    migrationChecked = true;
+    data.lastUpdated = data.lastUpdated || now();
+    data.lastReset = data.lastReset || now();
 
-    // Migrate top-level feedback
-    if (usage.feedback) {
-      migrateLegacyFeedback(usage.feedback);
+    if (data.feedback) {
+      let changed = migrateLegacyFeedback(data.feedback);
 
       // Migrate all nested feedback objects (perUser, perApp, perModel)
       ['perUser', 'perApp', 'perModel'].forEach(key => {
-        if (usage.feedback[key]) {
-          Object.keys(usage.feedback[key]).forEach(id => {
-            const feedbackItem = usage.feedback[key][id];
-            migrateLegacyFeedback(feedbackItem);
+        if (data.feedback[key]) {
+          Object.keys(data.feedback[key]).forEach(id => {
+            if (migrateLegacyFeedback(data.feedback[key][id])) changed = true;
           });
         }
       });
 
       // Mark as migrated by saving immediately
-      dirty = true;
-      await saveUsage();
+      if (changed) {
+        store.markDirty();
+        await store.flush();
+      }
     }
-  } catch {
-    usage = createDefaultUsage();
   }
-  return usage;
-}
-
-async function saveUsage() {
-  if (!usage || !dirty) return;
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  usage.lastUpdated = now();
-  await fs.writeFile(dataFile, JSON.stringify(usage, null, 2));
-  dirty = false;
-}
-
-function scheduleSave() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(async () => {
-    saveTimer = null;
-    try {
-      await saveUsage();
-    } catch (error) {
-      logger.error('Failed to save usage data', { component: 'UsageTracker', error });
-    }
-  }, SAVE_INTERVAL_MS);
+  return data;
 }
 
 function inc(map, key, amount) {
@@ -265,8 +249,7 @@ async function recordChatMessage({
     ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
     tokenSource
   });
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
 export async function recordChatRequest(args) {
@@ -297,8 +280,7 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
     modelId,
     rating
   });
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
 export async function recordMagicPrompt({
@@ -341,8 +323,7 @@ export async function recordMagicPrompt({
     tokenSource: 'estimate'
   });
 
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
 export async function getUsage() {
@@ -362,16 +343,9 @@ export async function getTrackingMode() {
 
 export async function resetUsage() {
   await loadConfig();
-  usage = createDefaultUsage();
-  usage.lastReset = now();
-  dirty = true;
-  await saveUsage();
+  const fresh = createDefaultUsage();
+  fresh.lastReset = now();
+  store.replace(fresh);
+  migrationChecked = true;
+  await store.flush();
 }
-
-// Start periodic save interval
-setInterval(() => {
-  if (dirty)
-    saveUsage().catch(e =>
-      logger.error('Usage save error', { component: 'UsageTracker', error: e })
-    );
-}, SAVE_INTERVAL_MS);

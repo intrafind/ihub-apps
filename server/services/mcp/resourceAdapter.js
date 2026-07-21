@@ -5,6 +5,7 @@ import { getSkillContent, validateSkillName } from '../../services/skillLoader.j
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getVisibleSourceIds } from './permissions.js';
 import logger from '../../utils/logger.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 /**
  * Map iHub sources + skills onto MCP `resources/list` + `resources/read`.
@@ -24,9 +25,7 @@ import logger from '../../utils/logger.js';
 function extractText(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'object') {
-    return value.en || value.de || Object.values(value)[0] || '';
-  }
+  if (typeof value === 'object') return getLocalizedString(value, 'en');
   return String(value);
 }
 

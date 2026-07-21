@@ -7,7 +7,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
@@ -20,6 +20,7 @@ function AdminUserEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
 
@@ -70,7 +71,7 @@ function AdminUserEditPage() {
           setUser(loadedUser);
           setInitialData(loadedUser);
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         } finally {
           setLoading(false);
         }
@@ -103,12 +104,13 @@ function AdminUserEditPage() {
     if (!data) data = user;
 
     if (!data.username) {
-      setError('Username is required');
+      setSaveError('Username is required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = isNewUser ? 'POST' : 'PUT';
       const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
 
@@ -149,8 +151,7 @@ function AdminUserEditPage() {
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
-      setError(err.message);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -248,6 +249,20 @@ function AdminUserEditPage() {
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <Icon name="warning" size="md" className="text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <DualModeEditor

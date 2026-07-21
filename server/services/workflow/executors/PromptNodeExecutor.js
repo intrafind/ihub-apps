@@ -24,6 +24,7 @@ import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
+import { getLocalizedString } from '../../../utils/localize.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -534,7 +535,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         tools,
         config,
         context: contextForLLM,
-        nodeId: node.id
+        nodeId: node.id,
+        nativeWebSearch
       });
 
       // Finalise the step transcript with timing + outcome.
@@ -932,13 +934,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   getLocalizedValue(value, language) {
-    if (typeof value === 'string') {
-      return value;
+    if (typeof value !== 'string' && (typeof value !== 'object' || value === null)) {
+      return String(value || '');
     }
-    if (typeof value === 'object' && value !== null) {
-      return value[language] || value['en'] || Object.values(value)[0] || '';
-    }
-    return String(value || '');
+    return getLocalizedString(value, language);
   }
 
   /**
@@ -1392,7 +1391,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {Promise<Object>} Final response with content
    * @private
    */
-  async executeLLMWithTools({ model, messages, tools, config, context, nodeId }) {
+  async executeLLMWithTools({
+    model,
+    messages,
+    tools,
+    config,
+    context,
+    nodeId,
+    nativeWebSearch = null
+  }) {
     // Budget-driven continuation (Claude Code TOKEN_BUDGET analog). The agent
     // runs as long as the task and budget require, rather than a fixed count.
     // `maxToolRoundsPerNode` is a safety backstop above the token budget; the
@@ -1455,6 +1462,17 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     while (iteration < maxIterations) {
       iteration++;
 
+      // Cancellation / node-timeout check. context.abortSignal is the signal
+      // WorkflowEngine._executeWithTimeout races the node against (fired by
+      // engine.cancel() or the per-node timeout); without this the tool loop
+      // ignored it entirely and kept issuing LLM calls and mutating shared
+      // run state after the run was already considered CANCELLED/timed out.
+      if (context.abortSignal?.aborted) {
+        const abortError = new Error('Agent tool loop aborted (workflow cancelled or timed out)');
+        abortError.code = 'ABORTED';
+        throw abortError;
+      }
+
       this.logger.debug('LLM iteration', {
         component: 'PromptNodeExecutor',
         nodeId,
@@ -1499,7 +1517,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             // Note: user and chatId are intentionally NOT passed here
             // They are not valid adapter options and would corrupt provider request bodies
           },
-          language
+          language,
+          signal: context.abortSignal
         });
       } catch (err) {
         if (
@@ -1620,8 +1639,16 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
       currentMessages.push(assistantMessage);
 
-      // Execute each tool call
+      // Execute each tool call. Re-check the abort signal before EACH call (not
+      // just once per iteration) so a cancellation received while several tool
+      // calls are queued in the same turn stops after the in-flight call rather
+      // than running the rest of the batch first.
       for (const toolCall of response.toolCalls) {
+        if (context.abortSignal?.aborted) {
+          const abortError = new Error('Agent tool loop aborted (workflow cancelled or timed out)');
+          abortError.code = 'ABORTED';
+          throw abortError;
+        }
         const toolResult = await this.executeToolCall(toolCall, tools, context);
         currentMessages.push(toolResult);
 

@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
@@ -7,6 +7,7 @@ import configCache from '../configCache.js';
 import { getContext } from '../utils/requestContext.js';
 import { anonymizeIp } from '../utils/ipAnonymizer.js';
 import { validateAuditEntry } from '../validators/auditEntrySchema.js';
+import { createJsonlAppender } from '../utils/jsonlAppender.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,10 +34,16 @@ function isEmailShaped(value) {
 
 // In-memory write buffer. High-volume middleware writes are batched and
 // flushed on an interval (and on shutdown) so we don't hit the disk on every
-// request. queryAuditLog() flushes first so reads stay consistent.
-let queue = [];
-let flushTimer = null;
-let overflowed = false;
+// request. queryAuditLog() flushes first so reads stay consistent. Entries
+// are grouped by date so a flush spanning midnight lands in the correct
+// per-day JSONL file.
+const appender = createJsonlAppender({
+  getFilePath: entry =>
+    join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${entry.ts.slice(0, 10)}.jsonl`),
+  flushIntervalMs: FLUSH_INTERVAL_MS,
+  maxQueueSize: MAX_QUEUE,
+  component: 'AuditLogService'
+});
 
 function getAuditConfig() {
   try {
@@ -94,75 +101,13 @@ function deriveSource(req) {
   return 'web';
 }
 
-function scheduleFlush() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    flushAuditLog().catch(error =>
-      logger.error('Failed to flush audit log', {
-        component: 'AuditLogService',
-        error: error.message
-      })
-    );
-  }, FLUSH_INTERVAL_MS);
-  // Don't let a pending flush keep the process alive on shutdown.
-  if (typeof flushTimer.unref === 'function') flushTimer.unref();
-}
-
-// Periodic safety-net flush. The one-shot scheduleFlush() timer clears itself
-// before running, so if a flush throws and re-buffers, nothing re-arms it —
-// this interval guarantees re-buffered entries eventually drain even with no
-// further audit activity. Mirrors UsageEventLog. unref so it never blocks exit.
-const periodicFlush = setInterval(() => {
-  if (queue.length > 0) {
-    flushAuditLog().catch(error =>
-      logger.error('Audit periodic flush error', {
-        component: 'AuditLogService',
-        error: error.message
-      })
-    );
-  }
-}, FLUSH_INTERVAL_MS);
-if (typeof periodicFlush.unref === 'function') periodicFlush.unref();
-
 /**
- * Flush the buffered audit entries to their daily JSONL files. Entries are
- * grouped by date so a flush spanning midnight lands in the correct files.
+ * Flush the buffered audit entries to their daily JSONL files.
  *
  * @returns {Promise<number>} number of entries written
  */
 export async function flushAuditLog() {
-  if (queue.length === 0) return 0;
-  const pending = queue;
-  queue = [];
-
-  const byDate = new Map();
-  for (const entry of pending) {
-    const date = entry.ts.slice(0, 10);
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(entry);
-  }
-
-  let count = 0;
-  let firstError = null;
-  // Write each date independently and only re-buffer the dates that failed, so
-  // a partial failure (e.g. a flush spanning midnight) can't re-write — and
-  // thereby duplicate — entries that already landed on disk.
-  for (const [date, entries] of byDate) {
-    try {
-      const filePath = join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${date}.jsonl`);
-      await fs.mkdir(dirname(filePath), { recursive: true });
-      const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n';
-      await fs.appendFile(filePath, lines, 'utf8');
-      count += entries.length;
-    } catch (error) {
-      firstError = firstError || error;
-      // Re-buffer only this date's entries so the next flush retries just them.
-      queue = entries.concat(queue);
-    }
-  }
-  if (firstError) throw firstError;
-  return count;
+  return appender.flush();
 }
 
 /**
@@ -232,22 +177,7 @@ export function logAudit({
       });
     }
 
-    queue.push(entry);
-    // Bound memory: if the buffer is overflowing (e.g. disk wedged), drop the
-    // oldest entries rather than grow without limit. Warn once per overflow.
-    if (queue.length > MAX_QUEUE) {
-      queue.splice(0, queue.length - MAX_QUEUE);
-      if (!overflowed) {
-        overflowed = true;
-        logger.error('Audit log buffer overflow — dropping oldest entries', {
-          component: 'AuditLogService',
-          max: MAX_QUEUE
-        });
-      }
-    } else {
-      overflowed = false;
-    }
-    scheduleFlush();
+    appender.append(entry);
 
     // Mark the request so the global audit middleware doesn't emit a duplicate
     // coarse entry for the same request — explicit calls are authoritative.
@@ -309,7 +239,7 @@ export async function queryAuditLog({
 } = {}) {
   // Flush buffered entries so reads reflect everything logged so far.
   try {
-    await flushAuditLog();
+    await appender.flush();
   } catch {
     // A flush failure is logged elsewhere; continue with what's on disk.
   }

@@ -16,6 +16,7 @@ import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import ChatService from '../../services/chat/ChatService.js';
+import { getLocalizedString } from '../../utils/localize.js';
 
 const chatService = new ChatService();
 
@@ -64,10 +65,7 @@ function buildToolParameters(app) {
 
 function localizedDescription(app, language = 'en') {
   if (!app.description) return `Invoke iHub app ${app.id}.`;
-  if (typeof app.description === 'string') return app.description;
-  return (
-    app.description[language] || app.description.en || Object.values(app.description)[0] || app.id
-  );
+  return getLocalizedString(app.description, language, undefined, app.id);
 }
 
 /**
@@ -90,10 +88,7 @@ export async function getAppAsTools(appIds, language = 'en') {
     // schema rejects nested objects ("Starting an object on a scalar field").
     // Other adapters' converters also pass these straight through. Resolve
     // locale here, do NOT re-wrap as a localized object.
-    const appName =
-      typeof app.name === 'string'
-        ? app.name
-        : app.name?.[language] || app.name?.en || Object.values(app.name || {})[0] || app.id;
+    const appName = getLocalizedString(app.name, language, undefined, app.id);
     tools.push({
       id: `app__${appId}`,
       name: `App: ${appName}`,

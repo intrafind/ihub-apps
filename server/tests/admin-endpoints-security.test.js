@@ -12,6 +12,7 @@
 
 import request from 'supertest';
 import express from 'express';
+import { promises as fsPromises } from 'fs';
 import { setupMiddleware } from '../middleware/setup.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import jwt from 'jsonwebtoken';
@@ -296,6 +297,39 @@ describe('Admin Endpoints Security - Comprehensive Audit', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(403);
+    });
+
+    test('GET /api/admin/auth/users must never return passwordHash values', async () => {
+      const token = createTestToken({
+        userId: 'admin1',
+        username: 'admin',
+        groups: ['admin', 'authenticated']
+      });
+
+      const readFileSpy = jest.spyOn(fsPromises, 'readFile').mockResolvedValueOnce(
+        JSON.stringify({
+          users: {
+            user1: {
+              id: 'user1',
+              username: 'testuser',
+              passwordHash: '$2b$12$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV'
+            }
+          },
+          metadata: {}
+        })
+      );
+
+      try {
+        const response = await request(app)
+          .get('/api/admin/auth/users')
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.users.user1).not.toHaveProperty('passwordHash');
+        expect(response.body.users.user1.username).toBe('testuser');
+      } finally {
+        readFileSpy.mockRestore();
+      }
     });
   });
 
