@@ -290,6 +290,169 @@ export const processTiffFile = async (file, options = {}) => {
 };
 
 /**
+ * Resize an already-loaded image to fit within `maxDimension` (longest edge)
+ * and re-encode it as JPEG. Shared canvas primitive used by both the
+ * uploader's processImageFile and the Office add-in's attachment resizer so
+ * the resize/re-encode behavior can't drift between the two call sites.
+ * @param {HTMLImageElement} img - A loaded image element
+ * @param {number} maxDimension - Maximum dimension for the longest edge
+ * @param {number} [quality] - JPEG re-encode quality (0-1)
+ * @returns {{ width: number, height: number, dataUrl: string }}
+ */
+export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+
+  if (width > height && width > maxDimension) {
+    height = Math.round((height * maxDimension) / width);
+    width = maxDimension;
+  } else if (height > maxDimension) {
+    width = Math.round((width * maxDimension) / height);
+    height = maxDimension;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+  return { width, height, dataUrl };
+};
+
+/**
+ * Process an image (or TIFF) file into the uploader's preview/data shape.
+ * Handles multipage TIFF (optionally returning one result per page via
+ * `allowMultiple`), resizing regular images through `resizeImageCanvas`.
+ * @param {File} file - The image file to process
+ * @param {Object} [options] - Processing options
+ * @param {number} [options.maxDimension] - Maximum dimension for resizing
+ * @param {boolean} [options.resize] - Whether to resize images
+ * @param {boolean} [options.allowMultiple] - Return one result per TIFF page
+ * @param {number} [options.quality] - JPEG re-encode quality (0-1)
+ * @returns {Promise<Object>} `{ preview, data }` or `{ multipleResults }`
+ */
+export const processImageFile = async (file, options = {}) => {
+  const { maxDimension = 1024, resize = true, allowMultiple = false, quality = 0.8 } = options;
+  const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+  if (isTiff) {
+    try {
+      const pages = await processTiffFile(file, { maxDimension, resize });
+
+      if (pages.length > 1 && allowMultiple) {
+        const pageResults = [];
+
+        for (let i = 0; i < pages.length; i++) {
+          const page = pages[i];
+
+          const response = await fetch(page.base64);
+          const blob = await response.blob();
+          const previewUrl = URL.createObjectURL(blob);
+
+          const baseFileName = file.name.replace(/\.tiff?$/i, '');
+          const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+          pageResults.push({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: page.base64,
+              fileName,
+              fileSize: blob.size,
+              fileType: 'image/png',
+              width: page.width,
+              height: page.height,
+              originalFileType: file.type,
+              originalFileName: file.name,
+              pageNumber: page.pageNumber,
+              totalPages: page.totalPages
+            }
+          });
+        }
+
+        return { multipleResults: pageResults };
+      }
+
+      const firstPage = pages[0];
+      const response = await fetch(firstPage.base64);
+      const blob = await response.blob();
+      const previewUrl = URL.createObjectURL(blob);
+
+      return {
+        preview: { type: 'image', url: previewUrl },
+        data: {
+          type: 'image',
+          source: 'local',
+          base64: firstPage.base64,
+          fileName: file.name.replace(/\.tiff?$/i, '.png'),
+          fileSize: blob.size,
+          fileType: 'image/png',
+          width: firstPage.width,
+          height: firstPage.height,
+          originalFileType: file.type,
+          originalFileName: file.name,
+          tiffPages: pages.length > 1 ? pages : undefined
+        }
+      };
+    } catch (error) {
+      console.error('Error processing TIFF file:', error);
+      throw new Error('tiff-processing-error');
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const previewUrl = URL.createObjectURL(file);
+
+        if (!resize) {
+          return resolve({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: e.target.result,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              width: img.width,
+              height: img.height
+            }
+          });
+        }
+
+        const { width, height, dataUrl } = resizeImageCanvas(img, maxDimension, quality);
+
+        resolve({
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            source: 'local',
+            base64: dataUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: 'image/jpeg',
+            width,
+            height
+          }
+        });
+      };
+      img.onerror = () => reject(new Error('invalid-image'));
+      img.src = e.target.result;
+    };
+
+    reader.onerror = () => reject(new Error('read-error'));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Extract audio from a video file using Web Audio API
  * @param {File} file - The video file to extract audio from
  * @param {Object} options - Processing options

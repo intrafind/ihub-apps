@@ -8,7 +8,7 @@ import {
   formatMimeTypesToDisplay,
   processDocumentFile,
   formatAcceptAttribute,
-  processTiffFile,
+  processImageFile,
   extractAudioFromVideo,
   loadMimetypesConfig
 } from '../utils/fileProcessing';
@@ -150,153 +150,12 @@ const UnifiedUploader = ({
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = async file => {
-    // Check if this is a TIFF file
-    const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
-
-    if (isTiff) {
-      try {
-        // Process TIFF file and convert to PNG
-        const pages = await processTiffFile(file, {
-          maxDimension: MAX_DIMENSION,
-          resize: RESIZE_IMAGES
-        });
-
-        // For multipage TIFFs, return all pages as separate images
-        if (pages.length > 1 && allowMultiple) {
-          // Return array of page results for multipage TIFF
-          const pageResults = [];
-
-          for (let i = 0; i < pages.length; i++) {
-            const page = pages[i];
-
-            // Create blob URL for preview
-            const response = await fetch(page.base64);
-            const blob = await response.blob();
-            const previewUrl = URL.createObjectURL(blob);
-
-            // Generate filename with page number
-            const baseFileName = file.name.replace(/\.tiff?$/i, '');
-            const fileName = `${baseFileName}_page${page.pageNumber}.png`;
-
-            pageResults.push({
-              preview: { type: 'image', url: previewUrl },
-              data: {
-                type: 'image',
-                source: 'local',
-                base64: page.base64,
-                fileName: fileName,
-                fileSize: blob.size,
-                fileType: 'image/png', // Converted to PNG
-                width: page.width,
-                height: page.height,
-                originalFileType: file.type,
-                originalFileName: file.name,
-                pageNumber: page.pageNumber,
-                totalPages: page.totalPages
-              }
-            });
-          }
-
-          // Return special structure to indicate multiple results from single file
-          return { multipleResults: pageResults };
-        }
-
-        // For single-page TIFF or when allowMultiple is false, use first page only
-        const firstPage = pages[0];
-
-        // Create blob URL for preview
-        const response = await fetch(firstPage.base64);
-        const blob = await response.blob();
-        const previewUrl = URL.createObjectURL(blob);
-
-        return {
-          preview: { type: 'image', url: previewUrl },
-          data: {
-            type: 'image',
-            source: 'local',
-            base64: firstPage.base64,
-            fileName: file.name.replace(/\.tiff?$/i, '.png'), // Change extension to PNG
-            fileSize: blob.size,
-            fileType: 'image/png', // Converted to PNG
-            width: firstPage.width,
-            height: firstPage.height,
-            originalFileType: file.type,
-            originalFileName: file.name,
-            tiffPages: pages.length > 1 ? pages : undefined // Include all pages if multipage
-          }
-        };
-      } catch (error) {
-        console.error('Error processing TIFF file:', error);
-        throw new Error('tiff-processing-error');
-      }
-    }
-
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-          const previewUrl = URL.createObjectURL(file);
-
-          // If resizing is disabled, return original image data
-          if (!RESIZE_IMAGES) {
-            return resolve({
-              preview: { type: 'image', url: previewUrl },
-              data: {
-                type: 'image',
-                source: 'local',
-                base64: e.target.result,
-                fileName: file.name,
-                fileSize: file.size,
-                fileType: file.type,
-                width: img.width,
-                height: img.height
-              }
-            });
-          }
-
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height && width > MAX_DIMENSION) {
-            height = Math.round((height * MAX_DIMENSION) / width);
-            width = MAX_DIMENSION;
-          } else if (height > MAX_DIMENSION) {
-            width = Math.round((width * MAX_DIMENSION) / height);
-            height = MAX_DIMENSION;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          const base64 = canvas.toDataURL('image/jpeg', 0.8);
-
-          resolve({
-            preview: { type: 'image', url: previewUrl },
-            data: {
-              type: 'image',
-              source: 'local',
-              base64,
-              fileName: file.name,
-              fileSize: file.size,
-              fileType: 'image/jpeg',
-              width,
-              height
-            }
-          });
-        };
-        img.onerror = () => reject(new Error('invalid-image'));
-        img.src = e.target.result;
-      };
-
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsDataURL(file);
+  const processImage = file =>
+    processImageFile(file, {
+      maxDimension: MAX_DIMENSION,
+      resize: RESIZE_IMAGES,
+      allowMultiple
     });
-  };
 
   const processAudio = file => {
     return new Promise((resolve, reject) => {
