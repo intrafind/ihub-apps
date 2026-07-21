@@ -40,7 +40,14 @@ class TokenStorageService {
   async initializeEncryptionKey() {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
-      this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim();
+      if (!/^[0-9a-f]{64}$/i.test(envKey)) {
+        throw new Error(
+          'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
+            'Generate one with: openssl rand -hex 32'
+        );
+      }
+      this.encryptionKey = envKey;
       logger.info('Using encryption key from TOKEN_ENCRYPTION_KEY environment variable', {
         component: 'TokenStorage'
       });
@@ -297,7 +304,7 @@ class TokenStorageService {
       const context = this._generateEncryptionContext(userId, serviceName);
 
       // Include context in the encryption to bind tokens to specific user/service
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      const cipher = crypto.createCipheriv(this.algorithm, key, iv);
 
       let encrypted = cipher.update(
         JSON.stringify({ ...tokens, context: context.toString('hex') }),
@@ -305,10 +312,13 @@ class TokenStorageService {
         'hex'
       );
       encrypted += cipher.final('hex');
+      const authTag = cipher.getAuthTag();
 
       return {
         encrypted,
         iv: iv.toString('hex'),
+        authTag: authTag.toString('hex'),
+        algorithm: this.algorithm,
         userId,
         serviceName,
         contextHash: context.toString('hex')
@@ -323,7 +333,14 @@ class TokenStorageService {
   }
 
   /**
-   * Decrypt token data with user and service verification
+   * Decrypt token data with user and service verification.
+   *
+   * New tokens are encrypted with authenticated AES-256-GCM (see
+   * `encryptTokens`). Tokens written before this change used
+   * unauthenticated AES-256-CBC and have no `authTag`/`algorithm`
+   * field — that legacy format is still accepted here so existing
+   * on-disk tokens keep working; they get upgraded to GCM the next
+   * time they're re-encrypted (e.g. on token refresh).
    */
   decryptTokens(encryptedData, userId, serviceName) {
     this._ensureKeyInitialized();
@@ -338,11 +355,24 @@ class TokenStorageService {
 
       const key = Buffer.from(this.encryptionKey, 'hex');
       const iv = Buffer.from(encryptedData.iv, 'hex');
+      const isGcm = encryptedData.algorithm === 'aes-256-gcm' || Boolean(encryptedData.authTag);
 
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-
-      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      let decrypted;
+      if (isGcm) {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      } else {
+        logger.warn('Decrypting tokens stored in legacy unauthenticated AES-256-CBC format', {
+          component: 'TokenStorage',
+          userId,
+          serviceName
+        });
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      }
 
       const parsedData = JSON.parse(decrypted);
 
