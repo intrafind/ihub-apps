@@ -29,13 +29,36 @@ export const DCR_ALLOWED_AUTH_METHODS = Object.freeze([
   'client_secret_basic'
 ]);
 
-const DANGEROUS_SCHEMES = new Set([
+// Schemes that must never be redirect targets: script/local-content schemes
+// (XSS vectors) plus well-known network/navigation schemes that are not
+// app-callback schemes. Anything else that is neither https nor loopback
+// http is treated as a private-use native-app scheme (RFC 8252 §7.1) — a
+// positive allowlist is impossible since every native MCP client picks its
+// own scheme (cursor://…, vscode://…, com.example.app://…).
+const DENIED_SCHEMES = new Set([
   'javascript:',
   'data:',
   'file:',
   'vbscript:',
   'blob:',
-  'about:'
+  'about:',
+  'ftp:',
+  'ftps:',
+  'sftp:',
+  'ws:',
+  'wss:',
+  'mailto:',
+  'tel:',
+  'ssh:',
+  'telnet:',
+  'smb:',
+  'ldap:',
+  'ldaps:',
+  'gopher:',
+  'intent:',
+  'chrome:',
+  'chrome-extension:',
+  'moz-extension:'
 ]);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -70,7 +93,7 @@ export function validateRedirectUri(uri) {
   }
 
   const scheme = parsed.protocol;
-  if (DANGEROUS_SCHEMES.has(scheme)) {
+  if (DENIED_SCHEMES.has(scheme)) {
     return { ok: false, reason: `redirect URI scheme not allowed: ${scheme}` };
   }
 
@@ -86,12 +109,11 @@ export function validateRedirectUri(uri) {
     return { ok: false, reason: 'http redirect URIs are only allowed for loopback addresses' };
   }
 
-  // Private-use URI scheme for native apps (RFC 8252 §7.1), e.g. cursor://…
-  if (/^[a-z][a-z0-9+.-]*:$/i.test(scheme)) {
-    return { ok: true };
-  }
-
-  return { ok: false, reason: `redirect URI scheme not allowed: ${scheme}` };
+  // Anything else is treated as a private-use URI scheme for native apps
+  // (RFC 8252 §7.1), e.g. cursor://…, vscode://…. Note that DCR necessarily
+  // allows arbitrary attacker-controlled https targets too — the mandatory
+  // user consent screen, not the scheme, is the actual authorization gate.
+  return { ok: true };
 }
 
 /**

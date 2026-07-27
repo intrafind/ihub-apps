@@ -36,6 +36,21 @@ describe('DCR redirect URI validation', () => {
     }
   });
 
+  it('rejects known network schemes that are not app callbacks', () => {
+    for (const uri of [
+      'ftp://evil.example.com/cb',
+      'ws://evil.example.com/cb',
+      'wss://evil.example.com/cb',
+      'mailto:attacker@example.com',
+      'ssh://evil.example.com/cb',
+      'ldap://evil.example.com/cb',
+      'intent://cb#Intent;end',
+      'chrome-extension://abcdef/cb'
+    ]) {
+      expect(validateRedirectUri(uri).ok).toBe(false);
+    }
+  });
+
   it('rejects URIs with fragments', () => {
     expect(validateRedirectUri('https://example.com/cb#frag').ok).toBe(false);
   });
