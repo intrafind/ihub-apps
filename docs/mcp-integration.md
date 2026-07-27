@@ -133,8 +133,25 @@ tool definition and forwards to `McpClientManager.callTool`, which:
 
 ### Enabling the gateway
 
-Set `platform.mcpServer.enabled: true` (Admin → MCP gateway) and the
-endpoint goes live at:
+The gateway needs **two** things switched on (both on Admin → MCP gateway):
+
+1. `platform.mcpServer.enabled: true` — mounts the `/mcp` endpoints.
+2. `platform.oauth.enabled.authz: true` — the OAuth authorization server.
+   The gateway accepts **only** OAuth bearer tokens, so without this no
+   client can ever authenticate. The admin page's *OAuth authorization
+   server* toggle sets this together with `oauth.enabled.clients`,
+   `oauth.authorizationCodeEnabled` and `oauth.refreshTokenEnabled`.
+
+Optionally enable `platform.oauth.dcr.enabled: true` (*Dynamic client
+registration* toggle) so MCP clients such as Claude can register their
+OAuth client automatically instead of an admin creating one by hand.
+
+> ⚠️ **Restart required:** the OAuth session middleware is mounted at
+> startup. After enabling the OAuth authorization server for the first
+> time, restart the server — otherwise the consent flow has no session
+> store and authorization fails.
+
+With the gateway enabled the endpoints go live at:
 
 ```
 POST   /mcp           # Streamable HTTP (canonical)
@@ -170,6 +187,49 @@ Two grant flows produce valid tokens:
 
 Both flows use the **same** authorization server and the **same**
 permission machinery (`enhanceUserWithPermissions`).
+
+#### How an MCP client bootstraps auth (discovery chain)
+
+MCP clients discover everything from a single unauthenticated probe:
+
+1. `POST /mcp` without a token → `401` with
+   `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`.
+2. The client fetches that **protected resource metadata** (RFC 9728) —
+   it names the authorization server and the supported `mcp:*` scopes.
+3. The client fetches `/.well-known/oauth-authorization-server`
+   (RFC 8414; same document as `/.well-known/openid-configuration`) —
+   it lists the authorize/token endpoints, PKCE support, and (when DCR
+   is enabled) the `registration_endpoint`.
+4. With DCR enabled the client `POST`s `/api/oauth/register` (RFC 7591)
+   and receives a `client_id` — no manual client setup.
+5. Authorization Code + PKCE runs as usual: the user signs in, consents
+   to the `mcp:*` scopes, and the client exchanges the code for tokens.
+
+#### Dynamic Client Registration (RFC 7591)
+
+`POST /api/oauth/register` is available when
+`platform.oauth.dcr.enabled: true`. It is unauthenticated (that is how
+the MCP client ecosystem uses DCR), so the policy is deliberately narrow:
+
+- Only `authorization_code` (+ `refresh_token`) grants can be registered —
+  `client_credentials` service accounts still require an admin.
+- Redirect URIs must be `https`, loopback `http`, or a private-use native
+  app scheme; dangerous schemes are rejected.
+- Grantable scopes are limited to identity scopes + `mcp:*`
+  (override with `platform.oauth.dcr.allowedScopes`).
+- Registered clients are never trusted and always require user consent.
+- `platform.oauth.dcr.maxClients` (default 100) caps auto-registered
+  clients; the shared `/api/oauth` rate limiter applies.
+- Clients registering `token_endpoint_auth_method: "none"` become public
+  PKCE clients; `client_secret_post/basic` yields a confidential client
+  whose secret is returned once in the registration response.
+
+Auto-registered clients appear in **Admin → OAuth clients** like any
+other client and can be narrowed (`allowedApps`, `allowedGroups`, …),
+suspended, or deleted there.
+
+If DCR stays disabled, create the client manually at
+`/admin/oauth/clients` and configure its id/secret in the MCP client.
 
 ### Scopes
 
@@ -250,6 +310,14 @@ Unauthenticated metadata endpoints help MCP-aware clients auto-configure:
 curl https://ihub.example.com/.well-known/openid-configuration
 # advertises mcp_endpoint + mcp:* scopes when gateway is enabled
 
+curl https://ihub.example.com/.well-known/oauth-authorization-server
+# RFC 8414 alias of the same document — MCP clients try this path first;
+# includes registration_endpoint when DCR is enabled
+
+curl https://ihub.example.com/.well-known/oauth-protected-resource/mcp
+# RFC 9728 — names the authorization server + scopes protecting /mcp
+# (also referenced by the 401 WWW-Authenticate challenge on /mcp)
+
 curl https://ihub.example.com/mcp/.well-known
 # MCP-specific metadata: issuer, mcp_endpoint, transports, scopes_supported,
 # oauth_authorization_server link
@@ -272,22 +340,49 @@ a set `MCP_SERVER_URL` into the new `mcpServers.json` as a server with
 the migration runs, the env var is ignored — manage the server via
 `/admin/mcp/servers` instead.
 
-## Connecting Claude Desktop / Cursor
+## Connecting Claude (claude.ai / Claude Desktop)
 
-(Worked example follows once gateway is enabled and an OAuth client with
-`grant_types: ["authorization_code"]` plus the appropriate `mcp:*` scopes
-is registered.)
+Checklist on the iHub side (all on **Admin → MCP gateway**):
 
-1. Register an OAuth client at `/admin/oauth/clients`:
-   - `grant_types`: `["authorization_code", "refresh_token"]`
-   - `redirectUris`: include the client's redirect URI
-   - `scopes`: include the desired `mcp:*` scopes
-2. In the client, add iHub as an MCP server with auto-discovery URL
-   `https://your-ihub/.well-known/openid-configuration`.
-3. The client redirects the user through iHub's authorization endpoint,
-   the user signs in via whichever mode is configured, reviews the
-   requested `mcp:*` scopes, and consents.
-4. Subsequent MCP calls run as that user with full group permissions.
+1. Enable the MCP gateway.
+2. Enable the OAuth authorization server (restart once after first enable).
+3. Enable Dynamic client registration.
+4. If iHub runs behind a proxy, set the **Public URL** so discovery
+   metadata advertises the externally reachable address. iHub must be
+   reachable over HTTPS for claude.ai.
+
+Then in Claude: **Settings → Connectors → Add custom connector** and
+paste `https://your-ihub/mcp`. Claude walks the discovery chain,
+registers itself via DCR, and sends the user through iHub's sign-in and
+consent screen. Subsequent MCP calls run as that user with their normal
+group permissions.
+
+Without DCR, create the OAuth client manually at `/admin/oauth/clients`:
+
+- `grant_types`: `["authorization_code", "refresh_token"]`
+- `redirectUris`: `["https://claude.ai/api/mcp/auth_callback"]`
+- `scopes`: the desired `mcp:*` scopes (plus `openid profile email`)
+
+and enter its client id/secret in Claude's connector advanced settings.
+
+Other MCP clients (Cursor, VS Code, custom agents) follow the same
+pattern — point them at `https://your-ihub/mcp`; clients that only take
+a discovery URL can use
+`https://your-ihub/.well-known/openid-configuration`.
+
+Troubleshooting:
+
+- `401 mcp_disabled` / hard 404 on `/mcp` → gateway not enabled.
+- `400 OAuth is not enabled on this server` from
+  `/api/oauth/authorize` or `/api/oauth/token` →
+  `oauth.enabled.authz` is still false.
+- Client fails right after registration → DCR disabled
+  (`/api/oauth/register` is a hard 404 while off) and no manual client
+  configured.
+- Consent screen loops or CSRF errors → server was not restarted after
+  enabling OAuth (session middleware missing).
+- `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`
+  scope; check the scopes on the OAuth client and re-authorize.
 
 ## Agent-to-Agent (A2A) endpoint — experimental
 

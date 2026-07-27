@@ -239,7 +239,11 @@ export default function registerMcpServerRoutes(app) {
       default_scopes: Array.isArray(cfg.defaultScopes)
         ? cfg.defaultScopes
         : ['mcp:tools:read', 'mcp:tools:call'],
-      oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`
+      oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`,
+      oauth_protected_resource: `${baseUrl}/.well-known/oauth-protected-resource`,
+      ...((configCache.getPlatform() || {}).oauth?.dcr?.enabled
+        ? { registration_endpoint: `${baseUrl}/api/oauth/register` }
+        : {})
     });
   });
 

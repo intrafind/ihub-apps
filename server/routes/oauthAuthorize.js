@@ -101,7 +101,12 @@ function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl, 
     openid: 'Verify your identity',
     profile: 'Access your name and profile information',
     email: 'Access your email address',
-    offline_access: 'Access resources when you are not actively using the app (refresh tokens)'
+    offline_access: 'Access resources when you are not actively using the app (refresh tokens)',
+    'mcp:tools:read': 'List the iHub tools available to you',
+    'mcp:tools:call': 'Run iHub tools on your behalf',
+    'mcp:apps:invoke': 'Run iHub apps on your behalf',
+    'mcp:workflows:run': 'Run iHub workflows on your behalf',
+    'mcp:resources:read': 'Read iHub sources and skills available to you'
   };
 
   const scopeItems = scopes
@@ -314,8 +319,14 @@ export default function registerOAuthAuthorizeRoutes(app) {
         }
       }
 
-      // Parse requested scopes; default to "openid" when absent
-      const requestedScopes = scope ? scope.split(' ').filter(Boolean) : ['openid'];
+      // Parse requested scopes. When the request carries no scope parameter,
+      // fall back to the client's registered scopes (RFC 6749 §3.3 pre-defined
+      // default) — MCP clients that skip the parameter still need their mcp:*
+      // scopes on the token or the gateway rejects it — and to "openid" for
+      // clients registered without scopes.
+      const requestedScopes = scope
+        ? scope.split(' ').filter(Boolean)
+        : (Array.isArray(client.scopes) && client.scopes.length > 0 && client.scopes) || ['openid'];
 
       // Check if user is authenticated via the authToken JWT cookie
       const token = req.cookies?.authToken;
@@ -335,7 +346,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
             response_type,
             client_id,
             redirect_uri,
-            scope: scope || 'openid',
+            scope: requestedScopes.join(' '),
             state: state || '',
             code_challenge: code_challenge || '',
             code_challenge_method: code_challenge_method || '',
@@ -444,7 +455,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         req.session.oauthParams = {
           client_id,
           redirect_uri,
-          scope: scope || 'openid',
+          scope: requestedScopes.join(' '),
           state: state || '',
           code_challenge: code_challenge || '',
           code_challenge_method: code_challenge_method || '',
@@ -467,7 +478,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
           client_id,
           redirect_uri,
           state: state || '',
-          scope: scope || 'openid',
+          scope: requestedScopes.join(' '),
           nonce: nonce || ''
         },
         baseUrl,

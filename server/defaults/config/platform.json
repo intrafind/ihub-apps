@@ -128,7 +128,28 @@
     "refreshTokenEnabled": false,
     "refreshTokenExpirationDays": 30,
     "consentRequired": true,
-    "consentMemoryDays": 90
+    "consentMemoryDays": 90,
+    "dcr": {
+      "enabled": false,
+      "maxClients": 100
+    }
+  },
+  "mcpServer": {
+    "enabled": false,
+    "requireConsent": true,
+    "publicUrl": "",
+    "transports": {
+      "streamableHttp": { "enabled": true },
+      "sse": { "enabled": true }
+    },
+    "a2a": { "enabled": false },
+    "expose": {
+      "tools": true,
+      "apps": true,
+      "workflows": true,
+      "resources": false
+    },
+    "defaultScopes": ["mcp:tools:read", "mcp:tools:call"]
   },
   "anonymousAuth": {
     "enabled": true,

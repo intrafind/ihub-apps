@@ -1409,7 +1409,16 @@
         "exposeWorkflowsDesc": "Requires scope mcp:workflows:run",
         "exposeResources": "Resources",
         "exposeResourcesDesc": "Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read.",
-        "connection": "Connection examples"
+        "connection": "Connection examples",
+        "authSection": "Authentication",
+        "authSectionDesc": "The MCP gateway only accepts OAuth bearer tokens issued by the built-in authorization server. It must be enabled for any MCP client to connect.",
+        "oauthWarning": "The gateway is enabled but the OAuth authorization server is off — MCP clients cannot obtain a token. Enable it below.",
+        "oauthToggle": "OAuth authorization server",
+        "oauthToggleDesc": "Serves /api/oauth/authorize and /api/oauth/token. Enabling this also switches on OAuth client management and the authorization_code + refresh_token grants. A server restart is required after enabling it for the first time.",
+        "dcrToggle": "Dynamic client registration (RFC 7591)",
+        "dcrToggleDesc": "Lets MCP clients such as Claude register their OAuth client automatically at /api/oauth/register — no manual client setup needed. Registered clients always go through user sign-in and consent, and only receive identity + mcp:* scopes.",
+        "claudeHintDcr": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes.",
+        "claudeHintManual": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID/secret of an OAuth client you created under /admin/oauth/clients (grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Enable dynamic client registration above to skip the manual client setup."
       }
     },
     "telemetry": {

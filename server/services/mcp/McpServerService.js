@@ -1,4 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadConfiguredTools, runTool } from '../../toolLoader.js';
@@ -299,6 +303,22 @@ export async function buildMcpServer({ user, platform }) {
         }
       );
     }
+  }
+
+  // ---- Empty-registry fallbacks --------------------------------------------
+  // The SDK only installs its tools/list and resources/list handlers when at
+  // least one tool/resource was registered; with zero registrations a client
+  // gets JSON-RPC -32601 "Method not found", which MCP clients (Claude,
+  // Cursor) surface as a connection error. Since the registry is fixed after
+  // build, install explicit empty-list handlers instead.
+  if (Object.keys(server._registeredTools || {}).length === 0) {
+    server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+  }
+  if (
+    Object.keys(server._registeredResources || {}).length === 0 &&
+    Object.keys(server._registeredResourceTemplates || {}).length === 0
+  ) {
+    server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
   }
 
   // ---- Audit hook on every dispatch ---------------------------------------

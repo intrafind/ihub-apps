@@ -2,8 +2,35 @@ import { verifyOAuthToken } from '../utils/oauthTokenService.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scopes.js';
+import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Resolve the URL of the RFC 9728 protected-resource metadata document.
+ * Advertised in the 401 WWW-Authenticate challenge so MCP clients can
+ * discover the authorization server (MCP auth spec, 2025-06-18).
+ *
+ * @param {import('express').Request} req - Express request object
+ * @returns {string} Absolute URL of /.well-known/oauth-protected-resource
+ */
+function resourceMetadataUrl(req) {
+  const mcpConfig = (configCache.getPlatform() || {}).mcpServer || {};
+  let base;
+  if (mcpConfig.publicUrl) {
+    // publicUrl points at the app base (possibly with a subpath); the
+    // well-known document lives at the host root per RFC 9728.
+    try {
+      base = new URL(mcpConfig.publicUrl).origin;
+    } catch {
+      base = mcpConfig.publicUrl.replace(/\/$/, '');
+    }
+  } else {
+    const protocol = req.protocol || (req.secure ? 'https' : 'http');
+    base = `${protocol}://${req.get('host')}`;
+  }
+  return `${base}/.well-known/oauth-protected-resource${buildServerPath('/mcp')}`;
+}
 
 /**
  * Bearer-token middleware for the MCP gateway (`/mcp` and `/mcp/sse`).
@@ -22,7 +49,7 @@ export default async function mcpAuth(req, res, next) {
   const mcpConfig = platform.mcpServer || {};
 
   if (!mcpConfig.enabled) {
-    return sendUnauthorized(res, 'mcp_disabled', 'MCP gateway is not enabled on this server');
+    return sendUnauthorized(req, res, 'mcp_disabled', 'MCP gateway is not enabled on this server');
   }
 
   // The MCP authorization model is OAuth-only — even if the platform allows
@@ -30,13 +57,13 @@ export default async function mcpAuth(req, res, next) {
   // bearer token.
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return sendUnauthorized(res, 'missing_token', 'Bearer token required');
+    return sendUnauthorized(req, res, 'missing_token', 'Bearer token required');
   }
 
   const token = authHeader.substring(7).trim();
   const decoded = verifyOAuthToken(token);
   if (!decoded) {
-    return sendUnauthorized(res, 'invalid_token', 'Token is invalid or expired');
+    return sendUnauthorized(req, res, 'invalid_token', 'Token is invalid or expired');
   }
 
   // Look up the OAuth client. Required for both auth_code (per-client
@@ -62,7 +89,7 @@ export default async function mcpAuth(req, res, next) {
   }
 
   if (!client || !client.active) {
-    return sendUnauthorized(res, 'invalid_client', 'OAuth client not found or suspended');
+    return sendUnauthorized(req, res, 'invalid_client', 'OAuth client not found or suspended');
   }
 
   // Build req.user with shape identical to jwtAuth (so downstream filtering
@@ -102,13 +129,17 @@ export default async function mcpAuth(req, res, next) {
     };
   } else {
     // Reject any non-OAuth token — only OAuth-issued tokens are valid for MCP.
-    return sendUnauthorized(res, 'invalid_token', 'Only OAuth tokens are accepted on /mcp');
+    return sendUnauthorized(req, res, 'invalid_token', 'Only OAuth tokens are accepted on /mcp');
   }
 
   // Enforce that the token bears at least one MCP scope. Method-level scope
   // checks (e.g. tools/call requires mcp:tools:call) are applied in the
   // McpServerService dispatch.
   if (!hasAnyScope(user.scopes, Object.values(MCP_SCOPES))) {
+    res.setHeader(
+      'WWW-Authenticate',
+      `Bearer realm="ihub-mcp", error="insufficient_scope", resource_metadata="${resourceMetadataUrl(req)}"`
+    );
     return sendError(res, 403, 'insufficient_scope', 'Token does not carry any mcp:* scopes');
   }
 
@@ -127,8 +158,15 @@ export default async function mcpAuth(req, res, next) {
   next();
 }
 
-function sendUnauthorized(res, error, description) {
-  res.setHeader('WWW-Authenticate', 'Bearer realm="ihub-mcp"');
+function sendUnauthorized(req, res, error, description) {
+  // The resource_metadata parameter (RFC 9728 §5.1) tells MCP clients where
+  // to find the protected-resource metadata, which in turn points at the
+  // OAuth authorization server — this is how Claude & co. bootstrap the
+  // whole auth flow from a single 401.
+  res.setHeader(
+    'WWW-Authenticate',
+    `Bearer realm="ihub-mcp", resource_metadata="${resourceMetadataUrl(req)}"`
+  );
   res.status(401).json({ error, error_description: description });
 }
 
