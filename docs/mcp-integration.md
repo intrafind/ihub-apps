@@ -312,7 +312,8 @@ curl https://ihub.example.com/.well-known/openid-configuration
 
 curl https://ihub.example.com/.well-known/oauth-authorization-server
 # RFC 8414 alias of the same document — MCP clients try this path first;
-# includes registration_endpoint when DCR is enabled
+# includes registration_endpoint when DCR and the authorization server
+# are both enabled
 
 curl https://ihub.example.com/.well-known/oauth-protected-resource/mcp
 # RFC 9728 — names the authorization server + scopes protecting /mcp

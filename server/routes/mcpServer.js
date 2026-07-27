@@ -200,6 +200,7 @@ export default function registerMcpServerRoutes(app) {
   // Unauthenticated metadata endpoint; safe to expose.
   app.get(buildServerPath('/mcp/.well-known'), enabledCheck, (req, res) => {
     const cfg = gatewayConfig();
+    const oauthCfg = (configCache.getPlatform() || {}).oauth || {};
     let baseUrl =
       cfg.publicUrl ||
       `${req.protocol || (req.secure ? 'https' : 'http')}://${req.get('host')}${buildServerPath('')}`;
@@ -241,7 +242,10 @@ export default function registerMcpServerRoutes(app) {
         : ['mcp:tools:read', 'mcp:tools:call'],
       oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`,
       oauth_protected_resource: `${baseUrl}/.well-known/oauth-protected-resource`,
-      ...((configCache.getPlatform() || {}).oauth?.dcr?.enabled
+      // Advertised only when /api/oauth/register would actually accept a
+      // registration — it hard-404s unless DCR and the authorization server
+      // are both enabled.
+      ...(oauthCfg?.dcr?.enabled && oauthCfg?.enabled?.authz
         ? { registration_endpoint: `${baseUrl}/api/oauth/register` }
         : {})
     });

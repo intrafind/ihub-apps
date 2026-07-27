@@ -16,16 +16,20 @@ import logger from '../utils/logger.js';
  */
 function resourceMetadataUrl(req) {
   const mcpConfig = (configCache.getPlatform() || {}).mcpServer || {};
-  let base;
+  let base = null;
   if (mcpConfig.publicUrl) {
     // publicUrl points at the app base (possibly with a subpath); the
     // well-known document lives at the host root per RFC 9728.
     try {
       base = new URL(mcpConfig.publicUrl).origin;
     } catch {
-      base = mcpConfig.publicUrl.replace(/\/$/, '');
+      // Misconfigured (non-absolute) publicUrl — fall through to the
+      // request-derived origin so the challenge always carries an
+      // absolute URL.
+      base = null;
     }
-  } else {
+  }
+  if (!base) {
     const protocol = req.protocol || (req.secure ? 'https' : 'http');
     base = `${protocol}://${req.get('host')}`;
   }

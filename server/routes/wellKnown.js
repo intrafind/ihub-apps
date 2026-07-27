@@ -87,9 +87,13 @@ function buildAuthServerMetadata(req) {
     userinfo_endpoint: `${baseUrl}/api/oauth/userinfo`,
     revocation_endpoint: `${baseUrl}/api/oauth/revoke`,
     end_session_endpoint: `${baseUrl}/api/oauth/logout`,
-    // RFC 7591 Dynamic Client Registration — advertised only when the admin
-    // has enabled DCR so MCP clients (Claude, Cursor, …) can self-register.
-    ...(oauthConfig.dcr?.enabled ? { registration_endpoint: `${baseUrl}/api/oauth/register` } : {}),
+    // RFC 7591 Dynamic Client Registration — advertised only when DCR *and*
+    // the authorization server are enabled, since /api/oauth/register
+    // hard-404s unless both are on (advertising it earlier would send MCP
+    // clients into a guaranteed registration failure).
+    ...(oauthConfig.dcr?.enabled && oauthConfig.enabled?.authz
+      ? { registration_endpoint: `${baseUrl}/api/oauth/register` }
+      : {}),
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: [algorithm],
