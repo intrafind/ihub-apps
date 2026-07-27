@@ -140,6 +140,19 @@ export async function buildMcpServer({ user, platform }) {
     { capabilities: { tools: { listChanged: false }, resources: { listChanged: false } } }
   );
 
+  // Local registration counters — used below to install empty-list fallback
+  // handlers without reaching into SDK-private fields.
+  let registeredToolCount = 0;
+  let registeredResourceCount = 0;
+  const registerTool = (...args) => {
+    server.registerTool(...args);
+    registeredToolCount += 1;
+  };
+  const registerResource = (...args) => {
+    server.registerResource(...args);
+    registeredResourceCount += 1;
+  };
+
   // ---- Tools (iHub-native, local-only) ------------------------------------
   // loadConfiguredTools excludes outbound MCP-discovered tools so the gateway
   // never re-proxies another server's tools to inbound callers.
@@ -148,7 +161,7 @@ export async function buildMcpServer({ user, platform }) {
     const tools = await loadConfiguredTools(platform?.defaultLanguage || 'en');
     for (const tool of tools) {
       if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
-      server.registerTool(
+      registerTool(
         tool.id,
         {
           description: typeof tool.description === 'string' ? tool.description : '',
@@ -185,7 +198,7 @@ export async function buildMcpServer({ user, platform }) {
     const { data: apps = [] } = configCache.getApps();
     for (const app of apps) {
       if (!isAppAllowed(app, user, expose)) continue;
-      server.registerTool(
+      registerTool(
         buildAppToolName(app.id),
         {
           description:
@@ -230,7 +243,7 @@ export async function buildMcpServer({ user, platform }) {
     for (const wf of workflows) {
       if (!isWorkflowAllowed(wf, user, expose)) continue;
       const paramsSchema = buildWorkflowMcpParams(wf);
-      server.registerTool(
+      registerTool(
         buildWorkflowToolName(wf.id),
         {
           description:
@@ -272,7 +285,7 @@ export async function buildMcpServer({ user, platform }) {
     for (const r of resources) {
       // registerResource binds a single URI to a read callback. The SDK's
       // `resources/list` is served from the union of registered entries.
-      server.registerResource(
+      registerResource(
         r.name,
         r.uri,
         { description: r.description, mimeType: r.mimeType },
@@ -311,13 +324,10 @@ export async function buildMcpServer({ user, platform }) {
   // gets JSON-RPC -32601 "Method not found", which MCP clients (Claude,
   // Cursor) surface as a connection error. Since the registry is fixed after
   // build, install explicit empty-list handlers instead.
-  if (Object.keys(server._registeredTools || {}).length === 0) {
+  if (registeredToolCount === 0) {
     server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
   }
-  if (
-    Object.keys(server._registeredResources || {}).length === 0 &&
-    Object.keys(server._registeredResourceTemplates || {}).length === 0
-  ) {
+  if (registeredResourceCount === 0) {
     server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
   }
 
