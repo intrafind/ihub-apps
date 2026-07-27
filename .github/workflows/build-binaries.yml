@@ -389,7 +389,7 @@ jobs:
         shell: bash
 
       - name: Upload assets to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         with:
           files: ./artifacts/**/*.*
