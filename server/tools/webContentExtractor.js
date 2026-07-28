@@ -4,8 +4,8 @@ import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
-import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
+import { enhanceFetchOptions } from '../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup, isAllowedHost } from '../utils/ssrfGuard.js';
 
 // Bound manual redirect-following so a malicious/misconfigured server can't
 // force an unbounded hop chain.
@@ -18,23 +18,19 @@ function createError(message, code) {
 }
 
 /**
- * Validate a single URL hop against the SSRF guard, honoring the admin SSL
- * domain whitelist bypass (kept for backward compatibility with the
- * pre-existing `webContentExtractor` behavior). Every redirect hop is
- * revalidated independently so a public initial hostname that redirects to a
- * private/internal address after the first check is still blocked.
+ * Validate a single URL hop against the SSRF guard, honoring the admin-managed
+ * `platform.ssrf.allowedHosts` bypass (the SSRF-specific allowlist — not the
+ * unrelated `ssl.domainWhitelist`, which only controls certificate
+ * validation). Every redirect hop is revalidated independently so a public
+ * initial hostname that redirects to a private/internal address after the
+ * first check is still blocked.
  *
  * @param {URL} parsedUrl - The URL for this hop
- * @param {Object} sslConfig - SSL config (for the domain whitelist bypass)
- * @returns {Promise<string[]|null>} Validated public addresses to pin the
- *   connection to, or null when the whitelist bypass applies (no DNS
- *   resolution/pinning is performed in that case)
+ * @param {string[]} allowedHosts - Patterns bypassing the private-IP veto
+ * @returns {Promise<string[]>} Validated public addresses to pin the connection to
  */
-async function assertHopIsSafe(parsedUrl, sslConfig) {
-  if (isDomainWhitelisted(parsedUrl.hostname, sslConfig.domainWhitelist)) {
-    return null;
-  }
-  const result = await assertPublicTarget(parsedUrl);
+async function assertHopIsSafe(parsedUrl, allowedHosts) {
+  const result = await assertPublicTarget(parsedUrl, { allowedHosts });
   if (!result.ok) {
     throw createError(
       `Access to private/internal IP addresses is not allowed (${result.reason})`,
@@ -92,11 +88,12 @@ export default async function webContentExtractor({
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
-  // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services
-  const sslConfig = getSSLConfig();
+  // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services.
+  // Skip check for hosts explicitly allow-listed by admin in platform.ssrf.allowedHosts.
+  const platformConfig = configCache.getPlatform() || {};
+  const allowedHosts = platformConfig.ssrf?.allowedHosts;
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
-  const platformConfig = configCache.getPlatform() || {};
   const shouldIgnoreSSL =
     ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
@@ -112,8 +109,14 @@ export default async function webContentExtractor({
         throw createError('Too many redirects while fetching webpage', 'TOO_MANY_REDIRECTS');
       }
 
-      const addresses = await assertHopIsSafe(hopUrl, sslConfig);
-      const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
+      const addresses = await assertHopIsSafe(hopUrl, allowedHosts);
+      // Skip the pinned lookup's defense-in-depth private-IP re-check for a
+      // hostname explicitly allow-listed by the admin — otherwise a
+      // legitimate internal target would resolve fine in assertHopIsSafe
+      // above but then get silently dropped here, failing with ENOTFOUND.
+      const pinnedLookup = createPinnedLookup(addresses, {
+        allowPrivate: isAllowedHost(hopUrl.hostname, allowedHosts)
+      });
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout

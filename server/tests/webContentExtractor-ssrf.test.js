@@ -25,9 +25,11 @@ jest.unstable_mockModule('../actionTracker.js', () => ({
   }
 }));
 
+let platformConfig = { ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] } };
+
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
-    getPlatform: () => ({ ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] } })
+    getPlatform: () => platformConfig
   }
 }));
 
@@ -55,6 +57,7 @@ describe('webContentExtractor SSRF guard', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    platformConfig = { ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] } };
     ({ default: webContentExtractor } = await import('../tools/webContentExtractor.js'));
   });
 
@@ -133,5 +136,60 @@ describe('webContentExtractor SSRF guard', () => {
       message: expect.stringContaining('Only HTTP and HTTPS URLs are supported')
     });
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('platform.ssrf.allowedHosts bypass', () => {
+    test('allows a private IP literal explicitly allow-listed by the admin', async () => {
+      platformConfig = {
+        ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] },
+        ssrf: { allowedHosts: ['169.254.169.254'] }
+      };
+      throttledFetchMock.mockResolvedValueOnce(htmlResponse());
+
+      const result = await webContentExtractor({ url: 'http://169.254.169.254/internal' });
+
+      expect(result.content).toContain('hello');
+      expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('the pinned DNS lookup for an allow-listed private target actually resolves it', async () => {
+      // Regression test: assertPublicTarget() lets an allow-listed private
+      // address through, but createPinnedLookup() used to unconditionally
+      // drop private addresses as a defense-in-depth re-check — silently
+      // breaking the allowlist bypass with an ENOTFOUND at connect time. This
+      // exercises the actual `lookup` function handed to the request agent to
+      // prove it resolves rather than erroring.
+      platformConfig = {
+        ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] },
+        ssrf: { allowedHosts: ['169.254.169.254'] }
+      };
+      throttledFetchMock.mockResolvedValueOnce(htmlResponse());
+
+      await webContentExtractor({ url: 'http://169.254.169.254/internal' });
+
+      const [, , requestOptions] = throttledFetchMock.mock.calls[0];
+      const lookup = requestOptions.agent?.options?.lookup;
+      expect(typeof lookup).toBe('function');
+
+      const lookupResult = await new Promise((resolve, reject) => {
+        lookup('169.254.169.254', {}, (err, address, family) => {
+          if (err) reject(err);
+          else resolve({ address, family });
+        });
+      });
+      expect(lookupResult.address).toBe('169.254.169.254');
+    });
+
+    test('still blocks a private IP that is not on the allowlist', async () => {
+      platformConfig = {
+        ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] },
+        ssrf: { allowedHosts: ['other-internal-host.corp'] }
+      };
+
+      await expect(webContentExtractor({ url: 'http://169.254.169.254/' })).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+      expect(throttledFetchMock).not.toHaveBeenCalled();
+    });
   });
 });
