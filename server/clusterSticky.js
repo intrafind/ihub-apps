@@ -1,14 +1,21 @@
 /**
- * Sticky session cluster primary.
+ * Sticky session cluster primary. Opt-in via `STICKY_SESSIONS=true`.
  *
  * Node.js's built-in cluster scheduler distributes incoming TCP connections
- * round-robin (or OS-scheduled) across workers. That breaks SSE-based chat
- * because our streaming state (`clients` and `activeRequests` maps in
+ * round-robin (or OS-scheduled) across workers. That used to break SSE-based
+ * chat, because streaming state (`clients` and `activeRequests` maps in
  * `server/sse.js`, and the `actionTracker` EventEmitter) lives in the worker's
- * process memory. A client that opens an SSE stream on worker A and then POSTs
- * a prompt that lands on worker B will never receive tokens and cannot cancel.
+ * process memory: a client that opened an SSE stream on worker A and then
+ * POSTed a prompt that landed on worker B would never receive tokens and could
+ * not cancel.
  *
- * This module replaces the default scheduler with a simple sticky router:
+ * That is no longer true. `server/clusterBus.js` relays per-chat events to
+ * whichever worker holds the stream, so the default scheduler is now both
+ * correct and the default. This module remains for deployments that want
+ * connection affinity anyway — iHub exposed directly to clients, with some
+ * worker-local state outside the chat path that benefits from pinning.
+ *
+ * It replaces the default scheduler with a simple sticky router:
  *   - Primary owns the real listening socket (`net.createServer`).
  *   - Each incoming connection is hashed by `remoteAddress` to a worker index.
  *   - The paused socket handle is forwarded to that worker over IPC.
@@ -28,10 +35,9 @@
  *   - behind NAT or a corporate proxy it is every user on that egress IP.
  *
  * `logStickyRoutingCaveat` below reports the collapse once at startup so it is
- * visible rather than something to discover under load. To actually use several
- * workers behind a proxy, terminate stickiness at the proxy (cookie- or
- * chatId-aware upstream hashing) and run iHub as separate replicas, or move the
- * per-chat state to a shared bus (Redis pub/sub) so affinity stops mattering.
+ * visible rather than something to discover under load. The fix is to stop
+ * asking for stickiness: unset `STICKY_SESSIONS` and let the cluster balance
+ * connections, since the bus already carries chat state across workers.
  */
 
 import net from 'node:net';
@@ -73,9 +79,9 @@ export function logStickyRoutingCaveat(workerCount) {
   logger.warn({
     component: 'StickyCluster',
     message:
-      'Sticky routing hashes the TCP peer address, which a reverse proxy makes identical for every request — all traffic will land on one of the ' +
+      'STICKY_SESSIONS is on: routing hashes the TCP peer address, which a reverse proxy makes identical for every request — all traffic will land on one of the ' +
       workerCount +
-      ' workers. Run WORKERS=1 with several replicas behind proxy-level stickiness, or expose iHub directly, to use all workers.',
+      ' workers. Chat no longer needs stickiness (per-chat events are relayed across workers), so unset STICKY_SESSIONS unless something else in your deployment requires connection affinity.',
     workerCount
   });
 }

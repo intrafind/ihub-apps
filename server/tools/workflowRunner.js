@@ -13,15 +13,122 @@
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
-import { recordPendingFinish } from '../services/workflow/chatBridge.js';
+import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
 import { actionTracker } from '../actionTracker.js';
-import { clients } from '../sse.js';
+import { hasChatClient } from '../sse.js';
+import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { getLocalizedString } from '../utils/localize.js';
 
-/** Maps chatId → { executionId, engine } for active workflow executions in chat */
-export const activeWorkflowExecutions = new Map();
+/**
+ * Maps chatId → { executionId, engine } for active workflow executions in chat.
+ *
+ * A presence map: the engine object itself cannot leave this process, but its
+ * membership is mirrored cluster-wide so a stop request or an SSE reconnect
+ * landing on another worker can find out who is running the workflow and ask
+ * that worker to act. See `server/clusterBus.js`.
+ */
+export const activeWorkflowExecutions = createPresenceMap('workflow');
+
+const CANCEL_CHANNEL = 'workflow:cancel';
+const REPLAY_CHANNEL = 'workflow:replay-request';
+
+/**
+ * Cancel the workflow execution bridged to a chat, wherever it is running.
+ *
+ * @param {string} chatId
+ * @returns {Promise<boolean>} True if cancelled locally or relayed to the owner.
+ */
+export async function cancelChatWorkflow(chatId) {
+  const workflowExec = activeWorkflowExecutions.get(chatId);
+  if (workflowExec) {
+    try {
+      await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
+      activeWorkflowExecutions.delete(chatId);
+      logger.info('Cancelled workflow', {
+        component: 'workflowRunner',
+        executionId: workflowExec.executionId,
+        chatId
+      });
+    } catch (error) {
+      logger.error('Error cancelling workflow', {
+        component: 'workflowRunner',
+        chatId,
+        error: error.message
+      });
+    }
+    return true;
+  }
+  if (hasRemote('workflow', chatId)) {
+    publish(CANCEL_CHANNEL, { chatId }, { kind: 'workflow', key: chatId });
+    return true;
+  }
+  return false;
+}
+
+subscribe(CANCEL_CHANNEL, ({ chatId }) => {
+  if (!activeWorkflowExecutions.has(chatId)) return;
+  cancelChatWorkflow(chatId).catch(error => {
+    logger.error('Error cancelling workflow on behalf of another worker', {
+      component: 'workflowRunner',
+      chatId,
+      error: error.message
+    });
+  });
+});
+
+/**
+ * Re-emit step progress for a still-running workflow so a reconnecting chat
+ * catches up on what it missed.
+ *
+ * When the workflow is running on another worker, ask that worker to do it
+ * rather than trying to read its engine state from here: it emits through
+ * `actionTracker`, and the SSE relay carries the events back to whichever
+ * worker now holds the stream. Persisted workflow state is cached in-process,
+ * so a remote read could also serve a stale snapshot.
+ *
+ * @param {string} chatId
+ * @returns {Promise<number>} Number of replayed steps (0 when relayed).
+ */
+export async function replayChatWorkflowProgress(chatId) {
+  const active = activeWorkflowExecutions.get(chatId);
+  if (!active) {
+    if (hasRemote('workflow', chatId))
+      publish(REPLAY_CHANNEL, { chatId }, { kind: 'workflow', key: chatId });
+    return 0;
+  }
+  if (!active.engine || !active.executionId) return 0;
+
+  const state = await active.engine.stateManager.get(active.executionId);
+  const workflow = state?.data?._workflowDefinition;
+  if (!state || !workflow) return 0;
+
+  const replayEvents = buildReplayStepsFromState(state, workflow);
+  for (const ev of replayEvents) {
+    actionTracker.trackWorkflowStep(chatId, { workflowName: workflow.name, ...ev });
+  }
+  if (replayEvents.length > 0) {
+    logger.info('Replayed workflow steps on SSE reconnect', {
+      component: 'workflowRunner',
+      chatId,
+      executionId: active.executionId,
+      steps: replayEvents.length
+    });
+  }
+  return replayEvents.length;
+}
+
+subscribe(REPLAY_CHANNEL, ({ chatId }) => {
+  if (!activeWorkflowExecutions.has(chatId)) return;
+  replayChatWorkflowProgress(chatId).catch(error => {
+    logger.warn('Workflow replay on behalf of another worker failed', {
+      component: 'workflowRunner',
+      chatId,
+      error: error.message
+    });
+  });
+});
 
 function resolveLocalized(value, lang = 'en') {
   return getLocalizedString(value, lang);
@@ -454,7 +561,7 @@ export default async function workflowRunner(params = {}) {
 
           // If the chat SSE client disconnected, stash the finish so it can be
           // delivered when the user reconnects (final output backfill).
-          if (!clients.has(chatId)) {
+          if (!hasChatClient(chatId)) {
             recordPendingFinish(chatId, {
               workflowName,
               executionId,
@@ -517,7 +624,7 @@ export default async function workflowRunner(params = {}) {
           }
 
           // Stash for backfill if the chat client is no longer connected.
-          if (!clients.has(chatId)) {
+          if (!hasChatClient(chatId)) {
             recordPendingFinish(chatId, {
               workflowName,
               executionId,

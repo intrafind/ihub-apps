@@ -9,6 +9,7 @@ import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 import logger from './utils/logger.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
+import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -81,17 +82,32 @@ import config from './config.js';
 // ----- Cluster setup -----
 const workerCount = config.WORKERS;
 
+// Connection routing. By default the workers share the listening socket and
+// Node's round-robin scheduler spreads connections evenly; per-chat state that
+// ends up on the "wrong" worker is relayed over the cluster bus
+// (`server/clusterBus.js`). STICKY_SESSIONS=true restores the old router, which
+// pins each client to one worker by hashing its TCP peer address — correct only
+// when clients reach iHub directly, since a proxy gives every request the same
+// peer address and collapses the cluster onto one worker.
+const stickyRouting = config.STICKY_SESSIONS === true;
+
 if (cluster.isPrimary && workerCount > 1) {
   logger.info({
     component: 'Server',
     message: `Primary process ${process.pid} starting ${workerCount} workers`,
     pid: process.pid,
-    workerCount
+    workerCount,
+    routing: stickyRouting ? 'sticky-ip-hash' : 'round-robin'
   });
 
-  // Track live workers so the sticky router can pick a healthy one on each
-  // incoming connection. Dead entries are replaced in the `exit` handler.
+  // Track live workers so the bus (and, in sticky mode, the router) can reach
+  // them. Dead entries are replaced in the `exit` handler.
   const workers = [];
+
+  // Start the repeater before forking so a worker's first presence
+  // announcement — sent as soon as its module graph loads — is never dropped.
+  initPrimaryBus({ getWorkers: () => workers });
+
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
     workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
   }
@@ -114,41 +130,58 @@ if (cluster.isPrimary && workerCount > 1) {
     }
   });
 
-  // Primary owns the public listening socket and hands each connection to a
-  // worker by hashing the client's remote address. This keeps every chat
-  // session pinned to one worker so in-memory SSE state stays consistent.
-  startStickyPrimary({
-    getWorkers: () => workers,
-    port: config.PORT,
-    host: config.HOST,
-    onListening: () => {
+  const logAccessUrls = () => {
+    if (config.HOST === '0.0.0.0' || config.HOST === '::') {
       logger.info({
         component: 'Server',
-        message: 'Sticky cluster primary listening',
-        host: config.HOST,
-        port: config.PORT,
-        workerCount
+        message: 'Access the application at one of these URLs:',
+        urls: [
+          `http://localhost:${config.PORT}`,
+          `http://127.0.0.1:${config.PORT}`,
+          "(or use your machine's hostname/IP address)"
+        ]
       });
-      logStickyRoutingCaveat(workerCount);
-      if (config.HOST === '0.0.0.0' || config.HOST === '::') {
-        logger.info({
-          component: 'Server',
-          message: 'Access the application at one of these URLs:',
-          urls: [
-            `http://localhost:${config.PORT}`,
-            `http://127.0.0.1:${config.PORT}`,
-            "(or use your machine's hostname/IP address)"
-          ]
-        });
-      } else {
-        logger.info({
-          component: 'Server',
-          message: 'Access the application at',
-          url: `http://${config.HOST}:${config.PORT}`
-        });
-      }
+    } else {
+      logger.info({
+        component: 'Server',
+        message: 'Access the application at',
+        url: `http://${config.HOST}:${config.PORT}`
+      });
     }
-  });
+  };
+
+  if (stickyRouting) {
+    // Primary owns the public listening socket and hands each connection to a
+    // worker by hashing the client's remote address.
+    startStickyPrimary({
+      getWorkers: () => workers,
+      port: config.PORT,
+      host: config.HOST,
+      onListening: () => {
+        logger.info({
+          component: 'Server',
+          message: 'Sticky cluster primary listening',
+          host: config.HOST,
+          port: config.PORT,
+          workerCount
+        });
+        logStickyRoutingCaveat(workerCount);
+        logAccessUrls();
+      }
+    });
+  } else {
+    // Workers bind the shared socket themselves and Node's round-robin
+    // scheduler hands each new connection to the next one. The primary keeps
+    // only the bus, so it stays idle enough to relay cross-worker chat traffic.
+    logger.info({
+      component: 'Server',
+      message: 'Cluster using round-robin connection scheduling; workers bind the port directly',
+      host: config.HOST,
+      port: config.PORT,
+      workerCount
+    });
+    logAccessUrls();
+  }
 
   const handlePrimaryShutdown = signal => {
     logger.info({
@@ -169,6 +202,11 @@ if (cluster.isPrimary && workerCount > 1) {
   process.on('SIGTERM', () => handlePrimaryShutdown('SIGTERM'));
   process.on('SIGINT', () => handlePrimaryShutdown('SIGINT'));
 } else {
+  // Join the cross-worker bus before anything can register per-chat state, so
+  // no SSE stream is ever invisible to the rest of the cluster. No-op when this
+  // process is not a cluster worker.
+  initWorkerBus();
+
   // Determine if we're running from a packaged binary
   // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
   const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
@@ -568,7 +606,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // needed.
   attachRealtimeTranscription(server);
 
-  if (cluster.isWorker) {
+  if (cluster.isWorker && stickyRouting) {
     // Inside a sticky cluster the primary owns the public port; this worker
     // only receives already-accepted connections via IPC.
     attachStickyWorker(server);
@@ -579,7 +617,10 @@ if (cluster.isPrimary && workerCount > 1) {
       workerIndex: process.env.WORKER_INDEX ?? 'unknown'
     });
   } else {
-    // Single-process mode (WORKERS=1): bind the port directly.
+    // Single-process mode (WORKERS=1), or a round-robin cluster worker: bind
+    // the port directly. In the cluster case `listen` goes through the cluster
+    // module, which shares the primary's socket rather than opening a second
+    // one, so all workers can use the same port.
     server.listen(PORT, HOST, () => {
       const protocol = server instanceof https.Server ? 'https' : 'http';
 

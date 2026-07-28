@@ -820,3 +820,29 @@ server, health probes included.
 - The primary now logs this once at startup instead of leaving it to be discovered under load.
 - To actually use several workers, either expose iHub directly, or run `WORKERS=1` with multiple
   replicas behind proxy-level session stickiness.
+
+## Clustered Deployments Now Use Every Worker Behind a Proxy
+
+Worker processes no longer need each client pinned to one of them. Chat streaming state that lands
+on a different worker than the one holding the browser's connection is relayed internally, so
+connections are distributed evenly instead of hashed by network address.
+
+- Previously, routing hashed the client's TCP address. Behind a reverse proxy or Kubernetes ingress
+  every request carries the proxy's address, so a single worker served all traffic while the rest
+  sat idle — a `WORKERS=4` deployment had the capacity of one process, and the saturated worker
+  looked like a dead server because health probes queued behind real requests.
+- No configuration change is needed to get the fix. Deployments already setting `WORKERS` see all
+  workers used from the first restart.
+- Chat streaming, stop/cancel, workflow cancellation and workflow progress replay all work
+  regardless of which worker a given request reaches.
+- Set `STICKY_SESSIONS=true` to restore the old address-hashing behaviour if some part of your
+  deployment depends on connection affinity. It is not needed for chat.
+
+Note two per-worker limits that now spread differently, since one user's requests can reach several
+workers: rate-limit counters and realtime-voice connection caps are counted per worker, so the
+effective ceiling is up to `WORKERS ×` the configured value. Size them accordingly or enforce limits
+at your ingress.
+
+Running more than one **replica** still requires cookie-based session affinity at the ingress — the
+relay works between workers in a pod, not between pods. See
+[Scaling with Multiple Workers](../../scaling.md) for Kubernetes examples.
