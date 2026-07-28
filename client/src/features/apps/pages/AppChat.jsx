@@ -1233,7 +1233,9 @@ function AppChat({ preloadedApp = null }) {
     ]
   );
 
-  // Handle citation document actions (openExternal, preview, download, openInApp)
+  // Handle citation document actions (openExternal, download, openInApp).
+  // "preview" is handled inside CitationPanel, which owns the passage texts the
+  // preview highlights.
   const handleDocumentAction = useCallback(
     (action, item, targetAppId) => {
       const getMeta = (doc, key) => {
@@ -1249,19 +1251,6 @@ function AppChat({ preloadedApp = null }) {
       if (action === 'openExternal') {
         if (deepLink) {
           window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'preview') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
-            convertToPdf: 'true'
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
         }
       } else if (action === 'download') {
         if (accessLink?.documentId) {

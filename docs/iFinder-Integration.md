@@ -14,6 +14,8 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 - **📄 Content Retrieval**: Fetch full document content for analysis and summarization
 - **ℹ️ Metadata Access**: Get detailed document metadata (author, creation date, file type, etc.)
 - **💾 Document Download**: Save documents locally or get download information
+- **🖍️ Passage Highlighting**: Jump from a cited passage to its position in the source document and
+  highlight it in the in-app PDF preview
 - **🔐 Secure Authentication**: User-based JWT authentication for all operations
 - **👤 User Context**: All operations respect the authenticated user's permissions
 
@@ -362,6 +364,48 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
 4. **"Download the latest contract for review"**
    - AI searches for recent contracts
    - Provides download information or saves locally
+
+### Passage Highlighting in the Document Preview
+
+When an answer cites iFinder documents, the **Documents** section below the answer lists each
+document with the passages the search backend returned. Those passages can be located and
+highlighted in the source document:
+
+- Expanding a document shows its passages; each has a magnifier button that opens the document at
+  that passage.
+- The document's overflow menu offers **Preview (PDF)**, which opens the same viewer with all of
+  that document's cited passages highlighted.
+- The viewer navigates highlight to highlight (buttons, or `Enter` / `Shift+Enter`), supports zoom
+  and download, and — when a document is cited more than once — can filter down to a single
+  passage.
+
+Both entries appear only for documents that expose an `ACCESS` link, which is what the
+`/api/integrations/ifinder/document` proxy needs to resolve the binary. The preview requests that
+proxy with `convertToPdf=true`, i.e. the PDF rendition iFinder generates for the document.
+
+**How passages are located.** A passage is a substring of the fulltext that the converter put into
+the search index, but the preview is a *generated* PDF whose text layer differs from that fulltext:
+whitespace and line breaks fall differently, ligatures may be expanded or not, words can be
+hyphenated across lines, and page headers or footers appear in the middle of the text stream.
+Matching therefore does not compare the strings directly. Both the passage and the page text are
+reduced to their Unicode letters and digits (NFKC-folded, lowercased), and the passage is searched
+in that reduced form, with an offset map back to the real text-layer positions. Consequences worth
+knowing:
+
+- Punctuation, spacing, casing and ligature differences never prevent a match, and matches are not
+  script-specific — Cyrillic, Greek and CJK passages work the same as Latin ones.
+- Passages that straddle a page break are highlighted on both pages.
+- If a header or footer interrupts a passage at a page break, the passage is split into
+  sentence-like fragments and matched individually, so it is highlighted partially rather than not
+  at all.
+- Highlights begin and end on a letter or digit, so trailing punctuation of a passage is not
+  included in the highlight.
+- If a passage genuinely does not occur in the generated PDF, the preview still opens and reports
+  "Passage not found".
+
+The matcher (`client/src/features/documentPreview/utils/passageMatcher.js`) is a port of the same
+module used by the iFinder searchbar preview, so both products resolve passages identically. Keep
+the two in sync when changing either.
 
 ## Security Considerations
 
