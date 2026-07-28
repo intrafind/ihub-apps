@@ -85,6 +85,51 @@ reconnect.
 Affinity therefore becomes a performance detail rather than a correctness
 precondition.
 
+### Configuration changes
+
+`configCache` is per-process memory, and an admin save is one HTTP request — so
+it writes the file under `contents/` and refreshes exactly one worker's cache.
+Under round-robin the next read goes to a different worker, which makes a saved
+change look like it reverted on the following page load, and a deleted app stay
+visible on every worker that did not handle the delete. It converged only when
+the 5-minute TTL timer happened to fire, which is what made the symptom look
+random.
+
+[`server/configSync.js`](../server/configSync.js) closes that gap on the same
+bus. Every explicit refresh — the calls admin routes make after writing a file —
+announces the affected cache keys, and the other workers re-read those files
+themselves:
+
+- **Keys travel, not contents.** A worker receiving `config/apps.json` reloads it
+  from disk. Shipping the loaded data would serialise every app definition
+  through the primary on each save and would let a worker's memory diverge from
+  the file that is the source of truth.
+- **TTL refreshes stay silent.** Only explicit refreshes announce. Every worker
+  runs its own timer, so announcing there would turn a quiet re-read into `N²`
+  bus messages and disk reads.
+- **Inbound announcements are coalesced** over a 25 ms window, because one save
+  frequently touches several entries (platform + groups, a bulk app import).
+- **Wholesale reloads** — backup import, the admin cache flush — announce a
+  single "reload everything" instead of enumerating keys, since each worker may
+  hold a different key set.
+
+Some subsystems keep live state derived from config that a cache reload does not
+touch: the logger's transports, telemetry exporters, MCP client connections, the
+usage tracker's cached mode. The route that wrote the file fixes those up in its
+own process only, so [`server/configReloadHooks.js`](../server/configReloadHooks.js)
+re-applies them on the workers that received the announcement. Each hook compares
+the config slice it depends on against what it last applied, so a log-level tweak
+does not rebuild telemetry exporters across the cluster.
+
+`GET /api/admin/cache/stats` returns a `sync` block with this worker's
+announce/receive/reload counters — hit it a few times in a cluster and you will
+see one worker's `announced` matched by another's `received`.
+
+Adding a new config write path? Call `configCache.refreshCacheEntry(key)` (or one
+of the `refresh*Cache()` helpers) rather than `setCacheEntry` directly; the
+announcement is attached to those. If you must write the cache directly, call
+`announceConfigChange(key)` yourself.
+
 ### Connection routing
 
 Because the bus removes the affinity requirement, connections are distributed
@@ -147,6 +192,31 @@ Worker ready for sticky connections { pid: 1245, workerIndex: '0' }
 With `WORKERS=1` the server runs as a plain single process; it binds the port
 itself, the cluster bus stays inactive, and you see the usual
 `Server is listening on all interfaces` log.
+
+### Cold start and generated keys
+
+On the very first start of an installation, `contents/.jwt-private-key.pem`,
+`contents/.jwt-public-key.pem` and `contents/.encryption-key` do not exist yet, so
+every worker reaches the "generate and persist" branch of
+`TokenStorageService` at the same time. Those writes now use exclusive create
+(`flag: 'wx'`): the first worker to land wins and the others adopt the key from
+disk, logging
+
+```
+Adopted RSA key pair created concurrently by another process
+Adopted encryption key created concurrently by another process
+```
+
+Without that arbitration each worker kept the pair it generated itself, so a
+token signed by one worker failed verification on the others — a logged-in user
+got 401s on roughly `(N-1)/N` of requests — and a secret encrypted by one worker
+could not be decrypted by any other. Seeing more than one
+`Generating new RSA key pair` line per start, or intermittent
+`Authentication required` right after a fresh install, is that failure.
+
+Setting `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` and `TOKEN_ENCRYPTION_KEY` explicitly
+skips generation altogether, and is required anyway once you run more than one
+replica — see [Cross-pod, not cross-worker](#cross-pod-not-cross-worker).
 
 ### Crash recovery
 
@@ -212,9 +282,10 @@ workers per replica: each replica's bus is independent.
 ### Worker-local state
 
 The bus covers the chat path (SSE delivery, abort, workflow cancel and replay,
-pending-finish backfill). Other worker-local state is unchanged, and round-robin
-routing means requests from one user now spread across workers rather than
-landing on one:
+pending-finish backfill) and configuration invalidation (see
+[Configuration changes](#configuration-changes)). Other worker-local state is
+unchanged, and round-robin routing means requests from one user now spread across
+workers rather than landing on one:
 
 - **Rate-limit counters are per worker.** With `WORKERS=N` the effective limit
   for a given key is up to `N ×` the configured value. Size limits accordingly,

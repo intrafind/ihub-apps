@@ -10,6 +10,7 @@ import configCache from './configCache.js';
 import logger from './utils/logger.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+import { registerConfigReloadHooks } from './configReloadHooks.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -361,6 +362,11 @@ if (cluster.isPrimary && workerCount > 1) {
       message: 'Server will continue with file-based configuration loading'
     });
   }
+
+  // Follow config changes announced by other workers into the subsystems that
+  // keep their own derived state (logger, telemetry, MCP clients). Registered
+  // after the cache is loaded so each watcher's baseline is the current config.
+  registerConfigReloadHooks();
 
   // Log proxy configuration if configured
   try {

@@ -3,6 +3,7 @@ import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
+import { announceFullConfigReload, getConfigSyncStats } from '../../configSync.js';
 import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -23,7 +24,9 @@ export default function registerAdminCacheRoutes(app) {
   app.get(buildServerPath('/api/admin/cache/stats'), adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
-      res.json(stats);
+      // Cluster invalidation counters, so a multi-worker deployment can tell
+      // whether config changes are actually reaching the other workers.
+      res.json({ ...stats, sync: getConfigSyncStats() });
     } catch (error) {
       return sendInternalError(res, error, 'get cache statistics');
     }
@@ -47,6 +50,9 @@ export default function registerAdminCacheRoutes(app) {
     try {
       configCache.clear();
       await configCache.initialize();
+      // clear()/initialize() only rebuild this worker's cache; the rest of the
+      // cluster reloads from the announcement.
+      announceFullConfigReload();
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'clear cache');
