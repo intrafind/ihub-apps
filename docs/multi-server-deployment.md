@@ -6,9 +6,11 @@ features degrade or stop working when the platform is no longer a single
 process.
 
 > If you only need to use multiple CPU cores on **one host**, use the built-in
-> sticky cluster (`WORKERS=N`) — see [Scaling with Multiple
-> Workers](scaling.md). Multi-host deployment is a different problem with
-> different trade-offs.
+> cluster (`WORKERS=N`) — see [Scaling with Multiple Workers](scaling.md). That
+> needs no load-balancer stickiness: workers relay per-chat state to each other
+> over the cluster bus. Multi-host deployment is a different problem with
+> different trade-offs, and it *does* need stickiness, because the bus does not
+> span hosts.
 
 ## TL;DR
 
@@ -85,9 +87,10 @@ The rest of this page explains why and how to operate around it.
 
 ### 1. Sticky load balancer
 
-Chat streaming relies on **per-process in-memory state**. The same client
-must keep landing on the same host (and within that host, on the same
-worker — handled by the sticky cluster, see [scaling.md](scaling.md)).
+Chat streaming relies on **per-process in-memory state**. The same client must
+keep landing on the same host. Within a host no stickiness is needed — the
+cluster bus relays chat state between workers, see [scaling.md](scaling.md) —
+but that bus rides `node:cluster` IPC and therefore stops at the host boundary.
 
 Why: `server/sse.js` keeps the live `clients` and `activeRequests` maps in
 the worker that opened the SSE GET. The follow-up POST that submits the

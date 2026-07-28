@@ -1,4 +1,4 @@
-import { cleanEnv, str, num } from 'envalid';
+import { cleanEnv, str, num, bool } from 'envalid';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -16,6 +16,12 @@ const env = cleanEnv(
     REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
+    // Opt back in to pinning each client to one worker by hashing its TCP peer
+    // address. Chat no longer needs it — cross-worker state is relayed over the
+    // cluster bus — and behind a proxy the hash collapses all traffic onto a
+    // single worker, so it defaults off. Only useful when iHub is exposed
+    // directly to clients and some other worker-local state must stay pinned.
+    STICKY_SESSIONS: bool({ default: false }),
     SSL_KEY: str({ optional: true }),
     SSL_CERT: str({ optional: true }),
     SSL_CA: str({ optional: true }),
@@ -56,6 +62,7 @@ const config = Object.freeze({
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
   WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
+  STICKY_SESSIONS: env.STICKY_SESSIONS,
   SSL_KEY: env.SSL_KEY,
   SSL_CERT: env.SSL_CERT,
   SSL_CA: env.SSL_CA,

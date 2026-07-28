@@ -1,7 +1,14 @@
 import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
-import { clients, activeRequests } from '../../sse.js';
+import {
+  clients,
+  abortChatRequest,
+  closeChatClient,
+  getChatResponseSink,
+  hasActiveChatRequest,
+  hasChatClient
+} from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import { throttledFetch } from '../../requestThrottler.js';
@@ -23,11 +30,8 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import {
-  buildReplayStepsFromState,
-  drainPendingFinish
-} from '../../services/workflow/chatBridge.js';
-import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
+import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
+import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 
 export default function registerSessionRoutes(
   app,
@@ -354,20 +358,11 @@ export default function registerSessionRoutes(
           component: 'sessionRoutes',
           onClose: ({ isCurrent }) => {
             if (!isCurrent) return;
-            if (activeRequests.has(chatId)) {
-              try {
-                const controller = activeRequests.get(chatId);
-                controller.abort();
-                activeRequests.delete(chatId);
-                logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-              } catch (error) {
-                logger.error('Error aborting request', {
-                  component: 'sessionRoutes',
-                  chatId,
-                  error: error.message
-                });
-              }
-            }
+            // The LLM call feeding this stream may be running on another
+            // worker, so abort through the cluster-aware helper — otherwise a
+            // browser closing the tab would leave the generation running to
+            // completion, billing tokens nobody will read.
+            abortChatRequest(chatId);
             logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
           }
         });
@@ -408,28 +403,10 @@ export default function registerSessionRoutes(
               status: pending.status
             });
           } else {
-            const active = activeWorkflowExecutions.get(chatId);
-            if (active && active.engine && active.executionId) {
-              const state = await active.engine.stateManager.get(active.executionId);
-              const workflow = state?.data?._workflowDefinition;
-              if (state && workflow) {
-                const replayEvents = buildReplayStepsFromState(state, workflow);
-                for (const ev of replayEvents) {
-                  actionTracker.trackWorkflowStep(chatId, {
-                    workflowName: workflow.name,
-                    ...ev
-                  });
-                }
-                if (replayEvents.length > 0) {
-                  logger.info('Replayed workflow steps on SSE reconnect', {
-                    component: 'sessionRoutes',
-                    chatId,
-                    executionId: active.executionId,
-                    steps: replayEvents.length
-                  });
-                }
-              }
-            }
+            // Resolves the owning worker itself when the workflow is running
+            // elsewhere in the cluster; the replayed steps come back over the
+            // SSE relay.
+            await replayChatWorkflowProgress(chatId);
           }
         } catch (replayError) {
           logger.warn('Workflow reconnect replay/backfill failed', {
@@ -702,7 +679,7 @@ export default function registerSessionRoutes(
                 ? `Workflow "${wfName}" is disabled.`
                 : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
               actionTracker.trackError(chatId, { message: reason });
-              if (!clients.has(chatId)) {
+              if (!hasChatClient(chatId)) {
                 return res.status(400).json({ status: 'error', message: reason });
               }
               actionTracker.trackChunk(chatId, { content: reason });
@@ -774,7 +751,15 @@ export default function registerSessionRoutes(
         }
         // --- end @mention detection ---
 
-        if (!clients.has(chatId)) {
+        // Resolve the SSE sink once, up front. In cluster mode the stream for
+        // this chat may be held by another worker, in which case this is a
+        // relay shim rather than a local response; null means no stream exists
+        // anywhere and the answer has to come back on this POST instead.
+        // Deciding from the sink itself (rather than checking membership and
+        // fetching separately) keeps the two in step.
+        const chatSink = getChatResponseSink(chatId);
+
+        if (!chatSink) {
           logger.info('No active SSE connection, creating response without streaming', {
             component: 'sessionRoutes',
             chatId
@@ -836,15 +821,14 @@ export default function registerSessionRoutes(
             user: req.user
           });
         } else {
-          // Mutate the existing entry in place rather than replacing it. The SSE
-          // GET handler pins this object reference via `myEntry` to identify a
-          // stale `req.on('close')` after a reconnect; replacing the entry here
-          // would defeat that check, letting a dead socket's close handler bail
-          // out and leak the Map entry + activeRequests controller for up to
+          // Note that `getChatResponseSink` refreshed lastActivity on the
+          // existing map entry in place rather than replacing it: the SSE GET
+          // handler pins that object reference via `myEntry` to identify a stale
+          // `req.on('close')` after a reconnect, and replacing the entry would
+          // defeat that check, letting a dead socket's close handler bail out
+          // and leak the Map entry + activeRequests controller for up to
           // 5 minutes until cleanupInactiveClients evicts it.
-          const clientEntry = clients.get(chatId);
-          const clientRes = clientEntry.response;
-          clientEntry.lastActivity = new Date();
+          const clientRes = chatSink;
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
@@ -972,66 +956,26 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     async (req, res) => {
       const { chatId } = req.params;
-      if (clients.has(chatId)) {
-        if (activeRequests.has(chatId)) {
-          try {
-            const controller = activeRequests.get(chatId);
-            controller.abort();
-            activeRequests.delete(chatId);
-            logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-          } catch (error) {
-            logger.error('Error aborting request', {
-              component: 'sessionRoutes',
-              chatId,
-              error: error.message
-            });
-          }
-        }
+      if (hasChatClient(chatId)) {
+        // Each of the three teardown steps targets state that may live on a
+        // different worker than this POST landed on: the LLM call, the workflow
+        // execution and the SSE stream are registered independently, so each
+        // helper resolves its own owner and relays if it is not this process.
+        abortChatRequest(chatId);
 
         // Also cancel any running workflow execution for this chatId
-        const { activeWorkflowExecutions } = await import('../../tools/workflowRunner.js');
-        const workflowExec = activeWorkflowExecutions.get(chatId);
-        if (workflowExec) {
-          try {
-            await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
-            activeWorkflowExecutions.delete(chatId);
-            logger.info('Cancelled workflow', {
-              component: 'sessionRoutes',
-              executionId: workflowExec.executionId,
-              chatId
-            });
-          } catch (error) {
-            logger.error('Error cancelling workflow', {
-              component: 'sessionRoutes',
-              chatId,
-              error: error.message
-            });
-          }
-        }
+        await cancelChatWorkflow(chatId);
 
-        // Re-read the client after the awaits above: cancelling the workflow
-        // yields the event loop, and the SSE connection can close in that gap
-        // (its req.on('close') handler deletes the entry from `clients`). The
-        // top-of-handler clients.has() check is therefore stale here, so guard
-        // against a now-missing entry instead of dereferencing undefined — an
-        // unguarded client.response.end() throws a TypeError that crashes the
-        // whole process as an unhandled rejection on Node >= 15.
-        const client = clients.get(chatId);
+        // Note the awaits above: cancelling the workflow yields the event loop,
+        // and the SSE connection can close in that gap (its req.on('close')
+        // handler deletes the entry from `clients`). The top-of-handler check is
+        // therefore stale here, which is why the close goes through
+        // `closeChatClient` — it re-reads the entry and no-ops when it is gone,
+        // instead of dereferencing undefined. An unguarded
+        // `client.response.end()` throws a TypeError that crashes the whole
+        // process as an unhandled rejection on Node >= 15.
         actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
-        if (client) {
-          try {
-            client.response.end();
-          } catch (error) {
-            // The socket may already be dead (write-after-end on an already
-            // destroyed stream). We're tearing it down anyway, so just log.
-            logger.warn('Error ending client response on stop', {
-              component: 'sessionRoutes',
-              chatId,
-              error: error?.message || String(error)
-            });
-          }
-          clients.delete(chatId);
-        }
+        closeChatClient(chatId);
         logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
@@ -1100,11 +1044,15 @@ export default function registerSessionRoutes(
    */
   app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
     const { chatId } = req.params;
-    if (clients.has(chatId)) {
+    if (hasChatClient(chatId)) {
+      // lastActivity lives with the response object, so it is only readable on
+      // the worker holding the stream. Rather than a bus round trip for a
+      // diagnostic field, report null when the stream is elsewhere — `active`
+      // and `processing` are the parts callers branch on.
       return res.status(200).json({
         active: true,
-        lastActivity: clients.get(chatId).lastActivity,
-        processing: activeRequests.has(chatId)
+        lastActivity: clients.get(chatId)?.lastActivity ?? null,
+        processing: hasActiveChatRequest(chatId)
       });
     }
     return res.status(200).json({ active: false });
