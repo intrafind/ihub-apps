@@ -7,11 +7,11 @@
  */
 
 import {
-  createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason
 } from './GenericToolCalling.js';
+import { convertOpenAIToolsToGeneric, convertGenericToolCallsToOpenAI } from './OpenAIConverter.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -98,64 +98,12 @@ export function convertGenericToolsToVLLM(genericTools = []) {
   }));
 }
 
-/**
- * Convert vLLM tools to generic format (same as OpenAI)
- * @param {Object[]} vllmTools - vLLM formatted tools
- * @returns {import('./GenericToolCalling.js').GenericTool[]} Generic tools
- */
-export function convertVLLMToolsToGeneric(vllmTools = []) {
-  return vllmTools.map((tool, index) => {
-    // Handle both nested function format and flat format
-    if (tool.type === 'function' && tool.function) {
-      return createGenericTool(
-        tool.function.id,
-        tool.function.name,
-        tool.function.description || '',
-        tool.function.parameters || { type: 'object', properties: {} },
-        { originalFormat: 'vllm', type: tool.type }
-      );
-    }
-
-    // Handle flat format (legacy or simplified)
-    return createGenericTool(
-      tool.id || tool.name || `tool_${index}`,
-      tool.name || `tool_${index}`,
-      tool.description || '',
-      tool.parameters || { type: 'object', properties: {} },
-      { originalFormat: 'vllm' }
-    );
-  });
-}
-
-/**
- * Convert generic tool calls to vLLM format (same as OpenAI)
- * @param {import('./GenericToolCalling.js').GenericToolCall[]} genericToolCalls - Generic tool calls
- * @returns {Object[]} vLLM formatted tool calls
- */
-export function convertGenericToolCallsToVLLM(genericToolCalls = []) {
-  // Convert to modern tool_calls array format
-  return genericToolCalls.map(toolCall => {
-    // Handle streaming chunks with __raw_arguments
-    let args;
-    if (toolCall.arguments && toolCall.arguments.__raw_arguments !== undefined) {
-      // This is a streaming chunk - use the raw arguments directly
-      args = toolCall.arguments.__raw_arguments;
-    } else if (typeof toolCall.arguments === 'string') {
-      args = toolCall.arguments;
-    } else {
-      args = JSON.stringify(toolCall.arguments);
-    }
-
-    return {
-      index: toolCall.index || 0,
-      id: toolCall.id,
-      function: {
-        name: toolCall.id,
-        arguments: args
-      }
-    };
-  });
-}
+// vLLM is OpenAI-compatible for both of these directions, so delegate rather
+// than hand-roll a second copy that can (and did — see issue #1747) drift:
+// the old `convertGenericToolCallsToVLLM` put the tool-call *id* in the
+// `function.name` field instead of the actual function name.
+export const convertVLLMToolsToGeneric = convertOpenAIToolsToGeneric;
+export const convertGenericToolCallsToVLLM = convertGenericToolCallsToOpenAI;
 
 /**
  * Convert vLLM tool calls to generic format (same as OpenAI)
