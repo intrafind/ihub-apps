@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { TextLayer } from 'pdfjs-dist';
 import { loadPdfjs } from '../../upload/utils/fileProcessing';
 import {
   buildPageIndex,
@@ -21,7 +20,7 @@ const RENDER_MARGIN_PX = 800;
  * over the text layer spans, so they follow the real glyph geometry instead of
  * approximating it — and the text layer itself stays untouched and selectable.
  */
-function PdfPage({ page, scale, matches, selectedMatchIdx, onHighlightsPainted }) {
+function PdfPage({ page, scale, matches, selectedMatchIdx, onHighlightsPainted, TextLayer }) {
   const wrapperRef = useRef(null);
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
@@ -88,7 +87,7 @@ function PdfPage({ page, scale, matches, selectedMatchIdx, onHighlightsPainted }
       renderTask?.cancel();
       textLayer?.cancel();
     };
-  }, [page, viewport]);
+  }, [page, viewport, TextLayer]);
 
   // Derive highlight boxes from the rendered text layer.
   useEffect(() => {
@@ -233,6 +232,10 @@ function PdfPageSlot({ page, scale, scrollRoot, ...pageProps }) {
 function PdfPassageViewer({ data, passages, scale = 1.2, onStateChange, controlRef }) {
   const scrollRef = useRef(null);
   const [pages, setPages] = useState([]);
+  // Taken from the lazily imported pdf.js rather than a static import: the
+  // `pdf` bundle chunk is deliberately on-demand (see vite.config.js), and a
+  // static import would pull it into the chat bundle for every user.
+  const [textLayerCtor, setTextLayerCtor] = useState(null);
   const [matchResult, setMatchResult] = useState(null);
   const [currentMatch, setCurrentMatch] = useState(-1);
   const [error, setError] = useState(null);
@@ -250,6 +253,8 @@ function PdfPassageViewer({ data, passages, scale = 1.2, onStateChange, controlR
       setError(null);
       try {
         const pdfjsLib = await loadPdfjs();
+        if (cancelled) return;
+        setTextLayerCtor(() => pdfjsLib.TextLayer);
         // pdf.js transfers (and thereby neuters) the buffer it is given; hand
         // it a copy so the caller can re-open the same bytes later.
         pdfDocument = await pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) }).promise;
@@ -419,6 +424,7 @@ function PdfPassageViewer({ data, passages, scale = 1.2, onStateChange, controlR
     <div ref={scrollRef} className="flex-1 overflow-auto bg-gray-100 dark:bg-gray-900 p-4">
       {error && <p className="text-sm text-red-600 dark:text-red-400 text-center py-8">{error}</p>}
       {!error &&
+        textLayerCtor &&
         pages.map(page => (
           <PdfPageSlot
             key={page.pageIdx}
@@ -428,6 +434,7 @@ function PdfPassageViewer({ data, passages, scale = 1.2, onStateChange, controlR
             matches={matchesByPage[page.pageIdx] || []}
             selectedMatchIdx={currentMatch}
             onHighlightsPainted={handleHighlightsPainted}
+            TextLayer={textLayerCtor}
           />
         ))}
     </div>

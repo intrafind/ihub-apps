@@ -1,9 +1,19 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { scrollToElement } from '../../../utils/citationTransformer';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import AppSelectionModal from '../../workflows/components/AppSelectionModal';
-import DocumentPreviewModal from '../../documentPreview/components/DocumentPreviewModal';
+import {
+  hasPassageText,
+  selectPreviewPassages
+} from '../../documentPreview/utils/passageSelection';
+
+// Loaded on demand: the preview pulls in pdf.js, which is a deliberately
+// on-demand bundle chunk. Importing it statically here would put pdf.js in
+// every chat page load, whether or not anyone opens a document.
+const DocumentPreviewModal = lazy(
+  () => import('../../documentPreview/components/DocumentPreviewModal')
+);
 
 const PASSAGE_TRUNCATE_LENGTH = 150;
 
@@ -491,17 +501,19 @@ function CitationPanel({ citations, onDocumentAction }) {
    * Handled here rather than through `onDocumentAction` because the passage
    * texts only exist in this component.
    *
+   * Passages with no usable text are dropped, and the passage to focus is
+   * located *after* that filtering. Passing the passage itself rather than its
+   * display index is what keeps the two in step — an index into the unfiltered
+   * list would point at the wrong passage as soon as one is dropped.
+   *
    * @param {Object} item the citation document.
    * @param {Array<{content: string}>} passageList the document's passages, in
    *   the order they are displayed.
-   * @param {number} initialPassageIndex passage to focus, `-1` for all.
+   * @param {{content: string}} [focusPassage] passage to focus; when omitted,
+   *   all passages are highlighted and none is singled out.
    */
-  const openPreview = useCallback((item, passageList, initialPassageIndex = -1) => {
-    setPreviewDoc({
-      item,
-      passages: passageList.map(p => p.content).filter(Boolean),
-      initialPassageIndex
-    });
+  const openPreview = useCallback((item, passageList, focusPassage = null) => {
+    setPreviewDoc({ item, ...selectPreviewPassages(passageList, focusPassage) });
   }, []);
 
   // Merge references and resultItems into unified document list
@@ -699,7 +711,9 @@ function CitationPanel({ citations, onDocumentAction }) {
                         content={passage.content}
                         index={passage.index}
                         onJumpToPassage={
-                          canPreview ? () => openPreview(doc, orderedPassages, pIdx) : null
+                          canPreview && hasPassageText(passage)
+                            ? () => openPreview(doc, orderedPassages, passage)
+                            : null
                         }
                         t={t}
                       />
@@ -726,14 +740,16 @@ function CitationPanel({ citations, onDocumentAction }) {
       )}
 
       {previewDoc && (
-        <DocumentPreviewModal
-          documentId={getDocumentAccess(previewDoc.item)?.documentId}
-          searchProfile={getDocumentAccess(previewDoc.item)?.searchProfile}
-          title={previewDoc.item.title || getMeta(previewDoc.item, 'title')}
-          passages={previewDoc.passages}
-          initialPassageIndex={previewDoc.initialPassageIndex}
-          onClose={() => setPreviewDoc(null)}
-        />
+        <Suspense fallback={null}>
+          <DocumentPreviewModal
+            documentId={getDocumentAccess(previewDoc.item)?.documentId}
+            searchProfile={getDocumentAccess(previewDoc.item)?.searchProfile}
+            title={previewDoc.item.title || getMeta(previewDoc.item, 'title')}
+            passages={previewDoc.passages}
+            initialPassageIndex={previewDoc.initialPassageIndex}
+            onClose={() => setPreviewDoc(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

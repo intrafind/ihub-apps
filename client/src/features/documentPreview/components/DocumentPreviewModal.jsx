@@ -20,7 +20,9 @@ const SCALE_STEP = 0.2;
  * @param {string} props.documentId iFinder document id from the ACCESS link.
  * @param {string} [props.searchProfile]
  * @param {string} [props.title] document title for the header.
- * @param {string[]} props.passages passage texts to highlight.
+ * @param {string[]} props.passages passage texts to highlight. Expected to be
+ *   pre-filtered to passages that actually carry text, so `initialPassageIndex`
+ *   indexes the same list that is rendered.
  * @param {number} [props.initialPassageIndex] index into `passages` to focus,
  *   or `-1`/undefined to highlight all of them.
  * @param {Function} props.onClose
@@ -89,28 +91,39 @@ function DocumentPreviewModal({
     const handler = e => {
       if (e.key === 'Escape') {
         onClose();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) controlRef.current?.previousMatch();
-        else controlRef.current?.nextMatch();
+        return;
       }
+      if (e.key !== 'Enter') return;
+      // Enter must still activate whatever control has focus — the toolbar
+      // buttons, the download link and the passage chips all rely on it. Only
+      // take Enter over when focus is not on something that handles it.
+      const target = e.target;
+      if (
+        target?.isContentEditable ||
+        ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'].includes(target?.tagName)
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (e.shiftKey) controlRef.current?.previousMatch();
+      else controlRef.current?.nextMatch();
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const activePassages = useMemo(() => {
-    const valid = passages.filter(p => typeof p === 'string' && p.trim().length > 0);
-    if (selectedPassage >= 0 && valid[selectedPassage]) return [valid[selectedPassage]];
-    return valid;
-  }, [passages, selectedPassage]);
+  const activePassages = useMemo(
+    () =>
+      selectedPassage >= 0 && passages[selectedPassage] ? [passages[selectedPassage]] : passages,
+    [passages, selectedPassage]
+  );
 
   const handleStateChange = useCallback(state => setViewerState(state), []);
 
   const downloadUrl = buildApiUrl(`integrations/ifinder/document?${documentParams}`);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
-  const passageCount = passages.filter(p => typeof p === 'string' && p.trim().length > 0).length;
+  const passageCount = passages.length;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60" onClick={onClose}>
@@ -266,21 +279,19 @@ function DocumentPreviewModal({
             >
               {t('documentPreview.allPassages', 'All')}
             </button>
-            {passages
-              .filter(p => typeof p === 'string' && p.trim().length > 0)
-              .map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedPassage(i)}
-                  className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
-                    selectedPassage === i
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+            {passages.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedPassage(i)}
+                className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                  selectedPassage === i
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
           </div>
         )}
 
