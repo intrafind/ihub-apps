@@ -31,7 +31,10 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/admin/*` (all admin routes)
 
 ### 3. Auth API Rate Limiter
-- **Default Limit**: 50 requests per 15 minutes per IP address (most restrictive)
+- **Limit**: 30 requests per 15 minutes per IP address in the shipped
+  `platform.json` (`rateLimit.authApi.limit`). The code-level fallback, used only
+  when no `rateLimit.authApi` section is present at all, is 50 per 15 minutes.
+  Either way it is the most restrictive limiter.
 - **Applied to**: Endpoints under `/api/auth` that verify credentials:
   - `POST /api/auth/local/login`
   - `POST /api/auth/ldap/login`

@@ -11,7 +11,9 @@ import { recordRateLimitHit } from '../telemetry/metrics.js';
  * credential limiter.
  *
  * The auth limiter exists to slow down password guessing, so it is deliberately
- * tight (30 requests / 15 minutes by default). Applying it to the whole
+ * tight: 30 requests / 15 minutes in the shipped `platform.json`, and 50 / 15
+ * minutes from the code fallback below when `rateLimit.authApi` is absent
+ * entirely. Applying it to the whole
  * `/api/auth` namespace also throttles endpoints that carry no credentials and
  * are polled as a matter of course:
  *

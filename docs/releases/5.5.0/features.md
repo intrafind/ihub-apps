@@ -765,7 +765,8 @@ step had completed.
 The brute-force limiter that protects login was applied to the whole `/api/auth` namespace,
 including read-only endpoints nothing can avoid calling. Polling `/api/auth/status` — the call the
 web app makes on every page load, and a natural choice for a container health probe — exhausted the
-30-requests-per-15-minutes window on its own, after which every caller including the probe received
+window (30 requests per 15 minutes in the shipped configuration) on its own, after which every
+caller including the probe received
 `429 Too Many Requests` until the window reset. The platform looked completely wedged.
 
 - The strict limiter now covers only endpoints that actually verify credentials

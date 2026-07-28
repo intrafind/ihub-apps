@@ -1,6 +1,7 @@
 /**
- * The strict auth limiter (30 requests / 15 min by default) is there to slow
- * password guessing. Mounted on the whole `/api/auth` namespace it also
+ * The strict auth limiter (30 requests / 15 min in the shipped platform.json)
+ * is there to slow password guessing. Mounted on the whole `/api/auth` namespace
+ * it also
  * throttled endpoints that carry no credentials — above all `/api/auth/status`,
  * which the SPA fetches on every boot and on every 401 recovery, and which
  * operators use as the container health probe.

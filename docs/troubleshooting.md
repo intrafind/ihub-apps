@@ -273,14 +273,14 @@ node -e "require('dotenv').config(); console.log('JWT_SECRET exists:', !!process
 
 **Cause:**
 
-The auth rate limiter is tight on purpose (30 requests / 15 minutes by default)
-because it guards password guessing. Two things can turn it into a self-inflicted
-outage:
+The auth rate limiter is tight on purpose — 30 requests / 15 minutes in the
+shipped `platform.json` — because it guards password guessing. Two things can turn
+it into a self-inflicted outage:
 
 1. Something polls a read-only endpoint in the `/api/auth` namespace —
    `/api/auth/status` is the usual one, since it is both the SPA's bootstrap call
    and a natural liveness probe. Read-only auth endpoints are exempt from the
-   credential limiter as of 5.6.0; on older versions they were not.
+   credential limiter as of 5.5.0; on older versions they were not.
 2. `trustProxy` is lower than the real number of proxy hops, so `req.ip` resolves
    to the inner proxy and **every user shares one counter**.
 
