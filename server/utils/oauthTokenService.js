@@ -89,20 +89,23 @@ export function generateOAuthToken(client, options = {}) {
  */
 export function verifyOAuthToken(token) {
   try {
-    // First try standard verification (audience: 'ihub-apps', covers client_credentials)
-    let decoded = verifyJwt(token);
+    // Authorization-code tokens are audience-scoped to the OAuth client that
+    // requested them, everything else uses the platform audience. Peek at the
+    // (still unverified) claims to pick the expected audience up front —
+    // verifying with the wrong one first works, but logs a
+    // "jwt audience invalid" warning on every single authorization-code
+    // request, which reads like an auth failure when it is not.
+    const peeked = decodeJwt(token);
+    const claims = peeked?.payload;
+    const expectedAudience =
+      claims?.authMode === 'oauth_authorization_code' && claims?.aud && claims.aud !== 'ihub-apps'
+        ? claims.aud
+        : undefined;
 
-    // If that failed, check if it's an auth code token with client-specific audience
-    if (!decoded) {
-      const peeked = decodeJwt(token);
-      if (
-        peeked?.payload?.authMode === 'oauth_authorization_code' &&
-        peeked?.payload?.aud &&
-        peeked.payload.aud !== 'ihub-apps'
-      ) {
-        decoded = verifyJwt(token, { audience: peeked.payload.aud });
-      }
-    }
+    const decoded =
+      expectedAudience === undefined
+        ? verifyJwt(token)
+        : verifyJwt(token, { audience: expectedAudience });
 
     if (!decoded) {
       logger.warn('Token verification failed', { component: 'OAuthTokenService' });

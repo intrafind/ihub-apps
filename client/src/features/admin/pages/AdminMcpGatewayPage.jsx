@@ -264,7 +264,9 @@ function AdminMcpGatewayPage() {
               checked={transports.streamableHttp?.enabled !== false}
               onChange={v =>
                 update({
-                  transports: { streamableHttp: { enabled: v } }
+                  transports: {
+                    streamableHttp: { ...(transports.streamableHttp || {}), enabled: v }
+                  }
                 })
               }
               label={t(
@@ -274,6 +276,21 @@ function AdminMcpGatewayPage() {
               description={t(
                 'admin.mcp.gateway.transportStreamableHttpDesc',
                 'Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.'
+              )}
+            />
+            <Toggle
+              checked={transports.streamableHttp?.stateless === true}
+              onChange={v =>
+                update({
+                  transports: {
+                    streamableHttp: { ...(transports.streamableHttp || {}), stateless: v }
+                  }
+                })
+              }
+              label={t('admin.mcp.gateway.transportStateless', 'Stateless mode')}
+              description={t(
+                'admin.mcp.gateway.transportStatelessDesc',
+                'Handle every Streamable HTTP request independently instead of keeping MCP sessions in memory. Enable when iHub runs behind a load balancer that spreads requests across several pods, where a session opened on one pod is unknown to the next. Trade-off: no server-initiated SSE stream.'
               )}
             />
             <Toggle
