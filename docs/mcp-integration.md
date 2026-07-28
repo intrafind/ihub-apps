@@ -293,14 +293,54 @@ callers with the matching scope.
 
 ### Session model
 
-The gateway is stateful: an `initialize` request receives a session id,
-echoed by the client on subsequent requests as `Mcp-Session-Id`. A
-session is bound to the authenticating user; subsequent requests on the
-same session with a token belonging to a *different* user are rejected
-with 403 to prevent resource leakage between concurrent OAuth clients.
+By default the gateway is stateful: an `initialize` request receives a
+session id, echoed by the client on subsequent requests as
+`Mcp-Session-Id`. A session is bound to the authenticating user;
+subsequent requests on the same session with a token belonging to a
+*different* user are rejected with 403 to prevent resource leakage
+between concurrent OAuth clients.
 
 `DELETE /mcp` (with `Mcp-Session-Id` header) tears down a session
-cleanly. SSE keepalive + reconnect is handled by the SDK.
+cleanly — only the user who opened the session may terminate it. SSE
+keepalive + reconnect is handled by the SDK. Sessions the client
+abandons without a `DELETE` are swept after an hour of inactivity.
+
+Requests the gateway cannot map to a live session get the status the MCP
+spec prescribes, so clients can recover on their own:
+
+| Situation | Response |
+| --- | --- |
+| `Mcp-Session-Id` is unknown, expired, or was opened elsewhere | `404` `Session not found` — the client starts a new session with a fresh `initialize` |
+| POST that is not `initialize` and carries no session id | `400 Bad Request: Mcp-Session-Id header is required` |
+| `GET /mcp` outside a session | `405 Method Not Allowed` — there is no server-initiated SSE stream to attach to |
+
+#### Stateless mode (load-balanced deployments)
+
+Session state lives in the worker's process memory. The sticky cluster
+router keeps a client on the same worker within one instance, but if
+iHub is deployed as several replicas behind a load balancer, a session
+opened on one replica is unknown to the next and the client has to
+re-initialize on every request.
+
+For that topology enable **stateless mode**
+(Admin → MCP gateway → Transports, or
+`platform.mcpServer.transports.streamableHttp.stateless: true`):
+
+```json
+{
+  "mcpServer": {
+    "transports": {
+      "streamableHttp": { "enabled": true, "stateless": true }
+    }
+  }
+}
+```
+
+Every request then builds its own short-lived MCP server, no session id
+is issued, and no affinity is required. Trade-off: `GET /mcp` answers
+`405`, so the server cannot push notifications to the client. The
+gateway does not use server-initiated messages today, and MCP clients
+treat the `405` as "this server has no push channel".
 
 ### Discovery
 
@@ -384,6 +424,17 @@ Troubleshooting:
   enabling OAuth (session middleware missing).
 - `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`
   scope; check the scopes on the OAuth client and re-authorize.
+- Sign-in and consent succeed but the client still reports it cannot
+  connect, and `/mcp` answers `404 Session not found` on every request →
+  requests are not landing on the process that holds the session. Enable
+  stateless mode (see [Stateless mode](#stateless-mode-load-balanced-deployments))
+  or configure session affinity on the load balancer.
+- `400 Bad Request: Mcp-Session-Id header is required` → the client sent
+  a non-`initialize` request without a session id; it never completed
+  (or lost) the handshake.
+
+Every rejection the transport makes is logged under the `McpGateway`
+component, so `npm run logs` shows the reason a client was turned away.
 
 ## Agent-to-Agent (A2A) endpoint — experimental
 

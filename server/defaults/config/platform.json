@@ -139,7 +139,7 @@
     "requireConsent": true,
     "publicUrl": "",
     "transports": {
-      "streamableHttp": { "enabled": true },
+      "streamableHttp": { "enabled": true, "stateless": false },
       "sse": { "enabled": true }
     },
     "a2a": { "enabled": false },
