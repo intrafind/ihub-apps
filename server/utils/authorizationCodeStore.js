@@ -80,8 +80,7 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
  * @returns {string} Lowercase hex digest.
  */
 function codeKey(code) {
-  // lgtm[js/insufficient-password-hash]
-  return crypto.createHash('sha256').update(String(code), 'utf8').digest('hex');
+  return crypto.createHash('sha256').update(String(code), 'utf8').digest('hex'); // lgtm[js/insufficient-password-hash] -- index key, not a stored password
 }
 
 /**
