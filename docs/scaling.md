@@ -7,9 +7,15 @@ this page explains how it works, how to tune it, and what the trade-offs are.
 ## TL;DR
 
 - **Default:** `WORKERS=4` in production, connections balanced round-robin.
-- **No stickiness required.** Chat state that lands on the "wrong" worker is
-  relayed to the right one over the cluster bus, so it is safe behind any load
-  balancer — including a Kubernetes ingress with no session affinity.
+- **No stickiness required between workers.** Chat state that lands on the
+  "wrong" worker is relayed to the right one over the cluster bus, so a single
+  iHub instance is safe behind any load balancer — including a Kubernetes
+  ingress with no session affinity.
+- **Stickiness is still required between instances.** The bus rides
+  `node:cluster` IPC and stops at the process tree, so running more than one
+  replica or host needs cookie affinity at the load balancer — see
+  [Kubernetes](#kubernetes) and
+  [multi-server deployment](multi-server-deployment.md).
 - **Dev scripts (`npm run dev`, `npm run server`):** pinned to `WORKERS=1` for
   fast reloads and straightforward debugging.
 - **Override:** set the `WORKERS` (or `NUM_WORKERS`) environment variable

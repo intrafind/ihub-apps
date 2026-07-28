@@ -38,26 +38,34 @@ const REPLAY_CHANNEL = 'workflow:replay-request';
  * Cancel the workflow execution bridged to a chat, wherever it is running.
  *
  * @param {string} chatId
- * @returns {Promise<boolean>} True if cancelled locally or relayed to the owner.
+ * @returns {Promise<boolean>} True if the workflow was cancelled here, or the
+ *   request was relayed to the worker running it. False when there is nothing
+ *   to cancel, and when the engine refused the cancellation — the execution is
+ *   then still running, so callers must not report success.
  */
 export async function cancelChatWorkflow(chatId) {
   const workflowExec = activeWorkflowExecutions.get(chatId);
   if (workflowExec) {
     try {
       await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
-      activeWorkflowExecutions.delete(chatId);
-      logger.info('Cancelled workflow', {
-        component: 'workflowRunner',
-        executionId: workflowExec.executionId,
-        chatId
-      });
     } catch (error) {
       logger.error('Error cancelling workflow', {
         component: 'workflowRunner',
         chatId,
+        executionId: workflowExec.executionId,
         error: error.message
       });
+      // Keep the registration: the execution is presumably still running, and
+      // dropping it here would leave nothing for a retry or the stop route to
+      // find.
+      return false;
     }
+    activeWorkflowExecutions.delete(chatId);
+    logger.info('Cancelled workflow', {
+      component: 'workflowRunner',
+      executionId: workflowExec.executionId,
+      chatId
+    });
     return true;
   }
   if (hasRemote('workflow', chatId)) {
