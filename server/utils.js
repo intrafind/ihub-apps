@@ -512,18 +512,22 @@ export async function simpleCompletion(
 ) {
   const resolvedModelId = modelId || model;
 
-  logger.info('Starting simple completion...', {
+  logger.debug('Starting simple completion...', {
     component: 'Utils',
-    messages: JSON.stringify(messages, null, 2),
+    messageCount: messages.length,
     modelId: resolvedModelId,
     temperature
   });
   // Try to get models from cache first
   let { data: models = [] } = configCache.getModels();
-  logger.info('Available models:', { component: 'Utils', models: models.map(m => m.id) });
+  logger.debug('Available models:', { component: 'Utils', models: models.map(m => m.id) });
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
-  logger.info('Using model:', { component: 'Utils', modelConfig });
+  logger.debug('Using model:', {
+    component: 'Utils',
+    modelId: modelConfig?.id,
+    provider: modelConfig?.provider
+  });
   if (!modelConfig) {
     throw new Error(`Model ${resolvedModelId} not found`);
   }
