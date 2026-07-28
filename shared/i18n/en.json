@@ -1928,7 +1928,8 @@
     "mentioned": "Mentioned",
     "passages": "{{count}} passage",
     "passages_plural": "{{count}} passages",
-    "openExternal": "Open in browser"
+    "openExternal": "Open in browser",
+    "showInDocument": "Show this passage in the document"
   },
   "chatMessage": {
     "user": "You",
@@ -2601,5 +2602,20 @@
     },
     "toggleLabel": "Transcription",
     "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"
+  },
+  "documentPreview": {
+    "title": "Document preview",
+    "loading": "Loading document…",
+    "pageCount": "{{count}} page",
+    "pageCount_plural": "{{count}} pages",
+    "matchPosition": "{{current}} of {{total}}",
+    "noMatches": "Passage not found",
+    "previousMatch": "Previous highlight",
+    "nextMatch": "Next highlight",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "highlight": "Highlight",
+    "allPassages": "All",
+    "loadFailed": "Could not load the document: {{error}}"
   }
 }

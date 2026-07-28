@@ -846,3 +846,26 @@ at your ingress.
 Running more than one **replica** still requires cookie-based session affinity at the ingress — the
 relay works between workers in a pod, not between pods. See
 [Scaling with Multiple Workers](../../scaling.md) for Kubernetes examples.
+
+## Cited Passages Can Now Be Located and Highlighted Inside the Source Document
+
+When an app uses iFinder as its search backend, the passages listed under a chat answer's
+**Documents** section can now be opened directly in the document they came from. The document opens
+in an in-app PDF preview with every cited passage highlighted, scrolled to the first one.
+
+- Each passage in an expanded document gets a magnifier button that opens the preview at that
+  passage. The overflow menu's **Preview (PDF)** entry opens the same viewer with all of the
+  document's cited passages highlighted.
+- The preview replaces the previous behaviour of opening the converted PDF in a new browser tab,
+  which could not highlight anything. It adds highlight-to-highlight navigation (also `Enter` /
+  `Shift+Enter`), a page count, zoom, download, and a per-passage filter when a document is cited
+  more than once.
+- Passage text and the generated preview PDF do not match character-for-character — the PDF's text
+  layer differs in whitespace, ligatures, hyphenation and page furniture such as headers and
+  footers. Matching therefore compares only letters and digits, so passages are still found across
+  those differences, in any script (including Cyrillic and CJK), and across page breaks.
+- A passage that a header or footer interrupts at a page break is highlighted sentence by sentence
+  rather than not at all. If a passage genuinely cannot be located, the preview still opens and
+  reports "Passage not found" instead of failing.
+- Documents without a downloadable version are unaffected: the passage button and preview entry
+  only appear where iFinder exposes document access.

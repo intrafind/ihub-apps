@@ -454,7 +454,8 @@
     "mentioned": "Erwähnt",
     "passages": "{{count}} Passage",
     "passages_plural": "{{count}} Passagen",
-    "openExternal": "Im Browser öffnen"
+    "openExternal": "Im Browser öffnen",
+    "showInDocument": "Diese Textstelle im Dokument anzeigen"
   },
   "chatMessage": {
     "user": "Du",
@@ -2566,5 +2567,20 @@
     },
     "toggleLabel": "Transkription",
     "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"
+  },
+  "documentPreview": {
+    "title": "Dokumentvorschau",
+    "loading": "Dokument wird geladen…",
+    "pageCount": "{{count}} Seite",
+    "pageCount_plural": "{{count}} Seiten",
+    "matchPosition": "{{current}} von {{total}}",
+    "noMatches": "Textstelle nicht gefunden",
+    "previousMatch": "Vorherige Markierung",
+    "nextMatch": "Nächste Markierung",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "highlight": "Markieren",
+    "allPassages": "Alle",
+    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
   }
 }
