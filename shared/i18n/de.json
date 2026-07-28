@@ -1661,7 +1661,16 @@
         "exposeWorkflowsDesc": "Erfordert Scope mcp:workflows:run",
         "exposeResources": "Ressourcen",
         "exposeResourcesDesc": "Quellen / Skills als MCP-Ressourcen (resources/list + resources/read). Erfordert Scope mcp:resources:read.",
-        "connection": "Verbindungsbeispiele"
+        "connection": "Verbindungsbeispiele",
+        "authSection": "Authentifizierung",
+        "authSectionDesc": "Das MCP-Gateway akzeptiert ausschließlich OAuth-Bearer-Token des integrierten Autorisierungsservers. Dieser muss aktiviert sein, damit sich MCP-Clients verbinden können.",
+        "oauthWarning": "Das Gateway ist aktiviert, aber der OAuth-Autorisierungsserver ist aus — MCP-Clients können kein Token erhalten. Bitte unten aktivieren.",
+        "oauthToggle": "OAuth-Autorisierungsserver",
+        "oauthToggleDesc": "Stellt /api/oauth/authorize und /api/oauth/token bereit. Beim Aktivieren werden auch die OAuth-Client-Verwaltung sowie die Grants authorization_code + refresh_token eingeschaltet. Nach dem erstmaligen Aktivieren ist ein Server-Neustart erforderlich.",
+        "dcrToggle": "Dynamische Client-Registrierung (RFC 7591)",
+        "dcrToggleDesc": "Erlaubt MCP-Clients wie Claude, ihren OAuth-Client automatisch unter /api/oauth/register zu registrieren — keine manuelle Client-Einrichtung nötig. Registrierte Clients durchlaufen immer Anmeldung und Zustimmung der Nutzenden und erhalten nur Identitäts- und mcp:*-Scopes.",
+        "claudeHintDcr": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen. Claude registriert seinen OAuth-Client automatisch; Nutzende melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
+        "claudeHintManual": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen und Client-ID/Secret eines unter /admin/oauth/clients angelegten OAuth-Clients eintragen (Grant-Typen authorization_code + refresh_token, Redirect-URI https://claude.ai/api/mcp/auth_callback sowie die gewünschten mcp:*-Scopes). Aktivieren Sie oben die dynamische Client-Registrierung, um die manuelle Einrichtung zu überspringen."
       }
     },
     "telemetry": {

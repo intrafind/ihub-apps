@@ -27,6 +27,7 @@ import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
+import registerOAuthRegisterRoutes from './routes/oauthRegister.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerMcpServerRoutes from './routes/mcpServer.js';
 import registerSwaggerRoutes from './routes/swagger.js';
@@ -451,6 +452,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerAuthRoutes(app);
   registerOAuthRoutes(app);
   registerOAuthAuthorizeRoutes(app);
+  registerOAuthRegisterRoutes(app);
   registerWellKnownRoutes(app);
   registerMcpServerRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });

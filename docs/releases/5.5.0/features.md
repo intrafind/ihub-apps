@@ -697,3 +697,31 @@ French, or other non-English system).
   the source of the crash. The application now instructs browsers not to auto-translate its pages;
   users should continue to switch languages using the in-app language selector.
 - No admin action is required on upgrade.
+
+## Connect Claude and Other MCP Clients Without Manual OAuth Setup
+
+The MCP gateway can now be activated end-to-end from **Admin → MCP gateway**, and MCP clients such
+as Claude (claude.ai custom connectors, Claude Desktop), Cursor, and VS Code can connect through
+standard OAuth discovery — including automatic client registration.
+
+- The MCP gateway page now includes an **Authentication** section: one toggle enables the OAuth
+  authorization server (previously this had to be edited in `platform.json` by hand, which left
+  the gateway unusable), and a second toggle enables **Dynamic client registration (RFC 7591)** so
+  MCP clients create their OAuth client automatically at `/api/oauth/register` — no manual client
+  setup needed. A warning appears if the gateway is on but OAuth is off.
+- New standard discovery endpoints: `/.well-known/oauth-authorization-server` (RFC 8414) and
+  `/.well-known/oauth-protected-resource` (RFC 9728). Unauthenticated requests to `/mcp` now
+  return the `resource_metadata` challenge that MCP clients use to bootstrap authentication.
+- Auto-registered clients are never trusted: users always sign in and consent to the requested
+  `mcp:*` scopes, and the clients can be reviewed, restricted, or removed under
+  **Admin → OAuth clients**. Registration is rate-limited and capped
+  (`oauth.dcr.maxClients`, default 100), and only the authorization-code flow can be registered.
+- The consent screen now explains `mcp:*` scopes in plain language, and clients that omit the
+  `scope` parameter receive their registered scopes instead of a token the gateway would reject.
+- Fixed the MCP gateway settings not saving at all: the platform config endpoint reported success
+  while discarding the gateway section, so every toggle on the page reverted on reload.
+- To connect Claude: enable the three toggles, then add `https://your-ihub/mcp` under
+  **Settings → Connectors → Add custom connector** in Claude.
+
+**Note:** after enabling the OAuth authorization server for the first time, restart the server
+once so the OAuth session middleware is mounted.
