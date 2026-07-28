@@ -18,9 +18,20 @@
  * for the lifetime of a chat session, so all per-chat in-memory state remains
  * consistent without any cross-worker coordination.
  *
- * Tradeoff: many users sharing one source IP (NAT, corporate proxy) will pile
- * on the same worker. For that case, deploy behind a reverse proxy that does
- * cookie or chatId-aware stickiness, or migrate to a Redis pub/sub fan-out.
+ * Tradeoff: the routing key is the TCP peer address, which is the only client
+ * identity available before any HTTP byte is parsed — `X-Forwarded-For` is not
+ * visible at this layer. Every caller that reaches iHub through the same hop
+ * therefore hashes to the same worker:
+ *
+ *   - behind a reverse proxy / ingress (i.e. every typical production setup)
+ *     that is ALL traffic, so one worker serves everything and the rest idle;
+ *   - behind NAT or a corporate proxy it is every user on that egress IP.
+ *
+ * `logStickyRoutingCaveat` below reports the collapse once at startup so it is
+ * visible rather than something to discover under load. To actually use several
+ * workers behind a proxy, terminate stickiness at the proxy (cookie- or
+ * chatId-aware upstream hashing) and run iHub as separate replicas, or move the
+ * per-chat state to a shared bus (Redis pub/sub) so affinity stops mattering.
  */
 
 import net from 'node:net';
@@ -45,6 +56,28 @@ function pickWorker(workers, key) {
     if (fallback && !fallback.isDead?.()) return fallback;
   }
   return null;
+}
+
+/**
+ * Warn once that sticky routing keys on the TCP peer address, so a deployment
+ * behind a reverse proxy concentrates all traffic on a single worker.
+ *
+ * Emitted at startup rather than per connection: by the time a worker is
+ * saturated the symptom ("the server stopped responding, even the health
+ * probes") gives no hint that the other workers were idle the whole time.
+ *
+ * @param {number} workerCount - Number of forked workers.
+ */
+export function logStickyRoutingCaveat(workerCount) {
+  if (workerCount <= 1) return;
+  logger.warn({
+    component: 'StickyCluster',
+    message:
+      'Sticky routing hashes the TCP peer address, which a reverse proxy makes identical for every request — all traffic will land on one of the ' +
+      workerCount +
+      ' workers. Run WORKERS=1 with several replicas behind proxy-level stickiness, or expose iHub directly, to use all workers.',
+    workerCount
+  });
 }
 
 /**

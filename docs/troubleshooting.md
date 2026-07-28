@@ -262,6 +262,54 @@ node -e "require('dotenv').config(); console.log('JWT_SECRET exists:', !!process
 
 ## Authentication Troubles
 
+### Everything Returns 429 / Health Probes Fail
+
+**Symptoms:**
+
+- The whole platform looks wedged: the SPA never gets past loading, health
+  probes stop passing, and the container may be restarted by the orchestrator
+- `/api/auth/status` answers `429 Too Many Requests`
+- Often starts right after an SSO or OAuth/MCP sign-in flow
+
+**Cause:**
+
+The auth rate limiter is tight on purpose — 30 requests / 15 minutes in the
+shipped `platform.json` — because it guards password guessing. Two things can turn
+it into a self-inflicted outage:
+
+1. Something polls a read-only endpoint in the `/api/auth` namespace —
+   `/api/auth/status` is the usual one, since it is both the SPA's bootstrap call
+   and a natural liveness probe. Read-only auth endpoints are exempt from the
+   credential limiter as of 5.5.0; on older versions they were not.
+2. `trustProxy` is lower than the real number of proxy hops, so `req.ip` resolves
+   to the inner proxy and **every user shares one counter**.
+
+**Debugging Steps:**
+
+```bash
+# Is the limiter the one rejecting? Look at the window and remaining budget.
+curl -si https://your-ihub/api/auth/status | grep -i 'ratelimit\|^HTTP'
+
+# Does req.ip differ per client? If every log line shows the same address
+# while real clients differ, the hop count is too low.
+npm run logs | grep '"ip"' | tail
+```
+
+**Solutions:**
+
+1. Set the hop count to match your topology (`platform.json`):
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+2. Point liveness/readiness probes at `/api/health`, which is not rate limited.
+
+3. Raise the window if your deployment legitimately needs more credential
+   attempts — see [rate limiting](rate-limiting.md).
+
 ### Login Failures
 
 **Symptoms:**

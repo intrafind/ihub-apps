@@ -377,6 +377,35 @@ function setupSessionMiddleware(app, platformConfig) {
 }
 
 /**
+ * Resolve the Express `trust proxy` setting from `platform.trustProxy`.
+ *
+ * Defaults to `1` (one proxy hop) to keep existing deployments unchanged.
+ * Numeric strings are coerced so the value can also come from an
+ * `IHUB_PLATFORM__trustProxy` environment override.
+ *
+ * @param {Object} platformConfig - Platform configuration
+ * @returns {number|boolean|string} Value for `app.set('trust proxy', …)`
+ */
+export function resolveTrustProxy(platformConfig = {}) {
+  const configured = platformConfig.trustProxy;
+  if (configured === undefined || configured === null || configured === '') return 1;
+  if (typeof configured === 'number' || typeof configured === 'boolean') return configured;
+  if (typeof configured === 'string') {
+    const trimmed = configured.trim();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    // Address / subnet list (e.g. "loopback, 10.0.0.0/8") — hand through verbatim.
+    return trimmed;
+  }
+  logger.warn('Ignoring unsupported trustProxy value; falling back to 1', {
+    component: 'Middleware',
+    trustProxy: typeof configured
+  });
+  return 1;
+}
+
+/**
  * Configure Express middleware.
  * Body parser limits are controlled by the `requestBodyLimitMB` option in
  * `platform.json`.
@@ -398,8 +427,18 @@ export function setupMiddleware(app, platformConfig = {}) {
     });
   }
 
-  // Trust proxy for proper IP and protocol detection
-  app.set('trust proxy', 1);
+  // Trust proxy for proper IP and protocol detection.
+  //
+  // The number is the count of proxy hops in front of iHub, and it decides what
+  // `req.ip` resolves to — which in turn is the rate-limit key and the audit-log
+  // client address. A value that is too low makes every caller behind the inner
+  // proxy share one identity: with `1` and two hops (ingress + internal LB) all
+  // users collapse onto the ingress IP and therefore onto a single rate-limit
+  // counter, so one busy client can exhaust the auth/OAuth window for everyone.
+  //
+  // Accepts anything Express accepts: a hop count, `true`, `false`, or a
+  // comma-separated list of trusted addresses/subnets.
+  app.set('trust proxy', resolveTrustProxy(platformConfig));
 
   // Open the per-request logging context. Subsequent middleware and route
   // handlers run inside an AsyncLocalStorage scope, so every logger call on
@@ -572,7 +611,13 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/short-links'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
-  // Auth API rate limiter for authentication endpoints
+  // Auth API rate limiters. Two layers, deliberately:
+  //   1. the public limiter bounds the whole namespace generously, and
+  //   2. the strict credential limiter covers only the endpoints that verify
+  //      credentials — it skips read-only ones such as /api/auth/status, which
+  //      the SPA fetches on every boot and operators use as a health probe
+  //      (see isReadOnlyAuthRequest in ./rateLimiting.js).
+  app.use(buildApiPath('/auth'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/auth'), rateLimiters.authApiLimiter);
 
   // Inference API rate limiter for AI inference endpoints

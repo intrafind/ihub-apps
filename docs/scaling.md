@@ -124,9 +124,29 @@ then exits after a 5-second grace period. Use a process supervisor
 
 ### Uneven load behind NAT / proxies
 
-Routing is hashed on source IP. If many users share one source IP (corporate
-NAT, shared VPN egress, a fronting reverse proxy that does not preserve
-client IPs), they all pile onto the same worker.
+Routing is hashed on the **TCP peer address** — the only client identity
+available before any HTTP byte is parsed. Everyone arriving through the same hop
+therefore lands on the same worker:
+
+- **Behind a reverse proxy or ingress — i.e. most production deployments — that
+  is all traffic.** One worker serves every request while the other `WORKERS - 1`
+  processes stay idle, so the effective capacity is a single process no matter
+  what `WORKERS` says. A saturated worker then looks like a dead server: requests
+  queue, and health probes queue with them.
+- Behind corporate NAT or a shared VPN egress it is every user on that egress IP.
+
+`X-Forwarded-For` does not help here: the sticky router runs at the TCP layer, in
+the primary process, before any HTTP parsing.
+
+The primary logs this once at startup whenever `WORKERS > 1`, so the collapse is
+visible before it has to be discovered under load:
+
+```
+[StickyCluster] Sticky routing hashes the TCP peer address, which a reverse
+proxy makes identical for every request — all traffic will land on one of the 4
+workers. Run WORKERS=1 with several replicas behind proxy-level stickiness, or
+expose iHub directly, to use all workers.
+```
 
 **Mitigations:**
 
@@ -134,10 +154,15 @@ client IPs), they all pile onto the same worker.
   HAProxy `balance uri` / cookie-based stickiness) in front of **multiple
   separate iHub instances**, each with its own port — then iHub's own
   cluster scales per-instance.
-- Ensure upstream proxies forward `X-Forwarded-For` and that iHub sees the
-  real client address. (Current build routes on `connection.remoteAddress`
-  only, not on the `X-Forwarded-For` header — that would require parsing the
-  HTTP request in the primary, which is a larger change.)
+- Or run `WORKERS=1` and scale out with replicas instead — see
+  [multi-server deployment](multi-server-deployment.md). A single process per
+  replica removes the illusion of unused capacity.
+- Ensure upstream proxies forward `X-Forwarded-For` and set `trustProxy` to the
+  real hop count, so `req.ip` (rate-limit key, audit log address) is the client
+  rather than the proxy — see
+  [rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key). This fixes
+  attribution, not worker distribution: the sticky router cannot read
+  `X-Forwarded-For`.
 
 ### Worker-local state
 
