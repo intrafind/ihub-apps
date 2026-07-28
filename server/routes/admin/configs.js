@@ -310,6 +310,12 @@ export default function registerAdminConfigRoutes(app) {
         ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
         authorization: newConfig.authorization || existingConfig.authorization,
         oauth: newConfig.oauth || existingConfig.oauth,
+        // MCP gateway (Admin → MCP gateway) is edited through this generic
+        // endpoint rather than a dedicated route, so it must be listed here —
+        // otherwise the spread of existingConfig silently wins and the saved
+        // toggles revert on the next load.
+        mcpServer:
+          newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
         jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         iFinder: newConfig.iFinder || existingConfig.iFinder,

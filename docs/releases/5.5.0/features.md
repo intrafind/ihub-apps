@@ -718,6 +718,8 @@ standard OAuth discovery — including automatic client registration.
   (`oauth.dcr.maxClients`, default 100), and only the authorization-code flow can be registered.
 - The consent screen now explains `mcp:*` scopes in plain language, and clients that omit the
   `scope` parameter receive their registered scopes instead of a token the gateway would reject.
+- Fixed the MCP gateway settings not saving at all: the platform config endpoint reported success
+  while discarding the gateway section, so every toggle on the page reverted on reload.
 - To connect Claude: enable the three toggles, then add `https://your-ihub/mcp` under
   **Settings → Connectors → Add custom connector** in Claude.
 
