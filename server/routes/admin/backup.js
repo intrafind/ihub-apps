@@ -6,6 +6,7 @@ import yauzl from 'yauzl';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import configCache from '../../configCache.js';
+import { announceFullConfigReload } from '../../configSync.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
@@ -424,6 +425,9 @@ export async function importConfig(req, res) {
     logger.info('Reloading configuration cache', { component: 'AdminBackup' });
     await configCache.clear();
     await configCache.initialize();
+    // An import replaces every file under contents/, so the other workers have
+    // to drop everything they hold rather than a named set of entries.
+    announceFullConfigReload();
     logger.info('Configuration cache reloaded', { component: 'AdminBackup' });
 
     // Count imported files

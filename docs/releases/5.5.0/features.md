@@ -846,3 +846,39 @@ at your ingress.
 Running more than one **replica** still requires cookie-based session affinity at the ingress — the
 relay works between workers in a pod, not between pods. See
 [Scaling with Multiple Workers](../../scaling.md) for Kubernetes examples.
+
+## Configuration Changes Now Reach Every Worker Immediately
+
+With `WORKERS` greater than 1, an admin save only reached the worker that handled the request. Every
+other worker kept serving the previous configuration until its cache expired, so a saved change
+looked applied on one page load and reverted on the next — and a deleted app stayed visible on the
+workers that had not handled the delete.
+
+- Saving, creating, deleting or toggling anything in the Admin UI now takes effect on all workers at
+  once: apps, models, prompts, tools, workflows, agents, sources, providers, groups, users, pages,
+  skills, MCP servers and platform settings.
+- Runtime settings that were previously applied only in the worker serving the request now follow
+  too — log level and logging config, telemetry, usage-tracking mode, iFinder/iAssistant connection
+  settings and outbound MCP server connections.
+- Backup import and the admin **Clear cache** / **Refresh cache** actions reload every worker.
+- No configuration change is needed. `GET /api/admin/cache/stats` gains a `sync` block with the
+  per-worker announce/receive counters if you want to confirm changes are propagating.
+
+## OIDC and OAuth Logins No Longer Fail Intermittently on a Fresh Install
+
+On the very first start of a multi-worker installation, each worker could generate its own JWT
+signing key and its own secret-encryption key, because they all raced to create the key files before
+any of them existed. A user who logged in was then authenticated on some workers and rejected with
+"Authentication required" on others, seemingly at random, and secrets encrypted by one worker could
+not be decrypted by another.
+
+- The first worker to create each key file now wins and the others adopt it, so a cold start ends
+  with one signing key and one encryption key for the whole cluster.
+- Only fresh installations were affected. Existing installations already have the key files on disk
+  and were reading them correctly.
+- **If you hit this**, `contents/.jwt-private-key.pem`, `contents/.jwt-public-key.pem` and
+  `contents/.encryption-key` may hold a key that only one worker was using. Existing sessions will
+  need a re-login after upgrading. Any secret that was saved in the Admin UI while the keys were
+  mismatched should be re-entered, since it may have been encrypted with a key that is no longer on
+  disk. Setting `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` and `TOKEN_ENCRYPTION_KEY` explicitly avoids the
+  situation entirely and is recommended for multi-replica deployments.

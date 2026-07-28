@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
@@ -154,6 +155,15 @@ export async function saveUsers(usersConfig, usersFilePath) {
     }
 
     configCache.setCacheEntry(cacheKey, usersConfig);
+
+    // Tell the other workers to re-read the file. Without this a user created or
+    // updated on one worker stays invisible to the rest until their TTL fires,
+    // and since every save rewrites the whole file from that worker's snapshot,
+    // a stale worker's next write would silently drop the change. This fires on
+    // each external login (`createOrUpdateExternalUser` always touches
+    // lastActiveDate), which is a login-rate broadcast of a small file — worth
+    // it for a config that decides authorization.
+    announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save users configuration', {
       component: 'Utils',
