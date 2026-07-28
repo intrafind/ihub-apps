@@ -191,6 +191,16 @@ indication anything was missing.
 - On Outlook hosts older than Mailbox 1.8 (which can't fetch attachment content at all), the
   banner now shows one explanation instead of repeating the same error on every attachment.
 
+## Gemini Apps No Longer Corrupt Parallel Tool Calls
+
+Fixed a bug where Gemini (Google) models calling more than one tool in the same turn could
+silently lose one of the calls. When two tool calls arrived in separate streaming chunks, the
+second one collided with the first instead of being tracked separately, corrupting its arguments
+into invalid JSON and dropping the call entirely — with no error shown to the user.
+
+- Apps and agent workflows on Gemini models that trigger multiple tools per turn (a common pattern
+  for tool-using agents) now execute every tool call correctly.
+
 ## Answer-Source Badge Fixed When a Tool-Enabled App Answers an Upload Directly
 
 Uploading a document or image to an app that has tools enabled, then getting an answer straight
