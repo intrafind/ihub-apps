@@ -55,14 +55,20 @@ const TICKET_TTL_MS = 15 * 60 * 1000;
 /**
  * HMAC the payload with the platform's JWT secret.
  *
+ * Fails closed: with no secret configured an empty key would still produce a
+ * valid-looking signature that anyone could reproduce, making tickets forgeable.
+ * Refusing to sign turns that misconfiguration into a loud server error instead.
+ *
  * @param {string} encodedPayload - base64url payload.
  * @returns {string} base64url signature.
+ * @throws {Error} If no JWT secret is available.
  */
 function sign(encodedPayload) {
-  return crypto
-    .createHmac('sha256', String(resolveJwtSecret() || ''))
-    .update(encodedPayload)
-    .digest('base64url');
+  const secret = resolveJwtSecret();
+  if (!secret || typeof secret !== 'string') {
+    throw new Error('Cannot sign consent ticket: no JWT secret is configured');
+  }
+  return crypto.createHmac('sha256', secret).update(encodedPayload).digest('base64url');
 }
 
 /**
@@ -100,7 +106,19 @@ export function verifyConsentTicket(ticket) {
 
   const encodedPayload = ticket.slice(0, separator);
   const signature = ticket.slice(separator + 1);
-  const expected = sign(encodedPayload);
+
+  let expected;
+  try {
+    expected = sign(encodedPayload);
+  } catch (error) {
+    // A missing secret is a server misconfiguration, not a bad ticket. Log it
+    // as such and reject rather than letting it surface as a 500.
+    logger.error('Cannot verify consent ticket', {
+      component: 'ConsentTicket',
+      error: error?.message || String(error)
+    });
+    return null;
+  }
 
   // timingSafeEqual throws on a length mismatch, which is itself a rejection.
   try {

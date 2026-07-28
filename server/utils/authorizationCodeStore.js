@@ -15,10 +15,10 @@ import { createPresenceMap, hasRemote, request, respond } from '../clusterBus.js
  * requests, and in cluster mode they land on different workers: the browser's
  * `POST /api/oauth/authorize/decision` mints the code on worker A, then the
  * client's `POST /api/oauth/token` is round-robined to whichever worker is
- * next. A plain per-process Map therefore answers "code not found" on N-1 of
- * every N token exchanges, which surfaces to the client as
- * `invalid_grant: Authorization code is invalid or expired` — intermittently,
- * with no bad input anywhere.
+ * next. A plain per-process Map therefore answers "code not found" on nearly
+ * every token exchange, which surfaces to the client as
+ * `invalid_grant: Authorization code is invalid or expired` with no bad input
+ * anywhere.
  *
  * Replicating the code to every worker would fix the lookup and break the
  * security property: reading a code *consumes* it, and N copies means N
@@ -28,13 +28,22 @@ import { createPresenceMap, hasRemote, request, respond } from '../clusterBus.js
  * the owner to consume it. Exactly one process ever holds a given code, so
  * single-use remains atomic without any distributed agreement.
  *
- * ## What travels over the bus
+ * ## Code shape: a public handle plus a secret
  *
- * Only the SHA-256 of the code, never the code itself. The local map is keyed
- * by that hash too, so the raw credential never leaves the worker that minted
- * it and never appears in another process's memory — the same indexing
- * approach `refreshTokenStore.js` uses. A hash is a sufficient key because
- * finding a colliding code is as hard as guessing the 256-bit code.
+ * A code is `<handle>.<secret>` — 128 bits of routing handle and 256 bits of
+ * secret, both from `crypto.randomBytes`.
+ *
+ * The split exists because ownership announcements are *broadcast to every
+ * worker and retained* for the life of the code. Keying them by the code
+ * itself would put a live credential in every process's memory for ten
+ * minutes. Keying them by the handle puts nothing there: the handle is a
+ * random label that grants nothing on its own, and the secret half never
+ * appears in an announcement.
+ *
+ * The secret does cross the IPC boundary once, in the single directed consume
+ * message to the owning worker, which verifies and destroys it. That is
+ * unavoidable — only the owner can verify — and is a different exposure from a
+ * retained broadcast. Comparison is constant-time.
  *
  * Nothing is persisted across restarts. That is intentional: a restarted
  * server is a clean slate, and codes issued before the restart simply expire
@@ -57,10 +66,10 @@ const CONSUME_CHANNEL = 'authcode:consume';
 const CONSUME_TIMEOUT_MS = 2000;
 
 /**
- * Codes minted by *this* worker, keyed by SHA-256 of the code. Membership is
- * announced to the cluster so other workers can route a consume request here.
+ * Codes minted by *this* worker, keyed by handle. Membership is announced to
+ * the cluster so other workers can route a consume request here.
  *
- * @type {Map<string, { data: Object, expiresAt: number, used: boolean }>}
+ * @type {Map<string, { secret: string, data: Object, expiresAt: number }>}
  */
 const codeStore = createPresenceMap(PRESENCE_KIND);
 
@@ -70,17 +79,38 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 /** Periodic cleanup runs every 5 minutes to remove stale entries. */
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
+/** Bytes of entropy in each half of a code. */
+const HANDLE_BYTES = 16;
+const SECRET_BYTES = 32;
+
 /**
- * Derive the store/presence key for a code.
+ * Split a code into its routing handle and secret halves.
  *
- * SHA-256 of the code value: an index key, not a password hash — the input is
- * 256 bits of CSPRNG output, so stretching would add cost and no strength.
- *
- * @param {string} code - The authorization code.
- * @returns {string} Lowercase hex digest.
+ * @param {string} code - The authorization code as issued.
+ * @returns {{handle: string, secret: string}|null} Parts, or null if the value
+ *   is not shaped like a code this store issued.
  */
-function codeKey(code) {
-  return crypto.createHash('sha256').update(String(code), 'utf8').digest('hex'); // lgtm[js/insufficient-password-hash] -- index key, not a stored password
+function splitCode(code) {
+  if (typeof code !== 'string') return null;
+  const separator = code.indexOf('.');
+  if (separator <= 0 || separator === code.length - 1) return null;
+  return { handle: code.slice(0, separator), secret: code.slice(separator + 1) };
+}
+
+/**
+ * Compare two secrets without leaking their contents through timing.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function secretsMatch(a, b) {
+  // timingSafeEqual throws on a length mismatch, which is itself a rejection.
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -90,7 +120,7 @@ function codeKey(code) {
  * token request: clientId, redirectUri, userId, scopes, codeChallenge,
  * codeChallengeMethod, and nonce.
  *
- * @param {string} code - The authorization code (random hex string).
+ * @param {string} code - The authorization code from `generateCode()`.
  * @param {Object} data - Payload bound to this code.
  * @param {string} data.clientId - OAuth client that requested the code.
  * @param {string} data.redirectUri - Redirect URI from the authorization request.
@@ -102,40 +132,52 @@ function codeKey(code) {
  * @returns {void}
  */
 export function storeCode(code, data) {
-  codeStore.set(codeKey(code), {
+  const parts = splitCode(code);
+  if (!parts) {
+    logger.warn('Refusing to store a malformed authorization code', {
+      component: 'AuthCodeStore'
+    });
+    return;
+  }
+
+  codeStore.set(parts.handle, {
+    secret: parts.secret,
     data,
-    expiresAt: Date.now() + CODE_TTL_MS,
-    used: false
+    expiresAt: Date.now() + CODE_TTL_MS
   });
 }
 
 /**
  * Consume a code held by this worker.
  *
- * @param {string} key - SHA-256 key of the code.
- * @returns {Object|null} The stored payload, or null if unknown/used/expired.
+ * @param {string} handle - Routing handle identifying the entry.
+ * @param {string} secret - Secret half presented by the caller.
+ * @returns {Object|null} The stored payload, or null if unknown, expired, or
+ *   the presented secret does not match.
  */
-function consumeLocal(key) {
-  const entry = codeStore.get(key);
+function consumeLocal(handle, secret) {
+  const entry = codeStore.get(handle);
 
   if (!entry) {
     logger.warn('Code not found', { component: 'AuthCodeStore' });
     return null;
   }
 
-  if (entry.used) {
-    logger.warn('Code already used - possible replay attack', { component: 'AuthCodeStore' });
-    codeStore.delete(key);
-    return null;
-  }
-
   if (Date.now() > entry.expiresAt) {
     logger.warn('Code expired', { component: 'AuthCodeStore' });
-    codeStore.delete(key);
+    codeStore.delete(handle);
     return null;
   }
 
-  codeStore.delete(key);
+  if (!secretsMatch(secret, entry.secret)) {
+    // A valid handle with the wrong secret is not an honest mistake; drop the
+    // entry so a guessing loop gets one attempt per code, not many.
+    logger.warn('Code secret mismatch - discarding code', { component: 'AuthCodeStore' });
+    codeStore.delete(handle);
+    return null;
+  }
+
+  codeStore.delete(handle);
   return entry.data;
 }
 
@@ -152,23 +194,24 @@ function consumeLocal(key) {
  *   code, or null if the code is unknown, already used, or expired.
  */
 export async function consumeCode(code) {
-  if (!code) {
+  const parts = splitCode(code);
+  if (!parts) {
     logger.warn('Code not found', { component: 'AuthCodeStore' });
     return null;
   }
 
-  const key = codeKey(code);
+  const { handle, secret } = parts;
 
-  if (codeStore.has(key)) {
-    return consumeLocal(key);
+  if (codeStore.has(handle)) {
+    return consumeLocal(handle, secret);
   }
 
   // Another worker minted it — that worker owns the single consumption.
-  if (hasRemote(PRESENCE_KIND, key)) {
+  if (hasRemote(PRESENCE_KIND, handle)) {
     const reply = await request(
       CONSUME_CHANNEL,
-      { key },
-      { route: { kind: PRESENCE_KIND, key }, timeoutMs: CONSUME_TIMEOUT_MS }
+      { handle, secret },
+      { route: { kind: PRESENCE_KIND, key: handle }, timeoutMs: CONSUME_TIMEOUT_MS }
     );
 
     if (!reply) {
@@ -190,13 +233,17 @@ export async function consumeCode(code) {
 /**
  * Generate a cryptographically random authorization code.
  *
- * Returns a 64-character lowercase hex string (256 bits of entropy),
- * which satisfies the RFC 6749 requirement for unpredictable codes.
+ * Shape is `<handle>.<secret>`: a 32-character hex handle used for cluster
+ * routing and a 64-character hex secret. 384 bits of entropy in total, well
+ * past the RFC 6749 requirement that codes be unguessable. Codes are opaque to
+ * clients, so the internal structure is not part of any contract.
  *
- * @returns {string} 32-byte random value encoded as hex.
+ * @returns {string} A new authorization code.
  */
 export function generateCode() {
-  return crypto.randomBytes(32).toString('hex');
+  const handle = crypto.randomBytes(HANDLE_BYTES).toString('hex');
+  const secret = crypto.randomBytes(SECRET_BYTES).toString('hex');
+  return `${handle}.${secret}`;
 }
 
 /**
@@ -209,20 +256,20 @@ export function generateCode() {
  */
 export function cleanup() {
   const now = Date.now();
-  for (const [key, entry] of codeStore.entries()) {
+  for (const [handle, entry] of codeStore.entries()) {
     if (now > entry.expiresAt) {
-      codeStore.delete(key);
+      codeStore.delete(handle);
     }
   }
 }
 
 // Serve consume requests for codes this worker minted. Returning `undefined`
-// when the code is not here matters: if the primary has already dropped the
+// when the handle is not here matters: if the primary has already dropped the
 // ownership entry the question is broadcast, and a non-owner answering "null"
 // first would lose the race against the real owner's answer.
-respond(CONSUME_CHANNEL, ({ key } = {}) => {
-  if (!key || !codeStore.has(key)) return undefined;
-  return { data: consumeLocal(key) };
+respond(CONSUME_CHANNEL, ({ handle, secret } = {}) => {
+  if (!handle || !codeStore.has(handle)) return undefined;
+  return { data: consumeLocal(handle, secret) };
 });
 
 // Periodic cleanup – runs in the background and does not prevent the

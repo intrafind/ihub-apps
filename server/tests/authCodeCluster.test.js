@@ -25,9 +25,14 @@ const WORKER_COUNT = 3;
 /** Time allowed for an ownership announcement to reach the primary and fan out. */
 const SETTLE_MS = 200;
 
-/** A fixed code so the driver can hand the same value to different workers. */
-const CODE = 'f'.repeat(64);
-const OTHER_CODE = 'a1b2c3'.padEnd(64, '0');
+/**
+ * Fixed codes so the driver can hand the same value to different workers.
+ * Shape matches `generateCode()`: `<32-hex handle>.<64-hex secret>`.
+ */
+const HANDLE = 'f'.repeat(32);
+const CODE = `${HANDLE}.${'e'.repeat(64)}`;
+const OTHER_HANDLE = 'a'.repeat(32);
+const OTHER_CODE = `${OTHER_HANDLE}.${'b'.repeat(64)}`;
 
 const PAYLOAD = {
   clientId: 'test_client',
@@ -139,16 +144,25 @@ async function runPrimary() {
       )
     );
 
-    // ---- the raw code never leaves the worker that minted it ----
-    // Only its SHA-256 is announced, so a code is not mirrored into every
-    // other process's memory.
+    // ---- the secret half is never announced to other workers ----
+    // Announcements are broadcast and retained for the life of the code, so
+    // they must carry only the routing handle.
     await ask(workers[0], { step: 'store', code: OTHER_CODE, payload: PAYLOAD });
     await settle();
     const leak = await ask(workers[1], { step: 'scan-remote-keys', code: OTHER_CODE });
-    check('the raw code value is never announced to other workers', () => {
-      assert.strictEqual(leak.containsRawCode, false, 'raw code found in presence mirror');
-      assert.strictEqual(leak.containsHash, true, 'hash should be present in presence mirror');
+    check('presence announcements carry the handle, never the full code', () => {
+      assert.strictEqual(leak.containsFullCode, false, 'full code found in presence mirror');
+      assert.strictEqual(leak.containsHandle, true, 'handle should be present in presence mirror');
     });
+
+    // ---- a valid handle with a forged secret is rejected cross-worker ----
+    const forged = await ask(workers[1], {
+      step: 'consume',
+      code: `${OTHER_HANDLE}.${'9'.repeat(64)}`
+    });
+    check('a forged secret is rejected by the owning worker', () =>
+      assert.strictEqual(forged.data, null)
+    );
   } catch (error) {
     failed = true;
     console.error(`❌ test driver failed: ${error.message}`);
@@ -186,8 +200,7 @@ function runWorker() {
     // Imported lazily so the bus is live first, mirroring server.js's order.
     const store = await import('../utils/authorizationCodeStore.js');
     const { hasRemote } = await import('../clusterBus.js');
-    const { createHash } = await import('node:crypto');
-    const hashOf = value => createHash('sha256').update(String(value), 'utf8').digest('hex');
+    const handleOf = code => String(code).split('.')[0];
 
     switch (msg.step) {
       case 'ready':
@@ -201,12 +214,12 @@ function runWorker() {
         reply({ data: await store.consumeCode(msg.code) });
         break;
       case 'probe-remote':
-        reply({ hasRemote: hasRemote('authcode', hashOf(msg.code)) });
+        reply({ hasRemote: hasRemote('authcode', handleOf(msg.code)) });
         break;
       case 'scan-remote-keys':
         reply({
-          containsRawCode: hasRemote('authcode', msg.code),
-          containsHash: hasRemote('authcode', hashOf(msg.code))
+          containsFullCode: hasRemote('authcode', msg.code),
+          containsHandle: hasRemote('authcode', handleOf(msg.code))
         });
         break;
       default:

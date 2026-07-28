@@ -37,8 +37,16 @@ Replicating codes to all workers would have destroyed the security property — 
 *consumes* it, so N copies means N valid redemptions. Instead the code stays on the minting worker,
 ownership is announced over `server/clusterBus.js`, and a worker receiving the token request asks
 the owner to consume it. Exactly one process ever holds a code, so single-use stays atomic with no
-distributed agreement. Only the SHA-256 of the code is announced, so the raw credential never
-leaves the worker that minted it.
+distributed agreement.
+
+A code is now `<handle>.<secret>` — 128 bits of routing handle, 256 bits of secret. Ownership
+announcements are broadcast to every worker and retained for the code's lifetime, so they carry only
+the handle, which grants nothing on its own. The secret crosses the IPC boundary once, in the single
+directed consume message to the owner, which verifies it in constant time and destroys it. An
+earlier revision announced a SHA-256 of the whole code instead; the split is better because the
+broadcast value was never secret to begin with, and it avoids hashing a request-derived credential
+(which CodeQL's `js/insufficient-password-hash` flags, and GitHub code scanning cannot suppress
+inline — the `lgtm[...]` comments elsewhere in this repo are decorative, LGTM.com is retired).
 
 This required a request/reply primitive on the bus (`request()` / `respond()`), built on the
 existing pub/sub with correlation ids so the primary remains a dumb repeater.

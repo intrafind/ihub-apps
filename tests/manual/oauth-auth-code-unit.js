@@ -166,10 +166,13 @@ import {
 
 section('Authorization Code Store (RFC 6749 §4.1.2)');
 
-await test('generateCode() returns a 64-character lowercase hex string', () => {
+await test('generateCode() returns a handle.secret pair with 384 bits of entropy', () => {
   const code = generateCode();
-  assert.equal(code.length, 64, `Expected 64 hex chars, got ${code.length}`);
-  assert.match(code, /^[0-9a-f]+$/, 'Code must be lowercase hexadecimal');
+  assert.match(
+    code,
+    /^[0-9a-f]{32}\.[0-9a-f]{64}$/,
+    'Code must be a 32-char hex handle and a 64-char hex secret, dot-separated'
+  );
 });
 
 await test('generateCode() produces unique values across calls', () => {
@@ -211,10 +214,27 @@ await test('Authorization codes are single-use: second consumeCode() call return
 });
 
 await test('consumeCode() returns null for an unknown code', async () => {
-  const result = await consumeCode(
-    'aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666aaaa1111bbbb2222'
-  );
+  const result = await consumeCode(`${'a'.repeat(32)}.${'b'.repeat(64)}`);
   assert.equal(result, null, 'Unknown code must return null');
+});
+
+await test('consumeCode() returns null for a malformed code', async () => {
+  for (const bad of [null, undefined, '', 'no-separator', '.', 'handle.', '.secret']) {
+    assert.equal(await consumeCode(bad), null, `Malformed code ${JSON.stringify(bad)} must fail`);
+  }
+});
+
+await test('A valid handle with the wrong secret is rejected and discards the code', async () => {
+  // Guessing the 256-bit secret should not be retryable against a known handle.
+  const code = generateCode();
+  const [handle] = code.split('.');
+  storeCode(code, { clientId: 'test_client', userId: 'user_wrong_secret' });
+
+  const forged = await consumeCode(`${handle}.${'0'.repeat(64)}`);
+  assert.equal(forged, null, 'A mismatched secret must not return the payload');
+
+  const afterwards = await consumeCode(code);
+  assert.equal(afterwards, null, 'The real code must be discarded after a failed attempt');
 });
 
 await test('cleanup() removes expired entries without affecting valid ones', async () => {

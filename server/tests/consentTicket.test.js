@@ -9,8 +9,15 @@ import assert from 'assert';
 import crypto from 'node:crypto';
 import process from 'node:process';
 
-// resolveJwtSecret() reads this; set it before importing the module under test.
-process.env.JWT_SECRET = 'test-secret-for-consent-tickets';
+// The signing key resolves through TokenStorageService, which reads this env
+// var. Initialise it the way server.js does so the test exercises the real
+// resolution chain rather than a stub.
+const SECRET = 'test-secret-for-consent-tickets';
+process.env.JWT_SECRET = SECRET;
+
+const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
+await tokenStorageService.initializeEncryptionKey();
+await tokenStorageService.initializeJwtSecret();
 
 const { issueConsentTicket, verifyConsentTicket } = await import('../utils/consentTicket.js');
 
@@ -82,10 +89,7 @@ check('an expired ticket is rejected', () => {
     JSON.stringify({ ...CONTEXT, exp: Date.now() - 1000 }),
     'utf8'
   ).toString('base64url');
-  const signature = crypto
-    .createHmac('sha256', process.env.JWT_SECRET)
-    .update(encoded)
-    .digest('base64url');
+  const signature = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
   assert.strictEqual(verifyConsentTicket(`${encoded}.${signature}`), null);
 });
 
@@ -99,6 +103,23 @@ check('malformed tickets are rejected without throwing', () => {
 check('a ticket missing required fields is rejected', () => {
   // A signed but incomplete ticket must not reach the code-minting path.
   assert.strictEqual(verifyConsentTicket(issueConsentTicket({ userId: 'u' })), null);
+});
+
+// ---- fail closed with no signing key ---------------------------------------
+// An empty HMAC key would still produce a signature everyone could reproduce,
+// making tickets forgeable. Signing must refuse, and verification must reject
+// cleanly rather than throwing a 500 into the consent flow.
+check('with no signing key, issuing throws and verification rejects', () => {
+  const good = issueConsentTicket(CONTEXT);
+  const restore = tokenStorageService.jwtSecret;
+  tokenStorageService.jwtSecret = null;
+  try {
+    assert.throws(() => issueConsentTicket(CONTEXT), /no JWT secret/i);
+    assert.strictEqual(verifyConsentTicket(good), null, 'must reject, not throw');
+  } finally {
+    tokenStorageService.jwtSecret = restore;
+  }
+  assert.ok(verifyConsentTicket(good), 'verification recovers once the key is back');
 });
 
 if (failed) {
