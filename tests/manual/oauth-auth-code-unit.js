@@ -178,7 +178,7 @@ await test('generateCode() produces unique values across calls', () => {
   assert.notEqual(a, b, 'Two consecutive codes should not be identical');
 });
 
-await test('storeCode() + consumeCode() round-trip returns the original payload', () => {
+await test('storeCode() + consumeCode() round-trip returns the original payload', async () => {
   const code = generateCode();
   const payload = {
     clientId: 'test_client',
@@ -190,7 +190,7 @@ await test('storeCode() + consumeCode() round-trip returns the original payload'
   };
 
   storeCode(code, payload);
-  const retrieved = consumeCode(code);
+  const retrieved = await consumeCode(code);
 
   assert.deepEqual(
     retrieved,
@@ -199,23 +199,25 @@ await test('storeCode() + consumeCode() round-trip returns the original payload'
   );
 });
 
-await test('Authorization codes are single-use: second consumeCode() call returns null', () => {
+await test('Authorization codes are single-use: second consumeCode() call returns null', async () => {
   const code = generateCode();
   storeCode(code, { clientId: 'test_client', userId: 'user_single_use' });
 
-  const first = consumeCode(code);
-  const second = consumeCode(code);
+  const first = await consumeCode(code);
+  const second = await consumeCode(code);
 
   assert.notEqual(first, null, 'First consumption must succeed');
   assert.equal(second, null, 'Second consumption of the same code must return null');
 });
 
-await test('consumeCode() returns null for an unknown code', () => {
-  const result = consumeCode('aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666aaaa1111bbbb2222');
+await test('consumeCode() returns null for an unknown code', async () => {
+  const result = await consumeCode(
+    'aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666aaaa1111bbbb2222'
+  );
   assert.equal(result, null, 'Unknown code must return null');
 });
 
-await test('cleanup() removes expired entries without affecting valid ones', () => {
+await test('cleanup() removes expired entries without affecting valid ones', async () => {
   // Store two codes – we will artificially expire one by manipulating the clock
   // is not possible directly, so instead we rely on the cleanup() export being
   // a no-op for non-expired entries and verify it does not remove fresh ones.
@@ -226,7 +228,7 @@ await test('cleanup() removes expired entries without affecting valid ones', () 
   // cleanup() should not delete the fresh code.
   cleanup();
 
-  const result = consumeCode(freshCode);
+  const result = await consumeCode(freshCode);
   assert.deepEqual(
     result,
     freshPayload,

@@ -1,5 +1,27 @@
 # Features — 5.5.0
 
+## OAuth Login for MCP Clients No Longer Fails With "Authorization code is invalid or expired"
+
+Fixed a bug that made the OAuth 2.0 authorization code flow fail on any multi-worker deployment
+(the default is 4 workers). After approving the consent screen, clients such as Claude Code
+reported `Authorization code is invalid or expired` and never obtained a token.
+
+- Authorization codes were held in a single worker's memory. Since connections are distributed
+  across workers round-robin, the token request almost always arrived at a different worker than
+  the one that issued the code, which then could not find it. Codes are now resolved across
+  workers, so the exchange succeeds regardless of which worker handles each request.
+- Codes remain strictly single-use: a code is consumed on exactly one worker, so replay attempts
+  are still rejected cluster-wide with `invalid_grant`.
+- The consent screen no longer depends on server-side session state either. Previously the CSRF
+  token and the PKCE `code_challenge` were stored in a per-worker session, so approving consent
+  could fail with `CSRF token missing`, or could issue a code with no PKCE binding that the token
+  endpoint later rejected.
+- Consent parameters (`redirect_uri`, `scope`, `code_challenge`, `nonce`) are now cryptographically
+  signed and verified on submission, so they can no longer be altered between the consent screen
+  and the decision.
+- No configuration changes are required. Deployments that set `STICKY_SESSIONS=true` to work around
+  this no longer need it for OAuth.
+
 ## Admin Config Backup Restore No Longer Risks Wiping the Configuration
 
 Fixed a data-loss risk in **Admin → Backup → Import**: if the safety backup of the current

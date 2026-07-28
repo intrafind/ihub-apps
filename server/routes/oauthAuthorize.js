@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { findClientById, loadOAuthClients } from '../utils/oauthClientManager.js';
 import { generateCode, storeCode } from '../utils/authorizationCodeStore.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -6,6 +5,7 @@ import { verifyJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { hasConsent, grantConsent } from '../utils/consentStore.js';
+import { issueConsentTicket, verifyConsentTicket } from '../utils/consentTicket.js';
 
 /**
  * OAuth 2.0 Authorization Code Flow - Authorization Endpoint
@@ -73,16 +73,6 @@ function renderGroupDeniedPage({ client, lang = 'en' }) {
 }
 
 /**
- * Generate a cryptographically random CSRF token for the consent form.
- * The token is single-use and stored in the session, then verified on POST.
- *
- * @returns {string} Random 32-byte hex CSRF token (64 hex characters).
- */
-function generateCsrfToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-/**
  * Render the consent screen HTML.
  * Produces a fully self-contained HTML page (no external CSS/JS dependencies)
  * showing the client's requested scopes and allow/deny buttons.
@@ -90,13 +80,13 @@ function generateCsrfToken() {
  * @param {Object} params - Render parameters.
  * @param {Object} params.client - OAuth client object from oauthClientManager.
  * @param {Array<string>} params.scopes - Requested OAuth scopes to display.
- * @param {string} params.csrfToken - CSRF token embedded as a hidden form field.
- * @param {Object} params.oauthParams - Original OAuth query parameters passed through hidden fields.
+ * @param {string} params.consentTicket - Signed ticket carrying the consent
+ *   context; the only field the decision handler trusts.
  * @param {string} params.baseUrl - Absolute base URL of this server instance.
  * @param {string} params.lang - BCP-47 primary language subtag for the HTML lang attribute (e.g. "en", "de").
  * @returns {string} Complete HTML string ready to send as a response.
  */
-function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl, lang = 'en' }) {
+function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'en' }) {
   const scopeDescriptions = {
     openid: 'Verify your identity',
     profile: 'Access your name and profile information',
@@ -168,12 +158,7 @@ function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl, 
     }
 
     <form method="POST" action="${escapeHtml(baseUrl + '/api/oauth/authorize/decision')}">
-      <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-      <input type="hidden" name="client_id" value="${escapeHtml(oauthParams.client_id)}">
-      <input type="hidden" name="redirect_uri" value="${escapeHtml(oauthParams.redirect_uri)}">
-      <input type="hidden" name="state" value="${escapeHtml(oauthParams.state || '')}">
-      <input type="hidden" name="scope" value="${escapeHtml(oauthParams.scope || '')}">
-      <input type="hidden" name="nonce" value="${escapeHtml(oauthParams.nonce || '')}">
+      <input type="hidden" name="consent_ticket" value="${escapeHtml(consentTicket)}">
       <div class="actions">
         <button type="submit" name="decision" value="deny" class="btn btn-secondary">Deny</button>
         <button type="submit" name="decision" value="allow" class="btn btn-primary">Allow</button>
@@ -226,8 +211,10 @@ function getBaseUrl(req) {
  *   1. Validate all OAuth parameters (response_type, client_id, redirect_uri, PKCE).
  *   2. If user is not logged in, store params in session and redirect to /login.
  *   3. If client is trusted (consentRequired=false), issue code immediately.
- *   4. Otherwise, render the consent screen and wait for the user's POST.
- *   5. On POST /decision, verify CSRF, re-authenticate user, generate and return code.
+ *   4. Otherwise, render the consent screen carrying a signed consent ticket
+ *      and wait for the user's POST.
+ *   5. On POST /decision, verify the ticket, re-authenticate user, generate and
+ *      return code.
  *
  * @param {import('express').Application} app - The Express application instance.
  */
@@ -448,20 +435,20 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.redirect(callbackUrl.toString());
       }
 
-      // Show consent screen — generate CSRF token and persist params in session
-      const csrfToken = generateCsrfToken();
-      if (req.session) {
-        req.session.csrfToken = csrfToken;
-        req.session.oauthParams = {
-          client_id,
-          redirect_uri,
-          scope: requestedScopes.join(' '),
-          state: state || '',
-          code_challenge: code_challenge || '',
-          code_challenge_method: code_challenge_method || '',
-          nonce: nonce || ''
-        };
-      }
+      // Show consent screen. The whole consent context travels inside a signed
+      // ticket in the form rather than in a session: the decision POST can land
+      // on any worker, and a per-process session store would lose the PKCE
+      // challenge and the CSRF token there. See utils/consentTicket.js.
+      const consentTicket = issueConsentTicket({
+        clientId: client_id,
+        redirectUri: redirect_uri,
+        scope: requestedScopes.join(' '),
+        state: state || '',
+        codeChallenge: code_challenge || '',
+        codeChallengeMethod: code_challenge_method || '',
+        nonce: nonce || '',
+        userId: currentUser.sub
+      });
 
       // Extract primary language from Accept-Language for the HTML lang attribute (WCAG 3.1.1).
       // Only allow a two-letter language code to prevent header injection.
@@ -473,14 +460,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const html = renderConsentScreen({
         client,
         scopes: requestedScopes,
-        csrfToken,
-        oauthParams: {
-          client_id,
-          redirect_uri,
-          state: state || '',
-          scope: requestedScopes.join(' '),
-          nonce: nonce || ''
-        },
+        consentTicket,
         baseUrl,
         lang: safeLang
       });
@@ -507,12 +487,16 @@ export default function registerOAuthAuthorizeRoutes(app) {
    *
    * Handles the consent form submission from the rendered consent screen.
    *
+   * Every consent parameter is read from the signed ticket rather than the POST
+   * body, so this handler holds no per-worker state and works on whichever
+   * worker the browser's POST happens to reach.
+   *
    * Steps:
-   *   1. Verify the CSRF token (constant-time comparison, single-use).
-   *   2. If the user denied, redirect with error=access_denied.
-   *   3. Re-validate redirect_uri against the client's allowlist.
-   *   4. Re-authenticate the user (JWT cookie must still be valid).
-   *   5. Retrieve stored PKCE params from session.
+   *   1. Verify the consent ticket's signature and expiry.
+   *   2. Re-authenticate the user (JWT cookie must still be valid).
+   *   3. Check the ticket was issued for that user (CSRF binding).
+   *   4. Re-validate redirect_uri against the client's allowlist.
+   *   5. If the user denied, redirect with error=access_denied.
    *   6. Generate and store the authorization code, then redirect.
    */
   app.post(buildServerPath('/api/oauth/authorize/decision'), async (req, res) => {
@@ -524,49 +508,28 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.status(400).send('OAuth is not enabled on this server');
       }
 
-      const { _csrf, client_id, redirect_uri, state, scope, decision, nonce } = req.body;
+      const { consent_ticket, decision } = req.body;
 
-      // Validate CSRF token — both tokens must be present
-      const sessionCsrf = req.session?.csrfToken;
-      if (!sessionCsrf || !_csrf) {
-        return res.status(403).send('invalid_request: CSRF token missing');
+      // Every consent parameter comes from the signed ticket, never from the
+      // POST body — a tampered redirect_uri, scope or code_challenge breaks the
+      // signature instead of being taken at face value.
+      const ticket = verifyConsentTicket(consent_ticket);
+      if (!ticket) {
+        logger.warn('[OAuth Authorize] Rejected consent decision with invalid ticket', {
+          component: 'OAuthAuthorize'
+        });
+        return res.status(403).send('invalid_request: consent ticket missing, invalid or expired');
       }
 
-      // Constant-time comparison prevents timing-based CSRF bypass
-      try {
-        const csrfValid = crypto.timingSafeEqual(
-          Buffer.from(sessionCsrf, 'utf8'),
-          Buffer.from(_csrf, 'utf8')
-        );
-        if (!csrfValid) {
-          return res.status(403).send('invalid_request: CSRF token mismatch');
-        }
-      } catch {
-        return res.status(403).send('invalid_request: CSRF token invalid');
-      }
-
-      // Invalidate CSRF token immediately after verification (single-use)
-      if (req.session) {
-        delete req.session.csrfToken;
-      }
-
-      // User denied access — redirect with error per RFC 6749 §4.1.2.1
-      if (decision !== 'allow') {
-        const errorUrl = new URL(redirect_uri);
-        errorUrl.searchParams.set('error', 'access_denied');
-        errorUrl.searchParams.set('error_description', 'User denied access');
-        if (state) errorUrl.searchParams.set('state', state);
-        return res.redirect(errorUrl.toString());
-      }
-
-      // Re-validate redirect_uri against the registered client allowlist
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-      const clientsConfig = loadOAuthClients(clientsFilePath);
-      const client = findClientById(clientsConfig, client_id);
-
-      if (!client || !isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
-        return res.status(400).send('invalid_request: Invalid redirect_uri');
-      }
+      const {
+        clientId: client_id,
+        redirectUri: redirect_uri,
+        state,
+        scope,
+        nonce,
+        codeChallenge,
+        codeChallengeMethod
+      } = ticket;
 
       // Re-authenticate: JWT cookie must still be valid after the consent interaction
       const token = req.cookies?.authToken;
@@ -582,6 +545,38 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.status(401).send('login_required: Session expired during consent');
       }
 
+      // The ticket is bound to the user it was issued for. This is what makes
+      // the endpoint CSRF-safe: a ticket obtained by an attacker cannot drive
+      // consent under a victim's cookie, and one cannot be forged without the
+      // signing key.
+      if (ticket.userId !== currentUser.sub) {
+        logger.warn('[OAuth Authorize] Consent ticket does not match the signed-in user', {
+          component: 'OAuthAuthorize',
+          clientId: client_id
+        });
+        return res.status(403).send('invalid_request: consent ticket was issued for another user');
+      }
+
+      // Re-validate redirect_uri against the registered client allowlist — the
+      // ticket proves the URI passed at GET time, this catches a client whose
+      // registration changed since.
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsConfig = loadOAuthClients(clientsFilePath);
+      const client = findClientById(clientsConfig, client_id);
+
+      if (!client || !isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
+        return res.status(400).send('invalid_request: Invalid redirect_uri');
+      }
+
+      // User denied access — redirect with error per RFC 6749 §4.1.2.1
+      if (decision !== 'allow') {
+        const errorUrl = new URL(redirect_uri);
+        errorUrl.searchParams.set('error', 'access_denied');
+        errorUrl.searchParams.set('error_description', 'User denied access');
+        if (state) errorUrl.searchParams.set('state', state);
+        return res.redirect(errorUrl.toString());
+      }
+
       // Re-check group allowlist on the decision step in case membership changed
       if (!isUserAllowedByGroups(client, currentUser)) {
         const errorUrl = new URL(redirect_uri);
@@ -594,12 +589,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.redirect(errorUrl.toString());
       }
 
-      // Retrieve PKCE parameters stored in session during GET /authorize
-      const storedParams = req.session?.oauthParams || {};
-      const codeChallenge = storedParams.code_challenge || '';
-      const codeChallengeMethod = storedParams.code_challenge_method || '';
-
-      // Parse requested scopes from the consent form hidden field
+      // Scopes as granted on the screen the user actually saw
       const requestedScopes = scope ? scope.split(' ').filter(Boolean) : ['openid'];
 
       // Generate and persist the authorization code (10-minute TTL, single-use)
@@ -615,7 +605,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         scopes: requestedScopes,
         codeChallenge,
         codeChallengeMethod,
-        nonce: nonce || storedParams.nonce || ''
+        nonce: nonce || ''
       });
 
       // Persist consent so the user is not prompted again within the TTL window.

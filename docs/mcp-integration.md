@@ -314,17 +314,27 @@ spec prescribes, so clients can recover on their own:
 | POST that is not `initialize` and carries no session id | `400 Bad Request: Mcp-Session-Id header is required` |
 | `GET /mcp` outside a session | `405 Method Not Allowed` — there is no server-initiated SSE stream to attach to |
 
-#### Stateless mode (load-balanced deployments)
+#### Stateless mode (clustered and load-balanced deployments)
 
-Session state lives in the worker's process memory. The sticky cluster
-router keeps a client on the same worker within one instance, but if
-iHub is deployed as several replicas behind a load balancer, a session
-opened on one replica is unknown to the next and the client has to
-re-initialize on every request.
+Session state lives in the worker's process memory, so a session is only
+usable on the worker that opened it.
 
-For that topology enable **stateless mode**
-(Admin → MCP gateway → Transports, or
-`platform.mcpServer.transports.streamableHttp.stateless: true`):
+> **Enable stateless mode on any deployment running more than one worker.**
+> Connections are distributed across workers round-robin by default
+> (`WORKERS` defaults to 4), so a client's `initialize` and its follow-up
+> `tools/call` normally land on *different* workers. The second request
+> then gets `404 Session not found` and the client cannot make progress.
+> This applies to a single instance, not just multi-replica deployments —
+> the same is true across replicas behind a load balancer.
+>
+> The alternative is `STICKY_SESSIONS=true`, which pins each client to one
+> worker by hashing its TCP peer address. That only works when clients
+> reach iHub directly: behind a reverse proxy or ingress every request
+> carries the same peer address, so all traffic collapses onto a single
+> worker. Prefer stateless mode.
+
+Enable **stateless mode** via Admin → MCP gateway → Transports, or
+`platform.mcpServer.transports.streamableHttp.stateless: true`:
 
 ```json
 {

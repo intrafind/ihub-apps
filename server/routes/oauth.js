@@ -228,8 +228,9 @@ export default function registerOAuthRoutes(app) {
           return sendOAuthError(res, 400, 'invalid_request', 'redirect_uri is required');
         }
 
-        // Consume the authorization code (single-use)
-        const codeData = consumeCode(sanitizedCode);
+        // Consume the authorization code (single-use). In cluster mode this may
+        // resolve against the worker that minted it, so it is asynchronous.
+        const codeData = await consumeCode(sanitizedCode);
         if (!codeData) {
           return sendOAuthError(
             res,
