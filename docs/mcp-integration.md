@@ -432,6 +432,24 @@ Troubleshooting:
 - `400 Bad Request: Mcp-Session-Id header is required` → the client sent
   a non-`initialize` request without a session id; it never completed
   (or lost) the handshake.
+- `405 Method Not Allowed` on `GET /mcp` → three different causes, all
+  reported by clients the same way. The `McpGateway` log line for the
+  rejection carries `hadSessionHeader`, `userAgent` and `accept`, which
+  tells them apart:
+  - **Benign.** A Streamable HTTP client probing for the optional
+    server-initiated SSE stream. The MCP SDK reads `405` as "this server
+    has no push channel" and carries on, so tools still list and run.
+    Sign-in works, tools work, and a `405` shows up once per connection —
+    nothing to fix.
+  - **Wrong transport.** A client configured for the *legacy SSE*
+    transport but pointed at `/mcp`. It needs a GET stream and cannot
+    recover from the `405`. Point it at `/mcp/sse`, or reconfigure it as
+    a Streamable HTTP (`http`) client on `/mcp`.
+  - **Header stripped in transit.** A reverse proxy dropping the
+    `Mcp-Session-Id` request header. The give-away is `405` with
+    `hadSessionHeader: false` *after* a successful `initialize`, usually
+    together with `400 … header is required` on the following POSTs.
+    Allow `Mcp-Session-Id` and `MCP-Protocol-Version` through the proxy.
 
 Every rejection the transport makes is logged under the `McpGateway`
 component, so `npm run logs` shows the reason a client was turned away.

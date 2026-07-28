@@ -105,6 +105,37 @@ function sendRpcError(res, status, code, message, headers = {}) {
 }
 
 /**
+ * Log a gateway-level rejection with everything needed to tell the causes
+ * apart from the server side.
+ *
+ * `405` and `400` here are routinely reported as "the MCP gateway does not
+ * work", and the three causes look identical to the client:
+ *   - a compliant streamable-HTTP client probing for the optional
+ *     server→client SSE stream (harmless — the MCP SDK treats 405 on GET as
+ *     "this server has no push channel" and carries on),
+ *   - a client configured for the legacy SSE transport but pointed at `/mcp`
+ *     instead of `/mcp/sse` (it needs a GET stream and cannot recover), or
+ *   - a reverse proxy dropping the `Mcp-Session-Id` header, so a client that
+ *     did initialize correctly never gets to use its session.
+ *
+ * `hadSessionHeader` is the discriminator: false on a GET right after a
+ * successful initialize means the header is being stripped in transit.
+ */
+function logGatewayRejection(req, { status, reason }) {
+  logger.info('MCP gateway rejected request', {
+    component: 'McpGateway',
+    status,
+    reason,
+    method: req.method,
+    userId: req.user?.id,
+    hadSessionHeader: Boolean(req.headers['mcp-session-id']),
+    accept: req.headers.accept || null,
+    protocolVersion: req.headers['mcp-protocol-version'] || null,
+    userAgent: req.headers['user-agent'] || null
+  });
+}
+
+/**
  * True when the (already parsed) POST body is an MCP `initialize` request —
  * the only message allowed to open a new session.
  */
@@ -221,6 +252,7 @@ export default function registerMcpServerRoutes(app) {
         // to. Declining it with 405 is explicitly allowed by the spec and MCP
         // clients treat it as "this server has no push channel".
         await closeServer(entry.server, null);
+        logGatewayRejection(req, { status: 405, reason: 'stateless_mode_no_sse_stream' });
         return sendRpcError(
           res,
           405,
@@ -286,15 +318,17 @@ export default function registerMcpServerRoutes(app) {
       // gets a targeted error instead of an McpServer that would be built,
       // rejected by the SDK and then leaked.
       if (req.method === 'GET') {
+        logGatewayRejection(req, { status: 405, reason: 'get_stream_without_session' });
         return sendRpcError(
           res,
           405,
           -32000,
-          'Method Not Allowed: open a session with an initialize request before requesting the SSE stream',
+          `Method Not Allowed: open a session with an initialize request before requesting the SSE stream. Legacy SSE clients must connect to ${buildServerPath('/mcp/sse')} instead.`,
           { Allow: 'POST, DELETE' }
         );
       }
       if (!isInitializeRequestBody(req.body)) {
+        logGatewayRejection(req, { status: 400, reason: 'post_without_session' });
         return sendRpcError(res, 400, -32000, 'Bad Request: Mcp-Session-Id header is required');
       }
       try {

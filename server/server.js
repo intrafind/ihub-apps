@@ -8,7 +8,7 @@ import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 import logger from './utils/logger.js';
-import { startStickyPrimary, attachStickyWorker } from './clusterSticky.js';
+import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -129,6 +129,7 @@ if (cluster.isPrimary && workerCount > 1) {
         port: config.PORT,
         workerCount
       });
+      logStickyRoutingCaveat(workerCount);
       if (config.HOST === '0.0.0.0' || config.HOST === '::') {
         logger.info({
           component: 'Server',

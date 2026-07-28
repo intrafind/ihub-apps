@@ -186,6 +186,12 @@ export const platformConfigSchema = z
       })
       .default({}),
     rateLimit: rateLimitSchema.default({}),
+    trustProxy: z
+      .union([z.number().int().min(0), z.boolean(), z.string()])
+      .default(1)
+      .describe(
+        'Express "trust proxy" setting: the number of proxy hops in front of iHub, true/false, or a comma-separated list of trusted addresses/subnets. Decides what req.ip resolves to, which is the rate-limit key and the audited client address. Set it to the real hop count — too low and every caller behind the inner proxy shares one identity (and therefore one rate-limit counter).'
+      ),
     logging: loggingSchema.default({}),
     ssl: z
       .object({
