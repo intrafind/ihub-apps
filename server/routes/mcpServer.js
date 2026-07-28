@@ -179,7 +179,15 @@ export default function registerMcpServerRoutes(app) {
       };
     }
 
-    await server.connect(transport);
+    try {
+      await server.connect(transport);
+    } catch (err) {
+      // The server is fully built by this point; if wiring the transport to it
+      // fails there is nothing left holding a reference, so release it here
+      // rather than leaving it to accumulate behind the caller's 500.
+      await closeServer(server, null);
+      throw err;
+    }
     entry.transport = transport;
     return entry;
   }

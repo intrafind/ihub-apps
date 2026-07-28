@@ -193,6 +193,24 @@ describe('MCP gateway session handling', () => {
     expect(buildMcpServer).toHaveBeenCalledTimes(1);
   });
 
+  it('releases the McpServer when wiring the transport to it fails', async () => {
+    // buildMcpServer succeeded, so something holds real resources; failing to
+    // connect must not leave it dangling behind the 500.
+    const close = jest.fn();
+    buildMcpServer.mockResolvedValue({
+      connect: jest.fn().mockRejectedValue(new Error('adapter init failed')),
+      close
+    });
+
+    const res = await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .send(INITIALIZE);
+
+    expect(res.status).toBe(500);
+    expect(close).toHaveBeenCalled();
+  });
+
   it('refuses to terminate a session owned by another user', async () => {
     buildMcpServer.mockResolvedValue({ connect: jest.fn(), close: jest.fn() });
     nextSessionId = '55555555-5555-5555-5555-555555555555';
