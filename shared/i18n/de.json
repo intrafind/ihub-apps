@@ -1923,7 +1923,7 @@
         "reproduce": "Außerhalb von iHub nachstellen:",
         "copyCurl": "curl-Befehl kopieren",
         "copyToken": "JWT kopieren",
-        "stepSummary": "{{ok}} ok, {{warn}} Warnungen, {{fail}} fehlgeschlagen · {{duration}}ms",
+        "stepSummary": "ok {{ok}} · Warnungen {{warn}} · fehlgeschlagen {{fail}} · {{duration}}ms",
         "notes": "Hinweise"
       },
       "diagnostics": {

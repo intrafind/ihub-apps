@@ -69,6 +69,7 @@ function StepRow({ step }) {
   const style = STATUS_STYLES[step.status] || STATUS_STYLES.skip;
   const hasBody = Boolean(step.details || step.hints?.length);
   const [expanded, setExpanded] = useState(step.status === 'fail' || step.status === 'warn');
+  const bodyId = `integration-step-${step.id}`;
 
   return (
     <div className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
@@ -76,6 +77,8 @@ function StepRow({ step }) {
         type="button"
         onClick={() => hasBody && setExpanded(prev => !prev)}
         disabled={!hasBody}
+        aria-expanded={hasBody ? expanded : undefined}
+        aria-controls={hasBody ? bodyId : undefined}
         className={`w-full flex items-start gap-3 px-3 py-2.5 text-left ${
           hasBody ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-default'
         }`}
@@ -106,7 +109,7 @@ function StepRow({ step }) {
       </button>
 
       {expanded && hasBody && (
-        <div className="px-3 pb-3 pl-11 space-y-3">
+        <div id={bodyId} className="px-3 pb-3 pl-11 space-y-3">
           {step.hints?.length > 0 && (
             // A passing step can still carry hints (e.g. "verify this URL from the
             // iFinder host too"). Those are notes, not problems, so they must not
@@ -192,7 +195,9 @@ function IntegrationTestResults({ title, result }) {
             {summary && (
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {t('admin.iFinder.testResults.stepSummary', {
-                  defaultValue: '{{ok}} ok, {{warn}} warnings, {{fail}} failed · {{duration}}ms',
+                  // Label before count, so the line reads correctly for one as
+                  // well as several ("warnings 1", not "1 warnings").
+                  defaultValue: 'ok {{ok}} · warnings {{warn}} · failed {{fail}} · {{duration}}ms',
                   ok: summary.ok,
                   warn: summary.warn,
                   fail: summary.fail,

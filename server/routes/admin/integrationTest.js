@@ -8,6 +8,7 @@ import { throttledFetch } from '../../requestThrottler.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import { isValidSearchProfileId } from '../../utils/pathSecurity.js';
 import {
   DiagnosticsReport,
   STATUS,
@@ -40,14 +41,6 @@ import {
 /** Fields of a user object that may be overridden to test as somebody else. */
 const OVERRIDABLE_USER_FIELDS = ['id', 'email', 'username', 'name', 'domain'];
 const MAX_OVERRIDE_LENGTH = 320;
-
-/**
- * Characters a search profile id may contain. iFinder profile ids are slugs
- * ("searchprofile-standard") or base64 of one, so this covers every legitimate
- * value while keeping request-body input out of the URL path entirely — no
- * slashes, dots or encoded traversal sequences can reach the endpoint template.
- */
-const SEARCH_PROFILE_PATTERN = /^[A-Za-z0-9_:@=+-]{1,200}$/;
 
 /**
  * Build the URL for an integration request.
@@ -129,15 +122,23 @@ function resolveIssuerUrl(req) {
   const platform = configCache.getPlatform() || {};
   const configured = platform.oauth?.issuer;
   if (configured && configured.startsWith('http')) {
-    return { issuer: configured.replace(/\/+$/, ''), source: 'platform.oauth.issuer' };
+    return {
+      issuer: configured.replace(/\/+$/, ''),
+      source: 'platform.oauth.issuer',
+      fromTrustedConfig: true
+    };
   }
 
+  // Derived from the Host header of this request, exactly as the well-known
+  // routes do. It is reported so the admin sees the URL iFinder would be pointed
+  // at, but it is caller-controlled and must never be fetched — see the JWKS step.
   const protocol = req.protocol || (req.secure ? 'https' : 'http');
   const host = req.get('host');
   const basePath = buildServerPath('').replace(/\/$/, '');
   return {
     issuer: `${protocol}://${host}${basePath}`,
-    source: 'auto-detected from this request'
+    source: 'auto-detected from the Host header of this request',
+    fromTrustedConfig: false
   };
 }
 
@@ -450,7 +451,7 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
  * @returns {Promise<Object>} `{ jwksUrl, issuer }`
  */
 async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeout }) {
-  const { issuer, source } = resolveIssuerUrl(req);
+  const { issuer, source, fromTrustedConfig } = resolveIssuerUrl(req);
   const jwksUrl = `${issuer}/.well-known/jwks.json`;
   const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
 
@@ -519,6 +520,26 @@ async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeo
         'Align Admin > Authentication > OAuth Server with the externally reachable URL of iHub.'
       ]
     });
+  }
+
+  // The issuer is only fetched when it comes from platform config. Auto-detection
+  // derives it from the Host header, which the caller controls, so fetching it
+  // would turn this endpoint into a server-side request forgery primitive: the
+  // header alone would decide which host iHub contacts. The computed URL is still
+  // reported, since seeing it is what tells the admin to pin it explicitly.
+  if (!fromTrustedConfig) {
+    report.add({
+      id: 'jwks',
+      label: 'JWKS endpoint serves the signing key',
+      status: STATUS.WARN,
+      message: `Not checked: the issuer URL is auto-detected, so ${jwksUrl} was not requested`,
+      details: { url: jwksUrl, issuerSource: source },
+      hints: [
+        'Configure the OAuth Issuer URL under Admin > Authentication > OAuth Server. iHub then knows its own externally reachable URL, this check runs against it, and the "iss" claim stops depending on which host name a client happens to use.',
+        `Until then, verify it by hand from the iFinder host: curl -sv ${jwksUrl}`
+      ]
+    });
+    return { issuer, jwksUrl, applicable: true };
   }
 
   await report.run('jwks', 'JWKS endpoint serves the signing key', async () => {
@@ -877,7 +898,7 @@ export default function registerIntegrationTestRoutes(app) {
         // against the shape of a profile id rather than merely encoded.
         const requestedProfile =
           typeof req.body?.searchProfile === 'string' ? req.body.searchProfile.trim() : '';
-        if (requestedProfile && !SEARCH_PROFILE_PATTERN.test(requestedProfile)) {
+        if (requestedProfile && !isValidSearchProfileId(requestedProfile)) {
           report.add({
             id: 'configuration',
             label: 'Configuration',

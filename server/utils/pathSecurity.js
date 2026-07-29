@@ -20,6 +20,19 @@ import { promises as fs } from 'fs';
 export const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
+ * Regular expression for an iFinder search profile id.
+ *
+ * Deliberately a different character class than SAFE_ID_PATTERN:
+ * - `=` and `+` are allowed because profile ids are frequently passed base64
+ *   encoded (e.g. "c2VhcmNocHJvZmlsZS1zdGFuZGFyZA=="), and `:` / `@` appear in
+ *   qualified profile names.
+ * - `.` is NOT allowed. Profile ids are interpolated into an API URL path, so
+ *   excluding dots removes traversal sequences entirely rather than relying on
+ *   encoding to neutralize them.
+ */
+export const SEARCH_PROFILE_ID_PATTERN = /^[a-zA-Z0-9_:@=+-]+$/;
+
+/**
  * Property names that must be rejected to prevent prototype pollution.
  * These names have special meaning in JavaScript's prototype chain.
  */
@@ -79,6 +92,33 @@ export function validateIdForPath(id, idType, res) {
     return false;
   }
   return true;
+}
+
+/**
+ * Validates an iFinder search profile id that will be interpolated into an API
+ * URL path.
+ *
+ * @param {string} id - Search profile id to validate
+ * @returns {boolean} - True if valid
+ */
+export function isValidSearchProfileId(id) {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+
+  if (id.length > 200) {
+    return false;
+  }
+
+  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+    return false;
+  }
+
+  if (DANGEROUS_KEYS.has(id)) {
+    return false;
+  }
+
+  return SEARCH_PROFILE_ID_PATTERN.test(id);
 }
 
 /**

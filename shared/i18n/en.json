@@ -1670,7 +1670,7 @@
         "reproduce": "Reproduce outside iHub:",
         "copyCurl": "Copy curl command",
         "copyToken": "Copy JWT",
-        "stepSummary": "{{ok}} ok, {{warn}} warnings, {{fail}} failed · {{duration}}ms",
+        "stepSummary": "ok {{ok}} · warnings {{warn}} · failed {{fail}} · {{duration}}ms",
         "notes": "Notes"
       },
       "diagnostics": {

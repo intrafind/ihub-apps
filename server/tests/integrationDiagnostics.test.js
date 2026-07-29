@@ -29,6 +29,7 @@ import {
   resolveHostname,
   truncateBody
 } from '../services/integrations/integrationDiagnostics.js';
+import { isValidSearchProfileId } from '../utils/pathSecurity.js';
 
 describe('inspectUrl', () => {
   it('accepts a plain https FQDN without complaints', () => {
@@ -413,6 +414,47 @@ describe('DiagnosticsReport', () => {
       hints: ['check DNS', 'check the server log', 'check DNS']
     });
     assert.deepEqual(report.steps[0].hints, ['check DNS', 'check the server log']);
+  });
+});
+
+describe('isValidSearchProfileId', () => {
+  it('accepts slug and base64 profile ids', () => {
+    for (const id of [
+      'searchprofile-standard',
+      'c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==',
+      'profile_1',
+      'tenant:profile',
+      'profile@site',
+      'a+b'
+    ]) {
+      assert.equal(isValidSearchProfileId(id), true, id);
+    }
+  });
+
+  it('rejects anything that could escape the URL path segment', () => {
+    for (const id of [
+      '../../../etc/passwd',
+      'a/b',
+      'a\\b',
+      '..',
+      'profile..name',
+      'pro file',
+      'profile?x=1',
+      'profile#frag',
+      'profile%2F..',
+      '__proto__',
+      ''
+    ]) {
+      assert.equal(isValidSearchProfileId(id), false, JSON.stringify(id));
+    }
+  });
+
+  it('rejects non-strings and over-long ids', () => {
+    assert.equal(isValidSearchProfileId(undefined), false);
+    assert.equal(isValidSearchProfileId(null), false);
+    assert.equal(isValidSearchProfileId(42), false);
+    assert.equal(isValidSearchProfileId('a'.repeat(201)), false);
+    assert.equal(isValidSearchProfileId('a'.repeat(200)), true);
   });
 });
 
