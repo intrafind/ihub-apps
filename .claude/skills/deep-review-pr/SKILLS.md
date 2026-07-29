@@ -45,6 +45,10 @@ Examples of the kinds of things that might warrant a deep dive (not exhaustive):
 - **Generic concerns**: API backwards compatibility, data model compatibility,
   concurrency/thread-safety, security implications, cross-module ripple effects,
   missing documentation or migration steps, error handling gaps.
+- **Reuse / duplication**: does the change reimplement or bypass an existing
+  component/pipeline for the same capability (e.g. talking to a low-level client/SPI a
+  higher-level component already wraps)? Such parallel paths silently lose features and
+  duplicate logic — check whether it should reuse the existing component instead.
 - **Specific code areas**: A class with complex logic, a method that does something
   subtle, a package where the changes interact with tricky existing code.
 - **Ambiguous findings**: A first-pass finding whose actual severity depends on
