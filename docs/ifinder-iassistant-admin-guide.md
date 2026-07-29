@@ -824,7 +824,6 @@ Expand **Diagnostics options** above the buttons for:
 - **Test as email / username / domain** — mint the test JWT for a specific user instead of your own
   admin account. Use this to confirm how the subject claim is built, for example whether iFinder
   expects `DOMAIN\username` rather than an email address.
-- **Test search query** — the term used for the iFinder test request (default `test`).
 - **Include the signed JWT** — returns the token itself plus a ready-to-run `curl` command. The token
   is a working credential for the tested user, so treat it like a password. Without this option the
   `curl` command references `$TOKEN` and is safe to share.
@@ -853,6 +852,11 @@ curl -X POST https://ihub.example.com/api/admin/integrations/ifinder/_test \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"includeToken": false, "user": {"username": "jdoe", "domain": "EXAMPLE"}}'
 ```
+
+The search term and the search profile are not accepted as parameters: the diagnostics
+deliberately exercise the configured profile with a fixed query, so that no value from the
+request can influence which URL iHub contacts. To test a different profile, change the
+**Default Search Profile** setting.
 
 The response contains `success`, a `summary` of step counts, and the ordered `steps` array with
 `status` (`ok` / `warn` / `fail` / `skip`), `message`, `details`, and `hints` per step.

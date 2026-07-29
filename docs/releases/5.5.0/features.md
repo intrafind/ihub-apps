@@ -949,8 +949,11 @@ reading server logs and guessing.
 - Detects an iAssistant profile ID that does not exist and lists the profiles the tested user can
   actually see.
 - Diagnostics options allow testing as a specific user (email, username, domain) to verify how the
-  JWT subject is built, choosing the test search query, optionally returning the signed JWT together
-  with a ready-to-run `curl` command, and running an iAssistant conversation round-trip to verify
-  write access. Without the token option the `curl` command references `$TOKEN` and is safe to share.
+  JWT subject is built, optionally returning the signed JWT together with a ready-to-run `curl`
+  command, and running an iAssistant conversation round-trip to verify write access. Without the
+  token option the `curl` command references `$TOKEN` and is safe to share.
+- The search term and profile are fixed rather than configurable per run, so no value from the
+  request can influence which URL iHub contacts. The diagnostics always exercise the configured
+  search profile, which is what an admin wants to verify anyway.
 - A previous behaviour is fixed: an iAssistant network failure used to be reported as "configuration
   is valid" and counted as a success. Unreachable now reads as unreachable.

@@ -45,7 +45,6 @@ function IFinderConfig() {
   const [testOptions, setTestOptions] = useState({
     includeToken: false,
     conversationRoundTrip: false,
-    query: 'test',
     userEmail: '',
     userUsername: '',
     userDomain: ''
@@ -191,10 +190,6 @@ function IFinderConfig() {
    */
   const buildTestPayload = () => {
     const payload = { includeToken: testOptions.includeToken };
-
-    if (testOptions.query.trim() && testOptions.query.trim() !== 'test') {
-      payload.query = testOptions.query.trim();
-    }
 
     const user = {};
     if (testOptions.userEmail.trim()) user.email = testOptions.userEmail.trim();
@@ -806,18 +801,6 @@ function IFinderConfig() {
                       'Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.'
                     )}
                   </p>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.diagnostics.query', 'Test search query')}
-                    </label>
-                    <input
-                      type="text"
-                      value={testOptions.query}
-                      onChange={e => handleTestOptionChange('query', e.target.value)}
-                      className="w-full md:w-1/3 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                    />
-                  </div>
 
                   <div className="space-y-3">
                     <div className="flex items-start">

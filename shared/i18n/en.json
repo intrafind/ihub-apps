@@ -1681,7 +1681,6 @@
         "userDomain": "Test as domain",
         "currentAdmin": "your admin account",
         "userHelp": "Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.",
-        "query": "Test search query",
         "includeToken": "Include the signed JWT",
         "includeTokenHelp": "Returns the token itself plus a ready-to-run curl command. The token is a working credential for the tested user — treat it like a password and do not paste it into tickets.",
         "conversationRoundTrip": "Run conversation round-trip (iAssistant)",

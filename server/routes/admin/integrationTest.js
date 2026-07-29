@@ -8,7 +8,6 @@ import { throttledFetch } from '../../requestThrottler.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
-import { isValidSearchProfileId } from '../../utils/pathSecurity.js';
 import {
   DiagnosticsReport,
   STATUS,
@@ -42,20 +41,34 @@ import {
 const OVERRIDABLE_USER_FIELDS = ['id', 'email', 'username', 'name', 'domain'];
 const MAX_OVERRIDE_LENGTH = 320;
 
+/** Search term used for the iFinder test request. Constant on purpose — see buildIntegrationUrl. */
+const TEST_SEARCH_QUERY = 'test';
+
 /**
  * Build the URL for an integration request.
  *
- * The origin and path always come from the trusted platform configuration, and
- * every caller-supplied value goes through `searchParams`, so request-body input
- * can never influence which host is contacted.
+ * Every component comes from the trusted platform configuration — nothing from
+ * the request body, the query string or a header ever reaches an outbound URL in
+ * this module. The origin is additionally re-asserted against the configured base
+ * URL, so even a future change to an endpoint template cannot redirect a
+ * diagnostics request at a different host.
  *
  * @param {string} baseUrl - Configured base URL
- * @param {string} path - Endpoint path (already templated)
- * @param {Object} [query] - Query parameters
+ * @param {string} path - Endpoint path from configuration
+ * @param {Object} [query] - Query parameters built from configuration/constants
  * @returns {string} Absolute URL
+ * @throws {Error} If the result would leave the configured origin
  */
 function buildIntegrationUrl(baseUrl, path, query = {}) {
-  const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`);
+  const base = new URL(baseUrl.replace(/\/+$/, ''));
+  const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, '')}${path}`);
+
+  if (url.origin !== base.origin) {
+    throw new Error(
+      `Refusing to send a diagnostics request to ${url.origin}, which is not the configured ${base.origin}`
+    );
+  }
+
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }
@@ -112,31 +125,38 @@ function buildTestUser(req, override) {
 /**
  * The issuer URL iHub advertises for its own OIDC metadata.
  *
- * When `platform.oauth.issuer` is unset the well-known routes derive it from the
- * incoming request, so the diagnostics do the same to report the URL iFinder
- * will really be pointed at.
+ * Returns two separate values on purpose:
+ *
+ * - `fetchableIssuer` is non-null only when `platform.oauth.issuer` is configured.
+ *   It is the only value this module ever requests, so no header can influence
+ *   which host iHub contacts.
+ * - `issuer` is what the admin is *shown*. When nothing is configured the
+ *   well-known routes derive the issuer from the request, so the diagnostics
+ *   report the same derivation to reveal the URL iFinder would be pointed at.
+ *   It is display-only and must never reach an HTTP request.
+ *
  * @param {import('express').Request} req
- * @returns {Object} `{ issuer, source }`
+ * @returns {Object} `{ issuer, fetchableIssuer, source, fromTrustedConfig }`
  */
 function resolveIssuerUrl(req) {
   const platform = configCache.getPlatform() || {};
   const configured = platform.oauth?.issuer;
   if (configured && configured.startsWith('http')) {
+    const issuer = configured.replace(/\/+$/, '');
     return {
-      issuer: configured.replace(/\/+$/, ''),
+      issuer,
+      fetchableIssuer: issuer,
       source: 'platform.oauth.issuer',
       fromTrustedConfig: true
     };
   }
 
-  // Derived from the Host header of this request, exactly as the well-known
-  // routes do. It is reported so the admin sees the URL iFinder would be pointed
-  // at, but it is caller-controlled and must never be fetched — see the JWKS step.
   const protocol = req.protocol || (req.secure ? 'https' : 'http');
   const host = req.get('host');
   const basePath = buildServerPath('').replace(/\/$/, '');
   return {
     issuer: `${protocol}://${host}${basePath}`,
+    fetchableIssuer: null,
     source: 'auto-detected from the Host header of this request',
     fromTrustedConfig: false
   };
@@ -448,8 +468,12 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
  * @returns {Promise<Object>} `{ jwksUrl, issuer }`
  */
 async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeout }) {
-  const { issuer, source, fromTrustedConfig } = resolveIssuerUrl(req);
+  const { issuer, fetchableIssuer, source, fromTrustedConfig } = resolveIssuerUrl(req);
+  // Display value: may be derived from the request, so it is only ever printed.
   const jwksUrl = `${issuer}/.well-known/jwks.json`;
+  // Request value: null unless the issuer came from platform config, so nothing
+  // taken from the request can decide which host the JWKS probe contacts.
+  const fetchableJwksUrl = fetchableIssuer ? `${fetchableIssuer}/.well-known/jwks.json` : null;
   const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
 
   if (!iFinderConfig.useOidcKeyPair) {
@@ -545,11 +569,11 @@ async function runOidcCallbackSteps(report, { req, iFinderConfig, jwtInfo, timeo
     // or a load balancer without hairpin NAT — so an unreachable endpoint is a
     // warning to re-check from the iFinder host. Only the *content* of a
     // successful response is conclusive.
-    const unreachableHint = `Re-run the check from the iFinder host: curl -sv ${jwksUrl}. If it answers there, the integration is fine and only iHub cannot reach its own external URL.`;
+    const unreachableHint = `Re-run the check from the iFinder host: curl -sv ${fetchableJwksUrl}. If it answers there, the integration is fine and only iHub cannot reach its own external URL.`;
 
     let response;
     try {
-      response = await throttledFetch('iFinderTest', jwksUrl, {
+      response = await throttledFetch('iFinderTest', fetchableJwksUrl, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         timeout
@@ -807,12 +831,6 @@ export default function registerIntegrationTestRoutes(app) {
    *               includeToken:
    *                 type: boolean
    *                 description: Include the signed JWT and an executable curl command in the result
-   *               query:
-   *                 type: string
-   *                 description: Search term used for the test request (default "test")
-   *               searchProfile:
-   *                 type: string
-   *                 description: Override the search profile for this test
    *               user:
    *                 type: object
    *                 description: Mint the test JWT for these user fields instead of the calling admin
@@ -883,35 +901,16 @@ export default function registerIntegrationTestRoutes(app) {
         const includeToken = req.body?.includeToken === true;
         const userOverride = sanitizeUserOverride(req.body?.user);
         const testUser = buildTestUser(req, userOverride);
-        const testQuery =
-          typeof req.body?.query === 'string' && req.body.query.trim() !== ''
-            ? req.body.query.trim().slice(0, 200)
-            : 'test';
 
         const platformConfig = configCache.getPlatform() || {};
         const iFinderConfig = platformConfig.iFinder || {};
         const config = iFinderService.getConfig();
-        // The override only ever reaches a URL path segment, so it is validated
-        // against the shape of a profile id rather than merely encoded.
-        const requestedProfile =
-          typeof req.body?.searchProfile === 'string' ? req.body.searchProfile.trim() : '';
-        if (requestedProfile && !isValidSearchProfileId(requestedProfile)) {
-          report.add({
-            id: 'configuration',
-            label: 'Configuration',
-            status: STATUS.FAIL,
-            message: 'The requested search profile is not a valid profile id',
-            details: { requestedSearchProfile: requestedProfile },
-            hints: [
-              'A search profile id may only contain letters, digits and the characters _ : @ = + - (for example "searchprofile-standard", or its base64 form).'
-            ]
-          });
-          return respond(res, report, {
-            integration: 'iFinder',
-            details: { invalidParameter: 'searchProfile' }
-          });
-        }
-        const searchProfile = requestedProfile || config.defaultSearchProfile;
+        // Both the search term and the profile are fixed here rather than taken
+        // from the request. A diagnostic should exercise the configured state, and
+        // keeping request input out of the URL entirely is a stronger guarantee
+        // than validating it: no caller-supplied value can reach an outbound URL.
+        const testQuery = TEST_SEARCH_QUERY;
+        const searchProfile = config.defaultSearchProfile;
         const signingKey = describeSigningKey(iFinderConfig);
         const timeout = config.timeout || 30000;
 
