@@ -38,6 +38,14 @@
  *    synchronous answer to "does some other worker hold the SSE stream for this
  *    chat?", which the request path needs before it decides to stream.
  *
+ *  - **request/reply** — `request(type, payload, {route})` asks another worker a
+ *    question and awaits its answer; `respond(type, handler)` answers. Built on
+ *    pub/sub with correlation ids, so the primary stays a dumb repeater. Needed
+ *    when the state cannot be replicated because reading it *mutates* it — a
+ *    single-use OAuth authorization code has to be consumed on exactly one
+ *    worker, so the worker holding it is asked to consume it rather than being
+ *    told to hand out a copy (`server/utils/authorizationCodeStore.js`).
+ *
  * Presence is eventually consistent: an announcement takes one IPC hop to the
  * primary and one back out. The paths that read it (a chat POST asking whether
  * an SSE stream exists) are separated from the registration (the SSE GET
@@ -377,6 +385,131 @@ export function subscribe(type, handler) {
   return () => handlers.delete(handler);
 }
 
+// ---------------------------------------------------------------------------
+// Request / reply
+// ---------------------------------------------------------------------------
+
+/** Reply traffic for channel `t` rides on `t:reply`. */
+const REPLY_SUFFIX = ':reply';
+
+/** Correlation id → settle callback, for requests this worker is awaiting. */
+const pendingRequests = new Map();
+
+/** Channels whose reply subscription has already been installed. */
+const replyChannels = new Set();
+
+let nextRequestId = 1;
+
+/**
+ * Correlation id. The pid makes it unique across the cluster, so a reply
+ * broadcast can never settle a different worker's pending request.
+ */
+function newRequestId() {
+  return `${process.pid}:${nextRequestId++}`;
+}
+
+function ensureReplyChannel(type) {
+  if (replyChannels.has(type)) return;
+  replyChannels.add(type);
+  subscribe(type + REPLY_SUFFIX, message => {
+    const id = message?.requestId;
+    const settle = typeof id === 'string' ? pendingRequests.get(id) : undefined;
+    // Replies fan out to every worker; only the originator holds the id.
+    if (!settle) return;
+    pendingRequests.delete(id);
+    settle(message.reply);
+  });
+}
+
+/**
+ * Ask another worker a question and await its answer.
+ *
+ * Resolves with `null` rather than rejecting when no answer arrives — every
+ * caller treats "nobody answered" the same as "the thing is not there", and a
+ * rejection mid-request would need a try/catch at each call site just to avoid
+ * turning a missing entry into a 500.
+ *
+ * @param {string} type - Channel; the responder must use the same one.
+ * @param {*} payload - Structured-cloneable request payload.
+ * @param {object} [options]
+ * @param {{kind: string, key: string}} [options.route] - Presence entry naming
+ *   the worker that should answer. Without it the question is broadcast and any
+ *   worker may answer, so the first reply wins.
+ * @param {number} [options.timeoutMs=1500] - How long to wait before giving up.
+ * @returns {Promise<*|null>} The responder's reply, or null on timeout / outside
+ *   cluster mode, where there is no other worker to ask.
+ */
+export function request(type, payload, { route, timeoutMs = 1500 } = {}) {
+  if (!busActive) return Promise.resolve(null);
+
+  ensureReplyChannel(type);
+  const requestId = newRequestId();
+
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      pendingRequests.delete(requestId);
+      logger.warn({
+        component: 'ClusterBus',
+        message: 'Cross-worker request timed out',
+        type,
+        timeoutMs
+      });
+      resolve(null);
+    }, timeoutMs);
+    // A pending question must never hold the event loop open during shutdown.
+    timer.unref?.();
+
+    pendingRequests.set(requestId, reply => {
+      clearTimeout(timer);
+      resolve(reply === undefined ? null : reply);
+    });
+
+    if (!publish(type, { requestId, payload }, route)) {
+      clearTimeout(timer);
+      pendingRequests.delete(requestId);
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Answer `request()` calls on a channel.
+ *
+ * A handler returning `undefined` sends **no reply**. That is what makes a
+ * broadcast question safe: when the primary does not know who owns the routed
+ * key it falls back to a fan-out, and every worker that does not hold the thing
+ * stays silent instead of racing a `null` ahead of the real owner's answer.
+ * Return an explicit wrapper (e.g. `{ data: null }`) to say "I own this and the
+ * answer is nothing".
+ *
+ * @param {string} type - Channel; must match the requester's.
+ * @param {(payload: *) => *|Promise<*>} handler - Returns the reply, or
+ *   `undefined` to stay silent.
+ * @returns {() => void} Unsubscribe.
+ */
+export function respond(type, handler) {
+  return subscribe(type, async message => {
+    const requestId = message?.requestId;
+    if (typeof requestId !== 'string') return;
+
+    let reply;
+    try {
+      reply = await handler(message.payload);
+    } catch (error) {
+      logger.error({
+        component: 'ClusterBus',
+        message: 'Cross-worker request handler threw',
+        type,
+        error: error?.message || String(error)
+      });
+      return;
+    }
+
+    if (reply === undefined) return;
+    publish(type + REPLY_SUFFIX, { requestId, reply });
+  });
+}
+
 /**
  * A `Map` that publishes its membership to the rest of the cluster.
  *
@@ -443,6 +576,8 @@ export function resetClusterBusForTests() {
   subscribers.clear();
   remoteOwnership.clear();
   presenceMaps.clear();
+  pendingRequests.clear();
+  replyChannels.clear();
   stats.published = 0;
   stats.received = 0;
   stats.presenceAnnounced = 0;

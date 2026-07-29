@@ -71,7 +71,7 @@
     "// === TESTING ===": "",
     "test:all": "npm run test:quick && npm run test:integration && npm run test:e2e",
     "test:quick": "npm run test:unit && npm run test:adapters && npm run test:cluster && npm run test:token-stats && npm run test:export-formats && npm run test:feature-flags",
-    "test:cluster": "node server/tests/sse-cluster-helpers.test.js && node server/tests/clusterBus.test.js && node server/tests/configSync.test.js && node server/tests/keyColdStartRace.test.js",
+    "test:cluster": "node server/tests/sse-cluster-helpers.test.js && node server/tests/clusterBus.test.js && node server/tests/configSync.test.js && node server/tests/keyColdStartRace.test.js && node server/tests/authCodeCluster.test.js && node server/tests/consentTicket.test.js",
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:integration:ci": "jest --config tests/config/jest.config.js tests/integration --testPathIgnorePatterns=tests/integration/api/chat.test.js --testPathIgnorePatterns=tests/integration/models/model-integration.test.js",
