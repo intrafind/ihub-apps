@@ -216,11 +216,30 @@ export function refreshVersionCheck({ force = false } = {}) {
   return inFlight;
 }
 
+/**
+ * A relay is adopted only when it is shaped like something this module could
+ * have produced: both timestamps numeric, and either a release carrying a tag or
+ * a non-empty error — never both, never neither.
+ *
+ * The `expiresAt` check is what matters most. `undefined <= Date.now()` is
+ * false, so an entry cached without a usable expiry would read as fresh
+ * forever and that worker would never check for a new release again.
+ */
+function isValidRelay(payload) {
+  if (!payload) return false;
+  if (typeof payload.checkedAt !== 'number' || typeof payload.expiresAt !== 'number') return false;
+
+  const hasRelease = typeof payload.release?.tag_name === 'string';
+  const hasError = typeof payload.error === 'string' && payload.error.length > 0;
+  return hasRelease !== hasError;
+}
+
 /** Adopt a result another worker produced, unless this worker has a newer one. */
 subscribe(CLUSTER_CHANNEL, payload => {
-  if (!payload || typeof payload.checkedAt !== 'number') return;
-  // A relay carries either a release or an error, never a half-built release.
-  if (payload.release && typeof payload.release.tag_name !== 'string') return;
+  if (!isValidRelay(payload)) {
+    logger.debug('Ignoring malformed version-check relay', { component: 'VersionCheck' });
+    return;
+  }
   if (cacheEntry && cacheEntry.checkedAt >= payload.checkedAt) return;
 
   cacheEntry = {

@@ -118,6 +118,20 @@ function createResponse() {
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Wait for a background check to record its outcome. Polls rather than sleeping
+ * a fixed interval, so it returns as soon as the abort fires and still tolerates
+ * a slow CI runner. The budget derives from the configured timeout — the thing
+ * actually being waited on.
+ */
+async function waitForCheckToSettle() {
+  const deadline = Date.now() + getVersionCheckTimeoutMs() * 4;
+  while (!getVersionCheckEntry() && Date.now() < deadline) {
+    await delay(20);
+  }
+  return getVersionCheckEntry();
+}
+
 beforeEach(() => {
   resetVersionCheckCache();
   httpFetch.mockReset();
@@ -289,15 +303,35 @@ describe('versionCheckService — cluster mode', () => {
     httpFetch.mockResolvedValue(okResponse(release('v9.9.9')));
     await refreshVersionCheck();
 
+    const newer = Date.now() + 1000;
     relayHandler()(null);
-    relayHandler()({ release: { tag_name: 'v0.0.1' } });
+    relayHandler()({ release: { tag_name: 'v0.0.1' } }); // no timestamps
+    relayHandler()({ release: { name: 'no tag' }, checkedAt: newer, expiresAt: newer }); // no tag
+    relayHandler()({ checkedAt: newer, expiresAt: newer }); // neither release nor error
     relayHandler()({
-      release: { name: 'no tag here' },
-      checkedAt: Date.now() + 1000,
-      expiresAt: Date.now() + SUCCESS_TTL_MS
+      // both a release and an error — not a shape this module produces
+      release: { tag_name: 'v0.0.1' },
+      error: 'boom',
+      checkedAt: newer,
+      expiresAt: newer
     });
 
     expect(getVersionCheckEntry().release.tag_name).toBe('v9.9.9');
+  });
+
+  test('a relay with no usable expiry cannot wedge the cache as permanently fresh', () => {
+    // `undefined <= Date.now()` is false, so adopting this entry would leave the
+    // cache looking fresh forever and the worker would never check again.
+    relayHandler()({
+      release: { tag_name: 'v9.9.9' },
+      error: null,
+      checkedAt: Date.now(),
+      expiresAt: 'whenever'
+    });
+
+    expect(getVersionCheckEntry()).toBeNull();
+    expect(isVersionCheckStale()).toBe(true);
+    expect(startBackgroundVersionCheck()).toBe(true);
   });
 
   test('trims the release to the fields that are cached and relayed', async () => {
@@ -404,8 +438,7 @@ describe('GET /api/admin/version/check-update', () => {
     expect(httpFetch).toHaveBeenCalledTimes(1);
 
     // The check it kicked off still records its failure in the background.
-    await delay(800);
-    expect(getVersionCheckEntry()?.error).toMatch(/timed out/);
+    expect((await waitForCheckToSettle())?.error).toMatch(/timed out/);
   });
 
   test('serves the cached result once a check has completed', async () => {
