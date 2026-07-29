@@ -319,15 +319,19 @@ describe('versionCheckService — cluster mode', () => {
     expect(getVersionCheckEntry().release.tag_name).toBe('v9.9.9');
   });
 
-  test('a relay with no usable expiry cannot wedge the cache as permanently fresh', () => {
-    // `undefined <= Date.now()` is false, so adopting this entry would leave the
-    // cache looking fresh forever and the worker would never check again.
-    relayHandler()({
-      release: { tag_name: 'v9.9.9' },
-      error: null,
-      checkedAt: Date.now(),
-      expiresAt: 'whenever'
-    });
+  // Any of these expiries compares false against `Date.now()`, so adopting one
+  // would leave the cache looking fresh forever and the worker would never check
+  // again. `NaN` and `Infinity` matter as much as `undefined` here: both pass
+  // `typeof x === 'number'`, and either would also make the endpoint's
+  // `lastCheckedAt` throw a RangeError out of `toISOString()`.
+  test.each([
+    ['a non-numeric expiry', { checkedAt: Date.now(), expiresAt: 'whenever' }],
+    ['a NaN expiry', { checkedAt: Date.now(), expiresAt: NaN }],
+    ['an infinite expiry', { checkedAt: Date.now(), expiresAt: Infinity }],
+    ['a NaN check time', { checkedAt: NaN, expiresAt: Date.now() + SUCCESS_TTL_MS }],
+    ['an expiry that precedes the check', { checkedAt: Date.now(), expiresAt: Date.now() - 1000 }]
+  ])('%s cannot wedge the cache as permanently fresh', (_label, timestamps) => {
+    relayHandler()({ release: { tag_name: 'v9.9.9' }, error: null, ...timestamps });
 
     expect(getVersionCheckEntry()).toBeNull();
     expect(isVersionCheckStale()).toBe(true);

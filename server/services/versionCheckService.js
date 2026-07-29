@@ -218,16 +218,24 @@ export function refreshVersionCheck({ force = false } = {}) {
 
 /**
  * A relay is adopted only when it is shaped like something this module could
- * have produced: both timestamps numeric, and either a release carrying a tag or
- * a non-empty error — never both, never neither.
+ * have produced: a finite, ordered timestamp pair, and either a release carrying
+ * a tag or a non-empty error — never both, never neither.
  *
- * The `expiresAt` check is what matters most. `undefined <= Date.now()` is
- * false, so an entry cached without a usable expiry would read as fresh
- * forever and that worker would never check for a new release again.
+ * The timestamps carry the sharp edges, and `typeof x === 'number'` is not
+ * enough to blunt them, since `NaN` and `Infinity` both pass it:
+ *  - `NaN <= Date.now()` is false, as is `undefined <= Date.now()`, so an entry
+ *    cached with either expiry would read as fresh forever and that worker would
+ *    never check for a new release again.
+ *  - `new Date(NaN).toISOString()` throws `RangeError`, which would turn the
+ *    admin endpoint's `lastCheckedAt` into a 500.
+ *
+ * A stale-looking entry is the safe direction — it just triggers a refresh — so
+ * `expiresAt` must genuinely follow `checkedAt` to be believed.
  */
 function isValidRelay(payload) {
   if (!payload) return false;
-  if (typeof payload.checkedAt !== 'number' || typeof payload.expiresAt !== 'number') return false;
+  if (!Number.isFinite(payload.checkedAt) || !Number.isFinite(payload.expiresAt)) return false;
+  if (payload.expiresAt <= payload.checkedAt) return false;
 
   const hasRelease = typeof payload.release?.tag_name === 'string';
   const hasError = typeof payload.error === 'string' && payload.error.length > 0;
