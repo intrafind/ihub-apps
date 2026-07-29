@@ -488,15 +488,19 @@ describe('isCertificateError', () => {
 });
 
 describe('probeTcpTls certificate validation', () => {
-  it('verifies certificates by default rather than trusting anything', async () => {
-    // badssl.com is not reachable from every CI network, so this asserts the
-    // contract that matters and can be checked offline: the default must be
-    // strict, i.e. the caller has to opt out explicitly.
+  it('always enforces certificate verification, with no way to relax it', () => {
+    // An external badssl-style host is not reachable from every CI network, so
+    // this pins the contract that can be checked offline: verification is
+    // hardcoded on, and there is no parameter a caller could use to turn it off.
     const source = probeTcpTls.toString();
-    assert.match(source, /rejectUnauthorized = true/);
+    assert.match(source, /rejectUnauthorized:\s*true/);
     assert.ok(
       !/rejectUnauthorized:\s*false/.test(source),
-      'probeTcpTls must never hardcode rejectUnauthorized: false'
+      'probeTcpTls must never set rejectUnauthorized: false'
+    );
+    assert.ok(
+      !/rejectUnauthorized\s*=/.test(source),
+      'probeTcpTls must not accept rejectUnauthorized as a caller-supplied option'
     );
   });
 

@@ -261,31 +261,27 @@ export async function resolveHostname(hostname) {
  * Open a TCP (and for https a TLS) connection to check reachability and collect
  * certificate facts.
  *
- * Certificate verification follows the platform SSL policy, so the probe behaves
- * exactly like a real outbound request: it never trusts more than the rest of the
- * server does. A certificate the trust store rejects therefore aborts the
- * handshake, and the probe reports that as `certificateRejected` together with
- * Node's specific reason (self-signed, expired, unknown CA, hostname mismatch).
- * That still distinguishes "unreachable" from "reachable but not trusted", which
- * are very different fixes, without ever disabling validation to find out.
+ * Certificate verification is ALWAYS enforced — there is deliberately no option
+ * to relax it. A diagnostic never needs to trust a certificate the server itself
+ * would reject: when the trust store rejects one, the handshake aborts and the
+ * probe reports `certificateRejected` with Node's specific reason (self-signed,
+ * expired, unknown CA, hostname mismatch). That already distinguishes
+ * "unreachable" from "reachable but not trusted", which are very different fixes.
+ *
+ * Callers that have relaxed TLS for a domain via the Admin > Platform > SSL
+ * whitelist should keep enforcing it here and use
+ * `describeTransport().ignoreInvalidCertificates` only to interpret the result —
+ * i.e. to explain that real requests still succeed even though the system trust
+ * store says no. Interpreting a rejection is strictly better than not detecting it.
  *
  * @param {Object} params
  * @param {string} params.hostname
  * @param {number} params.port
  * @param {string} params.protocol - 'http' or 'https'
  * @param {number} [params.timeout=10000]
- * @param {boolean} [params.rejectUnauthorized=true] - Pass the platform SSL policy
- *   for this URL (see `describeTransport().ignoreInvalidCertificates`). Only an
- *   explicit admin whitelist entry may relax it.
  * @returns {Promise<Object>} Probe result
  */
-export function probeTcpTls({
-  hostname,
-  port,
-  protocol,
-  timeout = 10000,
-  rejectUnauthorized = true
-}) {
+export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
   const useTls = protocol === 'https';
   const startedAt = Date.now();
 
@@ -309,7 +305,9 @@ export function probeTcpTls({
           // RFC 6066 forbids an IP address as the SNI server name, and Node warns
           // about it. Only send SNI for real hostnames.
           ...(net.isIP(hostname) === 0 ? { servername: hostname } : {}),
-          rejectUnauthorized
+          // Never relaxed. See the function comment: a rejection is reported and
+          // interpreted, not avoided by trusting the certificate.
+          rejectUnauthorized: true
         })
       : net.connect({ host: hostname, port });
 

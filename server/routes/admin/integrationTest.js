@@ -248,14 +248,15 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
   }
 
   await report.run('tcp', 'TCP / TLS connection', async () => {
+    // The probe always verifies certificates. Where the admin has whitelisted the
+    // domain under Admin > Platform > SSL, a rejection here is not a broken
+    // integration — real requests still go through — so the whitelist changes how
+    // the result is *interpreted*, never how strictly it was measured.
     const probe = await probeTcpTls({
       hostname: urlInfo.hostname,
       port: urlInfo.port,
       protocol: urlInfo.protocol,
-      timeout: Math.min(timeout, 15000),
-      // Verify exactly as an outbound request would: only an explicit admin
-      // whitelist entry relaxes it, never the probe itself.
-      rejectUnauthorized: !transport.ignoreInvalidCertificates
+      timeout: Math.min(timeout, 15000)
     });
 
     const details = {
@@ -263,18 +264,33 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
       connected: probe.connected,
       remoteAddress: probe.remoteAddress,
       durationMs: probe.durationMs,
-      certificateValidation: transport.ignoreInvalidCertificates
-        ? 'relaxed for this domain by the Admin > Platform > SSL whitelist'
-        : 'enforced against the trust store of the iHub server',
+      certificateValidation: 'always enforced by this probe against the iHub trust store',
+      sslWhitelisted: transport.ignoreInvalidCertificates,
       note: transport.viaProxy
         ? `This probe connects directly. Real requests go through the proxy ${transport.proxyUrl}, so a failure here does not necessarily break the integration.`
         : 'Direct connection from the iHub server (no proxy configured for this URL).',
       ...(probe.tls ? { tls: probe.tls } : {})
     };
 
+    const opensslHint = `Inspect what the host presents: openssl s_client -connect ${urlInfo.hostname}:${urlInfo.port}${
+      urlInfo.isIpLiteral ? '' : ` -servername ${urlInfo.hostname}`
+    }`;
+
     // A certificate rejection is not an unreachable host: the handshake got far
     // enough to receive a certificate, so only trust is missing.
     if (!probe.connected && probe.certificateRejected) {
+      if (transport.ignoreInvalidCertificates) {
+        return {
+          status: STATUS.WARN,
+          message: `Reached ${urlInfo.hostname}:${urlInfo.port}; its TLS certificate is not trusted by the iHub trust store (${probe.error}), but this domain is whitelisted so requests still succeed`,
+          details,
+          hints: [
+            'The integration works because the domain is whitelisted under Admin > Platform > SSL. That bypass applies to iHub only — browsers and other clients still reject this certificate.',
+            'Add the issuing CA to the trust store of the iHub server to fix it properly and drop the whitelist entry.',
+            opensslHint
+          ]
+        };
+      }
       return {
         status: STATUS.FAIL,
         message: `Reached ${urlInfo.hostname}:${urlInfo.port}, but its TLS certificate was rejected: ${probe.error}`,
@@ -282,9 +298,7 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
         hints: [
           'Add the CA that issued the certificate to the trust store of the iHub server, so both iHub and the browser trust it.',
           'As a temporary workaround the domain can be whitelisted under Admin > Platform > SSL. That only relaxes iHub, not other clients.',
-          `Verify what the host presents: openssl s_client -connect ${urlInfo.hostname}:${urlInfo.port}${
-            urlInfo.isIpLiteral ? '' : ` -servername ${urlInfo.hostname}`
-          }`
+          opensslHint
         ]
       };
     }
@@ -305,31 +319,14 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
       };
     }
 
-    const tlsHints = [];
-    let status = STATUS.OK;
+    // Reaching here with TLS means the certificate passed verification, so there
+    // is no untrusted or expired case left to report.
     let message = `Connected to ${urlInfo.hostname}:${urlInfo.port} in ${probe.durationMs}ms`;
-
     if (probe.tls) {
-      message += ` (${probe.tls.protocol}, certificate for ${probe.tls.subject || 'unknown subject'})`;
-      if (!probe.tls.authorized) {
-        // Only reachable when the SSL whitelist relaxed verification for this
-        // domain; otherwise an untrusted certificate already aborted above.
-        status = STATUS.WARN;
-        message = `Connected, but the TLS certificate of ${urlInfo.hostname} is not trusted: ${probe.tls.authorizationError}`;
-        tlsHints.push(
-          `Add the CA that issued "${probe.tls.issuer || 'the certificate'}" to the trust store of the iHub server.`,
-          'This domain is whitelisted under Admin > Platform > SSL, so requests still go through — but only from iHub. Other clients will keep rejecting it.'
-        );
-        if (probe.tls.selfSigned) {
-          tlsHints.push('The certificate is self-signed.');
-        }
-      } else if (probe.tls.expired) {
-        status = STATUS.WARN;
-        tlsHints.push(`The certificate expired on ${probe.tls.validTo}.`);
-      }
+      message += ` (${probe.tls.protocol}, certificate for ${probe.tls.subject || 'unknown subject'} issued by ${probe.tls.issuer || 'unknown issuer'}, valid to ${probe.tls.validTo || 'unknown'})`;
     }
 
-    return { status, message, details, hints: tlsHints };
+    return { status: STATUS.OK, message, details };
   });
 
   return urlInfo;
