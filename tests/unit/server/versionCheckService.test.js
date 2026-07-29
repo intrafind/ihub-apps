@@ -49,7 +49,6 @@ jest.mock('../../../server/clusterBus.js', () => {
   };
 });
 
-import { __handlers as clusterHandlers } from '../../../server/clusterBus.js';
 import { httpFetch } from '../../../server/utils/httpConfig.js';
 import {
   FAILURE_TTL_MS,
@@ -229,12 +228,15 @@ describe('versionCheckService — cluster mode', () => {
   const CLUSTER_CHANNEL = 'versionCheck:result';
 
   /**
-   * The service registers its relay handler while being imported. Resolve it
-   * through an assertion so a broken registration fails as "expected a
-   * function" rather than as a TypeError at the call site.
+   * The service registers its relay handler while being imported. The store it
+   * lands in belongs to the clusterBus mock, so reach it through the mock
+   * registry rather than importing a named export the real module does not
+   * have. The assertion makes a broken registration fail as "expected a
+   * function" instead of as a TypeError at the call site.
    */
   function relayHandler() {
-    const handler = clusterHandlers[CLUSTER_CHANNEL];
+    const { __handlers: handlers } = jest.requireMock('../../../server/clusterBus.js');
+    const handler = handlers[CLUSTER_CHANNEL];
     expect(handler).toEqual(expect.any(Function));
     return handler;
   }
