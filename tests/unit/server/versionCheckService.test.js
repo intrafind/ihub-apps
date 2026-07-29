@@ -228,6 +228,17 @@ describe('versionCheckService — caching', () => {
 describe('versionCheckService — cluster mode', () => {
   const CLUSTER_CHANNEL = 'versionCheck:result';
 
+  /**
+   * The service registers its relay handler while being imported. Resolve it
+   * through an assertion so a broken registration fails as "expected a
+   * function" rather than as a TypeError at the call site.
+   */
+  function relayHandler() {
+    const handler = clusterHandlers[CLUSTER_CHANNEL];
+    expect(handler).toEqual(expect.any(Function));
+    return handler;
+  }
+
   test('relays a completed check to the other workers', async () => {
     httpFetch.mockResolvedValue(okResponse(release('v9.9.9')));
     const entry = await refreshVersionCheck();
@@ -245,7 +256,7 @@ describe('versionCheckService — cluster mode', () => {
 
   test('adopts a result from another worker instead of querying GitHub again', () => {
     const checkedAt = Date.now();
-    clusterHandlers[CLUSTER_CHANNEL]({
+    relayHandler()({
       release: { tag_name: 'v9.9.9', name: 'v9.9.9', html_url: 'url', published_at: null },
       error: null,
       checkedAt,
@@ -262,7 +273,7 @@ describe('versionCheckService — cluster mode', () => {
     httpFetch.mockResolvedValue(okResponse(release('v9.9.9')));
     const own = await refreshVersionCheck();
 
-    clusterHandlers[CLUSTER_CHANNEL]({
+    relayHandler()({
       release: { tag_name: 'v1.0.0' },
       error: null,
       checkedAt: own.checkedAt - 1000,
@@ -276,9 +287,9 @@ describe('versionCheckService — cluster mode', () => {
     httpFetch.mockResolvedValue(okResponse(release('v9.9.9')));
     await refreshVersionCheck();
 
-    clusterHandlers[CLUSTER_CHANNEL](null);
-    clusterHandlers[CLUSTER_CHANNEL]({ release: { tag_name: 'v0.0.1' } });
-    clusterHandlers[CLUSTER_CHANNEL]({
+    relayHandler()(null);
+    relayHandler()({ release: { tag_name: 'v0.0.1' } });
+    relayHandler()({
       release: { name: 'no tag here' },
       checkedAt: Date.now() + 1000,
       expiresAt: Date.now() + SUCCESS_TTL_MS
