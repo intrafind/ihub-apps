@@ -927,3 +927,30 @@ in an in-app PDF preview with every cited passage highlighted, scrolled to the f
   reports "Passage not found" instead of failing.
 - Documents without a downloadable version are unaffected: the passage button and preview entry
   only appear where iFinder exposes document access.
+
+## Connection Diagnostics for iFinder and iAssistant
+
+The **Test iFinder** and **Test iAssistant** buttons under Admin → iFinder Integration now run a
+step-by-step diagnostic instead of returning a single pass/fail message. Each step reports what it
+observed and, when it fails, what to check — so connecting iHub to iFinder no longer requires
+reading server logs and guessing.
+
+- Checks the whole path: the configured URL (including a warning when the hostname is not fully
+  qualified), DNS resolution, the TCP/TLS handshake with certificate subject, issuer, expiry and
+  trust result, JWT generation, local signature verification, JWKS reachability, and a real API
+  request against iFinder's search endpoint or iAssistant's profile list.
+- Shows the decoded JWT — header, payload, and the subject that was actually derived for the user —
+  so it can be compared against the trust configuration on the iFinder side. A 401 now also surfaces
+  the `WWW-Authenticate` header and names the usual causes: issuer mismatch, a `kid` missing from
+  the JWKS, a subject in the wrong format, or clock skew.
+- Flags the issuer and JWKS URL that **iFinder itself must call back to**. A `localhost` or
+  single-label hostname there is reported as a failure, because iFinder can never fetch the signing
+  keys from it — the most common reason iFinder answers 500 during token validation.
+- Detects an iAssistant profile ID that does not exist and lists the profiles the tested user can
+  actually see.
+- Diagnostics options allow testing as a specific user (email, username, domain) to verify how the
+  JWT subject is built, choosing the test search query, optionally returning the signed JWT together
+  with a ready-to-run `curl` command, and running an iAssistant conversation round-trip to verify
+  write access. Without the token option the `curl` command references `$TOKEN` and is safe to share.
+- A previous behaviour is fixed: an iAssistant network failure used to be reported as "configuration
+  is valid" and counted as a success. Unreachable now reads as unreachable.
