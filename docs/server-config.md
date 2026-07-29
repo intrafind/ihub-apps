@@ -90,6 +90,8 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
 | `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
+| `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |
+| `VERSION_CHECK_TIMEOUT_MS` | Abort deadline in milliseconds for the release lookup (alias: `IHUB_VERSION_CHECK_TIMEOUT_MS`). Clamped to 500–60000. | `5000` |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.

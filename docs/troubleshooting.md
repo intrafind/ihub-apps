@@ -594,6 +594,41 @@ curl -v https://api.openai.com/v1/models
 - **Timeout Issues:** Increase `REQUEST_TIMEOUT` environment variable
 - **Proxy Issues:** Configure proxy settings in environment
 
+### Admin Start Page Shows Only Grey Loading Boxes
+
+**Symptoms:**
+- `/admin` renders animated grey placeholders and never loads the dashboard
+- Typically on installations without outbound internet access
+
+**Cause:**
+
+The dashboard's update check contacts `api.github.com`. Where a firewall drops
+packets instead of refusing them, the connection never completes. Before 5.5.0
+the page waited for that request, so it stayed on its loading placeholders until
+the operating system's TCP timeout — minutes later.
+
+**Debugging Steps:**
+
+```bash
+# Should answer immediately, even with no internet access
+curl -s -w '\n%{time_total}s\n' -b "authToken=$TOKEN" \
+     http://localhost:3000/api/admin/version/check-update
+```
+
+A failed or timed-out check is reported in the response's `error` field; a check
+still running comes back as `"checking": true` with no result yet. Both are
+normal and neither blocks the page.
+
+**Solutions:**
+
+- Upgrade to 5.5.0 or later — the check is bounded and no longer blocks the page.
+- Set `NO_VERSION_CHECK=true` to skip the release lookup entirely on air-gapped
+  installations.
+- Raise `VERSION_CHECK_TIMEOUT_MS` (default `5000`) if GitHub is reachable but
+  slow, for example through a strict proxy.
+- Check the server log for `component: VersionCheck` warnings to see what the
+  lookup reported.
+
 ---
 
 ## Performance Problems
