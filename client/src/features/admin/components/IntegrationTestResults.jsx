@@ -210,7 +210,11 @@ function IntegrationTestResults({ title, result }) {
       {steps?.length > 0 ? (
         <div className="bg-white dark:bg-gray-800">
           {steps.map(step => (
-            <StepRow key={step.id} step={step} />
+            // The key includes the status so a step whose outcome changed between
+            // runs remounts and re-applies the default expansion (fail/warn open,
+            // ok collapsed). A step with an unchanged outcome keeps whatever the
+            // admin expanded or collapsed by hand.
+            <StepRow key={`${step.id}-${step.status}`} step={step} />
           ))}
         </div>
       ) : (

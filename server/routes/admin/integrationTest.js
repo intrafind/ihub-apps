@@ -42,6 +42,34 @@ const OVERRIDABLE_USER_FIELDS = ['id', 'email', 'username', 'name', 'domain'];
 const MAX_OVERRIDE_LENGTH = 320;
 
 /**
+ * Characters a search profile id may contain. iFinder profile ids are slugs
+ * ("searchprofile-standard") or base64 of one, so this covers every legitimate
+ * value while keeping request-body input out of the URL path entirely — no
+ * slashes, dots or encoded traversal sequences can reach the endpoint template.
+ */
+const SEARCH_PROFILE_PATTERN = /^[A-Za-z0-9_:@=+-]{1,200}$/;
+
+/**
+ * Build the URL for an integration request.
+ *
+ * The origin and path always come from the trusted platform configuration, and
+ * every caller-supplied value goes through `searchParams`, so request-body input
+ * can never influence which host is contacted.
+ *
+ * @param {string} baseUrl - Configured base URL
+ * @param {string} path - Endpoint path (already templated)
+ * @param {Object} [query] - Query parameters
+ * @returns {string} Absolute URL
+ */
+function buildIntegrationUrl(baseUrl, path, query = {}) {
+  const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+  }
+  return url.toString();
+}
+
+/**
  * Accept only known string fields from the request body, so the override cannot
  * be used to smuggle arbitrary structures into JWT generation.
  * @param {Object} raw - `user` object from the request body
@@ -223,7 +251,10 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
       hostname: urlInfo.hostname,
       port: urlInfo.port,
       protocol: urlInfo.protocol,
-      timeout: Math.min(timeout, 15000)
+      timeout: Math.min(timeout, 15000),
+      // Verify exactly as an outbound request would: only an explicit admin
+      // whitelist entry relaxes it, never the probe itself.
+      rejectUnauthorized: !transport.ignoreInvalidCertificates
     });
 
     const details = {
@@ -231,11 +262,31 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
       connected: probe.connected,
       remoteAddress: probe.remoteAddress,
       durationMs: probe.durationMs,
+      certificateValidation: transport.ignoreInvalidCertificates
+        ? 'relaxed for this domain by the Admin > Platform > SSL whitelist'
+        : 'enforced against the trust store of the iHub server',
       note: transport.viaProxy
         ? `This probe connects directly. Real requests go through the proxy ${transport.proxyUrl}, so a failure here does not necessarily break the integration.`
         : 'Direct connection from the iHub server (no proxy configured for this URL).',
       ...(probe.tls ? { tls: probe.tls } : {})
     };
+
+    // A certificate rejection is not an unreachable host: the handshake got far
+    // enough to receive a certificate, so only trust is missing.
+    if (!probe.connected && probe.certificateRejected) {
+      return {
+        status: STATUS.FAIL,
+        message: `Reached ${urlInfo.hostname}:${urlInfo.port}, but its TLS certificate was rejected: ${probe.error}`,
+        details,
+        hints: [
+          'Add the CA that issued the certificate to the trust store of the iHub server, so both iHub and the browser trust it.',
+          'As a temporary workaround the domain can be whitelisted under Admin > Platform > SSL. That only relaxes iHub, not other clients.',
+          `Verify what the host presents: openssl s_client -connect ${urlInfo.hostname}:${urlInfo.port}${
+            urlInfo.isIpLiteral ? '' : ` -servername ${urlInfo.hostname}`
+          }`
+        ]
+      };
+    }
 
     if (!probe.connected) {
       return {
@@ -260,22 +311,16 @@ async function runTransportSteps(report, { rawUrl, urlLabel, timeout }) {
     if (probe.tls) {
       message += ` (${probe.tls.protocol}, certificate for ${probe.tls.subject || 'unknown subject'})`;
       if (!probe.tls.authorized) {
-        status = transport.ignoreInvalidCertificates ? STATUS.WARN : STATUS.FAIL;
-        message = `TLS certificate of ${urlInfo.hostname} is not trusted: ${probe.tls.authorizationError}`;
+        // Only reachable when the SSL whitelist relaxed verification for this
+        // domain; otherwise an untrusted certificate already aborted above.
+        status = STATUS.WARN;
+        message = `Connected, but the TLS certificate of ${urlInfo.hostname} is not trusted: ${probe.tls.authorizationError}`;
         tlsHints.push(
-          `Add the CA that issued "${probe.tls.issuer || 'the certificate'}" to the trust store of the iHub server.`
+          `Add the CA that issued "${probe.tls.issuer || 'the certificate'}" to the trust store of the iHub server.`,
+          'This domain is whitelisted under Admin > Platform > SSL, so requests still go through — but only from iHub. Other clients will keep rejecting it.'
         );
         if (probe.tls.selfSigned) {
           tlsHints.push('The certificate is self-signed.');
-        }
-        if (transport.ignoreInvalidCertificates) {
-          tlsHints.push(
-            'This domain is whitelisted under Admin > Platform > SSL, so requests still go through — but only from iHub. Other clients will keep rejecting it.'
-          );
-        } else {
-          tlsHints.push(
-            'As a temporary workaround the domain can be whitelisted under Admin > Platform > SSL.'
-          );
         }
       } else if (probe.tls.expired) {
         status = STATUS.WARN;
@@ -323,6 +368,15 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
     if (subjectField === 'email' && !String(info.subject).includes('@')) {
       hints.push(
         `JWT Subject Field is "email" but the subject "${info.subject}" is not an email address — the user has no email, so iHub fell back to the username or id. iFinder has to know the subject in exactly this form.`
+      );
+    }
+
+    // The scope claim is read back from the signed token, so it is the value
+    // iFinder will really see. Flag the implicit fallback, which does not match
+    // the scope the shipped platform default configures.
+    if (!iFinderConfig.defaultScope) {
+      hints.push(
+        `No Default Scope is configured, so the token was signed with the built-in fallback scope "${info.scope}". Set the scope explicitly on this page — the shipped default is "fa_index_read".`
       );
     }
 
@@ -819,9 +873,27 @@ export default function registerIntegrationTestRoutes(app) {
         const platformConfig = configCache.getPlatform() || {};
         const iFinderConfig = platformConfig.iFinder || {};
         const config = iFinderService.getConfig();
-        const searchProfile =
-          (typeof req.body?.searchProfile === 'string' && req.body.searchProfile.trim()) ||
-          config.defaultSearchProfile;
+        // The override only ever reaches a URL path segment, so it is validated
+        // against the shape of a profile id rather than merely encoded.
+        const requestedProfile =
+          typeof req.body?.searchProfile === 'string' ? req.body.searchProfile.trim() : '';
+        if (requestedProfile && !SEARCH_PROFILE_PATTERN.test(requestedProfile)) {
+          report.add({
+            id: 'configuration',
+            label: 'Configuration',
+            status: STATUS.FAIL,
+            message: 'The requested search profile is not a valid profile id',
+            details: { requestedSearchProfile: requestedProfile },
+            hints: [
+              'A search profile id may only contain letters, digits and the characters _ : @ = + - (for example "searchprofile-standard", or its base64 form).'
+            ]
+          });
+          return respond(res, report, {
+            integration: 'iFinder',
+            details: { invalidParameter: 'searchProfile' }
+          });
+        }
+        const searchProfile = requestedProfile || config.defaultSearchProfile;
         const signingKey = describeSigningKey(iFinderConfig);
         const timeout = config.timeout || 30000;
 
@@ -847,7 +919,10 @@ export default function registerIntegrationTestRoutes(app) {
           jwtAudience: iFinderConfig.audience || 'ifinder-api',
           jwtIssuer: iFinderConfig.issuer || 'ihub-apps',
           tokenExpirationSeconds: iFinderConfig.tokenExpirationSeconds || 3600,
-          defaultScope: iFinderConfig.defaultScope || 'fi_index_read',
+          // Deliberately not defaulted here: duplicating the fallback would risk
+          // reporting a scope other than the one actually signed. The scope that
+          // ends up in the token is reported by the JWT step from the real claim.
+          defaultScope: iFinderConfig.defaultScope || '(not configured)',
           signingKeyMode: signingKey.mode,
           signingKeySource: signingKey.description
         };
@@ -951,7 +1026,10 @@ export default function registerIntegrationTestRoutes(app) {
             '{profileId}',
             encodeURIComponent(searchProfile)
           );
-          const searchUrl = `${config.baseUrl.replace(/\/+$/, '')}${searchEndpoint}?query=${encodeURIComponent(testQuery)}&size=1`;
+          const searchUrl = buildIntegrationUrl(config.baseUrl, searchEndpoint, {
+            query: testQuery,
+            size: 1
+          });
 
           const result = await runApiRequestStep(report, {
             id: 'search',
@@ -1197,7 +1275,10 @@ export default function registerIntegrationTestRoutes(app) {
             'Skipped because the base URL or the JWT could not be prepared.'
           );
         } else {
-          const profilesUrl = `${config.baseUrl.replace(/\/+$/, '')}/public-api/rag/api/v0/profiles`;
+          const profilesUrl = buildIntegrationUrl(
+            config.baseUrl,
+            '/public-api/rag/api/v0/profiles'
+          );
           const requestContext = {
             useOidcKeyPair: Boolean(iFinderConfig.useOidcKeyPair),
             jwksUrl: oidc.applicable ? oidc.jwksUrl : undefined,

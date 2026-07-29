@@ -21,8 +21,10 @@ import {
   describeHttpFailure,
   describeNetworkError,
   inspectUrl,
+  isCertificateError,
   isPrivateAddress,
   previewToken,
+  probeTcpTls,
   redactHeaders,
   resolveHostname,
   truncateBody
@@ -400,5 +402,72 @@ describe('DiagnosticsReport', () => {
     report.add({ id: 'a', label: 'A', status: STATUS.OK, details: {}, hints: [] });
     assert.equal('details' in report.steps[0], false);
     assert.equal('hints' in report.steps[0], false);
+  });
+
+  it('deduplicates hints, keeping first-seen order', () => {
+    const report = new DiagnosticsReport();
+    report.add({
+      id: 'a',
+      label: 'A',
+      status: STATUS.FAIL,
+      hints: ['check DNS', 'check the server log', 'check DNS']
+    });
+    assert.deepEqual(report.steps[0].hints, ['check DNS', 'check the server log']);
+  });
+});
+
+describe('isCertificateError', () => {
+  it('recognises OpenSSL verification failures by code', () => {
+    for (const code of [
+      'DEPTH_ZERO_SELF_SIGNED_CERT',
+      'CERT_HAS_EXPIRED',
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+      'ERR_TLS_CERT_ALTNAME_INVALID'
+    ]) {
+      assert.equal(isCertificateError({ code, message: '' }), true, code);
+    }
+  });
+
+  it('recognises them by message when no code is present', () => {
+    assert.equal(isCertificateError({ message: 'self signed certificate in chain' }), true);
+    assert.equal(
+      isCertificateError({ message: "Hostname/IP does not match certificate's altnames" }),
+      true
+    );
+  });
+
+  it('does not classify transport failures as certificate failures', () => {
+    for (const code of ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH']) {
+      assert.equal(isCertificateError({ code, message: 'connect failed' }), false, code);
+    }
+    assert.equal(isCertificateError(null), false);
+    assert.equal(isCertificateError(undefined), false);
+  });
+});
+
+describe('probeTcpTls certificate validation', () => {
+  it('verifies certificates by default rather than trusting anything', async () => {
+    // badssl.com is not reachable from every CI network, so this asserts the
+    // contract that matters and can be checked offline: the default must be
+    // strict, i.e. the caller has to opt out explicitly.
+    const source = probeTcpTls.toString();
+    assert.match(source, /rejectUnauthorized = true/);
+    assert.ok(
+      !/rejectUnauthorized:\s*false/.test(source),
+      'probeTcpTls must never hardcode rejectUnauthorized: false'
+    );
+  });
+
+  it('reports a refused port as unreachable, not as a certificate problem', async () => {
+    // Port 1 is reserved and never listening.
+    const probe = await probeTcpTls({
+      hostname: '127.0.0.1',
+      port: 1,
+      protocol: 'http',
+      timeout: 3000
+    });
+    assert.equal(probe.connected, false);
+    assert.equal(probe.certificateRejected, false);
+    assert.ok(probe.code);
   });
 });

@@ -52,7 +52,9 @@ export class DiagnosticsReport {
    * @param {string} step.status - One of STATUS
    * @param {string} [step.message] - One-line result summary
    * @param {Object} [step.details] - Raw observed facts, rendered as JSON
-   * @param {string[]} [step.hints] - What the admin should check on failure
+   * @param {string[]} [step.hints] - What the admin should check on failure.
+   *   Deduplicated, since several classifiers can independently suggest the same
+   *   check and a repeated line reads like a bug.
    * @param {number} [step.durationMs]
    * @returns {Object} The recorded step
    */
@@ -60,7 +62,7 @@ export class DiagnosticsReport {
     const step = { id, label, status, message };
     if (typeof durationMs === 'number') step.durationMs = durationMs;
     if (details && Object.keys(details).length > 0) step.details = details;
-    if (hints && hints.length > 0) step.hints = hints;
+    if (hints && hints.length > 0) step.hints = [...new Set(hints)];
     this.steps.push(step);
     return step;
   }
@@ -259,19 +261,31 @@ export async function resolveHostname(hostname) {
  * Open a TCP (and for https a TLS) connection to check reachability and collect
  * certificate facts.
  *
- * The TLS handshake runs with `rejectUnauthorized: false` on purpose: we want
- * the certificate details even when verification fails, and then report the
- * verification result separately. That distinguishes "unreachable" from
- * "reachable but the certificate is not trusted", which are very different fixes.
+ * Certificate verification follows the platform SSL policy, so the probe behaves
+ * exactly like a real outbound request: it never trusts more than the rest of the
+ * server does. A certificate the trust store rejects therefore aborts the
+ * handshake, and the probe reports that as `certificateRejected` together with
+ * Node's specific reason (self-signed, expired, unknown CA, hostname mismatch).
+ * That still distinguishes "unreachable" from "reachable but not trusted", which
+ * are very different fixes, without ever disabling validation to find out.
  *
  * @param {Object} params
  * @param {string} params.hostname
  * @param {number} params.port
  * @param {string} params.protocol - 'http' or 'https'
  * @param {number} [params.timeout=10000]
+ * @param {boolean} [params.rejectUnauthorized=true] - Pass the platform SSL policy
+ *   for this URL (see `describeTransport().ignoreInvalidCertificates`). Only an
+ *   explicit admin whitelist entry may relax it.
  * @returns {Promise<Object>} Probe result
  */
-export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
+export function probeTcpTls({
+  hostname,
+  port,
+  protocol,
+  timeout = 10000,
+  rejectUnauthorized = true
+}) {
   const useTls = protocol === 'https';
   const startedAt = Date.now();
 
@@ -289,7 +303,14 @@ export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
     };
 
     const socket = useTls
-      ? tls.connect({ host: hostname, port, servername: hostname, rejectUnauthorized: false })
+      ? tls.connect({
+          host: hostname,
+          port,
+          // RFC 6066 forbids an IP address as the SNI server name, and Node warns
+          // about it. Only send SNI for real hostnames.
+          ...(net.isIP(hostname) === 0 ? { servername: hostname } : {}),
+          rejectUnauthorized
+        })
       : net.connect({ host: hostname, port });
 
     socket.setTimeout(timeout);
@@ -303,7 +324,15 @@ export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
     );
 
     socket.on('error', error =>
-      finish({ connected: false, error: error.message, code: error.code })
+      finish({
+        connected: false,
+        // A TLS-level rejection means the TCP connection and the handshake
+        // succeeded far enough to receive a certificate, so the host is
+        // reachable and only trust is the problem.
+        certificateRejected: isCertificateError(error),
+        error: error.message,
+        code: error.code
+      })
     );
 
     const onConnect = () => {
@@ -337,6 +366,38 @@ export function probeTcpTls({ hostname, port, protocol, timeout = 10000 }) {
 
     socket.on(useTls ? 'secureConnect' : 'connect', onConnect);
   });
+}
+
+/**
+ * OpenSSL verification failures Node surfaces as `error.code`. Matching them lets
+ * the diagnostics say "reachable but the certificate was rejected" instead of
+ * lumping a trust problem in with an unreachable host.
+ */
+const CERTIFICATE_ERROR_CODES = new Set([
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'CERT_REVOKED',
+  'CERT_SIGNATURE_FAILURE',
+  'CERT_UNTRUSTED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'HOSTNAME_MISMATCH',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+]);
+
+/**
+ * True when a connection error is a certificate verification failure rather than
+ * a transport failure.
+ * @param {Error} error
+ * @returns {boolean}
+ */
+export function isCertificateError(error) {
+  if (!error) return false;
+  if (CERTIFICATE_ERROR_CODES.has(error.code)) return true;
+  return /certificate|self.signed|unable to verify|altnames/i.test(error.message || '');
 }
 
 /**
