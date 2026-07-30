@@ -28,17 +28,121 @@ import { getLocalizedString } from '../../utils/localize.js';
  */
 
 /**
- * Convert an iHub tool definition (`tool.parameters` is JSON Schema) into
- * MCP's `inputSchema` shape (zod or JSON Schema both work). We pass JSON
- * Schema directly since the SDK accepts it via `inputSchema`.
+ * Coerce a possibly-localized value (`string` or `{ en, de, ... }`) to a plain
+ * string for use as a JSON Schema `description`. Nested tool parameters may
+ * still carry localized descriptions that `loadConfiguredTools` did not flatten.
  */
-function jsonSchemaToInputSchema(jsonSchema) {
-  // SDK accepts a Zod raw shape OR an `AnySchema` (with a JSON Schema). Pass
-  // through the JSON Schema by wrapping in a thin AnySchema object.
-  if (!jsonSchema || typeof jsonSchema !== 'object') {
-    return { jsonSchema: { type: 'object', properties: {} } };
+function localizedToString(value) {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    return value.en || Object.values(value).find(v => typeof v === 'string');
   }
-  return { jsonSchema };
+  return undefined;
+}
+
+/**
+ * Convert a single JSON Schema node into a Zod type. Handles the subset of
+ * JSON Schema that iHub app/workflow/tool definitions use (object, string,
+ * number, integer, boolean, array, enum, nullable). Anything unrecognized
+ * falls back to `z.any()` so a call is never rejected for a construct we can't
+ * model.
+ */
+function jsonSchemaNodeToZod(node) {
+  if (!node || typeof node !== 'object') return z.any();
+
+  // String enums map cleanly onto z.enum; mixed/other enums fall through.
+  if (
+    Array.isArray(node.enum) &&
+    node.enum.length > 0 &&
+    node.enum.every(v => typeof v === 'string')
+  ) {
+    const enumType = z.enum(node.enum);
+    const enumDesc = localizedToString(node.description);
+    return enumDesc ? enumType.describe(enumDesc) : enumType;
+  }
+
+  const rawType = Array.isArray(node.type) ? node.type.find(t => t !== 'null') : node.type;
+  let zodType;
+  switch (rawType) {
+    case 'string':
+      zodType = z.string();
+      break;
+    case 'number':
+    case 'integer':
+      zodType = z.number();
+      break;
+    case 'boolean':
+      zodType = z.boolean();
+      break;
+    case 'array':
+      zodType = z.array(node.items ? jsonSchemaNodeToZod(node.items) : z.any());
+      break;
+    case 'object': {
+      const props = node.properties || {};
+      // Free-form object (no declared properties, e.g. `additionalProperties`
+      // or an open payload). `z.object({})` strips every key and would silently
+      // drop the caller's whole object — the same empty-schema data loss this
+      // module exists to fix. `z.record` preserves arbitrary keys instead.
+      if (Object.keys(props).length === 0) {
+        zodType = z.record(z.any());
+        break;
+      }
+      const shape = {};
+      const req = Array.isArray(node.required) ? node.required : [];
+      for (const [key, child] of Object.entries(props)) {
+        let childType = jsonSchemaNodeToZod(child);
+        if (!req.includes(key)) childType = childType.optional();
+        shape[key] = childType;
+      }
+      zodType = z.object(shape);
+      break;
+    }
+    default:
+      zodType = z.any();
+  }
+
+  if (Array.isArray(node.type) && node.type.includes('null')) zodType = zodType.nullable();
+  const desc = localizedToString(node.description);
+  if (desc) zodType = zodType.describe(desc);
+  return zodType;
+}
+
+/**
+ * Convert a top-level JSON Schema object (`{ type:'object', properties,
+ * required }`) into a Zod **raw shape** (`{ [prop]: ZodType }`).
+ */
+function jsonSchemaToZodShape(jsonSchema) {
+  const shape = {};
+  if (!jsonSchema || typeof jsonSchema !== 'object' || !jsonSchema.properties) {
+    return shape;
+  }
+  const required = Array.isArray(jsonSchema.required) ? jsonSchema.required : [];
+  for (const [key, node] of Object.entries(jsonSchema.properties)) {
+    let childType = jsonSchemaNodeToZod(node);
+    if (!required.includes(key)) childType = childType.optional();
+    shape[key] = childType;
+  }
+  return shape;
+}
+
+/**
+ * Build the config fragment that MCP's `registerTool(name, config, cb)` expects
+ * for a tool's input.
+ *
+ * SDK 1.x reads `config.inputSchema` and requires it to be a **Zod raw shape**
+ * (or Zod object) — it does NOT accept raw JSON Schema, and silently ignores any
+ * other key (e.g. `jsonSchema`), which makes the tool advertise an empty
+ * `{ properties: {} }` schema so clients strip every argument. We therefore
+ * convert our JSON Schema to a Zod raw shape here. When there are no properties
+ * we omit `inputSchema` entirely, preserving the SDK's no-validation path for
+ * genuinely paramless tools.
+ */
+export function jsonSchemaToInputSchema(jsonSchema) {
+  const shape = jsonSchemaToZodShape(jsonSchema);
+  if (Object.keys(shape).length === 0) {
+    return {};
+  }
+  return { inputSchema: shape };
 }
 
 function buildAppToolName(appId) {
@@ -54,7 +158,7 @@ function buildWorkflowToolName(workflowId) {
  * `variables` array. We only need `message` plus declared variables — the
  * model passes message text via the MCP tool argument.
  */
-function buildAppInputSchema(app) {
+export function buildAppInputSchema(app) {
   const properties = {
     message: {
       type: 'string',
@@ -62,6 +166,23 @@ function buildAppInputSchema(app) {
     }
   };
   const required = ['message'];
+  // Let callers pick a model unless the app pins one. When the app restricts
+  // models, advertise the choices as an enum; otherwise accept any model id.
+  // RequestBuilder falls back to the app's preferred model when the requested
+  // one is missing or incompatible, so an unknown id can't error. Note this
+  // enforces app-level `allowedModels`, not per-user `permissions.models` —
+  // the same as the chat route, which doesn't gate execution on model
+  // permissions either (see appInvoker.js).
+  if (!app.disallowModelSelection) {
+    const modelProp = {
+      type: 'string',
+      description: "Optional model id to run this app with. Defaults to the app's preferred model."
+    };
+    if (Array.isArray(app.allowedModels) && app.allowedModels.length > 0) {
+      modelProp.enum = app.allowedModels;
+    }
+    properties.modelId = modelProp;
+  }
   if (Array.isArray(app.variables)) {
     for (const v of app.variables) {
       if (!v?.name) continue;
@@ -177,7 +298,16 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
           try {
-            const result = await runTool(tool.id, args || {});
+            // Inject the authenticated caller's identity + a tracking chatId.
+            // Integration tools (iFinder, Entra, Jira, ...) run *as the user* and
+            // reject calls without an authenticated `user`/`chatId` in their
+            // params. MCP args are schema-validated first, so they can never
+            // spoof these fields — we set them last regardless.
+            const result = await runTool(tool.id, {
+              ...(args || {}),
+              user,
+              chatId: `mcp-${Date.now()}`
+            });
             return toolSuccessResult(result);
           } catch (err) {
             logger.warn('MCP gateway tool call failed', {
@@ -365,7 +495,7 @@ function extractText(value) {
   return String(value);
 }
 
-function buildWorkflowMcpParams(wf) {
+export function buildWorkflowMcpParams(wf) {
   const properties = {
     input: { type: 'string', description: 'Primary input for the workflow' }
   };
