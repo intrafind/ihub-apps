@@ -1614,7 +1614,14 @@
         "extractAudioFromVideo": "Extract audio track (for transcription / audio models)",
         "maxVideoSize": "Max Video File Size (MB)",
         "supportedVideoFormats": "Supported Video Formats",
-        "transcriptionDefaultEnabled": "On by default (users can toggle it per chat)"
+        "transcriptionDefaultEnabled": "On by default (users can toggle it per chat)",
+        "appsAsTools": "Apps as Tools",
+        "appsAsToolsDesc": "Let this app delegate to other apps. The model can call each selected app as a tool and use its answer (concierge pattern).",
+        "appsAsToolsHelper": "Each selected app becomes a tool (app__<id>) the model can call. Users only reach apps they have permission for, and a called app cannot call further apps.",
+        "searchApps": "Search apps to add...",
+        "appsAsToolsNoResults": "No apps match your search",
+        "appsAsToolsNoApps": "No apps available",
+        "removeAppTool": "Remove {{name}}"
       }
     },
     "features": {

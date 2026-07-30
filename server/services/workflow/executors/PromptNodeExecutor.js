@@ -34,7 +34,7 @@ import path from 'path';
 import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
-import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/appAsToolGateway.js';
+import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
 
@@ -1942,7 +1942,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (typeof toolId === 'string' && toolId.startsWith('app__')) {
       const appCallStartMs = Date.now();
       try {
-        const { invokeAppTool } = await import('../../../agents/runtime/appAsToolGateway.js');
+        const { invokeAppTool } = await import('../../chat/appToolsGateway.js');
         // Propagate the calling node's model to the app so the operator's
         // model choice flows down. Without this every app silently runs on
         // whatever bedrock-nova-* it was configured with, regardless of

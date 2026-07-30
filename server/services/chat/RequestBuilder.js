@@ -1,5 +1,6 @@
 import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
@@ -125,8 +126,14 @@ function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement (app.tools array or websearch config both require tool support)
-  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
+  // Filter by tools requirement (app.tools, app.apps — apps invoked as tools —
+  // or websearch config all require tool support). app.apps only counts while
+  // the appAsTool feature is enabled: with the flag off no app__* tools are
+  // generated, so a configured-but-inactive delegation must not shrink the
+  // model list.
+  const appToolsActive =
+    app?.apps && app.apps.length > 0 && isFeatureEnabled('appAsTool', configCache.getFeatures());
+  if ((app?.tools && app.tools.length > 0) || appToolsActive || app?.websearch?.enabled) {
     availableModels = availableModels.filter(model => model.supportsTools);
   }
 

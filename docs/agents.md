@@ -18,7 +18,7 @@ leave durable artifacts behind.
 | **Inbox** | Markdown checklist at `contents/data/agent-inboxes/<id>.md`. Users add work; agents read/mark-done via `read_inbox`/`write_inbox`. |
 | **Service-account identity** | Agent runs execute as `agent:<profileId>` principals. Groups in `profile.serviceAccount.groups` determine what apps/tools/models the agent can use. `isAdmin` is forced false. |
 | **Dynamic tasks** | Agents may call `create_task` to enqueue work onto `state.data._taskQueue`. A drain-mode loop processes the queue until empty (bounded by `dynamicTasks.maxDepth` and the existing 200-iteration cap). |
-| **App-as-tool** | When `features.appAsTool: true` and a node has `config.apps: [appId, ...]`, the LLM sees `app__<appId>` synthetic tools that call into `ChatService.invokeAppInternal`. App→App nesting is forbidden. |
+| **App-as-tool** | When `features.appAsTool: true` and a node has `config.apps: [appId, ...]`, the LLM sees `app__<appId>` synthetic tools that call into `ChatService.invokeAppInternal` via the shared gateway (`server/services/chat/appToolsGateway.js`). Regular chat apps can use the same mechanism through their own `apps: [...]` config field (see [App Configuration](apps.md#apps-as-tools-concierge-pattern)). App→App nesting is forbidden. |
 | **HITL** | Explicit `human` nodes in the workflow pause until an operator in `profile.hitl.approverGroups` approves via `POST /api/agents/runs/:runId/approve`. |
 | **Artifacts** | Agents call `write_artifact({ name, content })` to persist to `contents/data/agent-artifacts/<execId>/`. Each run can produce multiple artifacts. |
 

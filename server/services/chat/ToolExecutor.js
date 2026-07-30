@@ -387,7 +387,16 @@ class ToolExecutor {
     };
   }
 
-  async executeToolCall(toolCall, tools, chatId, buildLogData, user, app, userFileData = null) {
+  async executeToolCall(
+    toolCall,
+    tools,
+    chatId,
+    buildLogData,
+    user,
+    app,
+    userFileData = null,
+    clientLanguage = undefined
+  ) {
     const toolId =
       tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
       toolCall.function.name;
@@ -495,8 +504,17 @@ class ToolExecutor {
         }
       }
 
-      // Regular tool execution
-      const result = await runTool(toolId, { ...args, chatId, user, appConfig: app });
+      // Regular tool execution. `language` is a default the tool may use
+      // (e.g. app-as-tool passes it to the callee run); explicit LLM-provided
+      // args of the same name win via the spread, while chatId/user/appConfig
+      // spread last so the LLM can never override them.
+      const result = await runTool(toolId, {
+        language: clientLanguage,
+        ...args,
+        chatId,
+        user,
+        appConfig: app
+      });
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction(
@@ -1189,7 +1207,8 @@ class ToolExecutor {
           buildLogData,
           user,
           app,
-          userFileData
+          userFileData,
+          clientLanguage
         );
 
         if (toolResult.clarification) {
@@ -1600,7 +1619,8 @@ class ToolExecutor {
             buildLogData,
             user,
             app,
-            userFileData
+            userFileData,
+            clientLanguage
           );
 
           if (toolResult.clarification) {

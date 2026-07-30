@@ -5,6 +5,7 @@ import ToolsConfigSection from './app-form/ToolsConfigSection';
 import McpToolsConfigSection from './app-form/McpToolsConfigSection';
 import SkillsConfigSection from './app-form/SkillsConfigSection';
 import WorkflowsConfigSection from './app-form/WorkflowsConfigSection';
+import AppsConfigSection from './app-form/AppsConfigSection';
 import IframeConfigSection from './app-form/IframeConfigSection';
 import RedirectConfigSection from './app-form/RedirectConfigSection';
 import Icon from '../../../shared/components/Icon';
@@ -254,6 +255,15 @@ function AppFormEditor({
               <WorkflowsConfigSection
                 selectedWorkflows={app.workflows || []}
                 onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
+              />
+            )}
+
+            {/* Apps-as-Tools Configuration */}
+            {featureFlags.isEnabled('appAsTool', false) && (
+              <AppsConfigSection
+                appId={app.id}
+                selectedApps={app.apps || []}
+                onAppsChange={apps => handleInputChange('apps', apps)}
               />
             )}
 

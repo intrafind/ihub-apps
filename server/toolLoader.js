@@ -418,6 +418,33 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // App-as-tool: surface other apps as synthetic `app__<id>` tools (the
+  // "concierge" pattern — a bot delegating to specialist bots). Skipped for
+  // principals that are themselves serving an app-as-tool call, so App→App
+  // chains stop at one level of nesting.
+  if (
+    Array.isArray(app.apps) &&
+    app.apps.length > 0 &&
+    context.user?.isInvokedViaAppAsTool !== true &&
+    isFeatureEnabled('appAsTool', configCache.getFeatures())
+  ) {
+    try {
+      const { getAppAsTools } = await import('./services/chat/appToolsGateway.js');
+      // Never expose an app to itself — a direct self-call can only loop.
+      const targetAppIds = app.apps.filter(id => typeof id === 'string' && id && id !== app.id);
+      const appAsTools = await getAppAsTools(targetAppIds, language || 'en', {
+        user: context.user
+      });
+      appTools = appTools.concat(appAsTools);
+    } catch (error) {
+      logger.error('Error generating app-as-tool tools', {
+        component: 'ToolLoader',
+        appId: app.id,
+        error
+      });
+    }
+  }
+
   // Add skill activation tools if the skills feature is enabled and the app has skills configured
   if (
     isFeatureEnabled('skills', configCache.getFeatures()) &&
@@ -566,6 +593,22 @@ export async function runTool(toolId, params = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // App-as-tool (`app__<appId>`): invoke another iHub app through the shared
+  // gateway. Runs the callee's full chat pipeline in-process (no REST hop);
+  // permission, feature-flag, and nesting guards live in the gateway.
+  if (toolId.startsWith('app__')) {
+    const { invokeAppTool } = await import('./services/chat/appToolsGateway.js');
+    const { chatId, user, appConfig, language, ...args } = params;
+    return await invokeAppTool({
+      toolId,
+      args,
+      user,
+      chatId,
+      language,
+      callerAppId: appConfig?.id
+    });
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')
