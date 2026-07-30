@@ -680,6 +680,13 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 
 ## Testing and Validation
 
+> **Use the built-in diagnostics first.** **Admin → iFinder Integration → Test iFinder** /
+> **Test iAssistant** performs every check below in one run — DNS, TLS, JWT generation, JWKS
+> reachability and a real API request — and shows the decoded token, the URLs used and what to check
+> for each failure. See [Connection Diagnostics](#0-start-here-connection-diagnostics). The manual
+> commands in this section remain useful for verifying reachability **from the iFinder host**, which
+> iHub cannot do for you.
+
 ### 1. Connection Testing
 
 **Test iFinder Connectivity:**
@@ -789,6 +796,70 @@ Use a JWT decoder tool to verify token structure:
 - [ ] Logging and monitoring operational
 
 ## Troubleshooting
+
+### 0. Start Here: Connection Diagnostics
+
+Before digging through logs, run the built-in diagnostics under **Admin → iFinder Integration →
+Test iFinder** / **Test iAssistant**. Instead of a single pass/fail message it walks the whole
+connection path and reports what it observed at every step, so you can see exactly where it breaks:
+
+| Step                       | What it proves                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Configuration              | Which key signs the JWT, which subject field is used, which endpoints and profile are configured         |
+| Base URL                   | Scheme, hostname, port, and whether the hostname is fully qualified                                      |
+| DNS resolution             | Whether the iHub server can resolve the hostname, and to which addresses                                 |
+| TCP / TLS connection       | Whether the port answers, plus the certificate subject, issuer, expiry, and trust result                 |
+| JWT generation             | The decoded header and payload, and the subject that was actually derived for the user                   |
+| JWT signature              | That iHub can verify its own token with the matching public key                                          |
+| Issuer reachable           | The issuer and JWKS URL **iFinder itself has to call back to** (OIDC key pair mode)                       |
+| JWKS endpoint              | That the endpoint publishes keys and that the token's `kid` is among them                                 |
+| API request                | The exact URL and method, the response status, the response headers, and a body excerpt                  |
+
+Every failing step lists concrete things to check. Expand a step to see the raw observations as JSON.
+
+#### Diagnostics Options
+
+Expand **Diagnostics options** above the buttons for:
+
+- **Test as email / username / domain** — mint the test JWT for a specific user instead of your own
+  admin account. Use this to confirm how the subject claim is built, for example whether iFinder
+  expects `DOMAIN\username` rather than an email address.
+- **Include the signed JWT** — returns the token itself plus a ready-to-run `curl` command. The token
+  is a working credential for the tested user, so treat it like a password. Without this option the
+  `curl` command references `$TOKEN` and is safe to share.
+- **Run conversation round-trip** — additionally creates and deletes an ephemeral iAssistant
+  conversation, which verifies write access rather than only authentication.
+
+#### Reading the Two Classic Failures
+
+**iFinder answers 500.** The request reached iFinder, so the cause is on its side — most often that
+iFinder cannot resolve or reach the JWKS URL of iHub while validating your token. Check the **Issuer
+reachable** step: if the advertised issuer is `localhost` or a short single-label hostname, iFinder
+can never fetch the keys. Set the externally reachable URL under **Admin → Authentication → OAuth
+Server** and verify it from the iFinder host with `curl -sv https://ihub.example.com/.well-known/jwks.json`.
+
+**iFinder answers 401 with an empty body.** The diagnostics print the claims that were sent
+(`sub`, `iss`, `aud`, `alg`, `kid`) so you can compare them against the trust configuration in
+iFinder, surface the `WWW-Authenticate` header when there is one, and remind you of the usual
+suspects: an issuer that does not match exactly (a trailing slash is enough), a `kid` that is not in
+the JWKS, a subject in the wrong format, or clock skew on the iHub server.
+
+The same checks are available over the API:
+
+```bash
+curl -X POST https://ihub.example.com/api/admin/integrations/ifinder/_test \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"includeToken": false, "user": {"username": "jdoe", "domain": "EXAMPLE"}}'
+```
+
+The search term and the search profile are not accepted as parameters: the diagnostics
+deliberately exercise the configured profile with a fixed query, so that no value from the
+request can influence which URL iHub contacts. To test a different profile, change the
+**Default Search Profile** setting.
+
+The response contains `success`, a `summary` of step counts, and the ordered `steps` array with
+`status` (`ok` / `warn` / `fail` / `skip`), `message`, `details`, and `hints` per step.
 
 ### 1. Common Connection Issues
 

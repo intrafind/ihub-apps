@@ -1915,7 +1915,29 @@
         "title": "Testergebnisse",
         "success": "Erfolgreich",
         "failed": "Fehlgeschlagen",
-        "details": "Details"
+        "details": "Details",
+        "whatToCheck": "Was zu prüfen ist",
+        "observed": "Beobachtet",
+        "copyDetails": "Kopieren",
+        "copied": "Kopiert",
+        "reproduce": "Außerhalb von iHub nachstellen:",
+        "copyCurl": "curl-Befehl kopieren",
+        "copyToken": "JWT kopieren",
+        "stepSummary": "ok {{ok}} · Warnungen {{warn}} · fehlgeschlagen {{fail}} · {{duration}}ms",
+        "notes": "Hinweise"
+      },
+      "diagnostics": {
+        "title": "Diagnose-Optionen",
+        "description": "Der Verbindungstest signiert ein JWT für Ihr eigenes Admin-Konto und ruft dieselben Endpunkte auf, die die Integration im Betrieb verwendet. Mit diesen Optionen können Sie als anderer Benutzer testen oder einen reproduzierbaren curl-Befehl erhalten.",
+        "userEmail": "Test als E-Mail",
+        "userUsername": "Test als Benutzername",
+        "userDomain": "Test als Domäne",
+        "currentAdmin": "Ihr Admin-Konto",
+        "userHelp": "Leer lassen, um mit dem eigenen Konto zu testen. Ausfüllen, um zu prüfen, wie das JWT-Subject für einen bestimmten Benutzer gebildet wird — zum Beispiel ob iFinder DOMAIN\\benutzername statt einer E-Mail-Adresse erwartet.",
+        "includeToken": "Signiertes JWT mit ausgeben",
+        "includeTokenHelp": "Gibt das Token selbst sowie einen direkt ausführbaren curl-Befehl zurück. Das Token ist ein gültiger Zugang für den getesteten Benutzer — behandeln Sie es wie ein Passwort und fügen Sie es nicht in Tickets ein.",
+        "conversationRoundTrip": "Konversations-Testlauf ausführen (iAssistant)",
+        "conversationRoundTripHelp": "Erstellt eine ephemere Testkonversation in iAssistant und löscht sie wieder. Prüft Schreibzugriff, nicht nur die Authentifizierung."
       }
     },
     "integrations": {

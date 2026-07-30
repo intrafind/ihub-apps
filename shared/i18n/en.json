@@ -1662,7 +1662,29 @@
         "title": "Test Results",
         "success": "Success",
         "failed": "Failed",
-        "details": "Details"
+        "details": "Details",
+        "whatToCheck": "What to check",
+        "observed": "Observed",
+        "copyDetails": "Copy",
+        "copied": "Copied",
+        "reproduce": "Reproduce outside iHub:",
+        "copyCurl": "Copy curl command",
+        "copyToken": "Copy JWT",
+        "stepSummary": "ok {{ok}} · warnings {{warn}} · failed {{fail}} · {{duration}}ms",
+        "notes": "Notes"
+      },
+      "diagnostics": {
+        "title": "Diagnostics options",
+        "description": "The connection test signs a JWT for your own admin account and calls the same endpoints the integration uses at runtime. Use these options to test as a different user or to get a reproducible curl command.",
+        "userEmail": "Test as email",
+        "userUsername": "Test as username",
+        "userDomain": "Test as domain",
+        "currentAdmin": "your admin account",
+        "userHelp": "Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.",
+        "includeToken": "Include the signed JWT",
+        "includeTokenHelp": "Returns the token itself plus a ready-to-run curl command. The token is a working credential for the tested user — treat it like a password and do not paste it into tickets.",
+        "conversationRoundTrip": "Run conversation round-trip (iAssistant)",
+        "conversationRoundTripHelp": "Creates an ephemeral test conversation in iAssistant and deletes it again. Verifies write access, not just authentication."
       }
     },
     "integrations": {
