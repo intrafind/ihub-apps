@@ -354,10 +354,26 @@ function AdminChangelogPage() {
               {/* Accordion body */}
               {expanded && (
                 <div className="px-5 py-4 bg-white dark:bg-gray-900">
-                  {/* Features */}
-                  {entry.features && (
+                  {/* New & improved. Labelled only when there are fixes to tell it
+                      apart from — a lone section needs no heading. */}
+                  {entry.features && entry.features.trim() && (
                     <div className="prose dark:prose-invert max-w-none">
+                      {entry.fixes && entry.fixes.trim() && (
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                          {t('admin.changelog.features', 'New & Improved')}
+                        </h2>
+                      )}
                       {renderMarkdown(entry.features)}
+                    </div>
+                  )}
+
+                  {/* Fixes */}
+                  {entry.fixes && entry.fixes.trim() && (
+                    <div className="prose dark:prose-invert max-w-none mt-6">
+                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                        {t('admin.changelog.fixes', 'Fixes')}
+                      </h2>
+                      {renderMarkdown(entry.fixes)}
                     </div>
                   )}
 
