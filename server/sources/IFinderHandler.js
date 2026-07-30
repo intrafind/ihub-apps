@@ -17,11 +17,25 @@ class IFinderHandler extends SourceHandler {
 
   /**
    * Load content from iFinder
-   * @param {Object} sourceConfig - { documentId?: string, query?: string, searchProfile?: string, user: Object, chatId: string }
+   *
+   * Connection settings come from the central iFinder integration (platform
+   * config); the source config only selects documents. Two modes:
+   * - documentId: load exactly that document
+   * - query: search and load the top `maxResults` matching documents
+   *
+   * @param {Object} sourceConfig - { documentId?: string, query?: string, searchProfile?: string, maxResults?: number, maxLength?: number, user: Object, chatId: string }
    * @returns {Promise<Object>} - { content: string, metadata: Object }
    */
   async loadContent(sourceConfig) {
-    const { documentId, query, searchProfile, user, chatId, maxLength = 50000 } = sourceConfig;
+    const {
+      documentId,
+      query,
+      searchProfile,
+      user,
+      chatId,
+      maxLength = 50000,
+      maxResults = 10
+    } = sourceConfig;
 
     if (!user) {
       throw new Error('IFinderHandler requires authenticated user in sourceConfig');
@@ -36,69 +50,170 @@ class IFinderHandler extends SourceHandler {
     }
 
     try {
-      let targetDocumentId = documentId;
-      let searchResults = null;
-
-      // If only query provided, search first to get document ID
-      if (!documentId && query) {
-        searchResults = await iFinder.search({
-          query,
-          chatId,
+      if (documentId) {
+        return await this.loadSingleDocument({
+          documentId,
+          searchProfile,
           user,
-          maxResults: 1,
-          searchProfile
+          chatId,
+          maxLength
         });
-
-        if (!searchResults.results || searchResults.results.length === 0) {
-          throw new Error(`No documents found for query: ${query}`);
-        }
-
-        targetDocumentId = searchResults.results[0].id;
       }
 
-      // Get document content
-      const contentResult = await iFinder.getContent({
-        documentId: targetDocumentId,
-        chatId,
-        user,
+      return await this.loadDocumentsByQuery({
+        query,
         searchProfile,
-        maxLength
-      });
-
-      // Get additional metadata if needed
-      const metadataResult = await iFinder.getMetadata({
-        documentId: targetDocumentId,
-        chatId,
         user,
-        searchProfile
+        chatId,
+        maxLength,
+        maxResults
       });
-
-      return {
-        content: contentResult.content,
-        metadata: {
-          type: 'ifinder',
-          documentId: targetDocumentId,
-          link: metadataResult.url || `ifinder://document/${targetDocumentId}`, // Use document URL if available
-          title: metadataResult.title,
-          author: metadataResult.author,
-          documentType: metadataResult.documentType,
-          mimeType: metadataResult.mimeType,
-          size: metadataResult.size,
-          sizeFormatted: metadataResult.sizeFormatted,
-          createdDate: metadataResult.createdDate,
-          lastModified: metadataResult.lastModified,
-          contentLength: contentResult.contentLength,
-          contentLengthFormatted: contentResult.contentLengthFormatted,
-          searchProfile: contentResult.searchProfile,
-          truncated: contentResult.truncated,
-          searchQuery: query,
-          searchResults: searchResults,
-          loadedAt: new Date().toISOString()
-        }
-      };
     } catch (error) {
       throw new Error(`Error loading from iFinder: ${error.message}`);
     }
+  }
+
+  /**
+   * Load one specific document with its metadata
+   * @param {Object} params - { documentId, searchProfile, user, chatId, maxLength }
+   * @returns {Promise<Object>} - { content: string, metadata: Object }
+   */
+  async loadSingleDocument({ documentId, searchProfile, user, chatId, maxLength }) {
+    const contentResult = await iFinder.getContent({
+      documentId,
+      chatId,
+      user,
+      searchProfile,
+      maxLength
+    });
+
+    const metadataResult = await iFinder.getMetadata({
+      documentId,
+      chatId,
+      user,
+      searchProfile
+    });
+
+    return {
+      content: contentResult.content,
+      metadata: {
+        type: 'ifinder',
+        documentId,
+        link: metadataResult.url || `ifinder://document/${documentId}`, // Use document URL if available
+        title: metadataResult.title,
+        author: metadataResult.author,
+        documentType: metadataResult.documentType,
+        mimeType: metadataResult.mimeType,
+        size: metadataResult.size,
+        sizeFormatted: metadataResult.sizeFormatted,
+        createdDate: metadataResult.createdDate,
+        lastModified: metadataResult.lastModified,
+        contentLength: contentResult.contentLength,
+        contentLengthFormatted: contentResult.contentLengthFormatted,
+        searchProfile: contentResult.searchProfile,
+        truncated: contentResult.truncated,
+        loadedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  /**
+   * Search for documents and load the content of the top matches
+   * @param {Object} params - { query, searchProfile, user, chatId, maxLength, maxResults }
+   * @returns {Promise<Object>} - { content: string, metadata: Object }
+   */
+  async loadDocumentsByQuery({ query, searchProfile, user, chatId, maxLength, maxResults }) {
+    const searchResults = await iFinder.search({
+      query,
+      chatId,
+      user,
+      maxResults,
+      searchProfile
+    });
+
+    const hits = searchResults.results || [];
+    if (hits.length === 0) {
+      throw new Error(`No documents found for query: ${query}`);
+    }
+
+    const loaded = [];
+    const failed = [];
+    const concurrency = 3;
+
+    // Load document contents in small batches to avoid overwhelming iFinder
+    for (let i = 0; i < hits.length; i += concurrency) {
+      const batch = hits.slice(i, i + concurrency);
+      const batchResults = await Promise.all(
+        batch.map(async hit => {
+          try {
+            const contentResult = await iFinder.getContent({
+              documentId: hit.id,
+              chatId,
+              user,
+              searchProfile,
+              maxLength
+            });
+            return { hit, contentResult };
+          } catch (error) {
+            failed.push({ documentId: hit.id, error: error.message });
+            return null;
+          }
+        })
+      );
+      loaded.push(...batchResults.filter(Boolean));
+    }
+
+    if (loaded.length === 0) {
+      throw new Error(
+        `Failed to load documents for query "${query}": ${failed.map(f => f.error).join('; ')}`
+      );
+    }
+
+    const content = loaded
+      .map(({ hit, contentResult }) => {
+        const title = hit.title || contentResult.metadata?.title || hit.id;
+        const link = hit.url || hit.deepLink || '';
+        const linkAttr = link ? ` link="${this.escapeAttribute(link)}"` : '';
+        return `<document id="${this.escapeAttribute(hit.id)}" title="${this.escapeAttribute(title)}"${linkAttr}>\n${contentResult.content}\n</document>`;
+      })
+      .join('\n\n');
+
+    return {
+      content,
+      metadata: {
+        type: 'ifinder',
+        searchQuery: query,
+        searchProfile: searchResults.searchProfile,
+        totalFound: searchResults.totalFound,
+        loadedDocuments: loaded.length,
+        failedDocuments: failed,
+        documents: loaded.map(({ hit, contentResult }) => ({
+          documentId: hit.id,
+          title: hit.title,
+          author: hit.author,
+          mimeType: hit.mimeType,
+          size: hit.size,
+          lastModified: hit.lastModified,
+          link: hit.url || hit.deepLink || `ifinder://document/${hit.id}`,
+          contentLength: contentResult.contentLength,
+          truncated: contentResult.truncated || false
+        })),
+        loadedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  /**
+   * Escape a value for use inside a double-quoted XML-style attribute
+   * @param {*} value - Value to escape
+   * @returns {string} - Escaped string
+   */
+  escapeAttribute(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   /**
@@ -107,7 +222,7 @@ class IFinderHandler extends SourceHandler {
    * @returns {string} - Cache key
    */
   getCacheKey(sourceConfig) {
-    const { documentId, query, searchProfile, user } = sourceConfig;
+    const { documentId, query, searchProfile, maxResults, maxLength, user } = sourceConfig;
 
     // Create user-specific cache key to avoid permission issues
     const userKey = user ? user.email || user.id : 'anonymous';
@@ -116,6 +231,8 @@ class IFinderHandler extends SourceHandler {
       documentId,
       query,
       searchProfile,
+      maxResults,
+      maxLength,
       user: userKey
     });
   }
@@ -129,6 +246,11 @@ class IFinderHandler extends SourceHandler {
 
   /**
    * Validate iFinder source configuration
+   *
+   * Only static configuration is validated here — the runtime context
+   * (user, chatId) is injected later by the SourceManager and enforced in
+   * loadContent, so requiring it here would reject every stored source.
+   *
    * @param {Object} sourceConfig - Configuration to validate
    * @returns {boolean} - True if valid
    */
@@ -137,24 +259,13 @@ class IFinderHandler extends SourceHandler {
       return false;
     }
 
-    const { documentId, query, user, chatId } = sourceConfig;
+    const { documentId, query } = sourceConfig;
+
+    const hasDocumentId = typeof documentId === 'string' && documentId.trim() !== '';
+    const hasQuery = typeof query === 'string' && query.trim() !== '';
 
     // Must have either documentId or query
-    if (!documentId && !query) {
-      return false;
-    }
-
-    // Must have user and chatId
-    if (!user || !chatId) {
-      return false;
-    }
-
-    // Validate user object
-    if (typeof user !== 'object' || (user.id && user.id === 'anonymous')) {
-      return false;
-    }
-
-    return true;
+    return hasDocumentId || hasQuery;
   }
 
   /**

@@ -115,14 +115,65 @@ describe('Source Validation', () => {
   });
 
   describe('iFinder Source Validation', () => {
-    it('should reject iFinder source with missing apiKey', () => {
+    it('should accept iFinder source with a document ID', () => {
       const source = {
         id: 'test-ifinder',
         name: { en: 'Test iFinder' },
         type: 'ifinder',
         config: {
-          baseUrl: 'https://ifinder.example.com',
-          apiKey: ''
+          documentId: 'doc-12345'
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.data.config.documentId, 'doc-12345');
+      // Defaults applied
+      assert.strictEqual(result.data.config.maxResults, 10);
+      assert.strictEqual(result.data.config.maxLength, 10000);
+    });
+
+    it('should accept iFinder source with a search query', () => {
+      const source = {
+        id: 'test-ifinder',
+        name: { en: 'Test iFinder' },
+        type: 'ifinder',
+        config: {
+          query: 'product manual',
+          searchProfile: 'searchprofile-standard',
+          maxResults: 5
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.data.config.query, 'product manual');
+      assert.strictEqual(result.data.config.maxResults, 5);
+    });
+
+    it('should reject prompt-exposed iFinder source without documentId or query', () => {
+      const source = {
+        id: 'test-ifinder',
+        name: { en: 'Test iFinder' },
+        type: 'ifinder',
+        exposeAs: 'prompt',
+        config: {}
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, false);
+    });
+
+    it('should treat empty strings as missing document selection', () => {
+      const source = {
+        id: 'test-ifinder',
+        name: { en: 'Test iFinder' },
+        type: 'ifinder',
+        exposeAs: 'prompt',
+        config: {
+          documentId: '',
+          query: '   ',
+          searchProfile: ''
         }
       };
 
@@ -130,19 +181,34 @@ describe('Source Validation', () => {
       assert.strictEqual(result.success, false);
     });
 
-    it('should accept iFinder source with valid config', () => {
+    it('should accept tool-exposed iFinder source without documentId or query', () => {
+      // The model provides documentId/query as tool parameters at call time
+      const source = {
+        id: 'test-ifinder-tool',
+        name: { en: 'Test iFinder Tool' },
+        type: 'ifinder',
+        exposeAs: 'tool',
+        config: {}
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, true);
+    });
+
+    it('should reject legacy connection fields (now provided by the central integration)', () => {
       const source = {
         id: 'test-ifinder',
         name: { en: 'Test iFinder' },
         type: 'ifinder',
         config: {
+          documentId: 'doc-12345',
           baseUrl: 'https://ifinder.example.com',
           apiKey: 'test-key'
         }
       };
 
       const result = validateSourceConfig(source);
-      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.success, false);
     });
   });
 

@@ -3,11 +3,18 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import FileUploader from './FileUploader';
+import { makeAdminApiCall } from '../../../api/adminApi';
+
+const IDLE_TEST_STATE = { loading: false, data: null, error: null };
 
 function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
   const { t } = useTranslation();
   const [formData, setFormData] = useState(source || {});
   const [validationErrors, setValidationErrors] = useState({});
+  // Results of the iFinder "Connect" (document metadata) and query preview
+  // checks — cleared whenever the fields they depend on change.
+  const [docTest, setDocTest] = useState(IDLE_TEST_STATE);
+  const [queryTest, setQueryTest] = useState(IDLE_TEST_STATE);
 
   useEffect(() => {
     if (source) {
@@ -37,7 +44,76 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
       ...formData.config,
       [configField]: value
     };
+
+    if (formData.type === 'ifinder') {
+      if (['documentId', 'searchProfile'].includes(configField)) {
+        setDocTest(IDLE_TEST_STATE);
+      }
+      if (['query', 'searchProfile', 'maxResults'].includes(configField)) {
+        setQueryTest(IDLE_TEST_STATE);
+      }
+      if (validationErrors.ifinderContent) {
+        setValidationErrors(prev => {
+          const { ifinderContent: _removed, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+
     handleChange('config', newConfig);
+  };
+
+  const handleIFinderConnect = async () => {
+    const documentId = formData.config?.documentId?.trim();
+    if (!documentId) return;
+
+    setDocTest({ loading: true, data: null, error: null });
+    try {
+      const response = await makeAdminApiCall('/admin/sources/_ifinder/metadata', {
+        method: 'POST',
+        body: {
+          documentId,
+          searchProfile: formData.config?.searchProfile?.trim() || undefined
+        }
+      });
+      setDocTest({ loading: false, data: response.data?.metadata || null, error: null });
+    } catch (err) {
+      setDocTest({
+        loading: false,
+        data: null,
+        error:
+          err.response?.data?.error ||
+          err.message ||
+          t('admin.sources.ifinderMetadataFailed', 'Failed to load document metadata')
+      });
+    }
+  };
+
+  const handleIFinderQueryTest = async () => {
+    const query = formData.config?.query?.trim();
+    if (!query) return;
+
+    setQueryTest({ loading: true, data: null, error: null });
+    try {
+      const response = await makeAdminApiCall('/admin/sources/_ifinder/search', {
+        method: 'POST',
+        body: {
+          query,
+          searchProfile: formData.config?.searchProfile?.trim() || undefined,
+          maxResults: formData.config?.maxResults || 10
+        }
+      });
+      setQueryTest({ loading: false, data: response.data || null, error: null });
+    } catch (err) {
+      setQueryTest({
+        loading: false,
+        data: null,
+        error:
+          err.response?.data?.error ||
+          err.message ||
+          t('admin.sources.ifinderQueryFailed', 'Failed to run search query')
+      });
+    }
   };
 
   const validateForm = () => {
@@ -82,11 +158,17 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
         }
       }
     } else if (formData.type === 'ifinder') {
-      if (!formData.config?.baseUrl?.trim()) {
-        errors.baseUrl = t('admin.sources.validation.baseUrlRequired', 'Base URL is required');
-      }
-      if (!formData.config?.apiKey?.trim()) {
-        errors.apiKey = t('admin.sources.validation.apiKeyRequired', 'API key is required');
+      // Tool sources may leave both empty — the model supplies them at call
+      // time. Prompt sources must know up front what to load.
+      if (formData.exposeAs !== 'tool') {
+        const hasDocumentId = formData.config?.documentId?.trim();
+        const hasQuery = formData.config?.query?.trim();
+        if (!hasDocumentId && !hasQuery) {
+          errors.ifinderContent = t(
+            'admin.sources.validation.ifinderContentRequired',
+            'Provide a document ID or a search query so the source knows which documents to load'
+          );
+        }
       }
     } else if (formData.type === 'page') {
       if (!formData.config?.pageId?.trim()) {
@@ -106,8 +188,22 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
   const handleSubmit = e => {
     e.preventDefault();
     if (validateForm()) {
-      onSave(formData);
+      onSave(prepareForSave(formData));
     }
+  };
+
+  // Drop empty optional iFinder fields so the stored config stays clean
+  const prepareForSave = data => {
+    if (data.type !== 'ifinder' || !data.config) {
+      return data;
+    }
+    const config = { ...data.config };
+    ['documentId', 'query', 'searchProfile'].forEach(field => {
+      if (typeof config[field] === 'string' && config[field].trim() === '') {
+        delete config[field];
+      }
+    });
+    return { ...data, config };
   };
 
   const getDefaultConfigForType = type => {
@@ -131,12 +227,10 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
         };
       case 'ifinder':
         return {
-          baseUrl: '',
-          apiKey: '',
-          searchProfile: 'default',
+          documentId: '',
+          query: '',
+          searchProfile: '',
           maxResults: 10,
-          queryTemplate: '',
-          filters: {},
           maxLength: 10000
         };
       case 'page':
@@ -151,6 +245,8 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
 
   const handleTypeChange = newType => {
     const newConfig = getDefaultConfigForType(newType);
+    setDocTest(IDLE_TEST_STATE);
+    setQueryTest(IDLE_TEST_STATE);
     setFormData(prev => ({
       ...prev,
       type: newType,
@@ -276,54 +372,232 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
       case 'ifinder':
         return (
           <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
+              <Icon
+                name="information-circle"
+                className="h-5 w-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0"
+              />
+              <p className="text-sm text-blue-700">
+                {t(
+                  'admin.sources.ifinderConnectionInfo',
+                  'The iFinder connection (URL and authentication) is managed centrally in the iFinder integration settings under Admin → Providers. Here you only choose which documents this source loads: pin a single document by ID, or use a search query to load the top matching documents.'
+                )}
+              </p>
+            </div>
+
+            {validationErrors.ifinderContent && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-600">{validationErrors.ifinderContent}</p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('admin.sources.baseUrl', 'iFinder Base URL')} *
+                {t('admin.sources.ifinderDocumentId', 'Document ID')}
               </label>
-              <input
-                type="url"
-                value={formData.config?.baseUrl || ''}
-                onChange={e => handleConfigChange('baseUrl', e.target.value)}
-                className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                  validationErrors.baseUrl ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="https://ifinder.example.com"
-              />
-              {validationErrors.baseUrl && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.baseUrl}</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.config?.documentId || ''}
+                  onChange={e => handleConfigChange('documentId', e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={t(
+                    'admin.sources.ifinderDocumentIdPlaceholder',
+                    'e.g. 5f2c9a1b3d4e…'
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={handleIFinderConnect}
+                  disabled={!formData.config?.documentId?.trim() || docTest.loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center whitespace-nowrap"
+                >
+                  <Icon
+                    name={docTest.loading ? 'arrow-path' : 'link'}
+                    className={`h-4 w-4 mr-2 ${docTest.loading ? 'animate-spin' : ''}`}
+                  />
+                  {docTest.loading
+                    ? t('admin.sources.ifinderConnecting', 'Connecting...')
+                    : t('admin.sources.ifinderConnect', 'Connect')}
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                {t(
+                  'admin.sources.ifinderDocumentIdHelp',
+                  'Pin this source to one specific iFinder document. Use Connect to load its metadata and verify it is the right one.'
+                )}
+              </p>
+
+              {docTest.error && (
+                <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
+                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{docTest.error}</p>
+                </div>
               )}
+
+              {docTest.data && (
+                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center mb-2">
+                    <Icon name="check-circle" className="h-5 w-5 text-green-600 mr-2" />
+                    <span className="font-medium text-green-800">
+                      {docTest.data.title ||
+                        docTest.data.filename ||
+                        t('admin.sources.ifinderUntitledDocument', 'Untitled document')}
+                    </span>
+                  </div>
+                  <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700">
+                    {[
+                      [t('admin.sources.ifinderMetaAuthor', 'Author'), docTest.data.author],
+                      [
+                        t('admin.sources.ifinderMetaMediaType', 'Media type'),
+                        docTest.data.mediaType
+                      ],
+                      [t('admin.sources.ifinderMetaFilename', 'File name'), docTest.data.filename],
+                      [t('admin.sources.ifinderMetaSize', 'Size'), docTest.data.sizeFormatted],
+                      [t('admin.sources.ifinderMetaLanguage', 'Language'), docTest.data.language],
+                      [
+                        t('admin.sources.ifinderMetaModified', 'Modified'),
+                        docTest.data.modificationDate
+                      ],
+                      [t('admin.sources.ifinderMetaSource', 'Source'), docTest.data.sourceName],
+                      [
+                        t('admin.sources.ifinderMetaProfile', 'Search profile'),
+                        docTest.data.searchProfile
+                      ]
+                    ]
+                      .filter(([, value]) => value !== null && value !== undefined && value !== '')
+                      .map(([label, value]) => (
+                        <div key={label} className="flex min-w-0">
+                          <dt className="font-medium mr-1 flex-shrink-0">{label}:</dt>
+                          <dd className="truncate">{String(value)}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                  {docTest.data.link && (
+                    <a
+                      href={docTest.data.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800"
+                    >
+                      <Icon name="link" className="h-4 w-4 mr-1" />
+                      {t('admin.sources.ifinderOpenDocument', 'Open document')}
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-white px-3 text-sm text-gray-500">
+                  {t('admin.sources.ifinderOr', 'or')}
+                </span>
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('admin.sources.apiKey', 'API Key')} *
+                {t('admin.sources.ifinderQuery', 'Search Query')}
               </label>
-              <input
-                type="password"
-                value={formData.config?.apiKey || ''}
-                onChange={e => handleConfigChange('apiKey', e.target.value)}
-                className={`w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                  validationErrors.apiKey ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Enter API key"
-              />
-              {validationErrors.apiKey && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.apiKey}</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.config?.query || ''}
+                  onChange={e => handleConfigChange('query', e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={t(
+                    'admin.sources.ifinderQueryPlaceholder',
+                    'e.g. product manual OR title:"user guide"'
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={handleIFinderQueryTest}
+                  disabled={!formData.config?.query?.trim() || queryTest.loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center whitespace-nowrap"
+                >
+                  <Icon
+                    name={queryTest.loading ? 'arrow-path' : 'magnifying-glass'}
+                    className={`h-4 w-4 mr-2 ${queryTest.loading ? 'animate-spin' : ''}`}
+                  />
+                  {queryTest.loading
+                    ? t('admin.sources.ifinderTestingQuery', 'Searching...')
+                    : t('admin.sources.ifinderTestQuery', 'Test Query')}
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                {t(
+                  'admin.sources.ifinderQueryHelp',
+                  'Documents matching this query are loaded as source content, up to the configured maximum. Ignored when a document ID is set.'
+                )}
+              </p>
+
+              {queryTest.error && (
+                <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
+                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{queryTest.error}</p>
+                </div>
+              )}
+
+              {queryTest.data && (
+                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center mb-2">
+                    <Icon name="check-circle" className="h-5 w-5 text-green-600 mr-2" />
+                    <span className="font-medium text-green-800">
+                      {t(
+                        'admin.sources.ifinderQueryMatches',
+                        '{{total}} documents found — the first {{shown}} would be loaded',
+                        {
+                          total: queryTest.data.totalFound ?? 0,
+                          shown: queryTest.data.results?.length ?? 0
+                        }
+                      )}
+                    </span>
+                  </div>
+                  {queryTest.data.results?.length > 0 && (
+                    <ul className="divide-y divide-green-200">
+                      {queryTest.data.results.map(result => (
+                        <li key={result.documentId} className="py-2">
+                          <p className="text-sm font-medium text-gray-900">
+                            {result.title ||
+                              result.filename ||
+                              t('admin.sources.ifinderUntitledDocument', 'Untitled document')}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {[result.documentId, result.mediaType, result.sizeFormatted]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t('admin.sources.searchProfile', 'Search Profile')}
                 </label>
                 <input
                   type="text"
-                  value={formData.config?.searchProfile || 'default'}
+                  value={formData.config?.searchProfile || ''}
                   onChange={e => handleConfigChange('searchProfile', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="default"
+                  placeholder={t('admin.sources.searchProfilePlaceholder', 'Platform default')}
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  {t(
+                    'admin.sources.searchProfileHelp',
+                    'Leave empty to use the profile configured in the iFinder integration.'
+                  )}
+                </p>
               </div>
 
               <div>
@@ -338,6 +612,31 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                   min="1"
                   max="100"
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  {t(
+                    'admin.sources.maxResultsHelp',
+                    'Number of documents loaded when using a search query.'
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('admin.sources.maxLength', 'Max Content Length')}
+                </label>
+                <input
+                  type="number"
+                  value={formData.config?.maxLength || 10000}
+                  onChange={e => handleConfigChange('maxLength', parseInt(e.target.value))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  min="1"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  {t(
+                    'admin.sources.maxLengthHelp',
+                    'Maximum characters loaded per document; longer content is truncated.'
+                  )}
+                </p>
               </div>
             </div>
           </div>

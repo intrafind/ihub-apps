@@ -653,24 +653,29 @@ class SourceManager {
    * Test iFinder source
    */
   async testIFinderSource(config) {
-    const { searchProfile = 'default' } = config;
-
     try {
-      const testQuery = 'test';
       const startTime = Date.now();
 
-      // Use the existing IFinderHandler to test
+      // Use the existing IFinderHandler to test. Keep the probe light: a
+      // single document with trimmed content. When the source pins a
+      // documentId that document is loaded; otherwise the configured query
+      // (or a generic fallback) is searched.
       const handler = this.handlers.get('ifinder');
-      const testConfig = { ...config, query: testQuery, maxResults: 1 };
+      const testConfig = { ...config, maxResults: 1, maxLength: 1000 };
+      if (!testConfig.documentId && !testConfig.query) {
+        testConfig.query = 'test';
+      }
 
-      await handler.loadContent(testConfig);
+      const result = await handler.loadContent(testConfig);
       const duration = Date.now() - startTime;
 
       return {
         accessible: true,
-        searchProfile,
+        searchProfile: result.metadata?.searchProfile || config.searchProfile,
         duration,
-        testQuery
+        ...(testConfig.documentId
+          ? { documentId: testConfig.documentId, documentTitle: result.metadata?.title }
+          : { testQuery: testConfig.query, totalFound: result.metadata?.totalFound })
       };
     } catch (error) {
       throw new Error(`iFinder test failed: ${error.message}`);

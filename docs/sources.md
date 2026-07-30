@@ -99,6 +99,15 @@ Fetch and process content from web URLs with intelligent content extraction.
 
 Integration with iFinder document management system for enterprise document access.
 
+The connection itself (base URL, JWT authentication) is **not** configured per source — it comes from the central iFinder integration in the platform configuration (Admin → Providers → iFinder, or the `iFinder` section in `platform.json`). A source only selects **which documents** to load:
+
+- **Pinned document**: set `documentId` to load one specific document
+- **Query-based**: set `query` to search iFinder and load the top `maxResults` matching documents
+
+If both are set, `documentId` wins. Sources exposed as `prompt` require one of the two; sources exposed as `tool` may leave both empty — the assistant supplies a query or document ID when it calls the tool.
+
+Documents are always fetched with the identity of the current user (per-user JWT), so users only ever see content they are allowed to access in iFinder.
+
 **Use Cases:**
 - Enterprise document repositories
 - Searchable knowledge bases
@@ -106,20 +115,21 @@ Integration with iFinder document management system for enterprise document acce
 - Dynamic document retrieval
 
 **Features:**
-- User authentication support
-- Document search functionality
-- Specific document retrieval by ID
+- User authentication support (per-user JWT via the central integration)
+- Load a fixed document by ID, or the top N documents for a search query
 - Configurable search profiles
 - Content length limits
 
 **Configuration Options:**
-- `baseUrl`: iFinder instance URL
-- `apiKey`: API authentication key
-- `searchProfile`: Search profile ('default' or custom)
-- `maxResults`: Maximum search results (1-100)
-- `queryTemplate`: Search query template
-- `filters`: Search filters object
-- `maxLength`: Maximum content length
+- `documentId`: Pin the source to one specific document
+- `query`: Search query that selects the documents to load
+- `searchProfile`: Search profile (optional — defaults to the platform-wide profile)
+- `maxResults`: Number of documents loaded for a query (1-100, default 10)
+- `maxLength`: Maximum content length per document (default 10000)
+
+**Admin UI helpers:**
+- **Connect** button next to the document ID loads the document's metadata (title, author, type, size, dates) so you can verify it is the right document before saving.
+- **Test Query** button runs the search and shows which documents the query would load.
 
 ### 4. Page Sources
 
@@ -320,6 +330,8 @@ PUT    /api/admin/sources/:id       # Update source
 DELETE /api/admin/sources/:id       # Delete source
 POST   /api/admin/sources/:id/test  # Test source
 POST   /api/admin/sources/:id/preview # Preview content
+POST   /api/admin/sources/_ifinder/metadata # Load iFinder document metadata (verify a document ID)
+POST   /api/admin/sources/_ifinder/search   # Preview which documents an iFinder query would load
 ```
 
 ## Examples
@@ -374,7 +386,32 @@ POST   /api/admin/sources/:id/preview # Preview content
 }
 ```
 
-### Example 3: iFinder Document Source
+### Example 3: iFinder Document Sources
+
+The iFinder connection comes from the central integration (Admin → Providers → iFinder); the source only selects documents.
+
+A source pinned to one document:
+
+```json
+{
+  "id": "employee-handbook",
+  "name": {
+    "en": "Employee Handbook"
+  },
+  "description": {
+    "en": "The current employee handbook"
+  },
+  "type": "ifinder",
+  "enabled": true,
+  "exposeAs": "prompt",
+  "config": {
+    "documentId": "a1b2c3d4e5f6",
+    "maxLength": 20000
+  }
+}
+```
+
+A query-based source loading the top 5 matching documents:
 
 ```json
 {
@@ -389,8 +426,7 @@ POST   /api/admin/sources/:id/preview # Preview content
   "enabled": true,
   "exposeAs": "tool",
   "config": {
-    "baseUrl": "https://ifinder.company.com",
-    "apiKey": "${IFINDER_API_KEY}",
+    "query": "category:knowledge",
     "searchProfile": "knowledge",
     "maxResults": 5,
     "maxLength": 10000
@@ -484,10 +520,11 @@ POST   /api/admin/sources/:id/preview # Preview content
 **Symptoms:** "Authentication failed" or "Connection timeout" errors.
 
 **Solutions:**
-- Verify iFinder instance URL and API key
+- Verify the central iFinder integration (Admin → Providers → iFinder): base URL and JWT signing key
+- Run the step-by-step integration diagnostics on the providers page
 - Check network connectivity to iFinder server
-- Ensure user has proper permissions
-- Test with a simple search query
+- Ensure the logged-in user has proper permissions in iFinder (documents are loaded with the user's identity)
+- Use the Connect / Test Query buttons on the source form to verify the document selection
 - Review iFinder server logs
 
 #### 5. Content Too Large
@@ -533,7 +570,8 @@ Sources support caching to improve performance:
 | "No handler registered for type" | Unknown source type | Use: filesystem, url, ifinder, or page |
 | "Source ID already exists" | Duplicate source ID | Choose unique source identifier |
 | "Invalid URL: Only HTTP and HTTPS protocols allowed" | Invalid URL protocol | Use http:// or https:// URLs |
-| "iFinder test failed: Authentication failed" | Invalid iFinder credentials | Check API key and base URL |
+| "iFinder test failed: Authentication failed" | iFinder integration misconfigured | Check the central iFinder integration (base URL, JWT key) |
+| "iFinder sources exposed as prompt context require either a document ID or a search query" | No document selection configured | Set `documentId` or `query` in the source config |
 
 ### Debugging Tips
 

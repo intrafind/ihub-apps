@@ -974,3 +974,22 @@ requests to specialist bots.
   app directly; apps a user may not access are never offered to the model.
 - Delegation is limited to one level: a called app cannot call further apps, so loops
   cannot form.
+
+## iFinder Sources Select Documents Instead of Carrying Connection Settings
+
+iFinder knowledge sources no longer ask for a base URL and API key — the connection comes from
+the central iFinder integration (Admin → Providers → iFinder). A source now only defines which
+documents it loads, and the admin form can verify the selection against the live iFinder before
+saving.
+
+- Pin a source to one document by ID, or give it a search query that loads the top N matching
+  documents (configurable, 1–100) as source content — each document arrives clearly delimited
+  with its title and link.
+- A **Connect** button next to the document ID loads the document's metadata (title, author,
+  media type, size, modification date, link) so admins can confirm it is the right document.
+- A **Test Query** button shows how many documents match and which ones would be loaded.
+- The search profile is optional and falls back to the platform-wide default profile.
+- Documents are always fetched with the identity of the current user, so a source never exposes
+  content the user could not open in iFinder directly.
+- Sources exposed as tools may leave both fields empty; the assistant supplies a query or
+  document ID when it calls the tool.
