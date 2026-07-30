@@ -17,11 +17,12 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { getLocalizedString } from '../../utils/localize.js';
+import iFinderService from '../../services/integrations/iFinderService.js';
 
 /**
  * Initialize source manager singleton
@@ -161,40 +162,33 @@ function getSourceManager() {
  *           description: Whether to clean HTML content
  *     IFinderConfig:
  *       type: object
- *       required:
- *         - baseUrl
- *         - apiKey
+ *       description: >
+ *         Selects which iFinder documents the source loads. Connection settings
+ *         (base URL, JWT authentication) come from the central iFinder
+ *         integration in the platform configuration. Sources exposed as prompt
+ *         context require either documentId or query; tool sources may leave
+ *         both empty and let the model supply them at call time.
  *       properties:
- *         baseUrl:
+ *         documentId:
  *           type: string
- *           format: uri
- *           description: iFinder base URL
- *         apiKey:
+ *           description: Pin the source to one specific iFinder document
+ *         query:
  *           type: string
- *           minLength: 1
- *           description: iFinder API key
+ *           description: Search query that selects the documents to load
  *         searchProfile:
  *           type: string
- *           default: default
- *           description: Search profile to use
+ *           description: Search profile to use (defaults to the platform-wide profile)
  *         maxResults:
  *           type: number
  *           minimum: 1
  *           maximum: 100
  *           default: 10
- *           description: Maximum number of search results
- *         queryTemplate:
- *           type: string
- *           default: ""
- *           description: Query template for searches
- *         filters:
- *           type: object
- *           description: Additional search filters
+ *           description: Number of documents loaded for a query
  *         maxLength:
  *           type: number
  *           minimum: 1
  *           default: 10000
- *           description: Maximum content length
+ *           description: Maximum content length per document
  *     PageConfig:
  *       type: object
  *       required:
@@ -621,6 +615,222 @@ export default function registerAdminSourcesRoutes(app) {
         res.json(types);
       } catch (error) {
         sendFailedOperationError(res, 'fetch source types', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/sources/_ifinder/metadata:
+   *   post:
+   *     summary: Load iFinder document metadata
+   *     description: >
+   *       Fetch the metadata of a single iFinder document (title, author, type,
+   *       size, dates) so an admin can verify a document ID while configuring a
+   *       source — before the source is saved. Uses the central iFinder
+   *       integration with the requesting admin's identity (admin access required)
+   *     tags: [Admin - Sources]
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - documentId
+   *             properties:
+   *               documentId:
+   *                 type: string
+   *                 description: iFinder document ID to look up
+   *               searchProfile:
+   *                 type: string
+   *                 description: Optional search profile (defaults to the platform-wide profile)
+   *     responses:
+   *       200:
+   *         description: Document metadata retrieved successfully
+   *       400:
+   *         description: Invalid request or document could not be loaded
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication
+   *       403:
+   *         description: Forbidden - Insufficient admin permissions
+   */
+  app.post(
+    buildServerPath('/api/admin/sources/_ifinder/metadata'),
+    requireFeature('sources'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { documentId, searchProfile } = req.body || {};
+
+        if (!documentId || typeof documentId !== 'string' || documentId.trim() === '') {
+          return sendBadRequest(res, 'documentId is required');
+        }
+        // Central safe-ID allowlist — the ID is embedded in a quoted _id:"…"
+        // search expression by iFinderService.getMetadata.
+        if (!isValidId(documentId.trim())) {
+          return sendBadRequest(res, 'Invalid document ID format');
+        }
+        if (searchProfile !== undefined && typeof searchProfile !== 'string') {
+          return sendBadRequest(res, 'searchProfile must be a string');
+        }
+
+        const startTime = Date.now();
+
+        try {
+          const metadata = await iFinderService.getMetadata({
+            documentId: documentId.trim(),
+            chatId: `admin-ifinder-metadata-${crypto.randomUUID()}`,
+            user: req.user,
+            searchProfile: searchProfile?.trim() || undefined
+          });
+
+          // Return a curated subset — the raw search result contains the full
+          // document record and would leak far more than the admin UI needs.
+          res.json({
+            success: true,
+            duration: Date.now() - startTime,
+            metadata: {
+              documentId: metadata.documentId,
+              title: metadata.title,
+              author: metadata.author,
+              language: metadata.language,
+              mediaType: metadata.mediaType,
+              sourceType: metadata.sourceType,
+              sourceName: metadata.sourceName,
+              application: metadata.application,
+              filename: metadata.filename,
+              size: metadata.size,
+              sizeFormatted: metadata.sizeFormatted,
+              contentLength: metadata.contentLength,
+              modificationDate: metadata.modificationDate,
+              indexingDate: metadata.indexingDate,
+              link: metadata.deepLink || metadata.url || null,
+              searchProfile: metadata.searchProfile
+            }
+          });
+        } catch (metadataError) {
+          res.status(400).json({
+            success: false,
+            error: metadataError.message,
+            duration: Date.now() - startTime
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'load iFinder document metadata', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/sources/_ifinder/search:
+   *   post:
+   *     summary: Preview an iFinder source query
+   *     description: >
+   *       Run a search against iFinder and return the matching documents so an
+   *       admin can verify which documents a query-based source would load —
+   *       before the source is saved. Uses the central iFinder integration with
+   *       the requesting admin's identity (admin access required)
+   *     tags: [Admin - Sources]
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - query
+   *             properties:
+   *               query:
+   *                 type: string
+   *                 description: Search query to preview
+   *               searchProfile:
+   *                 type: string
+   *                 description: Optional search profile (defaults to the platform-wide profile)
+   *               maxResults:
+   *                 type: number
+   *                 minimum: 1
+   *                 maximum: 100
+   *                 default: 10
+   *                 description: Number of hits to return
+   *     responses:
+   *       200:
+   *         description: Search preview executed successfully
+   *       400:
+   *         description: Invalid request or search failed
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication
+   *       403:
+   *         description: Forbidden - Insufficient admin permissions
+   */
+  app.post(
+    buildServerPath('/api/admin/sources/_ifinder/search'),
+    requireFeature('sources'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { query, searchProfile, maxResults } = req.body || {};
+
+        if (!query || typeof query !== 'string' || query.trim() === '') {
+          return sendBadRequest(res, 'query is required');
+        }
+        if (query.length > 1000) {
+          return sendBadRequest(res, 'query must not exceed 1000 characters');
+        }
+        if (searchProfile !== undefined && typeof searchProfile !== 'string') {
+          return sendBadRequest(res, 'searchProfile must be a string');
+        }
+        const parsedMaxResults = maxResults === undefined ? 10 : Number(maxResults);
+        if (!Number.isInteger(parsedMaxResults) || parsedMaxResults < 1 || parsedMaxResults > 100) {
+          return sendBadRequest(res, 'maxResults must be an integer between 1 and 100');
+        }
+
+        const startTime = Date.now();
+
+        try {
+          const searchResult = await iFinderService.search({
+            query: query.trim(),
+            chatId: `admin-ifinder-search-${crypto.randomUUID()}`,
+            user: req.user,
+            maxResults: parsedMaxResults,
+            searchProfile: searchProfile?.trim() || undefined
+          });
+
+          res.json({
+            success: true,
+            duration: Date.now() - startTime,
+            totalFound: searchResult.totalFound,
+            searchProfile: searchResult.searchProfile,
+            results: (searchResult.results || []).map(hit => ({
+              documentId: hit.id,
+              title: hit.title,
+              score: hit.score,
+              language: hit.language,
+              mediaType: hit.mediaType,
+              sourceName: hit.sourceName,
+              filename: hit.filename,
+              size: hit.size,
+              sizeFormatted: hit.sizeFormatted,
+              modificationDate: hit.modificationDate,
+              link: hit.deepLink || hit.url || null
+            }))
+          });
+        } catch (searchError) {
+          res.status(400).json({
+            success: false,
+            error: searchError.message,
+            duration: Date.now() - startTime
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'preview iFinder search', error);
       }
     }
   );

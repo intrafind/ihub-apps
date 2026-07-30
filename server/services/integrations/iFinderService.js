@@ -2,6 +2,7 @@ import { actionTracker } from '../../actionTracker.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
 import fs from 'fs';
@@ -547,6 +548,13 @@ class IFinderService {
       throw new Error('Document ID parameter is required');
     }
 
+    // The ID is embedded in a quoted _id:"…" query below. Document IDs can
+    // arrive from model/tool parameters, so validate against the central safe
+    // ID allowlist to prevent query injection.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
+    }
+
     // Use the search method with _id:documentId query
     const searchResult = await this.search({
       query: `_id:\"${documentId}\"`,
@@ -987,9 +995,10 @@ class IFinderService {
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
     const authHeader = getIFinderAuthorizationHeader(user);
 
-    // Validate documentId to prevent query injection: allow only alphanumeric, hyphens, underscores, dots
-    if (!/^[\w.\-]+$/.test(documentId)) {
-      throw new Error(`Invalid document ID format: ${documentId}`);
+    // Validate documentId against the central safe ID allowlist to prevent
+    // query injection into the sSearchTerm below.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
     }
 
     const searchUrl =

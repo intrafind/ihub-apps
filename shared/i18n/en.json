@@ -1724,6 +1724,43 @@
       "externalMappingsPlaceholder": "Type a group name and press Enter…",
       "externalMappingsEmpty": "No external mappings yet",
       "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group."
+    },
+    "sources": {
+      "ifinderConnectionInfo": "The iFinder connection (URL and authentication) is managed centrally in the iFinder integration settings under Admin → Providers. Here you only choose which documents this source loads: pin a single document by ID, or use a search query to load the top matching documents.",
+      "ifinderDocumentId": "Document ID",
+      "ifinderDocumentIdPlaceholder": "e.g. 5f2c9a1b3d4e…",
+      "ifinderDocumentIdHelp": "Pin this source to one specific iFinder document. Use Connect to load its metadata and verify it is the right one.",
+      "ifinderConnect": "Connect",
+      "ifinderConnecting": "Connecting...",
+      "ifinderMetadataFailed": "Failed to load document metadata",
+      "ifinderUntitledDocument": "Untitled document",
+      "ifinderMetaAuthor": "Author",
+      "ifinderMetaMediaType": "Media type",
+      "ifinderMetaFilename": "File name",
+      "ifinderMetaSize": "Size",
+      "ifinderMetaLanguage": "Language",
+      "ifinderMetaModified": "Modified",
+      "ifinderMetaSource": "Source",
+      "ifinderMetaProfile": "Search profile",
+      "ifinderOpenDocument": "Open document",
+      "ifinderOr": "or",
+      "ifinderQuery": "Search Query",
+      "ifinderQueryPlaceholder": "e.g. product manual OR title:\"user guide\"",
+      "ifinderQueryHelp": "Documents matching this query are loaded as source content, up to the configured maximum. Ignored when a document ID is set.",
+      "ifinderTestQuery": "Test Query",
+      "ifinderTestingQuery": "Searching...",
+      "ifinderQueryFailed": "Failed to run search query",
+      "ifinderQueryMatches": "{{total}} documents found — the first {{shown}} would be loaded",
+      "searchProfile": "Search Profile",
+      "searchProfilePlaceholder": "Platform default",
+      "searchProfileHelp": "Leave empty to use the profile configured in the iFinder integration.",
+      "maxResults": "Max Results",
+      "maxResultsHelp": "Number of documents loaded when using a search query.",
+      "maxLength": "Max Content Length",
+      "maxLengthHelp": "Maximum characters loaded per document; longer content is truncated.",
+      "validation": {
+        "ifinderContentRequired": "Provide a document ID or a search query so the source knows which documents to load"
+      }
     }
   },
   "cloudStorage": {
