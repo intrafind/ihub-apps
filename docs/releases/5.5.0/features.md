@@ -957,3 +957,20 @@ reading server logs and guessing.
   search profile, which is what an admin wants to verify anyway.
 - A previous behaviour is fixed: an iAssistant network failure used to be reported as "configuration
   is valid" and counted as a success. Unreachable now reads as unreachable.
+
+## Apps Can Now Call Other Apps as Tools (Concierge Pattern)
+
+A chat app can delegate to other apps: list app IDs in the new `apps` field and the model
+sees each one as a callable tool (`app__<id>`). The called app answers with its own system
+prompt, model, tools, and sources — entirely server-side, with no REST round-trip — and the
+calling app weaves the answer into its response. This enables a concierge bot that routes
+requests to specialist bots.
+
+- Configure via the new **Apps as Tools** section in the admin app editor, or the `apps`
+  array in the app JSON.
+- Requires the **App-as-Tool** platform feature (Admin → Features; previously agent-only,
+  off by default).
+- Users can only reach apps their groups permit — the same permission check as opening the
+  app directly; apps a user may not access are never offered to the model.
+- Delegation is limited to one level: a called app cannot call further apps, so loops
+  cannot form.

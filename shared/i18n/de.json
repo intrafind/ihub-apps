@@ -1867,7 +1867,13 @@
         "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
         "maxVideoSize": "Maximale Videodateigröße (MB)",
         "supportedVideoFormats": "Unterstützte Videoformate",
-        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)"
+        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)",
+        "appsAsTools": "Apps als Tools",
+        "appsAsToolsDesc": "Erlaubt dieser App, an andere Apps zu delegieren. Das Modell kann jede ausgewählte App als Tool aufrufen und deren Antwort verwenden (Concierge-Muster).",
+        "appsAsToolsHelper": "Jede ausgewählte App wird zu einem Tool (app__<id>), das das Modell aufrufen kann. Nutzer erreichen nur Apps, für die sie berechtigt sind; eine aufgerufene App kann keine weiteren Apps aufrufen.",
+        "searchApps": "Apps suchen und hinzufügen...",
+        "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
+        "appsAsToolsNoApps": "Keine Apps verfügbar"
       }
     },
     "features": {

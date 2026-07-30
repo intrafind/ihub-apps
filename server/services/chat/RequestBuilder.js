@@ -125,8 +125,13 @@ function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement (app.tools array or websearch config both require tool support)
-  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
+  // Filter by tools requirement (app.tools, app.apps — apps invoked as tools —
+  // or websearch config all require tool support)
+  if (
+    (app?.tools && app.tools.length > 0) ||
+    (app?.apps && app.apps.length > 0) ||
+    app?.websearch?.enabled
+  ) {
     availableModels = availableModels.filter(model => model.supportsTools);
   }
 

@@ -549,6 +549,7 @@ Each app is defined with the following essential properties:
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
 | `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
 | `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
 | `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
@@ -893,6 +894,40 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
 | `skillSettings.autoActivate`   | Boolean | -       | When `true`, all listed skills are activated automatically when the app opens        |
 | `skillSettings.maxActiveSkills`| Number  | -       | Maximum number of skills that can be active at the same time (1-10)                 |
+
+#### Apps as Tools (Concierge Pattern)
+
+The `apps` array lets an app delegate to other apps. Each listed app is exposed to the model
+as a synthetic tool named `app__<appId>` — its description is the target app's description and
+its parameters are derived from the target app's `variables` (plus a required `message`
+parameter). When the model calls the tool, the target app runs its full chat pipeline
+**server-side and in-process** (own system prompt, own preferred model, own tools and
+sources — no REST round-trip) and returns its answer as the tool result.
+
+This enables a "concierge" bot that routes requests to specialist bots:
+
+```json
+{
+  "id": "concierge",
+  "name": { "en": "Concierge" },
+  "description": { "en": "Routes your request to the right assistant" },
+  "system": {
+    "en": "You are a concierge. Delegate domain questions to the available app tools and synthesize their answers. State which specialist you consulted."
+  },
+  "apps": ["hr-bot", "it-support-bot", "travel-bot"]
+}
+```
+
+Requirements and behavior:
+
+| Aspect            | Behavior                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Feature flag      | The `appAsTool` platform feature must be enabled (Admin → Features). Off by default.                               |
+| Permissions       | Users can only reach target apps their groups allow — the same check as opening the app directly. Apps the user may not access are not offered to the model at all. |
+| Nesting           | One level only. A called app runs without `app__*` tools, so chains like A → B → C (or loops) cannot form. Self-references are ignored. |
+| Model             | Each target app resolves its own model (`preferredModel` or platform default). The target model must support tools only if the target app itself uses tools. The calling app's model must support tool calling. |
+| Statelessness     | Each call is a fresh, single-turn invocation of the target app — no chat history is shared in either direction.    |
+| Tool description  | Write target app descriptions as if instructing the concierge's model when to pick that specialist — the description **is** the tool description. |
 
 #### iAssistant Configuration
 
