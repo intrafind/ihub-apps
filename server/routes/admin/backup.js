@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
-import { ZipArchive } from 'archiver';
+import archiver from 'archiver';
 import yauzl from 'yauzl';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -186,7 +186,7 @@ export async function exportConfig(req, res) {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const archive = new ZipArchive({
+    const archive = archiver('zip', {
       zlib: { level: 9 } // Maximum compression
     });
 

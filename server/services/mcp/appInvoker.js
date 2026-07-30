@@ -50,15 +50,22 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
     throw new Error(`App not found: ${safeAppId}`);
   }
 
-  // The MCP tool surface treats every non-message arg as an app variable so
-  // the prompt template can interpolate ${var}. Drop falsy values.
+  // Optional model override. RequestBuilder validates it against the app's
+  // allowed/compatible models and falls back to the preferred model if the
+  // requested one is missing or incompatible, so an unknown id can't error.
+  const modelId =
+    typeof args?.modelId === 'string' && args.modelId.trim() ? args.modelId.trim() : undefined;
+
+  // The MCP tool surface treats every remaining non-reserved arg as an app
+  // variable so the prompt template can interpolate ${var}.
   const variables = { ...args };
   delete variables.message;
+  delete variables.modelId;
 
   const builder = new RequestBuilder();
   const prep = await builder.prepareChatRequest({
     appId: app.id, // trusted value from configCache, not user input
-    modelId: undefined, // RequestBuilder picks app.preferredModel
+    modelId, // undefined → RequestBuilder picks app.preferredModel
     messages: [{ role: 'user', content: message, variables }],
     temperature: undefined,
     style: undefined,

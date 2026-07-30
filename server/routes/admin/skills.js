@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
 import JSZip from 'jszip';
-import { ZipArchive } from 'archiver';
+import archiver from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
@@ -230,7 +230,7 @@ export default function registerAdminSkillsRoutes(app) {
           return sendNotFound(res, 'Skill');
         }
 
-        const archive = new ZipArchive({ zlib: { level: 9 } });
+        const archive = archiver('zip', { zlib: { level: 9 } });
         const fileName = `${skillName}.zip`;
 
         res.setHeader('Content-Type', 'application/zip');
