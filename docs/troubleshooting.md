@@ -624,8 +624,9 @@ normal and neither blocks the page.
 - Upgrade to 5.5.0 or later — the check is bounded and no longer blocks the page.
 - Set `NO_VERSION_CHECK=true` to skip the release lookup entirely on air-gapped
   installations.
-- Raise `VERSION_CHECK_TIMEOUT_MS` (default `5000`) if GitHub is reachable but
-  slow, for example through a strict proxy.
+- Raise `VERSION_CHECK_TIMEOUT_MS` (default `1000`) if GitHub is reachable but
+  slow, for example through a strict proxy — a check that times out means no
+  "update available" badge, nothing worse.
 - Check the server log for `component: VersionCheck` warnings to see what the
   lookup reported.
 

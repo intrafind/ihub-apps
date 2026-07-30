@@ -51,8 +51,7 @@ jest.mock('../../../server/clusterBus.js', () => {
 
 import { httpFetch } from '../../../server/utils/httpConfig.js';
 import {
-  FAILURE_TTL_MS,
-  SUCCESS_TTL_MS,
+  CACHE_TTL_MS,
   buildUpdateInfo,
   getVersionCheckEntry,
   getVersionCheckTimeoutMs,
@@ -182,15 +181,15 @@ describe('versionCheckService — timeout', () => {
     expect(getVersionCheckTimeoutMs()).toBe(60000);
 
     process.env.VERSION_CHECK_TIMEOUT_MS = 'not-a-number';
-    expect(getVersionCheckTimeoutMs()).toBe(5000);
+    expect(getVersionCheckTimeoutMs()).toBe(1000);
 
     delete process.env.VERSION_CHECK_TIMEOUT_MS;
-    expect(getVersionCheckTimeoutMs()).toBe(5000);
+    expect(getVersionCheckTimeoutMs()).toBe(1000);
   });
 });
 
 describe('versionCheckService — caching', () => {
-  test('serves a successful lookup from cache for the success TTL', async () => {
+  test('serves a successful lookup from cache for the cache TTL', async () => {
     httpFetch.mockResolvedValue(okResponse(release('v9.9.9')));
 
     const first = await refreshVersionCheck();
@@ -198,7 +197,7 @@ describe('versionCheckService — caching', () => {
 
     expect(httpFetch).toHaveBeenCalledTimes(1);
     expect(second).toBe(first);
-    expect(first.expiresAt - first.checkedAt).toBe(SUCCESS_TTL_MS);
+    expect(first.expiresAt - first.checkedAt).toBe(CACHE_TTL_MS);
     expect(isVersionCheckStale()).toBe(false);
   });
 
@@ -206,8 +205,7 @@ describe('versionCheckService — caching', () => {
     httpFetch.mockImplementation(dropsPackets());
 
     const entry = await refreshVersionCheck();
-    expect(entry.expiresAt - entry.checkedAt).toBe(FAILURE_TTL_MS);
-    expect(FAILURE_TTL_MS).toBeLessThan(SUCCESS_TTL_MS);
+    expect(entry.expiresAt - entry.checkedAt).toBe(CACHE_TTL_MS);
 
     expect(startBackgroundVersionCheck()).toBe(false);
     await refreshVersionCheck();
@@ -276,7 +274,7 @@ describe('versionCheckService — cluster mode', () => {
       release: { tag_name: 'v9.9.9', name: 'v9.9.9', html_url: 'url', published_at: null },
       error: null,
       checkedAt,
-      expiresAt: checkedAt + SUCCESS_TTL_MS
+      expiresAt: checkedAt + CACHE_TTL_MS
     });
 
     expect(isVersionCheckStale()).toBe(false);
@@ -328,7 +326,7 @@ describe('versionCheckService — cluster mode', () => {
     ['a non-numeric expiry', { checkedAt: Date.now(), expiresAt: 'whenever' }],
     ['a NaN expiry', { checkedAt: Date.now(), expiresAt: NaN }],
     ['an infinite expiry', { checkedAt: Date.now(), expiresAt: Infinity }],
-    ['a NaN check time', { checkedAt: NaN, expiresAt: Date.now() + SUCCESS_TTL_MS }],
+    ['a NaN check time', { checkedAt: NaN, expiresAt: Date.now() + CACHE_TTL_MS }],
     ['an expiry that precedes the check', { checkedAt: Date.now(), expiresAt: Date.now() - 1000 }]
   ])('%s cannot wedge the cache as permanently fresh', (_label, timestamps) => {
     relayHandler()({ release: { tag_name: 'v9.9.9' }, error: null, ...timestamps });
@@ -415,7 +413,7 @@ describe('versionCheckService — buildUpdateInfo', () => {
 
   test('does not throw on an entry with neither a usable release nor an error', () => {
     const checkedAt = Date.now();
-    const entry = { release: {}, error: null, checkedAt, expiresAt: checkedAt + SUCCESS_TTL_MS };
+    const entry = { release: {}, error: null, checkedAt, expiresAt: checkedAt + CACHE_TTL_MS };
 
     const info = buildUpdateInfo(entry, '1.2.3');
     expect(info.updateAvailable).toBe(false);

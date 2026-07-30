@@ -11,9 +11,9 @@
  * timeout. In deployments without outbound internet access packets are usually
  * dropped rather than refused, so the connection never completes and the
  * request hung until the OS TCP timeout — minutes — leaving the dashboard
- * showing nothing but loading skeletons. The fetch now aborts after a few
- * seconds, both results and failures are cached, and the Admin endpoint answers
- * from that cache while refreshing in the background.
+ * showing nothing but loading skeletons. The fetch now aborts after a second,
+ * both results and failures are cached, and the Admin endpoint answers from that
+ * cache while refreshing in the background.
  */
 import { publish, subscribe } from '../clusterBus.js';
 import { httpFetch } from '../utils/httpConfig.js';
@@ -26,14 +26,17 @@ const LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases
 const CLUSTER_CHANNEL = 'versionCheck:result';
 
 /** Abort deadline for the GitHub request when not overridden by env. */
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 1000;
 const MIN_TIMEOUT_MS = 500;
 const MAX_TIMEOUT_MS = 60000;
 
-/** How long a successful lookup is served from cache before it is refreshed. */
-export const SUCCESS_TTL_MS = 60 * 60 * 1000; // 1 hour
-/** Failures are retried sooner, but not on every single admin page load. */
-export const FAILURE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+/**
+ * How long a completed check is served from cache before another is allowed —
+ * results and failures alike. Short enough that a new release shows up promptly
+ * and a network that has come back is retried soon, long enough that opening the
+ * Admin UI does not query GitHub on every page load.
+ */
+export const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Last completed check: `{ release, error, checkedAt, expiresAt }`.
@@ -186,14 +189,14 @@ export function refreshVersionCheck({ force = false } = {}) {
         release: outcome.release ?? null,
         error: outcome.error ?? null,
         checkedAt,
-        expiresAt: checkedAt + (outcome.error ? FAILURE_TTL_MS : SUCCESS_TTL_MS)
+        expiresAt: checkedAt + CACHE_TTL_MS
       };
 
       if (outcome.error) {
         logger.warn('Version check failed', {
           component: 'VersionCheck',
           error: outcome.error,
-          retryInMs: FAILURE_TTL_MS
+          retryInMs: CACHE_TTL_MS
         });
       } else {
         logger.debug('Version check completed', {
