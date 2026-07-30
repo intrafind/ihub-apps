@@ -154,6 +154,19 @@ function filterModelsForApp(models, app) {
   return availableModels;
 }
 
+/**
+ * Whether the user is permitted to use a specific model id per their resolved
+ * group permissions (`user.permissions.models`, which may contain the `*`
+ * wildcard). Returns true when no model-permission info is present so callers
+ * without an enhanced user object (e.g. internal/system flows) are not blocked.
+ */
+function isModelPermittedForUser(user, modelId) {
+  const allowed = user?.permissions?.models;
+  if (allowed instanceof Set) return allowed.has('*') || allowed.has(modelId);
+  if (Array.isArray(allowed)) return allowed.includes('*') || allowed.includes(modelId);
+  return true;
+}
+
 class RequestBuilder {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -249,8 +262,26 @@ class RequestBuilder {
       const globalDefaultModel = models.find(m => m.default)?.id;
       const defaultModel = defaultModelFromFiltered || globalDefaultModel;
 
+      // A caller may request a specific model, but only one they're permitted
+      // to use. An explicitly requested modelId the user has no permission for
+      // is ignored (not an error) so resolution falls back to the app's
+      // preferred/default model. This stops `modelId` from being used to
+      // escalate to a model outside `permissions.models` — over both the chat
+      // route and the MCP gateway — without changing the app-default path when
+      // no model is requested.
+      let requestedModelId = modelId;
+      if (requestedModelId && !isModelPermittedForUser(user, requestedModelId)) {
+        logger.warn('Requested model not permitted for user; falling back to app default', {
+          component: 'RequestBuilder',
+          appId: app.id,
+          requestedModelId,
+          user: user?.id
+        });
+        requestedModelId = undefined;
+      }
+
       // Determine which model to use
-      let resolvedModelId = modelId || app.preferredModel || defaultModel;
+      let resolvedModelId = requestedModelId || app.preferredModel || defaultModel;
 
       // Check if we still don't have a model ID (all sources were null/undefined)
       if (!resolvedModelId) {

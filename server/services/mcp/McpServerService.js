@@ -78,8 +78,16 @@ function jsonSchemaNodeToZod(node) {
       zodType = z.array(node.items ? jsonSchemaNodeToZod(node.items) : z.any());
       break;
     case 'object': {
-      const shape = {};
       const props = node.properties || {};
+      // Free-form object (no declared properties, e.g. `additionalProperties`
+      // or an open payload). `z.object({})` strips every key and would silently
+      // drop the caller's whole object — the same empty-schema data loss this
+      // module exists to fix. `z.record` preserves arbitrary keys instead.
+      if (Object.keys(props).length === 0) {
+        zodType = z.record(z.any());
+        break;
+      }
+      const shape = {};
       const req = Array.isArray(node.required) ? node.required : [];
       for (const [key, child] of Object.entries(props)) {
         let childType = jsonSchemaNodeToZod(child);
@@ -160,8 +168,11 @@ export function buildAppInputSchema(app) {
   const required = ['message'];
   // Let callers pick a model unless the app pins one. When the app restricts
   // models, advertise the choices as an enum; otherwise accept any model id.
-  // RequestBuilder validates and falls back to the app's preferred model if the
-  // requested one is missing or incompatible, so this is always safe.
+  // RequestBuilder falls back to the app's preferred model when the requested
+  // one is missing or incompatible, so an unknown id can't error. Note this
+  // enforces app-level `allowedModels`, not per-user `permissions.models` —
+  // the same as the chat route, which doesn't gate execution on model
+  // permissions either (see appInvoker.js).
   if (!app.disallowModelSelection) {
     const modelProp = {
       type: 'string',

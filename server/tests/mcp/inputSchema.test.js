@@ -187,6 +187,39 @@ describe('MCP gateway input schema advertisement', () => {
     expect(tool.inputSchema.required).toEqual(['question']);
   });
 
+  it('preserves a free-form object argument instead of stripping it', async () => {
+    // A nested `type: object` node with no declared `properties` (an open
+    // payload) must NOT convert to z.object({}) — that would strip every key
+    // and silently drop the caller's object, the exact bug this module fixes.
+    const parameters = {
+      type: 'object',
+      properties: {
+        payload: { type: 'object', description: 'Arbitrary free-form object' }
+      },
+      required: ['payload']
+    };
+    let received;
+
+    const { client } = await connect(server => {
+      server.registerTool(
+        'store_blob',
+        { description: 'store', ...jsonSchemaToInputSchema(parameters) },
+        async args => {
+          received = args;
+          return { content: [{ type: 'text', text: 'ok' }] };
+        }
+      );
+    });
+
+    await client.callTool({
+      name: 'store_blob',
+      arguments: { payload: { a: 1, nested: { b: 'two' } } }
+    });
+
+    // The free-form object must survive round-trip through schema validation.
+    expect(received.payload).toEqual({ a: 1, nested: { b: 'two' } });
+  });
+
   it('omits inputSchema for a paramless definition (no forced validation)', () => {
     expect(jsonSchemaToInputSchema({ type: 'object', properties: {} })).toEqual({});
     expect(jsonSchemaToInputSchema(null)).toEqual({});
