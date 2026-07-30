@@ -33,7 +33,7 @@ class IFinderHandler extends SourceHandler {
       searchProfile,
       user,
       chatId,
-      maxLength = 50000,
+      maxLength = 10000, // matches the source schema default
       maxResults = 10
     } = sourceConfig;
 

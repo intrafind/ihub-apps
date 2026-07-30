@@ -233,3 +233,20 @@ describe('IFinderHandler', () => {
     });
   });
 });
+
+describe('iFinderService.getMetadata document ID validation', () => {
+  it('rejects IDs that could inject into the _id query', async () => {
+    // documentId can arrive from model/tool parameters; getMetadata embeds it
+    // in a quoted _id:"…" search expression and must reject unsafe values
+    // before any request is built.
+    const { default: iFinderService } = await import('../services/integrations/iFinderService.js');
+
+    for (const bad of ['doc" OR *:*', 'a/b', '..', 'doc id with spaces']) {
+      await assert.rejects(
+        iFinderService.getMetadata({ documentId: bad, user, chatId }),
+        /Invalid document ID format/,
+        `expected rejection for ${JSON.stringify(bad)}`
+      );
+    }
+  });
+});

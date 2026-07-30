@@ -17,20 +17,12 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
-
-/**
- * Character allowlist for iFinder document IDs. The ID is embedded in a quoted
- * `_id:"…"` search expression, so anything beyond word characters, dots and
- * hyphens is rejected to prevent query injection (same rule as
- * iFinderService.resolveDocumentLink).
- */
-const IFINDER_DOCUMENT_ID_PATTERN = /^[\w.\-]+$/;
 
 /**
  * Initialize source manager singleton
@@ -677,7 +669,9 @@ export default function registerAdminSourcesRoutes(app) {
         if (!documentId || typeof documentId !== 'string' || documentId.trim() === '') {
           return sendBadRequest(res, 'documentId is required');
         }
-        if (!IFINDER_DOCUMENT_ID_PATTERN.test(documentId.trim())) {
+        // Central safe-ID allowlist — the ID is embedded in a quoted _id:"…"
+        // search expression by iFinderService.getMetadata.
+        if (!isValidId(documentId.trim())) {
           return sendBadRequest(res, 'Invalid document ID format');
         }
         if (searchProfile !== undefined && typeof searchProfile !== 'string') {

@@ -1977,6 +1977,43 @@
       "externalMappingsPlaceholder": "Gruppennamen eingeben und Enter drücken…",
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
       "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
+    },
+    "sources": {
+      "ifinderConnectionInfo": "Die iFinder-Verbindung (URL und Authentifizierung) wird zentral in den iFinder-Integrationseinstellungen unter Admin → Provider verwaltet. Hier wählen Sie nur aus, welche Dokumente diese Quelle lädt: ein einzelnes Dokument per ID festlegen oder per Suchanfrage die am besten passenden Dokumente laden.",
+      "ifinderDocumentId": "Dokument-ID",
+      "ifinderDocumentIdPlaceholder": "z. B. 5f2c9a1b3d4e…",
+      "ifinderDocumentIdHelp": "Legt diese Quelle auf ein bestimmtes iFinder-Dokument fest. Mit „Verbinden“ laden Sie die Metadaten und prüfen, ob es das richtige Dokument ist.",
+      "ifinderConnect": "Verbinden",
+      "ifinderConnecting": "Verbinde...",
+      "ifinderMetadataFailed": "Dokument-Metadaten konnten nicht geladen werden",
+      "ifinderUntitledDocument": "Unbenanntes Dokument",
+      "ifinderMetaAuthor": "Autor",
+      "ifinderMetaMediaType": "Medientyp",
+      "ifinderMetaFilename": "Dateiname",
+      "ifinderMetaSize": "Größe",
+      "ifinderMetaLanguage": "Sprache",
+      "ifinderMetaModified": "Geändert",
+      "ifinderMetaSource": "Quelle",
+      "ifinderMetaProfile": "Suchprofil",
+      "ifinderOpenDocument": "Dokument öffnen",
+      "ifinderOr": "oder",
+      "ifinderQuery": "Suchanfrage",
+      "ifinderQueryPlaceholder": "z. B. Produkthandbuch OR title:\"Benutzerhandbuch\"",
+      "ifinderQueryHelp": "Dokumente, die dieser Anfrage entsprechen, werden bis zur konfigurierten Höchstzahl als Quelleninhalt geladen. Wird ignoriert, wenn eine Dokument-ID gesetzt ist.",
+      "ifinderTestQuery": "Anfrage testen",
+      "ifinderTestingQuery": "Suche läuft...",
+      "ifinderQueryFailed": "Suchanfrage konnte nicht ausgeführt werden",
+      "ifinderQueryMatches": "{{total}} Dokumente gefunden — die ersten {{shown}} würden geladen",
+      "searchProfile": "Suchprofil",
+      "searchProfilePlaceholder": "Plattform-Standard",
+      "searchProfileHelp": "Leer lassen, um das in der iFinder-Integration konfigurierte Profil zu verwenden.",
+      "maxResults": "Max. Ergebnisse",
+      "maxResultsHelp": "Anzahl der Dokumente, die bei einer Suchanfrage geladen werden.",
+      "maxLength": "Max. Inhaltslänge",
+      "maxLengthHelp": "Maximale Zeichenzahl pro Dokument; längerer Inhalt wird gekürzt.",
+      "validation": {
+        "ifinderContentRequired": "Geben Sie eine Dokument-ID oder eine Suchanfrage an, damit die Quelle weiß, welche Dokumente geladen werden sollen"
+      }
     }
   },
   "cloudStorage": {

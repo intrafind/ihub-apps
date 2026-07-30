@@ -7,6 +7,13 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 
 const IDLE_TEST_STATE = { loading: false, data: null, error: null };
 
+// Number inputs yield '' when cleared; store undefined instead of NaN so the
+// server-side schema defaults apply on save.
+const parseOptionalInt = value => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
 function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
   const { t } = useTranslation();
   const [formData, setFormData] = useState(source || {});
@@ -607,7 +614,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                 <input
                   type="number"
                   value={formData.config?.maxResults || 10}
-                  onChange={e => handleConfigChange('maxResults', parseInt(e.target.value))}
+                  onChange={e => handleConfigChange('maxResults', parseOptionalInt(e.target.value))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   min="1"
                   max="100"
@@ -627,7 +634,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                 <input
                   type="number"
                   value={formData.config?.maxLength || 10000}
-                  onChange={e => handleConfigChange('maxLength', parseInt(e.target.value))}
+                  onChange={e => handleConfigChange('maxLength', parseOptionalInt(e.target.value))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   min="1"
                 />
