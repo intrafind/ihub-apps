@@ -120,7 +120,9 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
                   type="button"
                   onClick={() => handleRemoveApp(id)}
                   className="ml-1 flex-shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
-                  aria-label={`Remove ${displayName}`}
+                  aria-label={t('admin.apps.edit.removeAppTool', 'Remove {{name}}', {
+                    name: displayName
+                  })}
                 >
                   <Icon name="x" className="w-3 h-3" />
                 </button>

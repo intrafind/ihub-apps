@@ -1620,7 +1620,8 @@
         "appsAsToolsHelper": "Each selected app becomes a tool (app__<id>) the model can call. Users only reach apps they have permission for, and a called app cannot call further apps.",
         "searchApps": "Search apps to add...",
         "appsAsToolsNoResults": "No apps match your search",
-        "appsAsToolsNoApps": "No apps available"
+        "appsAsToolsNoApps": "No apps available",
+        "removeAppTool": "Remove {{name}}"
       }
     },
     "features": {
