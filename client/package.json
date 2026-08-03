@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babel/standalone": "^7.28.1",
+    "@babel/standalone": "^8.0.4",
     "@dagrejs/dagre": "^2.0.4",
     "@heroicons/react": "2.2.0",
     "@kenjiuno/decompressrtf": "^0.1.4",
