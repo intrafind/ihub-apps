@@ -16,7 +16,12 @@ import SourceManager from './SourceManager.js';
 // Singleton instance of SourceManager
 let singletonSourceManager = null;
 
-// Factory function to create source manager with default configuration
+// Factory function to create source manager with default configuration.
+// NOTE: this is a process-wide singleton — `config` is only honored on the
+// very first call. Later calls, regardless of what they pass, receive the
+// already-constructed instance unchanged. Callers that need a custom
+// filesystem basePath etc. must ensure that config is supplied by whichever
+// call happens to run first, or rely on the handler defaults instead.
 export const createSourceManager = (config = {}) => {
   if (!singletonSourceManager) {
     singletonSourceManager = new SourceManager(config);
