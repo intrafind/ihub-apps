@@ -1,5 +1,4 @@
 import configCache from '../configCache.js';
-import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import {
@@ -163,17 +162,6 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
   app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
     try {
       const platformConfig = configCache.getPlatform() || {};
-      const authConfig = platformConfig.auth || {};
-
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
 
       // Use centralized method to get filtered apps with user-specific ETag
       const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(

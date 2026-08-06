@@ -5,6 +5,7 @@ import express from 'express';
 import crypto from 'crypto';
 import Office365Service from '../../services/integrations/Office365Service.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { hasAuthenticatedUser } from '../../utils/authorization.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
@@ -74,7 +75,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     // it does NOT guarantee req.user.id is truthy. Refuse to start an
     // OAuth flow without a real user id — otherwise tokens would land
     // under a shared sentinel key and could be read by another caller.
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -256,7 +257,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
  */
 router.get('/status', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -318,7 +319,7 @@ router.get('/status', authRequired, async (req, res) => {
  */
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -356,7 +357,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
  */
 router.get('/sources', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -402,7 +403,7 @@ router.get('/sources', authRequired, async (req, res) => {
  */
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -449,7 +450,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  */
 router.get('/items', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 
@@ -499,7 +500,7 @@ router.get('/items', authRequired, async (req, res) => {
  */
 router.get('/download', authRequired, async (req, res) => {
   try {
-    if (!req.user?.id) {
+    if (!hasAuthenticatedUser(req)) {
       return sendAuthRequired(res);
     }
 

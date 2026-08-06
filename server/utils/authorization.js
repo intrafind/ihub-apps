@@ -510,6 +510,19 @@ export function isAnonymousAccessAllowed(platform) {
 }
 
 /**
+ * Check whether a request carries a genuinely authenticated (non-anonymous) user.
+ * `req.user` is always populated with an `{ id: 'anonymous', ... }` principal when
+ * anonymous access is enabled, so a plain `!req.user?.id` check no longer detects
+ * "not logged in" — callers that must refuse anonymous callers (e.g. OAuth flows
+ * keyed by user id) need this instead.
+ * @param {Object} req - Express request object
+ * @returns {boolean} True if req.user is a real, authenticated user
+ */
+export function hasAuthenticatedUser(req) {
+  return Boolean(req.user?.id) && req.user.id !== 'anonymous';
+}
+
+/**
  * Get default groups for anonymous users
  * @param {Object} platform - Platform configuration
  * @returns {string[]} Default group names
