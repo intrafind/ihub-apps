@@ -70,6 +70,13 @@ describe('auditLogger gating', () => {
     expect(onSpy).not.toHaveBeenCalled();
   });
 
+  test('excludes magic-prompt (matches the singular route segment)', () => {
+    const { req, res } = makeReqRes({ url: '/api/magic-prompt' });
+    const onSpy = jest.spyOn(res, 'on');
+    mw(req, res, jest.fn());
+    expect(onSpy).not.toHaveBeenCalled();
+  });
+
   test('skips non-api paths', () => {
     const { req, res } = makeReqRes({ url: '/healthz' });
     const onSpy = jest.spyOn(res, 'on');
