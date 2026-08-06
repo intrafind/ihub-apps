@@ -21,7 +21,7 @@ on the host's app bar.
   Microsoft 365 manifest (v1.20)**. One ZIP surfaces on Outlook (new),
   Teams, and M365 Copilot.
 - Reuse the iframe/embed plumbing from
-  [`nextcloud-embed`](../nextcloud-embed/): public PKCE OAuth client
+  [`nextcloud-embed`](../archive/nextcloud-embed/): public PKCE OAuth client
   auto-created on admin "Enable", dynamic CSP `frame-ancestors`,
   same `client/src/features/office/` host adapter pattern.
 - iHub auth: continue using the existing OAuth2 + PKCE popup against

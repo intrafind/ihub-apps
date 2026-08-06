@@ -124,7 +124,7 @@ Semantics, in short:
 - **Non-empty allow-list** → the user sees only the **intersection** of their group permissions and the allow-list. The client cannot grant access the user does not already have.
 - Authorization-code tokens **never** carry admin privileges, even if the signed-in user is an administrator.
 
-The full design is in [OAuth Client Permission Filter for Authorization Code Flow](../concepts/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md).
+The full design is in [OAuth Client Permission Filter for Authorization Code Flow](../concepts/archive/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md).
 
 ---
 
@@ -190,7 +190,7 @@ The OAuth client and other OAuth flags are left in place by **Disable** so re-en
 ### Sign-in succeeds but the user sees "no apps available"
 
 - The Office Add-in OAuth client has an **Allowed Apps** allow-list that intersects to nothing for this user. Either widen the allow-list or grant the user a group with access to those apps.
-- Confirm with [OAuth Client Permission Filter](../concepts/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md) — anonymous users with no groups will see nothing here unless the apps have anonymous access.
+- Confirm with [OAuth Client Permission Filter](../concepts/archive/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md) — anonymous users with no groups will see nothing here unless the apps have anonymous access.
 
 ### "Add-in could not be started" / blank task pane
 

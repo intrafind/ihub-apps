@@ -838,7 +838,7 @@ The `concepts/` folder is for design documents, RFC-style proposals, and technic
 **Single Document Features:**
 
 - Use format: `concepts/YYYY-MM-DD {title}.md`
-- Examples: `2026-02-02 Provider API Key Persistence Fix.md`
+- Examples: `2026-03-10 Per-User Rate Limiting Proposal.md`
 
 **Multi-Document Features:**
 
@@ -847,11 +847,9 @@ The `concepts/` folder is for design documents, RFC-style proposals, and technic
 - Place all related documents in the subfolder
 - Example structure:
   ```
-  concepts/websearch-provider-api-keys/
+  concepts/persistence-layer/
   ├── README.md
-  ├── 2026-02-03 Websearch Provider API Key Configuration.md
-  ├── 2026-02-03 Websearch Provider UI Screenshots.md
-  └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
+  └── 2026-03-18 Pluggable Persistence Layer PRD.md
   ```
 
 **When to Use Subfolders:**
@@ -868,3 +866,9 @@ The `concepts/` folder is for design documents, RFC-style proposals, and technic
 - Implementation summaries
 - UI/UX changes with screenshots
 - API changes and usage examples
+
+**Active vs. Archived:**
+
+- `concepts/` (top level) = active, in-flight design docs only — proposals not yet implemented, or documents current code/docs still treat as the reference design. Safe for agents to read as current guidance.
+- `concepts/archive/` = completed work (shipped features, resolved fixes, finished audits/reviews, superseded proposals) kept for history and git blame. Agents must **not** treat anything under `concepts/archive/` as current architectural guidance or design intent — read it only as a historical record.
+- When a concept doc's feature ships and is verified in the codebase (and, where applicable, documented in `docs/`), move it to `concepts/archive/` with `git mv` — never delete it.

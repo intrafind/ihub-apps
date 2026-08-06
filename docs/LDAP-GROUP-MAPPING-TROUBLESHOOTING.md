@@ -472,7 +472,7 @@ If you're still experiencing issues:
 1. **Check the logs** - Look for `[LDAP Auth]` and `[Authorization]` entries
 2. **Verify your configuration** - Ensure JSON is valid
 3. **Test with `ldapsearch`** - Confirm LDAP server returns groups
-4. **Review the concept document** - See `concepts/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md`
+4. **Review the concept document** - See `concepts/archive/2026-02-17 LDAP Group Lookup and Admin Role Assignment.md`
 5. **Check the main documentation** - See `docs/ldap-ntlm-authentication.md`
 
 ## Related Documentation
