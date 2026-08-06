@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
+import { fetchAuthStatus } from '../../api';
 import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
 
 // Auth action types
@@ -115,11 +116,7 @@ export function AuthProvider({ children }) {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
-      const response = await apiClient.get('/auth/status', {
-        headers: getAuthHeaders()
-      });
-
-      const data = response.data;
+      const data = await fetchAuthStatus({ skipCache: false });
 
       if (data.success !== false) {
         dispatch({
@@ -341,8 +338,7 @@ export function AuthProvider({ children }) {
 
         // Try to get fresh auth config to check for auto-redirect
         try {
-          const response = await apiClient.get('/auth/status');
-          const data = response.data;
+          const data = await fetchAuthStatus({ skipCache: true });
 
           // If auto-redirect is configured, redirect to the auth provider
           if (data.autoRedirect && !isLogoutPage) {
@@ -399,8 +395,17 @@ export function AuthProvider({ children }) {
     window.addEventListener('authTokenExpired', handleTokenExpired);
 
     // Listen for successful re-authentication from the auth gate overlay
-    const handleAuthGateSuccess = () => {
+    const handleAuthGateSuccess = async () => {
       console.log('🔓 Auth gate re-authentication successful - refreshing auth state');
+      // The auth gate is a standalone script that logs in via its own fetch calls,
+      // bypassing our cache module entirely, so the cached auth-status entry from
+      // before login is still present and must be cleared before refetching.
+      try {
+        const { clearApiCache } = await import('../../api/utils/cache');
+        clearApiCache();
+      } catch (error) {
+        console.warn('Could not clear API cache on auth gate success:', error);
+      }
       loadAuthStatus();
     };
     window.addEventListener('authGateSuccess', handleAuthGateSuccess);
