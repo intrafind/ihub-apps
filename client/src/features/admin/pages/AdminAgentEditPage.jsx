@@ -119,6 +119,8 @@ export default function AdminAgentEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('form');
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(profile, null, 2));
+  const [jsonError, setJsonError] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
@@ -203,6 +205,14 @@ export default function AdminAgentEditPage() {
       serviceAccount: { ...prev.serviceAccount, ...partial }
     }));
   }
+  function toggleMode() {
+    if (mode === 'form') {
+      setJsonText(JSON.stringify(profile, null, 2));
+      setJsonError(null);
+    }
+    setMode(mode === 'form' ? 'json' : 'form');
+  }
+
   function handleCronSchedule(cron) {
     setProfile(prev => {
       const triggers = cron ? [{ type: 'schedule', config: { cron, timezone: 'UTC' } }] : [];
@@ -340,7 +350,7 @@ export default function AdminAgentEditPage() {
           </h1>
           <div className="flex gap-2">
             <button
-              onClick={() => setMode(mode === 'form' ? 'json' : 'form')}
+              onClick={toggleMode}
               className="px-3 py-2 text-sm border bg-white rounded hover:bg-gray-50"
             >
               {mode === 'form'
@@ -349,7 +359,7 @@ export default function AdminAgentEditPage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || (mode === 'json' && !!jsonError)}
               className="px-4 py-2 text-sm bg-indigo-600 text-white rounded disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
@@ -370,17 +380,23 @@ export default function AdminAgentEditPage() {
         )}
 
         {mode === 'json' ? (
-          <textarea
-            className="w-full h-[600px] font-mono text-xs p-3 border rounded"
-            value={JSON.stringify(profile, null, 2)}
-            onChange={e => {
-              try {
-                setProfile(JSON.parse(e.target.value));
-              } catch {
-                // ignore parse errors while typing
-              }
-            }}
-          />
+          <div>
+            <textarea
+              className="w-full h-[600px] font-mono text-xs p-3 border rounded"
+              value={jsonText}
+              onChange={e => {
+                const text = e.target.value;
+                setJsonText(text);
+                try {
+                  setProfile(JSON.parse(text));
+                  setJsonError(null);
+                } catch (err) {
+                  setJsonError(err.message);
+                }
+              }}
+            />
+            {jsonError && <p className="mt-1 text-sm text-red-600">{jsonError}</p>}
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Identity */}
