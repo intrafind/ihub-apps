@@ -31,7 +31,7 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "marked": "^15.0.8",
-    "mermaid": "^11.16.0",
+    "mermaid": "^11.16.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.51.0",
     "pdfjs-dist": "^4.10.38",
     "pptxgenjs": "^4.0.1",
@@ -41,7 +41,7 @@
     "react-i18next": "^15.4.1",
     "react-markdown": "^10.1.0",
     "react-quill-new": "^3.8.3",
-    "react-router-dom": "^7.18.1",
+    "react-router-dom": "^7.18.2",
     "svg-pan-zoom": "^3.6.2",
     "tailwindcss": "^3.3.2",
     "turndown": "^7.2.4",
@@ -55,11 +55,11 @@
   },
   "devDependencies": {
     "@microsoft/office-js": "^1.1.110",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "autoprefixer": "^10.5.2",
-    "postcss": "^8.5.22",
+    "postcss": "^8.5.26",
     "vite": "^8.1.4"
   }
 }
