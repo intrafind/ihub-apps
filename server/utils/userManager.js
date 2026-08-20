@@ -432,7 +432,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       ? 'ldap'
       : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
         ? 'ntlm'
-        : externalUser.provider === 'proxy'
+        : externalUser.authMethod === 'proxy' || externalUser.provider === 'proxy'
           ? 'proxy'
           : externalUser.provider === 'teams'
             ? 'teams'
