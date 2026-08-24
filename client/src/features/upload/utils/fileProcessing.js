@@ -685,7 +685,7 @@ export const readTextFile = file => {
 export const processPdfFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   let textContent = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -702,7 +702,7 @@ export const processPdfFile = async file => {
 export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   const pages = Math.min(pdf.numPages, maxPages);
   const images = [];
   for (let i = 1; i <= pages; i++) {
