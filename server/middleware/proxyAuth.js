@@ -7,29 +7,69 @@ import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
+// JWKS documents are cached per provider URL, but only for a bounded TTL. The
+// previous cache never expired, so once an IdP rotated its signing keys every
+// token signed with the new key failed verification until the process was
+// restarted. `httpFetch` is deliberately kept instead of a library with its own
+// HTTP stack (e.g. `jwks-rsa`) so the platform's proxy and TLS settings still
+// apply to the JWKS request.
+const JWKS_CACHE_TTL_MS = 10 * 60 * 60 * 1000; // 10 hours
+// Floor between forced refreshes, so a stream of tokens carrying unknown `kid`
+// values cannot turn into a stream of outbound requests to the IdP.
+const JWKS_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
 const jwksCache = new Map();
 
-async function getJwks(jwkUrl) {
-  if (jwksCache.has(jwkUrl)) return jwksCache.get(jwkUrl);
+async function fetchJwks(jwkUrl, previous) {
+  // Record the attempt regardless of outcome so a persistently unreachable
+  // endpoint is retried on a fixed interval instead of on every request.
+  const attemptedAt = Date.now();
   try {
     const res = await httpFetch(jwkUrl);
     if (!res.ok) throw new Error(`Failed to load JWKs: ${res.status}`);
     const jwks = await res.json();
-    jwksCache.set(jwkUrl, jwks);
+    jwksCache.set(jwkUrl, { jwks, fetchedAt: attemptedAt, lastAttemptAt: attemptedAt });
     return jwks;
   } catch (error) {
     logger.error('Error fetching JWKs', { component: 'ProxyAuth', error });
+    if (previous) jwksCache.set(jwkUrl, { ...previous, lastAttemptAt: attemptedAt });
     return null;
   }
 }
 
+async function getJwks(jwkUrl, { forceRefresh = false } = {}) {
+  const entry = jwksCache.get(jwkUrl);
+  if (entry) {
+    const fresh = Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS;
+    const throttled = Date.now() - entry.lastAttemptAt < JWKS_REFRESH_MIN_INTERVAL_MS;
+    if ((fresh && !forceRefresh) || throttled) return entry.jwks;
+  }
+
+  // Fall back to the stale copy if the refresh fails, rather than locking every
+  // user out while the IdP's JWKS endpoint is briefly unreachable.
+  const jwks = await fetchJwks(jwkUrl, entry);
+  return jwks || entry?.jwks || null;
+}
+
+function findSigningKey(jwks, kid) {
+  if (!jwks?.keys?.length) return null;
+  return (kid ? jwks.keys.find(k => k.kid === kid) : jwks.keys[0]) || null;
+}
+
 async function verifyJwt(token, provider) {
   try {
-    const jwks = await getJwks(provider.jwkUrl);
-    if (!jwks || !jwks.keys?.length) throw new Error('No keys');
     const decoded = jwt.decode(token, { complete: true });
     const kid = decoded?.header?.kid;
-    const jwk = kid ? jwks.keys.find(k => k.kid === kid) : jwks.keys[0];
+
+    let jwks = await getJwks(provider.jwkUrl);
+    let jwk = findSigningKey(jwks, kid);
+
+    // An unknown `kid` normally means the IdP rotated keys since the last fetch;
+    // refresh once before giving up instead of waiting out the full TTL.
+    if (!jwk && kid) {
+      jwks = await getJwks(provider.jwkUrl, { forceRefresh: true });
+      jwk = findSigningKey(jwks, kid);
+    }
     if (!jwk) throw new Error('Key not found');
 
     // Use jose to import the JWK and verify the JWT
