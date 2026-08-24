@@ -2014,6 +2014,98 @@
       "validation": {
         "ifinderContentRequired": "Geben Sie eine Dokument-ID oder eine Suchanfrage an, damit die Quelle weiß, welche Dokumente geladen werden sollen"
       }
+    },
+    "auditLog": {
+      "title": "Audit-Log",
+      "timestamp": "Zeitstempel",
+      "actorColumn": "Akteur",
+      "actionColumn": "Aktion",
+      "resultColumn": "Ergebnis",
+      "resourceColumn": "Ressource",
+      "sourceColumn": "Quelle",
+      "summaryColumn": "Zusammenfassung",
+      "noEntries": "Keine Audit-Log-Einträge gefunden.",
+      "showMore": "Mehr anzeigen",
+      "showLess": "Weniger anzeigen",
+      "exportCsv": "CSV exportieren",
+      "exporting": "Exportiere…",
+      "exportError": "Audit-Log konnte nicht exportiert werden",
+      "fetchError": "Audit-Log konnte nicht geladen werden",
+      "retentionDays": "{{days}} Tage aufbewahren",
+      "retentionForever": "Dauerhaft aufbewahren",
+      "retentionDisabled": "Aufräumen deaktiviert",
+      "retentionHint": "Konfiguriert in platform.json → audit. Bearbeitung unter Plattform → Erweitert.",
+      "runCleanup": "Jetzt aufräumen",
+      "cleanupRunning": "Läuft…",
+      "cleanupRemoved": "{{count}} Dateien entfernt",
+      "cleanupNoop": "Nichts zu entfernen",
+      "cleanupError": "Aufräumen fehlgeschlagen: {{error}}",
+      "filters": {
+        "from": "Von",
+        "to": "Bis",
+        "actor": "Akteur",
+        "resource": "Ressource",
+        "action": "Aktion",
+        "result": "Ergebnis",
+        "source": "Quelle",
+        "allActors": "Alle Akteure",
+        "allResources": "Alle Ressourcen",
+        "allActions": "Alle Aktionen",
+        "allResults": "Alle Ergebnisse",
+        "allSources": "Alle Quellen",
+        "noActors": "Keine Akteure",
+        "noResources": "Keine Ressourcen",
+        "noActions": "Keine Aktionen",
+        "noResults": "Keine Ergebnisse",
+        "noSources": "Keine Quellen",
+        "filterValues": "Werte filtern…",
+        "noValues": "Keine Werte im Zeitraum",
+        "search": "Suche",
+        "searchPlaceholder": "Zusammenfassung, ID, IP…",
+        "searchHint": "Zusammenfassung, Ressourcen-ID, IP, Request-ID und Akteur durchsuchen"
+      },
+      "presets": {
+        "label": "Schnellfilter",
+        "last24h": "Letzte 24 Stunden",
+        "last7Days": "Letzte 7 Tage",
+        "last30Days": "Letzte 30 Tage",
+        "hideSignIns": "Anmeldungen ausblenden",
+        "failuresOnly": "Nur Fehler",
+        "clearAll": "Alle Filter zurücksetzen"
+      },
+      "values": {
+        "action": {
+          "create": "Erstellen",
+          "update": "Aktualisieren",
+          "delete": "Löschen",
+          "toggle": "Umschalten",
+          "import": "Importieren",
+          "export": "Exportieren",
+          "login": "Anmeldung",
+          "logout": "Abmeldung"
+        },
+        "result": {
+          "success": "Erfolg",
+          "failure": "Fehler"
+        },
+        "source": {
+          "web": "Web",
+          "admin": "Admin",
+          "api": "API"
+        }
+      }
+    },
+    "filters": {
+      "multiSelect": {
+        "all": "Alle",
+        "none": "Keine",
+        "someSelected": "{{selected}} von {{total}}",
+        "selectAll": "Alle auswählen",
+        "selectNone": "Keine auswählen",
+        "search": "Werte filtern…",
+        "noMatches": "Keine passenden Werte",
+        "noOptions": "Keine Werte"
+      }
     }
   },
   "cloudStorage": {

@@ -993,3 +993,30 @@ saving.
   content the user could not open in iFinder directly.
 - Sources exposed as tools may leave both fields empty; the assistant supplies a query or
   document ID when it calls the tool.
+
+## Audit Log Filtering by Checkbox, With Entry Counts
+
+**Observability → Audit Log** now filters with checkbox lists instead of single-value dropdowns, so
+"everything except logins" is one click rather than impossible. Actor, resource, action, result and
+source each open a list of the values that actually occur in the selected date range, each showing
+how many entries are behind it.
+
+- **Select all** and **Select none** are single clicks; lists longer than ten values get a
+  type-ahead box. Full keyboard and screen-reader support.
+- Counts are what make a noisy log tractable: seeing `login — 794` tells you exactly what to untick.
+- Option lists are read from the log, not from a fixed list, so resource types added by a later
+  release appear on their own.
+- Counts and options are computed over the date range only, so unticking a value never makes its
+  checkbox vanish.
+- A new **search box** matches the summary, resource ID, IP, request ID and actor name of any entry
+  in the date range.
+- **Quick filters:** Last 24 hours / Last 7 days / Last 30 days, **Hide sign-ins**, **Failures
+  only**, and **Clear all filters**.
+- The default range is now the **last 24 hours** instead of 7 days. Widen it with the date inputs or
+  a chip.
+- Filter state stays in the URL, so a filtered view is still bookmarkable and shareable. Each field
+  takes an include parameter and an `<field>Exclude` parameter, with `*` meaning "every value" —
+  `?actionExclude=login,logout` is "everything but sign-ins". Existing single-value links such as
+  `?resource=app` keep working.
+- Audit log queries now scan each daily file once instead of loading the whole date range into
+  memory and sorting it, so a wide range costs materially less.
