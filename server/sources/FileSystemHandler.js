@@ -43,17 +43,23 @@ class FileSystemHandler extends SourceHandler {
    */
   async _resolveSafePath(relativePath) {
     const cleaned = sanitizeRelativePath(relativePath);
-    const resolved = await resolveAndValidatePath(cleaned, this.basePath);
-    if (!resolved) {
+
+    // Filesystem sources must live under contents/sources — reject anything
+    // else up front, then delegate the actual boundary/symlink validation to
+    // resolveAndValidatePath() against the sources directory itself, so there
+    // is a single, centralized implementation of that check.
+    let remainder;
+    if (cleaned === 'sources') {
+      remainder = '.';
+    } else if (cleaned.startsWith('sources/')) {
+      remainder = cleaned.slice('sources/'.length) || '.';
+    } else {
       throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
     }
 
-    // Filesystem sources must live under contents/sources — without this,
-    // a path like "config/groups.json" or "../.encryption-key" would still
-    // resolve inside contents/ and grant access to unrelated config/secrets.
     const sourcesDir = await this._getSourcesDir();
-    const sourcesDirWithSep = sourcesDir.endsWith(path.sep) ? sourcesDir : sourcesDir + path.sep;
-    if (resolved !== sourcesDir && !resolved.startsWith(sourcesDirWithSep)) {
+    const resolved = await resolveAndValidatePath(remainder, sourcesDir);
+    if (!resolved) {
       throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
     }
 

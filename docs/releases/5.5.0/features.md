@@ -627,8 +627,9 @@ decrypt stored secrets.
   check, are now hard-scoped to `contents/sources/`, regardless of what path is requested.
 - Saving a filesystem source with a `config.path` outside `sources/` (or containing a dotfile
   segment) is now rejected by validation.
-- Existing filesystem sources are unaffected — all bundled sources already store their path with
-  the `sources/` prefix. No admin action is required.
+- All bundled default sources already store their path with the `sources/` prefix, so they are
+  unaffected. See **Breaking Changes** below if you have a custom filesystem source with a path
+  outside `sources/`.
   
 ## Dynamic JSX Pages No Longer Depend on a Public CDN
 

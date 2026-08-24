@@ -96,6 +96,20 @@ describe('Source Validation', () => {
       assert.strictEqual(result.success, false);
     });
 
+    it('should reject filesystem source with an absolute path (no /app or /workspace carve-out)', () => {
+      const source = {
+        id: 'test-source',
+        name: { en: 'Test Source' },
+        type: 'filesystem',
+        config: {
+          path: '/app/config/groups.json'
+        }
+      };
+
+      const result = validateSourceConfig(source);
+      assert.strictEqual(result.success, false);
+    });
+
     it('should reject filesystem source pointing at config/groups.json', () => {
       const source = {
         id: 'test-source',

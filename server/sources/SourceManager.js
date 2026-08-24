@@ -568,25 +568,23 @@ class SourceManager {
         throw new Error('File path is required');
       }
 
-      // Resolve path relative to contents directory (config.path is stored
-      // with a "sources/" prefix, e.g. "sources/faq.md"), then confirm the
-      // resolved file stays within contents/sources — filesystem sources
-      // must never be able to reference arbitrary files under contents/
-      // (see FileSystemHandler._resolveSafePath, which enforces the same rule).
-      const contentsDir = path.join(getRootDir(), 'contents');
-      const fullPath = await resolveAndValidatePath(filePath, contentsDir);
-      if (!fullPath) {
-        throw new Error('Invalid file path: Path must be within contents directory');
+      // config.path is stored with a "sources/" prefix (e.g. "sources/faq.md").
+      // Reject anything else up front, then delegate the actual boundary and
+      // symlink validation to resolveAndValidatePath() against the sources
+      // directory itself (the same centralized check FileSystemHandler uses),
+      // rather than re-checking containment by hand against contents/.
+      let remainder;
+      if (filePath === 'sources') {
+        remainder = '.';
+      } else if (filePath.startsWith('sources/')) {
+        remainder = filePath.slice('sources/'.length) || '.';
+      } else {
+        throw new Error('Invalid file path: Path must be within the sources directory');
       }
 
-      let sourcesDir = path.join(contentsDir, 'sources');
-      try {
-        sourcesDir = await fs.promises.realpath(sourcesDir);
-      } catch {
-        // Sources directory doesn't exist yet; fall back to the unresolved path.
-      }
-      const sourcesDirWithSep = sourcesDir.endsWith(path.sep) ? sourcesDir : sourcesDir + path.sep;
-      if (fullPath !== sourcesDir && !fullPath.startsWith(sourcesDirWithSep)) {
+      const sourcesDir = path.join(getRootDir(), 'contents', 'sources');
+      const fullPath = await resolveAndValidatePath(remainder, sourcesDir);
+      if (!fullPath) {
         throw new Error('Invalid file path: Path must be within the sources directory');
       }
 
