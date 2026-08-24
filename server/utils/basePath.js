@@ -249,6 +249,11 @@ export const basePathRewriteMiddleware = (req, res, next) => {
  * process-wide global, which would be subject to cross-request races under
  * concurrent traffic.
  *
+ * Applies the same trusted-proxy gate as basePathRewriteMiddleware: an
+ * untrusted direct client's header must not be able to influence generated
+ * response URLs (manifest, OIDC redirect construction, etc.) any more than
+ * it can influence routing.
+ *
  * Must run after the request context is opened (see setup.js) so
  * setContext() has a store to write into.
  *
@@ -259,7 +264,7 @@ export const basePathRewriteMiddleware = (req, res, next) => {
 export const basePathDetectionMiddleware = (req, res, next) => {
   const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
   const detectedPath = req.headers[headerName.toLowerCase()];
-  if (detectedPath) {
+  if (detectedPath && isFromTrustedProxy(req)) {
     const normalized =
       detectedPath.endsWith('/') && detectedPath !== '/' ? detectedPath.slice(0, -1) : detectedPath;
     if (isValidBasePath(normalized)) {
