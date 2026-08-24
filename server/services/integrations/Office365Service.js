@@ -963,7 +963,7 @@ class Office365Service {
           logger.warn('Could not load drives for site', {
             component: 'Office365Service',
             siteName: site.displayName,
-            error: e
+            error
           });
         }
       }

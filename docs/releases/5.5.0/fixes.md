@@ -53,3 +53,23 @@ a specific model instead of only the app's preferred one.
 - Apps that restrict their models advertise the allowed ids as a fixed choice list.
 - Apps configured to hide model selection do not expose the option.
 - An unknown or incompatible model falls back to the app's preferred model rather than failing.
+
+## Crashes in Error Handlers Fixed
+
+A group of error handlers referenced a variable name that did not exist in that scope, so whenever
+the original problem occurred the handler itself threw a `ReferenceError` instead of logging the
+cause. The real failure was lost, and in a few places a clean failure turned into a hard crash.
+
+- Proxy authentication now logs and recovers from JWKS fetch and JWT verification failures instead of
+  throwing inside the handler.
+- Short link redirects, admin config saves, prompt/skill/style loading, marketplace skill installs,
+  usage rollups, SharePoint drive listing, and workflow execution recovery all log the actual error
+  again.
+- Workflow registry recovery re-throws the original error instead of a `ReferenceError`, so unexpected
+  filesystem problems surface with their real message.
+- An SSE chat connection that fails during setup now reports the error against the right chat id
+  rather than crashing the handler a second time.
+- The tool-calling entry point (`createConverter`, `ToolCallPatterns.*`) threw on every call because
+  the helpers it uses were re-exported but never imported locally. They now work.
+
+Lint now enforces `no-undef`, so this class of bug fails the build rather than shipping.
