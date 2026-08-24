@@ -242,7 +242,7 @@ async function buildSkillContent(item, skillMd, authHeaders) {
     try {
       companions = await registryService.discoverCompanions(item.source.url, authHeaders);
     } catch (error) {
-      logger.warn('Companion discovery fallback failed', { component: COMPONENT, error: err });
+      logger.warn('Companion discovery fallback failed', { component: COMPONENT, error });
     }
   }
 
@@ -278,7 +278,7 @@ async function buildSkillContent(item, skillMd, authHeaders) {
         logger.warn('Failed to fetch companion file', {
           component: COMPONENT,
           relativePath,
-          error: err
+          error
         });
       }
     })

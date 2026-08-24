@@ -14,6 +14,7 @@
  *   - Context reads are serialized behind the module's mailbox lock so they
  *     can't interleave with a load/unload cycle.
  */
+/* global Office */
 
 import '@testing-library/jest-dom';
 

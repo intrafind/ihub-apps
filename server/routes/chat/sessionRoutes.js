@@ -348,8 +348,10 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
+      // Destructured outside the try so the catch below can still reference
+      // chatId when channel setup throws.
+      const { appId, chatId } = req.params;
       try {
-        const { appId, chatId } = req.params;
         const channel = createSseChannel({
           req,
           res,
