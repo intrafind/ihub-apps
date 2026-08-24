@@ -1023,3 +1023,18 @@ how many entries are behind it.
   `?resource=app` keep working.
 - Audit log queries now scan each daily file once instead of loading the whole date range into
   memory and sorting it, so a wide range costs materially less.
+
+## Subpath Deployments No Longer Bypass Authentication or Rate Limits
+
+Closed a security gap where requests carrying an `X-Forwarded-Prefix` header (used for reverse
+proxy subpath deployments, e.g. `/ihub/`) could, in some configurations, reach protected API
+endpoints without going through authentication or rate limiting.
+
+- The base-path rewrite now runs before authentication and rate limiting instead of after, so every
+  downstream check consistently sees the final, rewritten request path.
+- The `X-Forwarded-Prefix` header is now only honored when the request arrives through a hop that
+  the server's `trust proxy` setting actually trusts, instead of being accepted unconditionally from
+  any direct client.
+- No admin action is required — the fix takes effect automatically on upgrade. Deployments that
+  rely on a specific reverse proxy for subpath routing should confirm their `trust proxy`
+  configuration reflects their actual proxy topology.

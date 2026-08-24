@@ -472,6 +472,18 @@ if (cluster.isPrimary && workerCount > 1) {
    */
   // Error localization and API key validation implemented in serverHelpers.js
 
+  // Rewrite the base path BEFORE any other middleware (body parser, rate
+  // limiters, auth chain). Rate limiters and the auth-skip heuristic are
+  // mounted/evaluated against a fixed, root-relative path (getBasePath()
+  // returns '' at startup, before any request exists) — they only match a
+  // subpath-deployed request correctly if req.url has already had its
+  // X-Forwarded-Prefix stripped by the time they run. Registering the
+  // rewrite any later — as it was before this fix — let a non-stripping
+  // reverse proxy (or a spoofed X-Forwarded-Prefix header) make the
+  // auth-skip heuristic and path-mounted rate limiters see an un-rewritten
+  // path, letting requests slip through unauthenticated / unlimited.
+  app.use(basePathRewriteMiddleware);
+
   // Middleware
   // Use the resolved platform config from configCache (which applies IHUB_PLATFORM__*
   // env overrides and decrypts secrets) so boot-time middleware (body-size limit,
@@ -479,11 +491,13 @@ if (cluster.isPrimary && workerCount > 1) {
   // the raw JSON value only if configCache failed to initialize.
   setupMiddleware(app, configCache.getPlatform() || platformConfig);
 
-  // Add base path middleware chain:
-  // 1. Rewrite: strips X-Forwarded-Prefix from req.url (handles non-stripping proxies)
-  // 2. Detection: stores current request for runtime base path resolution
-  // 3. Validation: warns on invalid X-Forwarded-Prefix values
-  app.use(basePathRewriteMiddleware);
+  // Detection/validation run after setupMiddleware because basePathDetectionMiddleware
+  // writes into the per-request AsyncLocalStorage context that setupMiddleware opens
+  // (the very first app.use() inside it) — setContext() silently no-ops before that
+  // context exists. Unlike the rewrite above, nothing here needs to run before the
+  // auth chain or rate limiters: they only depend on req.url (already rewritten),
+  // not on getBasePath(), which is consumed later by route handlers (e.g. building
+  // OIDC redirect / manifest URLs).
   app.use(basePathDetectionMiddleware);
   app.use(basePathValidationMiddleware);
 
