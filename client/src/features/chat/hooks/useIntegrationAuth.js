@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Generic hook to detect integration authentication errors in chat responses
@@ -16,10 +17,10 @@ export function useIntegrationAuth() {
     jira: {
       name: 'JIRA',
       icon: 'ticket',
-      authUrl: '/api/integrations/jira/auth',
-      statusUrl: '/api/integrations/jira/status',
-      disconnectUrl: '/api/integrations/jira/disconnect',
-      refreshUrl: '/api/integrations/jira/refresh',
+      authUrl: buildApiUrl('integrations/jira/auth'),
+      statusUrl: buildApiUrl('integrations/jira/status'),
+      disconnectUrl: buildApiUrl('integrations/jira/disconnect'),
+      refreshUrl: buildApiUrl('integrations/jira/refresh'),
       authErrorPatterns: ['JIRA_AUTH_REQUIRED', 'JIRA authentication', 'connect your JIRA account'],
       toolPrefix: 'jira_',
       description: {

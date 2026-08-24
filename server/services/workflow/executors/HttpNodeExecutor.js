@@ -14,7 +14,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
-import { assertPublicTarget, createPinnedLookup } from './ssrfGuard.js';
+import { assertPublicTarget, createPinnedLookup } from '../../../utils/ssrfGuard.js';
 
 /**
  * HTTP node configuration

@@ -4,7 +4,13 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminTools, makeAdminApiCall, toggleTool, deleteTool } from '../../../api/adminApi';
+import {
+  deleteTool,
+  fetchAdminTools,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleTool
+} from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ToolNameCell({ tool, currentLanguage }) {
@@ -55,7 +61,7 @@ function AdminToolsPage() {
       const data = await fetchAdminTools();
       setTools(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setTools([]);
     } finally {
       setLoading(false);
@@ -67,7 +73,7 @@ function AdminToolsPage() {
       await toggleTool(toolId);
       await loadTools();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -102,7 +108,7 @@ function AdminToolsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download tool config: ${err.message}`);
+      setError(`Failed to download tool config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -125,12 +131,12 @@ function AdminToolsPage() {
       await loadTools();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Tool with ID "${toolConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload tool config: ${err.message}`);
+        setError(`Failed to upload tool config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);

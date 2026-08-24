@@ -452,13 +452,16 @@ function AppsList() {
 
   // Always show debugging info when no apps are available
   if (apps.length === 0) {
+    const noAppsConfig = uiConfig?.errorPages?.noApps;
     return (
       <div className="text-center py-12">
         <div className="text-yellow-500 mb-4">
-          {t('error.noAppsAvailable', 'No apps available from server')}
+          {getLocalizedContent(noAppsConfig?.title, currentLanguage) ||
+            t('error.noAppsAvailable', 'No apps available from server')}
         </div>
         <p className="mb-4">
-          {t('error.checkServer', 'Check if the server is running and returning data correctly.')}
+          {getLocalizedContent(noAppsConfig?.message, currentLanguage) ||
+            t('error.checkServer', 'Check if the server is running and returning data correctly.')}
         </p>
         <button
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"

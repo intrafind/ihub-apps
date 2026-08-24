@@ -10,7 +10,7 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import SourcePicker from '../components/SourcePicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { fetchAdminModels, fetchAdminApps } from '../../../api/adminApi';
+import { fetchAdminApps, fetchAdminModels, getAdminApiErrorMessage } from '../../../api/adminApi';
 import {
   fetchAgentProfile,
   createAgentProfile,
@@ -148,7 +148,7 @@ export default function AdminAgentEditPage() {
         setProfile(mergedProfile);
         setInitialData(structuredClone(mergedProfile));
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }

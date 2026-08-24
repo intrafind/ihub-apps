@@ -1,5 +1,75 @@
 # Features — 5.5.0
 
+## OAuth Login for MCP Clients No Longer Fails With "Authorization code is invalid or expired"
+
+Fixed a bug that made the OAuth 2.0 authorization code flow fail on any multi-worker deployment
+(the default is 4 workers). After approving the consent screen, clients such as Claude Code
+reported `Authorization code is invalid or expired` and never obtained a token.
+
+- Authorization codes were held in a single worker's memory. Since connections are distributed
+  across workers round-robin, the token request almost always arrived at a different worker than
+  the one that issued the code, which then could not find it. Codes are now resolved across
+  workers, so the exchange succeeds regardless of which worker handles each request.
+- Codes remain strictly single-use: a code is consumed on exactly one worker, so replay attempts
+  are still rejected cluster-wide with `invalid_grant`.
+- The consent screen no longer depends on server-side session state either. Previously the CSRF
+  token and the PKCE `code_challenge` were stored in a per-worker session, so approving consent
+  could fail with `CSRF token missing`, or could issue a code with no PKCE binding that the token
+  endpoint later rejected.
+- Consent parameters (`redirect_uri`, `scope`, `code_challenge`, `nonce`) are now cryptographically
+  signed and verified on submission, so they can no longer be altered between the consent screen
+  and the decision.
+- No configuration changes are required. Deployments that set `STICKY_SESSIONS=true` to work around
+  this no longer need it for OAuth.
+
+## Admin Config Backup Restore No Longer Risks Wiping the Configuration
+
+Fixed a data-loss risk in **Admin → Backup → Import**: if the safety backup of the current
+configuration failed partway through (for example due to a full disk), the import used to proceed
+anyway and delete the live configuration directory before copying in the new one.
+
+- The import now stages the imported configuration next to the live one and swaps it in with an
+  atomic rename, so there is no window where a request could see a half-restored configuration.
+- If the safety backup can't be created, or the final swap fails, the import aborts and the
+  original configuration (apps, models, users, groups, encryption key) is left untouched or rolled
+  back automatically — nothing is deleted unless the new configuration is safely in place.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Brute-Force Rate Limiting Now Actually Applies to Login and Inference Endpoints
+
+Fixed a bug where the rate limiters intended to protect authentication and inference endpoints
+were mounted on paths that never matched any real request, so they never fired.
+
+- `POST /api/auth/local/login` (and the LDAP/NTLM login endpoints) are now correctly limited to
+  50 requests per 15 minutes per IP, restoring brute-force login protection.
+- The OpenAI-compatible inference proxy (`/api/inference/...`) is now correctly rate-limited,
+  protecting upstream LLM quota and cost from runaway clients.
+- No configuration changes are required; existing `rateLimit.authApi` / `rateLimit.inferenceApi`
+  overrides in `platform.json` now take effect as intended.
+  
+## Cancelling a Workflow No Longer Crashes the Server
+
+Fixed a crash where stopping or cancelling a running workflow at the moment the chat connection
+dropped could take down the entire server for all users.
+
+- Previously, if the browser's connection closed while a workflow was being cancelled, the stop
+  handler tried to close an already-removed connection and threw an unhandled error, exiting the
+  server process.
+- The stop endpoint now safely handles a connection that has already disconnected, so cancelling a
+  workflow always completes cleanly.
+
+## Authentication Admin Now Uses Searchable Group Pickers
+
+The default-group fields in Authentication settings are now searchable group selectors instead of
+free-text inputs, so admins pick from real, defined groups and can no longer introduce typos that
+silently grant no permissions.
+
+- Applies to all default-group fields: the authenticated-users group, anonymous-access groups, and
+  the default groups for each OIDC, LDAP, and NTLM provider.
+- Each field shows the defined groups with their names and descriptions and filters as you type.
+- Any group value that no longer matches a defined group is still shown but visibly flagged, so
+  existing configurations remain visible and can be corrected rather than being dropped.
+
 ## Agent Profile Editor No Longer Corrupts Shared State on Save
 
 Fixed a bug in the Agent Profile admin editor where saving could corrupt data shared across the
@@ -30,6 +100,19 @@ existing native-search behavior already available for Gemini and GPT models.
   migrated automatically. Only Brave Search remains a real, script-backed tool; native search is
   now resolved directly from the app/workflow configuration and passed straight to the model
   provider.
+
+## Agent Workflows No Longer Crash on Their First Prompt Step
+
+Fixed a regression introduced with the native web search rework above that caused agent workflows
+to fail as soon as they reached a prompt step, with the error `Agent execution failed:
+nativeWebSearch is not defined`.
+
+- Every workflow with a prompt/agent node was affected, whether or not the node used web search;
+  the failure surfaced on the first such step (for example, the Stellungnahmen review workflows
+  failed at their `refine-decision` step).
+- Workflows now run their prompt steps normally again, and the native web search directive is
+  correctly applied on steps that request it.
+- No configuration changes are required.
 
 ## iHub Support Bot Can Now Answer Questions About the Platform
 
@@ -129,6 +212,16 @@ indication anything was missing.
   pane, which could previously stall the pane on a large attachment.
 - On Outlook hosts older than Mailbox 1.8 (which can't fetch attachment content at all), the
   banner now shows one explanation instead of repeating the same error on every attachment.
+
+## Gemini Apps No Longer Corrupt Parallel Tool Calls
+
+Fixed a bug where Gemini (Google) models calling more than one tool in the same turn could
+silently lose one of the calls. When two tool calls arrived in separate streaming chunks, the
+second one collided with the first instead of being tracked separately, corrupting its arguments
+into invalid JSON and dropping the call entirely — with no error shown to the user.
+
+- Apps and agent workflows on Gemini models that trigger multiple tools per turn (a common pattern
+  for tool-using agents) now execute every tool call correctly.
 
 ## Answer-Source Badge Fixed When a Tool-Enabled App Answers an Upload Directly
 
@@ -461,6 +554,53 @@ field) and the multimodal audio-upload path (which sends audio to a chat LLM).
 **Before using:** add or enable a transcription model under **Admin → Models** (model type
 "Transcription"), set its realtime URL, then enable transcription on the desired app.
 
+## Admin Details Popups Are Now Keyboard-Accessible and Consistent
+
+The App, Model, Prompt, and Short Link details popups in the admin area now share one dialog
+component, fixing an inconsistency where only the Prompt popup closed on **Escape**.
+
+- All four popups now close on **Escape** and trap keyboard focus while open (Tab/Shift+Tab cycle
+  within the dialog instead of escaping to the page behind it), and are marked `aria-modal` for
+  screen readers.
+- Clicking the dimmed backdrop now also closes the popup, matching other dialogs in the admin area.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Admin Save/Load Errors Now Show the Real Reason
+
+Admin pages (Apps, Prompts, Models, Tools, Workflows, Skills, Users, Groups, Agents, Providers,
+and more) now display the server's actual error message — a validation problem, a duplicate ID, a
+conflict reason — instead of a generic "Request failed with status code 409".
+
+- A shared helper extracts the server-provided error detail everywhere an admin API call fails,
+  across roughly 60 call sites.
+- Saving an app or prompt that fails validation no longer replaces the entire edit form with a
+  full-page error, discarding the in-progress edit — the error now shows as a banner above the
+  still-visible form. The same fix applies to the User and Group editors.
+- No admin action is required.
+
+## Chat Messages Are Now Sanitized Before Rendering as HTML
+
+User messages that carry an image, file, or audio attachment (or that merely contain text
+resembling an `<img>` tag or a `data:image` value) are now sanitized before being rendered as
+HTML. Previously this render path skipped the sanitization applied everywhere else in the app, so
+a pasted message body could execute arbitrary script in the app's origin.
+
+- No admin action is required — the fix takes effect automatically on upgrade.
+- Legitimate attachments (pasted images, uploaded files, audio) continue to render exactly as
+  before.
+  
+## Audit Log Now Covers Tools, Marketplace, and UI Configuration Changes
+
+The admin audit log (Admin → Audit Log) now records explicit, before/after-aware entries for three
+route groups that previously relied only on the coarse URL-derived fallback: **Tools**,
+**Marketplace**, and **UI configuration**.
+
+- Tools: create, update, delete, enable/disable toggle, and script content edits.
+- Marketplace: registry create/update/delete/refresh, and item install/update/uninstall/detach.
+- UI configuration: asset upload/delete, configuration save, and configuration backup.
+- No admin action required — existing audit log filtering, retention, and CSV export apply to
+  these new entries automatically.
+
 ## No More Silent Empty Answers from Gemini (Web Search Off)
 
 Chatting with a Gemini model while web search is turned off (for example the **Web Chat** app) could
@@ -489,3 +629,411 @@ decrypt stored secrets.
   segment) is now rejected by validation.
 - Existing filesystem sources are unaffected — all bundled sources already store their path with
   the `sources/` prefix. No admin action is required.
+  
+## Dynamic JSX Pages No Longer Depend on a Public CDN
+
+Custom React pages (`contents/pages/*.jsx`) and app-embedded React components now compile using the
+JSX compiler already bundled with iHub, instead of fetching it from `unpkg.com`/`cdn.jsdelivr.net`
+at runtime. This removes a supply-chain dependency on those CDNs being reachable and trustworthy,
+and fixes JSX pages failing to render on air-gapped or self-hosted deployments that block outbound
+calls to public CDNs.
+
+- No admin action is required — the compiler now loads from iHub's own bundle on first use.
+
+## Disabling a Teams SSO User Now Actually Blocks Them
+
+Disabling a Microsoft Teams user's account previously had no effect: Teams SSO logins (both the
+silent tab/app sign-in and the token-exchange endpoint) never checked or recorded the account's
+active status, unlike every other external login method (OIDC, LDAP, NTLM, proxy).
+
+- Teams users are now persisted to `users.json` and validated on every sign-in the same way as
+  OIDC/LDAP/NTLM/proxy users, so an admin who disables a Teams user's account blocks them from
+  signing in again (`403 Forbidden`).
+- No admin action is required — existing Teams users are picked up automatically on their next
+  sign-in.
+  
+## Cancelling an Agent Run Now Actually Stops It
+
+Cancelling a workflow/agent run, or hitting its per-node timeout, previously only stopped things
+*between* steps — an agent step already in progress kept calling the model and running tools in
+the background until it finished on its own, even though the run showed as cancelled.
+
+- Cancelling a run (or a timeout firing) now interrupts an in-flight agent step immediately: the
+  in-progress model request is aborted, and the agent stops before starting another model call or
+  another queued tool call in the same turn.
+- This stops wasted LLM spend and background tool activity on runs operators already considered
+  stopped.
+- Also fixed a related bug where a tool-enabled agent step could fail outright with an internal
+  error when native web search was configured, instead of running normally.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Web Content Extraction Is Now Protected Against Redirect-Based SSRF
+
+The **webContentExtractor** tool (used directly by apps and internally by Brave Search's page
+extraction) validated only the initial URL before fetching. A page that redirected to an internal
+address — for example a cloud metadata endpoint — could bypass that check entirely and have the
+server fetch it on the tool's behalf.
+
+- Every redirect hop is now re-validated against the same private/internal-address guard as the
+  initial request, and the connection is pinned to the validated address to close a DNS-rebinding
+  window between the check and the fetch.
+- Redirect chains are capped at 5 hops to prevent an unbounded chain.
+- No admin action is required — the fix takes effect automatically on upgrade.
+
+## Production Docker Compose Now Boots on a Fresh Clone
+
+`docker/docker-compose.prod.yml` previously couldn't start on a clean checkout, and broke
+configuration migrations and admin-UI saves once it did.
+
+- Configuration was bind-mounted from a host `../contents/` folder that doesn't exist until the
+  app generates it on first boot, so a fresh clone started with an empty, broken config.
+- `contents/config` was mounted read-only, so config migrations and any admin-UI save (platform
+  settings, apps, models, etc.) failed once the container did start.
+- Replaced the multi-volume, read-only setup with a single writable volume covering the whole
+  `contents/` tree, matching how the app already manages its own data — no separate init
+  container needed.
+- No admin action is required for new deployments. Existing deployments upgrading their compose
+  file should back up their current volumes first (see `docker/DOCKER.md`'s updated backup/migration
+  steps) since the old per-directory volumes (`ihub-config`, `ihub-data`, `ihub-uploads`, etc.) are
+  replaced by a single `ihub-contents` volume.
+  
+## Customizable Error & Empty-State Messages
+
+Admins can now reword the text shown on error and empty-state screens per language, directly from
+the admin panel — no code change or redeploy required. This is useful for branded deployments that
+need tenant-specific wording, a support contact, or a different tone.
+
+- Covers the generic error screen, the 404 / 500 / 403 / 401 pages, and the "no apps available"
+  state on the apps list.
+- Edit under **Admin → UI Customization → Error Pages**. Each screen has its own title and message
+  fields, with the standard multi-language editor (add languages, auto-translate).
+- Every field is optional — leave one empty to keep the built-in default text. Existing
+  installations get the current wording seeded automatically so there's nothing to fill in unless
+  you want to change it.
+- No admin action is required on upgrade; a migration adds the editable defaults for you.
+
+## Authentication Debug Logging — Fixed and Consolidated
+
+Enabling authentication debug logging now actually works, and all of its controls live in one
+place. Admins can trace OIDC redirects, token exchange, group mapping, and NTLM handshakes to
+diagnose sign-in problems.
+
+- Configure it under **Admin → Platform → Logging → Authentication Debug Logging**. The
+  Authentication page now points here instead of offering a second, disconnected copy.
+- Turning it on is sufficient on its own — traces are written at the `info` level, so they appear
+  at the default log level without also lowering the global log level, and the change applies
+  immediately (no server restart).
+- The **Include raw authentication data** option (off by default) is clearly marked as a security
+  risk; leave it off unless you are actively debugging, and turn it off again afterward.
+- The obsolete "Console logging" toggle was removed (the logger already manages console output).
+- No admin action is required on upgrade: a migration moves any previously saved setting to its new
+  location so your configuration is preserved.
+
+## Fixed App Crash Caused by Browser Auto-Translation
+
+Fixed a crash where the entire app would fail to load with a generic "Something went wrong" error
+on browsers configured to automatically translate pages (for example, Chrome or Edge on a German,
+French, or other non-English system).
+
+- The symptom was an unexpected-error screen showing `NotFoundError: Failed to execute
+  'insertBefore' on 'Node'`, often in the browser's own translated wording rather than iHub's.
+- It was most visible right after a fresh installation, because a new install starts in English
+  and a non-English browser would offer to auto-translate it.
+- iHub Apps already ships its own language switcher, so browser translation was both redundant and
+  the source of the crash. The application now instructs browsers not to auto-translate its pages;
+  users should continue to switch languages using the in-app language selector.
+- No admin action is required on upgrade.
+
+## Connect Claude and Other MCP Clients Without Manual OAuth Setup
+
+The MCP gateway can now be activated end-to-end from **Admin → MCP gateway**, and MCP clients such
+as Claude (claude.ai custom connectors, Claude Desktop), Cursor, and VS Code can connect through
+standard OAuth discovery — including automatic client registration.
+
+- The MCP gateway page now includes an **Authentication** section: one toggle enables the OAuth
+  authorization server (previously this had to be edited in `platform.json` by hand, which left
+  the gateway unusable), and a second toggle enables **Dynamic client registration (RFC 7591)** so
+  MCP clients create their OAuth client automatically at `/api/oauth/register` — no manual client
+  setup needed. A warning appears if the gateway is on but OAuth is off.
+- New standard discovery endpoints: `/.well-known/oauth-authorization-server` (RFC 8414) and
+  `/.well-known/oauth-protected-resource` (RFC 9728). Unauthenticated requests to `/mcp` now
+  return the `resource_metadata` challenge that MCP clients use to bootstrap authentication.
+- Auto-registered clients are never trusted: users always sign in and consent to the requested
+  `mcp:*` scopes, and the clients can be reviewed, restricted, or removed under
+  **Admin → OAuth clients**. Registration is rate-limited and capped
+  (`oauth.dcr.maxClients`, default 100), and only the authorization-code flow can be registered.
+- The consent screen now explains `mcp:*` scopes in plain language, and clients that omit the
+  `scope` parameter receive their registered scopes instead of a token the gateway would reject.
+- Fixed the MCP gateway settings not saving at all: the platform config endpoint reported success
+  while discarding the gateway section, so every toggle on the page reverted on reload.
+- To connect Claude: enable the three toggles, then add `https://your-ihub/mcp` under
+  **Settings → Connectors → Add custom connector** in Claude.
+
+**Note:** after enabling the OAuth authorization server for the first time, restart the server
+once so the OAuth session middleware is mounted.
+
+## MCP clients can connect reliably after sign-in
+
+Fixed the MCP gateway rejecting every request that followed a successful OAuth login, which left
+clients such as the Claude Code CLI stuck at "could not connect" even though the browser consent
+step had completed.
+
+- Requests the gateway cannot match to a live session now get the status the MCP spec prescribes,
+  so clients recover on their own: an unknown or expired `Mcp-Session-Id` returns
+  `404 Session not found` (the client simply opens a new session), and `GET /mcp` outside a session
+  returns `405`. Previously all of these returned `400 Bad Request: Server not initialized`, which
+  MCP clients treat as a fatal protocol error.
+- The session is registered the moment the handshake is accepted, closing a window in which a
+  client already held its session id but the gateway did not yet recognise it.
+- New **Stateless mode** toggle under **Admin → MCP gateway → Transports** for installations that
+  run several load-balanced replicas. Each request is then served independently, so no session
+  affinity is required. Trade-off: no server-initiated SSE stream (the gateway does not use one).
+- Every request the gateway turns away is now logged under the `McpGateway` component with the
+  reason, and abandoned sessions are released after an hour instead of being held for the lifetime
+  of the process.
+- Only the user who opened a session can terminate it via `DELETE /mcp`.
+- Authorization-code tokens no longer log a misleading `JWT verification failed — jwt audience
+  invalid` warning on every MCP request; those tokens are audience-scoped to their OAuth client by
+  design and were always being accepted.
+
+## Health Probes and the Login Screen No Longer Lock Themselves Out With 429s
+
+The brute-force limiter that protects login was applied to the whole `/api/auth` namespace,
+including read-only endpoints nothing can avoid calling. Polling `/api/auth/status` — the call the
+web app makes on every page load, and a natural choice for a container health probe — exhausted the
+window (30 requests per 15 minutes in the shipped configuration) on its own, after which every
+caller including the probe received
+`429 Too Many Requests` until the window reset. The platform looked completely wedged.
+
+- The strict limiter now covers only endpoints that actually verify credentials
+  (`/api/auth/local/login`, the LDAP/NTLM logins, and the Teams token exchange). Brute-force
+  protection is unchanged for those.
+- Read-only endpoints — `/api/auth/status`, `/api/auth/user`, the provider-discovery endpoints, the
+  OIDC sign-in and callback redirects, and `/api/auth/logout` — are covered by the generous public
+  API limiter instead. A single exhausted window can no longer block SSO sign-ins or logouts for
+  everyone.
+- Health probes are best pointed at `/api/health`, which has never been rate limited.
+
+## New `trustProxy` Setting for Deployments Behind More Than One Proxy
+
+`platform.json` now takes a `trustProxy` value: the number of proxy hops in front of iHub (it also
+accepts `true`/`false` or a list of trusted addresses and subnets). It decides what iHub sees as the
+client address, which is both the rate-limit key and the address recorded in the audit log.
+
+- The default is `1`, matching the previous hard-coded behaviour — nothing changes on upgrade.
+- Raise it if iHub sits behind more than one hop, e.g. an ingress plus an internal load balancer.
+  With a value that is too low, every caller behind the inner proxy is seen as the *same* client, so
+  they all share one rate-limit counter and one busy client can exhaust the auth or OAuth window for
+  the whole deployment. Audit entries also record the proxy rather than the user's address.
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+## MCP Gateway `405` Responses Are Now Diagnosable
+
+A `GET /mcp` rejected with `405` was returned without a log line, so the three very different causes
+were indistinguishable from the server side. Each rejection is now logged under the `McpGateway`
+component with the request's method, user, user agent, and whether an `Mcp-Session-Id` header
+arrived.
+
+- Most `405`s are harmless: a Streamable HTTP client probing for the optional server-initiated SSE
+  stream. Tools still list and run — nothing to fix.
+- A `405` a client cannot recover from means it is configured for the legacy SSE transport but
+  pointed at `/mcp`; the error message now names `/mcp/sse` explicitly.
+- A `405` with no session header *after* a successful handshake means a reverse proxy is stripping
+  the `Mcp-Session-Id` header — allow it (and `MCP-Protocol-Version`) through.
+
+## Clustering Now Warns When Sticky Routing Collapses Onto One Worker
+
+With `WORKERS` greater than 1, the primary process hands each connection to a worker chosen from the
+TCP peer address. Behind a reverse proxy that address is identical for every request, so all traffic
+lands on a single worker while the others stay idle — and a saturated worker looks like a dead
+server, health probes included.
+
+- The primary now logs this once at startup instead of leaving it to be discovered under load.
+- To actually use several workers, either expose iHub directly, or run `WORKERS=1` with multiple
+  replicas behind proxy-level session stickiness.
+
+## Clustered Deployments Now Use Every Worker Behind a Proxy
+
+Worker processes no longer need each client pinned to one of them. Chat streaming state that lands
+on a different worker than the one holding the browser's connection is relayed internally, so
+connections are distributed evenly instead of hashed by network address.
+
+- Previously, routing hashed the client's TCP address. Behind a reverse proxy or Kubernetes ingress
+  every request carries the proxy's address, so a single worker served all traffic while the rest
+  sat idle — a `WORKERS=4` deployment had the capacity of one process, and the saturated worker
+  looked like a dead server because health probes queued behind real requests.
+- No configuration change is needed to get the fix. Deployments already setting `WORKERS` see all
+  workers used from the first restart.
+- Chat streaming, stop/cancel, workflow cancellation and workflow progress replay all work
+  regardless of which worker a given request reaches.
+- Set `STICKY_SESSIONS=true` to restore the old address-hashing behaviour if some part of your
+  deployment depends on connection affinity. It is not needed for chat.
+
+Note two per-worker limits that now spread differently, since one user's requests can reach several
+workers: rate-limit counters and realtime-voice connection caps are counted per worker, so the
+effective ceiling is up to `WORKERS ×` the configured value. Size them accordingly or enforce limits
+at your ingress.
+
+Running more than one **replica** still requires cookie-based session affinity at the ingress — the
+relay works between workers in a pod, not between pods. See
+[Scaling with Multiple Workers](../../scaling.md) for Kubernetes examples.
+
+## Configuration Changes Now Reach Every Worker Immediately
+
+With `WORKERS` greater than 1, an admin save only reached the worker that handled the request. Every
+other worker kept serving the previous configuration until its cache expired, so a saved change
+looked applied on one page load and reverted on the next — and a deleted app stayed visible on the
+workers that had not handled the delete.
+
+- Saving, creating, deleting or toggling anything in the Admin UI now takes effect on all workers at
+  once: apps, models, prompts, tools, workflows, agents, sources, providers, groups, users, pages,
+  skills, MCP servers and platform settings.
+- Runtime settings that were previously applied only in the worker serving the request now follow
+  too — log level and logging config, telemetry, usage-tracking mode, iFinder/iAssistant connection
+  settings and outbound MCP server connections.
+- Backup import and the admin **Clear cache** / **Refresh cache** actions reload every worker.
+- No configuration change is needed. `GET /api/admin/cache/stats` gains a `sync` block with the
+  per-worker announce/receive counters if you want to confirm changes are propagating.
+
+## OIDC and OAuth Logins No Longer Fail Intermittently on a Fresh Install
+
+On the very first start of a multi-worker installation, each worker could generate its own JWT
+signing key and its own secret-encryption key, because they all raced to create the key files before
+any of them existed. A user who logged in was then authenticated on some workers and rejected with
+"Authentication required" on others, seemingly at random, and secrets encrypted by one worker could
+not be decrypted by another.
+
+- The first worker to create each key file now wins and the others adopt it, so a cold start ends
+  with one signing key and one encryption key for the whole cluster.
+- Only fresh installations were affected. Existing installations already have the key files on disk
+  and were reading them correctly.
+- **If you hit this**, `contents/.jwt-private-key.pem`, `contents/.jwt-public-key.pem` and
+  `contents/.encryption-key` may hold a key that only one worker was using. Existing sessions will
+  need a re-login after upgrading. Any secret that was saved in the Admin UI while the keys were
+  mismatched should be re-entered, since it may have been encrypted with a key that is no longer on
+  disk. Setting `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` and `TOKEN_ENCRYPTION_KEY` explicitly avoids the
+  situation entirely and is recommended for multi-replica deployments.
+  
+## Cited Passages Can Now Be Located and Highlighted Inside the Source Document
+
+When an app uses iFinder as its search backend, the passages listed under a chat answer's
+**Documents** section can now be opened directly in the document they came from. The document opens
+in an in-app PDF preview with every cited passage highlighted, scrolled to the first one.
+
+- Each passage in an expanded document gets a magnifier button that opens the preview at that
+  passage. The overflow menu's **Preview (PDF)** entry opens the same viewer with all of the
+  document's cited passages highlighted.
+- The preview replaces the previous behaviour of opening the converted PDF in a new browser tab,
+  which could not highlight anything. It adds highlight-to-highlight navigation (also `Enter` /
+  `Shift+Enter`), a page count, zoom, download, and a per-passage filter when a document is cited
+  more than once.
+- Passage text and the generated preview PDF do not match character-for-character — the PDF's text
+  layer differs in whitespace, ligatures, hyphenation and page furniture such as headers and
+  footers. Matching therefore compares only letters and digits, so passages are still found across
+  those differences, in any script (including Cyrillic and CJK), and across page breaks.
+- A passage that a header or footer interrupts at a page break is highlighted sentence by sentence
+  rather than not at all. If a passage genuinely cannot be located, the preview still opens and
+  reports "Passage not found" instead of failing.
+- Documents without a downloadable version are unaffected: the passage button and preview entry
+  only appear where iFinder exposes document access.
+
+## Connection Diagnostics for iFinder and iAssistant
+
+The **Test iFinder** and **Test iAssistant** buttons under Admin → iFinder Integration now run a
+step-by-step diagnostic instead of returning a single pass/fail message. Each step reports what it
+observed and, when it fails, what to check — so connecting iHub to iFinder no longer requires
+reading server logs and guessing.
+
+- Checks the whole path: the configured URL (including a warning when the hostname is not fully
+  qualified), DNS resolution, the TCP/TLS handshake with certificate subject, issuer, expiry and
+  trust result, JWT generation, local signature verification, JWKS reachability, and a real API
+  request against iFinder's search endpoint or iAssistant's profile list.
+- Shows the decoded JWT — header, payload, and the subject that was actually derived for the user —
+  so it can be compared against the trust configuration on the iFinder side. A 401 now also surfaces
+  the `WWW-Authenticate` header and names the usual causes: issuer mismatch, a `kid` missing from
+  the JWKS, a subject in the wrong format, or clock skew.
+- Flags the issuer and JWKS URL that **iFinder itself must call back to**. A `localhost` or
+  single-label hostname there is reported as a failure, because iFinder can never fetch the signing
+  keys from it — the most common reason iFinder answers 500 during token validation.
+- Detects an iAssistant profile ID that does not exist and lists the profiles the tested user can
+  actually see.
+- Diagnostics options allow testing as a specific user (email, username, domain) to verify how the
+  JWT subject is built, optionally returning the signed JWT together with a ready-to-run `curl`
+  command, and running an iAssistant conversation round-trip to verify write access. Without the
+  token option the `curl` command references `$TOKEN` and is safe to share.
+- The search term and profile are fixed rather than configurable per run, so no value from the
+  request can influence which URL iHub contacts. The diagnostics always exercise the configured
+  search profile, which is what an admin wants to verify anyway.
+- A previous behaviour is fixed: an iAssistant network failure used to be reported as "configuration
+  is valid" and counted as a success. Unreachable now reads as unreachable.
+
+## Apps Can Now Call Other Apps as Tools (Concierge Pattern)
+
+A chat app can delegate to other apps: list app IDs in the new `apps` field and the model
+sees each one as a callable tool (`app__<id>`). The called app answers with its own system
+prompt, model, tools, and sources — entirely server-side, with no REST round-trip — and the
+calling app weaves the answer into its response. This enables a concierge bot that routes
+requests to specialist bots.
+
+- Configure via the new **Apps as Tools** section in the admin app editor, or the `apps`
+  array in the app JSON.
+- Requires the **App-as-Tool** platform feature (Admin → Features; previously agent-only,
+  off by default).
+- Users can only reach apps their groups permit — the same permission check as opening the
+  app directly; apps a user may not access are never offered to the model.
+- Delegation is limited to one level: a called app cannot call further apps, so loops
+  cannot form.
+
+## iFinder Sources Select Documents Instead of Carrying Connection Settings
+
+iFinder knowledge sources no longer ask for a base URL and API key — the connection comes from
+the central iFinder integration (Admin → Providers → iFinder). A source now only defines which
+documents it loads, and the admin form can verify the selection against the live iFinder before
+saving.
+
+- Pin a source to one document by ID, or give it a search query that loads the top N matching
+  documents (configurable, 1–100) as source content — each document arrives clearly delimited
+  with its title and link.
+- A **Connect** button next to the document ID loads the document's metadata (title, author,
+  media type, size, modification date, link) so admins can confirm it is the right document.
+- A **Test Query** button shows how many documents match and which ones would be loaded.
+- The search profile is optional and falls back to the platform-wide default profile.
+- Documents are always fetched with the identity of the current user, so a source never exposes
+  content the user could not open in iFinder directly.
+- Sources exposed as tools may leave both fields empty; the assistant supplies a query or
+  document ID when it calls the tool.
+
+## Audit Log Filtering by Checkbox, With Entry Counts
+
+**Observability → Audit Log** now filters with checkbox lists instead of single-value dropdowns, so
+"everything except logins" is one click rather than impossible. Actor, resource, action, result and
+source each open a list of the values that actually occur in the selected date range, each showing
+how many entries are behind it.
+
+- **Select all** and **Select none** are single clicks; lists longer than ten values get a
+  type-ahead box. Full keyboard and screen-reader support.
+- Counts are what make a noisy log tractable: seeing `login — 794` tells you exactly what to untick.
+- Option lists are read from the log, not from a fixed list, so resource types added by a later
+  release appear on their own.
+- Counts and options are computed over the date range only, so unticking a value never makes its
+  checkbox vanish.
+- A new **search box** matches the summary, resource ID, IP, request ID and actor name of any entry
+  in the date range.
+- **Quick filters:** Today / Today & yesterday / Last 7 days / Last 30 days, **Hide sign-ins**,
+  **Failures only**, and **Clear all filters**.
+- The default range is now **today and yesterday** instead of 7 days. The date filter works in whole
+  calendar days (UTC) with no time-of-day cutoff, so the default covers two days rather than a
+  rolling 24 hours — that way the table is not near-empty just after midnight. Widen it with the
+  date inputs or a chip.
+- Action, result and source are translated in the table itself, not only in the filter lists.
+- Filter state stays in the URL, so a filtered view is still bookmarkable and shareable. Each field
+  takes an include parameter and an `<field>Exclude` parameter, with `*` meaning "every value" —
+  `?actionExclude=login,logout` is "everything but sign-ins". Existing single-value links such as
+  `?resource=app` keep working.
+- Audit log queries now scan each daily file once instead of loading the whole date range into
+  memory and sorting it, so a wide range costs materially less.

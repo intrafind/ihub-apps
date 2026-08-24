@@ -5,7 +5,7 @@ import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ModelNameCell({ model, currentLanguage }) {
@@ -72,7 +72,7 @@ function AdminModelsPage() {
       const data = response.data;
       setModels(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setModels([]);
     } finally {
       setLoading(false);
@@ -91,7 +91,7 @@ function AdminModelsPage() {
       const result = response.data;
       setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -100,7 +100,7 @@ function AdminModelsPage() {
       await toggleModels('*', true);
       setModels(prev => prev.map(m => ({ ...m, enabled: true })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -109,7 +109,7 @@ function AdminModelsPage() {
       await toggleModels('*', false);
       setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -145,7 +145,7 @@ function AdminModelsPage() {
       await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
       setModels(prev => prev.filter(m => m.id !== modelId));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -164,7 +164,7 @@ function AdminModelsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download model config: ${err.message}`);
+      setError(`Failed to download model config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -194,12 +194,12 @@ function AdminModelsPage() {
       await loadModels();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload model config: ${err.message}`);
+        setError(`Failed to upload model config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);

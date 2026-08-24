@@ -21,6 +21,7 @@ import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import registryService from '../../services/marketplace/RegistryService.js';
 import contentInstaller from '../../services/marketplace/ContentInstaller.js';
 import logger from '../../utils/logger.js';
+import { logAudit } from '../../services/AuditLogService.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
 
@@ -91,6 +92,14 @@ export default function registerAdminMarketplaceRoutes(app) {
           });
         }
 
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'marketplaceRegistry',
+          resourceId: registry.id,
+          summary: `Created marketplace registry ${registry.id}`
+        });
+
         res.status(201).json(registry);
       } catch (error) {
         logger.error('Error creating registry', { component: COMPONENT, error: error.message });
@@ -139,6 +148,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { registryId } = req.params;
         if (!validateIdForPath(registryId, 'registryId', res)) return;
         const updated = await registryService.updateRegistry(registryId, req.body);
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'marketplaceRegistry',
+          resourceId: registryId,
+          summary: `Updated marketplace registry ${registryId}`
+        });
         res.json(updated);
       } catch (error) {
         logger.error('Error updating registry', { component: COMPONENT, error: error.message });
@@ -161,6 +177,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { registryId } = req.params;
         if (!validateIdForPath(registryId, 'registryId', res)) return;
         await registryService.deleteRegistry(registryId);
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'marketplaceRegistry',
+          resourceId: registryId,
+          summary: `Deleted marketplace registry ${registryId}`
+        });
         res.json({ success: true });
       } catch (error) {
         logger.error('Error deleting registry', { component: COMPONENT, error: error.message });
@@ -183,6 +206,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { registryId } = req.params;
         if (!validateIdForPath(registryId, 'registryId', res)) return;
         const catalog = await registryService.refreshRegistry(registryId);
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'marketplaceRegistryCatalog',
+          resourceId: registryId,
+          summary: `Refreshed catalog for marketplace registry ${registryId}`
+        });
         res.json({ success: true, itemCount: (catalog.items || []).length });
       } catch (error) {
         logger.error('Error refreshing registry', { component: COMPONENT, error: error.message });
@@ -316,6 +346,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const installedBy = req.user?.email || req.user?.username || 'admin';
         const manifest = await contentInstaller.install(registryId, type, name, installedBy);
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'marketplaceItem',
+          resourceId: `${type}/${name}`,
+          summary: `Installed marketplace item ${type}/${name} from registry ${registryId}`
+        });
         res.status(201).json(manifest);
       } catch (error) {
         logger.error('Error installing item', { component: COMPONENT, error: error.message });
@@ -339,6 +376,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const updatedBy = req.user?.email || req.user?.username || 'admin';
         const manifest = await contentInstaller.update(type, name, updatedBy);
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'marketplaceItem',
+          resourceId: `${type}/${name}`,
+          summary: `Updated marketplace item ${type}/${name}`
+        });
         res.json(manifest);
       } catch (error) {
         logger.error('Error updating item', { component: COMPONENT, error: error.message });
@@ -361,6 +405,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { type, name } = req.params;
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         await contentInstaller.uninstall(type, name);
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'marketplaceItem',
+          resourceId: `${type}/${name}`,
+          summary: `Uninstalled marketplace item ${type}/${name}`
+        });
         res.json({ success: true });
       } catch (error) {
         logger.error('Error uninstalling item', { component: COMPONENT, error: error.message });
@@ -383,6 +434,13 @@ export default function registerAdminMarketplaceRoutes(app) {
         const { type, name } = req.params;
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         await contentInstaller.detach(type, name);
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'marketplaceItem',
+          resourceId: `${type}/${name}`,
+          summary: `Detached marketplace item ${type}/${name} from tracking`
+        });
         res.json({ success: true });
       } catch (error) {
         logger.error('Error detaching item', { component: COMPONENT, error: error.message });

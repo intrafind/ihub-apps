@@ -5,6 +5,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { DataTable } from '../components/data-table';
 import StatusBadge from '../../workflows/components/StatusBadge';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 const ACTIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 30000;
 
@@ -34,7 +35,7 @@ export default function AgentRunsPage() {
         setError(null);
         hasActiveRun = data.some(r => r.status === 'running' || r.status === 'paused');
       } catch (err) {
-        if (mounted) setError(err.message);
+        if (mounted) setError(getAdminApiErrorMessage(err));
       } finally {
         if (mounted) setLoading(false);
       }

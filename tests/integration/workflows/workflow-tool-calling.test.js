@@ -29,7 +29,7 @@ describe('Tool Calling Workflow - Structure Tests', () => {
     test('has agent node with tool configuration', () => {
       const agentNode = toolCallingWorkflow.nodes.find(n => n.id === 'searcher');
       expect(agentNode).toBeDefined();
-      expect(agentNode.type).toBe('prompt');
+      expect(agentNode.type).toBe('agent');
     });
 
     test('agent node has googleSearch tool', () => {

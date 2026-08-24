@@ -36,9 +36,8 @@ Browser ──HTTPS:443──▶  nginx / Apache / Traefik  ──HTTP:3000─�
 
 ### How the backend detects HTTPS
 
-iHub Apps trusts the first proxy hop (`app.set('trust proxy', 1)` in
-`server/middleware/setup.js`) and resolves the public protocol from the
-`X-Forwarded-Proto` header (`server/utils/publicBaseUrl.js`). Your proxy must
+iHub Apps trusts one proxy hop by default and resolves the public protocol from
+the `X-Forwarded-Proto` header (`server/utils/publicBaseUrl.js`). Your proxy must
 therefore forward these headers:
 
 ```nginx
@@ -51,6 +50,20 @@ proxy_set_header X-Forwarded-Prefix /ihub;    # only for subpath deployments
 
 Without `X-Forwarded-Proto`, redirect URLs and OAuth/OIDC callbacks may be
 built with the wrong scheme (`http://` instead of `https://`).
+
+If there is more than one proxy in front of iHub, set the hop count in
+`platform.json`:
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+The default (`1`) assumes a single hop. Too low a value makes `req.ip` resolve to
+the inner proxy rather than the client, which both mis-attributes audit log
+entries and collapses every caller onto one rate-limit counter — see
+[rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key).
 
 ### Minimal nginx example
 

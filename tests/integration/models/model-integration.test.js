@@ -1,7 +1,7 @@
-import { createCompletionRequest } from '../../server/adapters/index.js';
-import { loadConfiguredTools } from '../../server/toolLoader.js';
-import { TestHelper, MockDataGenerator } from '../utils/helpers.js';
-import { testModels, testEnvironment, mockApiKeys } from '../utils/fixtures.js';
+import { createCompletionRequest } from '../../../server/adapters/index.js';
+import { loadConfiguredTools } from '../../../server/toolLoader.js';
+import { TestHelper, MockDataGenerator } from '../../utils/helpers.js';
+import { testModels, testEnvironment, mockApiKeys } from '../../utils/fixtures.js';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,6 +12,17 @@ dotenv.config({ path: '.env' });
  * Model Integration Tests
  * These tests validate the integration with actual LLM providers
  * or use mock responses when real API calls are disabled
+ *
+ * NOT run in CI (see package.json's test:integration:ci) and not collectible
+ * under Jest at all today: server/adapters/index.js transitively requires
+ * server/sources/index.js -> URLHandler.js -> utils/httpConfig.js, which
+ * statically imports node-fetch/http-proxy-agent/https-proxy-agent - all
+ * real ESM-only packages Babel's CommonJS transform can't parse (and each
+ * one mocked away just uncovers the next in the chain). Needs a true
+ * ESM-mode Jest project (`--experimental-vm-modules`, as
+ * server/jest.config.js already uses for server/tests/) rather than the
+ * jsdom/babel-CJS config this file currently lives under. Tracked in
+ * https://github.com/intrafind/ihub-apps/issues/1705.
  */
 
 describe('Model Integration Tests', () => {

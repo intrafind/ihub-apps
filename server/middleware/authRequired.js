@@ -1,7 +1,7 @@
 /**
  * Authentication middleware to enforce authentication when required
  */
-import { isAnonymousAccessAllowed } from '../utils/authorization.js';
+import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import authDebugService from '../utils/authDebugService.js';
 import configCache from '../configCache.js';
 
@@ -170,31 +170,41 @@ export function chatAuthRequired(req, res, next) {
   authRequired(req, res, err => {
     if (err) return next(err);
 
-    // Then check app access permissions if user is authenticated
-    if (req.user && req.user.id !== 'anonymous') {
-      authDebugService.log(
-        'chat-auth-required',
-        'info',
-        'User authenticated, checking app access',
-        {
-          url: req.url,
-          method: req.method,
-          userId: req.user?.id,
-          appId: req.params.appId
-        }
-      );
+    // Tokenless requests reach here with req.user still undefined whenever
+    // anonymousAuth is enabled (authRequired only enforces auth, it never
+    // materializes a principal). Without a principal, appAccessRequired's
+    // permission check silently no-ops, so anonymous callers could reach any
+    // app id, including ones not allowlisted for the anonymous group. Build
+    // the same resolved-permissions anonymous principal here that the apps
+    // list endpoint already builds for itself, scoped to chat endpoints only.
+    if (!req.user) {
+      const platformConfig = configCache.getPlatform() || {};
+      if (isAnonymousAccessAllowed(platformConfig)) {
+        req.user = enhanceUserWithPermissions(null, platformConfig.auth || {}, platformConfig);
+      }
+    }
+
+    // Check app access permissions whenever a principal exists.
+    // resourceAccessRequired() is a safe no-op if req.user.permissions is
+    // somehow still missing.
+    if (req.user) {
+      authDebugService.log('chat-auth-required', 'info', 'Checking app access', {
+        url: req.url,
+        method: req.method,
+        userId: req.user?.id,
+        appId: req.params.appId
+      });
       return appAccessRequired(req, res, next);
     }
 
     authDebugService.log(
       'chat-auth-required',
       'info',
-      'Proceeding without app access check (anonymous or unauthenticated user)',
+      'Proceeding without app access check (no user principal)',
       {
         url: req.url,
         method: req.method,
-        hasUser: !!req.user,
-        userId: req.user?.id
+        hasUser: !!req.user
       }
     );
     next();

@@ -1,7 +1,7 @@
 /**
  * Regression tests for the iFinder JWT subject env-var leak.
  *
- * Bug (pre-V043 / pre-skip-list): configCache's `resolveEnvVars` matched
+ * Bug (pre-V076 / pre-skip-list): configCache's `resolveEnvVars` matched
  * `${field}` placeholders in `iFinder.jwtSubjectField` against process.env.
  * On Windows `process.env.username` is set to the OS user running the
  * server, so a template like `BMG\${username}` was rewritten to
@@ -15,13 +15,13 @@
  *   2. iFinderJwt's template regex matches both `${field}` (legacy) and
  *      `${user.field}` (preferred) syntaxes, and the legacy detector
  *      flags only the unprefixed form.
- *   3. The V043 migration converts `${field}` to `${user.field}` in
+ *   3. The V076 migration converts `${field}` to `${user.field}` in
  *      existing platform.json files.
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveEnvVarsInObject } from '../configCache.js';
-import { up as migrationUp } from '../migrations/V043__fix_ifinder_jwt_subject_template.js';
+import { up as migrationUp } from '../migrations/V076__fix_ifinder_jwt_subject_template.js';
 
 describe('iFinder JWT subject — env var resolution skip', () => {
   // configCache passes this skipPaths list when caching the platform config.
@@ -108,7 +108,7 @@ describe('iFinder JWT subject — template regex pin', () => {
   // These regexes are intentionally duplicated from `resolveJwtSubject` in
   // iFinderJwt.js. They are the part of the contract that callers (admins
   // writing templates) depend on — if you change the regex, update both
-  // sites AND bump V043 (or add a new migration) to convert existing configs.
+  // sites AND bump V076 (or add a new migration) to convert existing configs.
 
   const TEMPLATE_RE = /\$\{(?:user\.)?(\w+)\}/g;
   const LEGACY_DETECT_RE = /\$\{(?!user\.)\w+\}/;
@@ -139,7 +139,7 @@ describe('iFinder JWT subject — template regex pin', () => {
   });
 });
 
-describe('V043 migration', () => {
+describe('V076 migration', () => {
   function makeCtx(initialPlatform) {
     let platform = JSON.parse(JSON.stringify(initialPlatform));
     const logs = [];

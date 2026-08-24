@@ -6,6 +6,7 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import logger from './utils/logger.js';
+import { getLocalizedString } from './utils/localize.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -65,7 +66,7 @@ function buildWorkflowToolParams(workflow, language = 'en') {
           description:
             typeof descriptionRaw === 'string'
               ? descriptionRaw
-              : extractLanguageValue(descriptionRaw, language)
+              : getLocalizedString(descriptionRaw, language)
         };
 
         // Enrich select types with enum values so the LLM knows valid choices
@@ -88,39 +89,6 @@ function buildWorkflowToolParams(workflow, language = 'en') {
     properties,
     required
   };
-}
-
-/**
- * Extract language-specific value from a multilingual object or return the value as-is
- * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
- * @param {string} language - Target language (e.g., 'en', 'de')
- * @param {string} fallbackLanguage - Fallback language (default: 'en')
- * @returns {any} - Language-specific value or original value
- */
-function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
-  // Get platform default language if not provided
-  if (!fallbackLanguage) {
-    const platformConfig = configCache.getPlatform() || {};
-    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // Check if this looks like a multilingual object
-    if (value[language] !== undefined) {
-      return value[language];
-    }
-    if (value[fallbackLanguage] !== undefined) {
-      return value[fallbackLanguage];
-    }
-    // If it has language keys but not the requested one, try first available
-    const availableLanguages = Object.keys(value).filter(
-      key => typeof value[key] === 'string' && key.length === 2
-    );
-    if (availableLanguages.length > 0) {
-      return value[availableLanguages[0]];
-    }
-  }
-
-  return value;
 }
 
 /**
@@ -154,7 +122,7 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
         Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')
       ) {
         // This is a multilingual field - an object with language codes as keys
-        result[key] = extractLanguageValue(value, language, fallbackLanguage);
+        result[key] = getLocalizedString(value, language, fallbackLanguage);
       } else {
         result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
       }
@@ -413,11 +381,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
 
-        let toolDescription = extractLanguageValue(
+        let toolDescription = getLocalizedString(
           wf.chatIntegration?.toolDescription || wf.description,
           language || 'en'
         );
-        const toolName = extractLanguageValue(wf.name, language || 'en');
+        const toolName = getLocalizedString(wf.name, language || 'en');
 
         // If the workflow has file/image input variables, hint that attached files
         // are passed automatically so the LLM knows to call this tool
@@ -450,6 +418,33 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // App-as-tool: surface other apps as synthetic `app__<id>` tools (the
+  // "concierge" pattern — a bot delegating to specialist bots). Skipped for
+  // principals that are themselves serving an app-as-tool call, so App→App
+  // chains stop at one level of nesting.
+  if (
+    Array.isArray(app.apps) &&
+    app.apps.length > 0 &&
+    context.user?.isInvokedViaAppAsTool !== true &&
+    isFeatureEnabled('appAsTool', configCache.getFeatures())
+  ) {
+    try {
+      const { getAppAsTools } = await import('./services/chat/appToolsGateway.js');
+      // Never expose an app to itself — a direct self-call can only loop.
+      const targetAppIds = app.apps.filter(id => typeof id === 'string' && id && id !== app.id);
+      const appAsTools = await getAppAsTools(targetAppIds, language || 'en', {
+        user: context.user
+      });
+      appTools = appTools.concat(appAsTools);
+    } catch (error) {
+      logger.error('Error generating app-as-tool tools', {
+        component: 'ToolLoader',
+        appId: app.id,
+        error
+      });
+    }
+  }
+
   // Add skill activation tools if the skills feature is enabled and the app has skills configured
   if (
     isFeatureEnabled('skills', configCache.getFeatures()) &&
@@ -468,8 +463,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'activate_skill',
-      name: extractLanguageValue({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
-      description: extractLanguageValue(activateDesc, lang),
+      name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
+      description: getLocalizedString(activateDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -485,8 +480,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'read_skill_resource',
-      name: extractLanguageValue({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
-      description: extractLanguageValue(readDesc, lang),
+      name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
+      description: getLocalizedString(readDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -598,6 +593,22 @@ export async function runTool(toolId, params = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // App-as-tool (`app__<appId>`): invoke another iHub app through the shared
+  // gateway. Runs the callee's full chat pipeline in-process (no REST hop);
+  // permission, feature-flag, and nesting guards live in the gateway.
+  if (toolId.startsWith('app__')) {
+    const { invokeAppTool } = await import('./services/chat/appToolsGateway.js');
+    const { chatId, user, appConfig, language, ...args } = params;
+    return await invokeAppTool({
+      toolId,
+      args,
+      user,
+      chatId,
+      language,
+      callerAppId: appConfig?.id
+    });
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')

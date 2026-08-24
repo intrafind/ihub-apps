@@ -78,7 +78,7 @@ export default defineConfig({
             // Vendor chunks
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-            'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
+            'vendor-forms': ['react-quill-new', 'ajv', 'ajv-formats'],
             'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
 
             // Heavy dependencies that should be separate

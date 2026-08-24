@@ -17,13 +17,6 @@ RUN apk add --update --no-cache \
     curl \
     musl-dev
 
-# Install Rust (required for mdbook and mdbook-mermaid)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Install mdbook and mdbook-mermaid
-RUN cargo install mdbook mdbook-mermaid
-
 # Create app directory
 WORKDIR /app
 
@@ -43,7 +36,8 @@ FROM dependencies AS builder
 # Copy source code
 COPY . .
 
-# Build the complete application (client + server) - skip docs for Docker
+# Build the complete application (client + server), skipping the mdBook/Rust
+# documentation build — the docs site isn't shipped in the container image.
 RUN npm run build:docker
 
 # -----------------------------------------------------------------------------

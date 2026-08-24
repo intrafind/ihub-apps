@@ -84,6 +84,16 @@ const loggingSchema = z.object({
       maxFiles: z.number().default(5)
     })
     .default({}),
+  // Optional per-component filtering (read by utils/logger.js). When enabled
+  // with a non-empty filter list, only logs from the listed components are
+  // emitted — except authentication components, which are always allowed
+  // through while auth.debug is enabled so the auth-debug toggle keeps working.
+  components: z
+    .object({
+      enabled: z.boolean().default(false),
+      filter: z.array(z.string()).default([])
+    })
+    .default({}),
   anonymizeIp: ipAnonymizationSchema
 });
 
@@ -176,6 +186,12 @@ export const platformConfigSchema = z
       })
       .default({}),
     rateLimit: rateLimitSchema.default({}),
+    trustProxy: z
+      .union([z.number().int().min(0), z.boolean(), z.string()])
+      .default(1)
+      .describe(
+        'Express "trust proxy" setting: the number of proxy hops in front of iHub, true/false, or a comma-separated list of trusted addresses/subnets. Decides what req.ip resolves to, which is the rate-limit key and the audited client address. Set it to the real hop count — too low and every caller behind the inner proxy shares one identity (and therefore one rate-limit counter).'
+      ),
     logging: loggingSchema.default({}),
     ssl: z
       .object({

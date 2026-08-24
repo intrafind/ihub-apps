@@ -8,13 +8,13 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminSkillDetail,
-  updateSkill,
-  toggleSkill,
   deleteSkill,
-  exportSkill
+  exportSkill,
+  fetchAdminSkillDetail,
+  getAdminApiErrorMessage,
+  toggleSkill,
+  updateSkill
 } from '../../../api/adminApi';
-
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -79,7 +79,7 @@ function AdminSkillEditPage() {
       setInitialOverrides(loadedOverrides);
     } catch (err) {
       console.error('Error loading skill:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ function AdminSkillEditPage() {
       await toggleSkill(skillName);
       await loadSkill();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 

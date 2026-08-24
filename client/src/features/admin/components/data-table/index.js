@@ -11,6 +11,7 @@ export { default as DataTableLoadingRows } from './DataTableLoadingRows';
 
 export { default as SearchInput } from './filters/SearchInput';
 export { default as FilterSelect } from './filters/FilterSelect';
+export { default as FilterMultiSelect } from './filters/FilterMultiSelect';
 
 export {
   formatSortParam,

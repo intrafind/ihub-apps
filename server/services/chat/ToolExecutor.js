@@ -25,6 +25,14 @@ import {
  */
 const MAX_CLARIFICATIONS = MAX_CLARIFICATIONS_PER_CONVERSATION;
 
+/**
+ * Cap on tracked chatIds in clarificationCounts. ToolExecutor is a process-wide
+ * singleton with no "conversation ended" signal to clear entries on, so the Map
+ * is bounded (insertion-ordered, evict-oldest) instead — mirrors searchCache.js.
+ * @constant {number}
+ */
+const MAX_CHAT_ENTRIES = 5000;
+
 class ToolExecutor {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -58,17 +66,15 @@ class ToolExecutor {
   incrementClarificationCount(chatId) {
     const current = this.getClarificationCount(chatId);
     const newCount = current + 1;
+    if (
+      !this.clarificationCounts.has(chatId) &&
+      this.clarificationCounts.size >= MAX_CHAT_ENTRIES
+    ) {
+      const oldest = this.clarificationCounts.keys().next().value;
+      if (oldest !== undefined) this.clarificationCounts.delete(oldest);
+    }
     this.clarificationCounts.set(chatId, newCount);
     return newCount;
-  }
-
-  /**
-   * Reset the clarification count for a conversation
-   * Called when a conversation ends or is explicitly reset
-   * @param {string} chatId - The conversation/chat ID
-   */
-  resetClarificationCount(chatId) {
-    this.clarificationCounts.delete(chatId);
   }
 
   /**
@@ -381,7 +387,16 @@ class ToolExecutor {
     };
   }
 
-  async executeToolCall(toolCall, tools, chatId, buildLogData, user, app, userFileData = null) {
+  async executeToolCall(
+    toolCall,
+    tools,
+    chatId,
+    buildLogData,
+    user,
+    app,
+    userFileData = null,
+    clientLanguage = undefined
+  ) {
     const toolId =
       tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
       toolCall.function.name;
@@ -489,8 +504,17 @@ class ToolExecutor {
         }
       }
 
-      // Regular tool execution
-      const result = await runTool(toolId, { ...args, chatId, user, appConfig: app });
+      // Regular tool execution. `language` is a default the tool may use
+      // (e.g. app-as-tool passes it to the callee run); explicit LLM-provided
+      // args of the same name win via the spread, while chatId/user/appConfig
+      // spread last so the LLM can never override them.
+      const result = await runTool(toolId, {
+        language: clientLanguage,
+        ...args,
+        chatId,
+        user,
+        appConfig: app
+      });
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction(
@@ -1183,7 +1207,8 @@ class ToolExecutor {
           buildLogData,
           user,
           app,
-          userFileData
+          userFileData,
+          clientLanguage
         );
 
         if (toolResult.clarification) {
@@ -1594,7 +1619,8 @@ class ToolExecutor {
             buildLogData,
             user,
             app,
-            userFileData
+            userFileData,
+            clientLanguage
           );
 
           if (toolResult.clarification) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminPages, deletePage } from '../../../api/adminApi';
+import { deletePage, fetchAdminPages, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
@@ -26,7 +26,7 @@ function AdminPagesPage() {
       const data = await fetchAdminPages();
       setPages(data);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -43,7 +43,7 @@ function AdminPagesPage() {
           await deletePage(id);
           setPages(prev => prev.filter(p => p.id !== id));
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         }
       }
     });

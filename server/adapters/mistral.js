@@ -5,8 +5,6 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
-import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class MistralAdapterClass extends BaseAdapter {
   /**
@@ -107,118 +105,6 @@ class MistralAdapterClass extends BaseAdapter {
       headers: this.createRequestHeaders(apiKey),
       body
     };
-  }
-
-  /**
-   * Process streaming response from Mistral
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    if (data === '[DONE]') {
-      result.complete = true;
-      return result;
-    }
-
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Extract usage data from any chunk that contains it
-      if (parsed.usage) {
-        result.usage = {
-          promptTokens: parsed.usage.prompt_tokens || 0,
-          completionTokens: parsed.usage.completion_tokens || 0,
-          totalTokens: parsed.usage.total_tokens || 0
-        };
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.choices && parsed.choices[0]?.message) {
-        if (parsed.choices[0].message.content) {
-          const msgContent = parsed.choices[0].message.content;
-          if (Array.isArray(msgContent)) {
-            for (const part of msgContent) {
-              if (typeof part === 'string') {
-                result.content.push(part);
-              } else if (part && part.type === 'text' && part.text) {
-                result.content.push(part.text);
-              }
-            }
-          } else if (typeof msgContent === 'object' && msgContent !== null) {
-            if (msgContent.type === 'text' && msgContent.text) {
-              result.content.push(msgContent.text);
-            }
-          } else {
-            result.content.push(msgContent);
-          }
-        }
-        if (parsed.choices[0].message.tool_calls) {
-          result.tool_calls.push(...parsed.choices[0].message.tool_calls);
-        }
-        result.complete = true;
-        if (parsed.choices[0].finish_reason) {
-          result.finishReason = parsed.choices[0].finish_reason;
-        }
-      }
-      // Handle streaming response chunks
-      else if (parsed.choices && parsed.choices[0]?.delta) {
-        const delta = parsed.choices[0].delta;
-        if (delta.content) {
-          const deltaContent = delta.content;
-          if (Array.isArray(deltaContent)) {
-            for (const part of deltaContent) {
-              if (typeof part === 'string') {
-                result.content.push(part);
-              } else if (part && part.type === 'text' && part.text) {
-                result.content.push(part.text);
-              }
-            }
-          } else if (typeof deltaContent === 'object' && deltaContent !== null) {
-            if (deltaContent.type === 'text' && deltaContent.text) {
-              result.content.push(deltaContent.text);
-            }
-          } else {
-            result.content.push(deltaContent);
-          }
-        }
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const normalized = { index: tc.index };
-            if (tc.id) normalized.id = tc.id;
-            if (tc.function) {
-              normalized.function = { ...tc.function };
-            }
-            result.tool_calls.push(normalized);
-          }
-        }
-      }
-
-      if (parsed.choices && parsed.choices[0]?.finish_reason) {
-        // Possible Mistral finish reasons include 'stop', 'length', 'tool_calls'
-        // and 'content_filter'. We forward the raw value so the service layer
-        // can normalize or act on it as needed.
-        result.complete = true;
-        result.finishReason = parsed.choices[0].finish_reason;
-      }
-    } catch (error) {
-      logger.error('Error parsing Mistral response chunk', {
-        component: 'MistralAdapter',
-        error
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing Mistral response: ${error.message}`;
-    }
-
-    return result;
   }
 }
 

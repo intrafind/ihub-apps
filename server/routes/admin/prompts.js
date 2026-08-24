@@ -324,6 +324,115 @@ export default function registerAdminPromptsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/prompts/app-generator:
+   *   get:
+   *     summary: Get the app generator prompt template for a specific language
+   *     description: |
+   *       Retrieves the app generator prompt template localized for the specified language.
+   *       This special endpoint provides access to the app generation prompt used by the
+   *       iHub Apps platform to create new application configurations.
+   *
+   *       **Admin Access Required**: This endpoint requires administrator authentication.
+   *
+   *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
+   *
+   *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
+   *       and returns the prompt text rather than the full configuration object.
+   *     tags:
+   *       - Admin - Prompts
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: lang
+   *         required: false
+   *         description: Language code for localization (defaults to platform default language)
+   *         schema:
+   *           type: string
+   *         example: "en"
+   *     responses:
+   *       200:
+   *         description: App generator prompt successfully retrieved
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AppGeneratorPrompt'
+   *             example:
+   *               id: "app-generator"
+   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
+   *               language: "en"
+   *       401:
+   *         description: Authentication required
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "Admin authentication required"
+   *       403:
+   *         description: Forbidden - insufficient admin privileges
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "Admin access required"
+   *       404:
+   *         description: App-generator prompt not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "App-generator prompt not found"
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             examples:
+   *               configError:
+   *                 summary: Configuration load error
+   *                 value:
+   *                   error: "Failed to load prompts configuration"
+   *               internalError:
+   *                 summary: General internal error
+   *                 value:
+   *                   error: "Internal server error"
+   */
+  app.get(
+    buildServerPath('/api/admin/prompts/app-generator'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const platformConfig = configCache.getPlatform();
+        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+        const { lang = defaultLanguage } = req.query;
+        const { data: prompts } = configCache.getPrompts(true);
+        if (!prompts) {
+          return sendFailedOperationError(
+            res,
+            'load prompts configuration',
+            new Error('prompts is null')
+          );
+        }
+        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+        if (!appGeneratorPrompt) {
+          return sendNotFound(res, 'App-generator prompt');
+        }
+        const promptText =
+          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
+      } catch (error) {
+        return sendInternalError(res, error, 'fetch app-generator prompt');
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/admin/prompts/{promptId}:
    *   get:
    *     summary: Get a specific prompt template by ID
@@ -1274,113 +1383,4 @@ export default function registerAdminPromptsRoutes(app) {
       sendErrorResponse(res, 500, errorMessage, { details: error.message });
     }
   });
-
-  /**
-   * @swagger
-   * /api/admin/prompts/app-generator:
-   *   get:
-   *     summary: Get the app generator prompt template for a specific language
-   *     description: |
-   *       Retrieves the app generator prompt template localized for the specified language.
-   *       This special endpoint provides access to the app generation prompt used by the
-   *       iHub Apps platform to create new application configurations.
-   *
-   *       **Admin Access Required**: This endpoint requires administrator authentication.
-   *
-   *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
-   *
-   *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
-   *       and returns the prompt text rather than the full configuration object.
-   *     tags:
-   *       - Admin - Prompts
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     parameters:
-   *       - in: query
-   *         name: lang
-   *         required: false
-   *         description: Language code for localization (defaults to platform default language)
-   *         schema:
-   *           type: string
-   *         example: "en"
-   *     responses:
-   *       200:
-   *         description: App generator prompt successfully retrieved
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AppGeneratorPrompt'
-   *             example:
-   *               id: "app-generator"
-   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
-   *               language: "en"
-   *       401:
-   *         description: Authentication required
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin authentication required"
-   *       403:
-   *         description: Forbidden - insufficient admin privileges
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin access required"
-   *       404:
-   *         description: App-generator prompt not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "App-generator prompt not found"
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             examples:
-   *               configError:
-   *                 summary: Configuration load error
-   *                 value:
-   *                   error: "Failed to load prompts configuration"
-   *               internalError:
-   *                 summary: General internal error
-   *                 value:
-   *                   error: "Internal server error"
-   */
-  app.get(
-    buildServerPath('/api/admin/prompts/app-generator'),
-    contentAdminAuth,
-    async (req, res) => {
-      try {
-        const platformConfig = configCache.getPlatform();
-        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
-        const { lang = defaultLanguage } = req.query;
-        const { data: prompts } = configCache.getPrompts(true);
-        if (!prompts) {
-          return sendFailedOperationError(
-            res,
-            'load prompts configuration',
-            new Error('prompts is null')
-          );
-        }
-        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
-        if (!appGeneratorPrompt) {
-          return sendNotFound(res, 'App-generator prompt');
-        }
-        const promptText =
-          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
-        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch app-generator prompt');
-      }
-    }
-  );
 }

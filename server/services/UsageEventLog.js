@@ -3,60 +3,19 @@ import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+import { createJsonlAppender } from '../utils/jsonlAppender.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataDir = path.join(getRootDir(), contentsDir, 'data');
 const eventFile = path.join(dataDir, 'usage-events.jsonl');
-const FLUSH_INTERVAL_MS = 10000;
 
-let queue = [];
-let flushTimer = null;
-
-// Single-flight serialization for any operation that touches `usage-events.jsonl`.
-// `flushQueue` (appendFile) and `cleanupEvents` (read + writeFile) must not
-// interleave, otherwise a flush that lands between the cleanup's read and its
-// rewrite would be overwritten — silently losing the just-appended entries.
-let writeLock = Promise.resolve();
-function withWriteLock(fn) {
-  const prev = writeLock;
-  let release;
-  writeLock = new Promise(r => {
-    release = r;
-  });
-  return prev.then(fn).finally(release);
-}
-
-async function appendQueueToDisk() {
-  if (queue.length === 0) return 0;
-  await fs.mkdir(path.dirname(eventFile), { recursive: true });
-  const pending = queue;
-  queue = [];
-  const count = pending.length;
-  const lines = pending.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-  try {
-    await fs.appendFile(eventFile, lines, 'utf8');
-  } catch (err) {
-    // Re-buffer on failure so the next flush retries instead of dropping events.
-    queue = pending.concat(queue);
-    throw err;
-  }
-  return count;
-}
+const appender = createJsonlAppender({
+  getFilePath: () => eventFile,
+  component: 'UsageEventLog'
+});
 
 export async function flushQueue() {
-  return withWriteLock(appendQueueToDisk);
-}
-
-function scheduleFlush() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    try {
-      await flushQueue();
-    } catch (error) {
-      logger.error('Failed to flush usage events', { component: 'UsageEventLog', error });
-    }
-  }, FLUSH_INTERVAL_MS);
+  return appender.flush();
 }
 
 /**
@@ -88,8 +47,7 @@ export function logUsageEvent({
   if (conversationId) entry.cid = conversationId;
   if (rating != null) entry.rating = rating;
   if (metadata) entry.meta = metadata;
-  queue.push(entry);
-  scheduleFlush();
+  appender.append(entry);
 }
 
 /**
@@ -151,12 +109,12 @@ export function getMonthlyDir() {
 export async function cleanupEvents(retentionDays = 90) {
   if (retentionDays < 0) return; // -1 means keep forever
   try {
-    await withWriteLock(async () => {
+    await appender.withWriteLock(async () => {
       // Drain any queued events into the on-disk file first so they're
       // included in the read-filter pass below. Done under the lock so a
-      // new scheduleFlush() can't slip in between drain and rewrite.
+      // new append() can't slip in between drain and rewrite.
       try {
-        await appendQueueToDisk();
+        await appender.drainToDisk();
       } catch {
         // A drain failure is logged elsewhere; continue with what's on disk.
       }
@@ -180,12 +138,3 @@ export async function cleanupEvents(retentionDays = 90) {
     logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error });
   }
 }
-
-// Periodic flush
-setInterval(() => {
-  if (queue.length > 0) {
-    flushQueue().catch(error =>
-      logger.error('Usage event flush error', { component: 'UsageEventLog', error })
-    );
-  }
-}, FLUSH_INTERVAL_MS);

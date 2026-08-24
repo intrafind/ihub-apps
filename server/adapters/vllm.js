@@ -11,7 +11,6 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class VLLMAdapterClass extends BaseAdapter {
   /**
@@ -194,109 +193,6 @@ class VLLMAdapterClass extends BaseAdapter {
       headers: this.createRequestHeaders(apiKey),
       body
     };
-  }
-
-  /**
-   * Process streaming response from vLLM (same as OpenAI)
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      thinking: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    if (data === '[DONE]') {
-      result.complete = true;
-      return result;
-    }
-
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Extract usage data from any chunk that contains it
-      if (parsed.usage) {
-        result.usage = {
-          promptTokens: parsed.usage.prompt_tokens || 0,
-          completionTokens: parsed.usage.completion_tokens || 0,
-          totalTokens: parsed.usage.total_tokens || 0
-        };
-      }
-
-      // Handle error responses
-      if (parsed.error) {
-        result.error = true;
-        result.errorMessage = parsed.error.message || 'vLLM error';
-        result.complete = true;
-        return result;
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.choices && parsed.choices[0]?.message) {
-        const message = parsed.choices[0].message;
-        if (message.content) {
-          result.content.push(message.content);
-        }
-        // vLLM reasoning text: `reasoning` (current) or `reasoning_content` (legacy)
-        const reasoning = message.reasoning_content ?? message.reasoning;
-        if (reasoning) {
-          result.thinking.push(reasoning);
-        }
-        if (parsed.choices[0].message.tool_calls) {
-          result.tool_calls.push(...parsed.choices[0].message.tool_calls);
-        }
-        result.complete = true;
-        if (parsed.choices[0].finish_reason) {
-          result.finishReason = parsed.choices[0].finish_reason;
-        }
-      }
-      // Handle streaming response chunks
-      else if (parsed.choices && parsed.choices[0]?.delta) {
-        const delta = parsed.choices[0].delta;
-        if (delta.content) {
-          result.content.push(delta.content);
-        }
-        const reasoning = delta.reasoning_content ?? delta.reasoning;
-        if (reasoning) {
-          result.thinking.push(reasoning);
-        }
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const normalized = { index: tc.index };
-            if (tc.id) normalized.id = tc.id;
-            if (tc.function) {
-              normalized.function = { ...tc.function };
-            }
-            if (tc.type) {
-              normalized.type = tc.type;
-            } else {
-              normalized.type = 'function';
-            }
-            result.tool_calls.push(normalized);
-          }
-        }
-      }
-
-      if (parsed.choices && parsed.choices[0]?.finish_reason) {
-        result.complete = true;
-        result.finishReason = parsed.choices[0].finish_reason;
-      }
-    } catch (error) {
-      logger.error('Error parsing vLLM response chunk', {
-        component: 'VLLMAdapter',
-        error
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing vLLM response: ${error.message}`;
-    }
-
-    return result;
   }
 }
 

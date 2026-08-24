@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { renderMarkdown } from '../../../config/marked.config';
 import ArtifactDownloadMenu from './ArtifactDownloadMenu';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Modal markdown viewer for agent run artifacts. Fetches the raw file from
@@ -20,9 +21,12 @@ function ArtifactViewer({ runId, name, onClose }) {
     setLoading(true);
     setError(null);
     setHtmlContent('');
-    fetch(`/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`, {
-      credentials: 'include'
-    })
+    fetch(
+      buildApiUrl(`agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`),
+      {
+        credentials: 'include'
+      }
+    )
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
@@ -56,7 +60,9 @@ function ArtifactViewer({ runId, name, onClose }) {
   }, [onClose]);
 
   if (!name) return null;
-  const artifactUrl = `/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`;
+  const artifactUrl = buildApiUrl(
+    `agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`
+  );
 
   return (
     <div

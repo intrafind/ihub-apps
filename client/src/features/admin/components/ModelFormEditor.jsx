@@ -8,7 +8,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from './formValidationContext';
 
@@ -54,7 +54,7 @@ function JsonConfigField({ id, value, onChange, className }) {
       setError(null);
       onChange(parsed);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       // Intentionally do NOT call onChange — keep last valid value in model.config.
     }
   };

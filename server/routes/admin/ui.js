@@ -12,6 +12,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { recordUpload } from '../../telemetry/metrics.js';
+import { logAudit } from '../../services/AuditLogService.js';
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -100,6 +101,14 @@ export default function registerAdminUIRoutes(app) {
           uploadedAt: new Date().toISOString(),
           uploadedBy: req.user?.username || 'admin'
         };
+
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'uiAsset',
+          resourceId: assetInfo.filename,
+          summary: `Uploaded UI asset ${assetInfo.filename}`
+        });
 
         res.json({
           success: true,
@@ -210,6 +219,14 @@ export default function registerAdminUIRoutes(app) {
 
         fs.unlinkSync(filepath);
 
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'uiAsset',
+          resourceId: id,
+          summary: `Deleted UI asset ${id}`
+        });
+
         res.json({
           success: true,
           message: 'Asset deleted successfully'
@@ -272,6 +289,13 @@ export default function registerAdminUIRoutes(app) {
       // Refresh the cache
       await configCache.refreshCacheEntry('config/ui.json');
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'uiConfig',
+        summary: 'Updated UI configuration'
+      });
+
       res.json({
         success: true,
         message: 'UI configuration updated successfully'
@@ -303,6 +327,14 @@ export default function registerAdminUIRoutes(app) {
 
       const backupPath = join(backupDir, `ui-config-backup-${timestamp}.json`);
       await atomicWriteJSON(backupPath, currentConfig);
+
+      logAudit({
+        req,
+        action: 'export',
+        resource: 'uiConfig',
+        resourceId: `ui-config-backup-${timestamp}.json`,
+        summary: 'Backed up UI configuration'
+      });
 
       res.json({
         success: true,
@@ -373,6 +405,19 @@ export default function registerAdminUIRoutes(app) {
       }
       if (pwa.shortName && typeof pwa.shortName !== 'string') {
         throw new Error('pwa.shortName must be a string');
+      }
+    }
+
+    // Validate errorPages section if present. Each screen is an object of
+    // localized `{ lang: value }` fields; unset fields fall back to i18n.
+    if (config.errorPages !== undefined) {
+      if (typeof config.errorPages !== 'object' || Array.isArray(config.errorPages)) {
+        throw new Error('errorPages section must be an object');
+      }
+      for (const [pageKey, page] of Object.entries(config.errorPages)) {
+        if (page !== null && (typeof page !== 'object' || Array.isArray(page))) {
+          throw new Error(`errorPages.${pageKey} must be an object`);
+        }
       }
     }
   }

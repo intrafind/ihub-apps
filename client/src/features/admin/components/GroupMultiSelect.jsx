@@ -25,6 +25,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {string} [props.emptyMessage] - Message shown when nothing is selected
  * @param {boolean} [props.allowCustom=true] - Allow adding names that are not known groups
  * @param {boolean} [props.warnOnCustom=true] - Visually flag entries that are not defined groups
+ * @param {boolean} [props.multiple=true] - Allow multiple selections; when false, a new selection replaces the current one
  * @param {boolean} [props.disabled=false] - Disable the control
  */
 function GroupMultiSelect({
@@ -38,6 +39,7 @@ function GroupMultiSelect({
   emptyMessage,
   allowCustom = true,
   warnOnCustom = true,
+  multiple = true,
   disabled = false
 }) {
   const { t } = useTranslation();
@@ -122,7 +124,8 @@ function GroupMultiSelect({
       setActiveIndex(-1);
       return;
     }
-    commit([...selected, val]);
+    // In single-select mode a new selection replaces the current one.
+    commit(multiple ? [...selected, val] : [val]);
   };
 
   // Add by raw term: prefer the canonical id of a matching known group.

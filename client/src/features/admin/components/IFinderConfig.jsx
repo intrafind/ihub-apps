@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
+import IntegrationTestResults from './IntegrationTestResults';
 
 const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'];
 
@@ -38,6 +39,17 @@ function IFinderConfig() {
   const [testing, setTesting] = useState({ iFinder: false, iAssistant: false });
   const [testResults, setTestResults] = useState({ iFinder: null, iAssistant: null });
   const [message, setMessage] = useState('');
+  // Options for the connection diagnostics. The signed JWT and the conversation
+  // round-trip are opt-in: the first exposes a usable credential, the second
+  // writes to iAssistant.
+  const [testOptions, setTestOptions] = useState({
+    includeToken: false,
+    conversationRoundTrip: false,
+    userEmail: '',
+    userUsername: '',
+    userDomain: ''
+  });
+  const [showTestOptions, setShowTestOptions] = useState(false);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -167,6 +179,27 @@ function IFinderConfig() {
     }
   };
 
+  const handleTestOptionChange = (field, value) => {
+    setTestOptions(prev => ({ ...prev, [field]: value }));
+  };
+
+  /**
+   * Build the request body for the diagnostics endpoints. Only user fields the
+   * admin actually filled in are sent, so the server keeps defaulting to the
+   * calling admin for the rest.
+   */
+  const buildTestPayload = () => {
+    const payload = { includeToken: testOptions.includeToken };
+
+    const user = {};
+    if (testOptions.userEmail.trim()) user.email = testOptions.userEmail.trim();
+    if (testOptions.userUsername.trim()) user.username = testOptions.userUsername.trim();
+    if (testOptions.userDomain.trim()) user.domain = testOptions.userDomain.trim();
+    if (Object.keys(user).length > 0) payload.user = user;
+
+    return payload;
+  };
+
   const handleTestIFinder = async () => {
     setTesting(prev => ({ ...prev, iFinder: true }));
     setTestResults(prev => ({ ...prev, iFinder: null }));
@@ -174,7 +207,8 @@ function IFinderConfig() {
 
     try {
       const response = await makeAdminApiCall('/admin/integrations/ifinder/_test', {
-        method: 'POST'
+        method: 'POST',
+        body: buildTestPayload()
       });
 
       setTestResults(prev => ({ ...prev, iFinder: response.data }));
@@ -211,7 +245,11 @@ function IFinderConfig() {
 
     try {
       const response = await makeAdminApiCall('/admin/integrations/iassistant/_test', {
-        method: 'POST'
+        method: 'POST',
+        body: {
+          ...buildTestPayload(),
+          conversationRoundTrip: testOptions.conversationRoundTrip
+        }
       });
 
       setTestResults(prev => ({ ...prev, iAssistant: response.data }));
@@ -688,67 +726,152 @@ function IFinderConfig() {
             </>
           )}
 
+          {/* Diagnostics options */}
+          {iFinderConfig.enabled && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowTestOptions(prev => !prev)}
+                className="inline-flex items-center text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              >
+                <Icon
+                  name={showTestOptions ? 'chevron-up' : 'chevron-down'}
+                  size="sm"
+                  className="mr-1"
+                />
+                {t('admin.iFinder.diagnostics.title', 'Diagnostics options')}
+              </button>
+
+              {showTestOptions && (
+                <div className="mt-3 p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.iFinder.diagnostics.description',
+                      'The connection test signs a JWT for your own admin account and calls the same endpoints the integration uses at runtime. Use these options to test as a different user or to get a reproducible curl command.'
+                    )}
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.diagnostics.userEmail', 'Test as email')}
+                      </label>
+                      <input
+                        type="text"
+                        value={testOptions.userEmail}
+                        onChange={e => handleTestOptionChange('userEmail', e.target.value)}
+                        placeholder={t(
+                          'admin.iFinder.diagnostics.currentAdmin',
+                          'your admin account'
+                        )}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.diagnostics.userUsername', 'Test as username')}
+                      </label>
+                      <input
+                        type="text"
+                        value={testOptions.userUsername}
+                        onChange={e => handleTestOptionChange('userUsername', e.target.value)}
+                        placeholder={t(
+                          'admin.iFinder.diagnostics.currentAdmin',
+                          'your admin account'
+                        )}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.diagnostics.userDomain', 'Test as domain')}
+                      </label>
+                      <input
+                        type="text"
+                        value={testOptions.userDomain}
+                        onChange={e => handleTestOptionChange('userDomain', e.target.value)}
+                        placeholder="EXAMPLE"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.iFinder.diagnostics.userHelp',
+                      'Leave empty to test with your own account. Fill these in to check how the JWT subject is built for a specific user — for example whether iFinder expects DOMAIN\\username instead of an email address.'
+                    )}
+                  </p>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="iFinderTestIncludeToken"
+                        checked={testOptions.includeToken}
+                        onChange={e => handleTestOptionChange('includeToken', e.target.checked)}
+                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                      />
+                      <div className="ml-2">
+                        <label
+                          htmlFor="iFinderTestIncludeToken"
+                          className="block text-sm text-gray-700 dark:text-gray-300"
+                        >
+                          {t('admin.iFinder.diagnostics.includeToken', 'Include the signed JWT')}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.iFinder.diagnostics.includeTokenHelp',
+                            'Returns the token itself plus a ready-to-run curl command. The token is a working credential for the tested user — treat it like a password and do not paste it into tickets.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="iFinderTestConversationRoundTrip"
+                        checked={testOptions.conversationRoundTrip}
+                        onChange={e =>
+                          handleTestOptionChange('conversationRoundTrip', e.target.checked)
+                        }
+                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                      />
+                      <div className="ml-2">
+                        <label
+                          htmlFor="iFinderTestConversationRoundTrip"
+                          className="block text-sm text-gray-700 dark:text-gray-300"
+                        >
+                          {t(
+                            'admin.iFinder.diagnostics.conversationRoundTrip',
+                            'Run conversation round-trip (iAssistant)'
+                          )}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.iFinder.diagnostics.conversationRoundTripHelp',
+                            'Creates an ephemeral test conversation in iAssistant and deletes it again. Verifies write access, not just authentication.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Test Results Display */}
           {(testResults.iFinder || testResults.iAssistant) && (
-            <div className="mb-4 p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+            <div className="mb-4 space-y-3">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.iFinder.testResults.title', 'Test Results')}
               </h4>
               {testResults.iFinder && (
-                <div className="mb-2">
-                  <div className="flex items-center mb-1">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      iFinder:
-                    </span>
-                    <span
-                      className={`text-sm font-medium ${
-                        testResults.iFinder.success
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {testResults.iFinder.success
-                        ? t('admin.iFinder.testResults.success', 'Success')
-                        : t('admin.iFinder.testResults.failed', 'Failed')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {testResults.iFinder.message}
-                  </p>
-                  {testResults.iFinder.details && (
-                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
-                      {JSON.stringify(testResults.iFinder.details, null, 2)}
-                    </pre>
-                  )}
-                </div>
+                <IntegrationTestResults title="iFinder" result={testResults.iFinder} />
               )}
               {testResults.iAssistant && (
-                <div>
-                  <div className="flex items-center mb-1">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      iAssistant:
-                    </span>
-                    <span
-                      className={`text-sm font-medium ${
-                        testResults.iAssistant.success
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      {testResults.iAssistant.success
-                        ? t('admin.iFinder.testResults.success', 'Success')
-                        : t('admin.iFinder.testResults.failed', 'Failed')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {testResults.iAssistant.message}
-                  </p>
-                  {testResults.iAssistant.details && (
-                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
-                      {JSON.stringify(testResults.iAssistant.details, null, 2)}
-                    </pre>
-                  )}
-                </div>
+                <IntegrationTestResults title="iAssistant" result={testResults.iAssistant} />
               )}
             </div>
           )}

@@ -67,6 +67,13 @@ export function isTransientHttpStatus(status) {
  */
 export function isTransientLlmError(err) {
   if (!err) return false;
+  // A deliberate cancellation (workflow cancel / node timeout / caller abort)
+  // is never transient — retrying it would immediately re-fire the same
+  // AbortError and just burn the retry budget on a request nobody wants
+  // completed anymore. Node-fetch and the DOM AbortController both surface
+  // this as `.name === 'AbortError'` regardless of the message text, which
+  // would otherwise match NETWORK_ERROR_MESSAGES' `aborted` term below.
+  if (err.name === 'AbortError' || err.code === 'ABORT_ERR') return false;
   if (err.status != null) return isTransientHttpStatus(err.status);
   const code = typeof err.code === 'string' ? err.code : '';
   const msg = typeof err.message === 'string' ? err.message : '';
@@ -227,10 +234,21 @@ export class WorkflowLLMHelper {
    * @param {string} params.apiKey - API key
    * @param {Object} params.options - Request options (will be filtered)
    * @param {string} [params.language='en'] - Language for error messages
+   * @param {AbortSignal} [params.signal] - Aborts the underlying HTTP request (node
+   *   timeout / workflow cancellation). Passed as a sibling param rather than inside
+   *   `options` because `filterAdapterOptions` only allowlists adapter-facing keys
+   *   (temperature, tools, ...) and would silently drop it.
    * @returns {Promise<Object>} Response with { content, toolCalls }
    * @throws {Error} If request fails or API returns error
    */
-  async executeStreamingRequest({ model, messages, apiKey, options = {}, language = 'en' }) {
+  async executeStreamingRequest({
+    model,
+    messages,
+    apiKey,
+    options = {},
+    language = 'en',
+    signal
+  }) {
     // Filter options to only valid adapter parameters (critical for provider compatibility)
     const filteredOptions = this.filterAdapterOptions({
       ...options,
@@ -278,7 +296,8 @@ export class WorkflowLLMHelper {
         const response = await throttledFetch(model.id, request.url, {
           method: 'POST',
           headers: request.headers,
-          body: JSON.stringify(request.body)
+          body: JSON.stringify(request.body),
+          signal
         });
 
         // Handle errors using centralized error handling

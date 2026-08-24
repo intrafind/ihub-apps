@@ -692,12 +692,10 @@ services:
   ihub-app:
     image: ihub-apps:latest
     volumes:
-      # Configuration as read-only
-      - ihub-config:/app/contents/config:ro
-      - ihub-apps:/app/contents/apps:ro
-      
-      # Writable data volumes
-      - ihub-data:/app/contents/data:rw
+      # contents/ must be writable: config migrations and admin-UI saves
+      # write into it at runtime, and it's seeded from image defaults on
+      # first boot when empty.
+      - ihub-contents:/app/contents:rw
       - ihub-logs:/app/logs:rw
     deploy:
       resources:

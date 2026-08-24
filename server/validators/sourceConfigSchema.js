@@ -61,15 +61,21 @@ const urlConfigSchema = z
 /**
  * iFinder source configuration schema
  * Complete schema to match IFinderHandler expectations and client form
+ *
+ * Connection settings (base URL, JWT authentication) come from the central
+ * iFinder integration in platform.json — a source only selects which
+ * documents to load: either one pinned document ID or a search query that
+ * loads the top `maxResults` matching documents.
  */
+const emptyStringAsUndefined = value =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const ifinderConfigSchema = z
   .object({
-    baseUrl: z.string().url('Valid base URL is required'),
-    apiKey: z.string().min(1, 'API key is required'),
-    searchProfile: z.string().default('default'),
+    documentId: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    query: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    searchProfile: z.preprocess(emptyStringAsUndefined, z.string().optional()),
     maxResults: z.number().min(1).max(100).default(10),
-    queryTemplate: z.string().default(''),
-    filters: z.record(z.any()).default({}),
     maxLength: z.number().positive().default(10000)
   })
   .strict();
@@ -151,7 +157,7 @@ export function validateSourceConfig(source) {
     }
 
     if (validated.type === 'ifinder') {
-      validateIFinderConfig(validated.config);
+      validateIFinderConfig(validated);
     }
 
     if (validated.type === 'page') {
@@ -259,18 +265,18 @@ function validateUrlConfig(config) {
 
 /**
  * Validate iFinder configuration
- * @param {Object} config - iFinder configuration to validate
+ * @param {Object} source - Full validated source (needed to inspect exposeAs)
  */
-function validateIFinderConfig(config) {
-  const { baseUrl } = config;
+function validateIFinderConfig(source) {
+  const { config, exposeAs } = source;
 
-  // Validate base URL protocol
-  const urlObj = new URL(baseUrl);
-  if (!['http:', 'https:'].includes(urlObj.protocol)) {
-    throw new Error('Invalid iFinder base URL: Only HTTP and HTTPS protocols are allowed');
+  // Tool-exposed sources receive documentId/query from the model at call time;
+  // prompt sources must know up front which documents to load.
+  if (exposeAs !== 'tool' && !config.documentId && !config.query) {
+    throw new Error(
+      'iFinder sources exposed as prompt context require either a document ID or a search query'
+    );
   }
-
-  // Additional validation is handled by the Zod schema
 }
 
 /**
@@ -337,12 +343,10 @@ export function getDefaultSourceConfig(type) {
       return {
         ...baseConfig,
         config: {
-          baseUrl: '',
-          apiKey: '',
-          searchProfile: 'default',
+          documentId: '',
+          query: '',
+          searchProfile: '',
           maxResults: 10,
-          queryTemplate: '',
-          filters: {},
           maxLength: 10000
         }
       };

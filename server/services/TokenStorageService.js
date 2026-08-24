@@ -40,7 +40,14 @@ class TokenStorageService {
   async initializeEncryptionKey() {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
-      this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim();
+      if (!/^[0-9a-f]{64}$/i.test(envKey)) {
+        throw new Error(
+          'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
+            'Generate one with: openssl rand -hex 32'
+        );
+      }
+      this.encryptionKey = envKey;
       logger.info('Using encryption key from TOKEN_ENCRYPTION_KEY environment variable', {
         component: 'TokenStorage'
       });
@@ -84,9 +91,15 @@ class TokenStorageService {
       const contentsDir = path.dirname(this.keyFilePath);
       await fs.mkdir(contentsDir, { recursive: true });
 
-      // Save the key with restrictive permissions
+      // Save the key with restrictive permissions. `wx` fails instead of
+      // overwriting: on a cold start every cluster worker reaches this point
+      // with a different freshly generated key, and a plain write would leave
+      // each worker using its own while the file holds whichever wrote last.
+      // Anything one worker encrypted would then be undecryptable everywhere
+      // else. The loser of the race adopts the winner's key below.
       await fs.writeFile(this.keyFilePath, this.encryptionKey, {
-        mode: 0o600 // Read/write for owner only
+        mode: 0o600, // Read/write for owner only
+        flag: 'wx'
       });
       logger.info('Encryption key persisted to disk', {
         component: 'TokenStorage',
@@ -97,6 +110,23 @@ class TokenStorageService {
         { component: 'TokenStorage' }
       );
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process created the file between our read and our write. Its
+        // key is the one on disk, so use that rather than the one we generated.
+        const winner = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+        if (/^[0-9a-f]{64}$/i.test(winner)) {
+          this.encryptionKey = winner;
+          logger.info('Adopted encryption key created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+        logger.error('Concurrently created encryption key file is invalid', {
+          component: 'TokenStorage',
+          keyFilePath: this.keyFilePath
+        });
+        return;
+      }
       logger.error('Failed to persist encryption key', {
         component: 'TokenStorage',
         error
@@ -297,7 +327,7 @@ class TokenStorageService {
       const context = this._generateEncryptionContext(userId, serviceName);
 
       // Include context in the encryption to bind tokens to specific user/service
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      const cipher = crypto.createCipheriv(this.algorithm, key, iv);
 
       let encrypted = cipher.update(
         JSON.stringify({ ...tokens, context: context.toString('hex') }),
@@ -305,10 +335,13 @@ class TokenStorageService {
         'hex'
       );
       encrypted += cipher.final('hex');
+      const authTag = cipher.getAuthTag();
 
       return {
         encrypted,
         iv: iv.toString('hex'),
+        authTag: authTag.toString('hex'),
+        algorithm: this.algorithm,
         userId,
         serviceName,
         contextHash: context.toString('hex')
@@ -323,7 +356,14 @@ class TokenStorageService {
   }
 
   /**
-   * Decrypt token data with user and service verification
+   * Decrypt token data with user and service verification.
+   *
+   * New tokens are encrypted with authenticated AES-256-GCM (see
+   * `encryptTokens`). Tokens written before this change used
+   * unauthenticated AES-256-CBC and have no `authTag`/`algorithm`
+   * field — that legacy format is still accepted here so existing
+   * on-disk tokens keep working; they get upgraded to GCM the next
+   * time they're re-encrypted (e.g. on token refresh).
    */
   decryptTokens(encryptedData, userId, serviceName) {
     this._ensureKeyInitialized();
@@ -338,11 +378,24 @@ class TokenStorageService {
 
       const key = Buffer.from(this.encryptionKey, 'hex');
       const iv = Buffer.from(encryptedData.iv, 'hex');
+      const isGcm = encryptedData.algorithm === 'aes-256-gcm' || Boolean(encryptedData.authTag);
 
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-
-      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      let decrypted;
+      if (isGcm) {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      } else {
+        logger.warn('Decrypting tokens stored in legacy unauthenticated AES-256-CBC format', {
+          component: 'TokenStorage',
+          userId,
+          serviceName
+        });
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      }
 
       const parsedData = JSON.parse(decrypted);
 
@@ -721,8 +774,14 @@ class TokenStorageService {
       const contentsDir = path.dirname(this.rsaPublicKeyPath);
       await fs.mkdir(contentsDir, { recursive: true });
 
+      // `wx` on the private key makes this the arbitration point for a cold
+      // start: without it every cluster worker keeps the pair it generated
+      // itself, so a token signed by one worker fails verification on the
+      // others and an authenticated user gets 401s on a fraction of requests
+      // — exactly the intermittency round-robin scheduling produces. The
+      // public key follows only after the private write wins.
+      await fs.writeFile(this.rsaPrivateKeyPath, privateKey, { mode: 0o600, flag: 'wx' });
       await fs.writeFile(this.rsaPublicKeyPath, publicKey, { mode: 0o644 });
-      await fs.writeFile(this.rsaPrivateKeyPath, privateKey, { mode: 0o600 });
 
       logger.info('RSA key pair persisted to disk', { component: 'TokenStorage' });
       logger.info(
@@ -730,6 +789,18 @@ class TokenStorageService {
         { component: 'TokenStorage' }
       );
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process persisted a pair first; adopt it so the whole cluster
+        // signs and verifies with the same key.
+        const adopted = await this.#readPersistedRSAKeyPair();
+        if (adopted) {
+          this.rsaKeyPair = adopted;
+          logger.info('Adopted RSA key pair created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+      }
       logger.error('Failed to persist RSA key pair', {
         component: 'TokenStorage',
         error
@@ -738,6 +809,31 @@ class TokenStorageService {
         component: 'TokenStorage'
       });
     }
+  }
+
+  /**
+   * Read the persisted RSA key pair, retrying briefly.
+   *
+   * The retry covers the gap between the winner's private-key write and its
+   * public-key write: a loser that lands in between would otherwise see only
+   * half a pair and fall back to its own keys.
+   *
+   * @returns {Promise<{publicKey: string, privateKey: string}|null>}
+   */
+  async #readPersistedRSAKeyPair() {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        const [publicKey, privateKey] = await Promise.all([
+          fs.readFile(this.rsaPublicKeyPath, 'utf8'),
+          fs.readFile(this.rsaPrivateKeyPath, 'utf8')
+        ]);
+        if (publicKey && privateKey) return { publicKey, privateKey };
+      } catch {
+        // Not both files yet — fall through to the wait below.
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
   }
 
   /**

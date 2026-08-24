@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -101,7 +101,7 @@ function AdminSourcesPage() {
       });
       setSources(prev => prev.map(s => (s.id === sourceId ? { ...s, enabled: newEnabled } : s)));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -116,7 +116,7 @@ function AdminSourcesPage() {
       setSources(prev => prev.map(s => (sourceIds.includes(s.id) ? { ...s, enabled } : s)));
       setSelectedSources(new Set());
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setBulkOperating(false);
     }
@@ -156,7 +156,7 @@ function AdminSourcesPage() {
             return newSet;
           });
         } catch (err) {
-          if (err.message.includes('dependencies')) {
+          if (getAdminApiErrorMessage(err).includes('dependencies')) {
             setError(
               t(
                 'admin.sources.deleteDependencies',
@@ -164,7 +164,7 @@ function AdminSourcesPage() {
               )
             );
           } else {
-            setError(err.message);
+            setError(getAdminApiErrorMessage(err));
           }
         }
       }

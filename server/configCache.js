@@ -11,6 +11,7 @@ import {
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools } from './toolLoader.js';
+import { announceConfigChange, announceFullConfigReload, setConfigReloader } from './configSync.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
@@ -18,6 +19,7 @@ import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
+import { getLocalizedString } from './utils/localize.js';
 
 /**
  * Resolve environment variables in a string
@@ -242,8 +244,7 @@ function expandToolFunctions(tools = []) {
         // Always extract string value from name (support both string and multilingual object)
         let toolName = tool.name;
         if (typeof toolName === 'object') {
-          // Extract from multilingual object
-          toolName = toolName.en || toolName.de || Object.values(toolName)[0] || tool.id;
+          toolName = getLocalizedString(toolName, 'en', undefined, tool.id);
         } else if (typeof toolName !== 'string') {
           // Fallback to ID if name is neither string nor object
           toolName = tool.id;
@@ -598,18 +599,40 @@ class ConfigCache {
       timestamp: Date.now()
     });
 
-    // Set refresh timer
+    // Set refresh timer. This uses the private reload so a periodic TTL refresh
+    // is not announced to the cluster — every worker runs its own timer, and
+    // announcing would turn a quiet re-read into N² bus messages and disk reads.
     const refreshTimer = setTimeout(() => {
-      this.refreshCacheEntry(key);
+      this._reloadEntry(key);
     }, this.cacheTTL);
 
     this.refreshTimers.set(key, refreshTimer);
   }
 
   /**
-   * Refresh a single cache entry
+   * Refresh a single cache entry and tell the rest of the cluster to do the same.
+   *
+   * This is the entry point for the admin routes: they write the JSON file and
+   * then call this, so the announcement is what stops the other workers from
+   * serving the pre-write contents until their TTL happens to fire.
+   *
+   * @param {string} key - Cache key, e.g. `'config/platform.json'`.
    */
   async refreshCacheEntry(key) {
+    await this._reloadEntry(key);
+    announceConfigChange(key);
+  }
+
+  /**
+   * Reload a single cache entry from disk without announcing it.
+   *
+   * Used by the TTL timer and by anything applying a change another worker
+   * already announced — re-announcing there would bounce the invalidation
+   * around the cluster.
+   *
+   * @param {string} key - Cache key.
+   */
+  async _reloadEntry(key) {
     const reloadStart = Date.now();
     let reloadError = null;
     try {
@@ -1252,6 +1275,7 @@ class ConfigCache {
       // Refresh enabled models cache
       const models = await loadAllModels(true);
       this.setCacheEntry('config/models.json', models);
+      announceConfigChange('config/models.json');
 
       logger.info('Models cache refreshed', {
         component: 'ConfigCache',
@@ -1271,6 +1295,7 @@ class ConfigCache {
     try {
       const profiles = await loadAllAgentProfiles(true);
       this.setCacheEntry('config/agents.json', profiles);
+      announceConfigChange('config/agents.json');
       logger.info('Agent profiles cache refreshed', {
         component: 'ConfigCache',
         count: profiles.length
@@ -1294,6 +1319,7 @@ class ConfigCache {
       // Refresh enabled apps cache
       const apps = await loadAllApps(true);
       this.setCacheEntry('config/apps.json', apps);
+      announceConfigChange('config/apps.json');
 
       logger.info('Apps cache refreshed', {
         component: 'ConfigCache',
@@ -1315,6 +1341,7 @@ class ConfigCache {
       // Refresh enabled prompts cache
       const prompts = await loadAllPrompts(true);
       this.setCacheEntry('config/prompts.json', prompts);
+      announceConfigChange('config/prompts.json');
 
       logger.info('Prompts cache refreshed', { component: 'ConfigCache', count: prompts.length });
     } catch (error) {
@@ -1333,6 +1360,7 @@ class ConfigCache {
       const tools = await loadAllTools(true);
       const expanded = expandToolFunctions(tools);
       this.setCacheEntry('config/tools.json', expanded);
+      announceConfigChange('config/tools.json');
 
       logger.info('Tools cache refreshed', { component: 'ConfigCache', count: expanded.length });
     } catch (error) {
@@ -1351,6 +1379,7 @@ class ConfigCache {
       // Refresh workflows cache
       const workflows = await loadAllWorkflows(true);
       this.setCacheEntry('config/workflows.json', workflows);
+      announceConfigChange('config/workflows.json');
 
       logger.info('Workflows cache refreshed', {
         component: 'ConfigCache',
@@ -1539,13 +1568,24 @@ class ConfigCache {
   }
 
   /**
-   * Invalidate and refresh all cached entries
+   * Invalidate and refresh all cached entries, cluster-wide.
    */
   async refreshAll() {
+    await this._reloadAll();
+    // One announcement rather than one per key: the other workers may hold a
+    // different key set (locales are loaded on demand), so each decides for
+    // itself what "all" means.
+    announceFullConfigReload();
+  }
+
+  /**
+   * Refresh every held cache entry without announcing it.
+   */
+  async _reloadAll() {
     logger.info('Refreshing all cached configurations', { component: 'ConfigCache' });
 
     const refreshPromises = Array.from(this.cache.keys()).map(async configPath => {
-      await this.refreshCacheEntry(configPath);
+      await this._reloadEntry(configPath);
     });
 
     await Promise.all(refreshPromises);
@@ -1785,5 +1825,13 @@ class ConfigCache {
 
 // Create singleton instance
 const configCache = new ConfigCache();
+
+// Teach configSync how to apply an invalidation another worker announced. The
+// wiring is injected rather than imported the other way round so configSync
+// stays a transport concern with no knowledge of what a config entry is.
+setConfigReloader({
+  entry: key => configCache._reloadEntry(key),
+  all: () => configCache._reloadAll()
+});
 
 export default configCache;

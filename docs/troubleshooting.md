@@ -262,6 +262,54 @@ node -e "require('dotenv').config(); console.log('JWT_SECRET exists:', !!process
 
 ## Authentication Troubles
 
+### Everything Returns 429 / Health Probes Fail
+
+**Symptoms:**
+
+- The whole platform looks wedged: the SPA never gets past loading, health
+  probes stop passing, and the container may be restarted by the orchestrator
+- `/api/auth/status` answers `429 Too Many Requests`
+- Often starts right after an SSO or OAuth/MCP sign-in flow
+
+**Cause:**
+
+The auth rate limiter is tight on purpose — 30 requests / 15 minutes in the
+shipped `platform.json` — because it guards password guessing. Two things can turn
+it into a self-inflicted outage:
+
+1. Something polls a read-only endpoint in the `/api/auth` namespace —
+   `/api/auth/status` is the usual one, since it is both the SPA's bootstrap call
+   and a natural liveness probe. Read-only auth endpoints are exempt from the
+   credential limiter as of 5.5.0; on older versions they were not.
+2. `trustProxy` is lower than the real number of proxy hops, so `req.ip` resolves
+   to the inner proxy and **every user shares one counter**.
+
+**Debugging Steps:**
+
+```bash
+# Is the limiter the one rejecting? Look at the window and remaining budget.
+curl -si https://your-ihub/api/auth/status | grep -i 'ratelimit\|^HTTP'
+
+# Does req.ip differ per client? If every log line shows the same address
+# while real clients differ, the hop count is too low.
+npm run logs | grep '"ip"' | tail
+```
+
+**Solutions:**
+
+1. Set the hop count to match your topology (`platform.json`):
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+2. Point liveness/readiness probes at `/api/health`, which is not rate limited.
+
+3. Raise the window if your deployment legitimately needs more credential
+   attempts — see [rate limiting](rate-limiting.md).
+
 ### Login Failures
 
 **Symptoms:**
@@ -545,6 +593,42 @@ curl -v https://api.openai.com/v1/models
 - **Rate Limiting:** Implement exponential backoff and retry logic
 - **Timeout Issues:** Increase `REQUEST_TIMEOUT` environment variable
 - **Proxy Issues:** Configure proxy settings in environment
+
+### Admin Start Page Shows Only Grey Loading Boxes
+
+**Symptoms:**
+- `/admin` renders animated grey placeholders and never loads the dashboard
+- Typically on installations without outbound internet access
+
+**Cause:**
+
+The dashboard's update check contacts `api.github.com`. Where a firewall drops
+packets instead of refusing them, the connection never completes. Before 5.5.0
+the page waited for that request, so it stayed on its loading placeholders until
+the operating system's TCP timeout — minutes later.
+
+**Debugging Steps:**
+
+```bash
+# Should answer immediately, even with no internet access
+curl -s -w '\n%{time_total}s\n' -b "authToken=$TOKEN" \
+     http://localhost:3000/api/admin/version/check-update
+```
+
+A failed or timed-out check is reported in the response's `error` field; a check
+still running comes back as `"checking": true` with no result yet. Both are
+normal and neither blocks the page.
+
+**Solutions:**
+
+- Upgrade to 5.5.0 or later — the check is bounded and no longer blocks the page.
+- Set `NO_VERSION_CHECK=true` to skip the release lookup entirely on air-gapped
+  installations.
+- Raise `VERSION_CHECK_TIMEOUT_MS` (default `1000`) if GitHub is reachable but
+  slow, for example through a strict proxy — a check that times out means no
+  "update available" badge, nothing worse.
+- Check the server log for `component: VersionCheck` warnings to see what the
+  lookup reported.
 
 ---
 

@@ -7,7 +7,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import GroupFormEditor from '../components/GroupFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
@@ -20,6 +20,7 @@ function AdminGroupEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [resources, setResources] = useState({ apps: [], models: [], prompts: [] });
   const [jsonSchema, setJsonSchema] = useState(null);
 
@@ -84,7 +85,7 @@ function AdminGroupEditPage() {
       setGroup(groupData);
       setInitialData(groupData);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -94,12 +95,13 @@ function AdminGroupEditPage() {
     if (!data) data = group;
 
     if (!data.id || !data.name) {
-      setError('Group ID and name are required');
+      setSaveError('Group ID and name are required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = groupId === 'new' ? 'POST' : 'PUT';
       const url = groupId === 'new' ? '/admin/groups' : `/admin/groups/${groupId}`;
 
@@ -115,8 +117,7 @@ function AdminGroupEditPage() {
       // Success - axios doesn't have response.ok, successful responses are returned directly
       navigate('/admin/groups');
     } catch (err) {
-      setError(err.message);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -217,6 +218,20 @@ function AdminGroupEditPage() {
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <Icon name="warning" size="md" className="text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <DualModeEditor

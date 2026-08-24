@@ -19,7 +19,32 @@ jest.mock('../../../client/src/features/upload/utils/fileProcessing', () => ({
   processDocumentFile: jest.fn(async file => ({
     content: `MOCK_TEXT(${file?.name || 'unknown'})`,
     pageImages: undefined
-  }))
+  })),
+  // Real implementation of the shared canvas-resize primitive, exercised
+  // against the HTMLCanvasElement/Image stubs set up below — this keeps the
+  // integration between buildChatApiMessages and the shared helper covered
+  // instead of stubbing the helper away entirely.
+  resizeImageCanvas: jest.fn((img, maxDimension, quality = 0.8) => {
+    let width = img.naturalWidth || img.width;
+    let height = img.naturalHeight || img.height;
+
+    if (width > height && width > maxDimension) {
+      height = Math.round((height * maxDimension) / width);
+      width = maxDimension;
+    } else if (height > maxDimension) {
+      width = Math.round((width * maxDimension) / height);
+      height = maxDimension;
+    }
+
+    const canvas = global.document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+    return { width, height, dataUrl };
+  })
 }));
 
 const {

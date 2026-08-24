@@ -79,17 +79,22 @@ export function configureOidcProviders() {
           const sessionId = authDebugService.generateSessionId();
 
           try {
-            //log access token itself if includeRawdata is enabled
-            authDebugService.log(
-              'oidc',
-              'debug',
-              'raw_access_token',
-              {
-                provider: provider.name,
-                accessToken
-              },
-              sessionId
-            );
+            // Log the access token itself only when the admin explicitly
+            // opted into raw data (default off). sanitizeData leaves it
+            // unmasked in that mode; the core logger still redacts the
+            // token-named key as a safety net.
+            if (authDebugService.isRawDataEnabled('oidc')) {
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'raw_access_token',
+                {
+                  provider: provider.name,
+                  accessToken
+                },
+                sessionId
+              );
+            }
 
             authDebugService.log(
               'oidc',
@@ -174,17 +179,19 @@ export function configureOidcProviders() {
               );
             }
 
-            // Log user info if includeRawData is enabled
-            authDebugService.log(
-              'oidc',
-              'debug',
-              'raw_user_info',
-              {
-                provider: provider.name,
-                userInfo: JSON.stringify(userInfo, null, 2)
-              },
-              sessionId
-            );
+            // Log the full user-info payload only when raw data is enabled.
+            if (authDebugService.isRawDataEnabled('oidc')) {
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'raw_user_info',
+                {
+                  provider: provider.name,
+                  userInfo: JSON.stringify(userInfo, null, 2)
+                },
+                sessionId
+              );
+            }
 
             // Normalize user data from OIDC provider
             const oidcUser = normalizeOidcUser(userInfo, provider, sessionId);

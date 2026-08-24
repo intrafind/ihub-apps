@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import logger from './logger.js';
+import { getLocalizedString } from './localize.js';
 
 /**
  * Source Dependency Tracker
@@ -101,15 +102,7 @@ class SourceDependencyTracker {
    * @returns {string} Localized app name
    */
   static getAppName(app, language = 'en') {
-    if (typeof app.name === 'string') {
-      return app.name;
-    }
-
-    if (typeof app.name === 'object') {
-      return app.name[language] || app.name['en'] || Object.values(app.name)[0] || app.id;
-    }
-
-    return app.id;
+    return getLocalizedString(app.name, language, undefined, app.id);
   }
 
   /**
@@ -283,17 +276,7 @@ class SourceDependencyTracker {
    * @returns {string} Source name
    */
   static getSourceName(source, language = 'en') {
-    if (typeof source.name === 'string') {
-      return source.name;
-    }
-
-    if (typeof source.name === 'object') {
-      return (
-        source.name[language] || source.name['en'] || Object.values(source.name)[0] || source.id
-      );
-    }
-
-    return source.id;
+    return getLocalizedString(source.name, language, undefined, source.id);
   }
 
   /**

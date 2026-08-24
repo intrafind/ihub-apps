@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../../api/client';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Polls `/api/integrations/nextcloud/status` to decide whether the current
@@ -68,9 +69,9 @@ export function useNextcloudConnection({ providerId } = {}) {
     // with the same hash selection intact. The server validates this
     // against the request's hostname (`isValidReturnUrl`).
     const returnUrl = window.location.pathname + window.location.search + window.location.hash;
-    const authUrl = `/api/integrations/nextcloud/auth?providerId=${encodeURIComponent(
-      providerId
-    )}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    const authUrl = buildApiUrl(
+      `integrations/nextcloud/auth?providerId=${encodeURIComponent(providerId)}&returnUrl=${encodeURIComponent(returnUrl)}`
+    );
     // Hard navigation, not popup — the Nextcloud OAuth pages reject
     // being iframed and the existing flow already top-level navigates
     // from the settings page.

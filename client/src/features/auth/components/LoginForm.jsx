@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 // localStorage key for the last successfully logged-in username so we can
 // pre-fill the field on return visits when the user opted into "Remember me".
@@ -113,7 +114,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
     const returnUrl = window.location.href;
 
     // Redirect to NTLM login endpoint which will trigger NTLM authentication
-    const ntlmLoginUrl = `/api/auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    const ntlmLoginUrl = buildApiUrl(`auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`);
     window.location.href = ntlmLoginUrl;
   };
 

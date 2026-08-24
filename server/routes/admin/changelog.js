@@ -45,23 +45,17 @@ export default function registerAdminChangelogRoutes(app) {
       const changelog = [];
       for (const version of versions) {
         const versionDir = join(releasesDir, version);
-        let features = '';
-        let breakingChanges = '';
 
-        try {
-          features = await fs.readFile(join(versionDir, 'features.md'), 'utf8');
-        } catch {
-          // No features file
-        }
+        // A release directory may be missing any of these — older ones predate
+        // the features/fixes split, so `fixes.md` in particular is often absent.
+        const [features, fixes, breakingChanges] = await Promise.all(
+          ['features.md', 'fixes.md', 'breaking-changes.md'].map(name =>
+            fs.readFile(join(versionDir, name), 'utf8').catch(() => '')
+          )
+        );
 
-        try {
-          breakingChanges = await fs.readFile(join(versionDir, 'breaking-changes.md'), 'utf8');
-        } catch {
-          // No breaking changes file
-        }
-
-        if (features || breakingChanges) {
-          changelog.push({ version, features, breakingChanges });
+        if (features || fixes || breakingChanges) {
+          changelog.push({ version, features, fixes, breakingChanges });
         }
       }
 

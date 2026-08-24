@@ -4,7 +4,6 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class AnthropicAdapterClass extends BaseAdapter {
   /**
@@ -229,115 +228,6 @@ class AnthropicAdapterClass extends BaseAdapter {
       },
       body: requestBody
     };
-  }
-
-  /**
-   * Process streaming response from Anthropic
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Extract usage from message_start (input tokens)
-      if (parsed.type === 'message_start' && parsed.message?.usage) {
-        result.usage = {
-          promptTokens: parsed.message.usage.input_tokens || 0,
-          completionTokens: parsed.message.usage.output_tokens || 0,
-          totalTokens:
-            (parsed.message.usage.input_tokens || 0) + (parsed.message.usage.output_tokens || 0)
-        };
-      }
-
-      // Extract usage from message_delta (final output token count)
-      if (parsed.type === 'message_delta' && parsed.usage) {
-        result.usage = {
-          promptTokens: 0,
-          completionTokens: parsed.usage.output_tokens || 0,
-          totalTokens: parsed.usage.output_tokens || 0
-        };
-      }
-
-      // Extract usage from non-streaming full response
-      if (parsed.usage && !parsed.type) {
-        result.usage = {
-          promptTokens: parsed.usage.input_tokens || 0,
-          completionTokens: parsed.usage.output_tokens || 0,
-          totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0)
-        };
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {
-        result.content.push(parsed.content[0].text);
-        result.complete = true;
-        if (parsed.stop_reason) {
-          result.finishReason = parsed.stop_reason === 'end_turn' ? 'stop' : parsed.stop_reason;
-        }
-      }
-      // Handle streaming content deltas
-      else if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
-        result.content.push(parsed.delta.text);
-      } else if (parsed.type === 'message_delta' && parsed.delta) {
-        if (parsed.delta.content) {
-          result.content.push(parsed.delta.content);
-        }
-        if (parsed.delta.stop_reason) {
-          result.finishReason =
-            parsed.delta.stop_reason === 'tool_use' ? 'tool_calls' : parsed.delta.stop_reason;
-        }
-      }
-
-      // Tool streaming events
-      if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
-        result.tool_calls.push({
-          index: parsed.index,
-          id: parsed.content_block.id,
-          type: 'function',
-          function: {
-            name: parsed.content_block.name,
-            arguments: ''
-          }
-        });
-      } else if (
-        parsed.type === 'content_block_delta' &&
-        parsed.delta?.type === 'input_json_delta'
-      ) {
-        // Pass partial tool call chunks to ToolExecutor for merging
-        result.tool_calls.push({
-          index: parsed.index,
-          function: {
-            arguments: parsed.delta.partial_json || ''
-          }
-        });
-      }
-
-      if (parsed.type === 'message_stop') {
-        result.complete = true;
-        // The finishReason is provided in the 'message_delta' event, not here.
-        // By not setting a finishReason, we avoid overwriting the correct 'tool_calls' reason
-        // that was already processed by the ToolExecutor.
-      }
-    } catch (parseError) {
-      logger.error('Error parsing Claude response chunk', {
-        component: 'AnthropicAdapter',
-        error: parseError
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
-    }
-
-    return result;
   }
 }
 

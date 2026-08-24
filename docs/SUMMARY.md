@@ -55,6 +55,7 @@
     - [iFinder Integration](iFinder-Integration.md)
     - [iFinder Quick Reference](iFinder-Quick-Reference.md)
     - [iFinder iAssistant Admin Guide](ifinder-iassistant-admin-guide.md)
+    - [iFinder Keyless (OIDC/OAuth) JWT](ifinder-oidc-jwt.md)
     - [iFinder JWT Key Generation](ifinder-jwt-key-generation.md)
     - [JIRA Integration](JIRA_INTEGRATION.md)
     - [File Upload Feature](file-upload-feature.md)

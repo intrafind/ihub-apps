@@ -14,6 +14,8 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 - **📄 Content Retrieval**: Fetch full document content for analysis and summarization
 - **ℹ️ Metadata Access**: Get detailed document metadata (author, creation date, file type, etc.)
 - **💾 Document Download**: Save documents locally or get download information
+- **🖍️ Passage Highlighting**: Jump from a cited passage to its position in the source document and
+  highlight it in the in-app PDF preview
 - **🔐 Secure Authentication**: User-based JWT authentication for all operations
 - **👤 User Context**: All operations respect the authenticated user's permissions
 
@@ -76,6 +78,14 @@ Alternatively, configure iFinder in your `platform.json`:
 ```
 
 ### 3. JWT Configuration
+
+> **Recommended: keyless authentication.** Instead of generating and exchanging
+> an RSA key pair, enable `iFinder.useOidcKeyPair`. iHub then signs the iFinder
+> JWT with its built-in OIDC signing key and iFinder verifies it by fetching the
+> public key from iHub's JWKS endpoint — no `privateKey`/`IFINDER_PRIVATE_KEY`
+> and no manual key upload into iFinder. See
+> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). The manual
+> key configuration described below is the legacy alternative.
 
 The iFinder integration uses JWT tokens for authentication with the following structure:
 
@@ -355,6 +365,48 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
    - AI searches for recent contracts
    - Provides download information or saves locally
 
+### Passage Highlighting in the Document Preview
+
+When an answer cites iFinder documents, the **Documents** section below the answer lists each
+document with the passages the search backend returned. Those passages can be located and
+highlighted in the source document:
+
+- Expanding a document shows its passages; each has a magnifier button that opens the document at
+  that passage.
+- The document's overflow menu offers **Preview (PDF)**, which opens the same viewer with all of
+  that document's cited passages highlighted.
+- The viewer navigates highlight to highlight (buttons, or `Enter` / `Shift+Enter`), supports zoom
+  and download, and — when a document is cited more than once — can filter down to a single
+  passage.
+
+Both entries appear only for documents that expose an `ACCESS` link, which is what the
+`/api/integrations/ifinder/document` proxy needs to resolve the binary. The preview requests that
+proxy with `convertToPdf=true`, i.e. the PDF rendition iFinder generates for the document.
+
+**How passages are located.** A passage is a substring of the fulltext that the converter put into
+the search index, but the preview is a *generated* PDF whose text layer differs from that fulltext:
+whitespace and line breaks fall differently, ligatures may be expanded or not, words can be
+hyphenated across lines, and page headers or footers appear in the middle of the text stream.
+Matching therefore does not compare the strings directly. Both the passage and the page text are
+reduced to their Unicode letters and digits (NFKC-folded, lowercased), and the passage is searched
+in that reduced form, with an offset map back to the real text-layer positions. Consequences worth
+knowing:
+
+- Punctuation, spacing, casing and ligature differences never prevent a match, and matches are not
+  script-specific — Cyrillic, Greek and CJK passages work the same as Latin ones.
+- Passages that straddle a page break are highlighted on both pages.
+- If a header or footer interrupts a passage at a page break, the passage is split into
+  sentence-like fragments and matched individually, so it is highlighted partially rather than not
+  at all.
+- Highlights begin and end on a letter or digit, so trailing punctuation of a passage is not
+  included in the highlight.
+- If a passage genuinely does not occur in the generated PDF, the preview still opens and reports
+  "Passage not found".
+
+The matcher (`client/src/features/documentPreview/utils/passageMatcher.js`) is a port of the same
+module used by the iFinder searchbar preview, so both products resolve passages identically. Keep
+the two in sync when changing either.
+
 ## Security Considerations
 
 ### Authentication & Authorization
@@ -430,13 +482,14 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-| Setting        | Environment Variable     | Platform Config                | Default                           | Description                          |
-| -------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------ |
-| Base URL       | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                 |
-| Search Profile | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID            |
-| Private Key    | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format) |
-| Timeout        | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)       |
-| Download Dir   | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory             |
+| Setting          | Environment Variable     | Platform Config                | Default                           | Description                                                                    |
+| ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
+| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID                                                      |
+| Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
+| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format); ignored when `useOidcKeyPair` is `true`  |
+| Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
+| Download Dir     | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory                                                       |
 
 ### Error Codes
 

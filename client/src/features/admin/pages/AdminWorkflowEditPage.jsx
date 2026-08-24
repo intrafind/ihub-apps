@@ -7,12 +7,12 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminWorkflow,
   createAdminWorkflow,
-  updateAdminWorkflow,
-  deleteAdminWorkflow
+  deleteAdminWorkflow,
+  fetchAdminWorkflow,
+  getAdminApiErrorMessage,
+  updateAdminWorkflow
 } from '../../../api/adminApi';
-
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -95,7 +95,7 @@ function AdminWorkflowEditPage() {
       setJsonText(JSON.stringify(workflow, null, 2));
     } catch (err) {
       console.error('Error loading workflow:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

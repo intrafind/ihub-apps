@@ -64,6 +64,9 @@ function AdminMcpGatewayPage() {
   const gateway = platform?.mcpServer || {};
   const expose = gateway.expose || {};
   const transports = gateway.transports || {};
+  const oauth = platform?.oauth || {};
+  const oauthAuthzEnabled = !!oauth.enabled?.authz;
+  const dcrEnabled = !!oauth.dcr?.enabled;
 
   const update = patch => {
     setPlatform(prev => ({
@@ -79,6 +82,39 @@ function AdminMcpGatewayPage() {
           : prev?.mcpServer?.transports
       }
     }));
+  };
+
+  const setOauthAuthz = enabled => {
+    setPlatform(prev => {
+      const prevOauth = prev?.oauth || {};
+      return {
+        ...prev,
+        oauth: {
+          ...prevOauth,
+          enabled: {
+            ...(prevOauth.enabled || {}),
+            authz: enabled,
+            // Enabling the authorization server for MCP also needs the client
+            // store and the authorization_code + refresh_token grants.
+            ...(enabled ? { clients: true } : {})
+          },
+          ...(enabled ? { authorizationCodeEnabled: true, refreshTokenEnabled: true } : {})
+        }
+      };
+    });
+  };
+
+  const setDcr = enabled => {
+    setPlatform(prev => {
+      const prevOauth = prev?.oauth || {};
+      return {
+        ...prev,
+        oauth: {
+          ...prevOauth,
+          dcr: { ...(prevOauth.dcr || {}), enabled }
+        }
+      };
+    });
   };
 
   const save = async () => {
@@ -160,6 +196,46 @@ function AdminMcpGatewayPage() {
           />
         </section>
 
+        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+            {t('admin.mcp.gateway.authSection', 'Authentication')}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            {t(
+              'admin.mcp.gateway.authSectionDesc',
+              'The MCP gateway only accepts OAuth bearer tokens issued by the built-in authorization server. It must be enabled for any MCP client to connect.'
+            )}
+          </p>
+          {gateway.enabled && !oauthAuthzEnabled && (
+            <div className="mb-3 p-3 rounded-md border bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm">
+              {t(
+                'admin.mcp.gateway.oauthWarning',
+                'The gateway is enabled but the OAuth authorization server is off — MCP clients cannot obtain a token. Enable it below.'
+              )}
+            </div>
+          )}
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <Toggle
+              checked={oauthAuthzEnabled}
+              onChange={setOauthAuthz}
+              label={t('admin.mcp.gateway.oauthToggle', 'OAuth authorization server')}
+              description={t(
+                'admin.mcp.gateway.oauthToggleDesc',
+                'Serves /api/oauth/authorize and /api/oauth/token. Enabling this also switches on OAuth client management and the authorization_code + refresh_token grants. A server restart is required after enabling it for the first time.'
+              )}
+            />
+            <Toggle
+              checked={dcrEnabled}
+              onChange={setDcr}
+              label={t('admin.mcp.gateway.dcrToggle', 'Dynamic client registration (RFC 7591)')}
+              description={t(
+                'admin.mcp.gateway.dcrToggleDesc',
+                'Lets MCP clients such as Claude register their OAuth client automatically at /api/oauth/register — no manual client setup needed. Registered clients always go through user sign-in and consent, and only receive identity + mcp:* scopes.'
+              )}
+            />
+          </div>
+        </section>
+
         <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
             {t('admin.mcp.gateway.publicUrl', 'Public URL')}
@@ -188,7 +264,9 @@ function AdminMcpGatewayPage() {
               checked={transports.streamableHttp?.enabled !== false}
               onChange={v =>
                 update({
-                  transports: { streamableHttp: { enabled: v } }
+                  transports: {
+                    streamableHttp: { ...(transports.streamableHttp || {}), enabled: v }
+                  }
                 })
               }
               label={t(
@@ -198,6 +276,21 @@ function AdminMcpGatewayPage() {
               description={t(
                 'admin.mcp.gateway.transportStreamableHttpDesc',
                 'Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.'
+              )}
+            />
+            <Toggle
+              checked={transports.streamableHttp?.stateless === true}
+              onChange={v =>
+                update({
+                  transports: {
+                    streamableHttp: { ...(transports.streamableHttp || {}), stateless: v }
+                  }
+                })
+              }
+              label={t('admin.mcp.gateway.transportStateless', 'Stateless mode')}
+              description={t(
+                'admin.mcp.gateway.transportStatelessDesc',
+                'Handle every Streamable HTTP request independently instead of keeping MCP sessions in memory. Enable when iHub runs behind a load balancer that spreads requests across several pods, where a session opened on one pod is unknown to the next. Trade-off: no server-initiated SSE stream.'
               )}
             />
             <Toggle
@@ -297,11 +390,22 @@ function AdminMcpGatewayPage() {
                 {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp/.well-known
               </code>
             </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300">
+            <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
               {t(
                 'admin.mcp.gateway.connectionHint',
                 'Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes.'
               )}
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              {dcrEnabled
+                ? t(
+                    'admin.mcp.gateway.claudeHintDcr',
+                    'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes.'
+                  )
+                : t(
+                    'admin.mcp.gateway.claudeHintManual',
+                    'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID/secret of an OAuth client you created under /admin/oauth/clients (grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Enable dynamic client registration above to skip the manual client setup.'
+                  )}
             </p>
           </section>
         )}

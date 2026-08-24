@@ -115,10 +115,12 @@ function StatusCell({ user, onToggle }) {
 }
 
 function LastActiveCell({ user }) {
+  // Captured once per mount — the static "days ago" label needs no live clock
+  const [now] = useState(() => Date.now());
   if (!user.lastActiveDate) {
     return <span className="text-gray-400 dark:text-gray-500">Never</span>;
   }
-  const daysAgo = Math.floor((Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24));
+  const daysAgo = Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24));
   return (
     <div className="flex flex-col">
       <span>{new Date(user.lastActiveDate).toLocaleDateString()}</span>

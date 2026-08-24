@@ -454,7 +454,8 @@
     "mentioned": "Erwähnt",
     "passages": "{{count}} Passage",
     "passages_plural": "{{count}} Passagen",
-    "openExternal": "Im Browser öffnen"
+    "openExternal": "Im Browser öffnen",
+    "showInDocument": "Diese Textstelle im Dokument anzeigen"
   },
   "chatMessage": {
     "user": "Du",
@@ -906,6 +907,18 @@
       "builtInSystem": "Integriertes Benutzername/Passwort-System",
       "anonymousAccess": "Anonymer Zugriff",
       "defaultGroups": "Standardgruppen",
+      "groups": {
+        "authenticatedLabel": "Authentifizierte Gruppe",
+        "authenticatedHelp": "Interne Gruppe, die automatisch allen authentifizierten Benutzern zugewiesen wird",
+        "anonymousLabel": "Anonyme Gruppen",
+        "anonymousHelp": "Interne Gruppen, die Benutzern ohne Authentifizierung zugewiesen werden",
+        "defaultLabel": "Standardgruppen",
+        "oidcHelp": "Interne Gruppen, die Benutzern bei der Authentifizierung über diesen Anbieter automatisch zugewiesen werden",
+        "ldapHelp": "Interne Gruppen, die LDAP-Benutzern automatisch zugewiesen werden",
+        "ntlmHelp": "Interne Gruppen, die über NTLM authentifizierten Benutzern automatisch zugewiesen werden",
+        "searchPlaceholder": "Gruppen suchen…",
+        "emptySingle": "Noch keine Gruppe ausgewählt"
+      },
       "jwtProviders": "JWT-Anbieter",
       "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
       "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren",
@@ -1649,7 +1662,16 @@
         "exposeWorkflowsDesc": "Erfordert Scope mcp:workflows:run",
         "exposeResources": "Ressourcen",
         "exposeResourcesDesc": "Quellen / Skills als MCP-Ressourcen (resources/list + resources/read). Erfordert Scope mcp:resources:read.",
-        "connection": "Verbindungsbeispiele"
+        "connection": "Verbindungsbeispiele",
+        "authSection": "Authentifizierung",
+        "authSectionDesc": "Das MCP-Gateway akzeptiert ausschließlich OAuth-Bearer-Token des integrierten Autorisierungsservers. Dieser muss aktiviert sein, damit sich MCP-Clients verbinden können.",
+        "oauthWarning": "Das Gateway ist aktiviert, aber der OAuth-Autorisierungsserver ist aus — MCP-Clients können kein Token erhalten. Bitte unten aktivieren.",
+        "oauthToggle": "OAuth-Autorisierungsserver",
+        "oauthToggleDesc": "Stellt /api/oauth/authorize und /api/oauth/token bereit. Beim Aktivieren werden auch die OAuth-Client-Verwaltung sowie die Grants authorization_code + refresh_token eingeschaltet. Nach dem erstmaligen Aktivieren ist ein Server-Neustart erforderlich.",
+        "dcrToggle": "Dynamische Client-Registrierung (RFC 7591)",
+        "dcrToggleDesc": "Erlaubt MCP-Clients wie Claude, ihren OAuth-Client automatisch unter /api/oauth/register zu registrieren — keine manuelle Client-Einrichtung nötig. Registrierte Clients durchlaufen immer Anmeldung und Zustimmung der Nutzenden und erhalten nur Identitäts- und mcp:*-Scopes.",
+        "claudeHintDcr": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen. Claude registriert seinen OAuth-Client automatisch; Nutzende melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
+        "claudeHintManual": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen und Client-ID/Secret eines unter /admin/oauth/clients angelegten OAuth-Clients eintragen (Grant-Typen authorization_code + refresh_token, Redirect-URI https://claude.ai/api/mcp/auth_callback sowie die gewünschten mcp:*-Scopes). Aktivieren Sie oben die dynamische Client-Registrierung, um die manuelle Einrichtung zu überspringen."
       }
     },
     "telemetry": {
@@ -1845,7 +1867,14 @@
         "extractAudioFromVideo": "Audiospur extrahieren (für Transkription / Audiomodelle)",
         "maxVideoSize": "Maximale Videodateigröße (MB)",
         "supportedVideoFormats": "Unterstützte Videoformate",
-        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)"
+        "transcriptionDefaultEnabled": "Standardmäßig aktiv (Nutzer können es pro Chat umschalten)",
+        "appsAsTools": "Apps als Tools",
+        "appsAsToolsDesc": "Erlaubt dieser App, an andere Apps zu delegieren. Das Modell kann jede ausgewählte App als Tool aufrufen und deren Antwort verwenden (Concierge-Muster).",
+        "appsAsToolsHelper": "Jede ausgewählte App wird zu einem Tool (app__<id>), das das Modell aufrufen kann. Nutzer erreichen nur Apps, für die sie berechtigt sind; eine aufgerufene App kann keine weiteren Apps aufrufen.",
+        "searchApps": "Apps suchen und hinzufügen...",
+        "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
+        "appsAsToolsNoApps": "Keine Apps verfügbar",
+        "removeAppTool": "{{name}} entfernen"
       }
     },
     "features": {
@@ -1893,7 +1922,29 @@
         "title": "Testergebnisse",
         "success": "Erfolgreich",
         "failed": "Fehlgeschlagen",
-        "details": "Details"
+        "details": "Details",
+        "whatToCheck": "Was zu prüfen ist",
+        "observed": "Beobachtet",
+        "copyDetails": "Kopieren",
+        "copied": "Kopiert",
+        "reproduce": "Außerhalb von iHub nachstellen:",
+        "copyCurl": "curl-Befehl kopieren",
+        "copyToken": "JWT kopieren",
+        "stepSummary": "ok {{ok}} · Warnungen {{warn}} · fehlgeschlagen {{fail}} · {{duration}}ms",
+        "notes": "Hinweise"
+      },
+      "diagnostics": {
+        "title": "Diagnose-Optionen",
+        "description": "Der Verbindungstest signiert ein JWT für Ihr eigenes Admin-Konto und ruft dieselben Endpunkte auf, die die Integration im Betrieb verwendet. Mit diesen Optionen können Sie als anderer Benutzer testen oder einen reproduzierbaren curl-Befehl erhalten.",
+        "userEmail": "Test als E-Mail",
+        "userUsername": "Test als Benutzername",
+        "userDomain": "Test als Domäne",
+        "currentAdmin": "Ihr Admin-Konto",
+        "userHelp": "Leer lassen, um mit dem eigenen Konto zu testen. Ausfüllen, um zu prüfen, wie das JWT-Subject für einen bestimmten Benutzer gebildet wird — zum Beispiel ob iFinder DOMAIN\\benutzername statt einer E-Mail-Adresse erwartet.",
+        "includeToken": "Signiertes JWT mit ausgeben",
+        "includeTokenHelp": "Gibt das Token selbst sowie einen direkt ausführbaren curl-Befehl zurück. Das Token ist ein gültiger Zugang für den getesteten Benutzer — behandeln Sie es wie ein Passwort und fügen Sie es nicht in Tickets ein.",
+        "conversationRoundTrip": "Konversations-Testlauf ausführen (iAssistant)",
+        "conversationRoundTripHelp": "Erstellt eine ephemere Testkonversation in iAssistant und löscht sie wieder. Prüft Schreibzugriff, nicht nur die Authentifizierung."
       }
     },
     "integrations": {
@@ -1926,6 +1977,136 @@
       "externalMappingsPlaceholder": "Gruppennamen eingeben und Enter drücken…",
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
       "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
+    },
+    "sources": {
+      "ifinderConnectionInfo": "Die iFinder-Verbindung (URL und Authentifizierung) wird zentral in den iFinder-Integrationseinstellungen unter Admin → Provider verwaltet. Hier wählen Sie nur aus, welche Dokumente diese Quelle lädt: ein einzelnes Dokument per ID festlegen oder per Suchanfrage die am besten passenden Dokumente laden.",
+      "ifinderDocumentId": "Dokument-ID",
+      "ifinderDocumentIdPlaceholder": "z. B. 5f2c9a1b3d4e…",
+      "ifinderDocumentIdHelp": "Legt diese Quelle auf ein bestimmtes iFinder-Dokument fest. Mit „Verbinden“ laden Sie die Metadaten und prüfen, ob es das richtige Dokument ist.",
+      "ifinderConnect": "Verbinden",
+      "ifinderConnecting": "Verbinde...",
+      "ifinderMetadataFailed": "Dokument-Metadaten konnten nicht geladen werden",
+      "ifinderUntitledDocument": "Unbenanntes Dokument",
+      "ifinderMetaAuthor": "Autor",
+      "ifinderMetaMediaType": "Medientyp",
+      "ifinderMetaFilename": "Dateiname",
+      "ifinderMetaSize": "Größe",
+      "ifinderMetaLanguage": "Sprache",
+      "ifinderMetaModified": "Geändert",
+      "ifinderMetaSource": "Quelle",
+      "ifinderMetaProfile": "Suchprofil",
+      "ifinderOpenDocument": "Dokument öffnen",
+      "ifinderOr": "oder",
+      "ifinderQuery": "Suchanfrage",
+      "ifinderQueryPlaceholder": "z. B. Produkthandbuch OR title:\"Benutzerhandbuch\"",
+      "ifinderQueryHelp": "Dokumente, die dieser Anfrage entsprechen, werden bis zur konfigurierten Höchstzahl als Quelleninhalt geladen. Wird ignoriert, wenn eine Dokument-ID gesetzt ist.",
+      "ifinderTestQuery": "Anfrage testen",
+      "ifinderTestingQuery": "Suche läuft...",
+      "ifinderQueryFailed": "Suchanfrage konnte nicht ausgeführt werden",
+      "ifinderQueryMatches": "{{total}} Dokumente gefunden — die ersten {{shown}} würden geladen",
+      "searchProfile": "Suchprofil",
+      "searchProfilePlaceholder": "Plattform-Standard",
+      "searchProfileHelp": "Leer lassen, um das in der iFinder-Integration konfigurierte Profil zu verwenden.",
+      "maxResults": "Max. Ergebnisse",
+      "maxResultsHelp": "Anzahl der Dokumente, die bei einer Suchanfrage geladen werden.",
+      "maxLength": "Max. Inhaltslänge",
+      "maxLengthHelp": "Maximale Zeichenzahl pro Dokument; längerer Inhalt wird gekürzt.",
+      "validation": {
+        "ifinderContentRequired": "Geben Sie eine Dokument-ID oder eine Suchanfrage an, damit die Quelle weiß, welche Dokumente geladen werden sollen"
+      }
+    },
+    "auditLog": {
+      "title": "Audit-Log",
+      "timestamp": "Zeitstempel",
+      "actorColumn": "Akteur",
+      "actionColumn": "Aktion",
+      "resultColumn": "Ergebnis",
+      "resourceColumn": "Ressource",
+      "sourceColumn": "Quelle",
+      "summaryColumn": "Zusammenfassung",
+      "noEntries": "Keine Audit-Log-Einträge gefunden.",
+      "showMore": "Mehr anzeigen",
+      "showLess": "Weniger anzeigen",
+      "exportCsv": "CSV exportieren",
+      "exporting": "Exportiere…",
+      "exportError": "Audit-Log konnte nicht exportiert werden",
+      "fetchError": "Audit-Log konnte nicht geladen werden",
+      "retentionDays": "{{days}} Tage aufbewahren",
+      "retentionForever": "Dauerhaft aufbewahren",
+      "retentionDisabled": "Aufräumen deaktiviert",
+      "retentionHint": "Konfiguriert in platform.json → audit. Bearbeitung unter Plattform → Erweitert.",
+      "runCleanup": "Jetzt aufräumen",
+      "cleanupRunning": "Läuft…",
+      "cleanupRemoved": "{{count}} Dateien entfernt",
+      "cleanupNoop": "Nichts zu entfernen",
+      "cleanupError": "Aufräumen fehlgeschlagen: {{error}}",
+      "filters": {
+        "from": "Von",
+        "to": "Bis",
+        "actor": "Akteur",
+        "resource": "Ressource",
+        "action": "Aktion",
+        "result": "Ergebnis",
+        "source": "Quelle",
+        "allActors": "Alle Akteure",
+        "allResources": "Alle Ressourcen",
+        "allActions": "Alle Aktionen",
+        "allResults": "Alle Ergebnisse",
+        "allSources": "Alle Quellen",
+        "noActors": "Keine Akteure",
+        "noResources": "Keine Ressourcen",
+        "noActions": "Keine Aktionen",
+        "noResults": "Keine Ergebnisse",
+        "noSources": "Keine Quellen",
+        "filterValues": "Werte filtern…",
+        "noValues": "Keine Werte im Zeitraum",
+        "search": "Suche",
+        "searchPlaceholder": "Zusammenfassung, ID, IP…",
+        "searchHint": "Zusammenfassung, Ressourcen-ID, IP, Request-ID und Akteur durchsuchen"
+      },
+      "presets": {
+        "label": "Schnellfilter",
+        "today": "Heute",
+        "todayAndYesterday": "Heute & gestern",
+        "last7Days": "Letzte 7 Tage",
+        "last30Days": "Letzte 30 Tage",
+        "hideSignIns": "Anmeldungen ausblenden",
+        "failuresOnly": "Nur Fehler",
+        "clearAll": "Alle Filter zurücksetzen"
+      },
+      "values": {
+        "action": {
+          "create": "Erstellen",
+          "update": "Aktualisieren",
+          "delete": "Löschen",
+          "toggle": "Umschalten",
+          "import": "Importieren",
+          "export": "Exportieren",
+          "login": "Anmeldung",
+          "logout": "Abmeldung"
+        },
+        "result": {
+          "success": "Erfolg",
+          "failure": "Fehler"
+        },
+        "source": {
+          "web": "Web",
+          "admin": "Admin",
+          "api": "API"
+        }
+      }
+    },
+    "filters": {
+      "multiSelect": {
+        "all": "Alle",
+        "none": "Keine",
+        "someSelected": "{{selected}} von {{total}}",
+        "selectAll": "Alle auswählen",
+        "selectNone": "Keine auswählen",
+        "search": "Werte filtern…",
+        "noMatches": "Keine passenden Werte",
+        "noOptions": "Keine Werte"
+      }
     }
   },
   "cloudStorage": {
@@ -2060,6 +2241,7 @@
       "TEAMS_SSO_TOKEN_REQUIRED": "SSO-Token ist erforderlich",
       "TEAMS_AUTH_NOT_ENABLED": "Teams-Authentifizierung ist nicht aktiviert",
       "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Ungültiges oder abgelaufenes Teams-Token",
+      "TEAMS_ACCOUNT_DISABLED": "Ihr Konto wurde deaktiviert. Bitte wenden Sie sich an Ihren Administrator.",
       "TEAMS_TAB_CONFIG_SAVED": "Tab-Konfiguration gespeichert"
     },
     "manifest": {
@@ -2544,5 +2726,20 @@
     },
     "toggleLabel": "Transkription",
     "toggleDescription": "Hochgeladene Audio-/Videodateien mit dem Transkriptionsmodell statt dem Chat-Modell transkribieren"
+  },
+  "documentPreview": {
+    "title": "Dokumentvorschau",
+    "loading": "Dokument wird geladen…",
+    "pageCount": "{{count}} Seite",
+    "pageCount_plural": "{{count}} Seiten",
+    "matchPosition": "{{current}} von {{total}}",
+    "noMatches": "Textstelle nicht gefunden",
+    "previousMatch": "Vorherige Markierung",
+    "nextMatch": "Nächste Markierung",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "highlight": "Markieren",
+    "allPassages": "Alle",
+    "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
   }
 }

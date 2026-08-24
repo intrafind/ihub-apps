@@ -7,17 +7,21 @@
  *
  * These tests cover:
  *   1. The shared FAILURE_FINISH_REASONS / isFailureFinishReason helpers.
- *   2. GoogleAdapter.processResponseBuffer surfacing an error (not a silent
- *      empty answer) for a degenerate MALFORMED_FUNCTION_CALL response, while
- *      leaving normal responses untouched.
- *   3. The streaming converter marking such a chunk complete with the raw
+ *   2. The streaming converter passing the raw failure reason through
+ *      (complete, no content) for a degenerate MALFORMED_FUNCTION_CALL
+ *      response, while leaving normal responses untouched. The converter
+ *      itself does not flag `error` for a bare failure reason — it's
+ *      StreamingHandler that turns a detectable failure reason into a
+ *      user-facing error via isFailureFinishReason (see test 4).
+ *   3. A MALFORMED_FUNCTION_CALL that still carried usable text is kept as
+ *      an answer, not treated as a failure.
+ *   4. The streaming converter marking such a chunk complete with the raw
  *      failure reason so StreamingHandler can turn it into an error.
- *   4. The RequestBuilder prevention notice that stops the model from being
+ *   5. The RequestBuilder prevention notice that stops the model from being
  *      told to use a web search tool that isn't in the request.
  */
 
 import assert from 'assert';
-import GoogleAdapter from '../adapters/google.js';
 import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
 import {
   isFailureFinishReason,
@@ -53,21 +57,16 @@ assert.strictEqual(isFailureFinishReason(null), false, 'null is not a failure re
 assert.ok(FAILURE_FINISH_REASONS.has('OTHER'), 'OTHER should be in the failure set');
 console.log('✓ Test 1 passed: failure finish reason helpers behave correctly\n');
 
-// --- 2. Degenerate MALFORMED_FUNCTION_CALL response → error ------------------
+// --- 2. Degenerate MALFORMED_FUNCTION_CALL response → detectable failure -----
 const malformedResponse = JSON.stringify({
   candidates: [{ finishReason: 'MALFORMED_FUNCTION_CALL', index: 0 }],
   usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 0, totalTokenCount: 10 }
 });
-const malformed = await GoogleAdapter.processResponseBuffer(malformedResponse);
+const malformed = await convertGoogleResponseToGeneric(malformedResponse);
 assert.strictEqual(
   malformed.complete,
   true,
   'Malformed response must terminate the turn (complete)'
-);
-assert.strictEqual(malformed.error, true, 'Malformed empty response must be surfaced as an error');
-assert.ok(
-  typeof malformed.errorMessage === 'string' && malformed.errorMessage.length > 0,
-  'A user-facing error message must be set'
 );
 assert.strictEqual(malformed.content.length, 0, 'There is no answer content');
 assert.strictEqual(
@@ -75,7 +74,11 @@ assert.strictEqual(
   'MALFORMED_FUNCTION_CALL',
   'The raw failure reason must be preserved'
 );
-console.log('✓ Test 2 passed: degenerate MALFORMED_FUNCTION_CALL surfaces an error\n');
+assert.ok(
+  isFailureFinishReason(malformed.finishReason),
+  'A bare failure reason with no output must be detectable via isFailureFinishReason'
+);
+console.log('✓ Test 2 passed: degenerate MALFORMED_FUNCTION_CALL surfaces a detectable failure\n');
 
 // --- 3. Normal STOP response is unaffected -----------------------------------
 const normalResponse = JSON.stringify({
@@ -87,7 +90,7 @@ const normalResponse = JSON.stringify({
     }
   ]
 });
-const normal = await GoogleAdapter.processResponseBuffer(normalResponse);
+const normal = await convertGoogleResponseToGeneric(normalResponse);
 assert.strictEqual(normal.error, false, 'Normal response must not be flagged as an error');
 assert.strictEqual(normal.complete, true, 'Normal response should be complete');
 assert.strictEqual(normal.finishReason, 'stop', 'Normal response maps to stop');
@@ -104,7 +107,7 @@ const malformedWithText = JSON.stringify({
     }
   ]
 });
-const withText = await GoogleAdapter.processResponseBuffer(malformedWithText);
+const withText = await convertGoogleResponseToGeneric(malformedWithText);
 assert.strictEqual(
   withText.error,
   false,

@@ -40,7 +40,6 @@ function AdminLoggingPage() {
     enabled: false,
     maskTokens: true,
     redactPasswords: true,
-    consoleLogging: false,
     includeRawData: false,
     providers: {
       oidc: { enabled: true },
@@ -238,12 +237,14 @@ function AdminLoggingPage() {
         }
       });
 
-      // Load platform config for authDebug
+      // Load platform config for auth debug settings. The canonical location is
+      // `auth.debug` (what the server reads); merge over defaults so any fields
+      // an older config omits keep sensible values.
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
         method: 'GET'
       });
-      if (platformResponse.data?.authDebug) {
-        setAuthDebugConfig(platformResponse.data.authDebug);
+      if (platformResponse.data?.auth?.debug) {
+        setAuthDebugConfig(prev => ({ ...prev, ...platformResponse.data.auth.debug }));
       }
 
       // Load audit-log settings (anonymizeIp lives under `audit.*`, the
@@ -303,8 +304,10 @@ function AdminLoggingPage() {
       });
       const platformConfig = platformResponse.data;
 
-      // Update authDebug section
-      platformConfig.authDebug = authDebugConfig;
+      // Persist under the canonical `auth.debug` key that the server reads.
+      // The platform save route merges the whole `auth` object, so keep the
+      // rest of the auth config intact.
+      platformConfig.auth = { ...platformConfig.auth, debug: authDebugConfig };
 
       // Save back
       await makeAdminApiCall('/admin/configs/platform', {
@@ -811,10 +814,16 @@ function AdminLoggingPage() {
 
         {/* Authentication Debug Logging */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
             <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.authDebugSection', 'Authentication Debug Logging')}
           </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.authDebugDescription',
+              'The single place to trace authentication flows — OIDC redirects, token exchange, group mapping, NTLM handshakes. Traces are written at the "info" level, so they appear at the default log level without any further changes and take effect immediately (no restart needed).'
+            )}
+          </p>
 
           <div className="space-y-4">
             <label className="flex items-center">
@@ -862,39 +871,30 @@ function AdminLoggingPage() {
                   </span>
                 </label>
 
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={authDebugConfig.consoleLogging || false}
-                    onChange={e =>
-                      setAuthDebugConfig(prev => ({
-                        ...prev,
-                        consoleLogging: e.target.checked
-                      }))
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.logging.consoleLogging', 'Enable console logging')}
-                  </span>
-                </label>
-
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={authDebugConfig.includeRawData || false}
-                    onChange={e =>
-                      setAuthDebugConfig(prev => ({
-                        ...prev,
-                        includeRawData: e.target.checked
-                      }))
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.logging.includeRawData', 'Include raw authentication data')}
-                  </span>
-                </label>
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={authDebugConfig.includeRawData || false}
+                      onChange={e =>
+                        setAuthDebugConfig(prev => ({
+                          ...prev,
+                          includeRawData: e.target.checked
+                        }))
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.includeRawData', 'Include raw authentication data')}
+                    </span>
+                  </label>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">
+                    {t(
+                      'admin.logging.includeRawDataWarning',
+                      'Security risk: logs the full user-info payload and access tokens. Leave off unless actively debugging; disable again afterwards.'
+                    )}
+                  </p>
+                </div>
 
                 {/* Provider-specific debug settings */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -1005,7 +1005,7 @@ function AdminLoggingPage() {
                 <li>
                   {t(
                     'admin.logging.note5',
-                    'Authentication debug logging is separate and requires restart'
+                    'Authentication debug logging applies immediately (no restart) and its traces are emitted at the "info" level, so they show at the default log level'
                   )}
                 </li>
               </ul>

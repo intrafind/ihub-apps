@@ -92,6 +92,7 @@
     }
   },
   "requestConcurrency": 5,
+  "trustProxy": 1,
   "refreshSalt": {
     "salt": 1,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
@@ -99,7 +100,20 @@
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480
+    "sessionTimeoutMinutes": 480,
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": { "enabled": true },
+        "local": { "enabled": true },
+        "proxy": { "enabled": true },
+        "ldap": { "enabled": true },
+        "ntlm": { "enabled": true }
+      }
+    }
   },
   "oauth": {
     "enabled": {
@@ -115,7 +129,28 @@
     "refreshTokenEnabled": false,
     "refreshTokenExpirationDays": 30,
     "consentRequired": true,
-    "consentMemoryDays": 90
+    "consentMemoryDays": 90,
+    "dcr": {
+      "enabled": false,
+      "maxClients": 100
+    }
+  },
+  "mcpServer": {
+    "enabled": false,
+    "requireConsent": true,
+    "publicUrl": "",
+    "transports": {
+      "streamableHttp": { "enabled": true, "stateless": false },
+      "sse": { "enabled": true }
+    },
+    "a2a": { "enabled": false },
+    "expose": {
+      "tools": true,
+      "apps": true,
+      "workflows": true,
+      "resources": false
+    },
+    "defaultScopes": ["mcp:tools:read", "mcp:tools:call"]
   },
   "anonymousAuth": {
     "enabled": true,

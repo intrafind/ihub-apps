@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -111,8 +112,12 @@ export function loadOAuthClients(clientsFilePath) {
  * Save OAuth clients to the OAuth clients file
  * @param {Object} clientsConfig - OAuth clients configuration object
  * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Tell the other cluster workers to
+ *   re-read the file. Pass false for writes that only record usage metadata, so
+ *   a per-minute `lastUsed` touch does not make every worker reload the file.
  */
-export async function saveOAuthClients(clientsConfig, clientsFilePath) {
+export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
   try {
     const fullPath = path.isAbsolute(clientsFilePath)
       ? clientsFilePath
@@ -139,6 +144,10 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
     }
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
+
+    // Otherwise a client registered on one worker cannot authenticate against
+    // the others until their cache TTL expires.
+    if (announce) announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save OAuth clients configuration', {
       component: 'OAuthClientManager',
@@ -464,7 +473,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
     // Only update if it's been more than 1 minute since last update (reduce writes)
     if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
       client.lastUsed = now;
-      await saveOAuthClients(clientsConfig, clientsFilePath);
+      await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
     }
   } catch (error) {
     logger.error('OAuth failed to update last used for client', {

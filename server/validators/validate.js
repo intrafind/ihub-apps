@@ -17,7 +17,14 @@ export default function validate(schemas = {}) {
         req.body = schemas.body.parse(req.body);
       }
       if (schemas.query) {
-        req.query = schemas.query.parse(req.query);
+        // Express 5 defines req.query as a getter-only accessor, so it must be
+        // redefined instead of assigned.
+        Object.defineProperty(req, 'query', {
+          value: schemas.query.parse(req.query),
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
       }
       if (schemas.params) {
         req.params = schemas.params.parse(req.params);
