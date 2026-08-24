@@ -176,25 +176,58 @@ exported from `data-table/index.js` so other admin tables can adopt it:
 Applied to **Resource**, **Action**, **Result**, **Source** and **Actor**. `From`/`To` stay as date
 inputs.
 
-### 4.3 URL encoding — exclusion semantics
+### 4.3 URL encoding — include set minus exclude set
 
-The UI writes a comma-joined list of **deselected** values into a `<field>Exclude` parameter:
+**Resolved 2026-08-24 (see Q2):** both directions are supported, `*` is a wildcard meaning "every
+value", and **exclusion wins over inclusion**.
 
+Each filterable field has two parameters:
+
+| Parameter | Meaning | Default when absent |
+| --- | --- | --- |
+| `<field>` | the include set | `*` (everything) |
+| `<field>Exclude` | the exclude set, subtracted from the include set | empty (nothing excluded) |
+
+The matcher is a single rule — **include first, then subtract exclude**:
+
+```js
+const matches = value =>
+  (include.has('*') || include.has(value)) && !(exclude.has('*') || exclude.has(value));
 ```
-/admin/audit-log?from=2026-08-17&actionExclude=login,logout
-```
 
-- No parameter → everything included (canonical "all", short URLs).
-- **Select none** → all currently known values listed in the exclude parameter.
-- The existing inclusion parameters (`resource=app`, `action=create`, …) stay supported by both the
-  API and the UI reader, so today's bookmarked/shared links keep working. Comma-separated inclusion
-  lists are accepted too. When both are present for a field, include is applied first, then exclude.
+Which gives:
 
-**Why exclusion rather than inclusion:** it matches what the ticket asks for ("deselect certain
-value"), and it is the safe default for an audit log. With a stored inclusion list, a resource type
-introduced by a later release (say `resource: 'skill'`) would be silently invisible in every
-bookmarked view. With exclusion, new values show up by default and only what an admin explicitly hid
-stays hidden.
+| URL | Result |
+| --- | --- |
+| *(neither parameter)* | everything — the default |
+| `?action=*` | everything — explicit form of the default |
+| `?action=create,update` | only those two |
+| `?actionExclude=login,logout` | everything except those two |
+| `?actionExclude=*` | nothing — the "select none" state |
+| `?action=*&actionExclude=login` | everything except login |
+| `?resource=app&resourceExclude=app` | nothing — exclusion wins on a value present in both |
+| `?resource=app` | unchanged from today — existing links keep working |
+
+**What the UI writes.** The checkbox control emits the **exclusion** form for a partial selection
+(`actionExclude=login`), omits both parameters for "all", and writes `<field>Exclude=*` for "none".
+Inclusion is fully supported on read, for today's bookmarked links and for anyone hand-writing a URL
+or an integration that wants to pin an exact set.
+
+The reason the UI prefers exclusion is that the two forms carry genuinely different intent for
+*future* values, and a checkbox row cannot express which the admin meant: a stored inclusion list
+means "pin exactly these", so a resource type introduced by a later release (say `resource: 'skill'`)
+would be silently invisible in every bookmarked view. Exclusion means "everything but these", so new
+values show up by default and only what an admin explicitly hid stays hidden — the right default for
+an audit log. Admins who *do* want to pin an exact set can still write the inclusion form by hand.
+
+**Value separators.** `resource`, `action`, `result` and `source` draw from comma-free vocabularies,
+so they accept both comma-separated (`?action=a,b`) and repeated (`?action=a&action=b`) forms.
+`actor` is free-form and a username can legitimately contain a comma (`Doe, John`), so the actor
+filter uses **repeated parameters only** and is never comma-split. The UI emits repeated parameters
+for actor accordingly.
+
+**`*` as a literal value.** `*` is always read as the wildcard. No resource, action, result or source
+value is `*`, and an actor named `*` is not a realistic case; this is documented rather than escaped.
 
 ### 4.4 Facets — real option lists with counts
 
@@ -286,8 +319,12 @@ unaffected), and the other `useFilterState` consumers.
 - single-value filter still matches (backward compatibility with existing links)
 - comma-separated and repeated-parameter inclusion lists
 - `actionExclude=login,logout` returns everything else
-- include + exclude combined
+- `action=*` is identical to omitting the parameter
+- `actionExclude=*` returns nothing
+- include + exclude combined (`action=*&actionExclude=login`)
+- **exclusion wins**: a value present in both the include and the exclude set does not match
 - exclusion of an unknown value is a no-op
+- `actor` is not comma-split — an actor named `Doe, John` matches as one value
 - legacy entries carrying `admin` instead of `actor` still match an actor filter
 - facet counts are computed over the date range, unaffected by the other active filters
 - `total` reflects the filtered count so pagination stays correct
@@ -317,8 +354,10 @@ Pre-commit: `npm run lint:fix && npm run format:fix`, then `npm run test:unit`.
 | # | Decision | Rationale | Reversible? |
 | --- | --- | --- | --- |
 | D1 | Fix the batching bug by adding `useFilterParams`, not by rewriting `useFilterState` | Every other page uses `useFilterState` correctly; rewriting it risks 13 working pages to fix one | yes |
-| D2 | **Exclusion** semantics in the URL (`<field>Exclude`) | Matches the ticket's wording; new resource/action values stay visible in old bookmarks instead of being silently filtered out | costly later — it is the URL contract |
+| D2 | Support **both** include and exclude parameters, with `*` as a wildcard and exclusion winning over inclusion | Confirmed by @manzke on the ticket. Covers include-all (default) and exclude-all in one consistent rule, and lets an integration pin an exact set while the checkbox UI expresses "everything but these" | costly later — it is the URL contract |
 | D3 | Keep the existing single-value inclusion parameters working | Bookmarked/shared filter links and `useOverviewData` keep working; purely additive API | yes |
+| D2a | The **UI** writes the exclusion form for a partial selection; inclusion stays fully supported on read | The two forms differ in intent for values added by later releases, and a checkbox row cannot express which was meant — exclusion is the safe default for an audit log | yes, UI-only |
+| D2b | `actor` uses repeated parameters only, never comma-split | A username can legitimately contain a comma; the other four fields cannot | yes |
 | D4 | Facets folded into `GET /api/admin/audit-log?facets=1`, not a separate endpoint | One file scan instead of two per page load | yes |
 | D5 | Facets computed over the date range only, **not** cross-filtered | Options and counts stay stable while ticking boxes; a cross-filtered facet would make the checkbox you just unticked vanish | yes |
 | D6 | Show a count next to every option | The ticket's real pain is "a lot of logins" — counts are what tell the admin what to hide | yes |
@@ -355,8 +394,13 @@ is a few hundred lines and a UI review. *Recommendation: one PR, since the redes
 the code the fix touches and a two-step lands the same UI twice. Happy to split if you want the fix
 out today.*
 
-**Q2 — Exclusion vs inclusion in the URL (D2).** This is the one decision that is expensive to
-change later, because it is a user-visible URL contract. Confirm exclusion semantics.
+**Q2 — Exclusion vs inclusion in the URL (D2). ✅ RESOLVED 2026-08-24 by @manzke:** support both,
+`*` matches all, exclusion overrides inclusion. Specified in §4.3. Two follow-on details were not
+covered by the answer and are decided as D2a/D2b — say so if either should go the other way:
+- **D2a** — for a *partial* selection the checkbox UI emits the exclusion form, not the inclusion
+  form, so values added by a later release stay visible in bookmarked views. Both remain readable.
+- **D2b** — `actor` is matched from repeated parameters only and never comma-split, because a
+  username can contain a comma.
 
 **Q3 — Free-text search.** Not in the ticket, but the log has no way to search `summary`,
 `resourceId`, `ip` or `requestId`. A `q=` box would often beat any combination of checkboxes. In
