@@ -1761,6 +1761,99 @@
       "validation": {
         "ifinderContentRequired": "Provide a document ID or a search query so the source knows which documents to load"
       }
+    },
+    "auditLog": {
+      "title": "Audit Log",
+      "timestamp": "Timestamp",
+      "actorColumn": "Actor",
+      "actionColumn": "Action",
+      "resultColumn": "Result",
+      "resourceColumn": "Resource",
+      "sourceColumn": "Source",
+      "summaryColumn": "Summary",
+      "noEntries": "No audit log entries found.",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "exportCsv": "Export CSV",
+      "exporting": "Exporting…",
+      "exportError": "Failed to export audit log",
+      "fetchError": "Failed to fetch audit log",
+      "retentionDays": "Retain {{days}} days",
+      "retentionForever": "Retain forever",
+      "retentionDisabled": "Cleanup disabled",
+      "retentionHint": "Configured in platform.json → audit. Edit under Platform → Advanced.",
+      "runCleanup": "Run cleanup now",
+      "cleanupRunning": "Running…",
+      "cleanupRemoved": "{{count}} files removed",
+      "cleanupNoop": "Nothing to remove",
+      "cleanupError": "Cleanup failed: {{error}}",
+      "filters": {
+        "from": "From",
+        "to": "To",
+        "actor": "Actor",
+        "resource": "Resource",
+        "action": "Action",
+        "result": "Result",
+        "source": "Source",
+        "allActors": "All actors",
+        "allResources": "All resources",
+        "allActions": "All actions",
+        "allResults": "All results",
+        "allSources": "All sources",
+        "noActors": "No actors",
+        "noResources": "No resources",
+        "noActions": "No actions",
+        "noResults": "No results",
+        "noSources": "No sources",
+        "filterValues": "Filter values…",
+        "noValues": "No values in range",
+        "search": "Search",
+        "searchPlaceholder": "Summary, ID, IP…",
+        "searchHint": "Search summary, resource ID, IP, request ID and actor"
+      },
+      "presets": {
+        "label": "Quick filters",
+        "today": "Today",
+        "todayAndYesterday": "Today & yesterday",
+        "last7Days": "Last 7 days",
+        "last30Days": "Last 30 days",
+        "hideSignIns": "Hide sign-ins",
+        "failuresOnly": "Failures only",
+        "clearAll": "Clear all filters"
+      },
+      "values": {
+        "action": {
+          "create": "Create",
+          "update": "Update",
+          "delete": "Delete",
+          "toggle": "Toggle",
+          "import": "Import",
+          "export": "Export",
+          "login": "Login",
+          "logout": "Logout"
+        },
+        "result": {
+          "success": "Success",
+          "failure": "Failure"
+        },
+        "source": {
+          "web": "Web",
+          "admin": "Admin",
+          "api": "API"
+        }
+      }
+    },
+    "filters": {
+      "multiSelect": {
+        "all": "All",
+        "none": "None",
+        "someSelected": "{{selected}} of {{total}}",
+        "selectAll": "Select all",
+        "selectNone": "Select none",
+        "search": "Filter…",
+        "noMatches": "No matching values",
+        "noOptions": "No values"
+      }
     }
   },
   "cloudStorage": {

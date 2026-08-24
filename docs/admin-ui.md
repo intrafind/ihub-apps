@@ -170,11 +170,39 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 Go to **Observability → Audit Log** to see a complete record of all admin actions.
 
-**Filtering:** Filter by date range, admin user, resource type (app, model, user, etc.), and action type (create, update, delete, toggle).
+The date filter works in **whole days**: `from` and `to` select calendar days (UTC), and there is no
+time-of-day cutoff. The default view covers today and yesterday — not a rolling 24 hours — so the
+table is not near-empty just after midnight. Widen or narrow it with the date inputs or the
+quick-filter chips.
 
-**Expanding rows:** Click any row to expand it and see the full event details. If a diff is available, it shows exactly what changed.
+### Filtering
 
-**URL-persisted filters:** All filter state is stored in the URL. You can bookmark a filtered view (e.g. all `delete` actions on `app` resources) or share it with a colleague.
+Actor, resource, action, result and source are **checkbox lists**. Open one and you get every value that actually occurs in the selected date range, each with the number of entries behind it — so when logins dominate the log you can see `login — 794` and untick exactly that. **Select all** and **Select none** are one click each, and lists longer than ten values get a type-ahead box.
+
+The option lists come from the log itself, not from a fixed vocabulary, so resource types added by a new release (or derived from a request path) show up on their own. Counts and options are computed over the **date range only** — unticking a value never makes its checkbox disappear.
+
+**Free-text search:** the search box matches the summary, resource ID, IP, request ID and actor name of every entry in the date range. It is a plain substring match, case-insensitive.
+
+**Quick filters:** one-click chips for **Today** / **Today & yesterday** / **Last 7 days** / **Last 30 days**, **Hide sign-ins** (drops `login` and `logout`), and **Failures only**. **Clear all filters** appears whenever any filter is active.
+
+**Long summaries:** the summary cell has a show-more/show-less toggle. There is no row-level detail view — the full record is available through the CSV export, which always reflects the filters currently on screen.
+
+### URL-persisted filters
+
+All filter state lives in the URL, so a filtered view can be bookmarked or shared. Each field has two parameters: the include set and an `Exclude` set subtracted from it. `*` means "every value".
+
+| URL | Result |
+| --- | --- |
+| *(no parameter)* | everything — the default |
+| `?action=create,update` | only those two |
+| `?actionExclude=login,logout` | everything except those two |
+| `?actionExclude=*` | nothing — the "select none" state |
+| `?action=*&actionExclude=login` | everything except login |
+| `?resource=app&resourceExclude=app` | nothing — exclusion wins on a value in both sets |
+
+The checkbox lists write the **exclusion** form for a partial selection, so a value introduced by a later release stays visible in a bookmarked view instead of being silently filtered out. The inclusion form keeps working for links you already have and for anyone pinning an exact set by hand.
+
+`resource`, `action`, `result` and `source` accept comma-separated (`?action=a,b`) and repeated (`?action=a&action=b`) parameters alike. `actor` accepts repeated parameters only and is never split on commas, because a username can legitimately contain one (`Doe, John`).
 
 ---
 

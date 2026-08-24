@@ -96,8 +96,11 @@ function DataTable({
   };
   const handlePageSizeChange = next => {
     if (isServerPaged) {
+      // Only one callback, deliberately: a server-paged page usually keeps both
+      // values in the URL, and two navigations in the same tick lose the first
+      // (React Router's setSearchParams does not queue). Resetting to page 1 is
+      // therefore the consumer's job, inside its own onPageSizeChange.
       paginationConfig.onPageSizeChange && paginationConfig.onPageSizeChange(next);
-      paginationConfig.onPageChange(1);
     } else {
       setInternalPageSize(next);
       setInternalPage(1);

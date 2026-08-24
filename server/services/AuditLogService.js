@@ -1,4 +1,5 @@
-import { promises as fs } from 'fs';
+import { promises as fs, createReadStream } from 'fs';
+import { createInterface } from 'readline';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { getRootDir } from '../pathUtils.js';
@@ -12,6 +13,11 @@ import { createJsonlAppender } from '../utils/jsonlAppender.js';
 const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 365;
+// Fallback window when a caller passes no `from`. Left at 7 days for callers
+// that just want "the most recent entries" (the admin overview's activity
+// panel). The audit log page always sends an explicit range and defaults it to
+// 24 hours itself.
+const DEFAULT_QUERY_RANGE_DAYS = 7;
 const FLUSH_INTERVAL_MS = 5000;
 // Hard cap so a failing disk + high write volume can't exhaust memory. When
 // exceeded we drop the oldest entries and emit a single overflow warning.
@@ -212,28 +218,135 @@ export function logAudit({
 }
 
 /**
+ * Facetable fields. Each is counted over the selected date range so the filter
+ * UI can render real option lists with entry counts instead of a hardcoded
+ * vocabulary (`resource` in particular is deliberately open-ended — the audit
+ * middleware derives resource names from request paths).
+ */
+const FACET_FIELDS = ['actor', 'resource', 'action', 'result', 'source'];
+
+/** Fields the free-text `q` filter searches, in the order they are checked. */
+const SEARCH_FIELDS = ['summary', 'resourceId', 'ip', 'requestId'];
+
+/**
+ * Read the facet value of a field from an entry, normalizing the two legacy
+ * shapes: entries written before the actor migration carry a plain `admin`
+ * string instead of an `actor` object, and `result` was optional (absent meant
+ * success).
+ */
+function facetValue(entry, field) {
+  switch (field) {
+    case 'actor':
+      return entry.actor?.username ?? entry.admin ?? '';
+    case 'result':
+      return entry.result ?? 'success';
+    default:
+      return entry[field] ?? '';
+  }
+}
+
+/**
+ * Normalize a filter argument to a Set of values, or null when the filter is
+ * not in play. Accepts a single string or an array of strings; empty values are
+ * dropped, and an argument that yields nothing is treated as absent.
+ */
+function toValueSet(value) {
+  if (value === undefined || value === null) return null;
+  const list = (Array.isArray(value) ? value : [value]).filter(
+    v => typeof v === 'string' && v.length > 0
+  );
+  return list.length > 0 ? new Set(list) : null;
+}
+
+/**
+ * Build a value matcher from an include set and an exclude set.
+ *
+ * The rule is "include first, then subtract exclude", with `*` meaning every
+ * value in either set:
+ *
+ *   matches(v) = (include has '*' || include has v) && !(exclude has '*' || exclude has v)
+ *
+ * An absent include set defaults to `*`, so exclusion alone means "everything
+ * but these". Exclusion always wins over inclusion for a value in both sets.
+ *
+ * @returns {((value: string) => boolean)|null} null when neither set filters
+ *   anything, so the caller can skip the check entirely.
+ */
+function buildValueMatcher(include, exclude) {
+  const inc = toValueSet(include);
+  const exc = toValueSet(exclude);
+  if (!inc && !exc) return null;
+  if (exc?.has('*')) return () => false; // the "select none" state
+  const includesAll = !inc || inc.has('*');
+  if (includesAll && !exc) return null;
+  if (includesAll) return value => !exc.has(value);
+  if (!exc) return value => inc.has(value);
+  return value => inc.has(value) && !exc.has(value);
+}
+
+/**
+ * Build the free-text matcher for `q`. Case-insensitive substring match over
+ * the summary, resource id, IP, request id and actor name. Runs in memory over
+ * the entries in the date range — there is no index.
+ */
+function buildTextMatcher(q) {
+  if (typeof q !== 'string') return null;
+  const needle = q.trim().toLowerCase();
+  if (!needle) return null;
+  return entry => {
+    for (const field of SEARCH_FIELDS) {
+      const value = entry[field];
+      if (typeof value === 'string' && value.toLowerCase().includes(needle)) return true;
+    }
+    const actor = facetValue(entry, 'actor');
+    return typeof actor === 'string' && actor.toLowerCase().includes(needle);
+  };
+}
+
+/**
  * Query audit log entries with optional filters and pagination.
+ *
+ * Every value filter accepts a single string or an array of strings, and has a
+ * matching `*Exclude` argument that is subtracted from it. `*` is a wildcard
+ * meaning "every value"; see {@link buildValueMatcher} for the exact rule.
+ *
+ * The whole date range is scanned once: each line is parsed, counted into the
+ * facets, matched against the filters, and kept only if it matches.
  *
  * @param {Object} options
  * @param {string} [options.from] - Start date (YYYY-MM-DD), defaults to 7 days ago
  * @param {string} [options.to] - End date (YYYY-MM-DD), defaults to today
- * @param {string} [options.actor] - Filter by actor username
- * @param {string} [options.resource] - Filter by resource type
- * @param {string} [options.action] - Filter by action type
- * @param {string} [options.result] - Filter by outcome ('success' | 'failure')
- * @param {string} [options.source] - Filter by source ('web' | 'mcp' | 'api' | 'admin')
+ * @param {string|string[]} [options.actor] - Actor usernames to include
+ * @param {string|string[]} [options.actorExclude] - Actor usernames to exclude
+ * @param {string|string[]} [options.resource] - Resource types to include
+ * @param {string|string[]} [options.resourceExclude] - Resource types to exclude
+ * @param {string|string[]} [options.action] - Actions to include
+ * @param {string|string[]} [options.actionExclude] - Actions to exclude
+ * @param {string|string[]} [options.result] - Outcomes to include
+ * @param {string|string[]} [options.resultExclude] - Outcomes to exclude
+ * @param {string|string[]} [options.source] - Sources to include
+ * @param {string|string[]} [options.sourceExclude] - Sources to exclude
+ * @param {string} [options.q] - Free-text search over summary/resourceId/ip/requestId/actor
+ * @param {boolean} [options.facets=false] - Also return per-field value counts
  * @param {number} [options.limit=50] - Max entries to return
  * @param {number} [options.offset=0] - Number of entries to skip
- * @returns {Promise<{entries: Array, total: number}>}
+ * @returns {Promise<{entries: Array, total: number, facets?: Object}>}
  */
 export async function queryAuditLog({
   from,
   to,
   actor,
+  actorExclude,
   resource,
+  resourceExclude,
   action,
+  actionExclude,
   result,
+  resultExclude,
   source,
+  sourceExclude,
+  q,
+  facets = false,
   limit = 50,
   offset = 0
 } = {}) {
@@ -247,16 +360,18 @@ export async function queryAuditLog({
   const now = new Date();
   const toDate = to || now.toISOString().slice(0, 10);
   const fromDate =
-    from || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    from || new Date(now.getTime() - DEFAULT_QUERY_RANGE_DAYS * DAY_MS).toISOString().slice(0, 10);
 
   const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+
+  const emptyFacets = () => Object.fromEntries(FACET_FIELDS.map(f => [f, []]));
 
   // Collect all matching JSONL files
   let files;
   try {
     files = await fs.readdir(auditDir);
   } catch {
-    return { entries: [], total: 0 };
+    return facets ? { entries: [], total: 0, facets: emptyFacets() } : { entries: [], total: 0 };
   }
 
   const jsonlFiles = files
@@ -268,50 +383,109 @@ export async function queryAuditLog({
     .sort()
     .reverse(); // newest first
 
-  // Read and parse all entries
-  const allEntries = [];
+  const matchers = {
+    actor: buildValueMatcher(actor, actorExclude),
+    resource: buildValueMatcher(resource, resourceExclude),
+    action: buildValueMatcher(action, actionExclude),
+    result: buildValueMatcher(result, resultExclude),
+    source: buildValueMatcher(source, sourceExclude)
+  };
+  // Only the fields that actually filter, so an unfiltered query does no work.
+  const activeMatchers = FACET_FIELDS.filter(field => matchers[field]).map(field => [
+    field,
+    matchers[field]
+  ]);
+  const matchesText = buildTextMatcher(q);
+
+  // Facet counters are keyed by field, then by value. They are populated from
+  // every entry in the date range *before* the value filters are applied, so
+  // unticking `login` does not make the `login` checkbox and its count vanish.
+  const counters = facets ? new Map(FACET_FIELDS.map(field => [field, new Map()])) : null;
+
+  // Only the newest `offset + limit` matches are kept. `total` is counted
+  // separately, so pagination stays exact without ever holding the whole
+  // matched set in memory — an unfiltered query over a wide range would
+  // otherwise materialize (and sort) the entire range.
+  const keepCount = Math.max(0, offset) + Math.max(0, limit);
+  const newest = [];
+  let total = 0;
+
+  // Sort newest first and drop everything past the window. Called whenever the
+  // buffer reaches twice the window, so the amortized cost stays O(n log k).
+  // Entries sharing an identical timestamp have no defined order between them,
+  // at the window boundary as anywhere else.
+  const trimToWindow = () => {
+    newest.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+    if (newest.length > keepCount) newest.length = keepCount;
+  };
+
   for (const file of jsonlFiles) {
+    let reader;
     try {
-      const content = await fs.readFile(join(auditDir, file), 'utf8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      for (const line of lines) {
+      reader = createInterface({
+        input: createReadStream(join(auditDir, file), 'utf8'),
+        crlfDelay: Infinity
+      });
+    } catch {
+      continue; // Skip unreadable files
+    }
+    try {
+      // One pass per file: parse, count facets, filter, keep only matches.
+      for await (const line of reader) {
+        if (!line) continue;
+        let entry;
         try {
-          allEntries.push(JSON.parse(line));
+          entry = JSON.parse(line);
         } catch {
-          // Skip malformed lines
+          continue; // Skip malformed lines
+        }
+        if (!entry || typeof entry !== 'object') continue;
+
+        if (counters) {
+          for (const field of FACET_FIELDS) {
+            const value = facetValue(entry, field);
+            if (!value) continue;
+            const byValue = counters.get(field);
+            byValue.set(value, (byValue.get(value) ?? 0) + 1);
+          }
+        }
+
+        let keep = true;
+        for (const [field, matcher] of activeMatchers) {
+          if (!matcher(facetValue(entry, field))) {
+            keep = false;
+            break;
+          }
+        }
+        if (keep && matchesText && !matchesText(entry)) keep = false;
+        if (keep) {
+          total += 1;
+          if (keepCount > 0) {
+            newest.push(entry);
+            if (newest.length >= keepCount * 2) trimToWindow();
+          }
         }
       }
     } catch {
       // Skip unreadable files
+    } finally {
+      reader.close();
     }
   }
 
-  // Sort newest first
-  allEntries.sort((a, b) => b.ts.localeCompare(a.ts));
+  trimToWindow();
+  const entries = newest.slice(offset, offset + limit);
 
-  // Apply filters. Entries written before the actor migration carry a legacy
-  // `admin` string instead of `actor`, so match both when filtering by actor.
-  let filtered = allEntries;
-  if (actor) {
-    filtered = filtered.filter(e => (e.actor?.username ?? e.admin) === actor);
-  }
-  if (resource) {
-    filtered = filtered.filter(e => e.resource === resource);
-  }
-  if (action) {
-    filtered = filtered.filter(e => e.action === action);
-  }
-  if (result) {
-    filtered = filtered.filter(e => (e.result ?? 'success') === result);
-  }
-  if (source) {
-    filtered = filtered.filter(e => e.source === source);
-  }
+  if (!counters) return { entries, total };
 
-  const total = filtered.length;
-  const entries = filtered.slice(offset, offset + limit);
-
-  return { entries, total };
+  const facetResult = {};
+  for (const field of FACET_FIELDS) {
+    facetResult[field] = Array.from(counters.get(field), ([value, count]) => ({
+      value,
+      count
+    })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  }
+  return { entries, total, facets: facetResult };
 }
 
 /**

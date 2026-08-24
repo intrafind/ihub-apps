@@ -16,6 +16,11 @@ export function usePagedRows(rows, page, pageSize) {
 /**
  * Normalize pagination config into a uniform internal shape used by DataTable.
  * `false` → disabled. Falsy/undefined → defaults to client mode.
+ *
+ * In `server` mode the consumer owns `page`/`pageSize` and must reset the page
+ * itself when the page size changes — DataTable calls `onPageSizeChange` only,
+ * never `onPageChange` alongside it, so a consumer that keeps both values in
+ * the URL can write them in a single navigation.
  */
 export function normalizePagination(pagination) {
   if (pagination === false) return null;

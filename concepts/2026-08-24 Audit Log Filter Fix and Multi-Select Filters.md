@@ -2,7 +2,7 @@
 
 **Issue:** [#2213 — Audit Log Filtering not possible](https://github.com/intrafind/ihub-apps/issues/2213)
 **Date:** 2026-08-24
-**Status:** Plan / awaiting review
+**Status:** Implemented
 
 ---
 
@@ -386,13 +386,9 @@ Pre-commit: `npm run lint:fix && npm run format:fix`, then `npm run test:unit`.
 
 ---
 
-## 9. Open Questions
+## 9. Open Questions — all resolved
 
-**Q1 — Scope split.** Ship the bug fix (§4.1) as its own small PR first, then the multi-select
-redesign? The fix is ~15 lines and restores working single-select filtering immediately; the redesign
-is a few hundred lines and a UI review. *Recommendation: one PR, since the redesign replaces exactly
-the code the fix touches and a two-step lands the same UI twice. Happy to split if you want the fix
-out today.*
+**Q1 — Scope split. ✅ RESOLVED:** one PR.
 
 **Q2 — Exclusion vs inclusion in the URL (D2). ✅ RESOLVED 2026-08-24 by @manzke:** support both,
 `*` matches all, exclusion overrides inclusion. Specified in §4.3. Two follow-on details were not
@@ -402,36 +398,35 @@ covered by the answer and are decided as D2a/D2b — say so if either should go 
 - **D2b** — `actor` is matched from repeated parameters only and never comma-split, because a
   username can contain a comma.
 
-**Q3 — Free-text search.** Not in the ticket, but the log has no way to search `summary`,
-`resourceId`, `ip` or `requestId`. A `q=` box would often beat any combination of checkboxes. In
-scope?
+**Q3 — Free-text search. ✅ RESOLVED:** in scope, in-memory. `?q=` is a case-insensitive substring
+match over `summary`, `resourceId`, `ip`, `requestId` and the actor name, applied during the same
+single pass as the value filters. No index.
 
-**Q4 — Quick presets.** Worth a "Hide login/logout" one-click toggle and/or "Failures only" and
-"Last 24h" chips above the filter row? Cheap, and aimed squarely at the ticket's "cumbersome"
-complaint.
+**Q4 — Quick presets. ✅ RESOLVED:** implemented. Range chips (Last 24 hours / 7 days / 30 days),
+a **Hide sign-ins** toggle (excludes `login` and `logout`), **Failures only**, and **Clear all
+filters** — the last of which also covers Q10's "active filters" affordance.
 
-**Q5 — Row detail view.** `docs/admin-ui.md` already promises row expansion with a diff (§3.5) and it
-does not exist. Do we build it (expand row → actor, ip, requestId, source, full summary), or correct
-the documentation? *Recommendation: correct the docs now, file the detail view separately.*
+**Q5 — Row detail view. ✅ RESOLVED:** correct the docs. `docs/admin-ui.md` now describes the
+show-more/show-less summary toggle that exists and points at the CSV export for the full record.
 
-**Q6 — Largest realistic audit volume.** If any installation writes millions of entries per week, a
-per-day facet cache (or a rolling index file) would be needed instead of a live scan. What is the
-worst case you know of?
+**Q6 — Largest realistic audit volume. ✅ RESOLVED:** nothing to do yet. The single-pass scan
+stands; a per-day facet cache stays a future option if an installation ever outgrows it.
 
-**Q7 — The `mcp` source (§3.3).** Offered in the UI and allowed by the schema, but never written.
-Wire `source: 'mcp'` into the MCP request path, or remove it from the UI? *Recommendation: remove it
-from the UI now; wire it up when MCP auditing is actually specified.*
+**Q7 — The `mcp` source (§3.3). ✅ RESOLVED:** removed from the UI for now — the source list is
+facet-driven, so `mcp` disappears until something writes it. `auditSources` still allows it, so
+wiring it up later needs no schema change. Filed as #2216.
 
-**Q8 — Default date range.** Still 7 days. With working filters, is a shorter default (24h) better
-for load, or does 7 days match how you use it?
+**Q8 — Default date range. ✅ RESOLVED:** reduced to 24 hours on the audit log page, which always
+sends an explicit range. The range chips widen it in one click. `queryAuditLog`'s own fallback for a
+caller that sends *no* range stays at 7 days — the admin overview's activity panel relies on it to
+show the most recent entries, and shortening it there would empty that panel on a quiet
+installation.
 
-**Q9 — Orphaned tests (§3.6).** `server/tests/*.test.js` do not run in CI. Fix the jest `testMatch`
-in this PR, or file it separately? *Recommendation: separately — it may surface unrelated failures
-and would derail this PR.*
+**Q9 — Orphaned tests (§3.6). ✅ RESOLVED:** filed as #2217. Everything new here lives
+under `tests/unit/**`, so it runs.
 
-**Q10 — Retention badge placement.** Untouched by this plan, but it sits in the header next to
-Export while the filters live in their own card. Any preference before the header gets a new
-"active filters / clear all" affordance?
+**Q10 — Retention badge placement. ✅ RESOLVED:** no preference given; the badge is unchanged and
+**Clear all filters** sits in the filter card's quick-filter row rather than the header.
 
 ---
 
@@ -444,3 +439,66 @@ Export while the filters live in their own card. Any preference before the heade
 | Facet computation slows down a large-range query | Same single pass as the query (D4/D8); facets only when `facets=1` |
 | Rewriting `queryAuditLog`'s scan introduces a filtering regression | Filter behaviour pinned by server unit tests written **before** the rewrite |
 | Multi-select popover regresses keyboard/screen-reader access | Explicit a11y test cases; `npm run test:a11y` covers the admin area |
+
+---
+
+## 11. Deviations from the Plan During Implementation
+
+1. **`DataTable` carried the same bug.** `handlePageSizeChange` called
+   `onPageSizeChange(next)` **and** `onPageChange(1)` back to back — two `setSearchParams` calls in
+   one tick — so the page-size fix in `AdminAuditLogPage` alone was not enough. In server mode
+   DataTable now calls `onPageSizeChange` only, and resetting the page is documented as the
+   consumer's job. `AdminAuditLogPage` is the only server-paged table in the client, so nothing else
+   is affected.
+2. **The route's query parsing lives in its own module**
+   (`server/routes/admin/auditLogQueryParams.js`) so the URL contract — comma splitting, the
+   actor exception, the per-field cap — is unit-testable without standing up Express.
+3. **The client filter encoding lives in `client/src/features/admin/utils/auditLogFilters.js`**
+   rather than inline in the page, for the same reason.
+4. **Checkbox options are the union of the facets and any value the current filter names.** A
+   filter on a value the date range contains no entries for would otherwise be invisible and
+   impossible to untick.
+5. **Assumption 1 is now verified, not assumed.** `tests/unit/client/use-filter-params.test.jsx`
+   demonstrates the loss directly: two `useFilterState` setters in one tick leave only the second
+   parameter in the URL.
+6. **`role="listbox"`/`aria-multiselectable` was dropped** in favour of real `<input
+   type="checkbox">` elements in a `role="group"`. Mixing checkbox inputs into a listbox is invalid
+   ARIA, and native checkboxes carry correct semantics and keyboard behaviour for free. The trigger
+   is a `button` whose accessible name is built from the field label plus its own state text.
+7. **Quick-filter ranges rather than a bare "Last 24h" chip**, since 24 hours became the default.
+8. **The 24-hour default is client-side only.** `queryAuditLog`'s fallback for a caller that sends
+   no date range stays at 7 days, because `useOverviewData`'s `/admin/audit-log?limit=8` call
+   depends on it (§8-assumption 4 noted that call as unaffected — it would not have been).
+
+---
+
+## 12. Review Follow-ups (Copilot, PR #2218)
+
+Seven findings, all confirmed against the code and all fixed:
+
+1. **The scan was still unbounded.** `queryAuditLog` kept every match before paginating, so an
+   unfiltered query held (and sorted) the whole date range. It now keeps only the newest
+   `offset + limit` entries in a window that is trimmed whenever it reaches twice that size, and
+   counts `total` separately — so pagination stays exact with bounded memory.
+2. **The checkbox UI could emit a request its own server rejects.** A partial selection out of more
+   than `MAX_FILTER_VALUES` options serialized an over-cap exclude list and got a 400. The encoder
+   now falls back to the inclusion form when the exclusion form does not fit (exclusion is still
+   preferred whenever it fits, per D2a), and the cap moved from 500 to 2000 — it is hygiene, not a
+   tight bound, so a selection that fits neither form now needs >4000 distinct values in the range.
+   A test pins the client and server constants together.
+3. **"Last 24 hours" was a mislabel.** The date filter selects whole calendar days by filename with
+   no timestamp cutoff, so at 22:00 UTC the preset covered ~46 hours. Rather than add
+   timestamp-level filtering (the date inputs are day-granular by contract), the presets are now
+   **Today** / **Today & yesterday** / **Last 7 days** / **Last 30 days**, and the docs, changelog
+   and default are described as calendar days. The default still spans two days so the table is not
+   near-empty just after midnight — which is what Q8 was really asking for.
+4. **Only the filter options were translated.** The table's own action/result/source cells rendered
+   raw values, so the "fully translated page" claim was false in the table itself. `valueLabel` now
+   feeds the pills and the source cell too.
+5. **`pageSize` from the URL was unbounded** while the server caps `limit`, so `?pageSize=5000`
+   computed page counts over rows the server would never return. It is clamped to the table's
+   largest offered page size.
+6. **`aria-haspopup="true"` announced a menu** while the popup is a `role="group"`. The trigger is a
+   disclosure, so `aria-haspopup` is gone and `aria-expanded` carries it.
+7. **The page-reset test never left page 1**, so it passed with the reset wiring removed. It now
+   starts at `?page=4`, asserts that state, and only then toggles a filter.

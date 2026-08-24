@@ -54,6 +54,27 @@ a specific model instead of only the app's preferred one.
 - Apps configured to hide model selection do not expose the option.
 - An unknown or incompatible model falls back to the app's preferred model rather than failing.
 
+## Audit Log Filters Now Actually Filter
+
+Selecting a resource, action, result or source on **Observability → Audit Log** left the table
+unchanged and the dropdown snapped straight back to "All". The page changed two URL parameters at
+once — the filter and the page number — and the second change silently discarded the first, so the
+filter never reached the server. Filters now apply on the first click, and a shared or bookmarked
+filter link opens the view it describes.
+
+- Changing the rows-per-page value on the audit log had the same problem and reverted to 50. It now
+  sticks.
+- The resource list no longer offers `provider`, which nothing ever writes, and no longer omits
+  `tool`, `credential`, `integrations`, `uiConfig` and the other types that do occur. The options
+  are read from the log itself, so nothing can go missing.
+- The actor list covers every actor in the selected date range, not just the ones on the page you
+  happen to be looking at.
+- `mcp` is gone from the source filter. No code path writes it, so selecting it could only ever
+  return an empty table.
+- The audit log page is now translated. The German UI previously showed it entirely in English.
+- CSV export uses the same filters as the table, including the new ones, so an export always matches
+  what is on screen.
+  
 ## Crashes in Error Handlers Fixed
 
 A group of error handlers referenced a variable name that did not exist in that scope, so whenever
