@@ -4,7 +4,6 @@ import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
-import { resolveAndValidatePath } from '../utils/pathSecurity.js';
 import { recordSourceLoad } from '../telemetry/metrics.js';
 import { getLocalizedString } from '../utils/localize.js';
 
@@ -560,19 +559,22 @@ class SourceManager {
   async testFilesystemSource(config) {
     const { path: filePath, encoding = 'utf-8' } = config;
     const fs = await import('fs');
-    const path = await import('path');
-    const { getRootDir } = await import('../pathUtils.js');
 
     try {
       if (!filePath) {
         throw new Error('File path is required');
       }
 
-      // Resolve path relative to contents directory
-      const contentsDir = path.join(getRootDir(), 'contents');
-      const fullPath = await resolveAndValidatePath(filePath, contentsDir);
-      if (!fullPath) {
-        throw new Error('Invalid file path: Path must be within contents directory');
+      // Resolve through the filesystem handler itself rather than repeating
+      // the contents/sources boundary here. That handler owns the single
+      // implementation of the check (and honours CONTENTS_DIR), so the test
+      // endpoint can never accept a path the real read/write path rejects.
+      const handler = this.getHandler('filesystem');
+      let fullPath;
+      try {
+        fullPath = await handler.resolveSourcePath(filePath);
+      } catch {
+        throw new Error('Invalid file path: Path must be within the sources directory');
       }
 
       const stats = await fs.promises.stat(fullPath);

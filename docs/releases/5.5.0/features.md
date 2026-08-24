@@ -616,6 +616,21 @@ is now both prevented and, if it still happens, reported clearly instead of show
   than a silent blank reply.
 - No admin action is required — the fix takes effect automatically on upgrade.
 
+## Filesystem Sources Are Now Scoped to `contents/sources/`
+
+Closed a privilege-escalation gap where an admin with only the restricted **Content Admin** role
+(not full Admin Access) could use the filesystem-source file browser/editor to read or write files
+anywhere under `contents/` — including `config/groups.json` and the `.encryption-key` file used to
+decrypt stored secrets.
+
+- Reading, writing, deleting, and browsing filesystem-source files, plus the "Test connection"
+  check, are now hard-scoped to `contents/sources/`, regardless of what path is requested.
+- Saving a filesystem source with a `config.path` outside `sources/` (or containing a dotfile
+  segment) is now rejected by validation.
+- All bundled default sources already store their path with the `sources/` prefix, so they are
+  unaffected. See **Breaking Changes** below if you have a custom filesystem source with a path
+  outside `sources/`.
+  
 ## Dynamic JSX Pages No Longer Depend on a Public CDN
 
 Custom React pages (`contents/pages/*.jsx`) and app-embedded React components now compile using the

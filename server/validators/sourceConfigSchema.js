@@ -212,22 +212,25 @@ function validateFilesystemPath(path) {
     throw new Error('Invalid file path: Path traversal not allowed');
   }
 
-  // Prevent absolute paths that could access system files
-  if (path.startsWith('/') && !path.startsWith('/app/') && !path.startsWith('/workspace/')) {
-    throw new Error('Invalid file path: Absolute paths to system directories not allowed');
-  }
-
   // Ensure path doesn't start with ./ (should be relative)
   if (path.startsWith('./')) {
     throw new Error('Invalid file path: Use relative paths without ./ prefix');
   }
 
-  // Check for dangerous paths
-  const dangerousPaths = ['/etc', '/var', '/usr', '/sys', '/proc', '/root'];
-  for (const dangerousPath of dangerousPaths) {
-    if (path.startsWith(dangerousPath)) {
-      throw new Error(`Invalid file path: Access to ${dangerousPath} not allowed`);
-    }
+  // Filesystem sources are only ever read/written under contents/sources —
+  // reject anything else so a source config can't be saved with a path
+  // pointing at config/ or other files outside that directory. This check
+  // applies unconditionally, so it also rules out absolute paths (there is
+  // no carve-out for e.g. "/app/..." or "/workspace/..." — the runtime
+  // handler in FileSystemHandler never accepted those either, since it
+  // requires the path to literally start with "sources/").
+  if (path !== 'sources' && !path.startsWith('sources/')) {
+    throw new Error('Invalid file path: Filesystem sources must be under the "sources/" directory');
+  }
+
+  // Reject dotfiles/dot-directories anywhere in the path (e.g. "sources/.env").
+  if (path.split('/').some(segment => segment.startsWith('.'))) {
+    throw new Error('Invalid file path: Dotfiles and dot-directories are not allowed');
   }
 }
 
