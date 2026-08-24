@@ -1851,7 +1851,9 @@ export default function registerAdminSourcesRoutes(app) {
         if (!validateIdForPath(id, 'source', res)) {
           return;
         }
-        const { path = 'sources' } = req.query;
+        // Default to the sources root; an explicitly empty ?path= must fall
+        // back too, since '' is now outside the allowed directory.
+        const path = req.query.path || 'sources';
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
 
