@@ -94,3 +94,28 @@ cause. The real failure was lost, and in a few places a clean failure turned int
   the helpers it uses were re-exported but never imported locally. They now work.
 
 Lint now enforces `no-undef`, so this class of bug fails the build rather than shipping.
+
+## Rotated Identity Provider Signing Keys Are Picked Up Without a Restart
+
+Proxy authentication cached each provider's JWKS document forever. When an identity provider rotated
+its signing keys, every token signed with a new key failed verification — users were locked out until
+the iHub process was restarted. The cache now expires.
+
+- A JWKS document is re-fetched after 10 hours, or immediately when a token arrives with a key id the
+  cached document does not contain (at most once every 5 minutes per provider, so unknown key ids
+  cannot be used to hammer the provider).
+- If a refresh fails, the previously cached keys keep working instead of rejecting every request while
+  the provider's JWKS endpoint is briefly unreachable.
+- The JWKS request still goes through the platform's configured HTTP proxy and TLS settings.
+- No configuration change is needed.
+
+## Crashes Outside a Request Are Logged Instead of Disappearing
+
+An exception or rejected promise raised outside Express's request handling — in a background job, a
+timer, or a streaming callback — terminated the process with nothing written to the application log,
+leaving no trace of what failed.
+
+- Unhandled promise rejections are logged with their message and stack, and the server keeps running.
+- Uncaught exceptions are logged and the process then exits deliberately. With `WORKERS` above 1 the
+  affected worker is respawned automatically, as it already was for any other worker exit.
+- The standalone binary already behaved this way; the regular server now matches it.
