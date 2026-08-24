@@ -29,10 +29,14 @@ const RESULT_PILL_COLORS = {
   failure: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
 };
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = Math.max(...PAGE_SIZE_OPTIONS);
 
-// Default window. One day keeps the first page load to one or two daily files;
-// the date inputs and the range presets widen it.
+// The date filter has whole-day granularity: `from`/`to` select calendar days
+// in UTC, and the server picks daily files by name without a timestamp cutoff.
+// The default spans today and yesterday rather than today alone, so the table
+// is not near-empty just after midnight.
 const DEFAULT_RANGE_DAYS = 1;
 
 // Actions the "hide sign-in noise" preset excludes — the ticket's actual
@@ -63,25 +67,25 @@ function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleString();
 }
 
-function ActionPill({ action }) {
+function ActionPill({ action, label }) {
   const colorClass = ACTION_PILL_COLORS[action] || DEFAULT_PILL_COLOR;
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
     >
-      {action}
+      {label ?? action}
     </span>
   );
 }
 
-function ResultPill({ result }) {
+function ResultPill({ result, label }) {
   const value = result || 'success';
   const colorClass = RESULT_PILL_COLORS[value] || DEFAULT_PILL_COLOR;
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
     >
-      {value}
+      {label ?? value}
     </span>
   );
 }
@@ -257,7 +261,12 @@ function AdminAuditLogPage() {
   const toDate = get('to');
   const queryText = get('q');
   const page = Math.max(1, parseInt(get('page'), 10) || 1);
-  const pageSize = Math.max(1, parseInt(get('pageSize'), 10) || DEFAULT_PAGE_SIZE);
+  // Clamped to what the table offers: the server caps `limit`, so a larger
+  // URL value would page over rows it never returns and strand the tail.
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, parseInt(get('pageSize'), 10) || DEFAULT_PAGE_SIZE)
+  );
   const offset = (page - 1) * pageSize;
 
   // The include/exclude sets currently in the URL, per field.
@@ -457,12 +466,14 @@ function AdminAuditLogPage() {
     {
       key: 'action',
       header: t('admin.auditLog.actionColumn', 'Action'),
-      render: e => <ActionPill action={e.action} />
+      render: e => <ActionPill action={e.action} label={valueLabel('action', e.action)} />
     },
     {
       key: 'result',
       header: t('admin.auditLog.resultColumn', 'Result'),
-      render: e => <ResultPill result={e.result} />
+      render: e => (
+        <ResultPill result={e.result} label={valueLabel('result', e.result ?? 'success')} />
+      )
     },
     {
       key: 'resource',
@@ -477,7 +488,9 @@ function AdminAuditLogPage() {
       header: t('admin.auditLog.sourceColumn', 'Source'),
       hideBelow: 'lg',
       render: e => (
-        <span className="text-sm text-gray-600 dark:text-gray-300">{e.source || '-'}</span>
+        <span className="text-sm text-gray-600 dark:text-gray-300">
+          {e.source ? valueLabel('source', e.source) : '-'}
+        </span>
       )
     },
     {
@@ -531,10 +544,16 @@ function AdminAuditLogPage() {
             {t('admin.auditLog.presets.label', 'Quick filters')}
           </span>
           <PresetChip
+            active={fromDate === getDefaultToDate() && toDate === getDefaultToDate()}
+            onClick={() => applyFilter({ from: getDefaultToDate(), to: getDefaultToDate() })}
+          >
+            {t('admin.auditLog.presets.today', 'Today')}
+          </PresetChip>
+          <PresetChip
             active={fromDate === daysAgo(1) && toDate === getDefaultToDate()}
             onClick={() => applyFilter({ from: daysAgo(1), to: getDefaultToDate() })}
           >
-            {t('admin.auditLog.presets.last24h', 'Last 24 hours')}
+            {t('admin.auditLog.presets.todayAndYesterday', 'Today & yesterday')}
           </PresetChip>
           <PresetChip
             active={fromDate === daysAgo(7) && toDate === getDefaultToDate()}
@@ -671,7 +690,7 @@ function AdminAuditLogPage() {
           pageSize,
           onPageChange: p => setMany({ page: String(p) }),
           onPageSizeChange: size => setMany({ pageSize: String(size), page: null }),
-          pageSizeOptions: [25, 50, 100, 200]
+          pageSizeOptions: PAGE_SIZE_OPTIONS
         }}
         empty={{
           icon: 'document-search',

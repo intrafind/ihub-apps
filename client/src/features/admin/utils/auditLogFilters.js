@@ -32,6 +32,19 @@ export function splitsOnComma(field) {
 }
 
 /**
+ * Values a single parameter may carry. Must match `MAX_FILTER_VALUES` in
+ * `server/routes/admin/auditLogQueryParams.js`, which answers 400 above it —
+ * a mismatch would make the UI reject its own request.
+ * (`tests/unit/server/auditLogQueryParams.test.js` pins them together.)
+ */
+export const MAX_FILTER_VALUES = 2000;
+
+/** Serialize a value list for one field's parameter. */
+function encodeValues(field, values) {
+  return splitsOnComma(field) ? values.join(',') : values;
+}
+
+/**
  * Turn the raw repeated values of one query parameter into a Set, applying
  * comma splitting for the fields that allow it.
  *
@@ -110,7 +123,20 @@ export function selectedOptionValues(options, include, exclude) {
  *
  * Everything selected clears both parameters (so values added by a later
  * release stay visible), nothing selected writes `<field>Exclude=*`, and a
- * partial selection writes the unselected values as the exclude set.
+ * partial selection normally writes the unselected values as the exclude set.
+ *
+ * The exception is the cap: a partial selection out of more than
+ * `MAX_FILTER_VALUES` options can produce an exclude list the server rejects
+ * with 400 — one actor ticked out of 2001 would emit 2000 exclusions. When the
+ * exclusion form does not fit, the inclusion form is written instead, since it
+ * is necessarily the shorter of the two. Exclusion is still preferred whenever
+ * it fits, because it is the form that keeps values added by a later release
+ * visible in a bookmarked view.
+ *
+ * A selection where *both* forms exceed the cap cannot be expressed at all;
+ * that needs more than `2 × MAX_FILTER_VALUES` distinct values in the date
+ * range, at which point the search box is the usable tool rather than a
+ * four-thousand-row checkbox list.
  *
  * @param {string} field
  * @param {Array<{value: string}>} options - the full option list the selection came from
@@ -122,14 +148,19 @@ export function encodeSelection(field, options, selected) {
   if (options.length === 0) return { [field]: null, [excludeParam]: null };
 
   const selectedSet = new Set(selected);
-  const unselected = options.filter(o => !selectedSet.has(o.value)).map(o => o.value);
+  const included = [];
+  const excluded = [];
+  for (const option of options) {
+    (selectedSet.has(option.value) ? included : excluded).push(option.value);
+  }
 
-  if (unselected.length === 0) return { [field]: null, [excludeParam]: null };
-  if (unselected.length === options.length) return { [field]: null, [excludeParam]: WILDCARD };
-  return {
-    [field]: null,
-    [excludeParam]: splitsOnComma(field) ? unselected.join(',') : unselected
-  };
+  if (excluded.length === 0) return { [field]: null, [excludeParam]: null };
+  if (included.length === 0) return { [field]: null, [excludeParam]: WILDCARD };
+
+  if (excluded.length > MAX_FILTER_VALUES && included.length < excluded.length) {
+    return { [field]: encodeValues(field, included), [excludeParam]: null };
+  }
+  return { [field]: null, [excludeParam]: encodeValues(field, excluded) };
 }
 
 /**
@@ -151,7 +182,7 @@ export function setExcluded(field, exclude, values, hidden) {
   }
   const list = Array.from(next);
   if (list.length === 0) return { [`${field}Exclude`]: null };
-  return { [`${field}Exclude`]: splitsOnComma(field) ? list.join(',') : list };
+  return { [`${field}Exclude`]: encodeValues(field, list) };
 }
 
 /** True when the field's filter leaves at least one value out. */

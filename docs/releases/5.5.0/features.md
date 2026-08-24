@@ -1010,10 +1010,13 @@ how many entries are behind it.
   checkbox vanish.
 - A new **search box** matches the summary, resource ID, IP, request ID and actor name of any entry
   in the date range.
-- **Quick filters:** Last 24 hours / Last 7 days / Last 30 days, **Hide sign-ins**, **Failures
-  only**, and **Clear all filters**.
-- The default range is now the **last 24 hours** instead of 7 days. Widen it with the date inputs or
-  a chip.
+- **Quick filters:** Today / Today & yesterday / Last 7 days / Last 30 days, **Hide sign-ins**,
+  **Failures only**, and **Clear all filters**.
+- The default range is now **today and yesterday** instead of 7 days. The date filter works in whole
+  calendar days (UTC) with no time-of-day cutoff, so the default covers two days rather than a
+  rolling 24 hours — that way the table is not near-empty just after midnight. Widen it with the
+  date inputs or a chip.
+- Action, result and source are translated in the table itself, not only in the filter lists.
 - Filter state stays in the URL, so a filtered view is still bookmarkable and shareable. Each field
   takes an include parameter and an `<field>Exclude` parameter, with `*` meaning "every value" —
   `?actionExclude=login,logout` is "everything but sign-ins". Existing single-value links such as

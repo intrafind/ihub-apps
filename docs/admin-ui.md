@@ -170,7 +170,10 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 Go to **Observability → Audit Log** to see a complete record of all admin actions.
 
-The default view covers the last 24 hours. Widen it with the date inputs or the quick-filter chips.
+The date filter works in **whole days**: `from` and `to` select calendar days (UTC), and there is no
+time-of-day cutoff. The default view covers today and yesterday — not a rolling 24 hours — so the
+table is not near-empty just after midnight. Widen or narrow it with the date inputs or the
+quick-filter chips.
 
 ### Filtering
 
@@ -180,7 +183,7 @@ The option lists come from the log itself, not from a fixed vocabulary, so resou
 
 **Free-text search:** the search box matches the summary, resource ID, IP, request ID and actor name of every entry in the date range. It is a plain substring match, case-insensitive.
 
-**Quick filters:** one-click chips for **Last 24 hours** / **Last 7 days** / **Last 30 days**, **Hide sign-ins** (drops `login` and `logout`), and **Failures only**. **Clear all filters** appears whenever any filter is active.
+**Quick filters:** one-click chips for **Today** / **Today & yesterday** / **Last 7 days** / **Last 30 days**, **Hide sign-ins** (drops `login` and `logout`), and **Failures only**. **Clear all filters** appears whenever any filter is active.
 
 **Long summaries:** the summary cell has a show-more/show-less toggle. There is no row-level detail view — the full record is available through the CSV export, which always reflects the filters currently on screen.
 

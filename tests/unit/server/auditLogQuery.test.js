@@ -156,6 +156,45 @@ describe('queryAuditLog date range and parsing', () => {
   });
 });
 
+describe('queryAuditLog result window', () => {
+  it('returns the same page whatever the window size, and an exact total', async () => {
+    // The scan keeps only `offset + limit` entries, so a small page must not
+    // change which rows come back or what `total` reports.
+    const all = await queryAuditLog({ ...range, limit: 100 });
+    for (const [limit, offset] of [
+      [1, 0],
+      [1, 5],
+      [2, 3],
+      [7, 1]
+    ]) {
+      const page = await queryAuditLog({ ...range, limit, offset });
+      expect(page.total).toBe(all.total);
+      expect(page.entries.map(e => e.id)).toEqual(
+        all.entries.slice(offset, offset + limit).map(e => e.id)
+      );
+    }
+  });
+
+  it('counts the total past the end of the window', async () => {
+    const page = await queryAuditLog({ ...range, limit: 1 });
+    expect(page.entries).toHaveLength(1);
+    expect(page.total).toBe(DAY_ONE_ENTRIES.length + DAY_TWO_ENTRIES.length);
+  });
+
+  it('still counts and facets correctly with a zero-size window', async () => {
+    const result = await queryAuditLog({ ...range, limit: 0, facets: true });
+    expect(result.entries).toEqual([]);
+    expect(result.total).toBe(DAY_ONE_ENTRIES.length + DAY_TWO_ENTRIES.length);
+    expect(result.facets.action.find(o => o.value === 'login').count).toBe(3);
+  });
+
+  it('reports a total beyond the window while filtering', async () => {
+    const page = await queryAuditLog({ ...range, actionExclude: ['login', 'logout'], limit: 1 });
+    expect(page.entries).toHaveLength(1);
+    expect(page.total).toBe(4);
+  });
+});
+
 describe('queryAuditLog single-value filters (backward compatibility)', () => {
   it('matches a single action', async () => {
     const result = await queryAuditLog({ ...range, action: 'login', limit: 100 });

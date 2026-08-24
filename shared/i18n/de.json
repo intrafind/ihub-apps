@@ -2066,7 +2066,8 @@
       },
       "presets": {
         "label": "Schnellfilter",
-        "last24h": "Letzte 24 Stunden",
+        "today": "Heute",
+        "todayAndYesterday": "Heute & gestern",
         "last7Days": "Letzte 7 Tage",
         "last30Days": "Letzte 30 Tage",
         "hideSignIns": "Anmeldungen ausblenden",

@@ -402,7 +402,23 @@ export async function queryAuditLog({
   // unticking `login` does not make the `login` checkbox and its count vanish.
   const counters = facets ? new Map(FACET_FIELDS.map(field => [field, new Map()])) : null;
 
-  const matched = [];
+  // Only the newest `offset + limit` matches are kept. `total` is counted
+  // separately, so pagination stays exact without ever holding the whole
+  // matched set in memory — an unfiltered query over a wide range would
+  // otherwise materialize (and sort) the entire range.
+  const keepCount = Math.max(0, offset) + Math.max(0, limit);
+  const newest = [];
+  let total = 0;
+
+  // Sort newest first and drop everything past the window. Called whenever the
+  // buffer reaches twice the window, so the amortized cost stays O(n log k).
+  // Entries sharing an identical timestamp have no defined order between them,
+  // at the window boundary as anywhere else.
+  const trimToWindow = () => {
+    newest.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+    if (newest.length > keepCount) newest.length = keepCount;
+  };
+
   for (const file of jsonlFiles) {
     let reader;
     try {
@@ -442,7 +458,13 @@ export async function queryAuditLog({
           }
         }
         if (keep && matchesText && !matchesText(entry)) keep = false;
-        if (keep) matched.push(entry);
+        if (keep) {
+          total += 1;
+          if (keepCount > 0) {
+            newest.push(entry);
+            if (newest.length >= keepCount * 2) trimToWindow();
+          }
+        }
       }
     } catch {
       // Skip unreadable files
@@ -451,11 +473,8 @@ export async function queryAuditLog({
     }
   }
 
-  // Sort newest first. Only the matched subset is sorted, not the whole range.
-  matched.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-
-  const total = matched.length;
-  const entries = matched.slice(offset, offset + limit);
+  trimToWindow();
+  const entries = newest.slice(offset, offset + limit);
 
   if (!counters) return { entries, total };
 

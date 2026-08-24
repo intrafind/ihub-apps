@@ -95,6 +95,14 @@ describe('parseAuditLogQuery value separators', () => {
   });
 });
 
+describe('the filter-value cap', () => {
+  it('matches the cap the checkbox UI encodes against', async () => {
+    // A mismatch would let the UI emit a request its own server rejects.
+    const client = await import('../../../client/src/features/admin/utils/auditLogFilters.js');
+    expect(client.MAX_FILTER_VALUES).toBe(MAX_FILTER_VALUES);
+  });
+});
+
 describe('parseAuditLogQuery limits', () => {
   it('accepts a filter set right at the cap', () => {
     const values = Array.from({ length: MAX_FILTER_VALUES }, (_, i) => `a${i}`);

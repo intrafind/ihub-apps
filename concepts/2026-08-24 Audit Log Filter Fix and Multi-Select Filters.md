@@ -469,3 +469,36 @@ under `tests/unit/**`, so it runs.
 8. **The 24-hour default is client-side only.** `queryAuditLog`'s fallback for a caller that sends
    no date range stays at 7 days, because `useOverviewData`'s `/admin/audit-log?limit=8` call
    depends on it (§8-assumption 4 noted that call as unaffected — it would not have been).
+
+---
+
+## 12. Review Follow-ups (Copilot, PR #2218)
+
+Seven findings, all confirmed against the code and all fixed:
+
+1. **The scan was still unbounded.** `queryAuditLog` kept every match before paginating, so an
+   unfiltered query held (and sorted) the whole date range. It now keeps only the newest
+   `offset + limit` entries in a window that is trimmed whenever it reaches twice that size, and
+   counts `total` separately — so pagination stays exact with bounded memory.
+2. **The checkbox UI could emit a request its own server rejects.** A partial selection out of more
+   than `MAX_FILTER_VALUES` options serialized an over-cap exclude list and got a 400. The encoder
+   now falls back to the inclusion form when the exclusion form does not fit (exclusion is still
+   preferred whenever it fits, per D2a), and the cap moved from 500 to 2000 — it is hygiene, not a
+   tight bound, so a selection that fits neither form now needs >4000 distinct values in the range.
+   A test pins the client and server constants together.
+3. **"Last 24 hours" was a mislabel.** The date filter selects whole calendar days by filename with
+   no timestamp cutoff, so at 22:00 UTC the preset covered ~46 hours. Rather than add
+   timestamp-level filtering (the date inputs are day-granular by contract), the presets are now
+   **Today** / **Today & yesterday** / **Last 7 days** / **Last 30 days**, and the docs, changelog
+   and default are described as calendar days. The default still spans two days so the table is not
+   near-empty just after midnight — which is what Q8 was really asking for.
+4. **Only the filter options were translated.** The table's own action/result/source cells rendered
+   raw values, so the "fully translated page" claim was false in the table itself. `valueLabel` now
+   feeds the pills and the source cell too.
+5. **`pageSize` from the URL was unbounded** while the server caps `limit`, so `?pageSize=5000`
+   computed page counts over rows the server would never return. It is clamped to the table's
+   largest offered page size.
+6. **`aria-haspopup="true"` announced a menu** while the popup is a `role="group"`. The trigger is a
+   disclosure, so `aria-haspopup` is gone and `aria-expanded` carries it.
+7. **The page-reset test never left page 1**, so it passed with the reset wiring removed. It now
+   starts at `?page=4`, asserts that state, and only then toggles a filter.

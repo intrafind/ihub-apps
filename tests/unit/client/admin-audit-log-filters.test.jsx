@@ -14,10 +14,21 @@ import '@testing-library/jest-dom';
  */
 
 // `t` must keep a stable identity across renders, as the real i18next hook
-// does — the page memoizes its fetch on it.
+// does — the page memoizes its fetch on it. The `values.*` keys are resolved
+// rather than falling through to their raw-value defaults, so a test can tell
+// a translated label apart from an untranslated one.
 jest.mock('react-i18next', () => {
+  const TRANSLATED = {
+    'admin.auditLog.values.action.login': 'Login',
+    'admin.auditLog.values.action.create': 'Create',
+    'admin.auditLog.values.action.update': 'Update',
+    'admin.auditLog.values.result.success': 'Success',
+    'admin.auditLog.values.result.failure': 'Failure',
+    'admin.auditLog.values.source.web': 'Web',
+    'admin.auditLog.values.source.admin': 'Admin'
+  };
   const translate = (key, defaultValue, opts) => {
-    let str = typeof defaultValue === 'string' ? defaultValue : key;
+    let str = TRANSLATED[key] ?? (typeof defaultValue === 'string' ? defaultValue : key);
     if (opts && typeof str === 'string') {
       for (const [k, v] of Object.entries(opts)) {
         str = str.replace(new RegExp(`{{${k}}}`, 'g'), v);
@@ -83,21 +94,20 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>;
 }
 
-function setup() {
+function setup(search = '') {
   mockMakeAdminApiCall.mockImplementation(url => {
     if (url.startsWith('/admin/audit-log/retention')) {
       return Promise.resolve({ data: { retentionDays: 365, cleanupEnabled: true } });
     }
-    return Promise.resolve({ data: { entries: [ENTRY], total: 1, facets: FACETS } });
+    return Promise.resolve({ data: { entries: [ENTRY], total: 400, facets: FACETS } });
   });
 
-  const utils = render(
-    <MemoryRouter initialEntries={['/admin/audit-log']}>
+  return render(
+    <MemoryRouter initialEntries={[`/admin/audit-log${search}`]}>
       <AdminAuditLogPage />
       <LocationProbe />
     </MemoryRouter>
   );
-  return utils;
 }
 
 /** Every audit-log list request made so far, oldest first. */
@@ -150,9 +160,9 @@ describe('AdminAuditLogPage filters reach the URL and the server', () => {
 
     openFilter('Action');
 
-    expect(popover().getByText('login')).toBeInTheDocument();
+    expect(popover().getByText('Login')).toBeInTheDocument();
     expect(popover().getByText('794')).toBeInTheDocument();
-    expect(popover().getByText('create')).toBeInTheDocument();
+    expect(popover().getByText('Create')).toBeInTheDocument();
   });
 
   it('lands a deselected value in the URL and in the refetch query string', async () => {
@@ -161,7 +171,7 @@ describe('AdminAuditLogPage filters reach the URL and the server', () => {
     const before = listCalls().length;
 
     openFilter('Action');
-    fireEvent.click(checkboxFor('login'));
+    fireEvent.click(checkboxFor('Login'));
 
     // The reported bug: the filter never reached the URL at all.
     await waitFor(() => expect(urlSearch()).toContain('actionExclude=login'));
@@ -171,17 +181,29 @@ describe('AdminAuditLogPage filters reach the URL and the server', () => {
   });
 
   it('resets to page 1 in the same navigation that changes a filter', async () => {
-    setup();
+    // Start on page 4 so the reset has something to undo — without this the
+    // test passes even with the page-reset wiring removed.
+    setup('?page=4');
     await waitForFacets();
+    expect(urlSearch()).toContain('page=4');
+    expect(decodeURIComponent(lastListCall())).toContain('offset=150');
 
-    // Move off page 1 first.
     openFilter('Resource');
     fireEvent.click(checkboxFor('auth'));
     await waitFor(() => expect(urlSearch()).toContain('resourceExclude=auth'));
 
-    // page is omitted when it is 1, so the filter is present and page is not.
+    // `page` is omitted when it is 1, so the filter survives and the page is gone.
     expect(urlSearch()).not.toContain('page=');
-    expect(decodeURIComponent(lastListCall())).toContain('offset=0');
+    await waitFor(() => expect(decodeURIComponent(lastListCall())).toContain('offset=0'));
+  });
+
+  it('clamps a page size larger than the table offers', async () => {
+    // The server caps `limit`, so a bigger URL value would page over rows it
+    // never returns.
+    setup('?pageSize=5000');
+    await waitForFacets();
+
+    expect(decodeURIComponent(lastListCall())).toContain('limit=200');
   });
 
   it('keeps a new page size instead of reverting to the default', async () => {
@@ -199,12 +221,25 @@ describe('AdminAuditLogPage filters reach the URL and the server', () => {
     await waitForFacets();
 
     openFilter('Action');
-    fireEvent.click(checkboxFor('login'));
+    fireEvent.click(checkboxFor('Login'));
     await waitFor(() => expect(urlSearch()).toContain('actionExclude=login'));
 
-    fireEvent.click(checkboxFor('login'));
+    fireEvent.click(checkboxFor('Login'));
     await waitFor(() => expect(urlSearch()).not.toContain('actionExclude'));
     expect(urlSearch()).not.toContain('action=');
+  });
+});
+
+describe('AdminAuditLogPage table values', () => {
+  it('renders action, result and source through the value translations', async () => {
+    setup();
+    await waitForFacets();
+
+    // The row for ENTRY: action `create`, result `success`, source `admin`.
+    const row = screen.getByText('Created the chat app').closest('tr');
+    expect(within(row).getByText('Create')).toBeInTheDocument();
+    expect(within(row).getByText('Success')).toBeInTheDocument();
+    expect(within(row).getByText('Admin')).toBeInTheDocument();
   });
 });
 
@@ -352,7 +387,7 @@ describe('AdminAuditLogPage keyboard access', () => {
     fireEvent.keyDown(trigger, { key: 'ArrowDown' });
 
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(popover().getByText('login')).toBeInTheDocument();
+    expect(popover().getByText('Login')).toBeInTheDocument();
   });
 
   it('moves focus between checkboxes with the arrow keys', async () => {
@@ -360,13 +395,13 @@ describe('AdminAuditLogPage keyboard access', () => {
     await waitForFacets();
 
     openFilter('Action');
-    const first = checkboxFor('login');
+    const first = checkboxFor('Login');
     expect(first).toHaveFocus();
 
     fireEvent.keyDown(first, { key: 'ArrowDown' });
-    expect(checkboxFor('create')).toHaveFocus();
+    expect(checkboxFor('Create')).toHaveFocus();
 
-    fireEvent.keyDown(checkboxFor('create'), { key: 'ArrowUp' });
+    fireEvent.keyDown(checkboxFor('Create'), { key: 'ArrowUp' });
     expect(first).toHaveFocus();
   });
 });

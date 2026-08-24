@@ -18,10 +18,13 @@ export const FILTER_FIELDS = ['actor', 'resource', 'action', 'result', 'source']
 const COMMA_SPLIT_FIELDS = new Set(['resource', 'action', 'result', 'source']);
 
 // Upper bound on filter values per field, so a crafted URL can't build an
-// enormous filter set. Far above anything the admin UI emits: the checkbox
-// control writes the exclusion form, which stays small even when most options
-// are unticked.
-export const MAX_FILTER_VALUES = 500;
+// enormous filter set. Only hygiene — matching a value is a Set lookup either
+// way — so it is set well above what the checkbox UI can emit: that control
+// writes whichever of the include/exclude forms is expressible, and the
+// shorter of the two never exceeds half the number of distinct values in the
+// date range. `MAX_FILTER_VALUES` in
+// `client/src/features/admin/utils/auditLogFilters.js` must match.
+export const MAX_FILTER_VALUES = 2000;
 
 // Upper bound on the free-text search term.
 export const MAX_QUERY_LENGTH = 200;

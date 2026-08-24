@@ -1813,7 +1813,8 @@
       },
       "presets": {
         "label": "Quick filters",
-        "last24h": "Last 24 hours",
+        "today": "Today",
+        "todayAndYesterday": "Today & yesterday",
         "last7Days": "Last 7 days",
         "last30Days": "Last 30 days",
         "hideSignIns": "Hide sign-ins",
