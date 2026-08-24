@@ -13,6 +13,7 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import FileSystemHandler from '../sources/FileSystemHandler.js';
+import SourceManager from '../sources/SourceManager.js';
 
 describe('FileSystemHandler sources/ containment', () => {
   let tempDir;
@@ -83,8 +84,74 @@ describe('FileSystemHandler sources/ containment', () => {
     assert.strictEqual(written, 'hello');
   });
 
+  it('tolerates a leading slash on a path under sources/', async () => {
+    // SourceManager.testFilesystemSource() delegates to this same method, so
+    // both entry points agree on what a valid path looks like.
+    const resolved = await handler.resolveSourcePath('/sources/faq.md');
+    assert.strictEqual(resolved, path.join(await fs.realpath(tempDir), 'sources', 'faq.md'));
+  });
+
+  it('rejects a leading-slash path outside sources/', async () => {
+    await assert.rejects(
+      () => handler.resolveSourcePath('/config/groups.json'),
+      /outside allowed directory/
+    );
+  });
+
+  it('rejects traversal that escapes sources/ via ..', async () => {
+    await assert.rejects(
+      () => handler.resolveSourcePath('sources/../config/groups.json'),
+      /outside allowed directory/
+    );
+  });
+
   it('validateConfig rejects a path outside sources/', () => {
     assert.strictEqual(handler.validateConfig({ path: 'config/groups.json' }), false);
     assert.strictEqual(handler.validateConfig({ path: 'sources/faq.md' }), true);
+  });
+});
+
+describe('SourceManager.testFilesystemSource sources/ containment', () => {
+  let tempDir;
+  let manager;
+
+  before(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-source-manager-'));
+    await fs.mkdir(path.join(tempDir, 'config'), { recursive: true });
+    await fs.writeFile(path.join(tempDir, 'config', 'groups.json'), '{"secret":true}');
+
+    manager = new SourceManager({ filesystem: { basePath: tempDir } });
+    await manager.getHandler('filesystem').ensureSourcesDirectory();
+    await fs.writeFile(path.join(tempDir, 'sources', 'faq.md'), '# FAQ');
+  });
+
+  after(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('accepts a file under sources/', async () => {
+    const result = await manager.testFilesystemSource({ path: 'sources/faq.md' });
+    assert.strictEqual(result.accessible, true);
+  });
+
+  it('rejects a path outside sources/', async () => {
+    await assert.rejects(
+      () => manager.testFilesystemSource({ path: 'config/groups.json' }),
+      /within the sources directory/
+    );
+  });
+
+  it('agrees with the handler on leading-slash paths', async () => {
+    // Regression: the test endpoint used to skip sanitizeRelativePath(), so it
+    // rejected a leading-slash path the read/write path happily accepted.
+    const result = await manager.testFilesystemSource({ path: '/sources/faq.md' });
+    assert.strictEqual(result.accessible, true);
+  });
+
+  it('honours a custom contents basePath instead of hardcoding contents/', async () => {
+    // Regression: testFilesystemSource() used to resolve against
+    // <root>/contents/sources regardless of the handler's configured basePath.
+    const result = await manager.testFilesystemSource({ path: 'sources/faq.md' });
+    assert.strictEqual(result.fileSize, 5);
   });
 });
