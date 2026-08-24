@@ -19,10 +19,12 @@ const JWKS_CACHE_TTL_MS = 10 * 60 * 60 * 1000; // 10 hours
 const JWKS_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const jwksCache = new Map();
+// One in-flight request per URL. The throttle below is checked before the fetch
+// is awaited, so without this a burst of concurrent requests arriving after the
+// TTL expires would each start their own outbound call.
+const inFlightFetches = new Map();
 
-async function fetchJwks(jwkUrl, previous) {
-  // Record the attempt regardless of outcome so a persistently unreachable
-  // endpoint is retried on a fixed interval instead of on every request.
+async function requestJwks(jwkUrl, previous) {
   const attemptedAt = Date.now();
   try {
     const res = await httpFetch(jwkUrl);
@@ -32,16 +34,35 @@ async function fetchJwks(jwkUrl, previous) {
     return jwks;
   } catch (error) {
     logger.error('Error fetching JWKs', { component: 'ProxyAuth', error });
-    if (previous) jwksCache.set(jwkUrl, { ...previous, lastAttemptAt: attemptedAt });
+    // Record the attempt whatever the outcome, so an unreachable endpoint is
+    // retried on a fixed interval instead of on every request. This has to
+    // happen on a cold start too, where there is no stale document to carry
+    // over — otherwise an outage at startup turns into one outbound call per
+    // login attempt.
+    jwksCache.set(jwkUrl, {
+      jwks: previous?.jwks ?? null,
+      fetchedAt: previous?.fetchedAt ?? 0,
+      lastAttemptAt: attemptedAt
+    });
     return null;
   }
+}
+
+function fetchJwks(jwkUrl, previous) {
+  const inFlight = inFlightFetches.get(jwkUrl);
+  if (inFlight) return inFlight;
+
+  const pending = requestJwks(jwkUrl, previous).finally(() => inFlightFetches.delete(jwkUrl));
+  inFlightFetches.set(jwkUrl, pending);
+  return pending;
 }
 
 async function getJwks(jwkUrl, { forceRefresh = false } = {}) {
   const entry = jwksCache.get(jwkUrl);
   if (entry) {
-    const fresh = Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS;
-    const throttled = Date.now() - entry.lastAttemptAt < JWKS_REFRESH_MIN_INTERVAL_MS;
+    const now = Date.now();
+    const fresh = now - entry.fetchedAt < JWKS_CACHE_TTL_MS;
+    const throttled = now - entry.lastAttemptAt < JWKS_REFRESH_MIN_INTERVAL_MS;
     if ((fresh && !forceRefresh) || throttled) return entry.jwks;
   }
 

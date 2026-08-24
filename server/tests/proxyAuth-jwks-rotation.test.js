@@ -12,6 +12,7 @@ import { jest } from '@jest/globals';
 import * as jose from 'jose';
 
 const JWK_URL = 'https://idp.example.com/.well-known/jwks.json';
+const JWKS_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000; // mirrors proxyAuth.js
 const ISSUER = 'https://idp.example.com';
 const AUDIENCE = 'ihub';
 
@@ -150,6 +151,56 @@ describe('proxyAuth JWKS cache', () => {
       expect(rejected.req.user).toBeNull();
     }
     expect(httpFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('throttles retries when the very first fetch fails', async () => {
+    const key = await makeKey('key-1');
+    const token = await signWith(key);
+
+    // Cold start during an outage: nothing cached to fall back on.
+    httpFetch.mockRejectedValueOnce(new Error('JWKS endpoint unreachable'));
+    const first = await callProxyAuth(proxyAuth, token);
+    expect(first.req.user).toBeNull();
+    expect(httpFetch).toHaveBeenCalledTimes(1);
+
+    // Further logins inside the retry interval must not each hit the IdP.
+    now += 1000;
+    for (let i = 0; i < 3; i++) {
+      const rejected = await callProxyAuth(proxyAuth, token);
+      expect(rejected.req.user).toBeNull();
+    }
+    expect(httpFetch).toHaveBeenCalledTimes(1);
+
+    // Once the interval passes it tries again and recovers.
+    now += JWKS_REFRESH_MIN_INTERVAL_MS + 1;
+    serveJwks(key);
+    const recovered = await callProxyAuth(proxyAuth, token);
+    expect(httpFetch).toHaveBeenCalledTimes(2);
+    expect(recovered.req.user?.id).toBe('user@example.com');
+  });
+
+  it('collapses a concurrent burst into a single JWKS request', async () => {
+    const key = await makeKey('key-1');
+    const token = await signWith(key);
+
+    // Hold the response open so all five requests are in flight at once.
+    let release;
+    const gate = new Promise(resolve => {
+      release = resolve;
+    });
+    httpFetch.mockImplementation(async () => {
+      await gate;
+      return { ok: true, json: async () => ({ keys: [key.jwk] }) };
+    });
+
+    const inFlight = Array.from({ length: 5 }, () => callProxyAuth(proxyAuth, token));
+    release();
+    const results = await Promise.all(inFlight);
+
+    expect(httpFetch).toHaveBeenCalledTimes(1);
+    for (const result of results) {
+      expect(result.req.user?.id).toBe('user@example.com');
+    }
   });
 
   it('keeps serving the cached keys when a refresh fails', async () => {
