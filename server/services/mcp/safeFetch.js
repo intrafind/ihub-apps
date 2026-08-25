@@ -181,6 +181,12 @@ export async function safeFetch(input, init = {}, opts = {}) {
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family) }
     });
+    // A user-influenced URL reaching this call is the premise of this function,
+    // not a bug: resolveAndCheck() above resolved the hostname once and refused
+    // private/internal addresses unless explicitly allow-listed, and the
+    // dispatcher pins the socket to that vetted address so re-resolution cannot
+    // swing to localhost. CodeQL cannot model the guard.
+    // codeql[js/request-forgery]
     undiciFetch = (target, options) => globalThis.fetch(target, { ...options, dispatcher });
   } catch {
     // Fall through to node-http-based fetch
