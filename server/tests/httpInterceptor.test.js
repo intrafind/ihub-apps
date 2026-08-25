@@ -658,6 +658,125 @@ await check('raw mode reaches the emitted record end to end', async () => {
   assert.ok(!record.requestBody.includes('TRUNCATED'), 'raw mode ignores maxBodyBytes');
 });
 
+// ---------------------------------------------------------------------------
+// httpFetch: the transport/observation split
+// ---------------------------------------------------------------------------
+//
+// httpFetch was split into proxiedFetch (applies proxy/SSL, sends) plus a thin
+// httpFetch wrapper (observes). These check the seam did not drop anything:
+// scheme validation moved into proxiedFetch, and interception has to be
+// transparent to the caller in both directions.
+
+const { httpFetch } = await import('../utils/httpConfig.js');
+
+/** Serve one canned response and return its URL. */
+async function withServer(handler, run) {
+  const server = http.createServer(handler);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    return await run(`http://127.0.0.1:${server.address().port}`);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+await check('httpFetch still rejects a non-http(s) scheme, interception on or off', async () => {
+  setHttpConfig(undefined);
+  await assert.rejects(httpFetch('ministral'), /Unsupported URL scheme "ministral"/);
+
+  // Enabled too: the predicate runs first now, so a bad scheme must still reach
+  // the caller as the same error rather than being swallowed by the wrapper.
+  setHttpConfig(ALL_ON);
+  await assert.rejects(httpFetch('ministral'), /Unsupported URL scheme "ministral"/);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const record = records().find(r => r.direction === 'outbound');
+  assert.ok(record, 'a rejected scheme is worth a record — it is a real failure mode');
+  assert.match(record.error, /Unsupported URL scheme/);
+});
+
+await check('httpFetch is transparent when the interceptor is disabled', async () => {
+  setHttpConfig({ inbound: { enabled: false }, outbound: { enabled: false } });
+  await withServer(
+    (req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ ok: true, path: req.url, method: req.method }));
+    },
+    async base => {
+      const response = await httpFetch(`${base}/v1/models`, { method: 'GET' });
+      assert.strictEqual(response.status, 200);
+      assert.deepStrictEqual(await response.json(), {
+        ok: true,
+        path: '/v1/models',
+        method: 'GET'
+      });
+    }
+  );
+  assert.strictEqual(records().length, 0, 'a disabled interceptor must emit nothing');
+});
+
+await check('httpFetch is transparent when the interceptor is enabled, and records', async () => {
+  setHttpConfig(ALL_ON);
+  await withServer(
+    (req, res) => {
+      let raw = '';
+      req.on('data', chunk => (raw += chunk));
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ echoed: JSON.parse(raw || '{}') }));
+      });
+    },
+    async base => {
+      const response = await httpFetch(`${base}/v1/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer sk-transparency' },
+        body: JSON.stringify({ model: 'gpt-4' })
+      });
+      // The caller's body must still be readable: the interceptor peeks a clone.
+      assert.deepStrictEqual(await response.json(), { echoed: { model: 'gpt-4' } });
+    }
+  );
+
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const record = records().find(r => r.direction === 'outbound');
+  assert.ok(record, 'the call should have been recorded');
+  assert.strictEqual(record.status, 200);
+  assert.strictEqual(record.method, 'POST');
+  assert.ok(record.requestBody.includes('gpt-4'));
+  assert.ok(!JSON.stringify(record).includes('sk-transparency'), 'header secret leaked');
+  // `lookup` is a proxiedFetch-only option and an agent is noise in a log; the
+  // record should show what the caller asked for.
+  assert.strictEqual(record.requestHeaders['content-type'], 'application/json');
+});
+
+await check("httpFetch still applies the SSRF guard's pinned DNS lookup", async () => {
+  setHttpConfig(ALL_ON);
+  await withServer(
+    (req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ ok: true }));
+    },
+    async base => {
+      let pinnedFor = null;
+      // A hostname, not an IP literal: Node skips DNS resolution entirely for
+      // `127.0.0.1`, so the lookup would never be consulted.
+      const url = base.replace('127.0.0.1', 'localhost');
+      const response = await httpFetch(`${url}/ping`, {
+        method: 'GET',
+        lookup: (hostname, opts, cb) => {
+          pinnedFor = hostname;
+          if (opts && opts.all) cb(null, [{ address: '127.0.0.1', family: 4 }]);
+          else cb(null, '127.0.0.1', 4);
+        }
+      });
+      assert.strictEqual(response.status, 200);
+      // `lookup` is a proxiedFetch-only option: it has to reach the agent and
+      // must not be forwarded to node-fetch. If the split dropped it, workflow
+      // HTTP nodes would silently lose their DNS pinning.
+      assert.strictEqual(pinnedFor, 'localhost', 'the pinned lookup was not applied');
+    }
+  );
+});
+
 logger.debug = realDebug;
 logger.info = realInfo;
 
