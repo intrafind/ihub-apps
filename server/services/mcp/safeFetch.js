@@ -148,7 +148,7 @@ function makePinnedAgent(pinnedAddress, family, isHttps) {
  * The original hostname is preserved in the `Host` header (and SNI) so TLS
  * cert validation still works against the public name.
  */
-export async function safeFetch(input, init = {}, opts = {}) {
+async function pinnedFetch(input, init = {}, opts = {}) {
   const url = typeof input === 'string' ? new URL(input) : input;
   if (!['http:', 'https:'].includes(url.protocol)) {
     const e = new Error(`Unsupported protocol: ${url.protocol}`);
@@ -163,45 +163,50 @@ export async function safeFetch(input, init = {}, opts = {}) {
   );
   const agent = makePinnedAgent(address, family, url.protocol === 'https:');
 
-  // Wire log (off by default — see logging.http in platform.json). This
-  // transport needs its own hook: it deliberately bypasses `httpFetch` so the
-  // socket stays pinned to the address the SSRF guard vetted.
-  const intercept = isOutboundEnabled(url);
-
   // Node 18+ `fetch` (undici) does not accept the legacy `agent` option, so
   // when running under undici we set a dispatcher. When undici is unavailable
   // (older Node) we fall back to http.request via a thin shim.
-  //
-  // Only the `import('undici')` failure means "no undici, use the shim" — a
-  // rejection from the request itself has to reach the caller, so the two are
-  // separated rather than sharing one catch.
-  let undiciFetch;
   try {
     const undici = await import('undici');
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family) }
     });
-    // A user-influenced URL reaching this call is the premise of this function,
-    // not a bug: resolveAndCheck() above resolved the hostname once and refused
-    // private/internal addresses unless explicitly allow-listed, and the
-    // dispatcher pins the socket to that vetted address so re-resolution cannot
-    // swing to localhost. CodeQL cannot model the guard.
-    // codeql[js/request-forgery]
-    undiciFetch = (target, options) => globalThis.fetch(target, { ...options, dispatcher });
+    return await globalThis.fetch(url, { ...init, dispatcher });
   } catch {
     // Fall through to node-http-based fetch
   }
 
-  if (undiciFetch) {
-    return intercept
-      ? await interceptedFetch(undiciFetch, url, init, intercept, 'safeFetch')
-      : await undiciFetch(url, init);
-  }
+  return await nodeHttpFetch(url, init, agent);
+}
 
-  const shimFetch = (target, options) => nodeHttpFetch(target, options, agent);
-  return intercept
-    ? await interceptedFetch(shimFetch, url, init, intercept, 'safeFetch')
-    : await shimFetch(url, init);
+/**
+ * `pinnedFetch` plus the outbound wire log (off by default — see logging.http
+ * in platform.json).
+ *
+ * This transport needs its own hook because it deliberately bypasses
+ * `httpFetch`: the socket has to stay pinned to the address the SSRF guard
+ * vetted. Splitting observation from the transport keeps `pinnedFetch` focused
+ * on that guarantee, and mirrors how `utils/httpConfig.js` wraps its own
+ * `proxiedFetch`.
+ *
+ * A rejected URL (bad protocol, SSRF-blocked host) is recorded and rethrown, so
+ * the wire log shows the refusal rather than going silent on it.
+ *
+ * @param {string|URL} input - Target URL.
+ * @param {Object} [init] - Standard fetch options.
+ * @param {Object} [opts] - `allowHosts` / `blockPrivateIps` for the SSRF guard.
+ * @returns {Promise<Response>}
+ */
+export async function safeFetch(input, init = {}, opts = {}) {
+  const intercept = isOutboundEnabled(input);
+  if (!intercept) return pinnedFetch(input, init, opts);
+  return interceptedFetch(
+    (target, options) => pinnedFetch(target, options, opts),
+    input,
+    init,
+    intercept,
+    'safeFetch'
+  );
 }
 
 /**

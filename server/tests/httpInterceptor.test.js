@@ -777,6 +777,56 @@ await check("httpFetch still applies the SSRF guard's pinned DNS lookup", async 
   );
 });
 
+// ---------------------------------------------------------------------------
+// safeFetch: the same transport/observation split
+// ---------------------------------------------------------------------------
+
+const { safeFetch } = await import('../services/mcp/safeFetch.js');
+
+await check('safeFetch keeps its SSRF guard and records through the wrapper', async () => {
+  // The previous check's response-body peek is detached, so its record can land
+  // after the buffer is cleared. Let it settle, then select by transport.
+  await new Promise(resolve => setTimeout(resolve, 30));
+  setHttpConfig(ALL_ON);
+  await withServer(
+    (req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ tools: [] }));
+    },
+    async base => {
+      const url = `${base.replace('127.0.0.1', 'localhost')}/mcp`;
+
+      // The guard still refuses a private address that was not allow-listed —
+      // wrapping the transport must not weaken it.
+      await assert.rejects(safeFetch(url), /SSRF guard|private IP/);
+
+      // With the host allow-listed the call goes through and is recorded.
+      const response = await safeFetch(url, { method: 'POST' }, { allowHosts: ['localhost'] });
+      assert.strictEqual(response.status, 200);
+      await new Promise(resolve => setTimeout(resolve, 30));
+
+      const outbound = records().filter(
+        r => r.direction === 'outbound' && r.transport === 'safeFetch'
+      );
+      assert.ok(
+        outbound.length >= 2,
+        `expected the refusal and the success attributed to safeFetch, got ${outbound.length}`
+      );
+      // A refusal is exactly what someone debugging an MCP server needs to see.
+      assert.ok(
+        outbound.some(r => /SSRF guard|private IP/.test(r.error || '')),
+        'the SSRF refusal should appear in the wire log'
+      );
+      assert.ok(outbound.some(r => r.status === 200));
+    }
+  );
+});
+
+await check('safeFetch rejects an unsupported protocol through the wrapper', async () => {
+  setHttpConfig(ALL_ON);
+  await assert.rejects(safeFetch('ftp://example.com/x'), /Unsupported protocol/);
+});
+
 logger.debug = realDebug;
 logger.info = realInfo;
 
