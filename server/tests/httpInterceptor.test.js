@@ -794,14 +794,19 @@ await check('safeFetch keeps its SSRF guard and records through the wrapper', as
       res.end(JSON.stringify({ tools: [] }));
     },
     async base => {
-      const url = `${base.replace('127.0.0.1', 'localhost')}/mcp`;
+      // An IP literal, not `localhost`: on a dual-stack runner `localhost`
+      // resolves to ::1 first while this server is bound to 127.0.0.1, so the
+      // connection is refused. dns.lookup resolves literals as-is, so the SSRF
+      // guard is still exercised — and the DNS path itself is covered by the
+      // pinned-lookup check above.
+      const url = `${base}/mcp`;
 
       // The guard still refuses a private address that was not allow-listed —
       // wrapping the transport must not weaken it.
       await assert.rejects(safeFetch(url), /SSRF guard|private IP/);
 
       // With the host allow-listed the call goes through and is recorded.
-      const response = await safeFetch(url, { method: 'POST' }, { allowHosts: ['localhost'] });
+      const response = await safeFetch(url, { method: 'POST' }, { allowHosts: ['127.0.0.1'] });
       assert.strictEqual(response.status, 200);
       await new Promise(resolve => setTimeout(resolve, 30));
 
