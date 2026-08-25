@@ -44,7 +44,9 @@ function fakeReqRes() {
   createSseChannel({ req: helper.req, res: helper.res, id: 'a', map, component: 'Test' });
   assert.strictEqual(helper.headers['Content-Type'], 'text/event-stream');
   assert.strictEqual(helper.headers['Cache-Control'], 'no-cache');
-  assert.strictEqual(helper.headers['Connection'], 'keep-alive');
+  // Hop-by-hop headers are forbidden in HTTP/2 and must not be sent on SSE
+  // responses, or h2-translating proxies produce a malformed stream.
+  assert.strictEqual(helper.headers['Connection'], undefined);
   assert.strictEqual(helper.headers['X-Accel-Buffering'], 'no');
   assert.ok(map.has('a'), 'registers itself in the map');
   helper.triggerClose();

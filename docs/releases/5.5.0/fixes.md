@@ -119,3 +119,18 @@ leaving no trace of what failed.
 - Uncaught exceptions are logged and the process then exits deliberately. With `WORKERS` above 1 the
   affected worker is respawned automatically, as it already was for any other worker exit.
 - The standalone binary already behaved this way; the regular server now matches it.
+
+## Streaming Works Behind HTTP/2 Reverse Proxies
+
+Chat responses and long-running tool jobs stopped mid-stream — or never started — for users behind a
+reverse proxy that serves iHub over HTTP/2, typically shown in the browser as
+`ERR_HTTP2_PROTOCOL_ERROR`. iHub sent a `Connection: keep-alive` header on its event-stream
+responses; that header is forbidden in HTTP/2, so a proxy that forwards it instead of removing it
+produces a stream strict clients reject outright.
+
+- The header is no longer sent on chat streaming or job progress responses. HTTP/1.1 keeps
+  connections alive on its own, so nothing changes for deployments served over HTTP/1.1.
+- The same header is no longer sent on outbound calls either — to the iAssistant conversation API and
+  when fetching web pages for URL sources and the web content extractor — so those requests survive
+  an intermediary that converts them to HTTP/2.
+- No configuration change is needed.
