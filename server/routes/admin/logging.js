@@ -1,5 +1,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
+import { applyHttpInterceptorConfig } from '../../utils/httpInterceptor.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
@@ -216,6 +217,10 @@ export default function registerAdminLoggingRoutes(app) {
 
       // Reconfigure logger to pick up changes
       logger.reconfigureLogger();
+
+      // Other workers pick this up through configReloadHooks; the one that
+      // served the request has to re-anchor the interceptor itself.
+      applyHttpInterceptorConfig();
 
       logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 

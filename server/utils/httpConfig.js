@@ -11,6 +11,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { isOutboundEnabled, interceptedFetch } from './httpInterceptor.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -492,5 +493,11 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
   // (used by the workflow SSRF guard to pin connections to validated IPs).
   const { lookup = null, ...fetchOptions } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
-  return nodeFetch(url, enhanced);
+
+  // Wire log (off by default — see logging.http in platform.json). This is the
+  // chokepoint for every outbound call in the server except the MCP/OpenAPI
+  // transport, which has its own hook in services/mcp/safeFetch.js.
+  const intercept = isOutboundEnabled(url);
+  if (!intercept) return nodeFetch(url, enhanced);
+  return interceptedFetch(nodeFetch, url, enhanced, intercept, 'httpFetch');
 }

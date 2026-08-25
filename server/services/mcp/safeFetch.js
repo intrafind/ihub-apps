@@ -3,6 +3,7 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 import configCache from '../../configCache.js';
+import { isOutboundEnabled, interceptedFetch } from '../../utils/httpInterceptor.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -162,20 +163,39 @@ export async function safeFetch(input, init = {}, opts = {}) {
   );
   const agent = makePinnedAgent(address, family, url.protocol === 'https:');
 
+  // Wire log (off by default — see logging.http in platform.json). This
+  // transport needs its own hook: it deliberately bypasses `httpFetch` so the
+  // socket stays pinned to the address the SSRF guard vetted.
+  const intercept = isOutboundEnabled(url);
+
   // Node 18+ `fetch` (undici) does not accept the legacy `agent` option, so
   // when running under undici we set a dispatcher. When undici is unavailable
   // (older Node) we fall back to http.request via a thin shim.
+  //
+  // Only the `import('undici')` failure means "no undici, use the shim" — a
+  // rejection from the request itself has to reach the caller, so the two are
+  // separated rather than sharing one catch.
+  let undiciFetch;
   try {
     const undici = await import('undici');
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family) }
     });
-    return await globalThis.fetch(url, { ...init, dispatcher });
+    undiciFetch = (target, options) => globalThis.fetch(target, { ...options, dispatcher });
   } catch {
     // Fall through to node-http-based fetch
   }
 
-  return await nodeHttpFetch(url, init, agent);
+  if (undiciFetch) {
+    return intercept
+      ? await interceptedFetch(undiciFetch, url, init, intercept, 'safeFetch')
+      : await undiciFetch(url, init);
+  }
+
+  const shimFetch = (target, options) => nodeHttpFetch(target, options, agent);
+  return intercept
+    ? await interceptedFetch(shimFetch, url, init, intercept, 'safeFetch')
+    : await shimFetch(url, init);
 }
 
 /**

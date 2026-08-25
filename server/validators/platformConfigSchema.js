@@ -73,6 +73,52 @@ const ipAnonymizationSchema = z
   .union([z.boolean(), z.enum(['off', 'mask', 'drop'])])
   .default(false);
 
+// Shared by the inbound and outbound halves of the HTTP interceptor. The two
+// differ only in how they select traffic (methods/paths vs hosts), so the
+// capture switches live here.
+const httpInterceptorDirectionSchema = {
+  enabled: z.boolean().default(false),
+  includeHeaders: z.boolean().default(true),
+  includeRequestBody: z.boolean().default(false),
+  includeResponseBody: z.boolean().default(false)
+};
+
+const httpInterceptorSchema = z
+  .object({
+    inbound: z
+      .object({
+        ...httpInterceptorDirectionSchema,
+        // Empty array = every method.
+        methods: z.array(z.string()).default([]),
+        // Empty allowlist = every path except the denylist. Entries match a
+        // path exactly or as a path-segment prefix (`/api/health` also covers
+        // `/api/health/live`, but not `/api/healthcheck`).
+        pathAllowlist: z.array(z.string()).default([]),
+        pathDenylist: z.array(z.string()).default(['/api/health'])
+      })
+      .default({}),
+    outbound: z
+      .object({
+        ...httpInterceptorDirectionSchema,
+        // Host patterns use the same semantics as `ssl.domainWhitelist`:
+        // `*.example.com` / `.example.com` mean subdomains only.
+        hostAllowlist: z.array(z.string()).default([]),
+        hostDenylist: z.array(z.string()).default([])
+      })
+      .default({}),
+    // Byte cap per captured body. 0 means uncapped — which can hold a whole
+    // upload in memory, so pair it with autoDisableAfterMinutes.
+    maxBodyBytes: z.number().default(8192),
+    // Skip redaction and the byte cap entirely. For the case where the
+    // redaction is hiding the value you are chasing; it writes credentials to
+    // the log in clear text.
+    rawBodies: z.boolean().default(false),
+    // Stop capturing this long after capture was switched on, so an
+    // interceptor left on in production turns itself off. 0 = never.
+    autoDisableAfterMinutes: z.number().default(60)
+  })
+  .default({});
+
 const loggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   format: z.enum(['json', 'text']).default('json'),
@@ -94,7 +140,12 @@ const loggingSchema = z.object({
       filter: z.array(z.string()).default([])
     })
     .default({}),
-  anonymizeIp: ipAnonymizationSchema
+  anonymizeIp: ipAnonymizationSchema,
+  // Wire-level request/response capture (utils/httpInterceptor.js). Everything
+  // defaults off: with bodies enabled this records user prompts, uploaded
+  // document content and PII. Records are emitted at the `debug` level, so
+  // `logging.level` has to be `debug` or `silly` for them to appear at all.
+  http: httpInterceptorSchema
 });
 
 const usageTrackingRetentionSchema = z

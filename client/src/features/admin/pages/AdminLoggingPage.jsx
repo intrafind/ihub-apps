@@ -12,6 +12,52 @@ function normalizeAnonymizeIp(value) {
   return 'off';
 }
 
+// Mirrors `logging.http` in server/defaults/config/platform.json. Everything
+// off: with bodies enabled the interceptor records user prompts, uploaded
+// document content and PII.
+const DEFAULT_HTTP_CONFIG = {
+  inbound: {
+    enabled: false,
+    includeHeaders: true,
+    includeRequestBody: false,
+    includeResponseBody: false,
+    methods: [],
+    pathAllowlist: [],
+    pathDenylist: ['/api/health']
+  },
+  outbound: {
+    enabled: false,
+    includeHeaders: true,
+    includeRequestBody: false,
+    includeResponseBody: false,
+    hostAllowlist: [],
+    hostDenylist: []
+  },
+  maxBodyBytes: 8192,
+  rawBodies: false,
+  autoDisableAfterMinutes: 60
+};
+
+// The list-shaped settings (methods, path and host patterns) are edited as
+// comma-separated text so the form stays a single input per list.
+const listToText = value => (Array.isArray(value) ? value.join(', ') : '');
+const textToList = text =>
+  String(text)
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+
+/** Merge a loaded `logging.http` block over the defaults, one level deep. */
+function mergeHttpConfig(loaded) {
+  if (!loaded || typeof loaded !== 'object') return DEFAULT_HTTP_CONFIG;
+  return {
+    ...DEFAULT_HTTP_CONFIG,
+    ...loaded,
+    inbound: { ...DEFAULT_HTTP_CONFIG.inbound, ...(loaded.inbound || {}) },
+    outbound: { ...DEFAULT_HTTP_CONFIG.outbound, ...(loaded.outbound || {}) }
+  };
+}
+
 function AdminLoggingPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -49,6 +95,7 @@ function AdminLoggingPage() {
       ntlm: { enabled: true }
     }
   });
+  const [httpConfig, setHttpConfig] = useState(DEFAULT_HTTP_CONFIG);
   // Both anonymizeIp settings accept boolean | 'off' | 'mask' | 'drop' on the
   // server. The UI normalises everything to the string form so the <select>
   // always has a single source of truth.
@@ -198,6 +245,12 @@ function AdminLoggingPage() {
       id: 'ConfigLoader',
       name: 'Config Loader',
       description: 'Configuration file loading, parsing, and validation'
+    },
+    {
+      id: 'HttpInterceptor',
+      name: 'HTTP Interceptor',
+      description:
+        'Raw inbound and outbound HTTP requests and responses captured by the HTTP interceptor'
     }
   ];
 
@@ -236,6 +289,8 @@ function AdminLoggingPage() {
           includeLevel: true
         }
       });
+
+      setHttpConfig(mergeHttpConfig(loadedConfig.http));
 
       // Load platform config for auth debug settings. The canonical location is
       // `auth.debug` (what the server reads); merge over defaults so any fields
@@ -370,6 +425,50 @@ function AdminLoggingPage() {
       setSaving(false);
     }
   };
+
+  const handleSaveHttpConfig = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+
+      // The logging PUT shallow-merges its body into platform.json's logging
+      // block, so sending only `http` leaves the other sections alone.
+      await makeAdminApiCall('/admin/logging/config', {
+        method: 'PUT',
+        body: { http: httpConfig }
+      });
+
+      setMessage({
+        type: 'success',
+        text: t('admin.logging.httpSaveSuccess', 'HTTP interceptor settings saved successfully')
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text:
+          error.message ||
+          t('admin.logging.httpSaveError', 'Failed to save HTTP interceptor settings')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Convenience setter for the two direction cards, which are structurally
+  // identical apart from how they select traffic.
+  const setDirection = (direction, patch) =>
+    setHttpConfig(prev => ({ ...prev, [direction]: { ...prev[direction], ...patch } }));
+
+  const httpCaptureOn = httpConfig.inbound?.enabled || httpConfig.outbound?.enabled;
+  // Records are emitted at the `debug` level. Enabling capture while the level
+  // is higher produces nothing at all, which is a confusing way to find out.
+  const httpLevelTooHigh = httpCaptureOn && !['debug', 'silly'].includes(loggingConfig.level);
+  const httpBodiesOn = Boolean(
+    httpConfig.inbound?.includeRequestBody ||
+    httpConfig.inbound?.includeResponseBody ||
+    httpConfig.outbound?.includeRequestBody ||
+    httpConfig.outbound?.includeResponseBody
+  );
 
   const handleLevelChange = newLevel => {
     setLoggingConfig(prev => ({ ...prev, level: newLevel }));
@@ -812,6 +911,358 @@ function AdminLoggingPage() {
           </div>
         </div>
 
+        {/* HTTP Interceptor */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
+            <Icon name="ArrowsRightLeftIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.httpSection', 'HTTP Interceptor')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.httpDescription',
+              'Records the raw HTTP traffic on both sides: every request this server serves, and every request it makes to LLM providers, integrations and MCP servers. Each record carries the request ID, so an outbound provider call can be traced back to the chat request that caused it. Records are written at the "debug" level under the component "HttpInterceptor".'
+            )}
+          </p>
+
+          <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+            <div className="flex items-start">
+              <Icon
+                name="ExclamationTriangleIcon"
+                className="w-5 h-5 mr-2 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+              />
+              <div className="text-sm text-amber-800 dark:text-amber-300">
+                {t(
+                  'admin.logging.httpWarning',
+                  'Turn this on to chase a specific problem, then turn it off. With bodies enabled it captures user prompts, uploaded document content and personal data. Credentials are masked unless raw mode is on.'
+                )}
+              </div>
+            </div>
+          </div>
+
+          {httpLevelTooHigh && (
+            <div className="mb-4 rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-4">
+              <div className="flex items-start">
+                <Icon
+                  name="InformationCircleIcon"
+                  className="w-5 h-5 mr-2 text-yellow-700 dark:text-yellow-400 flex-shrink-0 mt-0.5"
+                />
+                <div className="text-sm text-yellow-800 dark:text-yellow-300">
+                  {t(
+                    'admin.logging.httpLevelWarning',
+                    'Capture is on, but the log level is above "debug" — no records will be written. Set the log level to "debug" for these records to appear.'
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Inbound */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={httpConfig.inbound?.enabled || false}
+                  onChange={e => setDirection('inbound', { enabled: e.target.checked })}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.logging.httpInbound', 'Capture inbound requests')}
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                {t(
+                  'admin.logging.httpInboundHelp',
+                  'Requests served by this server. Static assets are always skipped.'
+                )}
+              </p>
+
+              {httpConfig.inbound?.enabled && (
+                <div className="mt-3 ml-6 space-y-3 border-l-2 border-blue-200 dark:border-blue-800 pl-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.inbound?.includeHeaders !== false}
+                      onChange={e => setDirection('inbound', { includeHeaders: e.target.checked })}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeHeaders', 'Include headers')}
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.inbound?.includeRequestBody || false}
+                      onChange={e =>
+                        setDirection('inbound', { includeRequestBody: e.target.checked })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeRequestBody', 'Include request bodies')}
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.inbound?.includeResponseBody || false}
+                      onChange={e =>
+                        setDirection('inbound', { includeResponseBody: e.target.checked })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeResponseBody', 'Include response bodies')}
+                    </span>
+                  </label>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.httpMethods', 'Methods')}
+                    </label>
+                    <input
+                      type="text"
+                      value={listToText(httpConfig.inbound?.methods)}
+                      onChange={e =>
+                        setDirection('inbound', { methods: textToList(e.target.value) })
+                      }
+                      placeholder={t('admin.logging.httpAllPlaceholder', 'Empty = all')}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.httpPathAllowlist', 'Path allowlist')}
+                    </label>
+                    <input
+                      type="text"
+                      value={listToText(httpConfig.inbound?.pathAllowlist)}
+                      onChange={e =>
+                        setDirection('inbound', { pathAllowlist: textToList(e.target.value) })
+                      }
+                      placeholder="/api/chat, /api/admin"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t(
+                        'admin.logging.httpPathAllowlistHelp',
+                        'Empty captures every path except the denylist. Entries match a path exactly or as a path prefix.'
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.httpPathDenylist', 'Path denylist')}
+                    </label>
+                    <input
+                      type="text"
+                      value={listToText(httpConfig.inbound?.pathDenylist)}
+                      onChange={e =>
+                        setDirection('inbound', { pathDenylist: textToList(e.target.value) })
+                      }
+                      placeholder="/api/health"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Outbound */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={httpConfig.outbound?.enabled || false}
+                  onChange={e => setDirection('outbound', { enabled: e.target.checked })}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.logging.httpOutbound', 'Capture outbound requests')}
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                {t(
+                  'admin.logging.httpOutboundHelp',
+                  'Requests this server makes: LLM providers, integrations, MCP servers, web search.'
+                )}
+              </p>
+
+              {httpConfig.outbound?.enabled && (
+                <div className="mt-3 ml-6 space-y-3 border-l-2 border-blue-200 dark:border-blue-800 pl-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.outbound?.includeHeaders !== false}
+                      onChange={e => setDirection('outbound', { includeHeaders: e.target.checked })}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeHeaders', 'Include headers')}
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.outbound?.includeRequestBody || false}
+                      onChange={e =>
+                        setDirection('outbound', { includeRequestBody: e.target.checked })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeRequestBody', 'Include request bodies')}
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={httpConfig.outbound?.includeResponseBody || false}
+                      onChange={e =>
+                        setDirection('outbound', { includeResponseBody: e.target.checked })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.httpIncludeResponseBody', 'Include response bodies')}
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.logging.httpStreamNote',
+                      'Streamed responses (chat, agents, workflows) are recorded with status, headers and timing, but their bodies are never buffered.'
+                    )}
+                  </p>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.httpHostAllowlist', 'Host allowlist')}
+                    </label>
+                    <input
+                      type="text"
+                      value={listToText(httpConfig.outbound?.hostAllowlist)}
+                      onChange={e =>
+                        setDirection('outbound', { hostAllowlist: textToList(e.target.value) })
+                      }
+                      placeholder="api.openai.com, *.anthropic.com"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t(
+                        'admin.logging.httpHostAllowlistHelp',
+                        'Empty captures every host except the denylist. "*.example.com" matches subdomains only.'
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.httpHostDenylist', 'Host denylist')}
+                    </label>
+                    <input
+                      type="text"
+                      value={listToText(httpConfig.outbound?.hostDenylist)}
+                      onChange={e =>
+                        setDirection('outbound', { hostDenylist: textToList(e.target.value) })
+                      }
+                      placeholder="telemetry.example.com"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Shared limits */}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('admin.logging.httpMaxBodyBytes', 'Max body size (bytes)')}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={httpConfig.maxBodyBytes ?? 8192}
+                onChange={e =>
+                  setHttpConfig(prev => ({
+                    ...prev,
+                    maxBodyBytes: Math.max(0, parseInt(e.target.value, 10) || 0)
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.httpMaxBodyBytesHelp',
+                  'Captured bodies are truncated at this size and the record says how much was dropped. 0 means no limit, which can hold a whole upload in memory.'
+                )}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('admin.logging.httpAutoDisable', 'Auto-disable after (minutes)')}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={httpConfig.autoDisableAfterMinutes ?? 60}
+                onChange={e =>
+                  setHttpConfig(prev => ({
+                    ...prev,
+                    autoDisableAfterMinutes: Math.max(0, parseInt(e.target.value, 10) || 0)
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.httpAutoDisableHelp',
+                  'Capture stops on its own this long after it was switched on, so an interceptor left running in production turns itself off. Saving again restarts the window. 0 means never.'
+                )}
+              </p>
+            </div>
+          </div>
+
+          {httpBodiesOn && (
+            <div className="mt-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={httpConfig.rawBodies || false}
+                  onChange={e => setHttpConfig(prev => ({ ...prev, rawBodies: e.target.checked }))}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  {t('admin.logging.httpRawBodies', 'Raw mode (no redaction, no size limit)')}
+                </span>
+              </label>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">
+                {t(
+                  'admin.logging.httpRawBodiesWarning',
+                  'Security risk: writes API keys, tokens, cookies and full request bodies to the log in clear text. For the case where redaction is hiding the value you are chasing — turn it off again straight afterwards.'
+                )}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <button
+              onClick={handleSaveHttpConfig}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+            >
+              {saving
+                ? t('common.saving', 'Saving...')
+                : t('admin.logging.saveHttp', 'Save HTTP Interceptor Settings')}
+            </button>
+          </div>
+        </div>
+
         {/* Authentication Debug Logging */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
@@ -1006,6 +1457,12 @@ function AdminLoggingPage() {
                   {t(
                     'admin.logging.note5',
                     'Authentication debug logging applies immediately (no restart) and its traces are emitted at the "info" level, so they show at the default log level'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'admin.logging.note6',
+                    'The HTTP interceptor writes its records at the "debug" level under the component "HttpInterceptor" — set the log level to "debug" to see them'
                   )}
                 </li>
               </ul>

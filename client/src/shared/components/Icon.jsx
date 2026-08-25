@@ -3,6 +3,7 @@ import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowsRightLeftIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
   ArrowDownTrayIcon,
@@ -392,6 +393,7 @@ const iconMap = {
   ShieldCheckIcon: { outline: OutlineShieldCheckIcon, solid: SolidShieldCheckIcon },
   CheckIcon: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
   SignalIcon: { outline: OutlineSignalIcon, solid: SolidSignalIcon },
+  ArrowsRightLeftIcon: { outline: ArrowsRightLeftIcon, solid: ArrowsRightLeftIcon },
   // Aliases for kebab-case names that match existing imported icons
   'arrow-left': { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
   'code-bracket': { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },

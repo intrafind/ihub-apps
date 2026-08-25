@@ -1,5 +1,29 @@
 # Fixes — 5.5.0
 
+## Google Grounding Link Resolution Honours Proxy and SSL Settings
+
+Workflow prompt nodes resolve Google grounding redirect links before handing citations back. That
+one call used raw `fetch()` and so ignored the platform's proxy, `NO_PROXY` and SSL settings,
+unlike every other outbound call in the server. On deployments that require an egress proxy the
+resolution silently failed and citations fell back to a stripped URL.
+
+- The call now goes through the same `httpFetch` path as everything else, so it honours
+  `proxy.*` and `ssl.*` from `platform.json` and shows up in the HTTP interceptor's outbound log.
+- No configuration changes are required.
+
+## MCP and OpenAPI Requests No Longer Retry Silently on a Network Error
+
+`safeFetch` — the SSRF-guarded transport behind MCP server connections and the OpenAPI tool runner
+— wrapped both the undici capability probe and the request itself in one `try`/`catch`. A genuine
+network failure (connection refused, TLS error, abort) was therefore treated as "undici is
+unavailable" and the request was silently retried through a minimal fallback client, which
+reported a different, more confusing error than the real one.
+
+- The capability probe and the request are now separate, so a failed request surfaces its own error
+  instead of being retried against a different transport.
+- No configuration changes are required.
+
+
 ## The Admin Dashboard No Longer Waits for the GitHub Update Check
 
 On installations without outbound internet access, the admin start page showed nothing but grey

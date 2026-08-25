@@ -232,6 +232,28 @@
       "maxSize": 10485760,
       "maxFiles": 5
     },
+    "http": {
+      "inbound": {
+        "enabled": false,
+        "includeHeaders": true,
+        "includeRequestBody": false,
+        "includeResponseBody": false,
+        "methods": [],
+        "pathAllowlist": [],
+        "pathDenylist": ["/api/health"]
+      },
+      "outbound": {
+        "enabled": false,
+        "includeHeaders": true,
+        "includeRequestBody": false,
+        "includeResponseBody": false,
+        "hostAllowlist": [],
+        "hostDenylist": []
+      },
+      "maxBodyBytes": 8192,
+      "rawBodies": false,
+      "autoDisableAfterMinutes": 60
+    },
     "anonymizeIp": false
   },
   "audit": {
