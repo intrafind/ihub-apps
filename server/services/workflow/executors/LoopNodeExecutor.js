@@ -131,9 +131,18 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       array,
       condition,
       maxIterations = 50,
-      body = [],
+      body: inlineBody = [],
       outputVariable
     } = config;
+
+    // Body resolution order:
+    // 1. Inline `config.body` (legacy / serializer-generated workflows)
+    // 2. Container children — workflow nodes whose `parentId` is this loop
+    //    node, ordered by the edges between them (visual editor containers)
+    const body =
+      Array.isArray(inlineBody) && inlineBody.length > 0
+        ? inlineBody
+        : this.resolveContainerBody(node, context);
 
     // Hard cap prevents runaway loops regardless of user configuration.
     // Raised from 200 → 500 to support per-document analysis over larger
@@ -210,6 +219,29 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           }
 
           const iterArr = resolvedArray.slice(0, hardCap);
+
+          // Optional bounded parallelism for forEach: run up to `concurrency`
+          // iterations at once. Each iteration works on a snapshot of the
+          // PRE-LOOP state — cross-iteration state writes are intentionally
+          // NOT propagated in parallel mode (only the collected results in
+          // `outputVariable` and step logs survive), because concurrent
+          // last-write-wins merging would be non-deterministic.
+          const concurrency = Math.max(1, Math.min(parseInt(config.concurrency, 10) || 1, 10));
+          if (concurrency > 1) {
+            const parallelOutcome = await this.executeForEachParallel(
+              node,
+              state,
+              context,
+              iterArr,
+              body,
+              concurrency,
+              chatId
+            );
+            results.push(...parallelOutcome.results);
+            iterationTimings.push(...parallelOutcome.iterationTimings);
+            break;
+          }
+
           for (let i = 0; i < iterArr.length; i++) {
             if (context.abortSignal?.aborted) break;
             currentState.data._loopIndex = i;
@@ -451,6 +483,124 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         error: error.message
       });
     }
+  }
+
+  /**
+   * Resolve the loop body from container children: workflow nodes whose
+   * `parentId` is this loop node, ordered by the edges between siblings
+   * (Kahn topological order; entry = child with no incoming sibling edge).
+   * Children not reachable through sibling edges are appended in their
+   * original array order so a disconnected body node still executes.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowNode} node - The loop node
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @returns {Array<import('./BaseNodeExecutor.js').WorkflowNode>} Ordered body nodes
+   */
+  resolveContainerBody(node, context) {
+    const wfNodes = context?.workflow?.nodes;
+    if (!Array.isArray(wfNodes)) return [];
+    const children = wfNodes.filter(n => n?.parentId === node.id);
+    if (children.length <= 1) return children;
+
+    const childIds = new Set(children.map(c => c.id));
+    const wfEdges = (context.workflow.edges || []).filter(
+      e => childIds.has(e.source) && childIds.has(e.target)
+    );
+
+    const inDegree = new Map(children.map(c => [c.id, 0]));
+    const adjacency = new Map(children.map(c => [c.id, []]));
+    for (const edge of wfEdges) {
+      adjacency.get(edge.source).push(edge.target);
+      inDegree.set(edge.target, inDegree.get(edge.target) + 1);
+    }
+
+    const queue = children.filter(c => inDegree.get(c.id) === 0).map(c => c.id);
+    const ordered = [];
+    const seen = new Set();
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(id);
+      for (const next of adjacency.get(id) || []) {
+        inDegree.set(next, inDegree.get(next) - 1);
+        if (inDegree.get(next) === 0) queue.push(next);
+      }
+    }
+    // Guard against sibling cycles: append anything Kahn couldn't order.
+    for (const child of children) {
+      if (!seen.has(child.id)) ordered.push(child.id);
+    }
+
+    const byId = new Map(children.map(c => [c.id, c]));
+    return ordered.map(id => byId.get(id));
+  }
+
+  /**
+   * Run forEach iterations with bounded parallelism. Each iteration executes
+   * the body against a snapshot of the pre-loop state; results are collected
+   * in item order. When an iteration fails, no new iterations are scheduled
+   * (in-flight ones finish). Cross-iteration state updates are discarded —
+   * only the returned results (and step logs) survive, keeping parallel runs
+   * deterministic.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowNode} node - The loop node
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Pre-loop workflow state
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @param {Array<*>} items - Array items to iterate over (already capped)
+   * @param {Array<import('./BaseNodeExecutor.js').WorkflowNode>} body - Body nodes
+   * @param {number} concurrency - Max iterations in flight (2-10)
+   * @param {string} chatId - SSE channel id
+   * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>}>}
+   */
+  async executeForEachParallel(node, state, context, items, body, concurrency, chatId) {
+    const results = new Array(items.length);
+    const iterationTimings = new Array(items.length);
+    let nextIndex = 0;
+    let stopScheduling = false;
+
+    const runOne = async i => {
+      const iterationState = {
+        ...state,
+        data: {
+          ...state.data,
+          _loopIndex: i,
+          _loopHuman: i + 1,
+          _loopItem: items[i],
+          _loopTotal: items.length
+        }
+      };
+      const bodyResult = await this.executeBodyNodes(body, iterationState, context, {
+        loopNodeId: node.id,
+        chatId,
+        iteration: i,
+        total: items.length
+      });
+      results[i] = bodyResult.output;
+      iterationTimings[i] = {
+        iteration: i,
+        startedAt: bodyResult.startedAt || null,
+        durationMs: bodyResult.durationMs || null,
+        failed: bodyResult.failed,
+        ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+      };
+      if (bodyResult.failed) stopScheduling = true;
+    };
+
+    const worker = async () => {
+      while (!stopScheduling && !context.abortSignal?.aborted && nextIndex < items.length) {
+        const i = nextIndex++;
+        await runOne(i);
+      }
+    };
+
+    const workerCount = Math.min(concurrency, items.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    return {
+      results: results.filter((_, i) => iterationTimings[i] !== undefined),
+      iterationTimings: iterationTimings.filter(t => t !== undefined)
+    };
   }
 
   /**

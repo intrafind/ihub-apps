@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { nodeFormRegistry } from './forms/index';
-import { NODE_TYPE_COLORS } from '../workflowEditorUtils';
+import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
+import { NodeTypeIcon } from '../nodes/nodeIcons';
 
 /**
  * Side panel for editing the selected workflow node's configuration.
@@ -10,11 +11,12 @@ import { NODE_TYPE_COLORS } from '../workflowEditorUtils';
  *
  * @param {object} props
  * @param {object} props.selectedNode - The currently selected React Flow node
+ * @param {Array<{value: string, label: string}>} [props.variables] - Workflow variables visible to this node
  * @param {function} props.onUpdateNode - Callback to update node data: (nodeId, { nodeName, nodeConfig }) => void
  * @param {function} props.onClose - Callback to close the panel
  * @param {function} props.onDeleteNode - Callback to delete a node: (nodeId) => void
  */
-export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteNode }) {
+export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose, onDeleteNode }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [config, setConfig] = useState({});
@@ -96,12 +98,14 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span
-            className="inline-block w-3 h-3 rounded-full shrink-0"
+            className="w-5 h-5 rounded flex items-center justify-center text-white shrink-0"
             style={{ backgroundColor: NODE_TYPE_COLORS[nodeType] || '#6B7280' }}
             aria-hidden="true"
-          />
+          >
+            <NodeTypeIcon type={nodeType} className="w-3 h-3" />
+          </span>
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-            {nodeType}
+            {NODE_TYPE_META[nodeType]?.label || nodeType}
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -138,6 +142,11 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
+        {NODE_TYPE_META[nodeType]?.description && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {NODE_TYPE_META[nodeType].description}
+          </p>
+        )}
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
             {t('workflows.editor.name', 'Name')}
@@ -175,16 +184,41 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose, onDeleteN
         </div>
 
         {activeTab === 'form' ? (
-          FormComponent ? (
-            <FormComponent config={config} onChange={handleConfigChange} />
-          ) : (
-            <div className="text-xs text-gray-500 dark:text-gray-400 italic">
-              {t(
-                'workflows.editor.noFormAvailable',
-                'No form available for this node type. Use the JSON tab.'
-              )}
-            </div>
-          )
+          <>
+            {FormComponent ? (
+              <FormComponent config={config} onChange={handleConfigChange} variables={variables} />
+            ) : (
+              <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {t(
+                  'workflows.editor.noFormAvailable',
+                  'No form available for this node type. Use the JSON tab.'
+                )}
+              </div>
+            )}
+            {nodeType !== 'start' && nodeType !== 'end' && (
+              <label className="flex items-center gap-2 cursor-pointer pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                <input
+                  type="checkbox"
+                  checked={config.chatVisible !== false}
+                  onChange={e =>
+                    handleConfigChange(
+                      e.target.checked
+                        ? (() => {
+                            const next = { ...config };
+                            delete next.chatVisible;
+                            return next;
+                          })()
+                        : { ...config, chatVisible: false }
+                    )
+                  }
+                  className="rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('workflows.editor.chatVisible', 'Show progress in chat')}
+                </span>
+              </label>
+            )}
+          </>
         ) : (
           <div>
             <textarea

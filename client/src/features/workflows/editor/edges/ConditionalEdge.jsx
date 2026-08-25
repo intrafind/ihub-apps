@@ -1,20 +1,35 @@
 import { getBezierPath, BaseEdge, EdgeLabelRenderer } from '@xyflow/react';
 
+/** Builds a short human-readable label for an edge condition. */
+export function conditionLabel(condition) {
+  if (!condition || !condition.type || condition.type === 'always') return null;
+  switch (condition.type) {
+    case 'never':
+      return 'never';
+    case 'equals':
+      if (condition.field === 'result.branch' && condition.value === 'true') return 'yes';
+      if (condition.field === 'result.branch' && condition.value === 'false') return 'no';
+      return `${condition.field} = ${condition.value}`;
+    case 'contains':
+      return `${condition.field} contains ${condition.value}`;
+    case 'exists':
+      return `${condition.field} exists`;
+    case 'expression': {
+      const expr = condition.expression || '';
+      return expr.length > 28 ? `${expr.slice(0, 25)}...` : expr || 'expression';
+    }
+    default:
+      return condition.type;
+  }
+}
+
 /**
- * Custom React Flow edge component for conditional workflow edges.
- * Renders a dashed line for "never" conditions and displays a label
- * showing the condition type and optional value.
+ * Custom React Flow edge component for workflow edges.
+ * Renders a dashed line for "never" conditions and a compact label
+ * summarizing the condition (e.g. "yes" / "no" on decision branches).
+ * Clicking the edge opens the edge condition editor (handled by the canvas).
  *
  * @param {object} props - React Flow edge props
- * @param {string} props.id - Edge identifier
- * @param {number} props.sourceX - Source X position
- * @param {number} props.sourceY - Source Y position
- * @param {number} props.targetX - Target X position
- * @param {number} props.targetY - Target Y position
- * @param {string} props.sourcePosition - Source handle position
- * @param {string} props.targetPosition - Target handle position
- * @param {object} props.data - Edge data with condition type and value
- * @param {object} props.style - Additional edge styles
  */
 export function ConditionalEdge({
   id,
@@ -25,6 +40,7 @@ export function ConditionalEdge({
   sourcePosition,
   targetPosition,
   data,
+  selected,
   style,
   ...props
 }) {
@@ -37,8 +53,13 @@ export function ConditionalEdge({
     targetPosition
   });
 
-  const isNever = data?.type === 'never';
-  const label = data?.type && data.type !== 'always' ? data.type : null;
+  const condition = data?.condition;
+  const isNever = condition?.type === 'never';
+  const customLabel =
+    data?.label && typeof data.label === 'object'
+      ? data.label.en || Object.values(data.label)[0]
+      : data?.label;
+  const label = customLabel || conditionLabel(condition);
 
   return (
     <>
@@ -48,7 +69,8 @@ export function ConditionalEdge({
         style={{
           ...style,
           strokeDasharray: isNever ? '5,5' : undefined,
-          stroke: isNever ? '#9CA3AF' : '#6B7280'
+          stroke: selected ? '#3B82F6' : isNever ? '#9CA3AF' : '#6B7280',
+          strokeWidth: selected ? 2 : 1.5
         }}
         {...props}
       />
@@ -61,7 +83,6 @@ export function ConditionalEdge({
             }}
           >
             {label}
-            {data?.value !== undefined && `: ${data.value}`}
           </div>
         </EdgeLabelRenderer>
       )}

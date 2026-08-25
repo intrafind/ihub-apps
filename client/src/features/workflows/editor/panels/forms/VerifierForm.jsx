@@ -4,11 +4,22 @@ import LocalizedField from './LocalizedField';
 import ResourcePicker from './ResourcePicker';
 import { fetchModels } from '../../../../../api/endpoints/models';
 
-function VerifierForm({ config, onChange }) {
+function VerifierForm({ config, onChange, variables }) {
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   return (
     <div className="space-y-3">
+      <FormField
+        label="Mode"
+        type="select"
+        value={config.mode || 'quality'}
+        onChange={v => onChange({ ...config, mode: v })}
+        options={[
+          { value: 'quality', label: 'Quality' },
+          { value: 'adversarial', label: 'Adversarial' }
+        ]}
+        helpText="Quality scores the output against the criteria below. Adversarial runs a tool-enabled reviewer that actively hunts for gaps before giving its verdict."
+      />
       <LocalizedField
         label="Criteria"
         rows={4}
@@ -28,6 +39,8 @@ function VerifierForm({ config, onChange }) {
         value={config.inputVariable}
         onChange={v => onChange({ ...config, inputVariable: v })}
         placeholder="e.g. promptResult"
+        suggestions={variables}
+        helpText="State variable holding the output to verify. Leave empty to verify the previous node's result."
       />
       <FormField
         label="Threshold"

@@ -1038,3 +1038,22 @@ how many entries are behind it.
   `?resource=app` keep working.
 - Audit log queries now scan each daily file once instead of loading the whole date range into
   memory and sorting it, so a wide range costs materially less.
+
+## Workflow Editor: Visual Loop Containers, Parallel Iteration, and Friendlier Editing
+
+Loops in workflows can now be built visually. A loop node is a resizable container on the canvas:
+drag any node into it and that node becomes the loop body, executed once per iteration — no more
+hand-editing an inline JSON body. Dragging a node back out releases it into the regular graph.
+
+- Loop-body nodes can use `{{_loopItem}}`, `{{_loopIndex}}`, `{{_loopHuman}}`, and `{{_loopTotal}}`
+  in their prompts; per-iteration results are collected into the loop's output variable. Existing
+  workflows with inline `config.body` definitions keep working unchanged.
+- Parallel iteration: a new `concurrency` option (up to 10) on forEach loops processes several
+  items at once. Each parallel iteration works on a snapshot of the pre-loop state — only the
+  collected results are propagated, keeping runs deterministic.
+- Editor improvements: a friendlier searchable node palette, labeled decision branches, an edge
+  condition editor, and configuration forms for every node type.
+- A new default example workflow, **Topic Deep Dive** (`topic-deep-dive`), demonstrates the
+  pattern end to end: outline a topic, analyze every section inside a parallel loop container, and
+  compose a final report. Existing installations receive it automatically at the next server
+  start. The new **Workflows** documentation page describes loop containers in detail.

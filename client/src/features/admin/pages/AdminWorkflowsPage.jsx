@@ -263,7 +263,7 @@ function AdminWorkflowsPage() {
       label: t('admin.workflows.visualEditor', 'Visual editor'),
       icon: 'share',
       priority: 'primary',
-      onClick: w => navigate(`/admin/workflows/${w.id}/editor`)
+      onClick: w => navigate(`/admin/workflows/${w.id}/edit`)
     },
     {
       id: 'toggle',
