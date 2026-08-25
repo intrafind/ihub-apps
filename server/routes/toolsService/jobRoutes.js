@@ -37,10 +37,11 @@ router.get('/jobs/:jobId/progress', authRequired, (req, res) => {
     return sendNotFound(res, 'Job');
   }
 
+  // `Connection: keep-alive` is intentionally absent — hop-by-hop headers are
+  // forbidden in HTTP/2 (RFC 9113 §8.2.2) and break proxies that forward them.
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
     'X-Accel-Buffering': 'no'
   });
 

@@ -164,8 +164,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       Authorization: authHeader,
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      'Cache-Control': 'no-cache'
     };
 
     return {
