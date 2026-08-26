@@ -19,7 +19,7 @@ import { resolveProgressTemplate, emitProgressMessage } from '../nodeProgress.js
 export class ProgressNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
     const messageTemplate = (node.config && (node.config.message || node.config.progress)) || '';
-    const resolved = resolveProgressTemplate(messageTemplate, state?.data || {});
+    const resolved = resolveProgressTemplate(messageTemplate, state?.data || {}, context?.language);
     // Default to 'running' so the chat client's step lifecycle works: when
     // the next iteration emits its own running step, the chat client marks
     // this one as completed automatically. That gives ONE step per doc

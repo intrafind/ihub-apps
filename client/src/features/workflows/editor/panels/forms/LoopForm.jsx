@@ -130,6 +130,28 @@ function LoopForm({ config, onChange, variables }) {
       />
 
       <FormField
+        label="If a round fails"
+        type="select"
+        value={config.onItemError || 'stop'}
+        onChange={v => update({ onItemError: v === 'stop' ? undefined : v })}
+        options={[
+          { value: 'stop', label: 'Stop the loop' },
+          { value: 'skip', label: 'Skip that item and carry on' }
+        ]}
+        helpText="Skipping suits a pass over documents: one file that cannot be read should not cost you the rest."
+      />
+
+      {config.onItemError === 'skip' && (
+        <FormField
+          label="Record skipped rounds in"
+          value={config.recordFailuresInto}
+          onChange={v => update({ recordFailuresInto: v || undefined })}
+          placeholder="e.g. coverage.failed"
+          helpText="Optional. Collects one entry per skipped round so a report can say what was left out."
+        />
+      )}
+
+      <FormField
         label="Max iterations (safety limit)"
         type="range"
         value={config.maxIterations ?? 50}

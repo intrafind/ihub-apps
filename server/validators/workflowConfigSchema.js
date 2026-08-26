@@ -242,8 +242,10 @@ export const nodeConfigSchema = z.object({
       progress: z
         .union([
           z.string(),
+          localizedStringSchema,
           z.object({
-            message: z.string(),
+            /** Plain text, or a localized object resolved against the run's language. */
+            message: z.union([z.string(), localizedStringSchema]),
             when: z.string().optional(),
             status: z.enum(['running', 'completed']).optional()
           })

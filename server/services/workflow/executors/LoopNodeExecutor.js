@@ -172,7 +172,14 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       outputVariable,
       // Bookkeeping the loop owns, so a body doesn't need plumbing steps:
       itemVariable, // name the current item, e.g. '_currentDoc'
-      countInto // path incremented once per completed round, e.g. '_coverage.processed'
+      countInto, // path incremented once per completed round, e.g. '_coverage.processed'
+      // 'stop' (default) ends the loop at the first failed round; 'skip' moves
+      // on to the next item. A pass over documents wants 'skip': one file the
+      // corpus cannot read should not cost you the other thirteen.
+      onItemError = 'stop',
+      // Optional state path collecting one entry per skipped round, so a
+      // report can say what was left out instead of quietly under-counting.
+      recordFailuresInto
     } = config;
 
     // Body resolution order:
@@ -270,7 +277,15 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             // applied to the previous one is thrown away.
             if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
           }
           break;
         }
@@ -308,7 +323,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               bodyEdges,
               concurrency,
               chatId,
-              itemVariable
+              itemVariable,
+              onItemError
             );
             results.push(...parallelOutcome.results);
             iterationTimings.push(...parallelOutcome.iterationTimings);
@@ -355,7 +371,15 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             // applied to the previous one is thrown away.
             if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
           }
           break;
         }
@@ -400,7 +424,15 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             // applied to the previous one is thrown away.
             if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
             i++;
           }
           break;
@@ -647,6 +679,38 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
+   * Appends one entry to the loop's failure log, when the loop configures a
+   * path for it. Without this a skipped round is invisible: the counters only
+   * ever move for rounds that succeeded, so a report would show fewer
+   * processed items with nothing to explain the gap.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} [path] - Dotted state path holding an array
+   * @param {Object} bodyResult - The failed iteration's result
+   * @param {number} iteration - 0-based round number
+   */
+  noteFailedRound(state, path, bodyResult, iteration) {
+    if (!path) return;
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    if (!Array.isArray(target[last])) target[last] = [];
+    target[last].push({
+      iteration,
+      item: state.data._loopItem ?? null,
+      failedAtNodeId: bodyResult.failedAtNodeId || null,
+      error: bodyResult.error || null
+    });
+  }
+
+  /**
    * Defines a `countInto` path as 0 when it is not already a number, so the
    * loop's own condition and any body step can read it from the first round.
    *
@@ -721,7 +785,9 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    * @param {Array<object>} bodyEdges - Edges between body nodes (conditional paths)
    * @param {number} concurrency - Max iterations in flight (2-10)
    * @param {string} chatId - SSE channel id
-   * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>}>}
+   * @param {string} [itemVariable] - Name to publish the current item under
+   * @param {string} [onItemError='stop'] - 'skip' keeps scheduling after a failed item
+   * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>, error?: object}>}
    */
   async executeForEachParallel(
     node,
@@ -732,7 +798,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     bodyEdges,
     concurrency,
     chatId,
-    itemVariable
+    itemVariable,
+    onItemError = 'stop'
   ) {
     const results = new Array(items.length);
     const iterationTimings = new Array(items.length);
@@ -771,7 +838,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         failed: bodyResult.failed,
         ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
       };
-      if (bodyResult.failed) stopScheduling = true;
+      // With 'skip' a failed item must not stop the remaining work.
+      if (bodyResult.failed && onItemError !== 'skip') stopScheduling = true;
       // Same rule as the sequential paths: an errored body step (today, one
       // that tried to pause) ends the loop rather than being tolerated.
       if (bodyResult.error && !parallelError) parallelError = bodyResult;

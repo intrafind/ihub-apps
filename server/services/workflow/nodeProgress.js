@@ -5,7 +5,12 @@
  * node in the graph — which meant loop bodies carried extra steps that had
  * nothing to do with the work. Instead any node may carry:
  *
- *   config.progress = { message: "📄 Loading {{_currentDoc.title}}", when?: "<expression>" }
+ *   config.progress = {
+ *     message: { en: "📄 Loading {{_currentDoc.title}}", de: "📄 Lade {{_currentDoc.title}}" },
+ *     when?: "<expression>"
+ *   }
+ *
+ * `message` may also be a plain string when the workflow is single-language.
  *
  * The message is emitted right before the node runs, with the same
  * `{{var}}` / `{{path.to.value}}` interpolation the standalone `progress`
@@ -16,18 +21,27 @@
  */
 
 import { actionTracker } from '../../actionTracker.js';
+// `shared/localize.js` rather than `server/utils/localize.js`: the latter pulls
+// in configCache to read the platform default language, which is far too heavy
+// a dependency for a helper called before every node runs.
+import { getLocalizedContent } from '../../../shared/localize.js';
 import { evaluateBooleanExpression } from './expressionEvaluator.js';
 
 /**
  * Resolves `{{path}}` placeholders in a progress message against state data.
  *
- * @param {string} template - Message template
+ * @param {string|Object} template - Message template, plain or localized
  * @param {Object} data - Workflow state data
+ * @param {string} [language='en'] - Language to resolve a localized template in
  * @returns {string} Message with placeholders substituted
  */
-export function resolveProgressTemplate(template, data) {
-  if (typeof template !== 'string' || !template) return '';
-  return template.replace(/\{\{\s*([a-zA-Z0-9_.[\]]+)\s*\}\}/g, (_match, path) => {
+export function resolveProgressTemplate(template, data, language = 'en') {
+  // A note may be a plain string or a localized object, like every other piece
+  // of author-written text in a workflow. `getLocalizedString` passes plain
+  // strings through unchanged, so both shapes work.
+  const text = getLocalizedContent(template, language);
+  if (typeof text !== 'string' || !text) return '';
+  return text.replace(/\{\{\s*([a-zA-Z0-9_.[\]]+)\s*\}\}/g, (_match, path) => {
     const value = getNested(path, data);
     if (value === null || value === undefined) return '';
     if (typeof value === 'object') {
@@ -95,14 +109,14 @@ export function emitNodeProgress(node, state, context) {
   if (!progress || typeof progress !== 'object' || Array.isArray(progress)) return false;
 
   const template = progress.message;
-  if (typeof template !== 'string' || !template) return false;
+  if (!template || (typeof template !== 'string' && typeof template !== 'object')) return false;
 
   if (progress.when) {
     const { value } = evaluateBooleanExpression(progress.when, state);
     if (!value) return false;
   }
 
-  const message = resolveProgressTemplate(template, state?.data || {});
+  const message = resolveProgressTemplate(template, state?.data || {}, context?.language);
   if (!message) return false;
 
   emitProgressMessage({

@@ -17,6 +17,14 @@ jest.mock('../../../../server/services/workflow/executors/index.js', () => ({
       if (node.config?.failAlways) {
         return { status: 'failed', output: null };
       }
+      if (
+        node.config?.failWhenItem !== undefined &&
+        state.data._loopItem === node.config.failWhenItem
+      ) {
+        const runs = (globalThis.__loopRuns ??= {});
+        runs[node.id] = (runs[node.id] || 0) + 1;
+        return { status: 'failed', output: null };
+      }
       if (node.config?.pauses) {
         return { status: 'paused', output: null };
       }
@@ -601,6 +609,102 @@ describe('human steps inside a loop body', () => {
       context
     );
     expect(result.error).toContain('ask-a-person');
+  });
+});
+
+describe('a failing item does not have to end the loop', () => {
+  /** A body whose step fails only for one specific item. */
+  const flakyContext = badItem => {
+    const ctx = containerContext([child('work')]);
+    ctx.workflow.nodes.find(n => n.id === 'work').config = { failWhenItem: badItem };
+    return ctx;
+  };
+
+  it('stops at the first failure by default', async () => {
+    const executor = new LoopNodeExecutor();
+    globalThis.__loopRuns = {};
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', outputVariable: 'out' }
+    };
+    const result = await executor.execute(
+      node,
+      { executionId: 'f1', data: { items: ['a', 'bad', 'c'] } },
+      flakyContext('bad')
+    );
+    // 'a' ran, 'bad' failed, 'c' never got a turn.
+    expect(globalThis.__loopRuns.work).toBe(2);
+    expect(result.stateUpdates.out).toHaveLength(2);
+  });
+
+  it('skips the bad item and finishes the rest when asked to', async () => {
+    const executor = new LoopNodeExecutor();
+    globalThis.__loopRuns = {};
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        onItemError: 'skip',
+        countInto: 'processed',
+        outputVariable: 'out'
+      }
+    };
+    const result = await executor.execute(
+      node,
+      { executionId: 'f2', data: { items: ['a', 'bad', 'c'] } },
+      flakyContext('bad')
+    );
+    expect(globalThis.__loopRuns.work).toBe(3);
+    // The counter tracks completed rounds only, so the skipped one is excluded.
+    expect(result.stateUpdates.processed).toBe(2);
+  });
+
+  it('records what it skipped, so a report can say what was left out', async () => {
+    const executor = new LoopNodeExecutor();
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        onItemError: 'skip',
+        recordFailuresInto: 'coverage.failed',
+        outputVariable: 'out'
+      }
+    };
+    const result = await executor.execute(
+      node,
+      { executionId: 'f3', data: { items: ['a', 'bad', 'c'] } },
+      flakyContext('bad')
+    );
+    const failed = result.stateUpdates.coverage.failed;
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ iteration: 1, item: 'bad', failedAtNodeId: 'work' });
+  });
+
+  it('keeps scheduling parallel items past a failure when skipping', async () => {
+    const executor = new LoopNodeExecutor();
+    globalThis.__loopRuns = {};
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        concurrency: 2,
+        onItemError: 'skip',
+        outputVariable: 'out'
+      }
+    };
+    await executor.execute(
+      node,
+      { executionId: 'f4', data: { items: ['a', 'bad', 'c', 'd'] } },
+      flakyContext('bad')
+    );
+    expect(globalThis.__loopRuns.work).toBe(4);
   });
 });
 

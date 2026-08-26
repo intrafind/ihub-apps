@@ -94,3 +94,49 @@ describe('progress notes and chatVisible', () => {
     expect(emitted[0].payload.message).toBe('Loading A');
   });
 });
+
+describe('localized progress notes', () => {
+  beforeEach(() => {
+    emitted.length = 0;
+  });
+
+  it('resolves a note in the run language', () => {
+    const node = {
+      id: 'fetch',
+      config: {
+        progress: {
+          message: {
+            en: 'Loading {{doc.title}}',
+            de: 'Lade {{doc.title}}'
+          }
+        }
+      }
+    };
+    const state = { data: { doc: { title: 'A' } } };
+
+    emitNodeProgress(node, state, { executionId: 'r1', language: 'de' });
+    expect(emitted[0].payload.message).toBe('Lade A');
+
+    emitted.length = 0;
+    emitNodeProgress(node, state, { executionId: 'r1', language: 'en' });
+    expect(emitted[0].payload.message).toBe('Loading A');
+  });
+
+  it('falls back to another language rather than showing nothing', () => {
+    const node = { id: 'n', config: { progress: { message: { de: 'Nur Deutsch' } } } };
+    emitNodeProgress(node, { data: {} }, { executionId: 'r2', language: 'fr' });
+    expect(emitted[0].payload.message).toBe('Nur Deutsch');
+  });
+
+  it('still accepts a plain string for a single-language workflow', () => {
+    const node = { id: 'n', config: { progress: { message: 'Working on {{x}}' } } };
+    emitNodeProgress(node, { data: { x: 'it' } }, { executionId: 'r3', language: 'de' });
+    expect(emitted[0].payload.message).toBe('Working on it');
+  });
+
+  it('resolves the language before substituting, so templates work in each', () => {
+    expect(
+      resolveProgressTemplate({ en: '{{n}} of {{t}}', de: '{{n}} von {{t}}' }, { n: 2, t: 5 }, 'de')
+    ).toBe('2 von 5');
+  });
+});

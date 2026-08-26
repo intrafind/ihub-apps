@@ -45,6 +45,8 @@ The loop node's `config` controls the iteration:
 | `concurrency`    | `forEach` only: number of iterations run in parallel (1–10, default 1 = sequential). See the parallel-mode caveat below.                                          |
 | `itemVariable`   | Optional name for the current item, so body steps can write `{{document}}` instead of `{{_loopItem}}`. Also restored to its previous value when a nested loop finishes.  |
 | `countInto`      | Optional state path the loop increases by one after every finished round (e.g. `coverage.processed`). The loop defines the path as `0` before the first round, so a `while` condition may read it straight away.  |
+| `onItemError`    | `stop` (default) ends the loop at the first failed round; `skip` moves on to the next item. A pass over documents wants `skip`: one file the corpus cannot read should not cost you the rest. |
+| `recordFailuresInto` | Optional state path collecting one entry per skipped round (`{ iteration, item, failedAtNodeId, error }`), so a report can say what was left out. |
 
 ### Loop variables
 
@@ -161,6 +163,29 @@ A step that owns a variable creates it, so seeding it first is unnecessary:
 
 What remains are genuine constants — a search-round budget, a threshold. Those belong in the Start step's **defaults**, not in a transform step at the top of the graph: they are settings for the run, not work the workflow performs.
 
+### When one item fails
+
+By default a loop stops at the first round that fails, which is right for a sequence where each round builds on the last. It is wrong for a pass over a corpus: a single file in an unsupported format — a zip among the PDFs — would end the run with every remaining document unread.
+
+Set `onItemError: "skip"` on such a loop, and name a `recordFailuresInto` path so the skipped items are visible rather than silently missing from the counts:
+
+```json
+{
+  "id": "analyse-documents",
+  "type": "loop",
+  "config": {
+    "mode": "forEach",
+    "array": "_corpus",
+    "itemVariable": "_currentDoc",
+    "countInto": "_coverage.processed",
+    "onItemError": "skip",
+    "recordFailuresInto": "_coverage.failed"
+  }
+}
+```
+
+`countInto` counts only rounds that completed, so processed and failed together account for every item. All four shipped per-document loops are configured this way. The editor exposes it as **If a round fails**.
+
 ### Progress notes on any step
 
 Any step can announce itself in chat while it runs. Add a `progress` object to its config instead of putting a separate announcement step in front of it:
@@ -181,6 +206,8 @@ Any step can announce itself in chat while it runs. Add a `progress` object to i
 | `message` | Required. The text to show, with `{{...}}` templates resolved against workflow state (including loop variables and the named item). |
 | `when`    | Optional condition (`$.data.…`). The note is skipped when it evaluates false, which is how a step announces itself only in some rounds. |
 | `status`  | Optional status label carried on the emitted event (default `running`).                                                        |
+
+`message` may be a plain string or a localized object — `{ "en": "…", "de": "…" }` — resolved against the language the run was started in, like every other author-written string in a workflow. A German-only note would otherwise be shown verbatim to an English reader. The editor's **Progress note** field offers the same **+ i18n** control as the other localized fields.
 
 The note is emitted just **before** the step runs, both for top-level steps and for steps inside a loop body. It is shown even when the step itself sets `chatVisible: false` — that combination is the point: hide the mechanical step, show the one line that means something to the reader. The editor exposes the note as **Progress note** at the bottom of every step's form.
 

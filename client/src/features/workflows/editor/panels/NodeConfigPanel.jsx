@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { nodeFormRegistry } from './forms/index';
 import FormField from './forms/FormField';
 import VariablesPanel from './VariablesPanel';
+import LocalizedField from './forms/LocalizedField';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
 
@@ -34,30 +35,41 @@ function ProgressNoteField({ config, onChange, t }) {
     );
   }
 
+  const hasText = message =>
+    typeof message === 'string'
+      ? message.trim() !== ''
+      : !!message && Object.values(message).some(v => typeof v === 'string' && v.trim() !== '');
+
   const update = patch => {
     const next = { ...(progress || {}), ...patch };
     Object.keys(next).forEach(k => {
       if (next[k] === '' || next[k] === undefined) delete next[k];
     });
     const nextConfig = { ...config };
-    if (next.message) nextConfig.progress = next;
+    // Keep the note while any language still has text; drop it once none does.
+    if (hasText(next.message)) nextConfig.progress = next;
     else delete nextConfig.progress;
     onChange(nextConfig);
   };
 
   return (
     <div className="space-y-2">
-      <FormField
+      {/* Localized, like every other author-written string: a note reading
+          "Lade Dokument 1/12" must not reach an English reader. */}
+      <LocalizedField
         label={t('workflows.editor.progressNote', 'Progress note')}
         value={progress?.message}
         onChange={v => update({ message: v })}
         placeholder="e.g. 📄 Reading {{_loopItem.title}}…"
-        helpText={t(
+        rows={2}
+      />
+      <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
+        {t(
           'workflows.editor.progressNoteHelp',
           'Optional. Shown in chat just before this step runs, so you do not need a separate announcement step.'
         )}
-      />
-      {progress?.message && (
+      </p>
+      {hasText(progress?.message) && (
         <FormField
           label={t('workflows.editor.progressNoteWhen', 'Only show when')}
           value={progress?.when}

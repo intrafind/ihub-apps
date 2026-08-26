@@ -125,7 +125,10 @@
         "fetchFulltext": true,
         "maxFulltextChars": 30000,
         "progress": {
-          "message": "🔍 Teilfrage {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\""
+          "message": {
+            "de": "🔍 Teilfrage {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\"",
+            "en": "🔍 Sub-question {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\""
+          }
         }
       },
       "parentId": "per-subquestion"
@@ -196,7 +199,9 @@
         "array": "_corpus",
         "maxIterations": 500,
         "itemVariable": "_currentDoc",
-        "countInto": "_coverage.processed"
+        "countInto": "_coverage.processed",
+        "onItemError": "skip",
+        "recordFailuresInto": "_coverage.failed"
       },
       "parentId": "per-subquestion"
     },
@@ -224,7 +229,10 @@
         "maxIterations": 1,
         "maxTokens": 6000,
         "progress": {
-          "message": "  📄 Doc {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+          "message": {
+            "de": "  📄 Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\"",
+            "en": "  📄 Doc {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+          }
         }
       },
       "execution": {

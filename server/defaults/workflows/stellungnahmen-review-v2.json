@@ -134,7 +134,9 @@
         "array": "_document",
         "maxIterations": 500,
         "itemVariable": "_currentDoc",
-        "countInto": "_coverage.processed"
+        "countInto": "_coverage.processed",
+        "onItemError": "skip",
+        "recordFailuresInto": "_coverage.failed"
       }
     },
     {
@@ -204,7 +206,10 @@
           "required": ["organisation", "title", "demandedChanges", "quotes"]
         },
         "progress": {
-          "message": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.fileName}}\""
+          "message": {
+            "de": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.fileName}}\"",
+            "en": "📄 Analysing document {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.fileName}}\""
+          }
         }
       },
       "execution": {

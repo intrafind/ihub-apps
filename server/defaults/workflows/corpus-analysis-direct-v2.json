@@ -129,7 +129,9 @@
         "array": "_corpus",
         "maxIterations": 500,
         "itemVariable": "_currentDoc",
-        "countInto": "_coverage.processed"
+        "countInto": "_coverage.processed",
+        "onItemError": "skip",
+        "recordFailuresInto": "_coverage.failed"
       }
     },
     {
@@ -195,7 +197,10 @@
           "required": ["keyStatements", "quotes"]
         },
         "progress": {
-          "message": "📄 Analysing document {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+          "message": {
+            "de": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\"",
+            "en": "📄 Analysing document {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+          }
         }
       },
       "execution": {

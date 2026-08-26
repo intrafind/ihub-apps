@@ -350,7 +350,9 @@
         "array": "_corpus",
         "maxIterations": 500,
         "itemVariable": "_currentDoc",
-        "countInto": "_coverage.processed"
+        "countInto": "_coverage.processed",
+        "onItemError": "skip",
+        "recordFailuresInto": "_coverage.failed"
       }
     },
     {
@@ -375,7 +377,10 @@
         "outputVariable": "_currentDocContent",
         "timeout": 90000,
         "progress": {
-          "message": "📄 Lade Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\""
+          "message": {
+            "de": "📄 Lade Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\"",
+            "en": "📄 Loading document {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\""
+          }
         }
       },
       "parentId": "analyse-documents"
@@ -446,7 +451,10 @@
           "required": ["organisation", "title", "demandedChanges", "quotes"]
         },
         "progress": {
-          "message": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDocContent.originalContentLength}} Zeichen, nur die ersten {{_currentDocContent.maxLength}} werden ausgewertet",
+          "message": {
+            "de": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDocContent.originalContentLength}} Zeichen, nur die ersten {{_currentDocContent.maxLength}} werden ausgewertet",
+            "en": "✂️ Full text truncated: {{_currentDoc.displayName}} — the document has {{_currentDocContent.originalContentLength}} characters; only the first {{_currentDocContent.maxLength}} are analysed"
+          },
           "when": "$.data._currentDocContent.truncated === true"
         }
       },
