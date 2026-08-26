@@ -134,3 +134,15 @@ produces a stream strict clients reject outright.
   when fetching web pages for URL sources and the web content extractor — so those requests survive
   an intermediary that converts them to HTTP/2.
 - No configuration change is needed.
+
+## New workflows could not be saved
+
+Creating a workflow from **Admin → Workflows → Create New Workflow** started from an empty
+definition, which the workflow schema always rejected: it requires at least a Start and an End step,
+plus a non-empty name and description. Saving therefore failed no matter what was entered, and the
+visual editor could never be opened for the new workflow.
+
+- New workflows now start from a valid template that already contains a **Start** and an **End**
+  step, connected, along with a pre-filled name and description that can be edited afterwards.
+- The visual editor's own "new workflow" canvas uses the same template, so both entry points behave
+  identically and a new workflow can be saved immediately and then arranged on the canvas.

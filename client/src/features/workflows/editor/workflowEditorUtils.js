@@ -474,3 +474,52 @@ export function absolutePosition(rfNode, rfNodes) {
     y: parentAbs.y + rfNode.position.y
   };
 }
+
+/**
+ * Builds a new workflow that is valid the moment it is created: it already
+ * contains the Start and End steps (connected) that the workflow schema
+ * requires, plus non-empty name/description and the standard config defaults.
+ *
+ * Both creation paths — the admin form/JSON page and the visual editor —
+ * use this so a freshly created workflow can be saved right away and then
+ * opened on the canvas.
+ *
+ * @param {object} [overrides] - Fields to merge over the starter (e.g. { id })
+ * @returns {object} A schema-valid workflow definition
+ */
+export function createStarterWorkflow(overrides = {}) {
+  return {
+    id: '',
+    name: { en: 'New Workflow' },
+    description: { en: 'Describe what this workflow does.' },
+    version: '1.0.0',
+    enabled: true,
+    status: 'draft',
+    config: {
+      observability: 'standard',
+      persistence: 'session',
+      errorHandling: 'retry',
+      humanInLoop: 'none',
+      maxExecutionTime: 300000,
+      maxNodes: 20
+    },
+    nodes: [
+      {
+        id: 'start',
+        type: 'start',
+        name: { en: 'Start' },
+        position: { x: 100, y: 150 },
+        config: {}
+      },
+      {
+        id: 'end',
+        type: 'end',
+        name: { en: 'End' },
+        position: { x: 460, y: 150 },
+        config: {}
+      }
+    ],
+    edges: [{ id: 'e-start-end', source: 'start', target: 'end' }],
+    ...overrides
+  };
+}

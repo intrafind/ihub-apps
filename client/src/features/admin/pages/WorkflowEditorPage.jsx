@@ -3,7 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
 import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
-import { workflowToFlow, flowToWorkflow } from '../../workflows/editor/workflowEditorUtils';
+import {
+  workflowToFlow,
+  flowToWorkflow,
+  createStarterWorkflow
+} from '../../workflows/editor/workflowEditorUtils';
 
 /** Same character class enforced by validateIdForPath() on the server. */
 const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -38,33 +42,9 @@ function WorkflowEditorPage() {
   useEffect(() => {
     const loadWorkflow = async () => {
       if (isNew) {
-        // Scaffold a new workflow with start and end nodes connected
-        setWorkflow({
-          id: '',
-          name: { en: 'New Workflow' },
-          description: { en: '' },
-          version: '1.0.0',
-          enabled: true,
-          status: 'draft',
-          config: {},
-          nodes: [
-            {
-              id: 'start',
-              type: 'start',
-              name: { en: 'Start' },
-              position: { x: 250, y: 0 },
-              config: {}
-            },
-            {
-              id: 'end',
-              type: 'end',
-              name: { en: 'End' },
-              position: { x: 250, y: 200 },
-              config: {}
-            }
-          ],
-          edges: [{ id: 'e-start-end', source: 'start', target: 'end' }]
-        });
+        // Start from the shared starter so the canvas opens with connected
+        // Start and End steps and the workflow is valid the moment it saves.
+        setWorkflow(createStarterWorkflow());
         setLoading(false);
         return;
       }

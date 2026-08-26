@@ -4,8 +4,10 @@ import {
   flowToWorkflow,
   collectUpstreamVariables,
   createNewNode,
+  createStarterWorkflow,
   parentsFirst
 } from '../../../client/src/features/workflows/editor/workflowEditorUtils.js';
+import { workflowConfigSchema } from '../../../server/validators/workflowConfigSchema.js';
 
 const containerWorkflow = {
   id: 'wf-1',
@@ -159,5 +161,38 @@ describe('parentsFirst', () => {
       { id: 'other' }
     ]);
     expect(ordered.map(n => n.id)).toEqual(['box', 'other', 'child']);
+  });
+});
+
+describe('createStarterWorkflow', () => {
+  it('produces a workflow the server schema accepts once an ID is given', () => {
+    const result = workflowConfigSchema.safeParse(createStarterWorkflow({ id: 'my-workflow' }));
+    expect(result.success).toBe(true);
+  });
+
+  it('ships connected start and end steps so a new workflow is valid immediately', () => {
+    const wf = createStarterWorkflow();
+    expect(wf.nodes.map(n => n.type)).toEqual(['start', 'end']);
+    expect(wf.edges).toEqual([{ id: 'e-start-end', source: 'start', target: 'end' }]);
+  });
+
+  it('fills name and description, which the schema requires to be non-empty', () => {
+    const wf = createStarterWorkflow();
+    expect(wf.name.en.length).toBeGreaterThan(0);
+    expect(wf.description.en.length).toBeGreaterThan(0);
+  });
+
+  it('renders on the canvas with both steps and their connection', () => {
+    const { nodes, edges } = workflowToFlow(createStarterWorkflow({ id: 'x' }));
+    expect(nodes).toHaveLength(2);
+    expect(edges).toHaveLength(1);
+    // Distinct positions so the two steps do not overlap on the canvas
+    expect(nodes[0].position).not.toEqual(nodes[1].position);
+  });
+
+  it('lets overrides win over the defaults', () => {
+    const wf = createStarterWorkflow({ id: 'abc', name: { en: 'Mine' } });
+    expect(wf.id).toBe('abc');
+    expect(wf.name).toEqual({ en: 'Mine' });
   });
 });
