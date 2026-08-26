@@ -17,8 +17,15 @@ jest.mock('../../../../server/services/workflow/executors/index.js', () => ({
       if (node.config?.failAlways) {
         return { status: 'failed', output: null };
       }
+      if (node.config?.pauses) {
+        return { status: 'paused', output: null };
+      }
       if (node.config?.delayMs) {
+        const probe = (globalThis.__loopProbe ??= { inflight: 0, max: 0 });
+        probe.inflight += 1;
+        probe.max = Math.max(probe.max, probe.inflight);
         await new Promise(resolve => setTimeout(resolve, node.config.delayMs));
+        probe.inflight -= 1;
       }
       return {
         status: 'completed',
@@ -155,9 +162,8 @@ describe('LoopNodeExecutor forEach over container children', () => {
     };
     const state = { executionId: 'x3', data: { items: [1, 2, 3, 4, 5] } };
 
-    const started = Date.now();
+    globalThis.__loopProbe = { inflight: 0, max: 0 };
     const result = await executor.execute(node, state, context);
-    const elapsed = Date.now() - started;
 
     expect(result.status).toBe('completed');
     expect(result.stateUpdates.collected).toEqual([
@@ -167,9 +173,10 @@ describe('LoopNodeExecutor forEach over container children', () => {
       'work:4',
       'work:5'
     ]);
-    // 5 items x 20ms at concurrency 3 should take ~2 waves, well under 5x20ms
-    // sequential; generous bound to avoid CI flakiness.
-    expect(elapsed).toBeLessThan(90);
+    // Measured rather than timed: iterations really do overlap, and never
+    // more than the configured concurrency at once.
+    expect(globalThis.__loopProbe.max).toBeGreaterThan(1);
+    expect(globalThis.__loopProbe.max).toBeLessThanOrEqual(3);
   });
 
   it('does not propagate body state updates from parallel iterations', async () => {
@@ -282,5 +289,161 @@ describe('workflowConfigSchema container validation', () => {
     workflow.edges.push({ id: 'e3', source: 'start', target: 'analyze' });
     const result = workflowConfigSchema.safeParse(workflow);
     expect(result.success).toBe(false);
+  });
+});
+
+describe('conditional paths inside a loop body', () => {
+  /** Body: entry -> (flagged ? extra : join) -> join */
+  function branchingContext() {
+    const ctx = containerContext(
+      [child('entry'), child('extra'), child('join')],
+      [
+        {
+          id: 'b1',
+          source: 'entry',
+          target: 'extra',
+          condition: { type: 'equals', field: 'data.flag', value: 'yes' }
+        },
+        {
+          id: 'b2',
+          source: 'entry',
+          target: 'join',
+          condition: { type: 'equals', field: 'data.flag', value: 'no' }
+        },
+        { id: 'b3', source: 'extra', target: 'join' }
+      ]
+    );
+    return ctx;
+  }
+
+  const node = {
+    id: 'the-loop',
+    type: 'loop',
+    config: { mode: 'forEach', array: 'items', outputVariable: 'out' }
+  };
+
+  it('takes the matching branch and skips the other step', async () => {
+    const executor = new LoopNodeExecutor();
+    const state = { executionId: 'c1', data: { items: ['a'], flag: 'no' } };
+    const result = await executor.execute(node, state, branchingContext());
+    // The last body node reached is `join`; `extra` was skipped entirely
+    expect(result.stateUpdates.out).toEqual(['join:a']);
+    expect(result.stateUpdates.ran_extra).toBeUndefined();
+    expect(result.stateUpdates.ran_join).toBe(true);
+  });
+
+  it('runs the optional step when its condition holds', async () => {
+    const executor = new LoopNodeExecutor();
+    const state = { executionId: 'c2', data: { items: ['a'], flag: 'yes' } };
+    const result = await executor.execute(node, state, branchingContext());
+    expect(result.stateUpdates.ran_extra).toBe(true);
+    expect(result.stateUpdates.ran_join).toBe(true);
+  });
+
+  it('still runs every node when the body has no edges', async () => {
+    const executor = new LoopNodeExecutor();
+    const ctx = containerContext([child('one'), child('two')]);
+    const state = { executionId: 'c3', data: { items: ['a'] } };
+    const result = await executor.execute(node, state, ctx);
+    expect(result.stateUpdates.ran_one).toBe(true);
+    expect(result.stateUpdates.ran_two).toBe(true);
+  });
+
+  it('does not run past a failing body node', async () => {
+    const executor = new LoopNodeExecutor();
+    const ctx = containerContext(
+      [child('boom'), child('after')],
+      [{ id: 'e', source: 'boom', target: 'after' }]
+    );
+    ctx.workflow.nodes.find(n => n.id === 'boom').config = { failAlways: true };
+    const state = { executionId: 'c4', data: { items: ['a'] } };
+    const result = await executor.execute(node, state, ctx);
+    expect(result.stateUpdates.ran_after).toBeUndefined();
+  });
+
+  it('stops an iteration whose body edges form a cycle', async () => {
+    const executor = new LoopNodeExecutor();
+    const ctx = containerContext(
+      [child('ping'), child('pong')],
+      [
+        { id: 'e1', source: 'ping', target: 'pong' },
+        { id: 'e2', source: 'pong', target: 'ping' }
+      ]
+    );
+    const state = { executionId: 'c5', data: { items: ['a'] } };
+    const result = await executor.execute(node, state, ctx);
+    // The step cap ends the iteration instead of spinning forever
+    expect(result.status).toBe('completed');
+    expect(result.output.iterations).toBe(1);
+  });
+});
+
+describe('nested loop containers', () => {
+  it('restores the outer loop item after an inner loop finishes', async () => {
+    const executor = new LoopNodeExecutor();
+    // outer(forEach groups) > [inner(forEach items), after]
+    const context = {
+      workflow: {
+        nodes: [
+          { id: 'outer', type: 'loop' },
+          {
+            id: 'inner',
+            type: 'loop',
+            parentId: 'outer',
+            config: { mode: 'forEach', array: 'items' }
+          },
+          { id: 'after', type: 'transform', parentId: 'outer', config: {} },
+          { id: 'leaf', type: 'transform', parentId: 'inner', config: {} }
+        ],
+        edges: [{ id: 'e', source: 'inner', target: 'after' }]
+      }
+    };
+    const node = {
+      id: 'outer',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'groups', outputVariable: 'out' }
+    };
+    const state = { executionId: 'n1', data: { groups: ['g1', 'g2'], items: ['i1'] } };
+
+    const result = await executor.execute(node, state, context);
+
+    // `after` runs once per OUTER item and still sees that outer item —
+    // the inner loop no longer clobbers it on cleanup.
+    expect(result.stateUpdates.out).toEqual(['after:g1', 'after:g2']);
+  });
+
+  it('leaves no loop variables behind once a top-level loop completes', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', outputVariable: 'out' }
+    };
+    const state = { executionId: 'n2', data: { items: ['a'] } };
+
+    const result = await executor.execute(node, state, context);
+    for (const key of ['_loopItem', '_loopIndex', '_loopHuman', '_loopTotal']) {
+      expect(result.stateUpdates[key]).toBeUndefined();
+    }
+  });
+});
+
+describe('human steps inside a loop body', () => {
+  it('fails the iteration instead of silently ignoring a pause', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('ask-a-person'), child('after')]);
+    context.workflow.nodes.find(n => n.id === 'ask-a-person').config = { pauses: true };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', outputVariable: 'out' }
+    };
+    const state = { executionId: 'p1', data: { items: ['a', 'b'] } };
+
+    const result = await executor.execute(node, state, context);
+    // The step after the pausing node must not have run, and the loop stops.
+    expect(result.stateUpdates.ran_after).toBeUndefined();
+    expect(result.output.iterations).toBe(1);
   });
 });

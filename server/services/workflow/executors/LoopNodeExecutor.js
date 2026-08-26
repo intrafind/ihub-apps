@@ -21,6 +21,7 @@
 
 import vm from 'node:vm';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import { DAGScheduler } from '../DAGScheduler.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
 
@@ -40,6 +41,9 @@ function emitSse(event, payload, chatId) {
  * the executor's result into state (e.g. `nodeResults.<id>_iter<N> = result`
  * creates a cycle when `result.stateUpdates.nodeResults` is the same object).
  */
+/** State keys the loop owns while iterating; restored when the loop ends. */
+const LOOP_SCOPE_KEYS = ['_loopIndex', '_loopHuman', '_loopItem', '_loopTotal'];
+
 const ENGINE_INTERNAL_STATE_KEYS = new Set([
   'nodeResults',
   'nodeInvocations',
@@ -112,6 +116,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    */
   constructor(options = {}) {
     super(options);
+    /** Reused for evaluating edge conditions inside a loop body. */
+    this.scheduler = new DAGScheduler();
   }
 
   /**
@@ -139,10 +145,11 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     // 1. Inline `config.body` (legacy / serializer-generated workflows)
     // 2. Container children — workflow nodes whose `parentId` is this loop
     //    node, ordered by the edges between them (visual editor containers)
-    const body =
-      Array.isArray(inlineBody) && inlineBody.length > 0
-        ? inlineBody
-        : this.resolveContainerBody(node, context);
+    const usingInlineBody = Array.isArray(inlineBody) && inlineBody.length > 0;
+    const body = usingInlineBody ? inlineBody : this.resolveContainerBody(node, context);
+    // Edges *between* body nodes drive conditional paths inside one iteration.
+    // Inline bodies have no edges and always run straight through.
+    const bodyEdges = usingInlineBody ? [] : this.resolveBodyEdges(body, context);
 
     // Hard cap prevents runaway loops regardless of user configuration.
     // Raised from 200 → 500 to support per-document analysis over larger
@@ -172,6 +179,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       const results = [];
       let currentState = { ...state, data: { ...state.data } };
 
+      // Snapshot any loop variables already in scope (we are nested inside
+      // another container) so they can be restored when this loop finishes.
+      const enclosingLoopVars = {};
+      for (const key of LOOP_SCOPE_KEYS) {
+        if (key in currentState.data) enclosingLoopVars[key] = currentState.data[key];
+      }
+
       switch (mode) {
         case 'for': {
           const iterCount = Math.min(count, hardCap);
@@ -184,6 +198,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length,
               total:
                 mode === 'for'
@@ -234,6 +249,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               context,
               iterArr,
               body,
+              bodyEdges,
               concurrency,
               chatId
             );
@@ -252,6 +268,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length,
               total:
                 mode === 'for'
@@ -296,6 +313,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length
             });
             results.push(bodyResult.output);
@@ -354,6 +372,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length
             });
             results.push(bodyResult.output);
@@ -402,11 +421,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           });
       }
 
-      // Clean up temporary loop variables from state
-      delete currentState.data._loopIndex;
-      delete currentState.data._loopHuman;
-      delete currentState.data._loopItem;
-      delete currentState.data._loopTotal;
+      // Restore the loop variables to what they were before this loop ran.
+      // For a nested container that hands the ENCLOSING loop its item back,
+      // so body steps after an inner loop still see the outer item.
+      for (const key of LOOP_SCOPE_KEYS) {
+        if (key in enclosingLoopVars) currentState.data[key] = enclosingLoopVars[key];
+        else delete currentState.data[key];
+      }
 
       // Build stateUpdates from body-produced data ONLY. We must NOT spread
       // engine-internal keys (nodeResults, nodeInvocations, _workflow*, etc.)
@@ -537,6 +558,22 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
+   * Collects the workflow edges that connect two body nodes of this container.
+   * These drive conditional paths *within* one iteration (e.g. skip a step
+   * unless a flag is set); edges leaving the container are not included.
+   *
+   * @param {Array<import('./BaseNodeExecutor.js').WorkflowNode>} body - Body nodes
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @returns {Array<object>} Edges whose source and target are both body nodes
+   */
+  resolveBodyEdges(body, context) {
+    const edges = context?.workflow?.edges;
+    if (!Array.isArray(edges) || !Array.isArray(body) || body.length < 2) return [];
+    const ids = new Set(body.map(n => n?.id));
+    return edges.filter(e => ids.has(e?.source) && ids.has(e?.target));
+  }
+
+  /**
    * Run forEach iterations with bounded parallelism. Each iteration executes
    * the body against a snapshot of the pre-loop state; results are collected
    * in item order. When an iteration fails, no new iterations are scheduled
@@ -549,11 +586,12 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
    * @param {Array<*>} items - Array items to iterate over (already capped)
    * @param {Array<import('./BaseNodeExecutor.js').WorkflowNode>} body - Body nodes
+   * @param {Array<object>} bodyEdges - Edges between body nodes (conditional paths)
    * @param {number} concurrency - Max iterations in flight (2-10)
    * @param {string} chatId - SSE channel id
    * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>}>}
    */
-  async executeForEachParallel(node, state, context, items, body, concurrency, chatId) {
+  async executeForEachParallel(node, state, context, items, body, bodyEdges, concurrency, chatId) {
     const results = new Array(items.length);
     const iterationTimings = new Array(items.length);
     let nextIndex = 0;
@@ -573,6 +611,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       const bodyResult = await this.executeBodyNodes(body, iterationState, context, {
         loopNodeId: node.id,
         chatId,
+        bodyEdges,
         iteration: i,
         total: items.length
       });
@@ -638,14 +677,60 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       );
     }
 
+    // Walk the body. With edges between body nodes we follow the first edge
+    // whose condition holds, so an iteration can branch (and skip steps) just
+    // like the outer graph; without edges we run every node in order.
+    const { bodyEdges = [] } = meta;
+    const byId = new Map(bodyNodes.map(n => [n.id, n]));
+    const stepCap = bodyNodes.length * 10 + 10;
+    let pending = bodyEdges.length > 0 ? bodyNodes.slice(0, 1) : bodyNodes.slice();
+    let steps = 0;
+
     let failedAtNodeId = null;
-    for (const bodyNode of bodyNodes) {
+    while (pending.length > 0) {
+      if (steps++ > stepCap) {
+        logger.warn('Loop body exceeded its step cap — stopping this iteration', {
+          component: 'LoopNodeExecutor',
+          loopNodeId,
+          stepCap
+        });
+        break;
+      }
+      const bodyNode = pending.shift();
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
       lastOutput = result.output;
 
       if (result.stateUpdates) {
         currentState.data = { ...currentState.data, ...result.stateUpdates };
+      }
+
+      // A body step that wants to pause the whole workflow (human-in-the-loop)
+      // cannot work here: pause/resume is driven by the outer scheduler, which
+      // only sees the loop node. Fail loudly instead of silently running on.
+      if (result.status === 'paused') {
+        logger.warn('Loop body attempted to pause the workflow', {
+          component: 'LoopNodeExecutor',
+          loopNodeId,
+          nodeId: bodyNode.id
+        });
+        return {
+          output: result.output,
+          state: currentState,
+          failed: true,
+          failedAtNodeId: bodyNode.id,
+          error: `Node '${bodyNode.id}' pauses the workflow, which is not supported inside a loop container. Move human steps outside the loop.`,
+          startedAt: iterStartedAt.toISOString(),
+          durationMs: Date.now() - iterStartMs
+        };
+      }
+
+      if (bodyEdges.length > 0 && result.status !== 'failed') {
+        const next = bodyEdges
+          .filter(e => e.source === bodyNode.id)
+          .find(e => this.scheduler.evaluateCondition(e, result.output, currentState));
+        const nextNode = next ? byId.get(next.target) : null;
+        if (nextNode) pending.push(nextNode);
       }
 
       if (result.status === 'failed') {

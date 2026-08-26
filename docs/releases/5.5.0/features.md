@@ -1057,3 +1057,32 @@ hand-editing an inline JSON body. Dragging a node back out releases it into the 
   pattern end to end: outline a topic, analyze every section inside a parallel loop container, and
   compose a final report. Existing installations receive it automatically at the next server
   start. The new **Workflows** documentation page describes loop containers in detail.
+
+## Workflow Loop Bodies Can Branch and Nest, Plus Modernized Example Workflows
+
+Building on the visual loop containers described above, the body of a loop is no longer restricted
+to a straight line of steps. Edges drawn between body steps are now evaluated on every iteration,
+and a container may sit inside another container.
+
+- **Conditional steps inside a loop body.** Connect two body steps and give the edge a condition —
+  the same edge condition editor used in the outer graph. Each iteration then walks the body,
+  following the first outgoing edge whose condition holds, so a step can be skipped for some items
+  and run for others. A step whose outgoing edges all evaluate to false ends that iteration, which
+  is how an early exit is expressed. A body with no edges keeps running every step in order, so
+  existing loops (and legacy inline `config.body` arrays) are unaffected.
+- **Nested loop containers.** A loop container can be a body step of another container — an outer
+  cycle per sub-question, an inner cycle per document, for example. Loop variables are now scoped
+  per loop: an inner loop restores `_loopItem`, `_loopIndex`, `_loopHuman` and `_loopTotal` to the
+  enclosing loop's values when it finishes, so steps placed after an inner loop still see the outer
+  item. Previously the inner loop deleted them. Note that while the inner loop runs, `_loopItem`
+  refers to the inner item — copy the outer item into a named variable first if you need both.
+- **Modernized example workflows.** `stellungnahmen-review-v2`, `stellungnahmen-review-ifinder-v2`,
+  `corpus-analysis-direct-v2`, `corpus-analysis-decomposed-v2` and `iterative-research-auto-v2`
+  replace the old cursor idiom — a cursor variable, a decision node and a back-edge — with loop
+  containers. The iFinder variant shows both new capabilities at once: a `while` container for
+  search refinement and a `forEach` container per document that branches on a truncation notice;
+  the decomposed variant is a container nested inside a container. The originals are untouched and
+  keep their IDs, so nothing changes for workflows already in use; existing installations pick up
+  the new files automatically at the next server start.
+- The converted workflows deliberately stay sequential: they accumulate shared evidence and
+  coverage state each round, and parallel iteration does not propagate body state updates.

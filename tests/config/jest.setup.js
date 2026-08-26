@@ -8,6 +8,15 @@ import { TextEncoder, TextDecoder } from 'node:util';
 if (typeof globalThis.TextEncoder === 'undefined') globalThis.TextEncoder = TextEncoder;
 if (typeof globalThis.TextDecoder === 'undefined') globalThis.TextDecoder = TextDecoder;
 
+// jsdom omits setImmediate; winston (used by the server logger) needs it, so
+// any server module that logs would otherwise throw inside jsdom-based tests.
+if (typeof globalThis.setImmediate === 'undefined') {
+  globalThis.setImmediate = (fn, ...args) => setTimeout(fn, 0, ...args);
+}
+if (typeof globalThis.clearImmediate === 'undefined') {
+  globalThis.clearImmediate = id => clearTimeout(id);
+}
+
 // Load test environment variables
 dotenv.config({ path: path.resolve('.env.test') });
 dotenv.config({ path: path.resolve('.env') });

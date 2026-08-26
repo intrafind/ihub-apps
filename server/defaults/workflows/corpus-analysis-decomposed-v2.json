@@ -1,0 +1,580 @@
+{
+  "id": "corpus-analysis-decomposed-v2",
+  "name": {
+    "en": "Corpus Completeness Analysis — Decomposed (case B) (v2)",
+    "de": "Korpus-Vollständigkeitsanalyse — Zerlegt (Fall B) (v2)"
+  },
+  "description": {
+    "en": "Free-form question → planner emits sub-questions → for each sub-question run its own iFinder search and per-document evidence extraction → audit-grade report. The 'nested' completeness pattern; same primitives, search happens INSIDE the outer cycle. Version 2: both iterations are nested visual loop containers — one per sub-question, one per document inside it — instead of two cursor idioms with three decision nodes and back-edges.",
+    "de": "Freie Frage → Planner erzeugt Teilfragen → für jede Teilfrage eine eigene iFinder-Suche und Evidenzextraktion pro Dokument → revisionssicherer Bericht. Das 'verschachtelte' Vollständigkeitsmuster; selbe Primitive, die Suche liegt INNERHALB des äußeren Zyklus. Version 2: Beide Wiederholungen sind verschachtelte visuelle Loop-Container — je Teilfrage und darin je Dokument — statt zweier Zähler-Konstrukte mit drei Entscheidungsknoten und Rückwärtskanten."
+  },
+  "version": "2.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 2700000,
+    "maxNodes": 40,
+    "maxIterations": 1000,
+    "allowCycles": true,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Pose Question",
+        "de": "Frage stellen"
+      },
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "userQuestion",
+            "type": "string",
+            "required": true,
+            "label": {
+              "en": "Question",
+              "de": "Frage"
+            }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Topic seeds (optional)",
+              "de": "Themenstichwörter (optional)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "init",
+      "type": "transform",
+      "name": {
+        "en": "Init accumulators",
+        "de": "Akkumulatoren initialisieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 180
+      },
+      "config": {
+        "operations": [
+          {
+            "set": "_records",
+            "value": []
+          },
+          {
+            "set": "_corpusAll",
+            "value": []
+          },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": {
+                "total": 0,
+                "source": "ifinder"
+              },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan-subquestions",
+      "type": "query-plan",
+      "name": {
+        "en": "Decompose into sub-questions",
+        "de": "In Teilfragen zerlegen"
+      },
+      "position": {
+        "x": 100,
+        "y": 320
+      },
+      "config": {
+        "questionPath": "$.data.userQuestion",
+        "seedsPath": "$.data.topicSeeds",
+        "outputVar": "_queryPlan",
+        "maxTopics": 5,
+        "maxSynonymsPerTopic": 3
+      }
+    },
+    {
+      "id": "per-subquestion",
+      "type": "loop",
+      "name": {
+        "en": "Work through every sub-question",
+        "de": "Jede Teilfrage abarbeiten"
+      },
+      "description": {
+        "en": "Searches the corpus once per planned sub-question and analyses whatever that search returns.",
+        "de": "Durchsucht den Korpus einmal je geplanter Teilfrage und analysiert die jeweiligen Treffer."
+      },
+      "position": {
+        "x": 360,
+        "y": 420
+      },
+      "size": {
+        "width": 900,
+        "height": 1180
+      },
+      "config": {
+        "chatVisible": false,
+        "mode": "forEach",
+        "array": "_queryPlan.topics",
+        "maxIterations": 50
+      }
+    },
+    {
+      "id": "load-subquestion",
+      "type": "transform",
+      "name": {
+        "en": "Load current sub-question",
+        "de": "Aktuelle Teilfrage laden"
+      },
+      "position": {
+        "x": 60,
+        "y": 70
+      },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          {
+            "copy": "_loopItem",
+            "to": "_subQuestion"
+          }
+        ]
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "announce-subquestion",
+      "type": "progress",
+      "name": {
+        "en": "Announce sub-question",
+        "de": "Teilfrage ankündigen"
+      },
+      "position": {
+        "x": 60,
+        "y": 240
+      },
+      "config": {
+        "chatVisible": false,
+        "message": "🔍 Teilfrage {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\""
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "search-subquestion",
+      "type": "corpus-search",
+      "name": {
+        "en": "Search iFinder",
+        "de": "iFinder durchsuchen"
+      },
+      "position": {
+        "x": 60,
+        "y": 410
+      },
+      "config": {
+        "queryPath": "$.data._subQuestion",
+        "corpusVar": "_corpus",
+        "coverageVar": "_coverage",
+        "maxPerTopic": 25,
+        "maxTotalDocs": 100,
+        "fetchFulltext": true,
+        "maxFulltextChars": 30000
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "accumulate-corpus",
+      "type": "code",
+      "name": {
+        "en": "Accumulate corpus across sub-questions",
+        "de": "Korpus über Teilfragen akkumulieren"
+      },
+      "position": {
+        "x": 60,
+        "y": 580
+      },
+      "config": {
+        "chatVisible": false,
+        "code": "const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];",
+        "outputVariable": "_corpusAllRaw",
+        "timeout": 5000
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "unwrap-corpus-accumulator",
+      "type": "transform",
+      "name": {
+        "en": "Unwrap accumulator",
+        "de": "Akkumulator auspacken"
+      },
+      "position": {
+        "x": 60,
+        "y": 750
+      },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          {
+            "copy": "_corpusAllRaw.result",
+            "to": "_corpusAll"
+          }
+        ]
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "analyse-documents",
+      "type": "loop",
+      "name": {
+        "en": "Analyse every document found",
+        "de": "Jedes gefundene Dokument analysieren"
+      },
+      "description": {
+        "en": "Runs the extraction steps once per document of the current sub-question. Sequential on purpose: each round appends to the shared evidence record.",
+        "de": "Führt die Extraktionsschritte einmal pro Dokument der aktuellen Teilfrage aus. Bewusst sequenziell: Jede Runde ergänzt den gemeinsamen Evidenz-Datensatz."
+      },
+      "position": {
+        "x": 60,
+        "y": 560
+      },
+      "size": {
+        "width": 620,
+        "height": 560
+      },
+      "config": {
+        "chatVisible": false,
+        "mode": "forEach",
+        "array": "_corpus",
+        "maxIterations": 500
+      },
+      "parentId": "per-subquestion"
+    },
+    {
+      "id": "load-doc",
+      "type": "transform",
+      "name": {
+        "en": "Load current document",
+        "de": "Aktuelles Dokument laden"
+      },
+      "position": {
+        "x": 40,
+        "y": 60
+      },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          {
+            "copy": "_loopItem",
+            "to": "_currentDoc"
+          }
+        ]
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "announce-doc",
+      "type": "progress",
+      "name": {
+        "en": "Announce document",
+        "de": "Dokument ankündigen"
+      },
+      "position": {
+        "x": 40,
+        "y": 155
+      },
+      "config": {
+        "chatVisible": false,
+        "message": "  📄 Doc {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "extract-evidence",
+      "type": "prompt",
+      "name": {
+        "en": "Extract evidence",
+        "de": "Evidenz extrahieren"
+      },
+      "position": {
+        "x": 40,
+        "y": 250
+      },
+      "config": {
+        "chatVisible": false,
+        "temperature": 0.2,
+        "system": {
+          "en": "You analyse one document for one specific sub-question. Extract structured findings, ground every claim in the source, quote verbatim. The downstream validator checks every quote against the source."
+        },
+        "prompt": {
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-question being investigated\n{{_subQuestion}}\n\n## Document ({{_loopHuman}} of {{_loopTotal}} for this sub-question)\nTitle: {{_currentDoc.title}}\nDocId: {{_currentDoc.docId}}\n\n### Content\n{{_currentDoc.fulltext}}\n\n## Output (JSON only, no markdown fences)\n{\n  \"keyStatements\": [\"<statement relevant to the sub-question>\"],\n  \"entities\": [\"<named entities>\"],\n  \"position\": \"<document's position on the sub-question, or empty>\",\n  \"evidenceQuotes\": [\"<VERBATIM source quote>\"],\n  \"quotes\": [{ \"text\": \"<each VERBATIM quote, one per entry>\" }]\n}"
+        },
+        "outputVariable": "_extractionOutput",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": {
+        "timeout": 90000,
+        "retries": 1
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "collect-evidence",
+      "type": "structured-record",
+      "name": {
+        "en": "Capture structured evidence",
+        "de": "Strukturierte Evidenz erfassen"
+      },
+      "position": {
+        "x": 40,
+        "y": 345
+      },
+      "config": {
+        "chatVisible": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "keyStatements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "entities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "position": {
+              "type": "string"
+            },
+            "evidenceQuotes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["keyStatements"]
+        },
+        "inputPath": "$.data._extractionOutput",
+        "sourcePath": "$.data._currentDoc",
+        "sourceSystem": "ifinder",
+        "recordsVar": "_records",
+        "iterationIndexPath": "$.data._loopIndex"
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "count-processed",
+      "type": "transform",
+      "name": {
+        "en": "Count document as processed",
+        "de": "Dokument als verarbeitet zählen"
+      },
+      "position": {
+        "x": 40,
+        "y": 440
+      },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          {
+            "increment": "_coverage.processed",
+            "by": 1
+          }
+        ]
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "validate",
+      "type": "quote-validator",
+      "name": {
+        "en": "Validate all quotes",
+        "de": "Alle Zitate validieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 2400
+      },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "corpusVar": "_corpusAll",
+        "maxSourceChars": 30000
+      }
+    },
+    {
+      "id": "synthesise",
+      "type": "prompt",
+      "name": {
+        "en": "Synthesise across sub-questions",
+        "de": "Über Teilfragen synthetisieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 2540
+      },
+      "config": {
+        "temperature": 0.3,
+        "system": {
+          "en": "You synthesise evidence collected across multiple sub-questions into a single narrative. Group findings by sub-question, then offer cross-cutting themes. Cite docIds inline. Do not add facts beyond the evidence."
+        },
+        "prompt": {
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-questions\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n\n## Records (across all sub-questions)\n{{#each _records}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.data.position}}\n{{/each}}\n\nWrite a markdown synthesis: for each sub-question a short paragraph, then a cross-cutting ## Themes section and ## Offene Punkte."
+        },
+        "outputVariable": "_synthesis",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": {
+        "timeout": 60000
+      }
+    },
+    {
+      "id": "compose",
+      "type": "template-render",
+      "name": {
+        "en": "Render audit report",
+        "de": "Auditbericht erzeugen"
+      },
+      "position": {
+        "x": 100,
+        "y": 2680
+      },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "synthesisVar": "_synthesis",
+        "artifactName": "corpus-analysis-decomposed.md",
+        "outputVariable": "finalReport",
+        "template": "# Korpus-Vollständigkeitsanalyse (zerlegt)\n\n## Frage\n\n{{userQuestion}}\n\n{{#if _queryPlan.topics}}\n## Teilfragen\n\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert (über alle Teilfragen):** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if records}}\n## Per-Dokument-Datensätze\n\n{{#each records}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **Status:** {{this.status}}\n- **Position:** {{this.data.position}}\n\n{{#if this.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate:**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich — nächstgelegen: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Done",
+        "de": "Fertig"
+      },
+      "position": {
+        "x": 100,
+        "y": 2960
+      },
+      "config": {
+        "outputVariables": ["finalReport"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "start",
+      "target": "init"
+    },
+    {
+      "id": "e2",
+      "source": "init",
+      "target": "plan-subquestions"
+    },
+    {
+      "id": "e21",
+      "source": "synthesise",
+      "target": "compose"
+    },
+    {
+      "id": "e22",
+      "source": "compose",
+      "target": "end"
+    },
+    {
+      "id": "e-plan-subquestions-per-subquestion",
+      "source": "plan-subquestions",
+      "target": "per-subquestion"
+    },
+    {
+      "id": "e-per-subquestion-validate",
+      "source": "per-subquestion",
+      "target": "validate"
+    },
+    {
+      "id": "e-validate-synthesise",
+      "source": "validate",
+      "target": "synthesise"
+    },
+    {
+      "id": "e-load-subquestion-announce-subquestion",
+      "source": "load-subquestion",
+      "target": "announce-subquestion"
+    },
+    {
+      "id": "e-announce-subquestion-search-subquestion",
+      "source": "announce-subquestion",
+      "target": "search-subquestion"
+    },
+    {
+      "id": "e-search-subquestion-accumulate-corpus",
+      "source": "search-subquestion",
+      "target": "accumulate-corpus"
+    },
+    {
+      "id": "e-accumulate-corpus-unwrap-corpus-accumulator",
+      "source": "accumulate-corpus",
+      "target": "unwrap-corpus-accumulator"
+    },
+    {
+      "id": "e-unwrap-corpus-accumulator-analyse-documents",
+      "source": "unwrap-corpus-accumulator",
+      "target": "analyse-documents"
+    },
+    {
+      "id": "e-load-doc-announce-doc",
+      "source": "load-doc",
+      "target": "announce-doc"
+    },
+    {
+      "id": "e-announce-doc-extract-evidence",
+      "source": "announce-doc",
+      "target": "extract-evidence"
+    },
+    {
+      "id": "e-extract-evidence-collect-evidence",
+      "source": "extract-evidence",
+      "target": "collect-evidence"
+    },
+    {
+      "id": "e-collect-evidence-count-processed",
+      "source": "collect-evidence",
+      "target": "count-processed"
+    }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

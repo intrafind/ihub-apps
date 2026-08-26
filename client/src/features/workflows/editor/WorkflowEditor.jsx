@@ -148,11 +148,35 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
     setTimeout(() => setNotice(null), 3500);
   }, []);
 
-  /** Finds the loop container (if any) whose box contains the given absolute point. */
+  /** Collects a node and every node nested below it. */
+  const withDescendants = useCallback(
+    rootId => {
+      const ids = new Set([rootId]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const n of nodes) {
+          if (n.parentId && ids.has(n.parentId) && !ids.has(n.id)) {
+            ids.add(n.id);
+            grew = true;
+          }
+        }
+      }
+      return ids;
+    },
+    [nodes]
+  );
+
+  /**
+   * Finds the loop container (if any) whose box contains the given absolute
+   * point. A container can be nested inside another one, but never inside
+   * itself or its own body — those are excluded.
+   */
   const containerAt = useCallback(
     (x, y, excludeId) => {
+      const excluded = excludeId ? withDescendants(excludeId) : new Set();
       for (const node of nodes) {
-        if (node.type !== 'loopContainer' || node.id === excludeId) continue;
+        if (node.type !== 'loopContainer' || excluded.has(node.id)) continue;
         const { width, height } = dimsOf(node);
         const pos = absolutePosition(node, nodes);
         if (x >= pos.x && x <= pos.x + width && y >= pos.y && y <= pos.y + height) {
@@ -161,7 +185,7 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
       }
       return null;
     },
-    [nodes]
+    [nodes, withDescendants]
   );
 
   /**
@@ -224,7 +248,6 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
    */
   const onNodeDragStop = useCallback(
     (_event, dragged) => {
-      if (dragged.type === 'loopContainer') return;
       if (dragged.data?.nodeType === 'start' || dragged.data?.nodeType === 'end') return;
 
       const node = nodes.find(n => n.id === dragged.id);
@@ -289,7 +312,7 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
         x: window.innerWidth / 2,
         y: window.innerHeight / 2
       });
-      const container = type === 'loop' ? null : containerAt(center.x, center.y, null);
+      const container = containerAt(center.x, center.y, null);
       let position = center;
       if (container) {
         const parentAbs = absolutePosition(container, nodes);
