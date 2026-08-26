@@ -5,6 +5,7 @@ import {
   workflowToFlow,
   findUnknownReferences,
   variablesProducedBy,
+  variablesScopedToContainer,
   collectUpstreamVariables
 } from '../../../client/src/features/workflows/editor/workflowEditorUtils.js';
 
@@ -49,8 +50,70 @@ describe('variablesProducedBy', () => {
 
     expect(names('start')).toEqual(expect.arrayContaining(['topic', 'budget']));
     expect(names('search')).toEqual(expect.arrayContaining(['_corpus', '_coverage']));
-    // A counter path contributes its root, which is what a reference resolves against.
-    expect(names('loop')).toEqual(expect.arrayContaining(['_doc', 'cov']));
+    // A counter path contributes its root, which is what a reference resolves
+    // against. The named item does NOT: it is loop-scoped, so it belongs to
+    // the steps inside the loop rather than to the workflow.
+    expect(names('loop')).toEqual(expect.arrayContaining(['cov']));
+    expect(names('loop')).not.toContain('_doc');
+    expect(variablesScopedToContainer(nodes.find(n => n.id === 'loop')).map(v => v.name)).toEqual([
+      '_doc'
+    ]);
+  });
+});
+
+describe('loop-scoped names stay inside their loop', () => {
+  const wf = {
+    id: 'w',
+    name: { en: 'w' },
+    description: { en: 'd' },
+    version: '1.0.0',
+    nodes: [
+      { id: 'start', type: 'start', name: { en: 'S' }, position: { x: 0, y: 0 }, config: {} },
+      {
+        id: 'loop',
+        type: 'loop',
+        name: { en: 'Each' },
+        position: { x: 1, y: 0 },
+        config: { mode: 'forEach', array: 'items', itemVariable: '_doc' }
+      },
+      {
+        id: 'inside',
+        type: 'prompt',
+        name: { en: 'Inside' },
+        position: { x: 0, y: 0 },
+        parentId: 'loop',
+        config: { prompt: { en: 'Read {{_doc.title}}' } }
+      },
+      {
+        id: 'after',
+        type: 'prompt',
+        name: { en: 'After' },
+        position: { x: 2, y: 0 },
+        config: { prompt: { en: 'Summarize {{_doc.title}}' } }
+      },
+      { id: 'end', type: 'end', name: { en: 'E' }, position: { x: 3, y: 0 }, config: {} }
+    ],
+    edges: [
+      { id: 'a', source: 'start', target: 'loop' },
+      { id: 'b', source: 'loop', target: 'after' }
+    ]
+  };
+
+  it('offers the item to a step inside the loop', () => {
+    const { nodes, edges } = workflowToFlow(wf);
+    expect(collectUpstreamVariables(nodes, edges, 'inside').map(v => v.value)).toContain('_doc');
+  });
+
+  it('does not offer it to a step after the loop', () => {
+    const { nodes, edges } = workflowToFlow(wf);
+    expect(collectUpstreamVariables(nodes, edges, 'after').map(v => v.value)).not.toContain('_doc');
+  });
+
+  it('warns when a step outside the loop reads the item, but not when one inside does', () => {
+    const { nodes, edges } = workflowToFlow(wf);
+    const problems = findUnknownReferences(nodes, edges);
+    expect(problems.map(p => p.nodeId)).toEqual(['after']);
+    expect(problems[0].name).toBe('_doc');
   });
 });
 

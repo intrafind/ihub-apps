@@ -42,9 +42,6 @@ function emitSse(event, payload, chatId) {
  * the executor's result into state (e.g. `nodeResults.<id>_iter<N> = result`
  * creates a cycle when `result.stateUpdates.nodeResults` is the same object).
  */
-/** State keys the loop owns while iterating; restored when the loop ends. */
-const LOOP_SCOPE_KEYS = ['_loopIndex', '_loopHuman', '_loopItem', '_loopTotal'];
-
 const ENGINE_INTERNAL_STATE_KEYS = new Set([
   'nodeResults',
   'nodeInvocations',
@@ -65,6 +62,39 @@ const ENGINE_INTERNAL_STATE_KEYS = new Set([
   '_currentStep',
   '_totalNodes'
 ]);
+
+/** State keys the loop owns while iterating; restored when the loop ends. */
+const LOOP_SCOPE_KEYS = ['_loopIndex', '_loopHuman', '_loopItem', '_loopTotal'];
+
+/**
+ * Per-worker copy of workflow state data for parallel iteration.
+ *
+ * Engine-internal keys hold live references the engine mutates after the
+ * executor returns (see the note on `propagatedData` below), so they are
+ * carried over by reference rather than cloned; everything else is deep
+ * copied so one worker's writes cannot reach another's.
+ *
+ * @param {Object} data - Workflow state data
+ * @returns {Object} A copy safe to hand a single parallel worker
+ */
+function cloneData(data) {
+  const source = data || {};
+  const internals = {};
+  const clonable = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (ENGINE_INTERNAL_STATE_KEYS.has(key)) internals[key] = value;
+    else clonable[key] = value;
+  }
+  let copied;
+  try {
+    copied = structuredClone(clonable);
+  } catch {
+    // Functions, class instances and other non-clonable values fall back to a
+    // shallow copy rather than failing the loop.
+    copied = { ...clonable };
+  }
+  return { ...copied, ...internals };
+}
 
 /**
  * Executor that runs a list of body nodes repeatedly based on the configured loop mode.
@@ -182,6 +212,12 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     try {
       const results = [];
       let currentState = { ...state, data: { ...state.data } };
+      // A body step that reports an *error* (as opposed to merely failing an
+      // iteration) makes the whole loop fail. Today only the pause guard does
+      // this: continuing past it would run the rest of the workflow on state a
+      // human was supposed to shape. Ordinary iteration failures keep their
+      // existing behaviour of being recorded and tolerated.
+      let bodyError = null;
 
       // Snapshot any loop variables already in scope (we are nested inside
       // another container) so they can be restored when this loop finishes.
@@ -220,6 +256,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -261,7 +298,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           if (concurrency > 1) {
             const parallelOutcome = await this.executeForEachParallel(
               node,
-              state,
+              // `currentState`, not the pre-loop `state`: the counter seeded
+              // by `seedCounter` lives on the former, and a body step reading
+              // it must see 0 rather than undefined.
+              currentState,
               context,
               iterArr,
               body,
@@ -272,6 +312,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             );
             results.push(...parallelOutcome.results);
             iterationTimings.push(...parallelOutcome.iterationTimings);
+            if (!bodyError && parallelOutcome.error) bodyError = parallelOutcome.error;
             if (countInto) {
               const done = parallelOutcome.iterationTimings.filter(tm => !tm.failed).length;
               for (let n = 0; n < done; n++) this.bumpCounter(currentState, countInto);
@@ -300,6 +341,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -343,6 +385,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -406,6 +449,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -517,6 +561,17 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         ...propagatedData,
         _stepLogs: { ...priorStepLogs, [node.id]: stepLog }
       };
+
+      if (bodyError) {
+        // Note: an error result carries no stateUpdates, so a loop that fails
+        // this way discards what its completed rounds produced. That matches
+        // how every other executor reports a failure; preserving partial
+        // state on failure would be an engine-wide change.
+        return this.createErrorResult(bodyError.error, {
+          nodeId: node.id,
+          failedAtNodeId: bodyError.failedAtNodeId
+        });
+      }
 
       return this.createSuccessResult({ results, iterations: results.length }, { stateUpdates });
     } catch (error) {
@@ -682,13 +737,18 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     const results = new Array(items.length);
     const iterationTimings = new Array(items.length);
     let nextIndex = 0;
+    let parallelError = null;
     let stopScheduling = false;
 
     const runOne = async i => {
       const iterationState = {
         ...state,
+        // A spread copies only the top level, so every worker would share the
+        // same nested objects and arrays — a body step mutating one would
+        // leak across iterations and make a parallel run non-deterministic,
+        // which is exactly what the snapshot is supposed to prevent.
         data: {
-          ...state.data,
+          ...cloneData(state.data),
           _loopIndex: i,
           _loopHuman: i + 1,
           _loopItem: items[i],
@@ -712,6 +772,9 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
       };
       if (bodyResult.failed) stopScheduling = true;
+      // Same rule as the sequential paths: an errored body step (today, one
+      // that tried to pause) ends the loop rather than being tolerated.
+      if (bodyResult.error && !parallelError) parallelError = bodyResult;
     };
 
     const worker = async () => {
@@ -726,7 +789,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
     return {
       results: results.filter((_, i) => iterationTimings[i] !== undefined),
-      iterationTimings: iterationTimings.filter(t => t !== undefined)
+      iterationTimings: iterationTimings.filter(t => t !== undefined),
+      ...(parallelError ? { error: parallelError } : {})
     };
   }
 

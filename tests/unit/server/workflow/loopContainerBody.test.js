@@ -31,6 +31,18 @@ jest.mock('../../../../server/services/workflow/executors/index.js', () => ({
       // "ran twice" — a rejoining branch must not double-execute its join.
       const runs = (globalThis.__loopRuns ??= {});
       runs[node.id] = (runs[node.id] || 0) + 1;
+      if (node.config?.readsPath) {
+        // Records what this worker saw at the given path, so a test can assert
+        // on the state a body step is actually handed.
+        (globalThis.__loopSaw ??= []).push(
+          node.config.readsPath.split('.').reduce((o, k) => (o == null ? o : o[k]), state.data)
+        );
+      }
+      if (node.config?.mutatesNested) {
+        // Writes THROUGH a nested object rather than replacing it: only a
+        // real per-worker copy keeps this out of the other iterations.
+        state.data.shared.seen.push(state.data._loopItem);
+      }
       return {
         status: 'completed',
         output: `${node.id}:${state.data._loopItem ?? state.data._loopIndex}`,
@@ -563,10 +575,32 @@ describe('human steps inside a loop body', () => {
     };
     const state = { executionId: 'p1', data: { items: ['a', 'b'] } };
 
+    globalThis.__loopRuns = {};
     const result = await executor.execute(node, state, context);
-    // The step after the pausing node must not have run, and the loop stops.
-    expect(result.stateUpdates.ran_after).toBeUndefined();
-    expect(result.output.iterations).toBe(1);
+    // The step after the pausing node must not have run, and the loop itself
+    // must fail: recording the pause only in the iteration log would let the
+    // engine schedule the rest of the workflow on state a person never saw.
+    expect(globalThis.__loopRuns.after).toBeUndefined();
+    expect(result.status).toBe('failed');
+    expect(result.error).toMatch(/pauses the workflow/);
+  });
+
+  it('names the step that tried to pause, so the message is actionable', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('ask-a-person')]);
+    context.workflow.nodes.find(n => n.id === 'ask-a-person').config = { pauses: true };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(
+      node,
+      { executionId: 'p2', data: { items: ['a'] } },
+      context
+    );
+    expect(result.error).toContain('ask-a-person');
   });
 });
 
@@ -677,6 +711,50 @@ describe('loop bookkeeping options', () => {
     // counter the loop itself maintains.
     expect(result.stateUpdates.rounds).toBe(2);
     expect(result.stateUpdates.out).toHaveLength(2);
+  });
+
+  it('gives each parallel worker its own nested state', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work', { config: { mutatesNested: true } })]);
+    context.workflow.nodes.find(n => n.id === 'work').config = { mutatesNested: true };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', concurrency: 3, outputVariable: 'out' }
+    };
+    const shared = { seen: [] };
+    const state = { executionId: 'p-iso', data: { items: [1, 2, 3], shared } };
+
+    await executor.execute(node, state, context);
+    // A shallow spread would leave every worker pushing into this same array.
+    expect(shared.seen).toEqual([]);
+  });
+
+  it('seeds the counter for parallel workers too', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work', { config: { readsPath: 'progress.done' } })]);
+    context.workflow.nodes.find(n => n.id === 'work').config = { readsPath: 'progress.done' };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        countInto: 'progress.done',
+        concurrency: 2,
+        outputVariable: 'out'
+      }
+    };
+    globalThis.__loopSaw = [];
+    const result = await executor.execute(
+      node,
+      { executionId: 'p-seed', data: { items: [1, 2] } },
+      context
+    );
+    // Each worker must be handed the seeded 0, exactly as a sequential run is.
+    // Passing the pre-loop state instead would show `undefined` here.
+    expect(globalThis.__loopSaw).toEqual([0, 0]);
+    expect(result.stateUpdates.progress.done).toBe(2);
   });
 
   it('counts and names items in parallel mode too', async () => {

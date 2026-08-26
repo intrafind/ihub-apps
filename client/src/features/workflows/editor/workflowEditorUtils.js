@@ -550,8 +550,11 @@ export function variablesProducedBy(rfNode) {
   }
 
   if (type === 'loop') {
+    // `countInto` outlives the loop, so it is a genuine producer. The named
+    // item does NOT — it is restored/removed when the loop ends — so it is
+    // contributed only to steps inside that loop, by
+    // `variablesScopedToContainer` below.
     add(cfg.countInto, `round count of ${name}`);
-    add(cfg.itemVariable, `current item of ${name}`);
   }
 
   if (type === 'corpus-search') {
@@ -568,11 +571,14 @@ export function variablesProducedBy(rfNode) {
   }
 
   if (type === 'query-plan') {
-    add(cfg.outputVariable || '_queryPlan', `search plan from ${name}`);
+    // QueryPlanNodeExecutor reads `outputVar`, not the usual `outputVariable`.
+    add(cfg.outputVar || '_queryPlan', `search plan from ${name}`);
   }
 
   if (type === 'template-render') {
     add(cfg.outputVariable, `report composed by ${name}`);
+    // The executor also writes a metadata object under `reportVar`.
+    add(cfg.reportVar, `report metadata from ${name}`);
   }
 
   if (type === 'inbox-load') {
@@ -605,6 +611,24 @@ export function variablesProducedBy(rfNode) {
   }
 
   return out;
+}
+
+/**
+ * Names a loop publishes only to the steps inside it.
+ *
+ * The named item is loop-scoped: the executor restores or removes it when the
+ * loop ends, so offering it to steps after the loop would suggest a variable
+ * that is empty by then, and treating it as globally defined would silence a
+ * genuine unknown-name warning outside the loop.
+ *
+ * @param {object} rfNode - A loop container node
+ * @returns {Array<{name: string, label: string}>}
+ */
+export function variablesScopedToContainer(rfNode) {
+  const cfg = rfNode?.data?.nodeConfig || {};
+  if (rfNode?.data?.nodeType !== 'loop' || !cfg.itemVariable) return [];
+  const name = rfNode.data?.nodeName || rfNode.id;
+  return [{ name: cfg.itemVariable, label: `current item of ${name}` }];
 }
 
 /**
@@ -688,6 +712,7 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
     let container = byId.get(self.parentId);
     while (container) {
       variablesProducedBy(container).forEach(v => addVariable(v.name, v.label));
+      variablesScopedToContainer(container).forEach(v => addVariable(v.name, v.label));
       container = container.parentId ? byId.get(container.parentId) : null;
     }
   }
@@ -771,10 +796,26 @@ export function findUnknownReferences(rfNodes, rfEdges) {
   const defined = new Set([...LOOP_SCOPE_NAMES, ...ENGINE_PROVIDED_NAMES.map(v => v.name)]);
   rfNodes.forEach(node => variablesProducedBy(node).forEach(v => defined.add(v.name)));
 
+  // Loop-scoped names resolve only for steps inside that loop, so build a
+  // per-node view rather than adding them to the global set.
+  const byNodeId = new Map(rfNodes.map(n => [n.id, n]));
+  const scopedFor = node => {
+    const names = new Set();
+    let container = node?.parentId ? byNodeId.get(node.parentId) : null;
+    while (container) {
+      variablesScopedToContainer(container).forEach(v => names.add(v.name));
+      container = container.parentId ? byNodeId.get(container.parentId) : null;
+    }
+    return names;
+  };
+
   const problems = [];
   const seen = new Set();
+  const scopedCache = new Map();
   const record = (node, name) => {
     if (defined.has(name) || NON_STATE_NAMES.has(name)) return;
+    if (!scopedCache.has(node.id)) scopedCache.set(node.id, scopedFor(node));
+    if (scopedCache.get(node.id).has(name)) return;
     const key = `${node.id}:${name}`;
     if (seen.has(key)) return;
     seen.add(key);
