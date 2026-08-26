@@ -145,3 +145,46 @@ produces a stream strict clients reject outright.
   when fetching web pages for URL sources and the web content extractor — so those requests survive
   an intermediary that converts them to HTTP/2.
 - No configuration change is needed.
+
+## New workflows could not be saved
+
+Creating a workflow from **Admin → Workflows → Create New Workflow** started from an empty
+definition, which the workflow schema always rejected: it requires at least a Start and an End step,
+plus a non-empty name and description. Saving therefore failed no matter what was entered, and the
+visual editor could never be opened for the new workflow.
+
+- New workflows now start from a valid template that already contains a **Start** and an **End**
+  step, connected, along with a pre-filled name and description that can be edited afterwards.
+- The visual editor's own "new workflow" canvas uses the same template, so both entry points behave
+  identically and a new workflow can be saved immediately and then arranged on the canvas.
+
+## One Unreadable Document No Longer Ends a Whole Workflow Run
+
+A loop stopped at the first round that failed. In a pass over a document corpus that meant a
+single file in an unsupported format — a zip among the PDFs — ended the run, leaving every
+remaining document unread and the report showing "14 identified, 0 processed".
+
+- Loops take a new `onItemError` option: `stop` (the existing behaviour, still the default) or
+  `skip`, which records the failure and moves to the next item. All four shipped per-document
+  loops now skip, so an unreadable file costs you that file and nothing else.
+- A companion `recordFailuresInto` path collects one entry per skipped round — the item, the step
+  that failed and its error — so a report can say what was left out instead of quietly
+  under-counting. The shipped workflows collect into `_coverage.failed`.
+- The visual editor exposes both as **If a round fails** and **Record skipped rounds in**.
+
+## Progress Notes Are Translated
+
+A step's progress note was a plain string, so a workflow written in German announced
+"Lade Dokument 1/12" to English readers too. `progress.message` now accepts a localized object
+like every other author-written string and is resolved against the language the run was started
+in; plain strings keep working for single-language workflows. The shipped German workflows have
+English translations for every note, and the editor's **Progress note** field offers the same
+**+ i18n** control as other localized fields.
+
+## Workflow Editor: Unreadable Fields in the Start and Human Steps
+
+The Start step's input-variable rows showed a type dropdown and a required checkbox but no
+readable name field: the select carried both a fixed width and the shared full-width class, and
+the latter won, collapsing the name box to a few pixels. The Human step's option rows had the same
+problem with three fields competing for one row. Both now give each text field a row of its own,
+which also leaves room for variable names longer than a few characters.

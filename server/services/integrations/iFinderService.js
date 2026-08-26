@@ -494,7 +494,14 @@ class IFinderService {
         rawApiMetadata: apiMetadata
       };
 
-      // Validate and truncate content if necessary
+      // Apply the caller's length cap and report the outcome explicitly.
+      // `truncated` is always a boolean and `maxLength` is echoed back, so a
+      // caller can branch on the result alone without re-deriving the limit
+      // or comparing lengths itself.
+      result.maxLength = maxLength;
+      result.originalContentLength = content.length;
+      result.truncated = false;
+
       if (result.content.length === 0) {
         logger.warn('No content extracted for document', {
           component: 'IFinderService',
@@ -505,6 +512,7 @@ class IFinderService {
         result.content = result.content.substring(0, maxLength) + '... [Content truncated]';
         result.truncated = true;
       }
+      result.returnedContentLength = result.content.length;
 
       logger.info('Successfully fetched document content', {
         component: 'IFinderService',

@@ -13,6 +13,7 @@ import {
   getAdminApiErrorMessage,
   updateAdminWorkflow
 } from '../../../api/adminApi';
+import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -44,26 +45,12 @@ function AdminWorkflowEditPage() {
   const { blocker, markSaved } = useUnsavedChanges(initialData, workflowData);
 
   /**
-   * Returns a default empty workflow template for new workflows.
+   * Returns the template used for new workflows. It already contains the
+   * Start and End steps (connected) the schema requires, so a new workflow
+   * saves successfully and can be opened in the visual editor right away.
    * @returns {Object} Default workflow configuration
    */
-  const getDefaultWorkflow = () => ({
-    id: '',
-    name: { en: '' },
-    description: { en: '' },
-    version: '1.0.0',
-    enabled: true,
-    config: {
-      observability: 'standard',
-      persistence: 'session',
-      errorHandling: 'retry',
-      humanInLoop: 'none',
-      maxExecutionTime: 300000,
-      maxNodes: 20
-    },
-    nodes: [],
-    edges: []
-  });
+  const getDefaultWorkflow = () => createStarterWorkflow();
 
   useEffect(() => {
     if (!isNewWorkflow) {
