@@ -1115,3 +1115,43 @@ without changing what any of them do.
   defaults they are copied into `contents/workflows/` at the next server start only when the file
   is missing, so a copy you have already edited is never overwritten — delete it to take the new
   version.
+
+## Workflow Editor: Variable Discovery, a Real Memory Step, and Container Auto-Layout
+
+A round of fixes to the workflow editor and the shipped example workflows, driven by what
+building the loop containers exposed.
+
+- **Know which variables exist.** Selecting a step and opening its new **Variables** tab lists
+  every name that step can read, grouped by origin — workflow inputs, each earlier step's output,
+  the enclosing loops' items and counters, and the run metadata the engine provides. Click a name
+  to copy it as `{{name}}`.
+- **Unknown names are flagged before they cost you a run.** The canvas warns about any `{{name}}`
+  or `$.data.name` reference that no step defines, and clicking one selects the step it appears in.
+  A misspelled variable used to render as an empty string and fail silently. The check knows the
+  names steps write beyond `outputVariable` — a corpus search's `corpusVar`/`coverageVar`, a loop's
+  `itemVariable`/`countInto`, a transform's operation targets, a human step's `humanResponse_<id>`,
+  a start step's inputs and defaults — and it leaves Handlebars block bodies alone rather than
+  reporting names that are perfectly valid inside an `{{#each}}`.
+- **Fewer variables to define at all.** A loop now defines its own `countInto` counter as `0`
+  before the first round, so a `while` condition can read it immediately. Together with the record
+  and coverage variables their own steps already create, the "initialise counters" step at the top
+  of a workflow is no longer needed — the shipped examples have dropped theirs, and genuine
+  constants moved to the Start step's defaults where they read as settings rather than work.
+- **Reading agent memory is a step, not a transform.** `memory` is now a real node type with a
+  form of its own, replacing a `readAgentMemorySection` operation hidden inside transform steps.
+  A missing profile or absent section yields an empty string rather than failing the run. The
+  `memory` palette entry previously had no implementation at all and would have failed at run time.
+- **Auto-layout arranges loop bodies.** It used to skip every step inside a container, leaving
+  body steps wherever they happened to sit. It now lays out each container's steps from the edges
+  between them, innermost container first, and grows each container to fit what it holds.
+- **Tool steps are configurable again.** The tool picker wrote a `toolName` key the engine never
+  reads, so it always looked empty, and Parameters rendered as `[object Object]` because an object
+  was bound to a plain textarea — the first keystroke replaced the whole parameter map with a
+  string. Tool steps now bind the real `toolId`, the picker offers the callable function ids
+  (`iFinder_getContent`, not just `iFinder`), and structured values get a JSON editor that keeps
+  the last valid value while you type. The same guard now covers every form field, and HTTP
+  headers use the new editor too.
+- **iFinder document fetches report truncation.** `getContent` now always returns `truncated`,
+  `originalContentLength`, `returnedContentLength` and the `maxLength` it applied, so a workflow
+  reads the flag off the result instead of re-deriving it from a length comparison. The iFinder
+  review's per-document loop is three steps as a result: fetch, extract, record.

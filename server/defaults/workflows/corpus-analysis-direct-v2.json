@@ -65,39 +65,6 @@
       }
     },
     {
-      "id": "init-coverage",
-      "type": "transform",
-      "name": {
-        "en": "Init coverage",
-        "de": "Abdeckung initialisieren"
-      },
-      "position": {
-        "x": 100,
-        "y": 180
-      },
-      "config": {
-        "operations": [
-          {
-            "set": "_records",
-            "value": []
-          },
-          {
-            "set": "_coverage",
-            "value": {
-              "candidates": {
-                "total": 0
-              },
-              "processed": 0,
-              "skipped": [],
-              "failed": [],
-              "quotesChecked": 0,
-              "quotesValidated": 0
-            }
-          }
-        ]
-      }
-    },
-    {
       "id": "plan",
       "type": "query-plan",
       "name": {
@@ -368,16 +335,6 @@
   ],
   "edges": [
     {
-      "id": "e1",
-      "source": "start",
-      "target": "init-coverage"
-    },
-    {
-      "id": "e2",
-      "source": "init-coverage",
-      "target": "plan"
-    },
-    {
       "id": "e3",
       "source": "plan",
       "target": "search"
@@ -411,6 +368,11 @@
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
+    },
+    {
+      "id": "e-start-plan",
+      "source": "start",
+      "target": "plan"
     }
   ],
   "allowedGroups": [],

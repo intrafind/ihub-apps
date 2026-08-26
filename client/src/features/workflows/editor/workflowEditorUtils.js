@@ -79,7 +79,10 @@ export const NODE_TYPE_META = {
     label: 'Ask a Person',
     description: 'Pause and wait for a person to review, choose, or approve.'
   },
-  memory: { label: 'Memory', description: 'Read or write persistent memory.' },
+  memory: {
+    label: 'Agent memory',
+    description: "Read a section of an agent's long-term memory into a variable."
+  },
   'query-plan': {
     label: 'Query Plan',
     description: 'Turn a question into a set of search queries.'
@@ -311,50 +314,144 @@ export function flowToWorkflow(rfNodes, rfEdges, existingWorkflow) {
   };
 }
 
+/** Canvas size used for an ordinary (non-container) step during layout. */
+const STEP_LAYOUT_SIZE = { width: 200, height: 80 };
+
+/** Space kept between a container's border and the steps inside it. */
+const CONTAINER_PADDING = { top: 56, right: 24, bottom: 24, left: 24 };
+
 /**
- * Applies automatic Dagre-based layout to position nodes in a left-to-right flow.
- * Container children keep their relative positions — only top-level nodes are
- * re-arranged, with containers sized by their persisted dimensions.
+ * Runs one Dagre pass over a set of sibling nodes and returns their positions
+ * relative to the bounding box of the result.
  *
- * @param {object[]} nodes - React Flow node array
- * @param {object[]} edges - React Flow edge array
- * @returns {object[]} New node array with updated positions
+ * @param {object[]} siblings - Nodes laid out together
+ * @param {object[]} edges - All edges; only sibling-to-sibling ones are used
+ * @param {Map<string, {width: number, height: number}>} sizes - Size per node id
+ * @returns {{positions: Map<string, {x: number, y: number}>, width: number, height: number}}
  */
-export function applyDagreLayout(nodes, edges) {
+function layoutSiblings(siblings, edges, sizes) {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: 'LR', ranksep: 80, nodesep: 60 });
 
-  const topLevel = nodes.filter(n => !n.parentId);
-  const topLevelIds = new Set(topLevel.map(n => n.id));
-
-  topLevel.forEach(node => {
-    const isContainer = node.type === 'loopContainer';
-    const dims = isContainer ? nodeDimensions(node) : { width: 200, height: 80 };
-    g.setNode(node.id, dims);
-  });
-
+  const ids = new Set(siblings.map(n => n.id));
+  // Dagre writes the computed coordinates onto the value object it is given,
+  // so every node needs its own — sharing one leaves all nodes stacked at
+  // whatever the last write produced.
+  siblings.forEach(node => g.setNode(node.id, { ...(sizes.get(node.id) || STEP_LAYOUT_SIZE) }));
   edges.forEach(edge => {
-    if (topLevelIds.has(edge.source) && topLevelIds.has(edge.target)) {
+    if (ids.has(edge.source) && ids.has(edge.target) && edge.source !== edge.target) {
       g.setEdge(edge.source, edge.target);
     }
   });
-
   dagre.layout(g);
 
+  // Dagre centres nodes on its own origin; shift so the top-left of the
+  // laid-out block sits at (0, 0) and the caller can place it anywhere.
+  const corners = siblings.map(node => {
+    const pos = g.node(node.id);
+    const size = sizes.get(node.id) || STEP_LAYOUT_SIZE;
+    return pos
+      ? { id: node.id, x: pos.x - size.width / 2, y: pos.y - size.height / 2, size }
+      : { id: node.id, x: 0, y: 0, size };
+  });
+  const minX = Math.min(...corners.map(c => c.x), 0);
+  const minY = Math.min(...corners.map(c => c.y), 0);
+
+  const positions = new Map();
+  let width = 0;
+  let height = 0;
+  corners.forEach(c => {
+    const x = c.x - minX;
+    const y = c.y - minY;
+    positions.set(c.id, { x, y });
+    width = Math.max(width, x + c.size.width);
+    height = Math.max(height, y + c.size.height);
+  });
+  return { positions, width, height };
+}
+
+/**
+ * Applies automatic Dagre-based layout to position nodes in a left-to-right flow.
+ *
+ * Loop containers are laid out from the inside out: each container's own steps
+ * are arranged from the edges between them and the container is then grown to
+ * fit, so a body is readable instead of keeping whatever positions its steps
+ * happened to have. Nested containers are handled innermost-first, so an outer
+ * container sizes around the already-sized inner one.
+ *
+ * @param {object[]} nodes - React Flow node array
+ * @param {object[]} edges - React Flow edge array
+ * @returns {object[]} New node array with updated positions and container sizes
+ */
+export function applyDagreLayout(nodes, edges) {
+  const childrenOf = new Map();
+  nodes.forEach(node => {
+    if (!node.parentId) return;
+    if (!childrenOf.has(node.parentId)) childrenOf.set(node.parentId, []);
+    childrenOf.get(node.parentId).push(node);
+  });
+
+  const sizes = new Map();
+  const positions = new Map();
+
+  /**
+   * Lays out one container's body and returns the size the container needs.
+   * Recurses first so a nested container is sized before its parent places it.
+   */
+  const sizeOf = node => {
+    if (sizes.has(node.id)) return sizes.get(node.id);
+    const children = childrenOf.get(node.id) || [];
+    if (node.type !== 'loopContainer') {
+      sizes.set(node.id, STEP_LAYOUT_SIZE);
+      return STEP_LAYOUT_SIZE;
+    }
+    children.forEach(sizeOf);
+    let size;
+    if (children.length === 0) {
+      size = { ...LOOP_CONTAINER_DEFAULT_SIZE };
+    } else {
+      const laid = layoutSiblings(children, edges, sizes);
+      children.forEach(child => {
+        const p = laid.positions.get(child.id);
+        positions.set(child.id, {
+          x: p.x + CONTAINER_PADDING.left,
+          y: p.y + CONTAINER_PADDING.top
+        });
+      });
+      size = {
+        width: Math.max(
+          LOOP_CONTAINER_DEFAULT_SIZE.width,
+          Math.round(laid.width + CONTAINER_PADDING.left + CONTAINER_PADDING.right)
+        ),
+        height: Math.max(
+          160,
+          Math.round(laid.height + CONTAINER_PADDING.top + CONTAINER_PADDING.bottom)
+        )
+      };
+    }
+    sizes.set(node.id, size);
+    return size;
+  };
+
+  nodes.filter(n => !n.parentId).forEach(sizeOf);
+
+  const topLevel = nodes.filter(n => !n.parentId);
+  const laidTop = layoutSiblings(topLevel, edges, sizes);
+  topLevel.forEach(node => positions.set(node.id, laidTop.positions.get(node.id)));
+
   return nodes.map(node => {
-    if (node.parentId) return node;
-    const nodeWithPosition = g.node(node.id);
-    if (!nodeWithPosition) return node;
-    const isContainer = node.type === 'loopContainer';
-    const dims = isContainer ? nodeDimensions(node) : { width: 200, height: 80 };
-    return {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - dims.width / 2,
-        y: nodeWithPosition.y - dims.height / 2
+    const position = positions.get(node.id);
+    const next = position ? { ...node, position } : { ...node };
+    if (node.type === 'loopContainer') {
+      const size = sizes.get(node.id);
+      if (size) {
+        next.width = size.width;
+        next.height = size.height;
+        next.style = { ...(node.style || {}), width: size.width, height: size.height };
       }
-    };
+    }
+    return next;
   });
 }
 
@@ -399,6 +496,121 @@ const LOOP_SCOPE_VARIABLES = [
 ];
 
 /**
+ * Lists the state variables a single step defines.
+ *
+ * Steps write state through more than one config key — a tool writes its
+ * `outputVariable`, a corpus search writes `corpusVar` and `coverageVar`, a
+ * loop writes its `countInto` counter and named item, a transform writes each
+ * operation target. Collecting them in one place is what lets the editor both
+ * suggest real names and tell a typo from a variable it simply did not know
+ * about.
+ *
+ * @param {object} rfNode - React Flow node
+ * @returns {Array<{name: string, label: string}>} Variables this step defines
+ */
+export function variablesProducedBy(rfNode) {
+  const cfg = rfNode?.data?.nodeConfig || {};
+  const type = rfNode?.data?.nodeType;
+  const name = rfNode?.data?.nodeName || NODE_TYPE_META[type]?.label || rfNode?.id;
+  const out = [];
+  const add = (variable, label) => {
+    if (typeof variable === 'string' && variable.trim()) {
+      out.push({ name: variable.trim().split('.')[0], label });
+    }
+  };
+
+  add(cfg.outputVariable, `from ${name}`);
+
+  if (type === 'start') {
+    (Array.isArray(cfg.inputVariables) ? cfg.inputVariables : []).forEach(v =>
+      add(v?.name, 'workflow input')
+    );
+    Object.keys(cfg.defaults || {}).forEach(key => add(key, 'start value'));
+    // A start step may declare its inputs as a mapping instead of a list; the
+    // keys are the state names the run begins with either way.
+    Object.keys(cfg.inputMapping || {}).forEach(key => add(key, 'workflow input'));
+  }
+
+  if (type === 'loop') {
+    add(cfg.countInto, `round count of ${name}`);
+    add(cfg.itemVariable, `current item of ${name}`);
+  }
+
+  if (type === 'corpus-search') {
+    add(cfg.corpusVar || '_corpus', `documents found by ${name}`);
+    add(cfg.coverageVar || '_coverage', `coverage counters from ${name}`);
+  }
+
+  if (type === 'structured-record') {
+    add(cfg.recordsVar || '_records', `records collected by ${name}`);
+  }
+
+  if (type === 'memory') {
+    add(cfg.outputVariable, `memory section read by ${name}`);
+  }
+
+  if (type === 'query-plan') {
+    add(cfg.outputVariable || '_queryPlan', `search plan from ${name}`);
+  }
+
+  if (type === 'template-render') {
+    add(cfg.outputVariable, `report composed by ${name}`);
+  }
+
+  if (type === 'inbox-load') {
+    add(cfg.outputVariable || 'currentInboxItem', `inbox item loaded by ${name}`);
+  }
+
+  if (type === 'human') {
+    // The engine keys a checkpoint's answer by the step's own id unless the
+    // step names it, which a step whose id contains a hyphen has to do.
+    add(cfg.outputVariable || `humanResponse_${rfNode.id}`, `answer given at ${name}`);
+  }
+
+  if (type === 'verifier') {
+    // VerifierNodeExecutor writes this fixed key rather than a configured one.
+    add('verificationResult', `verdict from ${name}`);
+  }
+
+  if (type === 'transform') {
+    (Array.isArray(cfg.operations) ? cfg.operations : []).forEach(op => {
+      if (!op || typeof op !== 'object') return;
+      add(op.to, `set by ${name}`);
+      add(op.set, `set by ${name}`);
+      add(op.increment, `counted by ${name}`);
+    });
+  }
+
+  return out;
+}
+
+/**
+ * The names the engine provides on its own inside a loop body.
+ * Kept separate from step-produced names so the reference checker can explain
+ * why a name is valid.
+ */
+export const LOOP_SCOPE_NAMES = ['_loopItem', '_loopIndex', '_loopHuman', '_loopTotal'];
+
+/**
+ * Run metadata the engine writes into state for every workflow, so a template
+ * may read it without any step defining it. Mirrors
+ * ENGINE_INTERNAL_STATE_KEYS in server/services/workflow/executors/LoopNodeExecutor.js.
+ */
+export const ENGINE_PROVIDED_NAMES = [
+  { name: '_currentStep', label: 'Steps run so far (engine)' },
+  { name: '_totalNodes', label: 'Total steps in the workflow (engine)' },
+  { name: '_currentNodeIteration', label: "This step's iteration count (engine)" },
+  { name: '_nodeIterations', label: 'Iteration count per step (engine)' },
+  { name: '_totalElapsedMs', label: 'Elapsed run time in ms (engine)' },
+  { name: '_humanWaitMs', label: 'Time spent waiting on a person (engine)' },
+  { name: '_resumeCount', label: 'Times this run was resumed (engine)' },
+  { name: '_pauseReason', label: 'Why the run last paused (engine)' },
+  { name: '_pausedAt', label: 'When the run last paused (engine)' },
+  { name: '_resumedAt', label: 'When the run last resumed (engine)' },
+  { name: 'nodeResults', label: 'Raw result of each step (engine)' }
+];
+
+/**
  * Collects the workflow state variables visible to a given node: input
  * variables from the start node, `outputVariable`s of upstream nodes
  * (following edges backwards), and — for nodes inside a loop container —
@@ -429,17 +641,10 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
     const node = byId.get(id);
     if (!node) return;
 
-    const cfg = node.data?.nodeConfig || {};
-    const displayName = node.data?.nodeName || NODE_TYPE_META[node.data?.nodeType]?.label || id;
+    // A step never suggests what it writes itself — that is the field the
+    // author is filling in, not something they can read here.
     if (id !== nodeId) {
-      if (typeof cfg.outputVariable === 'string' && cfg.outputVariable) {
-        addVariable(cfg.outputVariable, `from ${displayName}`);
-      }
-      if (node.data?.nodeType === 'start' && Array.isArray(cfg.inputVariables)) {
-        cfg.inputVariables.forEach(v => {
-          if (v?.name) addVariable(v.name, 'workflow input');
-        });
-      }
+      variablesProducedBy(node).forEach(v => addVariable(v.name, v.label));
     }
 
     (incoming.get(id) || []).forEach(visit);
@@ -455,19 +660,144 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
   const self = byId.get(nodeId);
   if (self?.parentId) {
     LOOP_SCOPE_VARIABLES.forEach(v => addVariable(v.value, v.label));
-    // Every enclosing loop that names its item contributes that name too, so a
-    // step nested two containers deep can reach both items by name.
+    // Every enclosing loop that names its item or counts rounds contributes
+    // those names too, so a step nested two containers deep can reach both.
     let container = byId.get(self.parentId);
     while (container) {
-      const named = container.data?.nodeConfig?.itemVariable;
-      if (named) {
-        addVariable(named, `current item of ${container.data?.nodeName || container.id}`);
-      }
+      variablesProducedBy(container).forEach(v => addVariable(v.name, v.label));
       container = container.parentId ? byId.get(container.parentId) : null;
     }
   }
 
   return Array.from(suggestions.values());
+}
+
+/** Matches `{{name}}` / `{{name.path}}` template references. */
+const TEMPLATE_REF_RE = /\{\{\s*([A-Za-z_$][\w$]*)/g;
+/**
+ * Matches the argument of a block helper — the `docs` in `{{#each docs}}`.
+ * Unlike names in the block body, the argument resolves against workflow
+ * state, so it is checkable even when the body is not.
+ */
+const BLOCK_ARG_RE = /\{\{#\s*(?:if|unless|each|with)\s+([A-Za-z_$][\w$]*)/g;
+/** Matches `$.data.name` state references. */
+const STATE_REF_RE = /\$\.data\.([A-Za-z_$][\w$]*)/g;
+
+/**
+ * Handlebars-ish names that resolve inside a block rather than against
+ * workflow state, plus the engine's own run metadata. Flagging these would be
+ * noise, not help.
+ */
+const NON_STATE_NAMES = new Set([
+  'this',
+  'each',
+  'if',
+  'unless',
+  'with',
+  'else',
+  'data',
+  'result',
+  'chatId',
+  'userId',
+  'workflowId'
+]);
+
+/**
+ * Steps whose `{{...}}` templates resolve against a scope the step builds,
+ * not against workflow state. The value lists the names that scope provides;
+ * anything else in such a template still resolves through `data.`.
+ */
+const NODE_TEMPLATE_SCOPES = {
+  // TemplateRenderNodeExecutor.composeReport
+  'template-render': [
+    'records',
+    'coverage',
+    'synthesis',
+    'runId',
+    'workflowId',
+    'generatedAt',
+    'data'
+  ],
+  // PromptNodeExecutor substitutes the loaded source content for these.
+  prompt: ['sources', 'source'],
+  planner: ['sources', 'source'],
+  verifier: ['sources', 'source']
+};
+
+/** Walks every string in a config value. */
+function forEachString(value, fn) {
+  if (typeof value === 'string') fn(value);
+  else if (Array.isArray(value)) value.forEach(v => forEachString(v, fn));
+  else if (value && typeof value === 'object')
+    Object.values(value).forEach(v => forEachString(v, fn));
+}
+
+/**
+ * Finds `{{name}}` and `$.data.name` references that no step in the workflow
+ * defines — the typos and renames that otherwise fail silently at run time,
+ * rendering as an empty string in a prompt.
+ *
+ * Only the leading segment of a path is checked: whether `_currentDoc` exists
+ * is knowable from the graph, whether it has a `.displayName` is not.
+ *
+ * @param {object[]} rfNodes - React Flow nodes
+ * @param {object[]} rfEdges - React Flow edges
+ * @returns {Array<{nodeId: string, nodeName: string, name: string}>} Unknown references
+ */
+export function findUnknownReferences(rfNodes, rfEdges) {
+  const defined = new Set([...LOOP_SCOPE_NAMES, ...ENGINE_PROVIDED_NAMES.map(v => v.name)]);
+  rfNodes.forEach(node => variablesProducedBy(node).forEach(v => defined.add(v.name)));
+
+  const problems = [];
+  const seen = new Set();
+  const record = (node, name) => {
+    if (defined.has(name) || NON_STATE_NAMES.has(name)) return;
+    const key = `${node.id}:${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    problems.push({
+      nodeId: node.id,
+      nodeName: node.data?.nodeName || NODE_TYPE_META[node.data?.nodeType]?.label || node.id,
+      name
+    });
+  };
+
+  rfNodes.forEach(node => {
+    const scope = NODE_TEMPLATE_SCOPES[node.data?.nodeType];
+    forEachString(node.data?.nodeConfig || {}, text => {
+      // Inside a block helper (`{{#each docs}}{{title}}{{/each}}`) names are
+      // relative to the block, so checking them against workflow state would
+      // report mistakes that are not there. A checker that cries wolf gets
+      // ignored, so template references in such a string are left alone —
+      // `$.data.` references in it are still checked.
+      const hasBlockHelper = text.includes('{{#');
+      if (hasBlockHelper) {
+        // The block's argument still resolves against workflow state, so a
+        // stale `{{#if oldFlag}}` is caught even though names in the body
+        // are left alone.
+        for (const m of text.matchAll(BLOCK_ARG_RE)) {
+          if (scope && scope.includes(m[1])) continue;
+          record(node, m[1]);
+        }
+      } else {
+        for (const m of text.matchAll(TEMPLATE_REF_RE)) {
+          if (scope && scope.includes(m[1])) continue;
+          record(node, m[1]);
+        }
+      }
+      for (const m of text.matchAll(STATE_REF_RE)) record(node, m[1]);
+    });
+  });
+
+  rfEdges.forEach(edge => {
+    const target = rfNodes.find(n => n.id === edge.target);
+    if (!target) return;
+    forEachString(edge.data?.condition || {}, text => {
+      for (const m of text.matchAll(STATE_REF_RE)) record(target, m[1]);
+    });
+  });
+
+  return problems;
 }
 
 /**

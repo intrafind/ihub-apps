@@ -28,7 +28,8 @@ import {
   createNewNode,
   parentsFirst,
   absolutePosition,
-  collectUpstreamVariables
+  collectUpstreamVariables,
+  findUnknownReferences
 } from './workflowEditorUtils';
 
 /** Map of custom node types used by React Flow */
@@ -329,6 +330,11 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
     [reactFlowInstance, containerAt, nodes, setNodes, showNotice, t]
   );
 
+  // References to names no step defines. Surfaced continuously rather than
+  // only on save, because the fix — a rename or a typo correction — is
+  // cheapest while the author is still looking at the step.
+  const unknownReferences = useMemo(() => findUnknownReferences(nodes, edges), [nodes, edges]);
+
   /** Apply automatic dagre layout and fit the view */
   const handleAutoLayout = useCallback(() => {
     const layouted = applyDagreLayout(nodes, edges);
@@ -459,6 +465,42 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
             nodeColor={node => NODE_TYPE_COLORS[node.data?.nodeType] || '#6B7280'}
             maskColor="rgba(0,0,0,0.1)"
           />
+          {unknownReferences.length > 0 && (
+            <Panel position="top-left">
+              <div className="max-w-sm bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                <p className="font-medium">
+                  {t(
+                    'workflows.editor.unknownVariables',
+                    'These names are used but never set — they will be empty at run time:'
+                  )}
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {unknownReferences.slice(0, 6).map(ref => (
+                    <li key={`${ref.nodeId}:${ref.name}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = nodes.find(n => n.id === ref.nodeId);
+                          if (target) setSelectedNode(target);
+                        }}
+                        className="font-mono hover:underline text-left"
+                      >
+                        {`{{${ref.name}}}`}
+                      </button>
+                      <span className="opacity-70">{` in ${ref.nodeName}`}</span>
+                    </li>
+                  ))}
+                </ul>
+                {unknownReferences.length > 6 && (
+                  <p className="mt-1 opacity-70">
+                    {t('workflows.editor.andMore', '…and {{count}} more', {
+                      count: unknownReferences.length - 6
+                    })}
+                  </p>
+                )}
+              </div>
+            </Panel>
+          )}
           <Panel position="top-right" className="flex gap-2">
             <button
               onClick={handleAutoLayout}

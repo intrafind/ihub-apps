@@ -1,4 +1,5 @@
 import FormField from './FormField';
+import JsonField from './JsonField';
 
 function HttpForm({ config, onChange }) {
   const auth = config.auth || {};
@@ -23,13 +24,13 @@ function HttpForm({ config, onChange }) {
         onChange={v => onChange({ ...config, method: v })}
         options={['GET', 'POST', 'PUT', 'DELETE', 'PATCH']}
       />
-      <FormField
+      <JsonField
         label="Headers"
-        type="textarea"
+        expect="object"
         rows={4}
         value={config.headers}
         onChange={v => onChange({ ...config, headers: v })}
-        placeholder="JSON object"
+        placeholder={'{\n  "Accept": "application/json"\n}'}
       />
       <FormField
         label="Body"

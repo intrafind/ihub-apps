@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { TextEncoder, TextDecoder } from 'node:util';
+import v8 from 'node:v8';
 
 // jest-environment-jsdom does not expose TextEncoder/TextDecoder as globals,
 // but they are standard in every browser. Polyfill them so client code that
@@ -15,6 +16,14 @@ if (typeof globalThis.setImmediate === 'undefined') {
 }
 if (typeof globalThis.clearImmediate === 'undefined') {
   globalThis.clearImmediate = id => clearTimeout(id);
+}
+
+// jsdom omits structuredClone, which dagre uses during layout. A JSON
+// round-trip is NOT a substitute — it drops undefined and Map/Set values and
+// leaves dagre with a degenerate graph that lays every node on top of the
+// next. v8's serializer gives real structured-clone semantics.
+if (typeof globalThis.structuredClone === 'undefined') {
+  globalThis.structuredClone = value => v8.deserialize(v8.serialize(value));
 }
 
 // Load test environment variables

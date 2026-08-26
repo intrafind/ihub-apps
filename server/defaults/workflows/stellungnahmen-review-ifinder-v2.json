@@ -39,7 +39,8 @@
           "queryLanguage": "de",
           "agentProfileId": "law-consultation-agent",
           "maxFulltextChars": 50000,
-          "filter": ["sourceLocations.label:bmg", "sourceLocations.label:Public"]
+          "filter": ["sourceLocations.label:bmg", "sourceLocations.label:Public"],
+          "_maxSearchIterations": 3
         },
         "inputVariables": [
           {
@@ -161,55 +162,8 @@
       }
     },
     {
-      "id": "init",
-      "type": "transform",
-      "name": {
-        "en": "Initialise corpus + counters",
-        "de": "Korpus + Zähler initialisieren"
-      },
-      "position": {
-        "x": 100,
-        "y": 200
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "set": "_records",
-            "value": []
-          },
-          {
-            "set": "_coverage",
-            "value": {
-              "candidates": {
-                "total": 0,
-                "source": "ifinder"
-              },
-              "processed": 0,
-              "skipped": [],
-              "failed": [],
-              "quotesChecked": 0,
-              "quotesValidated": 0
-            }
-          },
-          {
-            "set": "_searchIterations",
-            "value": 0
-          },
-          {
-            "set": "_maxSearchIterations",
-            "value": 3
-          },
-          {
-            "set": "_corpusMap",
-            "value": ""
-          }
-        ]
-      }
-    },
-    {
       "id": "read-corpus-map",
-      "type": "transform",
+      "type": "memory",
       "name": {
         "en": "Read corpus map from agent memory",
         "de": "Korpusübersicht aus Agent-Memory laden"
@@ -220,15 +174,10 @@
       },
       "config": {
         "chatVisible": false,
-        "operations": [
-          {
-            "readAgentMemorySection": {
-              "profileIdPath": "agentProfileId",
-              "section": "iFinder corpus map"
-            },
-            "to": "_corpusMap"
-          }
-        ]
+        "operation": "read",
+        "profileIdPath": "agentProfileId",
+        "section": "iFinder corpus map",
+        "outputVariable": "_corpusMap"
       }
     },
     {
@@ -432,32 +381,6 @@
       "parentId": "analyse-documents"
     },
     {
-      "id": "mark-truncation",
-      "type": "transform",
-      "name": {
-        "en": "Mark truncation status on the current doc",
-        "de": "Trunkierungs-Status am aktuellen Dokument vermerken"
-      },
-      "position": {
-        "x": 40,
-        "y": 345
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "maxFulltextChars",
-            "to": "_currentDoc.maxFulltextChars"
-          },
-          {
-            "evaluate": "$.data._currentDoc.contentLength > $.data.maxFulltextChars",
-            "to": "_currentDoc.truncated"
-          }
-        ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
       "id": "extract-evidence",
       "type": "prompt",
       "name": {
@@ -475,8 +398,8 @@
           "de": "Sie sind ein KI-Assistent, der eine einzelne Stellungnahme zu einem Gesetzentwurf analysiert. Halten Sie sich strikt an folgende Regeln:\n- Antworten Sie immer in der Sprache des analysierten Dokuments. Vermischen Sie keine Sprachen.\n- Stützen Sie jede Aussage auf das Dokument. Niemals erfinden.\n- Zitate sind Zeichen für Zeichen aus der Quelle übernommen. Niemals paraphrasieren. Lassen Sie keine Zwischensätze aus einem zitierten Abschnitt weg.\n- Wiederholen Sie den Analyseprozess intern und verbessern Sie Ihr Ergebnis, bevor Sie es zurückgeben. Geben Sie ausschließlich das verbesserte Ergebnis aus."
         },
         "prompt": {
-          "en": "## Document\nTitle: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nSource: {{_currentDoc.sourceName}}\n\n{{#if _currentDoc.truncated}}\n**⚠ Truncation warning:** Only the first {{_currentDoc.maxFulltextChars}} of {{_currentDoc.contentLength}} characters of this document were loaded (limit: {{_currentDoc.maxFulltextChars}}). The unread tail may contain additional demands. Output only what you can verify from the visible text; do not invent content from the truncated portion. The final report will mark this document as truncated.\n{{/if}}\n\n### Content\n{{_currentDocContent.content}}\n\n## User focus\n{{userPrompt}}\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
-          "de": "## Dokument\nTitel: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nQuelle: {{_currentDoc.sourceName}}\n\n{{#if _currentDoc.truncated}}\n**⚠ Hinweis zur Kürzung:** Es wurden nur die ersten {{_currentDoc.maxFulltextChars}} von {{_currentDoc.contentLength}} Zeichen dieses Dokuments geladen (Limit: {{_currentDoc.maxFulltextChars}}). Im nicht gelesenen Rest können weitere Forderungen stehen. Geben Sie nur Forderungen aus, die Sie im sichtbaren Text belegen können — erfinden Sie KEINE Inhalte aus dem gekürzten Teil. Der Endbericht kennzeichnet dieses Dokument als gekürzt.\n{{/if}}\n\n### Inhalt\n{{_currentDocContent.content}}\n\n## Nutzer-Fokus\n{{userPrompt}}\n\nDer Nutzer-Fokus nennt das Gesetz, die Paragraphen oder Themen, auf die es dem Nutzer ankommt. Bei der Relevanzprüfung sind Wortfamilien und Synonyme zu berücksichtigen (z. B. „Krankengeld\" trifft auf „§ 48 SGB V\", „Höchstbezugsdauer\", „Anspruchsdauer\" zu). Wenn der Nutzer-Fokus leer ist, gelten ALLE Forderungen als relevant.\n\n## Vorgehen\n\n**Schritt 1 — Inventur.** Listen Sie intern jeden Paragraphen und jedes eigenständige Thema auf, zu dem diese Stellungnahme eine Änderung fordert. Diese Liste nicht ausgeben.\n\n**Schritt 2 — Filtern gegen den Nutzer-Fokus.** Dies ist der wichtigste Schritt. Streng anwenden:\n- Wenn der Nutzer-Fokus **nicht leer** ist UND nichts in Ihrer Schritt-1-Inventur (auch unter Berücksichtigung von Synonymen / Wortfamilien) dazu passt, ist die korrekte Ausgabe `demandedChanges: []`. KEINE themenfremden Forderungen aufnehmen. Themenfremde Forderungen auszugeben ist ein Fehler.\n- Wenn mindestens eine inventarisierte Forderung zum Fokus passt, behalten Sie NUR diese.\n- Wenn der Nutzer-Fokus leer ist, behalten Sie alle.\n\n**Schritt 3 — Extraktion der gefilterten Forderungen.** Für jede:\n1. `summary` — ein Satz, der die Forderung beschreibt.\n2. `paragraphReference` — der exakte Paragraphenbezug (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Leerstring wenn kein Paragraph genannt wird.\n3. `sourceQuote` — das EXAKTE wörtliche Zitat aus dem Dokument. Zeichen für Zeichen. Per Substring-Suche im Originaltext auffindbar. Mittelsätze nicht weglassen — „Satz 1. Satz 2. Satz 3.\" muss vollständig zitiert werden, auch wenn Satz 2 nicht unmittelbar relevant ist.\n4. Nach Paragraph und Absatz sortieren; wenn kein Paragraph, nach Thema.\n\n**Schritt 4 — Metadaten.** Bestimmen Sie `organisation` (die einreichende Stelle, nicht die Person) und `title` der Stellungnahme.\n\n**Schritt 5 — Eigenkontrolle.** Wenden Sie Schritt 2 erneut auf Ihre extrahierte Liste an. Verwerfen Sie jede Forderung, deren Paragraphenbezug und Thema nicht zum Nutzer-Fokus passen. `demandedChanges: []` zurückzugeben ist die korrekte und erwartete Antwort, wenn dieses Dokument den Nutzer-Fokus nicht behandelt.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
+          "en": "## Document\nTitle: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nSource: {{_currentDoc.sourceName}}\n\n{{#if _currentDocContent.truncated}}\n**⚠ Truncation warning:** Only the first {{_currentDocContent.maxLength}} of {{_currentDocContent.originalContentLength}} characters of this document were loaded (limit: {{_currentDocContent.maxLength}}). The unread tail may contain additional demands. Output only what you can verify from the visible text; do not invent content from the truncated portion. The final report will mark this document as truncated.\n{{/if}}\n\n### Content\n{{_currentDocContent.content}}\n\n## User focus\n{{userPrompt}}\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
+          "de": "## Dokument\nTitel: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nQuelle: {{_currentDoc.sourceName}}\n\n{{#if _currentDocContent.truncated}}\n**⚠ Hinweis zur Kürzung:** Es wurden nur die ersten {{_currentDocContent.maxLength}} von {{_currentDocContent.originalContentLength}} Zeichen dieses Dokuments geladen (Limit: {{_currentDocContent.maxLength}}). Im nicht gelesenen Rest können weitere Forderungen stehen. Geben Sie nur Forderungen aus, die Sie im sichtbaren Text belegen können — erfinden Sie KEINE Inhalte aus dem gekürzten Teil. Der Endbericht kennzeichnet dieses Dokument als gekürzt.\n{{/if}}\n\n### Inhalt\n{{_currentDocContent.content}}\n\n## Nutzer-Fokus\n{{userPrompt}}\n\nDer Nutzer-Fokus nennt das Gesetz, die Paragraphen oder Themen, auf die es dem Nutzer ankommt. Bei der Relevanzprüfung sind Wortfamilien und Synonyme zu berücksichtigen (z. B. „Krankengeld\" trifft auf „§ 48 SGB V\", „Höchstbezugsdauer\", „Anspruchsdauer\" zu). Wenn der Nutzer-Fokus leer ist, gelten ALLE Forderungen als relevant.\n\n## Vorgehen\n\n**Schritt 1 — Inventur.** Listen Sie intern jeden Paragraphen und jedes eigenständige Thema auf, zu dem diese Stellungnahme eine Änderung fordert. Diese Liste nicht ausgeben.\n\n**Schritt 2 — Filtern gegen den Nutzer-Fokus.** Dies ist der wichtigste Schritt. Streng anwenden:\n- Wenn der Nutzer-Fokus **nicht leer** ist UND nichts in Ihrer Schritt-1-Inventur (auch unter Berücksichtigung von Synonymen / Wortfamilien) dazu passt, ist die korrekte Ausgabe `demandedChanges: []`. KEINE themenfremden Forderungen aufnehmen. Themenfremde Forderungen auszugeben ist ein Fehler.\n- Wenn mindestens eine inventarisierte Forderung zum Fokus passt, behalten Sie NUR diese.\n- Wenn der Nutzer-Fokus leer ist, behalten Sie alle.\n\n**Schritt 3 — Extraktion der gefilterten Forderungen.** Für jede:\n1. `summary` — ein Satz, der die Forderung beschreibt.\n2. `paragraphReference` — der exakte Paragraphenbezug (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Leerstring wenn kein Paragraph genannt wird.\n3. `sourceQuote` — das EXAKTE wörtliche Zitat aus dem Dokument. Zeichen für Zeichen. Per Substring-Suche im Originaltext auffindbar. Mittelsätze nicht weglassen — „Satz 1. Satz 2. Satz 3.\" muss vollständig zitiert werden, auch wenn Satz 2 nicht unmittelbar relevant ist.\n4. Nach Paragraph und Absatz sortieren; wenn kein Paragraph, nach Thema.\n\n**Schritt 4 — Metadaten.** Bestimmen Sie `organisation` (die einreichende Stelle, nicht die Person) und `title` der Stellungnahme.\n\n**Schritt 5 — Eigenkontrolle.** Wenden Sie Schritt 2 erneut auf Ihre extrahierte Liste an. Verwerfen Sie jede Forderung, deren Paragraphenbezug und Thema nicht zum Nutzer-Fokus passen. `demandedChanges: []` zurückzugeben ist die korrekte und erwartete Antwort, wenn dieses Dokument den Nutzer-Fokus nicht behandelt.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
         },
         "outputVariable": "_extractionOutput",
         "maxTokens": 16000,
@@ -523,8 +446,8 @@
           "required": ["organisation", "title", "demandedChanges", "quotes"]
         },
         "progress": {
-          "message": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDoc.contentLength}} Zeichen, nur die ersten {{_currentDoc.maxFulltextChars}} werden ausgewertet",
-          "when": "$.data._currentDoc.truncated === true"
+          "message": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDocContent.originalContentLength}} Zeichen, nur die ersten {{_currentDocContent.maxLength}} werden ausgewertet",
+          "when": "$.data._currentDocContent.truncated === true"
         }
       },
       "execution": {
@@ -622,16 +545,6 @@
   ],
   "edges": [
     {
-      "id": "e-start",
-      "source": "start",
-      "target": "init"
-    },
-    {
-      "id": "e-init",
-      "source": "init",
-      "target": "read-corpus-map"
-    },
-    {
       "id": "e-map",
       "source": "read-corpus-map",
       "target": "seed-plan"
@@ -666,37 +579,24 @@
       }
     },
     {
-      "id": "e-fetch-doc-mark-truncation",
-      "source": "fetch-doc",
-      "target": "mark-truncation"
-    },
-    {
-      "id": "e-mark-truncation-extract-evidence",
-      "source": "mark-truncation",
-      "target": "extract-evidence",
-      "condition": {
-        "type": "expression",
-        "expression": "$.data._currentDoc.truncated !== true"
-      }
-    },
-    {
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
     },
     {
-      "id": "e-mark-truncation-extract-evidence",
-      "source": "mark-truncation",
-      "target": "extract-evidence",
-      "condition": {
-        "type": "expression",
-        "expression": "$.data._currentDoc.truncated === true"
-      }
-    },
-    {
       "id": "e-search-corpus-refine-decision",
       "source": "search-corpus",
       "target": "refine-decision"
+    },
+    {
+      "id": "e-fetch-doc-extract-evidence",
+      "source": "fetch-doc",
+      "target": "extract-evidence"
+    },
+    {
+      "id": "e-start-read-corpus-map",
+      "source": "start",
+      "target": "read-corpus-map"
     }
   ],
   "allowedGroups": [],

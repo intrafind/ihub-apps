@@ -44,7 +44,7 @@ The loop node's `config` controls the iteration:
 | `maxIterations`  | Safety cap on iterations (default 50, hard ceiling 500).                                                                                                          |
 | `concurrency`    | `forEach` only: number of iterations run in parallel (1–10, default 1 = sequential). See the parallel-mode caveat below.                                          |
 | `itemVariable`   | Optional name for the current item, so body steps can write `{{document}}` instead of `{{_loopItem}}`. Also restored to its previous value when a nested loop finishes.  |
-| `countInto`      | Optional state path the loop increases by one after every finished round (e.g. `coverage.processed`), which removes the need for a counting step inside the body.        |
+| `countInto`      | Optional state path the loop increases by one after every finished round (e.g. `coverage.processed`). The loop defines the path as `0` before the first round, so a `while` condition may read it straight away.  |
 
 ### Loop variables
 
@@ -140,6 +140,27 @@ Its inner extraction prompt therefore uses `{{_subQuestion}}` for the outer item
 
 Nesting works on the canvas like any other containment: drag a loop container into another container to nest it, or add a loop from the palette while the viewport centre sits inside a container. A container can never be dropped into itself or into its own body.
 
+### Knowing which variables exist
+
+Guessing a variable name is the easiest way to break a workflow quietly: a misspelled `{{topci}}` renders as an empty string and the run continues as if nothing happened. Two things in the editor remove the guesswork.
+
+**The Variables tab.** Selecting a step and opening its **Variables** tab lists every name that step can read, grouped by where it comes from — workflow inputs, the output of each earlier step, the enclosing loops' items and counters, and the run metadata the engine provides. Click a name to copy it as `{{name}}`.
+
+**The unknown-name warning.** The canvas shows a warning listing any `{{name}}` or `$.data.name` reference that no step in the workflow defines; clicking one selects the step it appears in. It understands the names steps write beyond `outputVariable` — a corpus search's `corpusVar`/`coverageVar`, a loop's `itemVariable`/`countInto`, a transform's operation targets, a human step's `humanResponse_<id>`, a start step's `inputVariables`/`inputMapping`/`defaults` — and the scopes some steps render against, such as a report template's `records`/`coverage`/`synthesis` and a prompt's `{{sources}}` placeholder. References inside a Handlebars block (`{{#each …}}`) are left alone, since names there resolve against the block rather than workflow state.
+
+### Variables you do not have to define
+
+A step that owns a variable creates it, so seeding it first is unnecessary:
+
+| Variable                             | Created by                                                    |
+| ------------------------------------ | ------------------------------------------------------------- |
+| A loop's `countInto` path            | The loop, set to `0` before its first round.                  |
+| `_records` (or a `recordsVar`)       | The first record a **Collect record** step writes.            |
+| `_corpus` / `_coverage`              | The **Corpus search** step, which builds the coverage object. |
+| A step's `outputVariable`            | The step itself, when it produces its result.                 |
+
+What remains are genuine constants — a search-round budget, a threshold. Those belong in the Start step's **defaults**, not in a transform step at the top of the graph: they are settings for the run, not work the workflow performs.
+
 ### Progress notes on any step
 
 Any step can announce itself in chat while it runs. Add a `progress` object to its config instead of putting a separate announcement step in front of it:
@@ -197,7 +218,7 @@ Several default workflows now ship in a second, container-based variant alongsid
 | Workflow                           | Loop containers used                                                                                                                                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `stellungnahmen-review-v2`         | One `forEach` container over the uploaded documents (`itemVariable: _currentDoc`), two steps long: extract evidence, then record it. The counter and the announcement are loop and step options. |
-| `stellungnahmen-review-ifinder-v2` | Two containers: a `while` container running up to three search-refinement rounds (counting them via `countInto`), and a `forEach` container per document that announces each load and flags truncated ones with a `when`-guarded note. |
+| `stellungnahmen-review-ifinder-v2` | Two containers: a `while` container running up to three search-refinement rounds (counting them via `countInto`), and a `forEach` container per document — fetch, extract, record — that announces each load and flags truncated ones with a `when`-guarded note. Seven steps at the top level, none of them plumbing. |
 | `corpus-analysis-direct-v2`        | One `forEach` container over the search result set (`_corpus`) — the flat completeness pattern: one search, cycle over results.                                                 |
 | `corpus-analysis-decomposed-v2`    | **Nested**: a `forEach` container per planned sub-question (`_subQuestion`), containing a second `forEach` container per document of that sub-question's search (`_currentDoc`). |
 | `iterative-research-auto-v2`       | One `while` container for the think → research → refine cycle, with a conditional sibling edge that ends the round before the researcher once the thinker reports completeness. |

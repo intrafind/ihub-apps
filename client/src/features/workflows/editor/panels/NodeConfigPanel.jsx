@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { nodeFormRegistry } from './forms/index';
 import FormField from './forms/FormField';
+import VariablesPanel from './VariablesPanel';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
 
@@ -114,9 +115,13 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
    * @param {'form' | 'json'} tab - The tab to switch to
    */
   const handleTabSwitch = tab => {
+    if (tab === activeTab) return;
     if (tab === 'json') {
       setConfigText(JSON.stringify(config, null, 2));
-    } else if (tab === 'form') {
+    } else if (activeTab === 'json') {
+      // Only the JSON tab holds edits that are not yet in `config`. Parsing on
+      // every arrival at the form would overwrite form edits with the stale
+      // text last serialized for the JSON tab.
       try {
         const parsed = JSON.parse(configText);
         setConfig(parsed);
@@ -249,9 +254,21 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
           >
             {t('workflows.editor.jsonTab', 'JSON')}
           </button>
+          <button
+            onClick={() => handleTabSwitch('variables')}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'variables'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            {t('workflows.editor.variablesTab', 'Variables')}
+          </button>
         </div>
 
-        {activeTab === 'form' ? (
+        {activeTab === 'variables' ? (
+          <VariablesPanel variables={variables} />
+        ) : activeTab === 'form' ? (
           <>
             {FormComponent ? (
               <FormComponent config={config} onChange={handleConfigChange} variables={variables} />

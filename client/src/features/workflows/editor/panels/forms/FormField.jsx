@@ -60,8 +60,11 @@ function FormField({
   // Guard against object/array values reaching a scalar input — they'd render
   // as "[object Object]" and silently corrupt the field on edit. Show a JSON
   // preview and direct the user to the JSON tab instead.
-  const isComplex =
-    type !== 'select' && type !== 'textarea' && value !== null && typeof value === 'object';
+  // Objects and arrays have no scalar rendering: a plain input shows
+  // "[object Object]" and the first keystroke replaces the structure with a
+  // string. Textareas are included — they are just as lossy. Forms that
+  // legitimately edit structured values should use JsonField instead.
+  const isComplex = type !== 'select' && value !== null && typeof value === 'object';
   if (isComplex) {
     let preview;
     try {
@@ -76,7 +79,7 @@ function FormField({
           {preview}
         </pre>
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-          Complex value — edit via the JSON tab.
+          Structured value — edit via the JSON tab.
         </p>
       </div>
     );

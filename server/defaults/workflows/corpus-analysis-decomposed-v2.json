@@ -53,45 +53,10 @@
               "de": "Themenstichwörter (optional)"
             }
           }
-        ]
-      }
-    },
-    {
-      "id": "init",
-      "type": "transform",
-      "name": {
-        "en": "Init accumulators",
-        "de": "Akkumulatoren initialisieren"
-      },
-      "position": {
-        "x": 100,
-        "y": 180
-      },
-      "config": {
-        "operations": [
-          {
-            "set": "_records",
-            "value": []
-          },
-          {
-            "set": "_corpusAll",
-            "value": []
-          },
-          {
-            "set": "_coverage",
-            "value": {
-              "candidates": {
-                "total": 0,
-                "source": "ifinder"
-              },
-              "processed": 0,
-              "skipped": [],
-              "failed": [],
-              "quotesChecked": 0,
-              "quotesValidated": 0
-            }
-          }
-        ]
+        ],
+        "defaults": {
+          "_corpusAll": []
+        }
       }
     },
     {
@@ -399,16 +364,6 @@
   ],
   "edges": [
     {
-      "id": "e1",
-      "source": "start",
-      "target": "init"
-    },
-    {
-      "id": "e2",
-      "source": "init",
-      "target": "plan-subquestions"
-    },
-    {
       "id": "e21",
       "source": "synthesise",
       "target": "compose"
@@ -452,6 +407,11 @@
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
+    },
+    {
+      "id": "e-start-plan-subquestions",
+      "source": "start",
+      "target": "plan-subquestions"
     }
   ],
   "allowedGroups": [],

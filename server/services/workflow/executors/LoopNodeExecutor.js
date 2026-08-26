@@ -191,6 +191,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         if (key in currentState.data) enclosingLoopVars[key] = currentState.data[key];
       }
 
+      // A loop that counts defines its own counter. Without this the path is
+      // undefined until the first round finishes, so a `while` condition that
+      // reads it (`data.rounds < data.maxRounds`) compares against undefined
+      // on the very first check — and no workflow should need a seeding step
+      // just to make its own loop condition evaluable.
+      if (countInto) this.seedCounter(currentState, countInto);
+
       switch (mode) {
         case 'for': {
           const iterCount = Math.min(count, hardCap);
@@ -570,6 +577,28 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
     const byId = new Map(children.map(c => [c.id, c]));
     return ordered.map(id => byId.get(id));
+  }
+
+  /**
+   * Defines a `countInto` path as 0 when it is not already a number, so the
+   * loop's own condition and any body step can read it from the first round.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} path - Dotted state path, e.g. '_coverage.processed'
+   */
+  seedCounter(state, path) {
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    // Never reset a counter an outer step already set — only define a missing one.
+    if (typeof target[last] !== 'number') target[last] = 0;
   }
 
   /**

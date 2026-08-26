@@ -73,23 +73,50 @@ describe('progress notes', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('reference only variables their loop actually provides', () => {
+  it('reference only variables something in the workflow provides', () => {
     const offenders = [];
     for (const file of files) {
       const wf = load(file);
       const byId = new Map(wf.nodes.map(n => [n.id, n]));
+
+      // Every underscore-prefixed name some step writes, plus what the engine
+      // provides inside a loop body. A note may reference any of them — the
+      // loop's own item, a counter, or a sibling step's output.
+      const written = new Set(['_loopItem', '_loopIndex', '_loopHuman', '_loopTotal']);
+      for (const n of wf.nodes) {
+        const c = n.config || {};
+        for (const key of ['outputVariable', 'itemVariable', 'corpusVar', 'coverageVar']) {
+          if (typeof c[key] === 'string') written.add(c[key].split('.')[0]);
+        }
+        if (typeof c.countInto === 'string') written.add(c.countInto.split('.')[0]);
+        for (const op of c.operations || []) {
+          for (const key of ['to', 'set', 'increment']) {
+            if (typeof op?.[key] === 'string') written.add(op[key].split('.')[0]);
+          }
+        }
+        for (const key of Object.keys(c.defaults || {})) written.add(key);
+      }
+
       for (const node of wf.nodes) {
         const message = node.config?.progress?.message;
         if (typeof message !== 'string') continue;
-        // Collect the item names in scope: this node's ancestors' itemVariables.
-        const inScope = new Set(['_loopItem', '_loopIndex', '_loopHuman', '_loopTotal']);
-        let cursor = byId.get(node.parentId);
-        while (cursor) {
-          if (cursor.config?.itemVariable) inScope.add(cursor.config.itemVariable);
-          cursor = byId.get(cursor.parentId);
-        }
         for (const [, name] of message.matchAll(/\{\{\s*(_[A-Za-z_$][\w$]*)/g)) {
-          if (!inScope.has(name)) offenders.push(`${file}:${node.id} -> {{${name}}}`);
+          if (!written.has(name)) offenders.push(`${file}:${node.id} -> {{${name}}}`);
+        }
+        // A note inside a loop must not reach for an item name only an
+        // enclosing loop defines — that is the shadowing mistake containers
+        // used to make easy.
+        if (node.parentId) {
+          const inScope = new Set(['_loopItem', '_loopIndex', '_loopHuman', '_loopTotal']);
+          let cursor = byId.get(node.parentId);
+          while (cursor) {
+            if (cursor.config?.itemVariable) inScope.add(cursor.config.itemVariable);
+            cursor = byId.get(cursor.parentId);
+          }
+          for (const [, name] of message.matchAll(/\{\{\s*(_loop[A-Za-z]*)/g)) {
+            if (!inScope.has(name))
+              offenders.push(`${file}:${node.id} -> {{${name}}} out of scope`);
+          }
         }
       }
     }
