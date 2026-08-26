@@ -271,7 +271,15 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
         ) : activeTab === 'form' ? (
           <>
             {FormComponent ? (
-              <FormComponent config={config} onChange={handleConfigChange} variables={variables} />
+              // Keyed on the node so every form remounts when the selection
+              // changes: a form holding local text state would otherwise show
+              // the previous node's value and write it onto this one.
+              <FormComponent
+                key={selectedNode.id}
+                config={config}
+                onChange={handleConfigChange}
+                variables={variables}
+              />
             ) : (
               <div className="text-xs text-gray-500 dark:text-gray-400 italic">
                 {t(

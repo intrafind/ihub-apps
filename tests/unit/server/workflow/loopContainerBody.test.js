@@ -27,6 +27,10 @@ jest.mock('../../../../server/services/workflow/executors/index.js', () => ({
         await new Promise(resolve => setTimeout(resolve, node.config.delayMs));
         probe.inflight -= 1;
       }
+      // Record how many times each step ran, so a test can tell "ran" from
+      // "ran twice" — a rejoining branch must not double-execute its join.
+      const runs = (globalThis.__loopRuns ??= {});
+      runs[node.id] = (runs[node.id] || 0) + 1;
       return {
         status: 'completed',
         output: `${node.id}:${state.data._loopItem ?? state.data._loopIndex}`,
@@ -378,6 +382,124 @@ describe('conditional paths inside a loop body', () => {
   });
 });
 
+describe('every body step gets a chance to run', () => {
+  it('runs a step that no sibling edge reaches', async () => {
+    const executor = new LoopNodeExecutor();
+    // A and B are wired together; C is wired to nothing. The schema allows
+    // this — container children are exempt from the incoming-edge rule — so
+    // an author can drop a step in and connect it later.
+    const context = containerContext(
+      [child('a'), child('b'), child('c')],
+      [{ id: 'ab', source: 'a', target: 'b' }]
+    );
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'for', count: 1, outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(node, { executionId: 'e1', data: {} }, context);
+    const ran = result.stateUpdates;
+    expect(ran.ran_a).toBe(true);
+    expect(ran.ran_b).toBe(true);
+    expect(ran.ran_c).toBe(true);
+  });
+
+  it('starts both chains when a body has two entry points', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext(
+      [child('a1'), child('a2'), child('b1'), child('b2')],
+      [
+        { id: 'e1', source: 'a1', target: 'a2' },
+        { id: 'e2', source: 'b1', target: 'b2' }
+      ]
+    );
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'for', count: 1, outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(node, { executionId: 'e2', data: {} }, context);
+    for (const id of ['a1', 'a2', 'b1', 'b2']) {
+      expect(result.stateUpdates[`ran_${id}`]).toBe(true);
+    }
+  });
+
+  it('follows every matching branch of a fan-out, like the outer graph does', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext(
+      [child('fork'), child('left'), child('right')],
+      [
+        { id: 'l', source: 'fork', target: 'left' },
+        { id: 'r', source: 'fork', target: 'right' }
+      ]
+    );
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'for', count: 1, outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(node, { executionId: 'e3', data: {} }, context);
+    expect(result.stateUpdates.ran_left).toBe(true);
+    expect(result.stateUpdates.ran_right).toBe(true);
+  });
+
+  it('runs a rejoining step once, not once per incoming branch', async () => {
+    const executor = new LoopNodeExecutor();
+    globalThis.__loopRuns = {};
+    const context = containerContext(
+      [child('fork'), child('left'), child('right'), child('join')],
+      [
+        { id: 'l', source: 'fork', target: 'left' },
+        { id: 'r', source: 'fork', target: 'right' },
+        { id: 'lj', source: 'left', target: 'join' },
+        { id: 'rj', source: 'right', target: 'join' }
+      ]
+    );
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'for', count: 1, outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(node, { executionId: 'e4', data: {} }, context);
+    expect(result.stateUpdates.ran_join).toBe(true);
+    expect(globalThis.__loopRuns.left).toBe(1);
+    expect(globalThis.__loopRuns.right).toBe(1);
+    expect(globalThis.__loopRuns.join).toBe(1);
+  });
+
+  it('still skips a step whose only incoming edge fails its condition', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext(
+      [child('a'), child('skipped')],
+      [
+        {
+          id: 'cond',
+          source: 'a',
+          target: 'skipped',
+          condition: { type: 'equals', field: 'data.flag', value: 'yes' }
+        }
+      ]
+    );
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'for', count: 1, outputVariable: 'out' }
+    };
+
+    const result = await executor.execute(
+      node,
+      { executionId: 'e5', data: { flag: 'no' } },
+      context
+    );
+    expect(result.stateUpdates.ran_a).toBe(true);
+    expect(result.stateUpdates.ran_skipped).toBeUndefined();
+  });
+});
+
 describe('nested loop containers', () => {
   it('restores the outer loop item after an inner loop finishes', async () => {
     const executor = new LoopNodeExecutor();
@@ -516,6 +638,45 @@ describe('loop bookkeeping options', () => {
 
     const result = await executor.execute(node, state, context);
     expect(result.stateUpdates.done ?? 0).toBe(0);
+  });
+
+  it('advances a TOP-LEVEL counter in sequential mode', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      // A flat path, unlike the nested one above: a nested path can appear to
+      // work through the shallow state copy even when the bump is discarded.
+      config: { mode: 'forEach', array: 'items', countInto: 'done', outputVariable: 'out' }
+    };
+    const state = { executionId: 'i4b', data: { items: [1, 2, 3] } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.stateUpdates.done).toBe(3);
+  });
+
+  it('lets a while loop bound itself on the counter it keeps', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'while',
+        condition: 'data.rounds < 2',
+        countInto: 'rounds',
+        maxIterations: 20,
+        outputVariable: 'out'
+      }
+    };
+    const state = { executionId: 'i4c', data: {} };
+
+    const result = await executor.execute(node, state, context);
+    // Two rounds, not the 20-iteration hard cap: the condition must see the
+    // counter the loop itself maintains.
+    expect(result.stateUpdates.rounds).toBe(2);
+    expect(result.stateUpdates.out).toHaveLength(2);
   });
 
   it('counts and names items in parallel mode too', async () => {

@@ -218,7 +218,43 @@ describe('parentsFirst', () => {
       { id: 'box' },
       { id: 'other' }
     ]);
-    expect(ordered.map(n => n.id)).toEqual(['box', 'other', 'child']);
+    expect(ordered.indexOf(ordered.find(n => n.id === 'box'))).toBeLessThan(
+      ordered.indexOf(ordered.find(n => n.id === 'child'))
+    );
+    expect(ordered.map(n => n.id).sort()).toEqual(['box', 'child', 'other']);
+  });
+
+  it('places a grandchild after its own parent, not just after the roots', () => {
+    // React Flow needs each parent before its children. Two levels of nesting
+    // put a grandchild and its parent in the same "has a parentId" bucket, so
+    // a plain two-way split can still emit them in the wrong order.
+    const ordered = parentsFirst([
+      { id: 'outer' },
+      { id: 'step', parentId: 'inner' },
+      { id: 'inner', parentId: 'outer' }
+    ]).map(n => n.id);
+    expect(ordered.indexOf('outer')).toBeLessThan(ordered.indexOf('inner'));
+    expect(ordered.indexOf('inner')).toBeLessThan(ordered.indexOf('step'));
+  });
+
+  it('keeps every node exactly once', () => {
+    const input = [
+      { id: 'c', parentId: 'b' },
+      { id: 'b', parentId: 'a' },
+      { id: 'a' },
+      { id: 'loose' }
+    ];
+    const ordered = parentsFirst(input);
+    expect(ordered).toHaveLength(4);
+    expect(new Set(ordered.map(n => n.id)).size).toBe(4);
+  });
+
+  it('does not hang on a parent cycle', () => {
+    const ordered = parentsFirst([
+      { id: 'x', parentId: 'y' },
+      { id: 'y', parentId: 'x' }
+    ]);
+    expect(ordered).toHaveLength(2);
   });
 });
 

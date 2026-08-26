@@ -1,5 +1,5 @@
-import { useId, useState } from 'react';
 import FormField from './FormField';
+import JsonField from './JsonField';
 
 /**
  * Config form for `structured-record` nodes.
@@ -9,36 +9,6 @@ import FormField from './FormField';
  * to a state array (default `_records`) for later reporting.
  */
 function StructuredRecordForm({ config, onChange, variables }) {
-  const schemaFieldId = useId();
-  const [schemaText, setSchemaText] = useState(() => {
-    try {
-      return config.schema ? JSON.stringify(config.schema, null, 2) : '';
-    } catch {
-      return '';
-    }
-  });
-  const [schemaError, setSchemaError] = useState(null);
-
-  const handleSchemaChange = text => {
-    setSchemaText(text);
-    if (!text.trim()) {
-      onChange({ ...config, schema: undefined });
-      setSchemaError(null);
-      return;
-    }
-    try {
-      onChange({ ...config, schema: JSON.parse(text) });
-      setSchemaError(null);
-    } catch (e) {
-      // Keep the text so the user can finish typing; config stays unchanged.
-      setSchemaError(e.message);
-    }
-  };
-
-  const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
-  const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
-
   return (
     <div className="space-y-3">
       <FormField
@@ -82,24 +52,15 @@ function StructuredRecordForm({ config, onChange, variables }) {
         suggestions={variables}
         helpText="State array each finished record is appended to. Default: _records"
       />
-      <div>
-        <label htmlFor={schemaFieldId} className={labelClass}>
-          Validation Schema (JSON)
-        </label>
-        <textarea
-          id={schemaFieldId}
-          value={schemaText}
-          onChange={e => handleSchemaChange(e.target.value)}
-          rows={8}
-          placeholder='{"type": "object", "properties": {...}, "required": [...]}'
-          className={`${inputClass} font-mono`}
-        />
-        {schemaError && <p className="text-xs text-red-500 mt-0.5">{schemaError}</p>}
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          Optional JSON Schema the extraction must match. Records that fail are kept but marked as
-          failed. Leave empty to skip validation.
-        </p>
-      </div>
+      <JsonField
+        label="Validation Schema (JSON)"
+        expect="object"
+        rows={8}
+        value={config.schema}
+        onChange={v => onChange({ ...config, schema: v })}
+        placeholder={'{"type": "object", "properties": {...}, "required": [...]}'}
+        helpText="Optional JSON Schema the extraction must match. Records that fail are kept but marked as failed. Leave empty to skip validation."
+      />
     </div>
   );
 }

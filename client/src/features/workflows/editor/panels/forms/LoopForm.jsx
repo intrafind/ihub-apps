@@ -17,6 +17,12 @@ function LoopForm({ config, onChange, variables }) {
   const mode = config.mode || 'forEach';
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // The engine defaults an absent `mode` to 'for' while this form presents
+  // 'forEach'. Carry the displayed mode on every edit, so a loop configured
+  // here never runs as a mode other than the one shown. Merely opening the
+  // panel changes nothing.
+  const update = patch => onChange({ ...config, mode, ...patch });
+
   const arraySuggestions = (variables || []).filter(
     v => !v.value.startsWith('_loop') || v.value === '_loopItem'
   );
@@ -34,7 +40,7 @@ function LoopForm({ config, onChange, variables }) {
         label="Repeat"
         type="select"
         value={mode}
-        onChange={v => onChange({ ...config, mode: v })}
+        onChange={v => update({ mode: v })}
         options={MODE_OPTIONS}
       />
 
@@ -43,7 +49,7 @@ function LoopForm({ config, onChange, variables }) {
           <FormField
             label="List to repeat over"
             value={config.array}
-            onChange={v => onChange({ ...config, array: v })}
+            onChange={v => update({ array: v })}
             suggestions={arraySuggestions}
             placeholder="e.g. searchResults"
             helpText="Name of a list variable produced by an earlier step."
@@ -54,10 +60,7 @@ function LoopForm({ config, onChange, variables }) {
             value={String(config.concurrency || 1)}
             onChange={v => {
               const parsed = Number(v);
-              const next = { ...config };
-              if (parsed > 1) next.concurrency = parsed;
-              else delete next.concurrency;
-              onChange(next);
+              update({ concurrency: parsed > 1 ? parsed : undefined });
             }}
             options={[
               { value: '1', label: 'Off — one after another' },
@@ -71,7 +74,7 @@ function LoopForm({ config, onChange, variables }) {
           <FormField
             label="Name the current item"
             value={config.itemVariable}
-            onChange={v => onChange({ ...config, itemVariable: v || undefined })}
+            onChange={v => update({ itemVariable: v || undefined })}
             placeholder="e.g. document"
             helpText={`Optional. Steps inside can then use {{${config.itemVariable || 'document'}}} instead of {{_loopItem}}, which reads better in prompts and progress notes.`}
           />
@@ -83,7 +86,7 @@ function LoopForm({ config, onChange, variables }) {
           label="How many times"
           type="number"
           value={config.count}
-          onChange={v => onChange({ ...config, count: v })}
+          onChange={v => update({ count: v })}
           min={1}
         />
       )}
@@ -94,7 +97,7 @@ function LoopForm({ config, onChange, variables }) {
           type="textarea"
           rows={3}
           value={config.condition}
-          onChange={v => onChange({ ...config, condition: v })}
+          onChange={v => update({ condition: v })}
           placeholder="data.retryCount < 3"
           helpText="JavaScript condition over the workflow state, e.g. data.needsMoreWork === true"
         />
@@ -104,7 +107,7 @@ function LoopForm({ config, onChange, variables }) {
         <FormField
           label="Task queue variable"
           value={config.queueKey}
-          onChange={v => onChange({ ...config, queueKey: v })}
+          onChange={v => update({ queueKey: v })}
           placeholder="_taskQueue"
           helpText="State key holding the task queue. Steps inside may add more tasks."
         />
@@ -113,7 +116,7 @@ function LoopForm({ config, onChange, variables }) {
       <FormField
         label="Collect results into"
         value={config.outputVariable}
-        onChange={v => onChange({ ...config, outputVariable: v })}
+        onChange={v => update({ outputVariable: v })}
         placeholder="e.g. analyses"
         helpText="After the loop, this variable holds one result per iteration."
       />
@@ -121,7 +124,7 @@ function LoopForm({ config, onChange, variables }) {
       <FormField
         label="Count completed rounds into"
         value={config.countInto}
-        onChange={v => onChange({ ...config, countInto: v || undefined })}
+        onChange={v => update({ countInto: v || undefined })}
         placeholder="e.g. coverage.processed"
         helpText="Optional. The loop increases this number by one after every finished round, so you do not need a counting step inside."
       />
@@ -130,7 +133,7 @@ function LoopForm({ config, onChange, variables }) {
         label="Max iterations (safety limit)"
         type="range"
         value={config.maxIterations ?? 50}
-        onChange={v => onChange({ ...config, maxIterations: v })}
+        onChange={v => update({ maxIterations: v })}
         min={1}
         max={500}
         helpText="The loop always stops after this many rounds."

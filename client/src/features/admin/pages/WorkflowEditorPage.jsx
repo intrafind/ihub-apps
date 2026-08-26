@@ -67,7 +67,12 @@ function WorkflowEditorPage() {
    * For new workflows, prompts for an ID and creates the workflow.
    * For existing workflows, updates in place.
    */
-  /** Persists a workflow object (POST for new, PUT for existing). */
+  /**
+   * Persists a workflow object (POST for new, PUT for existing).
+   *
+   * @returns {Promise<string|null>} The saved workflow's id, or null if the
+   * save failed — callers that chain further requests need to know.
+   */
   const persistWorkflow = useCallback(
     async updated => {
       setSaving(true);
@@ -80,11 +85,13 @@ function WorkflowEditorPage() {
         }
         setWorkflow(updated);
         showToast('success', t('workflows.editor.saveSuccess', 'Workflow saved'));
+        return updated.id || id;
       } catch (err) {
         showToast(
           'error',
           t('workflows.editor.saveFailed', 'Save failed: {{message}}', { message: err.message })
         );
+        return null;
       } finally {
         setSaving(false);
       }
@@ -92,6 +99,10 @@ function WorkflowEditorPage() {
     [isNew, id, navigate, t, showToast]
   );
 
+  /**
+   * @returns {Promise<string|null>} The saved id, or null when nothing was
+   * saved — either the ID dialog opened or the request failed.
+   */
   const handleSave = useCallback(
     async (rfNodes, rfEdges) => {
       const updated = flowToWorkflow(rfNodes, rfEdges, workflow);
@@ -100,9 +111,9 @@ function WorkflowEditorPage() {
         // pattern as validateIdForPath() on the server).
         setIdValue('');
         setIdDialog({ updated });
-        return;
+        return null;
       }
-      await persistWorkflow(updated);
+      return await persistWorkflow(updated);
     },
     [workflow, isNew, persistWorkflow]
   );
@@ -130,9 +141,13 @@ function WorkflowEditorPage() {
    */
   const handlePublish = useCallback(
     async (rfNodes, rfEdges) => {
-      await handleSave(rfNodes, rfEdges);
+      // The ID dialog is asynchronous: on a brand-new workflow `handleSave`
+      // opens it and returns without saving. Publishing anyway would POST to
+      // /workflows/new/publish and fail on top of the open dialog.
+      const savedId = await handleSave(rfNodes, rfEdges);
+      if (!savedId) return;
       try {
-        await apiClient.post(`/workflows/${workflow?.id || id}/publish`);
+        await apiClient.post(`/workflows/${savedId}/publish`);
         showToast(
           'success',
           t('workflows.editor.publishSuccess', 'Workflow published successfully')

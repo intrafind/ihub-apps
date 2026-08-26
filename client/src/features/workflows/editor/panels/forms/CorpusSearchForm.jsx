@@ -13,8 +13,19 @@ import FormField from './FormField';
 /** Render a string array as one entry per line for a textarea. */
 const arrayToLines = value => (Array.isArray(value) ? value.join('\n') : value || '');
 
-/** Parse textarea lines back into a string array (empty text clears the key). */
-const linesToArray = text => (text && text.trim() ? text.split('\n') : undefined);
+/**
+ * Parse textarea lines back into a string array (empty text clears the key).
+ * Blank lines are dropped: pressing Enter after the last entry would otherwise
+ * send an empty query or filter to the search backend.
+ */
+const linesToArray = text => {
+  if (typeof text !== 'string') return undefined;
+  const lines = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines : undefined;
+};
 
 function CorpusSearchForm({ config, onChange, variables }) {
   return (

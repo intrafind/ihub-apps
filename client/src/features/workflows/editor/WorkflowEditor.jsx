@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
@@ -144,9 +144,19 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
   const [notice, setNotice] = useState(null);
   const reactFlowInstance = useReactFlow();
 
-  const showNotice = useCallback(message => {
-    setNotice(message);
-    setTimeout(() => setNotice(null), 3500);
+  // One live timer, so an earlier notice's countdown cannot blank a newer one
+  // partway through. Messages queued in the same tick are shown together
+  // rather than replacing each other.
+  const noticeTimer = useRef(null);
+  const showNotice = useCallback(messages => {
+    const list = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+    if (list.length === 0) return;
+    setNotice(list.join(' '));
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => {
+      setNotice(null);
+      noticeTimer.current = null;
+    }, 3500);
   }, []);
 
   /** Collects a node and every node nested below it. */
@@ -172,19 +182,30 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
    * Finds the loop container (if any) whose box contains the given absolute
    * point. A container can be nested inside another one, but never inside
    * itself or its own body — those are excluded.
+   *
+   * Returns the INNERMOST match. An inner container is drawn inside an outer
+   * one, so a point inside it is inside both; picking the first match in array
+   * order would always give the outer loop, silently attaching the step to the
+   * wrong iteration.
    */
   const containerAt = useCallback(
     (x, y, excludeId) => {
       const excluded = excludeId ? withDescendants(excludeId) : new Set();
+      let best = null;
+      let bestArea = Infinity;
       for (const node of nodes) {
         if (node.type !== 'loopContainer' || excluded.has(node.id)) continue;
         const { width, height } = dimsOf(node);
         const pos = absolutePosition(node, nodes);
         if (x >= pos.x && x <= pos.x + width && y >= pos.y && y <= pos.y + height) {
-          return node;
+          const area = width * height;
+          if (area < bestArea) {
+            best = node;
+            bestArea = area;
+          }
         }
       }
-      return null;
+      return best;
     },
     [nodes, withDescendants]
   );
@@ -284,20 +305,22 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
       const crossing = edges.filter(
         e => (parentOf.get(e.source) ?? null) !== (parentOf.get(e.target) ?? null)
       );
+      const messages = [
+        nextParent
+          ? t('workflows.editor.nodeAdopted', 'Step added to the loop — it now runs once per item.')
+          : t('workflows.editor.nodeReleased', 'Step moved out of the loop.')
+      ];
       if (crossing.length > 0) {
         setEdges(eds => eds.filter(e => !crossing.includes(e)));
-        showNotice(
+        // Losing wiring must never be the silent half of a two-message tick.
+        messages.push(
           t(
             'workflows.editor.boundaryEdgesRemoved',
             'Connections crossing the loop boundary were removed — reconnect inside or outside the loop.'
           )
         );
       }
-      showNotice(
-        nextParent
-          ? t('workflows.editor.nodeAdopted', 'Step added to the loop — it now runs once per item.')
-          : t('workflows.editor.nodeReleased', 'Step moved out of the loop.')
-      );
+      showNotice(messages);
     },
     [nodes, edges, containerAt, setNodes, setEdges, showNotice, t]
   );
@@ -394,24 +417,15 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
    */
   const handleDeleteNode = useCallback(
     nodeId => {
-      setNodes(nds => {
-        const doomed = new Set([nodeId]);
-        let grew = true;
-        while (grew) {
-          grew = false;
-          for (const n of nds) {
-            if (n.parentId && doomed.has(n.parentId) && !doomed.has(n.id)) {
-              doomed.add(n.id);
-              grew = true;
-            }
-          }
-        }
-        setEdges(eds => eds.filter(e => !doomed.has(e.source) && !doomed.has(e.target)));
-        setSelectedNode(prev => (prev && doomed.has(prev.id) ? null : prev));
-        return nds.filter(n => !doomed.has(n.id));
-      });
+      // Compute the doomed set outside the updaters. A state updater must be
+      // pure: React invokes it twice under StrictMode, so calling the other
+      // setters from inside would run them twice per delete.
+      const doomed = withDescendants(nodeId);
+      setNodes(nds => nds.filter(n => !doomed.has(n.id)));
+      setEdges(eds => eds.filter(e => !doomed.has(e.source) && !doomed.has(e.target)));
+      setSelectedNode(prev => (prev && doomed.has(prev.id) ? null : prev));
     },
-    [setNodes, setEdges]
+    [withDescendants, setNodes, setEdges]
   );
 
   /**

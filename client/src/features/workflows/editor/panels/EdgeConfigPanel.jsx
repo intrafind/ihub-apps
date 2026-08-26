@@ -3,6 +3,29 @@ import { useTranslation } from 'react-i18next';
 import FormField from './forms/FormField';
 
 /**
+ * Turns what the user typed into the value the engine will compare against.
+ *
+ * Edge conditions are evaluated with strict equality, so a text input that
+ * always yields a string can never match a number or boolean in state —
+ * `3 === '3'` is false and the edge silently never fires. Literals are
+ * therefore parsed; anything else stays text.
+ *
+ * @param {string} text - Raw input
+ * @returns {string|number|boolean|null} The typed comparison value
+ */
+export function coerceLiteral(text) {
+  const trimmed = typeof text === 'string' ? text.trim() : text;
+  if (trimmed === '') return '';
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (trimmed === 'null') return null;
+  // Only a complete, canonical number — "1.2.3", "1px" and " 12 " with inner
+  // text stay strings rather than becoming a surprising NaN or 1.
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return text;
+}
+
+/**
  * Side panel for editing a selected edge's condition.
  * Turns the raw condition object into a small builder: pick when the
  * connection should be followed, and — for conditional types — which
@@ -99,9 +122,16 @@ export function EdgeConfigPanel({ selectedEdge, variables, onUpdateEdge, onDelet
         {(type === 'equals' || type === 'contains') && (
           <FormField
             label={t('workflows.editor.edgeValue', 'Compare with')}
-            value={condition.value ?? ''}
-            onChange={v => update({ ...condition, value: v })}
+            value={condition.value === undefined ? '' : String(condition.value)}
+            onChange={v => update({ ...condition, value: coerceLiteral(v) })}
             placeholder={type === 'equals' ? 'e.g. true' : 'e.g. error'}
+            helpText={
+              typeof condition.value === 'string'
+                ? t('workflows.editor.edgeValueText', 'Compared as text.')
+                : t('workflows.editor.edgeValueTyped', 'Compared as {{kind}}.', {
+                    kind: condition.value === null ? 'null' : typeof condition.value
+                  })
+            }
           />
         )}
 

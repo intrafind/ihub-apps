@@ -220,7 +220,6 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
-            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -229,6 +228,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
             if (bodyResult.failed) break;
           }
@@ -297,7 +300,6 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
-            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -306,6 +308,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
             if (bodyResult.failed) break;
           }
@@ -337,7 +343,6 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
-            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -347,6 +352,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             });
             // Use returned state so the next condition evaluation sees updated data
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
             if (bodyResult.failed) break;
             i++;
@@ -397,7 +406,6 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
-            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -406,6 +414,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
             // Resolve the task object in the new state (executeBodyNodes
             // shallow-copies state.data, so we have to look it up again).
@@ -753,13 +765,22 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       );
     }
 
-    // Walk the body. With edges between body nodes we follow the first edge
-    // whose condition holds, so an iteration can branch (and skip steps) just
-    // like the outer graph; without edges we run every node in order.
+    // Walk the body. With edges between body nodes we follow every edge whose
+    // condition holds — matching the outer graph, where `getNextNodes` queues
+    // all matching targets — so an iteration can branch, fan out, and skip
+    // steps. Without edges we run every node in order.
     const { bodyEdges = [] } = meta;
     const byId = new Map(bodyNodes.map(n => [n.id, n]));
     const stepCap = bodyNodes.length * 10 + 10;
-    let pending = bodyEdges.length > 0 ? bodyNodes.slice(0, 1) : bodyNodes.slice();
+    // Entry points are every body node with no incoming sibling edge, not just
+    // the first: a body may have two independent chains, and a step wired to
+    // nothing at all still has to run.
+    const hasIncoming = new Set(bodyEdges.filter(e => byId.has(e.target)).map(e => e.target));
+    let pending =
+      bodyEdges.length > 0 ? bodyNodes.filter(n => !hasIncoming.has(n.id)) : bodyNodes.slice();
+    // A step runs at most once per iteration, so a diamond rejoins instead of
+    // running its join twice.
+    const seen = new Set(pending.map(n => n.id));
     let steps = 0;
 
     let failedAtNodeId = null;
@@ -803,11 +824,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       }
 
       if (bodyEdges.length > 0 && result.status !== 'failed') {
-        const next = bodyEdges
-          .filter(e => e.source === bodyNode.id)
-          .find(e => this.scheduler.evaluateCondition(e, result.output, currentState));
-        const nextNode = next ? byId.get(next.target) : null;
-        if (nextNode) pending.push(nextNode);
+        for (const edge of bodyEdges.filter(e => e.source === bodyNode.id)) {
+          if (!this.scheduler.evaluateCondition(edge, result.output, currentState)) continue;
+          const nextNode = byId.get(edge.target);
+          if (!nextNode || seen.has(nextNode.id)) continue;
+          seen.add(nextNode.id);
+          pending.push(nextNode);
+        }
       }
 
       if (result.status === 'failed') {

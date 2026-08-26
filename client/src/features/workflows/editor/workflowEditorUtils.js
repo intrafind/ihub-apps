@@ -192,9 +192,27 @@ function nodeDimensions(rfNode) {
  * parent nodes to appear in the array before nodes that reference them.
  */
 export function parentsFirst(nodes) {
-  const containers = nodes.filter(n => !n.parentId);
-  const children = nodes.filter(n => n.parentId);
-  return [...containers, ...children];
+  // Splitting parented from unparented is not enough once containers nest: a
+  // grandchild would land in the same bucket as its own parent and could still
+  // precede it. Emit each node only after its parent chain, depth first.
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const ordered = [];
+  const placed = new Set();
+  const visiting = new Set();
+
+  const place = node => {
+    if (!node || placed.has(node.id)) return;
+    if (visiting.has(node.id)) return; // cycle guard; the schema rejects these
+    visiting.add(node.id);
+    if (node.parentId && byId.has(node.parentId)) place(byId.get(node.parentId));
+    visiting.delete(node.id);
+    if (placed.has(node.id)) return;
+    placed.add(node.id);
+    ordered.push(node);
+  };
+
+  nodes.forEach(place);
+  return ordered;
 }
 
 /**
@@ -575,8 +593,13 @@ export function variablesProducedBy(rfNode) {
   if (type === 'transform') {
     (Array.isArray(cfg.operations) ? cfg.operations : []).forEach(op => {
       if (!op || typeof op !== 'object') return;
+      // Transform operations name their destination under different keys:
+      // most use `to`, `set` writes a literal, `increment` bumps a counter,
+      // and `merge` writes to `into`. Missing one makes the reference checker
+      // report a step that is actually correct.
       add(op.to, `set by ${name}`);
       add(op.set, `set by ${name}`);
+      add(op.into, `merged by ${name}`);
       add(op.increment, `counted by ${name}`);
     });
   }
