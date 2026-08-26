@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DAGScheduler } from './DAGScheduler.js';
+import { emitNodeProgress } from './nodeProgress.js';
 import { getStateManager, WorkflowStatus } from './StateManager.js';
 import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
@@ -976,6 +977,10 @@ export class WorkflowEngine {
       engine: this, // Reference to engine for sub-workflow spawning (planner nodes)
       depth: options?.depth || 0 // Current sub-workflow nesting depth
     };
+
+    // 6b. A node may carry its own progress note (config.progress) — show it
+    // before the work starts, so the chat reflects what is happening now.
+    emitNodeProgress(node, updatedState, context);
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
     const executionConfig = node.execution || {};

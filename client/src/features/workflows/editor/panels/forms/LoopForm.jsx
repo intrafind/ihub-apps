@@ -68,6 +68,13 @@ function LoopForm({ config, onChange, variables }) {
             ]}
             helpText="Parallel items cannot pass data to each other — only the collected results are kept."
           />
+          <FormField
+            label="Name the current item"
+            value={config.itemVariable}
+            onChange={v => onChange({ ...config, itemVariable: v || undefined })}
+            placeholder="e.g. document"
+            helpText={`Optional. Steps inside can then use {{${config.itemVariable || 'document'}}} instead of {{_loopItem}}, which reads better in prompts and progress notes.`}
+          />
         </>
       )}
 
@@ -109,6 +116,14 @@ function LoopForm({ config, onChange, variables }) {
         onChange={v => onChange({ ...config, outputVariable: v })}
         placeholder="e.g. analyses"
         helpText="After the loop, this variable holds one result per iteration."
+      />
+
+      <FormField
+        label="Count completed rounds into"
+        value={config.countInto}
+        onChange={v => onChange({ ...config, countInto: v || undefined })}
+        placeholder="e.g. coverage.processed"
+        helpText="Optional. The loop increases this number by one after every finished round, so you do not need a counting step inside."
       />
 
       <FormField

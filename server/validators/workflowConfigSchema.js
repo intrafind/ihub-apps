@@ -231,6 +231,25 @@ export const nodeConfigSchema = z.object({
       /** Whether this node's progress is visible in the chat step indicator. Defaults to true. */
       chatVisible: z.boolean().optional(),
       /**
+       * Optional progress note shown while this node runs — the friendly
+       * alternative to a separate `progress` node in a loop body.
+       * `when` is a boolean expression over workflow state; the note is
+       * skipped when it evaluates false.
+       * Standalone `progress` nodes keep using a plain string here as a
+       * legacy alias for their own message, so only objects are treated
+       * as a node-level note.
+       */
+      progress: z
+        .union([
+          z.string(),
+          z.object({
+            message: z.string(),
+            when: z.string().optional(),
+            status: z.enum(['running', 'completed']).optional()
+          })
+        ])
+        .optional(),
+      /**
        * Optional per-node thinking override for LLM-backed nodes (prompt,
        * planner, verifier, query-plan). Overrides the model's thinking config
        * for this node's LLM call only. See nodeThinkingSchema.

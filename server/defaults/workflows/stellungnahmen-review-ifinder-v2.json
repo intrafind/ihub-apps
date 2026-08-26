@@ -273,7 +273,8 @@
         "chatVisible": false,
         "mode": "while",
         "condition": "(data._refineDecision === undefined) || (data._refineDecision.done === false && data._searchIterations < data._maxSearchIterations)",
-        "maxIterations": 3
+        "maxIterations": 3,
+        "countInto": "_searchIterations"
       }
     },
     {
@@ -300,28 +301,6 @@
       "parentId": "refine-search"
     },
     {
-      "id": "advance-search-iteration",
-      "type": "transform",
-      "name": {
-        "en": "Advance search iteration counter",
-        "de": "Suchrunden-Zähler erhöhen"
-      },
-      "position": {
-        "x": 40,
-        "y": 155
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "increment": "_searchIterations",
-            "by": 1
-          }
-        ]
-      },
-      "parentId": "refine-search"
-    },
-    {
       "id": "refine-decision",
       "type": "prompt",
       "name": {
@@ -340,8 +319,8 @@
           "de": "Sie sind ein Korpus-Vollständigkeits-Schiedsrichter. Sie prüfen die Kandidatenliste und den Nutzer-Fokus und entscheiden, ob der Korpus breit genug für eine revisionssichere Stellungnahmen-Auswertung ist. Antworten Sie NUR mit JSON."
         },
         "prompt": {
-          "en": "## User focus\n{{userPrompt}}\n\n## Current query plan\nTopics: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nExpansions: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Candidates so far ({{_corpus.length}} hits in round {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  source={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Decision\nReturn JSON:\n{\n  \"done\": <bool>,                          // true if corpus is sufficient OR you are out of iterations\n  \"reason\": \"<one short sentence, max 25 words — never repeat yourself>\",\n  \"extraTopics\": [\"<additional iFinder query string>\"]  // empty when done=true\n}\n\nRules: if `_searchIterations >= _maxSearchIterations`, ALWAYS return `done: true` (we have hit the cap). Otherwise: if the candidate list clearly misses obvious paragraphs/themes from the user focus, propose 1-3 extra topics; if not, return done=true.",
-          "de": "## Nutzer-Fokus\n{{userPrompt}}\n\n## Aktueller Suchplan\nThemen: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nErweiterungen: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Bisherige Kandidaten ({{_corpus.length}} Treffer in Runde {{_searchIterations}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  quelle={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Entscheidung\nJSON zurückgeben:\n{\n  \"done\": <bool>,\n  \"reason\": \"<ein kurzer Satz, max. 25 Wörter — niemals wiederholen>\",\n  \"extraTopics\": [\"<zusätzliche iFinder-Anfrage>\"]\n}\n\nRegeln: wenn `_searchIterations >= _maxSearchIterations`, IMMER `done: true` zurückgeben (Obergrenze erreicht). Andernfalls: wenn die Kandidatenliste offensichtliche Paragraphen/Themen aus dem Fokus übergeht, 1-3 zusätzliche Themen vorschlagen; sonst `done: true` zurückgeben."
+          "en": "## User focus\n{{userPrompt}}\n\n## Current query plan\nTopics: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nExpansions: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Candidates so far ({{_corpus.length}} hits in round {{_loopHuman}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  source={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Decision\nReturn JSON:\n{\n  \"done\": <bool>,                          // true if corpus is sufficient OR you are out of iterations\n  \"reason\": \"<one short sentence, max 25 words — never repeat yourself>\",\n  \"extraTopics\": [\"<additional iFinder query string>\"]  // empty when done=true\n}\n\nRules: if `_searchIterations >= _maxSearchIterations`, ALWAYS return `done: true` (we have hit the cap). Otherwise: if the candidate list clearly misses obvious paragraphs/themes from the user focus, propose 1-3 extra topics; if not, return done=true.",
+          "de": "## Nutzer-Fokus\n{{userPrompt}}\n\n## Aktueller Suchplan\nThemen: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nErweiterungen: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Bisherige Kandidaten ({{_corpus.length}} Treffer in Runde {{_loopHuman}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  quelle={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Entscheidung\nJSON zurückgeben:\n{\n  \"done\": <bool>,\n  \"reason\": \"<ein kurzer Satz, max. 25 Wörter — niemals wiederholen>\",\n  \"extraTopics\": [\"<zusätzliche iFinder-Anfrage>\"]\n}\n\nRegeln: wenn `_searchIterations >= _maxSearchIterations`, IMMER `done: true` zurückgeben (Obergrenze erreicht). Andernfalls: wenn die Kandidatenliste offensichtliche Paragraphen/Themen aus dem Fokus übergeht, 1-3 zusätzliche Themen vorschlagen; sonst `done: true` zurückgeben."
         },
         "outputVariable": "_refineDecision",
         "thinking": {
@@ -420,47 +399,10 @@
         "chatVisible": false,
         "mode": "forEach",
         "array": "_corpus",
-        "maxIterations": 500
+        "maxIterations": 500,
+        "itemVariable": "_currentDoc",
+        "countInto": "_coverage.processed"
       }
-    },
-    {
-      "id": "load-doc",
-      "type": "transform",
-      "name": {
-        "en": "Load current document",
-        "de": "Aktuelles Dokument laden"
-      },
-      "position": {
-        "x": 40,
-        "y": 60
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "_loopItem",
-            "to": "_currentDoc"
-          }
-        ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "announce-doc",
-      "type": "progress",
-      "name": {
-        "en": "Announce document",
-        "de": "Dokument ankündigen"
-      },
-      "position": {
-        "x": 40,
-        "y": 155
-      },
-      "config": {
-        "chatVisible": false,
-        "message": "📄 Lade Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\""
-      },
-      "parentId": "analyse-documents"
     },
     {
       "id": "fetch-doc",
@@ -482,7 +424,10 @@
           "maxLength": "$.data.maxFulltextChars"
         },
         "outputVariable": "_currentDocContent",
-        "timeout": 90000
+        "timeout": 90000,
+        "progress": {
+          "message": "📄 Lade Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\""
+        }
       },
       "parentId": "analyse-documents"
     },
@@ -509,22 +454,6 @@
             "to": "_currentDoc.truncated"
           }
         ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "announce-truncation",
-      "type": "progress",
-      "name": {
-        "en": "Announce truncation",
-        "de": "Trunkierung ankündigen"
-      },
-      "position": {
-        "x": 350,
-        "y": 400
-      },
-      "config": {
-        "message": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDoc.contentLength}} Zeichen, nur die ersten {{_currentDoc.maxFulltextChars}} werden ausgewertet"
       },
       "parentId": "analyse-documents"
     },
@@ -592,6 +521,10 @@
             }
           },
           "required": ["organisation", "title", "demandedChanges", "quotes"]
+        },
+        "progress": {
+          "message": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDoc.contentLength}} Zeichen, nur die ersten {{_currentDoc.maxFulltextChars}} werden ausgewertet",
+          "when": "$.data._currentDoc.truncated === true"
         }
       },
       "execution": {
@@ -649,28 +582,6 @@
         "sourceSystem": "ifinder",
         "recordsVar": "_records",
         "iterationIndexPath": "$.data._loopIndex"
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "count-processed",
-      "type": "transform",
-      "name": {
-        "en": "Count document as processed",
-        "de": "Dokument als verarbeitet zählen"
-      },
-      "position": {
-        "x": 40,
-        "y": 725
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "increment": "_coverage.processed",
-            "by": 1
-          }
-        ]
       },
       "parentId": "analyse-documents"
     },
@@ -746,16 +657,6 @@
       "target": "end"
     },
     {
-      "id": "e-search-corpus-advance-search-iteration",
-      "source": "search-corpus",
-      "target": "advance-search-iteration"
-    },
-    {
-      "id": "e-advance-search-iteration-refine-decision",
-      "source": "advance-search-iteration",
-      "target": "refine-decision"
-    },
-    {
       "id": "e-refine-decision-merge-refined-plan",
       "source": "refine-decision",
       "target": "merge-refined-plan",
@@ -765,28 +666,9 @@
       }
     },
     {
-      "id": "e-load-doc-announce-doc",
-      "source": "load-doc",
-      "target": "announce-doc"
-    },
-    {
-      "id": "e-announce-doc-fetch-doc",
-      "source": "announce-doc",
-      "target": "fetch-doc"
-    },
-    {
       "id": "e-fetch-doc-mark-truncation",
       "source": "fetch-doc",
       "target": "mark-truncation"
-    },
-    {
-      "id": "e-mark-truncation-announce-truncation",
-      "source": "mark-truncation",
-      "target": "announce-truncation",
-      "condition": {
-        "type": "expression",
-        "expression": "$.data._currentDoc.truncated === true"
-      }
     },
     {
       "id": "e-mark-truncation-extract-evidence",
@@ -798,19 +680,23 @@
       }
     },
     {
-      "id": "e-announce-truncation-extract-evidence",
-      "source": "announce-truncation",
-      "target": "extract-evidence"
-    },
-    {
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
     },
     {
-      "id": "e-collect-evidence-count-processed",
-      "source": "collect-evidence",
-      "target": "count-processed"
+      "id": "e-mark-truncation-extract-evidence",
+      "source": "mark-truncation",
+      "target": "extract-evidence",
+      "condition": {
+        "type": "expression",
+        "expression": "$.data._currentDoc.truncated === true"
+      }
+    },
+    {
+      "id": "e-search-corpus-refine-decision",
+      "source": "search-corpus",
+      "target": "refine-decision"
     }
   ],
   "allowedGroups": [],

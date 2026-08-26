@@ -136,47 +136,9 @@
         "chatVisible": false,
         "mode": "forEach",
         "array": "_queryPlan.topics",
-        "maxIterations": 50
+        "maxIterations": 50,
+        "itemVariable": "_subQuestion"
       }
-    },
-    {
-      "id": "load-subquestion",
-      "type": "transform",
-      "name": {
-        "en": "Load current sub-question",
-        "de": "Aktuelle Teilfrage laden"
-      },
-      "position": {
-        "x": 60,
-        "y": 70
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "_loopItem",
-            "to": "_subQuestion"
-          }
-        ]
-      },
-      "parentId": "per-subquestion"
-    },
-    {
-      "id": "announce-subquestion",
-      "type": "progress",
-      "name": {
-        "en": "Announce sub-question",
-        "de": "Teilfrage ankündigen"
-      },
-      "position": {
-        "x": 60,
-        "y": 240
-      },
-      "config": {
-        "chatVisible": false,
-        "message": "🔍 Teilfrage {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\""
-      },
-      "parentId": "per-subquestion"
     },
     {
       "id": "search-subquestion",
@@ -196,7 +158,10 @@
         "maxPerTopic": 25,
         "maxTotalDocs": 100,
         "fetchFulltext": true,
-        "maxFulltextChars": 30000
+        "maxFulltextChars": 30000,
+        "progress": {
+          "message": "🔍 Teilfrage {{_loopHuman}} / {{_loopTotal}} — \"{{_subQuestion}}\""
+        }
       },
       "parentId": "per-subquestion"
     },
@@ -264,48 +229,11 @@
         "chatVisible": false,
         "mode": "forEach",
         "array": "_corpus",
-        "maxIterations": 500
+        "maxIterations": 500,
+        "itemVariable": "_currentDoc",
+        "countInto": "_coverage.processed"
       },
       "parentId": "per-subquestion"
-    },
-    {
-      "id": "load-doc",
-      "type": "transform",
-      "name": {
-        "en": "Load current document",
-        "de": "Aktuelles Dokument laden"
-      },
-      "position": {
-        "x": 40,
-        "y": 60
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "_loopItem",
-            "to": "_currentDoc"
-          }
-        ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "announce-doc",
-      "type": "progress",
-      "name": {
-        "en": "Announce document",
-        "de": "Dokument ankündigen"
-      },
-      "position": {
-        "x": 40,
-        "y": 155
-      },
-      "config": {
-        "chatVisible": false,
-        "message": "  📄 Doc {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
-      },
-      "parentId": "analyse-documents"
     },
     {
       "id": "extract-evidence",
@@ -329,7 +257,10 @@
         },
         "outputVariable": "_extractionOutput",
         "maxIterations": 1,
-        "maxTokens": 6000
+        "maxTokens": 6000,
+        "progress": {
+          "message": "  📄 Doc {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.title}}\""
+        }
       },
       "execution": {
         "timeout": 90000,
@@ -382,28 +313,6 @@
         "sourceSystem": "ifinder",
         "recordsVar": "_records",
         "iterationIndexPath": "$.data._loopIndex"
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "count-processed",
-      "type": "transform",
-      "name": {
-        "en": "Count document as processed",
-        "de": "Dokument als verarbeitet zählen"
-      },
-      "position": {
-        "x": 40,
-        "y": 440
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "increment": "_coverage.processed",
-            "by": 1
-          }
-        ]
       },
       "parentId": "analyse-documents"
     },
@@ -525,16 +434,6 @@
       "target": "synthesise"
     },
     {
-      "id": "e-load-subquestion-announce-subquestion",
-      "source": "load-subquestion",
-      "target": "announce-subquestion"
-    },
-    {
-      "id": "e-announce-subquestion-search-subquestion",
-      "source": "announce-subquestion",
-      "target": "search-subquestion"
-    },
-    {
       "id": "e-search-subquestion-accumulate-corpus",
       "source": "search-subquestion",
       "target": "accumulate-corpus"
@@ -550,24 +449,9 @@
       "target": "analyse-documents"
     },
     {
-      "id": "e-load-doc-announce-doc",
-      "source": "load-doc",
-      "target": "announce-doc"
-    },
-    {
-      "id": "e-announce-doc-extract-evidence",
-      "source": "announce-doc",
-      "target": "extract-evidence"
-    },
-    {
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
-    },
-    {
-      "id": "e-collect-evidence-count-processed",
-      "source": "collect-evidence",
-      "target": "count-processed"
     }
   ],
   "allowedGroups": [],

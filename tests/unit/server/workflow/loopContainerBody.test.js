@@ -447,3 +447,96 @@ describe('human steps inside a loop body', () => {
     expect(result.output.iterations).toBe(1);
   });
 });
+
+describe('loop bookkeeping options', () => {
+  it('publishes the current item under a name the author chooses', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        itemVariable: '_currentDoc',
+        outputVariable: 'out'
+      }
+    };
+    const state = { executionId: 'i1', data: { items: ['a', 'b'] } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.output.iterations).toBe(2);
+    // The named variable is loop scope: gone again once the loop finishes.
+    expect(result.stateUpdates._currentDoc).toBeUndefined();
+  });
+
+  it('restores a shadowed name to the enclosing value', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', itemVariable: 'doc', outputVariable: 'out' }
+    };
+    const state = { executionId: 'i2', data: { items: ['a'], doc: 'outer' } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.stateUpdates.doc).toBe('outer');
+  });
+
+  it('counts completed rounds into a nested path', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        countInto: '_coverage.processed',
+        outputVariable: 'out'
+      }
+    };
+    const state = { executionId: 'i3', data: { items: [1, 2, 3], _coverage: { processed: 0 } } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.stateUpdates._coverage.processed).toBe(3);
+  });
+
+  it('counts only the rounds that completed', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work')]);
+    context.workflow.nodes.find(n => n.id === 'work').config = { failAlways: true };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: { mode: 'forEach', array: 'items', countInto: 'done', outputVariable: 'out' }
+    };
+    const state = { executionId: 'i4', data: { items: [1, 2, 3] } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.stateUpdates.done ?? 0).toBe(0);
+  });
+
+  it('counts and names items in parallel mode too', async () => {
+    const executor = new LoopNodeExecutor();
+    const context = containerContext([child('work', { config: { delayMs: 5 } })]);
+    context.workflow.nodes.find(n => n.id === 'work').config = { delayMs: 5 };
+    const node = {
+      id: 'the-loop',
+      type: 'loop',
+      config: {
+        mode: 'forEach',
+        array: 'items',
+        itemVariable: '_currentDoc',
+        countInto: 'processed',
+        concurrency: 2,
+        outputVariable: 'out'
+      }
+    };
+    const state = { executionId: 'i5', data: { items: [1, 2, 3, 4] } };
+
+    const result = await executor.execute(node, state, context);
+    expect(result.stateUpdates.processed).toBe(4);
+  });
+});

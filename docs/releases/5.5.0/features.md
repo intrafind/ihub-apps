@@ -1086,3 +1086,32 @@ and a container may sit inside another container.
   the new files automatically at the next server start.
 - The converted workflows deliberately stay sequential: they accumulate shared evidence and
   coverage state each round, and parallel iteration does not propagate body state updates.
+
+## Loop Bookkeeping and Progress Notes Become Step Options
+
+Reading a loop body used to mean stepping over its plumbing: a step to copy the current item under
+a usable name, a step to announce what was about to happen, a step to bump a counter. Those three
+are now options on the steps that already exist, so a body contains only the work it actually does.
+Across the shipped example workflows this removed 42% of the body steps — from 38 down to 22 —
+without changing what any of them do.
+
+- **Name the current item.** A loop's new `itemVariable` option gives the current element a name of
+  its own, so body steps write `{{_currentDoc.displayName}}` instead of `{{_loopItem.displayName}}`.
+  This is what makes nested loops legible: the outer loop's item keeps its name while an inner loop
+  runs, and is restored when the inner loop finishes. `{{_loopItem}}` continues to work everywhere.
+- **Count rounds without a counting step.** A loop's new `countInto` option names a state path — for
+  example `coverage.processed` — that the loop increases by one after every finished round. It
+  works in every loop mode, including `while`, where it replaces the usual "increment the iteration
+  counter" transform.
+- **Progress notes on any step.** Every step can now carry a `progress: { message, when? }` object
+  and announce itself in chat just before it runs, which replaces the separate announcement step
+  that used to precede it. The optional `when` condition means a step can speak up only in the
+  rounds where it has something to say — the iFinder review uses it to flag only those documents
+  whose full text had to be truncated. The standalone `progress` node is unchanged and remains the
+  right choice for an announcement that belongs to no particular step.
+- The visual editor exposes all three: **Name the current item** and **Count completed rounds into**
+  on the loop form, and a **Progress note** field at the bottom of every step's form.
+- The five `-v2` example workflows have been simplified accordingly and keep their IDs. Like all
+  defaults they are copied into `contents/workflows/` at the next server start only when the file
+  is missing, so a copy you have already edited is never overwritten — delete it to take the new
+  version.

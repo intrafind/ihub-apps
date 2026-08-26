@@ -22,6 +22,7 @@
 import vm from 'node:vm';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { DAGScheduler } from '../DAGScheduler.js';
+import { emitNodeProgress } from '../nodeProgress.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
 
@@ -138,7 +139,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       condition,
       maxIterations = 50,
       body: inlineBody = [],
-      outputVariable
+      outputVariable,
+      // Bookkeeping the loop owns, so a body doesn't need plumbing steps:
+      itemVariable, // name the current item, e.g. '_currentDoc'
+      countInto // path incremented once per completed round, e.g. '_coverage.processed'
     } = config;
 
     // Body resolution order:
@@ -181,8 +185,9 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
       // Snapshot any loop variables already in scope (we are nested inside
       // another container) so they can be restored when this loop finishes.
+      const scopeKeys = itemVariable ? [...LOOP_SCOPE_KEYS, itemVariable] : LOOP_SCOPE_KEYS;
       const enclosingLoopVars = {};
-      for (const key of LOOP_SCOPE_KEYS) {
+      for (const key of scopeKeys) {
         if (key in currentState.data) enclosingLoopVars[key] = currentState.data[key];
       }
 
@@ -208,6 +213,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -251,10 +257,15 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               body,
               bodyEdges,
               concurrency,
-              chatId
+              chatId,
+              itemVariable
             );
             results.push(...parallelOutcome.results);
             iterationTimings.push(...parallelOutcome.iterationTimings);
+            if (countInto) {
+              const done = parallelOutcome.iterationTimings.filter(tm => !tm.failed).length;
+              for (let n = 0; n < done; n++) this.bumpCounter(currentState, countInto);
+            }
             break;
           }
 
@@ -264,6 +275,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             currentState.data._loopHuman = i + 1;
             currentState.data._loopItem = iterArr[i];
             currentState.data._loopTotal = iterArr.length;
+            if (itemVariable) currentState.data[itemVariable] = iterArr[i];
 
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
@@ -278,6 +290,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -317,6 +330,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -376,6 +390,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -424,7 +439,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       // Restore the loop variables to what they were before this loop ran.
       // For a nested container that hands the ENCLOSING loop its item back,
       // so body steps after an inner loop still see the outer item.
-      for (const key of LOOP_SCOPE_KEYS) {
+      for (const key of scopeKeys) {
         if (key in enclosingLoopVars) currentState.data[key] = enclosingLoopVars[key];
         else delete currentState.data[key];
       }
@@ -558,6 +573,27 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
+   * Increments a (possibly nested) counter path by one on the live state.
+   * Used for the loop's `countInto` option so a body needs no counting step.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} path - Dotted state path, e.g. '_coverage.processed'
+   */
+  bumpCounter(state, path) {
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    target[last] = (typeof target[last] === 'number' ? target[last] : 0) + 1;
+  }
+
+  /**
    * Collects the workflow edges that connect two body nodes of this container.
    * These drive conditional paths *within* one iteration (e.g. skip a step
    * unless a flag is set); edges leaving the container are not included.
@@ -591,7 +627,17 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    * @param {string} chatId - SSE channel id
    * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>}>}
    */
-  async executeForEachParallel(node, state, context, items, body, bodyEdges, concurrency, chatId) {
+  async executeForEachParallel(
+    node,
+    state,
+    context,
+    items,
+    body,
+    bodyEdges,
+    concurrency,
+    chatId,
+    itemVariable
+  ) {
     const results = new Array(items.length);
     const iterationTimings = new Array(items.length);
     let nextIndex = 0;
@@ -605,7 +651,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           _loopIndex: i,
           _loopHuman: i + 1,
           _loopItem: items[i],
-          _loopTotal: items.length
+          _loopTotal: items.length,
+          ...(itemVariable ? { [itemVariable]: items[i] } : {})
         }
       };
       const bodyResult = await this.executeBodyNodes(body, iterationState, context, {
@@ -697,6 +744,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         break;
       }
       const bodyNode = pending.shift();
+      emitNodeProgress(bodyNode, currentState, context);
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
       lastOutput = result.output;

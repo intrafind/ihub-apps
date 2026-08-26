@@ -132,47 +132,10 @@
         "chatVisible": false,
         "mode": "forEach",
         "array": "_document",
-        "maxIterations": 500
+        "maxIterations": 500,
+        "itemVariable": "_currentDoc",
+        "countInto": "_coverage.processed"
       }
-    },
-    {
-      "id": "load-doc",
-      "type": "transform",
-      "name": {
-        "en": "Load current document",
-        "de": "Aktuelles Dokument laden"
-      },
-      "position": {
-        "x": 40,
-        "y": 60
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "copy": "_loopItem",
-            "to": "_currentDoc"
-          }
-        ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
-      "id": "announce-doc",
-      "type": "progress",
-      "name": {
-        "en": "Announce document",
-        "de": "Dokument ankündigen"
-      },
-      "position": {
-        "x": 40,
-        "y": 155
-      },
-      "config": {
-        "chatVisible": false,
-        "message": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.fileName}}\""
-      },
-      "parentId": "analyse-documents"
     },
     {
       "id": "extract-evidence",
@@ -239,6 +202,9 @@
             }
           },
           "required": ["organisation", "title", "demandedChanges", "quotes"]
+        },
+        "progress": {
+          "message": "📄 Analysiere Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.fileName}}\""
         }
       },
       "execution": {
@@ -299,28 +265,6 @@
       "parentId": "analyse-documents"
     },
     {
-      "id": "count-processed",
-      "type": "transform",
-      "name": {
-        "en": "Count document as processed",
-        "de": "Dokument als verarbeitet zählen"
-      },
-      "position": {
-        "x": 40,
-        "y": 440
-      },
-      "config": {
-        "chatVisible": false,
-        "operations": [
-          {
-            "increment": "_coverage.processed",
-            "by": 1
-          }
-        ]
-      },
-      "parentId": "analyse-documents"
-    },
-    {
       "id": "compose-report",
       "type": "template-render",
       "name": {
@@ -377,24 +321,9 @@
       "target": "end"
     },
     {
-      "id": "e-load-doc-announce-doc",
-      "source": "load-doc",
-      "target": "announce-doc"
-    },
-    {
-      "id": "e-announce-doc-extract-evidence",
-      "source": "announce-doc",
-      "target": "extract-evidence"
-    },
-    {
       "id": "e-extract-evidence-collect-evidence",
       "source": "extract-evidence",
       "target": "collect-evidence"
-    },
-    {
-      "id": "e-collect-evidence-count-processed",
-      "source": "collect-evidence",
-      "target": "count-processed"
     }
   ],
   "allowedGroups": [],

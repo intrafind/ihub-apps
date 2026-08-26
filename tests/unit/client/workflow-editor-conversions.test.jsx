@@ -117,6 +117,64 @@ describe('flowToWorkflow round-trip', () => {
   });
 });
 
+describe('new loop and step options survive an editor round-trip', () => {
+  it('keeps itemVariable, countInto, and a step progress note', () => {
+    const wf = JSON.parse(JSON.stringify(containerWorkflow));
+    const loop = wf.nodes.find(n => n.id === 'the-loop');
+    loop.config.itemVariable = '_currentDoc';
+    loop.config.countInto = 'coverage.processed';
+    wf.nodes.find(n => n.id === 'analyze').config.progress = {
+      message: 'Reading {{_currentDoc.title}}',
+      when: '$.data._currentDoc.truncated === true'
+    };
+
+    const { nodes, edges } = workflowToFlow(wf);
+    const out = flowToWorkflow(nodes, edges, wf);
+
+    const outLoop = out.nodes.find(n => n.id === 'the-loop');
+    expect(outLoop.config.itemVariable).toBe('_currentDoc');
+    expect(outLoop.config.countInto).toBe('coverage.processed');
+    expect(out.nodes.find(n => n.id === 'analyze').config.progress).toEqual({
+      message: 'Reading {{_currentDoc.title}}',
+      when: '$.data._currentDoc.truncated === true'
+    });
+  });
+
+  it('offers the named item to steps inside the loop', () => {
+    const wf = JSON.parse(JSON.stringify(containerWorkflow));
+    wf.nodes.find(n => n.id === 'the-loop').config.itemVariable = '_currentDoc';
+    const { nodes, edges } = workflowToFlow(wf);
+    const names = collectUpstreamVariables(nodes, edges, 'analyze').map(s => s.value);
+    expect(names).toContain('_currentDoc');
+  });
+
+  it('offers both named items to a step inside a nested loop', () => {
+    const wf = JSON.parse(JSON.stringify(containerWorkflow));
+    wf.nodes.find(n => n.id === 'the-loop').config.itemVariable = '_subQuestion';
+    wf.nodes.push({
+      id: 'inner-loop',
+      type: 'loop',
+      name: { en: 'Per document' },
+      position: { x: 20, y: 40 },
+      parentId: 'the-loop',
+      config: { mode: 'forEach', array: '_corpus', itemVariable: '_currentDoc' }
+    });
+    wf.nodes.push({
+      id: 'inner-step',
+      type: 'prompt',
+      name: { en: 'Extract' },
+      position: { x: 10, y: 20 },
+      parentId: 'inner-loop',
+      config: {}
+    });
+
+    const { nodes, edges } = workflowToFlow(wf);
+    const names = collectUpstreamVariables(nodes, edges, 'inner-step').map(s => s.value);
+    expect(names).toContain('_currentDoc');
+    expect(names).toContain('_subQuestion');
+  });
+});
+
 describe('collectUpstreamVariables', () => {
   it('offers workflow inputs, upstream outputs, and loop scope to container children', () => {
     const { nodes, edges } = workflowToFlow(containerWorkflow);

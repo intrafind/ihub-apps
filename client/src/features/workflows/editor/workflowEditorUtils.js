@@ -455,6 +455,16 @@ export function collectUpstreamVariables(rfNodes, rfEdges, nodeId) {
   const self = byId.get(nodeId);
   if (self?.parentId) {
     LOOP_SCOPE_VARIABLES.forEach(v => addVariable(v.value, v.label));
+    // Every enclosing loop that names its item contributes that name too, so a
+    // step nested two containers deep can reach both items by name.
+    let container = byId.get(self.parentId);
+    while (container) {
+      const named = container.data?.nodeConfig?.itemVariable;
+      if (named) {
+        addVariable(named, `current item of ${container.data?.nodeName || container.id}`);
+      }
+      container = container.parentId ? byId.get(container.parentId) : null;
+    }
   }
 
   return Array.from(suggestions.values());

@@ -1,8 +1,76 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { nodeFormRegistry } from './forms/index';
+import FormField from './forms/FormField';
 import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
 import { NodeTypeIcon } from '../nodes/nodeIcons';
+
+/**
+ * Editor for a node's progress note — the one-line message the step announces
+ * in chat while it runs. Any step can carry one, which saves adding a separate
+ * announcement step before it (see server/services/workflow/nodeProgress.js).
+ *
+ * The standalone `progress` node type stores its text as a plain string, so a
+ * string value here is legacy config the engine ignores; that case is sent to
+ * the JSON tab rather than silently rewritten into an object.
+ *
+ * @param {object} props
+ * @param {object} props.config - The node's current config object
+ * @param {function} props.onChange - Callback receiving the updated config
+ * @param {function} props.t - Translation function
+ */
+function ProgressNoteField({ config, onChange, t }) {
+  const progress = config.progress;
+
+  if (typeof progress === 'string') {
+    return (
+      <p className="text-xs text-amber-600 dark:text-amber-400">
+        {t(
+          'workflows.editor.progressNoteLegacy',
+          'This step has a plain-text progress value. Edit it via the JSON tab.'
+        )}
+      </p>
+    );
+  }
+
+  const update = patch => {
+    const next = { ...(progress || {}), ...patch };
+    Object.keys(next).forEach(k => {
+      if (next[k] === '' || next[k] === undefined) delete next[k];
+    });
+    const nextConfig = { ...config };
+    if (next.message) nextConfig.progress = next;
+    else delete nextConfig.progress;
+    onChange(nextConfig);
+  };
+
+  return (
+    <div className="space-y-2">
+      <FormField
+        label={t('workflows.editor.progressNote', 'Progress note')}
+        value={progress?.message}
+        onChange={v => update({ message: v })}
+        placeholder="e.g. 📄 Reading {{_loopItem.title}}…"
+        helpText={t(
+          'workflows.editor.progressNoteHelp',
+          'Optional. Shown in chat just before this step runs, so you do not need a separate announcement step.'
+        )}
+      />
+      {progress?.message && (
+        <FormField
+          label={t('workflows.editor.progressNoteWhen', 'Only show when')}
+          value={progress?.when}
+          onChange={v => update({ when: v })}
+          placeholder="$.data._currentDoc.truncated === true"
+          helpText={t(
+            'workflows.editor.progressNoteWhenHelp',
+            'Optional condition. Leave empty to always show the note.'
+          )}
+        />
+      )}
+    </div>
+  );
+}
 
 /**
  * Side panel for editing the selected workflow node's configuration.
@@ -193,6 +261,11 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
                   'workflows.editor.noFormAvailable',
                   'No form available for this node type. Use the JSON tab.'
                 )}
+              </div>
+            )}
+            {nodeType !== 'start' && nodeType !== 'end' && nodeType !== 'progress' && (
+              <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                <ProgressNoteField config={config} onChange={handleConfigChange} t={t} />
               </div>
             )}
             {nodeType !== 'start' && nodeType !== 'end' && (

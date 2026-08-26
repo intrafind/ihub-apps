@@ -43,6 +43,8 @@ The loop node's `config` controls the iteration:
 | `outputVariable` | State variable that receives the **collected results** — one entry per iteration, each being the output of the last body node (for prompt nodes an object whose `content` field holds the text). |
 | `maxIterations`  | Safety cap on iterations (default 50, hard ceiling 500).                                                                                                          |
 | `concurrency`    | `forEach` only: number of iterations run in parallel (1–10, default 1 = sequential). See the parallel-mode caveat below.                                          |
+| `itemVariable`   | Optional name for the current item, so body steps can write `{{document}}` instead of `{{_loopItem}}`. Also restored to its previous value when a nested loop finishes.  |
+| `countInto`      | Optional state path the loop increases by one after every finished round (e.g. `coverage.processed`), which removes the need for a counting step inside the body.        |
 
 ### Loop variables
 
@@ -54,6 +56,18 @@ During each iteration the loop injects these variables into workflow state, usab
 | `_loopIndex` | 0-based iteration index.                                            |
 | `_loopHuman` | 1-based counterpart of `_loopIndex`, for user-facing progress text. |
 | `_loopTotal` | Total number of iterations (`-1` in `while` mode).                  |
+
+Set `itemVariable` on the loop to give the current item a name of its own. `{{_loopItem}}` keeps working, but a named item reads far better in prompts and progress notes, and it is what makes a nested loop's body legible:
+
+```json
+{
+  "id": "analyse-documents",
+  "type": "loop",
+  "config": { "mode": "forEach", "array": "_corpus", "itemVariable": "_currentDoc" }
+}
+```
+
+Body steps then use `{{_currentDoc.displayName}}`. Like the four built-in loop variables, a named item is scoped to its own loop and restored when an inner loop finishes.
 
 ### Conditional steps inside a loop body
 
@@ -110,22 +124,48 @@ A loop container may itself be a body node of another container — the inner lo
 
 Loop variables are **scoped to their own loop**. When an inner loop finishes it restores `_loopItem`, `_loopIndex`, `_loopHuman` and `_loopTotal` to the enclosing loop's values, so body steps placed after the inner container still see the outer item. After a top-level loop finishes the variables are removed again, as before.
 
-> **Caution:** while the inner loop is running, `_loopItem` (and its three companions) refer to the **inner** item. A step inside the inner body that also needs the outer item must read it from a named variable — copy it in the outer body **before** entering the inner container.
+> **Caution:** while the inner loop is running, `_loopItem` (and its three companions) refer to the **inner** item. A step inside the inner body that also needs the outer item must read it under a name of its own — give each loop an `itemVariable`.
 
-The shipped `corpus-analysis-decomposed-v2` does exactly this: `load-subquestion` is the first step of the outer container and copies the current sub-question, `load-doc` is the first step of the inner container and copies the current document.
+The shipped `corpus-analysis-decomposed-v2` does exactly this: the outer container names its item `_subQuestion`, the inner one names its item `_currentDoc`.
 
 ```json
 {
-  "id": "load-subquestion",
-  "type": "transform",
-  "parentId": "per-subquestion",
-  "config": { "operations": [{ "copy": "_loopItem", "to": "_subQuestion" }] }
+  "id": "per-subquestion",
+  "type": "loop",
+  "config": { "mode": "forEach", "array": "_queryPlan.topics", "itemVariable": "_subQuestion" }
 }
 ```
 
-Its inner extraction prompt therefore uses `{{_subQuestion}}` for the outer item and `{{_loopHuman}}` / `{{_loopTotal}}` for its own per-document counter.
+Its inner extraction prompt therefore uses `{{_subQuestion}}` for the outer item, `{{_currentDoc}}` for the inner one, and `{{_loopHuman}}` / `{{_loopTotal}}` for its own per-document counter.
 
 Nesting works on the canvas like any other containment: drag a loop container into another container to nest it, or add a loop from the palette while the viewport centre sits inside a container. A container can never be dropped into itself or into its own body.
+
+### Progress notes on any step
+
+Any step can announce itself in chat while it runs. Add a `progress` object to its config instead of putting a separate announcement step in front of it:
+
+```json
+{
+  "id": "fetch-doc",
+  "type": "tool",
+  "config": {
+    "toolId": "iFinder_getContent",
+    "progress": { "message": "📄 Loading {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\"" }
+  }
+}
+```
+
+| Field     | Description                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `message` | Required. The text to show, with `{{...}}` templates resolved against workflow state (including loop variables and the named item). |
+| `when`    | Optional condition (`$.data.…`). The note is skipped when it evaluates false, which is how a step announces itself only in some rounds. |
+| `status`  | Optional status label carried on the emitted event (default `running`).                                                        |
+
+The note is emitted just **before** the step runs, both for top-level steps and for steps inside a loop body. It is shown even when the step itself sets `chatVisible: false` — that combination is the point: hide the mechanical step, show the one line that means something to the reader. The editor exposes the note as **Progress note** at the bottom of every step's form.
+
+`stellungnahmen-review-ifinder-v2` uses both variants: `fetch-doc` always announces the document it is about to load, while `extract-evidence` carries a `when`-guarded note that only appears for documents whose full text had to be truncated.
+
+The standalone `progress` node type still exists and is unchanged — use it for an announcement that is not tied to a particular step, such as a phase heading between two blocks of work.
 
 ### Parallel mode caveat
 
@@ -156,10 +196,10 @@ Several default workflows now ship in a second, container-based variant alongsid
 
 | Workflow                           | Loop containers used                                                                                                                                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stellungnahmen-review-v2`         | One `forEach` container over the uploaded documents (`_document`): load → announce → extract → record → count.                                                                  |
-| `stellungnahmen-review-ifinder-v2` | Two containers: a `while` container running up to three search-refinement rounds, and a `forEach` container per document whose body branches on a truncation notice.            |
+| `stellungnahmen-review-v2`         | One `forEach` container over the uploaded documents (`itemVariable: _currentDoc`), two steps long: extract evidence, then record it. The counter and the announcement are loop and step options. |
+| `stellungnahmen-review-ifinder-v2` | Two containers: a `while` container running up to three search-refinement rounds (counting them via `countInto`), and a `forEach` container per document that announces each load and flags truncated ones with a `when`-guarded note. |
 | `corpus-analysis-direct-v2`        | One `forEach` container over the search result set (`_corpus`) — the flat completeness pattern: one search, cycle over results.                                                 |
-| `corpus-analysis-decomposed-v2`    | **Nested**: a `forEach` container per planned sub-question, containing a second `forEach` container per document of that sub-question's search.                                 |
+| `corpus-analysis-decomposed-v2`    | **Nested**: a `forEach` container per planned sub-question (`_subQuestion`), containing a second `forEach` container per document of that sub-question's search (`_currentDoc`). |
 | `iterative-research-auto-v2`       | One `while` container for the think → research → refine cycle, with a conditional sibling edge that ends the round before the researcher once the thinker reports completeness. |
 
 Like all defaults, these files live in `server/defaults/workflows/` and are copied into `contents/workflows/` at the next server start when missing.
