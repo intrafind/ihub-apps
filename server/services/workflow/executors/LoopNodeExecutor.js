@@ -312,7 +312,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             );
             results.push(...parallelOutcome.results);
             iterationTimings.push(...parallelOutcome.iterationTimings);
-            if (!bodyError && parallelOutcome.error) bodyError = parallelOutcome.error;
+            if (parallelOutcome.error) bodyError = parallelOutcome.error;
             if (countInto) {
               const done = parallelOutcome.iterationTimings.filter(tm => !tm.failed).length;
               for (let n = 0; n < done; n++) this.bumpCounter(currentState, countInto);
