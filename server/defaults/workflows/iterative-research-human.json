@@ -24,7 +24,10 @@
         "en": "Start",
         "de": "Start"
       },
-      "position": { "x": 100, "y": 50 },
+      "position": {
+        "x": 100,
+        "y": 50
+      },
       "config": {
         "inputVariables": [
           {
@@ -46,7 +49,10 @@
         "en": "Research Planner",
         "de": "Recherche-Planer"
       },
-      "position": { "x": 100, "y": 130 },
+      "position": {
+        "x": 100,
+        "y": 130
+      },
       "config": {
         "system": {
           "en": "You are a research planner. Break down research tasks into 3-5 specific, focused topics. Each topic should be concrete enough for a single research session. Return your plan as valid JSON with 'topics' array and 'approach' string.",
@@ -62,7 +68,9 @@
           "properties": {
             "topics": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "approach": {
               "type": "string"
@@ -79,7 +87,10 @@
         "en": "Review Plan",
         "de": "Plan prüfen"
       },
-      "position": { "x": 100, "y": 210 },
+      "position": {
+        "x": 100,
+        "y": 210
+      },
       "config": {
         "message": {
           "en": "Review the research plan below. Is it comprehensive and well-structured for the task?",
@@ -113,7 +124,8 @@
             }
           }
         },
-        "showData": ["$.data.researchPlan"]
+        "showData": ["$.data.researchPlan"],
+        "outputVariable": "humanResponse_plan_checkpoint"
       }
     },
     {
@@ -123,11 +135,21 @@
         "en": "Initialize Research",
         "de": "Recherche initialisieren"
       },
-      "position": { "x": 100, "y": 290 },
+      "position": {
+        "x": 100,
+        "y": 290
+      },
       "config": {
         "operations": [
-          { "lengthOf": "researchPlan.topics", "to": "_topicsCount" },
-          { "arrayGet": "researchPlan.topics", "index": 0, "to": "_firstTopic" },
+          {
+            "lengthOf": "researchPlan.topics",
+            "to": "_topicsCount"
+          },
+          {
+            "arrayGet": "researchPlan.topics",
+            "index": 0,
+            "to": "_firstTopic"
+          },
           {
             "set": "researchState",
             "value": {
@@ -136,8 +158,14 @@
               "completedTopics": []
             }
           },
-          { "copy": "_topicsCount", "to": "researchState.total" },
-          { "copy": "_firstTopic", "to": "researchState.currentTopic" }
+          {
+            "copy": "_topicsCount",
+            "to": "researchState.total"
+          },
+          {
+            "copy": "_firstTopic",
+            "to": "researchState.currentTopic"
+          }
         ]
       }
     },
@@ -148,9 +176,17 @@
         "en": "Initialize Findings",
         "de": "Ergebnisse initialisieren"
       },
-      "position": { "x": 100, "y": 370 },
+      "position": {
+        "x": 100,
+        "y": 370
+      },
       "config": {
-        "operations": [{ "set": "allFindings", "value": [] }]
+        "operations": [
+          {
+            "set": "allFindings",
+            "value": []
+          }
+        ]
       }
     },
     {
@@ -160,7 +196,10 @@
         "en": "Topic Researcher",
         "de": "Themen-Rechercheur"
       },
-      "position": { "x": 100, "y": 450 },
+      "position": {
+        "x": 100,
+        "y": 450
+      },
       "config": {
         "system": {
           "en": "You are a thorough researcher. Research ONE specific topic using web search. Provide detailed findings with key facts and sources. Return your findings as valid JSON.",
@@ -175,15 +214,23 @@
         "outputSchema": {
           "type": "object",
           "properties": {
-            "topic": { "type": "string" },
-            "summary": { "type": "string" },
+            "topic": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
             "keyFacts": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "sources": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": ["topic", "summary", "keyFacts", "sources"]
@@ -197,7 +244,10 @@
         "en": "Review Research",
         "de": "Recherche prüfen"
       },
-      "position": { "x": 100, "y": 530 },
+      "position": {
+        "x": 100,
+        "y": 530
+      },
       "config": {
         "message": {
           "en": "Review the research for this topic. Is it thorough enough to include in the final report?",
@@ -231,7 +281,8 @@
             }
           }
         },
-        "showData": ["$.data.currentResearch", "$.data.researchState"]
+        "showData": ["$.data.currentResearch", "$.data.researchState"],
+        "outputVariable": "humanResponse_research_checkpoint"
       }
     },
     {
@@ -241,9 +292,17 @@
         "en": "Accumulate Findings",
         "de": "Ergebnisse sammeln"
       },
-      "position": { "x": 100, "y": 610 },
+      "position": {
+        "x": 100,
+        "y": 610
+      },
       "config": {
-        "operations": [{ "push": "currentResearch", "to": "allFindings" }]
+        "operations": [
+          {
+            "push": "currentResearch",
+            "to": "allFindings"
+          }
+        ]
       }
     },
     {
@@ -253,11 +312,20 @@
         "en": "Topic Controller",
         "de": "Themen-Controller"
       },
-      "position": { "x": 100, "y": 690 },
+      "position": {
+        "x": 100,
+        "y": 690
+      },
       "config": {
         "operations": [
-          { "push": "researchState.currentTopic", "to": "researchState.completedTopics" },
-          { "increment": "researchState.currentIndex", "by": 1 },
+          {
+            "push": "researchState.currentTopic",
+            "to": "researchState.completedTopics"
+          },
+          {
+            "increment": "researchState.currentIndex",
+            "by": 1
+          },
           {
             "condition": "researchState.currentIndex >= researchState.total",
             "to": "researchState.allComplete",
@@ -279,7 +347,10 @@
         "en": "All Topics Complete?",
         "de": "Alle Themen abgeschlossen?"
       },
-      "position": { "x": 100, "y": 770 },
+      "position": {
+        "x": 100,
+        "y": 770
+      },
       "config": {
         "type": "expression",
         "expression": "$.data.researchState.allComplete === true"
@@ -292,7 +363,10 @@
         "en": "Report Generator",
         "de": "Bericht-Generator"
       },
-      "position": { "x": 100, "y": 850 },
+      "position": {
+        "x": 100,
+        "y": 850
+      },
       "config": {
         "system": {
           "en": "You are an expert report writer. Create comprehensive, well-structured research reports that synthesize all findings into a cohesive narrative. Use markdown formatting for the report.",
@@ -312,7 +386,10 @@
         "en": "Complete",
         "de": "Abgeschlossen"
       },
-      "position": { "x": 100, "y": 930 },
+      "position": {
+        "x": 100,
+        "y": 930
+      },
       "config": {
         "outputVariables": ["task", "researchPlan", "allFindings", "finalReport"]
       }

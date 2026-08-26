@@ -1,4 +1,5 @@
 import FormField from './FormField';
+import JsonField from './JsonField';
 
 function HttpForm({ config, onChange }) {
   const auth = config.auth || {};
@@ -23,22 +24,33 @@ function HttpForm({ config, onChange }) {
         onChange={v => onChange({ ...config, method: v })}
         options={['GET', 'POST', 'PUT', 'DELETE', 'PATCH']}
       />
-      <FormField
+      <JsonField
         label="Headers"
-        type="textarea"
+        expect="object"
         rows={4}
         value={config.headers}
         onChange={v => onChange({ ...config, headers: v })}
-        placeholder="JSON object"
+        placeholder={'{\n  "Accept": "application/json"\n}'}
       />
-      <FormField
-        label="Body"
-        type="textarea"
-        rows={4}
-        value={config.body}
-        onChange={v => onChange({ ...config, body: v })}
-        placeholder="Request body..."
-      />
+      {config.body !== null && typeof config.body === 'object' ? (
+        <JsonField
+          label="Body"
+          rows={4}
+          value={config.body}
+          onChange={v => onChange({ ...config, body: v })}
+          helpText="HttpNodeExecutor accepts an object body and serializes it. Clear the field to switch back to raw text."
+        />
+      ) : (
+        <FormField
+          label="Body"
+          type="textarea"
+          rows={4}
+          value={config.body}
+          onChange={v => onChange({ ...config, body: v })}
+          placeholder="Request body..."
+          helpText="Paste a JSON object here and it is sent as text. Use the JSON tab to store it as a structured body."
+        />
+      )}
 
       <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-700">
         Authentication

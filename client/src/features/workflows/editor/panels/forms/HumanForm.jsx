@@ -45,41 +45,45 @@ function HumanForm({ config, onChange }) {
           {options.map((opt, index) => (
             <div
               key={index}
-              className="border border-gray-200 dark:border-gray-700 rounded p-2 flex items-center gap-1.5"
+              className="border border-gray-200 dark:border-gray-700 rounded p-2 space-y-1.5"
             >
+              {/* Three fields plus a delete button do not fit one row in the
+                  320px panel; stack them so each stays readable. */}
               <input
                 type="text"
                 value={opt.value || ''}
                 onChange={e => updateOption(index, 'value', e.target.value)}
                 placeholder="Value"
-                className={`flex-1 ${inputClass}`}
+                className={`${inputClass} font-mono`}
               />
               <input
                 type="text"
                 value={opt.label || ''}
                 onChange={e => updateOption(index, 'label', e.target.value)}
                 placeholder="Label"
-                className={`flex-1 ${inputClass}`}
+                className={inputClass}
               />
-              <select
-                value={opt.style || 'primary'}
-                onChange={e => updateOption(index, 'style', e.target.value)}
-                className={`w-28 ${inputClass}`}
-              >
-                {STYLE_OPTIONS.map(s => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => removeOption(index)}
-                className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 text-sm shrink-0"
-                aria-label="Remove option"
-              >
-                &#x2715;
-              </button>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={opt.style || 'primary'}
+                  onChange={e => updateOption(index, 'style', e.target.value)}
+                  className={`flex-1 min-w-0 ${inputClass}`}
+                >
+                  {STYLE_OPTIONS.map(s => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeOption(index)}
+                  className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 text-sm shrink-0"
+                  aria-label="Remove option"
+                >
+                  &#x2715;
+                </button>
+              </div>
             </div>
           ))}
         </div>

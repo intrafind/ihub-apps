@@ -281,7 +281,11 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       },
       {
         stateUpdates: {
-          [`humanResponse_${node.id}`]: humanResponseOutput,
+          // A step id may contain characters a template cannot reference —
+          // `humanResponse_plan-checkpoint` is unreachable from `{{...}}`.
+          // `outputVariable` lets the step name its own answer, like every
+          // other step; the id-derived key stays the default.
+          [node.config?.outputVariable || `humanResponse_${node.id}`]: humanResponseOutput,
           pendingCheckpoint: null // Clear the pending checkpoint
         },
         branch: response // Use the response value as the branch for decision routing
