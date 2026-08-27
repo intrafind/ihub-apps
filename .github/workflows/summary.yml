@@ -7,19 +7,20 @@ name: Summarize new issues
 # actions/ai-inference@v3 dropped the github-models provider entirely; the only
 # provider left is "copilot", which shells out to the GitHub Copilot CLI.
 #
-# SETUP REQUIRED: the Copilot CLI authenticates with a *user* token that has a
-# Copilot seat. The ephemeral GITHUB_TOKEN has no Copilot entitlement, so it
-# cannot be used. To re-enable summaries, add a repository secret COPILOT_PAT:
+# The Copilot CLI authenticates with a *user* token that has a Copilot seat.
+# The ephemeral GITHUB_TOKEN has no Copilot entitlement, so it cannot be used.
+# Inference therefore reads the COPILOT_GITHUB_TOKEN secret, which must be a
+# fine-grained PAT created on a personal account (an organization-owned token
+# will not work) by a user with an active Copilot subscription, carrying the
+# "Copilot Requests" account permission. No repository scopes are needed - the
+# PAT is never used to touch this repository.
 #
-#   1. An account with an active GitHub Copilot subscription creates a
-#      fine-grained PAT. It must be created on a personal account - an
-#      organization-owned token will not work.
-#   2. Grant it the "Copilot Requests" account permission (no repo scopes are
-#      needed; this workflow never uses the PAT to touch the repository).
-#   3. Save it as the repository secret COPILOT_PAT.
-#
-# Until that secret exists this workflow logs a warning and exits cleanly
-# instead of failing on every newly opened issue.
+# Secrets are not auto-exported to the runner, so the env mapping below is
+# required even though the secret shares the variable's name. If the secret is
+# ever removed the workflow logs a warning and exits cleanly rather than
+# failing on every newly opened issue. Note that a fine-grained PAT expires;
+# once it does, the secret is still set but inference will start failing, so
+# the token needs rotating on its expiry schedule.
 
 on:
   issues:
@@ -42,14 +43,14 @@ jobs:
       issues: write
 
     env:
-      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
 
     steps:
       - name: Check Copilot credentials
         id: creds
         run: |
           if [ -z "$COPILOT_GITHUB_TOKEN" ]; then
-            echo "::warning::Secret COPILOT_PAT is not configured - skipping the AI issue summary. See the setup note in .github/workflows/summary.yml."
+            echo "::warning::Secret COPILOT_GITHUB_TOKEN is not configured - skipping the AI issue summary. See the setup note in .github/workflows/summary.yml."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -75,8 +76,8 @@ jobs:
         with:
           model: gpt-4.1
           # Deliberately no `copilot-allow-tools`: the Copilot CLI is agentic and
-          # would act with the COPILOT_PAT identity. Leaving it unset keeps this a
-          # text-only completion, so untrusted issue content cannot drive tools.
+          # would act with the COPILOT_GITHUB_TOKEN identity. Leaving it unset keeps
+          # this a text-only completion, so untrusted issue content cannot drive tools.
           prompt: |
             You are summarizing a GitHub issue for repository maintainers.
 
