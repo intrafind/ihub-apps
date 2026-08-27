@@ -1,19 +1,20 @@
 # One Agentic Loop — Unified Runtime for Chats, Workflows and Agents
 
-**Date:** 2026-08-26
+**Date:** 2026-08-26 (revised 2026-08-27: full cutover, no coexisting implementations, TDD-first)
 **Status:** Concept / design proposal
-**Related:** `concepts/2026-08-26 Agent Harness Comparison — DeepSeek Harness, Hermes, Deep Agents vs iHub.md` (this concept combines roadmap items P0.1 RunLog, P0.2 server-side sessions, P1.4 approval seam, and P2.10 chat-loop parity into one architectural move)
-**Sources:** `server/services/chat/ToolExecutor.js`, `server/services/chat/ChatService.js`, `server/services/workflow/executors/PromptNodeExecutor.js`, `server/services/workflow/executors/HumanNodeExecutor.js`, `server/services/workflow/WorkflowEngine.js`, `server/tools/askUser.js`, `server/tools/workflowRunner.js`, `server/actionTracker.js`, `server/routes/chat/feedbackRoutes.js`, `server/routes/agents/runs.js`
+**Decision recorded:** The unification only succeeds if *everyone* uses the same loop. Therefore this is **not** a lift-and-delegate refactor that leaves old paths alive: every caller is changed, every old implementation is **deleted**, the SSE contract is redesigned and the frontend migrated with it, and the whole effort is driven test-first.
+**Related:** `concepts/2026-08-26 Agent Harness Comparison — DeepSeek Harness, Hermes, Deep Agents vs iHub.md` (combines roadmap items P0.1 RunLog, P0.2 server-side sessions, P1.4 approval seam, P2.10 chat-loop parity)
+**Sources:** `server/services/chat/{ToolExecutor,StreamingHandler,NonStreamingHandler,ChatService,appToolsGateway}.js`, `server/services/workflow/executors/{PromptNodeExecutor,HumanNodeExecutor,VerifierNodeExecutor,PlannerNodeExecutor,DecisionNodeExecutor}.js`, `server/services/workflow/WorkflowLLMHelper.js`, `server/routes/openaiProxy.js`, `server/tools/{askUser,workflowRunner}.js`, `server/actionTracker.js`, `client/src/features/chat/hooks/useAppChat.js`, `client/src/features/workflows/hooks/useWorkflowExecution.js`, `tests/` + `server/tests/`
 
 ---
 
 ## 1. Executive summary
 
-1. **iHub runs three divergent LLM loops today.** The chat loop (`ToolExecutor.processChatWithTools` → `continueWithToolExecution`, hard cap 10 sequential iterations), the workflow/agent loop (`PromptNodeExecutor.executeLLMWithTools`, budget-driven with microcompaction and circuit breakers), and the no-tools streaming/non-streaming handlers. Every loop improvement lands in one place and skews the others — budgets, context recovery, circuit breakers, and the citations ledger exist only in the workflow path; knowledge-source badges and clarifications exist only in the chat path.
-2. **Human interaction exists as four disconnected mechanisms.** `ask_user` (chat: ends the turn, discards in-flight loop state, max 10/conversation), `human` nodes (workflows: durable pause with approver groups, options, input schema, wall clock suspended), the workflow-in-chat checkpoint bridge (`workflowRunner` forwards `workflow.human.required` into the chat stream), and message feedback (`POST /feedback`, stored but invisible to the running loop). They have four different data shapes, three different answer channels, and no shared audit trail.
-3. **The proposal: one `AgentLoop` runtime + one `RunLog` ledger + one `Interaction` model, consumed by every surface.** A chat turn, a workflow prompt/agent node, an agent run step, an app-as-tool invocation, and an MCP-exposed app all execute the *same* loop, which writes the *same* append-only event ledger and raises the *same* typed interactions (question / approval / review) answered through whichever channel the run is attached to (chat stream, run page, notification). This is exactly how Claude Code works: one loop under interactive chat, headless runs, and subagents; a session you can leave, resume, steer, and audit — the surface is just a channel.
-4. **The unified loop is extracted from `PromptNodeExecutor`, not written fresh.** It is already the superior implementation (token budgets with graceful wrap-up, reactive microcompaction, tool circuit breakers, abort-signal awareness, structured output, per-step logs). The chat path adopts it behind a feature flag; `ToolExecutor`'s duplicate loop is retired. `HumanNodeExecutor`'s checkpoint model (id, options, inputSchema, showData, expiry, approver groups, branch routing) becomes the wire format for *all* interactions — `ask_user` becomes a `question` interaction that pauses and resumes instead of ending the turn.
-5. **What users get:** chats that can pause for questions and continue where they stopped (also after a browser reload or on another device), workflows and agents that can ask real questions mid-run — not only approve/reject — through the same UI as chat, feedback that is recorded on the run ledger where it can steer verifier loops and evals, one run inspector for everything, and the ability to promote any chat into a long-running, schedulable, delegable run. What the platform gets: every model-visible byte and every human decision in one reviewable ledger.
+1. **iHub runs three divergent LLM loops and several loop-adjacent call paths.** The chat tool loop (`ToolExecutor`, hard cap 10 sequential iterations), the workflow/agent loop (`PromptNodeExecutor.executeLLMWithTools`, budget-driven with microcompaction and circuit breakers), the no-tools `StreamingHandler`/`NonStreamingHandler` pair, `WorkflowLLMHelper`'s direct adapter calls (used by planner/verifier/summarizer/memory-composer), and the OpenAI-compatible inference proxy (`routes/openaiProxy.js`). Every improvement lands in one of them and skews the rest.
+2. **Human interaction exists as four disconnected mechanisms** — `ask_user` (ends the chat turn, discards in-flight loop state), `human` nodes (durable pause with approver groups and branch routing), the workflow-in-chat checkpoint bridge, and message feedback (stored, invisible to the running loop) — with four data shapes, three answer channels, and no shared audit trail.
+3. **The proposal: one execution stack — `LLMClient` + `AgentLoop` — one `RunLog` ledger, one `Interaction` model, used by every caller with no exceptions and no surviving alternatives.** `LLMClient` is the single provider-request primitive (streaming-native; "non-streaming" is a collected stream, not a second code path). `AgentLoop` is the single tool-executing loop over it. Chat turns, workflow prompt/agent nodes, agent run steps, app-as-tool, the MCP gateway, and the inference API all sit on this stack; `ToolExecutor`'s loop, both handlers, and `WorkflowLLMHelper`'s private path are **deleted**, not wrapped.
+4. **The SSE contract is redesigned once (v2) and the frontend moves with it — a clean break, decided.** Today the chat client alone consumes 17 ad-hoc event names, with different vocabularies again in the workflow-execution and agent-run views. SSE v2 is one typed event schema (a projection of RunLog events) consumed by **one** client-side event reducer shared by chat, workflow, and run-detail surfaces. No dual-emit compatibility layer; embedded surfaces (Teams, Outlook add-in, Nextcloud) migrate in the same major release. The one deliberately unchanged wire contract is the inference API — it is OpenAI-shaped by definition; only its implementation moves.
+5. **Test-driven, in the strict sense.** The contracts (LoopRequest/LoopResult, RunLog events, Interaction, SSE v2) are written as executable schemas and contract-test suites *before* the implementation; recorded provider-stream fixtures and replay tests pin current behavior before any caller moves; each migration stage's definition of done is "old code deleted, all suites green". The repo's existing infrastructure carries this: Jest unit/integration suites (including the agent-loop behavior tests that become the shared spec — `agent-budget-loop`, `agent-loop-proactive-compaction`, `agent-audit-trail`, `tests/integration/workflows`), per-provider adapter fixture tests, cluster tests, and Playwright e2e.
 
 ---
 
@@ -33,7 +34,7 @@
 | Telemetry | OTel GenAI span per round (`llmCallTelemetry`) | Usage into `_budget` + step logs; spans via `WorkflowLLMHelper` |
 | Citations / knowledge sources | Knowledge-source badges (`trackAnswerSource`) | `_citations` ledger |
 
-Also in the field: `NonStreamingHandler`/`StreamingHandler` (the no-tools degenerate cases), `WorkflowLLMHelper` (direct adapter calls with their own retry policy), and `ChatService.invokeAppInternal` (the whole chat pipeline replayed against an `InMemorySink` for app-as-tool). Every one of these is a place loop behavior can diverge — and per the harness study, all three reference harnesses (DeepSeek Harness, Hermes, Deep Agents) run **one** loop under every surface precisely to avoid this.
+Per the harness study, all three reference harnesses (DeepSeek Harness, Hermes, Deep Agents) run **one** loop under every surface precisely to avoid this divergence.
 
 ## 3. Today: four human-interaction mechanisms
 
@@ -44,180 +45,187 @@ Also in the field: `NonStreamingHandler`/`StreamingHandler` (the no-tools degene
 | Workflow-in-chat bridge (`server/tools/workflowRunner.js`) | Same checkpoint, re-emitted as a `workflow.checkpoint` chat event; safety timeout suspended while paused | Chat stream → `POST /api/workflows/executions/:id/respond` | Workflow pauses; chat turn stays open | Same as human node |
 | Feedback (`server/routes/chat/feedbackRoutes.js`) | `{messageId, appId, chatId, messageContent, rating}` → `recordFeedback` + `storeFeedback` | Thumbs/star UI on chat messages | None — fire-and-forget; the running loop never sees it | usage.json / feedback store, detached from any run |
 
-Plus the *intervention* channel: `POST /api/apps/:appId/chat/:chatId/stop` (cluster-aware abort) and `engine.cancel()` — stop exists everywhere, but **steering** (redirect a running loop without killing it, Claude Code's mid-turn message / dsh's `steer()` / Hermes' `/steer`) exists nowhere.
+Plus the *intervention* channel: `POST /api/apps/:appId/chat/:chatId/stop` and `engine.cancel()` — stop exists everywhere, but **steering** (redirect a running loop without killing it) exists nowhere.
 
-The inconsistency is user-visible: an app author who wants "ask the user something mid-task" gets a turn-ending clarification in chat but a durable resumable checkpoint in a workflow; an agent can be approved but not *asked*; feedback can't fail a verifier; and none of it lands in one reviewable record.
+## 4. The complete caller inventory — everything that moves, everything that dies
 
----
+The success criterion is architectural monoculture: after the cutover there is exactly **one** way a model gets called and exactly **one** way a tool loop runs. Every row below is in scope; "same interface" admits no exceptions.
 
-## 4. Target picture — what "like Claude Code" means for iHub
+| # | Caller today | Path today | Target | Deleted afterwards |
+|---|---|---|---|---|
+| 1 | Chat with tools | `ToolExecutor.processChatWithTools` → `continueWithToolExecution` | `AgentLoop.run` with a chat channel | The entire duplicated loop (dispatch, accumulation, iteration control) in `ToolExecutor.js` |
+| 2 | Chat without tools, streaming | `StreamingHandler.executeStreamingResponse` | Same `AgentLoop.run` — a no-tools run is the same loop finishing in one step | `StreamingHandler.js` as a separate implementation (thinking/grounding/image handling moves into the loop's stream pipeline) |
+| 3 | Chat without tools, non-streaming | `NonStreamingHandler.executeNonStreamingResponse` | Same run, **collect mode**: the caller awaits the assembled `LoopResult` instead of subscribing to events — streaming is the only wire path to providers | `NonStreamingHandler.js` |
+| 4 | OpenAI-compatible inference API | `routes/openaiProxy.js` (models + chat completions incl. tool calls) | Thin OpenAI wire adapter over **`LLMClient`** (single step; client-defined tools are returned to the caller, never executed server-side — tool execution belongs to the external caller on this surface). External wire contract unchanged: it is OpenAI-shaped by definition | The proxy's private request/streaming plumbing |
+| 5 | Workflow `prompt`/`agent` nodes | `PromptNodeExecutor.executeLLMWithTools` | `AgentLoop.run` (this loop is the *donor* — extracted, not rewritten) | The in-executor copy of the loop |
+| 6 | Planner / verifier / decision / summarizer / memory-composer / title generation / magic prompt | `WorkflowLLMHelper.executeStreamingRequest`, ad-hoc adapter calls | **`LLMClient.execute`** (single-shot; verifier's tool-enabled adversarial mode uses `AgentLoop`) | `WorkflowLLMHelper`'s private path — its retry/option-allowlist logic *becomes* `LLMClient` |
+| 7 | Agent runs | Profile → workflow → node executors | Unchanged shape; inherits the loop through #5/#6 | — |
+| 8 | App-as-tool / `ChatService.invokeAppInternal` | Full chat pipeline replayed against `InMemorySink` | Child `AgentLoop.run` (headless channel, frozen principal + policies, `parentRunId` link) | `InMemorySink`'s response-shape normalization hacks (ChatService.js:127–169) |
+| 9 | MCP gateway (apps/workflows as tools) + A2A `tasks/send` | `invokeAppNonStreaming` → chat pipeline | Same child-run path as #8 | Bespoke invocation glue |
+| 10 | Chat-embedded workflows | `workflowRunner` bridging engine events onto chat SSE | Unchanged trigger; its event bridge becomes a RunLog→SSE-v2 projection instead of hand-mapped events | Hand-mapped event translation |
 
-Claude Code's operating model, mapped onto iHub's vocabulary:
-
-1. **Everything is a run on one loop.** An interactive chat is a run with a live channel attached. A headless/scheduled execution is the same run without one. A workflow prompt node is a run segment. A subagent / app-as-tool call is a child run. The *only* differences are the channel, the trigger, and the policy — never the loop code.
-2. **Every run writes one ledger.** Prompts as rendered, tool calls and results, interactions asked and answered, budget events, compactions — append-only, reviewable later in one inspector, resumable and (eventually) replayable. ("Model-visible ⟺ logged", per the harness study.)
-3. **Human interaction is one typed stream, both directions.** Agent→human: questions, approvals, reviews — rendered inline when a human is attached, parked as durable pending interactions with notifications when not. Human→agent: answers, steering, stop, feedback — accepted mid-run without destroying loop state.
-4. **Pauses are durable.** A question or approval pauses the run; the run survives a browser reload, a server restart, or an overnight wait, and resumes from exactly where it stopped, on any device.
-
-Concretely for iHub users: start a task in chat, answer a clarification an hour later from the run page; give an agent profile the *same* `ask_user` capability workflows have; rate an agent's draft and have the verifier loop consume the rating; open one trajectory view for a chat, a workflow execution, or an agent run and see the same event types.
+Auxiliary single-call consumers (#6) are the reason for the two-layer interface: they are not loops and should not pretend to be. `AgentLoop` itself calls providers **only** through `LLMClient`, so "one interface" holds at both altitudes: one primitive for a model call, one loop for tool execution. A lint/CI guard (see §8) fails the build on any new direct adapter/fetch usage outside `LLMClient`.
 
 ---
 
 ## 5. Design
 
-### 5.1 `AgentLoop` — the one loop
+### 5.1 `LLMClient` — the one request primitive
 
-A new service `server/services/loop/AgentLoop.js`, extracted from `PromptNodeExecutor.executeLLMWithTools` (the richer implementation — budgets, microcompaction, circuit breakers, abort awareness, structured output). Target shape:
+`server/services/loop/LLMClient.js`, absorbed from `WorkflowLLMHelper` + the fetch/parse plumbing duplicated across `ToolExecutor` and the handlers:
 
 ```js
-// One invocation = one "segment": the model works until it produces a final
-// answer, raises an interaction, exhausts a budget, or is aborted.
-const result = await agentLoop.run({
-  runId,                    // RunLog stream this segment appends to
-  principal,                // user | agent service account (frozen for children)
-  model, messages, tools,   // as today (prep / node config)
-  policies: {
-    budgets,                //  maxTokensPerRun / maxToolRounds / wallTime — one schema
-    approval,               //  approval rules consulted by the pre-tool gate (P1.4)
-    interactions,           //  which interaction kinds this run may raise + limits
-    context,                //  compaction thresholds, spill limits
-  },
-  channel,                  // ChannelBinding: chat SSE | run page | none (headless)
-  signal,                   // AbortSignal (chat stop / engine cancel / timeout)
+const stream = llmClient.execute({
+  model, messages, tools?, apiKey,
+  options: { temperature, maxTokens, responseSchema?, responseFormat?, thinking?, nativeWebSearch? },
+  telemetry: { runId, step },        // OTel GenAI span + RunLog request/header handled HERE, once
+  signal,
 });
-// result: { status: 'completed'|'paused'|'aborted'|'error'|'budget_exhausted',
-//           content, structured, finishReason, usage, citations,
-//           pendingInteraction?  // when status === 'paused'
-//         }
+// stream: AsyncIterable<GenericChunk> (text | thinking | tool_call_delta | image | grounding | usage | finish)
+// await llmClient.collect(stream) → { content, toolCalls, thinking, usage, finishReason, ... }
 ```
 
-Internal step pipeline with three seams, so cross-cutting behavior is registered, not woven in (the waterfall/middleware pattern every studied harness uses):
+Properties: streaming is the only provider wire path (`collect()` is how "non-streaming" callers consume it — one code path, two consumption modes); provider normalization stays in `adapters/toolCalling/` untouched; retry/failover policy (transient 429/5xx/network) lives here once; **every** call logs a `request/header` RunLog event and opens the GenAI span here, so no caller can forget telemetry or the ledger.
 
-- **`pre-step`** — context policies run here: proactive summarization, spill of oversized tool results, prompt assembly finalization. The full request envelope (rendered system prompt + tool schemas + call config) is written to the RunLog *before* the call.
-- **`pre-tool` / `post-tool`** — the approval gate (P1.4), circuit breakers, argument-default injection, result-size spill, citation extraction. `ask_user` stops being special-cased in the loop body: it is a `question` interaction raised through the same seam any tool could use (`requiresUserInput` already exists on tool descriptors).
-- **`step-end`** — budget accounting, telemetry span finalization, knowledge-source/citation merge.
+### 5.2 `AgentLoop` — the one loop
 
-Independent tool calls in one assistant turn execute concurrently behind a segment planner (read-only tools always parallel; others sequential), matching Hermes' dispatch design.
+Extracted from `PromptNodeExecutor.executeLLMWithTools` (the richer implementation: run-level token budgets with graceful wrap-up, reactive microcompaction, circuit breakers, abort awareness, structured output). One invocation = one *segment*: the model works until final answer, raised interaction, exhausted budget, or abort.
 
-**Who calls it:**
+```js
+const result = await agentLoop.run({
+  runId, principal,                     // agent principals frozen for children
+  model, messages, tools,
+  policies: { budgets, approval, interactions, context },
+  channel,                              // chat SSE | run page | none (headless)
+  signal,
+});
+// → { status: 'completed'|'paused'|'aborted'|'error'|'budget_exhausted',
+//     content, structured, finishReason, usage, citations, pendingInteraction? }
+```
 
-| Surface | Adapter |
-|---|---|
-| Chat (`routes/chat/sessionRoutes.js`) | Builds prep via `RequestBuilder` as today, opens/continues a chat run, calls `agentLoop.run` with a chat `ChannelBinding` (actionTracker SSE). `StreamingHandler`/`NonStreamingHandler` become the tool-less fast path inside the loop, not siblings. |
-| Workflow `prompt`/`agent` nodes | `PromptNodeExecutor` keeps prompt resolution, tool registration, and output parsing; delegates execution to `agentLoop.run` with the node's config mapped onto `policies` and the engine's abortSignal. A `paused` result propagates exactly as human-node pauses do today. |
-| Agent runs | Unchanged shape (profile → workflow) — they inherit the unified loop through the node executors; budgets already live in the profile. |
-| App-as-tool / `invokeAppInternal` | A child run with frozen principal + policies, linked via `parentRunId`; the `InMemorySink` becomes a headless ChannelBinding. |
-| MCP gateway (apps/workflows as tools) | Same child-run path; interactions in headless mode follow the `never`/park policy (5.3). |
+Three seams keep cross-cutting behavior registered, not woven in (the waterfall/middleware pattern every studied harness uses): **pre-step** (compaction, spill, prompt finalization), **pre/post-tool** (the approval gate, circuit breakers, argument defaults, result spill, citations — `ask_user` stops being special-cased and becomes a `question` interaction raised through the same seam), **step-end** (budget accounting, telemetry, source/citation merge). Independent tool calls in one assistant turn execute concurrently behind a segment planner (read-only tools always parallel; others when argument targets don't overlap). Chat-specific behavior that survives (knowledge-source badges, upload handling, passthrough tools, clarification caps) is expressed as seam registrations and channel concerns — not as a second loop.
 
-### 5.2 `RunLog` — the ledger underneath
+### 5.3 `RunLog` — the ledger underneath
 
-One append-only event stream per run (chat conversation, workflow execution, agent run — same schema), JSONL per run under `contents/data/run-log/` following the `AuditLogService` write pattern (buffered appends, retention policy, atomic files). Event families:
+One append-only event stream per run (chat conversation, workflow execution, agent run — same schema), JSONL per run under `contents/data/run-log/` following the `AuditLogService` write pattern (buffered appends, retention, atomic files):
 
 ```
-run/start        {runId, kind: chat|workflow|agent|subagent, parentRunId?, principal, app|workflow|profile, trigger}
+run/start        {runId, kind: chat|workflow|agent|subagent|inference, parentRunId?, principal, trigger}
 request/header   {step, model, provider, renderedSystemPrompt, toolSchemasHash → toolSchemas, callConfig}
 message/user     message/assistant   (content, usage, finishReason)
 tool/call        {step, toolId, args}          // logged BEFORE execution
 tool/result      {step, toolId, resultPreview, spillRef?, error?, durationMs}
-interaction/raised     interaction/answered    // see 5.3 — includes feedback
+interaction/raised     interaction/answered    // feedback included
 budget/checkpoint      budget/exhausted
 context/compaction     {shadowedRange, summaryRef, trigger: proactive|overflow}
 run/paused       run/resumed        run/end {status, finishReason, usage, cost?}
 ```
 
-Rules carried over from the harness study: **anything model-visible must be reconstructable from the log** (new model-visible inputs require new event types — review rule, later a runtime assertion); tool calls are logged before execution so a crash mid-tool is visible; `_stepLogs` is refactored to be a *projection* of this ledger rather than a second store. The existing run-detail SSE stream and a future chat-history endpoint both become projections too — this is what makes "one run inspector for everything" (roadmap P0.3) a rendering exercise instead of four integrations.
+Rules from the harness study: **anything model-visible must be reconstructable from the log** (enforced as a test, §7); tool calls logged before execution so a crash mid-tool is visible; `_stepLogs`, the run-detail SSE stream, and the chat-history endpoint are all *projections* of this ledger. Server-side chat sessions fall out: a chat's RunLog **is** its transcript (the browser keeps localStorage as a cache; the server becomes the source of truth).
 
-Server-side chat sessions fall out of this: a chat's RunLog *is* its transcript. The client keeps localStorage as a cache; the server becomes the source of truth for apps that opt in (`features.serverSessions` or per-app flag), which also fixes cross-device history and post-hoc review of chat tool use.
+### 5.4 `Interaction` — every human touchpoint, one model
 
-### 5.3 `Interaction` — one model for every human touchpoint
-
-One service (`server/services/loop/InteractionService.js`) and one wire shape, generalizing today's checkpoint (which already has 80% of the needed fields):
+One service and one wire shape, generalizing today's checkpoint (which already has 80% of the fields):
 
 ```js
 Interaction {
   id, runId, step,
   kind: 'question' | 'approval' | 'review' | 'notify',
-  origin: 'tool' | 'node' | 'policy' | 'system',      // ask_user, human node, approval gate, budget warning…
-  prompt: { message, options?, inputSchema?, showData? },  // exactly HumanNodeExecutor's checkpoint fields
+  origin: 'tool' | 'node' | 'policy' | 'system',
+  prompt: { message, options?, inputSchema?, showData? },      // = HumanNodeExecutor's checkpoint fields
   policy: { approverGroups?, expiresAt?, onTimeout: 'fail'|'branch:<value>'|'deny',
-            fallback: 'park' | 'deny' | 'default:<value>' },   // what happens with no human attached
+            fallback: 'park' | 'deny' | 'default:<value>' },   // behavior with no human attached
   status: 'pending' | 'answered' | 'expired' | 'cancelled',
   answer?: { value, data?, by, at, channel },
 }
 ```
 
-- **`question`** replaces the `ask_user` special case *and* the human node's input-collection use. In chat it renders as today's clarification widget — but the run **pauses** (loop state persisted, like workflow pauses) instead of ending the turn, so the answer resumes the same step. The 10-per-conversation cap becomes `policies.interactions.maxQuestions`. Workflows and agents raise the identical kind; an agent profile can finally *ask* rather than only seek approval.
-- **`approval`** covers human nodes' approve/reject use **and** the P1.4 per-tool-call gate. Decisions: approve / edit-args / reject-with-reason / respond (the harness-consensus set); the answer value doubles as the routing `branch`, preserving `HumanNodeExecutor.resume()` semantics, approver-group validation included (HumanNodeExecutor.js:175–216 moves into the service).
-- **`review`** is the structured "look at this draft" gate (showData/displayData today) — distinct from approval so UIs can render content-first with comment fields, and so verifier loops can consume the reviewer's comments as gaps.
-- **`notify`** is fire-and-forget (budget 80% warnings, completion notices) — no pause, but on the ledger.
-- **Human→agent events** ride the same rails as ledger events and, where the loop is live, as inputs: `answer` (resolves a pending interaction), **`steer`** (new: queue a user message into a *running* loop, delivered at the next step boundary inside an explicit trust marker — Hermes' design), `stop` (today's abort, now logged), and **`feedback`** — `POST /feedback` additionally appends `interaction/answered {kind:'feedback', rating, messageId}` to the run's ledger, which verifier/review loops and future evals can read. Existing feedback storage stays; it gains a run linkage.
+- **`question`** replaces `ask_user` *and* the human node's input-collection use. In chat it renders as today's clarification widget — but the run **pauses** (loop state persisted, like workflow pauses) instead of ending the turn; the answer resumes the same step. Workflows and agents raise the identical kind; an agent can finally *ask*, not only seek approval.
+- **`approval`** covers human nodes' approve/reject **and** the per-tool-call gate from the roadmap (P1.4). Decisions: approve / edit-args / reject-with-reason / respond; the answer value doubles as the routing `branch`; approver-group validation moves from `HumanNodeExecutor.resume()` (lines 175–216) into the service.
+- **`review`** is the content-first "look at this draft" gate, distinct from approval so verifier loops can consume reviewer comments as gaps.
+- **Human→agent events ride the same rails:** `answer`, **`steer`** (new — queue a message into a running loop, delivered at the next step boundary inside an explicit trust marker), `stop` (today's abort, now logged), and **`feedback`** — `POST /feedback` additionally appends `interaction/answered {kind:'feedback', rating, messageId}` to the run's ledger, consumable by verifier loops and evals. Existing feedback storage stays; it gains run linkage.
 
-**Delivery is a channel concern, not the raiser's:** a pending interaction is (a) pushed inline when a live channel is bound (chat SSE `interaction.raised` event — superseding `clarification` and `workflow.checkpoint`; run page via the existing `agent.hitl.*` stream), (b) parked in a durable pending store visible in the approvals queue (which becomes the *interactions* queue), and (c) escalated per policy — email/Teams webhook to `approverGroups`, expiry enforcement with `onTimeout`. Headless runs (cron, MCP callers, CI) declare `fallback` per kind: `deny` for approvals (fail-closed, the dsh `never` stance), `park` for questions (pause + notify), `default:<value>` where the author pre-answers.
+Delivery is a channel concern: inline when a live channel is bound; parked in the durable pending store (the approvals queue becomes the *interactions* queue); escalated per policy (email/Teams to approver groups, expiry with `onTimeout`). Headless runs declare fallbacks per kind — `deny` for approvals (fail-closed), `park`+notify for questions. **One** answer endpoint (`POST /api/runs/:runId/interactions/:id/answer`); the three existing endpoints are migrated and removed, not aliased forever.
 
-Answering goes through one endpoint (`POST /api/runs/:runId/interactions/:id/answer`) with the existing three kept as thin aliases during migration (chat clarification reply, `/api/workflows/executions/:id/respond`, `/api/agents/runs/:runId/approve`).
+### 5.5 SSE v2 — one event contract, one client reducer
 
-### 5.4 Configuration surface
+Today `useAppChat.js` alone handles 17 event names (`chunk, thinking, citation, clarification, done, error, image, answer.source, skill.activation, workflow.step, workflow.checkpoint, workflow.result, connected, conversation.id, conversation.title, response.message.id, search.status`), while `useWorkflowExecution.js` and the agent run-detail page each speak their own dialects. SSE v2 replaces all three vocabularies with one typed schema that is a **projection of RunLog events** plus the transport frames:
 
-One shared block, referenced from all three author surfaces instead of three dialects:
-
-```jsonc
-"execution": {
-  "budgets": { "maxTokensPerRun": 0, "maxToolRounds": 30, "maxWallTimeSec": 600 },
-  "approval": { "mode": "ask" | "never", "rules": [ /* tool/path/arg predicates, P1.4 */ ] },
-  "interactions": {
-    "maxQuestions": 10,
-    "question":  { "fallback": "park", "notify": ["group:agents-ops"] },
-    "approval":  { "approverGroups": ["managers"], "onTimeout": "deny", "expiresAfterSec": 86400 },
-    "review":    { "fallback": "park" }
-  },
-  "context": { "summarizeAtPercent": 75, "spillToolResultBytes": 51200 }
-}
+```
+stream/connected · stream/error
+run/started · run/ended {status, finishReason, usage}
+step/delta {kind: text|thinking|image}        // token stream
+step/completed {message, citations, sources}
+tool/started · tool/progress · tool/completed
+interaction/raised · interaction/answered     // supersedes clarification + workflow.checkpoint + agent.hitl.*
+progress/node {nodeId, status}                // workflow/run structure
+meta {conversationId?, title?, messageId?}
 ```
 
-- **Apps** (`appConfigSchema`): optional `execution` block; absent = today's defaults (so plain chat apps change nothing).
-- **Workflow nodes**: `config.execution` overrides per node; `human` nodes become sugar for raising a declared interaction (executor stays, delegates to InteractionService).
-- **Agent profiles**: `budgets`/`hitl` fields migrate into the same shape (Flyway migration maps `hitl.approverGroups` → `execution.interactions.approval.approverGroups`).
+Frontend migration (in scope, same release): one shared **event reducer** module consumed by `useAppChat.js`, `useWorkflowExecution.js`, and the agent run-detail hook; the clarification widget, `HumanCheckpoint.jsx`, and the approvals queue render the *same* `interaction/raised` payload; embedded surfaces (Teams app, Outlook add-in, Nextcloud, browser extension) update against the same reducer. **No dual-emit layer** — this is a clean break shipped as a major release with the deprecation called out in the changelog; the decision is recorded here per the project's backward-compatibility policy. (The OpenAI inference API is exempt: its wire format is OpenAI's contract and is preserved by construction.)
 
-### 5.5 What explicitly does *not* change
+### 5.6 Configuration
 
-The adapter layer (`server/adapters/` + `toolCalling/`) and `RequestBuilder` prompt assembly stay as-is — the loop consumes them. The workflow engine's scheduling, checkpointing, and node model stay — only the *inside* of prompt-type nodes changes. The visual editor, run pages, and approvals queue keep working through event aliases until their upgrade. Group-based permissions and feature flags are untouched.
+One shared `execution` block (budgets, approval rules, interaction policies, context thresholds) referenced from apps, workflow nodes, and agent profiles — replacing three dialects. Absent = current defaults, so existing app JSONs stay valid; a Flyway-style migration maps `hitl.approverGroups` and profile `budgets` into the shared shape.
 
----
+### 5.7 Explicitly unchanged
 
-## 6. Migration plan (strangler, four stages)
-
-**S0 — Seams first (no behavior change).**
-Introduce `RunLog` and `InteractionService`; both existing loops write to them in parallel with their current stores (`_stepLogs` double-writes; checkpoints register as interactions; feedback gains run linkage). Ships dark behind `features.runLog`. *Value even if S2 never ships: the unified ledger + interactions queue.*
-
-**S1 — Extract the loop.**
-Lift `executeLLMWithTools` into `AgentLoop` with the three seams; `PromptNodeExecutor` becomes its first consumer (pure refactor, verified by replaying recorded runs — the RunLog from S0 provides the fixtures). Port the segment planner for parallel tool calls here.
-
-**S2 — Chat adopts the loop** (feature flag `unifiedLoop`, per-app opt-in).
-`sessionRoutes` opens/continues a chat run; `ToolExecutor` delegates to `AgentLoop`; `ask_user` becomes a pausing `question` interaction; chat gains budgets, microcompaction, circuit breakers, and steer. The SSE contract is preserved via a compatibility emitter (old event names emitted alongside `interaction.*` — see open question 1).
-
-**S3 — Converge and retire.**
-Remove `continueWithToolExecution` and the duplicated dispatch in `ToolExecutor` (it shrinks to chat-specific concerns: knowledge sources, upload handling); `HumanNodeExecutor` and the workflow chat bridge delegate to InteractionService; the three answer endpoints alias the unified one; approvals page becomes the interactions queue with notifications (P1.5).
-
-**S4 — The payoff features.**
-Server-side chat history UI + one run inspector over the ledger (P0.3); "promote chat to run" (hand a chat run to the scheduler/inbox machinery); replay harness over RunLog fixtures (P3.15).
-
-Each stage is independently shippable and reversible; nothing waits on the full vision.
+The adapter layer (`server/adapters/` + `toolCalling/`) and `RequestBuilder` prompt assembly; the workflow engine's scheduling, checkpointing, and node model; group permissions and feature flags; the OpenAI-compatible wire format of the inference API.
 
 ---
 
-## 7. Risks and open questions
+## 6. Test-driven development approach
 
-1. **SSE backward compatibility (decision needed).** Replacing `clarification`/`workflow.checkpoint` events with `interaction.*` breaks existing clients (SPA versions, Teams/Outlook embeds, API consumers). Proposal: emit both during S2/S3 and drop legacy names in a major release — but per project policy ("always ask before backward-compatibility shims"), this needs an explicit decision: dual-emit window vs. clean break.
-2. **Chat pause semantics vs. provider message invariants.** Resuming a paused chat step re-sends an assistant message with tool_calls and a pending tool result; malformed resumes are a known crash class. Mitigation: adopt the Deep Agents `PatchToolCalls` trick — on resume, synthesize tool results for calls that can no longer complete ("cancelled — user answered differently") so transcripts stay provider-valid.
-3. **Storage growth.** Request headers per step are large. Mitigations: hash-dedupe unchanged tool schemas/system prompts within a run (log `toolSchemasHash` + one full copy per epoch, the dsh `request/header` reason=`initial|change` pattern), spill previews for big tool results, retention policy from day one.
-4. **Privacy.** Server-side chat transcripts are new personal data. Follow the existing audit-log posture (retention, pseudonymization options, admin-scoped access, per-app opt-in), and surface the setting to admins before default-on is even discussed.
-5. **Cluster correctness.** Chat pauses add durable per-run state where today only workflows have it; `StateManager`/registry are per-process + files. S2 rides on the same scheduler-lock + sticky-session model as workflow pauses; the SQLite run store (roadmap P3.13) is the structural fix, not a prerequisite.
-6. **Scope discipline.** This concept deliberately excludes: the subagent primitive (P2.11 — but it lands trivially on child runs), agent scheduling (P2.8), and the execution substrate (P3.17). The loop unification makes them cheaper; it does not depend on them.
+The contracts are written first, as executable artifacts; implementation follows red→green; every cutover stage is complete only when the replaced code is deleted and all suites pass. Grounded in the existing infrastructure — Jest unit/integration (`tests/unit`, `tests/integration` incl. `workflows`, `api`, `models`), per-provider adapter tests with fixtures (`server/tests/{openai,anthropic,google,mistral,bedrock}Adapter.test.js`), the existing agent-loop behavior suites (`agent-budget-loop`, `agent-loop-proactive-compaction`, `agent-audit-trail`, `agent-context-management`, …), cluster tests, and Playwright e2e (`tests/e2e`).
 
-## 8. Success criteria
+**T1 — Contract tests (written before any implementation).** Zod schemas for `LoopRequest`/`LoopResult`, every RunLog event type, `Interaction`, and every SSE v2 event — plus schema snapshot tests so contract drift is a failing test, not a surprise. These schemas are the spec; PRs that change them change the spec visibly.
 
-- One loop implementation executes chat, workflow prompt/agent nodes, and app-as-tool; the chat-only loop code is deleted (S3).
-- A chat with an unanswered `ask_user` survives server restart and browser reload, and resumes correctly on answer.
-- A workflow can ask a free-text question and an agent profile can raise one, both answered from the same queue UI as chat clarifications.
-- Every LLM call in every surface has a `request/header` ledger event; a run inspector shows chats and agent runs with identical event rendering.
-- Feedback given on a chat or run message is visible in that run's ledger and consumable by a verifier node.
+**T2 — Provider stream fixtures.** Recorded SSE byte streams per provider (extending the existing adapter fixtures) drive `LLMClient` tests: chunk normalization, tool-call delta accumulation (incl. Gemini `thoughtSignature` round-tripping, Anthropic split usage, Bedrock EventStream framing), retry/failover, abort mid-stream, `collect()` equivalence (collected result ≡ streamed events, property-tested).
+
+**T3 — Loop behavior specs.** The existing agent-loop tests are promoted to the shared `AgentLoop` spec and extended with the chat-side behaviors: budget exhaustion → tool withdrawal → wrap-up turn; round caps; circuit breakers (rate-limit and consecutive-failure); proactive + reactive compaction; abort via signal; parallel segment planning (read-only parallel, overlapping-path sequential); structured output; clarification cap; passthrough tools; knowledge-source accumulation. Every behavior is asserted **once**, against the one loop — that is the point.
+
+**T4 — Surface contract tests.** For each caller in §4, an integration test proving: (a) the surface produces the correct external result (chat SSE v2 stream, workflow node output, agent run state, OpenAI-shape completion incl. tool_calls passthrough, MCP tool result), and (b) **the same scenario emits the same RunLog events across surfaces** — the equivalence test that makes "one loop" verifiable rather than aspirational.
+
+**T5 — The ledger invariant as a test.** For every recorded run fixture: reconstruct each model request purely from the RunLog (`request/header` + derived history) and byte-compare against what `LLMClient` actually sent. This is dsh's "model-visible ⟺ logged" runtime invariant, enforced first as CI.
+
+**T6 — Interaction lifecycle tests.** Question pause → server restart (state reloaded from checkpoint) → answer → same-step resume with a provider-valid transcript (synthesized tool results for superseded calls); approval deny fail-closed in headless/cron contexts; expiry + `onTimeout` routing; approver-group rejection; feedback landing on the ledger.
+
+**T7 — Frontend.** Unit tests for the single event reducer (every SSE v2 event type, plus malformed-input tolerance); component tests for the interaction widgets; Playwright e2e for the five golden flows — chat with tools, clarification pause/answer, chat-embedded workflow with checkpoint, agent run with approval, stop/steer mid-run — run against the real server as today's e2e suite does.
+
+**T8 — Replay/characterization safety net.** Before each caller cutover, record fixtures of the *current* behavior through the RunLog double-write (see §7 stage C0); after cutover, replay the same inputs and diff outcomes. Deviations are either bugs (fix) or documented intentional changes (attached to the stage's PR).
+
+CI wiring: T1–T3 into `test:quick`; T4–T6 into `test:integration`; T7 into `test:e2e`; coverage gate on `server/services/loop/**`. Deletion is enforced too: knip + a lint rule fail the build on imports of the deleted modules and on any provider `fetch` outside `LLMClient`.
+
+---
+
+## 7. Cutover plan — staged, but every stage deletes
+
+Stages exist because the change cannot land as one commit, **not** to let implementations coexist. There are no per-app opt-in flags and no long-lived compatibility layers; each stage ends with the old path removed from the tree, and a stage that cannot delete its target is not done. Sequenced to keep the tree releasable after every stage:
+
+- **C0 — Contracts + seams** (no behavior change): land T1 schemas + `RunLog`/`InteractionService` skeletons; both existing loops double-write to the ledger (this produces the T8 fixtures). The only stage where old and new coexist — and only as writers, never as alternative execution paths.
+- **C1 — `LLMClient`**: build against T2; cut over **all** single-shot callers (inference API, planner/verifier/decision/summarizer/memory-composer, title generation, magic prompt); **delete** `WorkflowLLMHelper`'s private path and the proxy's plumbing.
+- **C2 — `AgentLoop`**: extract from `PromptNodeExecutor` against T3; cut over workflow prompt/agent nodes and the verifier's adversarial mode; **delete** the in-executor loop.
+- **C3 — Chat + composition surfaces**: chat routes (tools, streaming, non-streaming) onto `AgentLoop`; app-as-tool and MCP gateway onto child runs; **delete** `ToolExecutor`'s loop, `StreamingHandler`, `NonStreamingHandler`, and the `InMemorySink` normalization hacks. Server-side chat sessions activate here (the RunLog is already being written).
+- **C4 — SSE v2 + frontend**: server emits only the v2 schema; ship the shared reducer and migrate `useAppChat`, `useWorkflowExecution`, run-detail, checkpoint/clarification widgets, and the embedded surfaces; **delete** legacy event emission and the three legacy client dialects. Released as the major version with the breaking-change notice.
+- **C5 — Interactions**: `ask_user` → pausing `question`; `human` nodes and the workflow chat bridge delegate to `InteractionService`; feedback gains run linkage; the unified answer endpoint replaces the three bespoke ones, which are **deleted**; the approvals page becomes the interactions queue with notifications.
+
+Operational safety comes from the tests (T4/T5/T8) and normal release discipline (canary deployment, the changelog), not from architectural escape hatches. If ops requires an emergency switch during rollout, it is a release-branch kill switch with a removal date inside the same release cycle — never a per-surface configuration.
+
+## 8. Risks and mitigations
+
+1. **Big-bang per surface.** Mitigated by the T8 replay fixtures (behavior pinned before each cutover), the T4 cross-surface equivalence tests, and stage-sized PRs that keep the tree releasable. The frontend break (C4) is the riskiest step — it ships with the full e2e suite green and the embedded surfaces migrated in the same release train.
+2. **Chat pause vs. provider message invariants.** Resuming a paused step re-sends tool_calls with pending results — a known crash class. Mitigation: on resume, synthesize tool results for calls that can no longer complete (Deep Agents' `PatchToolCalls` pattern), covered by T6.
+3. **Storage growth.** Request headers per step are large: hash-dedupe unchanged schemas/prompts within a run (one full copy per epoch, dsh's `reason: initial|change` pattern), spill previews for big results, retention from day one.
+4. **Privacy.** Server-side chat transcripts are new personal data: follow the audit-log posture (retention, pseudonymization options, admin-scoped access), surfaced to admins before rollout.
+5. **Cluster correctness.** Chat pauses add durable per-run state where only workflows have it today; C3 rides the same scheduler-lock + sticky-session model as workflow pauses; the SQLite run store (roadmap P3.13) is the structural fix, not a prerequisite.
+6. **Scope discipline.** Still excluded (cheaper after, not dependencies): the subagent primitive, agent scheduling, the execution substrate.
+
+## 9. Success criteria
+
+- Exactly one provider call site (`LLMClient`) and one tool loop (`AgentLoop`) in the tree; `continueWithToolExecution`, `StreamingHandler`, `NonStreamingHandler`, and `WorkflowLLMHelper`'s private path no longer exist — enforced by knip/lint in CI, not by convention.
+- The same scenario run through chat, a workflow node, and an agent run emits identical RunLog event sequences (T4 passes).
+- Every model request in every surface is reconstructable byte-for-byte from the ledger (T5 passes).
+- A chat with an unanswered question survives server restart and browser reload and resumes correctly; a workflow and an agent profile can raise the same question, answered from the same queue UI.
+- The frontend consumes one event reducer; the 17-event chat dialect and the workflow/run-detail dialects are gone.
+- Feedback on any message is visible in that run's ledger and consumable by a verifier node.
+- The OpenAI-compatible inference API behaves byte-identically at the wire (its golden tests pass unchanged).
