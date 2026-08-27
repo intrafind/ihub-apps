@@ -2,6 +2,10 @@
  * OpenAI API adapter
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
+import {
+  modelConsumesThoughtSignature,
+  stripThoughtSignatureExtraContent
+} from './toolCalling/thoughtSignatures.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 import modelDiscoveryService from '../services/ModelDiscoveryService.js';
@@ -30,13 +34,23 @@ class OpenAIAdapterClass extends BaseAdapter {
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API
    */
-  formatMessages(messages) {
+  formatMessages(messages, model) {
+    const keepExtraContent = modelConsumesThoughtSignature(model);
     const formattedMessages = messages.map(message => {
       const content = message.content;
 
       // Base message with role and optional tool fields
       const base = { role: message.role };
-      if (message.tool_calls) base.tool_calls = message.tool_calls;
+      // Gemini's `extra_content` thought signature is a Google vendor extension.
+      // Strict OpenAI-compatible providers reject a request that carries it, so
+      // drop it unless this model is the one that consumes it — a caller
+      // replaying Gemini-originated history against another model must not have
+      // that field forwarded upstream.
+      if (message.tool_calls) {
+        base.tool_calls = keepExtraContent
+          ? message.tool_calls
+          : stripThoughtSignatureExtraContent(message.tool_calls);
+      }
       if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
       if (message.name) base.name = message.name;
 
@@ -116,7 +130,7 @@ class OpenAIAdapterClass extends BaseAdapter {
     const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 
-    const formattedMessages = this.formatMessages(messages);
+    const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
     // Use model discovery to get the effective model ID if enabled

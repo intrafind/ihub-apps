@@ -7,11 +7,12 @@
 
 import assert from 'assert';
 import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleConverter.js';
+import { THOUGHT_SIGNATURE_SKIP_SENTINEL } from '../adapters/toolCalling/thoughtSignatures.js';
 import GoogleAdapter from '../adapters/google.js';
 
 describe('Gemini ThoughtSignature Handling', () => {
   describe('Response Parsing', () => {
-    it('should extract thoughtSignature from function call and include in tool call metadata', () => {
+    it('should extract thoughtSignature from function call and include in tool call metadata', async () => {
       // Simulate a Gemini 3 response with thinking enabled and a function call
       const geminiResponse = JSON.stringify({
         candidates: [
@@ -33,7 +34,7 @@ describe('Gemini ThoughtSignature Handling', () => {
         ]
       });
 
-      const result = convertGoogleResponseToGeneric(geminiResponse, 'default');
+      const result = await convertGoogleResponseToGeneric(geminiResponse, 'default');
 
       // Verify tool call was created
       assert.strictEqual(result.tool_calls.length, 1, 'Should have one tool call');
@@ -56,7 +57,7 @@ describe('Gemini ThoughtSignature Handling', () => {
       assert.strictEqual(result.thoughtSignatures[0], 'AgQKA...', 'thoughtSignature should match');
     });
 
-    it('should handle multiple tool calls with their respective thoughtSignatures', () => {
+    it('should handle multiple tool calls with their respective thoughtSignatures', async () => {
       const geminiResponse = JSON.stringify({
         candidates: [
           {
@@ -84,7 +85,7 @@ describe('Gemini ThoughtSignature Handling', () => {
         ]
       });
 
-      const result = convertGoogleResponseToGeneric(geminiResponse, 'default');
+      const result = await convertGoogleResponseToGeneric(geminiResponse, 'default');
 
       assert.strictEqual(result.tool_calls.length, 2, 'Should have two tool calls');
       assert.strictEqual(
@@ -99,7 +100,7 @@ describe('Gemini ThoughtSignature Handling', () => {
       );
     });
 
-    it('should handle function calls without thoughtSignature gracefully', () => {
+    it('should handle function calls without thoughtSignature gracefully', async () => {
       const geminiResponse = JSON.stringify({
         candidates: [
           {
@@ -120,7 +121,7 @@ describe('Gemini ThoughtSignature Handling', () => {
         ]
       });
 
-      const result = convertGoogleResponseToGeneric(geminiResponse, 'default');
+      const result = await convertGoogleResponseToGeneric(geminiResponse, 'default');
 
       assert.strictEqual(result.tool_calls.length, 1, 'Should have one tool call');
       assert.ok(result.tool_calls[0].metadata, 'Should have metadata object');
@@ -173,7 +174,7 @@ describe('Gemini ThoughtSignature Handling', () => {
       );
     });
 
-    it('should handle tool calls without thoughtSignature in metadata', () => {
+    it('should fall back to the skip sentinel when metadata has no thoughtSignature', () => {
       const messages = [
         { role: 'user', content: 'test query' },
         {
@@ -203,12 +204,12 @@ describe('Gemini ThoughtSignature Handling', () => {
       assert.ok(functionCallPart, 'Should have a function call part');
       assert.strictEqual(
         functionCallPart.thoughtSignature,
-        undefined,
-        'thoughtSignature should not be present when not in metadata'
+        THOUGHT_SIGNATURE_SKIP_SENTINEL,
+        'a current-turn function call with no signature gets the documented skip sentinel'
       );
     });
 
-    it('should handle tool calls without metadata object', () => {
+    it('should fall back to the skip sentinel when the tool call has no metadata', () => {
       const messages = [
         { role: 'user', content: 'test query' },
         {
@@ -235,14 +236,14 @@ describe('Gemini ThoughtSignature Handling', () => {
       assert.ok(functionCallPart, 'Should have a function call part');
       assert.strictEqual(
         functionCallPart.thoughtSignature,
-        undefined,
-        'thoughtSignature should not be present when metadata is missing'
+        THOUGHT_SIGNATURE_SKIP_SENTINEL,
+        'a current-turn function call with no signature gets the documented skip sentinel'
       );
     });
   });
 
   describe('Multi-turn Conversation Flow', () => {
-    it('should preserve thoughtSignature through complete conversation cycle', () => {
+    it('should preserve thoughtSignature through complete conversation cycle', async () => {
       // Step 1: Parse initial response with thoughtSignature
       const initialResponse = JSON.stringify({
         candidates: [
@@ -264,7 +265,7 @@ describe('Gemini ThoughtSignature Handling', () => {
         ]
       });
 
-      const parsedResult = convertGoogleResponseToGeneric(initialResponse, 'default');
+      const parsedResult = await convertGoogleResponseToGeneric(initialResponse, 'default');
 
       // Step 2: Create assistant message with the tool call (simulating ToolExecutor)
       const assistantMessage = {

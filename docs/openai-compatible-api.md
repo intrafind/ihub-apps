@@ -63,6 +63,61 @@ Tool calling works across all providers: iHub converts OpenAI-format tools into 
 format, dispatches to the provider, and converts the response (including streamed tool-call
 deltas) back into OpenAI format.
 
+### Tool calling with Gemini — thought signatures
+
+Thinking Gemini models (the 2.5 and 3 series) return a **thought signature** on tool calls: an
+encrypted snapshot of the model's reasoning that Gemini requires back in the conversation
+history. Gemini 3 validates this strictly and rejects a continuation request whose current-turn
+function calls are missing it:
+
+```
+400 ... Function call is missing a thought_signature in functionCall parts.
+```
+
+Gemini puts the signature on the **first** tool call of a response — with parallel tool calls,
+the rest carry none. Preserve it on exactly the call it came back on; do not copy it onto the
+others or synthesise one where there was none.
+
+The OpenAI schema has no field for this, so iHub follows Google's own compatibility
+convention and nests the signature inside the tool call it belongs to:
+
+```json
+{
+  "id": "call_0_1732531200000",
+  "type": "function",
+  "function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" },
+  "extra_content": { "google": { "thought_signature": "AgQKA..." } }
+}
+```
+
+**What callers should do:** echo the assistant message's `tool_calls` back **verbatim**,
+including `extra_content`, alongside the `role: "tool"` result. Reconstructing tool calls
+field-by-field, or using a client that drops unknown fields, loses the signature.
+
+This is the same field Gemini-aware OpenAI clients already handle. [Hermes
+Agent](https://github.com/NousResearch/hermes-agent), for example, captures `extra_content`
+off each tool call — including from the OpenAI SDK's unknown-field bag — and replays it when
+the model name looks Gemini-family, so it works against iHub with no changes.
+
+> **Name your Gemini models with `gemini` (or `gemma`) in the id.** Clients decide whether to
+> replay `extra_content` by pattern-matching the model name, because on a plain OpenAI
+> endpoint that is the only signal they have. A Gemini-backed model published as, say,
+> `fast-assistant` will have its signature dropped by such a client and fall back to the
+> degraded path below.
+
+If the signature does not come back, iHub substitutes Google's documented
+`skip_thought_signature_validator` sentinel on the affected function call so the request
+succeeds instead of failing with a 400. The conversation continues, but the model loses the
+reasoning context behind that tool call, which can degrade multi-step tool use — so
+round-tripping the real signature is always preferable. iHub logs a warning
+(`No thought signature for current-turn function call`) whenever it falls back.
+
+`extra_content` is only present when the upstream model actually returned a signature, so
+responses from other providers are unchanged. And because strict providers (Mistral,
+Fireworks, …) reject a request that *carries* the field, iHub strips it from outgoing
+`tool_calls` whenever the target model is not Gemini-family — so replaying a Gemini
+conversation against a different model is safe.
+
 ---
 
 ## Setup
@@ -360,4 +415,5 @@ primary sources are:
 | `404` model not found            | The `model` id does not match any configured model. Check `GET .../models`.        |
 | `429 Too many requests`          | Inference rate limit hit. Back off or raise `rateLimit.inferenceApi.limit`.        |
 | `500` API key not found          | The underlying provider's API key is not configured on the server.                 |
+| `400 missing a thought_signature` (Gemini) | The tool call was sent back without its `extra_content.google.thought_signature`. Echo `tool_calls` verbatim — see [Tool calling with Gemini](#tool-calling-with-gemini--thought-signatures). |
 | Empty/blocked from a browser     | Add your origin to the `cors` configuration (see Server Configuration).            |

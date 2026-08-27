@@ -177,3 +177,35 @@ readable name field: the select carried both a fixed width and the shared full-w
 the latter won, collapsing the name box to a few pixels. The Human step's option rows had the same
 problem with three fields competing for one row. Both now give each text field a row of its own,
 which also leaves room for variable names longer than a few characters.
+
+## Tool Calling Over the Inference API Works With Google Models Again
+
+An external application calling the OpenAI-compatible Inference API with a Google model and tools
+got the first tool call back fine, then failed the moment it sent the tool result:
+`HTTP 400 ... Function call is missing a thought_signature in functionCall parts`. Gemini's thinking
+models attach a **thought signature** to a tool call and require it back in the conversation
+history; the OpenAI response format has no field for it, so iHub was dropping it on the way out.
+
+- Tool calls returned by the Inference API now carry the signature in
+  `extra_content.google.thought_signature`, the same location Google's own OpenAI-compatibility
+  layer uses. Callers that echo the assistant message's `tool_calls` back unchanged keep full
+  multi-turn tool calling.
+  This is the field Gemini-aware OpenAI clients already look for, so agents like Hermes Agent
+  work against iHub unchanged.
+- Signatures echoed back in that field — or in the flat `thought_signature` variant some clients
+  use — are accepted and forwarded to Gemini, on the same tool call they arrived on. Gemini signs
+  only the first tool call of a response, so parallel calls after it correctly carry no signature.
+- Clients that strip unknown fields no longer break the conversation: iHub substitutes Google's
+  documented skip-validation value for the missing signature so the request succeeds, and logs a
+  warning. Those turns lose the model's preserved reasoning context, so echoing the real signature
+  is still the better path.
+- Only affects Google models — no other provider's responses gain the field. Because strict
+  providers such as Mistral reject a request that carries it, it is also stripped from outgoing
+  requests whenever the target model is not Gemini-family, so replaying a Gemini conversation
+  against another model stays safe.
+- **Name Gemini models with `gemini` (or `gemma`) in the model id.** OpenAI-compatible clients
+  decide whether to replay the signature by matching the model name — it is the only signal they
+  have on a generic endpoint — so a Gemini model published under an unrelated id falls back to the
+  degraded path.
+- In-product chats, workflows and agents were never affected; they already preserved signatures
+  internally.

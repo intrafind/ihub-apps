@@ -14,6 +14,7 @@ import {
   normalizeToolName
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
+import { extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -105,12 +106,19 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
  * @returns {Object[]} Google formatted function call parts
  */
 export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
-  return genericToolCalls.map(toolCall => ({
-    functionCall: {
-      name: normalizeToolName(toolCall.name),
-      args: toolCall.arguments || {}
-    }
-  }));
+  return genericToolCalls.map(toolCall => {
+    const part = {
+      functionCall: {
+        name: normalizeToolName(toolCall.name),
+        args: toolCall.arguments || {}
+      }
+    };
+    // Gemini validates that a function call comes back with the thought
+    // signature it was issued with (see ./thoughtSignatures.js).
+    const thoughtSignature = extractThoughtSignature(toolCall);
+    if (thoughtSignature) part.thoughtSignature = thoughtSignature;
+    return part;
+  });
 }
 
 /**
@@ -448,16 +456,11 @@ export function convertGenericResponseToGoogle(genericResponse) {
     }
   }
 
-  // Add function calls
+  // Add function calls. Reuse the tool-call converter so this path keeps the
+  // thought signature too — every public Google conversion has to preserve it,
+  // not just the ones on the hot path.
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    for (const toolCall of genericResponse.tool_calls) {
-      parts.push({
-        functionCall: {
-          name: toolCall.name,
-          args: toolCall.arguments
-        }
-      });
-    }
+    parts.push(...convertGenericToolCallsToGoogle(genericResponse.tool_calls));
   }
 
   const response = {
@@ -539,12 +542,17 @@ export function processMessageForGoogle(message) {
         args = {};
       }
 
-      parts.push({
+      const functionCallPart = {
         functionCall: {
           name: normalizeToolName(toolCall.function.name),
           args
         }
-      });
+      };
+      // Gemini validates that a function call comes back with the thought
+      // signature it was issued with (see ./thoughtSignatures.js).
+      const thoughtSignature = extractThoughtSignature(toolCall);
+      if (thoughtSignature) functionCallPart.thoughtSignature = thoughtSignature;
+      parts.push(functionCallPart);
     }
 
     return { role: 'model', parts };
