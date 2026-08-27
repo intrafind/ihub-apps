@@ -14,6 +14,7 @@ import {
   normalizeToolName
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
+import { extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -105,12 +106,19 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
  * @returns {Object[]} Google formatted function call parts
  */
 export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
-  return genericToolCalls.map(toolCall => ({
-    functionCall: {
-      name: normalizeToolName(toolCall.name),
-      args: toolCall.arguments || {}
-    }
-  }));
+  return genericToolCalls.map(toolCall => {
+    const part = {
+      functionCall: {
+        name: normalizeToolName(toolCall.name),
+        args: toolCall.arguments || {}
+      }
+    };
+    // Gemini validates that a function call comes back with the thought
+    // signature it was issued with (see ./thoughtSignatures.js).
+    const thoughtSignature = extractThoughtSignature(toolCall);
+    if (thoughtSignature) part.thoughtSignature = thoughtSignature;
+    return part;
+  });
 }
 
 /**
@@ -539,12 +547,17 @@ export function processMessageForGoogle(message) {
         args = {};
       }
 
-      parts.push({
+      const functionCallPart = {
         functionCall: {
           name: normalizeToolName(toolCall.function.name),
           args
         }
-      });
+      };
+      // Gemini validates that a function call comes back with the thought
+      // signature it was issued with (see ./thoughtSignatures.js).
+      const thoughtSignature = extractThoughtSignature(toolCall);
+      if (thoughtSignature) functionCallPart.thoughtSignature = thoughtSignature;
+      parts.push(functionCallPart);
     }
 
     return { role: 'model', parts };

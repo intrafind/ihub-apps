@@ -1,0 +1,298 @@
+/**
+ * Regression coverage for Gemini thought signatures crossing the
+ * OpenAI-compatible boundary (server/routes/openaiProxy.js).
+ *
+ * The bug: an external caller hitting /api/inference/v1/chat/completions with a
+ * Google model and tools got the first tool call fine, then Gemini rejected the
+ * follow-up request carrying the tool result with
+ *
+ *   400 ... Function call is missing a thought_signature in functionCall parts.
+ *
+ * Gemini 3 attaches a thought signature to the first functionCall part of every
+ * response and strictly validates that it comes back for each function call in
+ * the current turn. The OpenAI tool-call schema has no field for it, so the
+ * proxy dropped it on the way out and had nothing to send back.
+ *
+ * The contract pinned here:
+ *   - the signature leaves as `extra_content.google.thought_signature`, the
+ *     location Google's own OpenAI-compatibility layer uses
+ *   - it is read back out of that field (and the flat variants clients use) and
+ *     lands on the Gemini functionCall part it came from
+ *   - a caller that dropped the field gets the documented skip sentinel rather
+ *     than a 400
+ *   - only the first of several parallel calls is signed, and previous turns are
+ *     left exactly as they were
+ *
+ * @see https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+
+// pathUtils resolves the app root via import.meta.url, which babel-jest's CJS
+// transform cannot express — stub it with an equivalent that works under jest.
+// It is reached through localize.js -> configCache.js -> configLoader.js.
+jest.mock('../../../server/pathUtils.js', () => ({
+  getRootDir: () => require('path').join(__dirname, '../../../')
+}));
+
+// configCache drags in the whole config/auth loading stack (more import.meta
+// modules). Message formatting never touches configuration.
+jest.mock('../../../server/configCache.js', () => ({
+  default: {
+    getPlatform: () => ({}),
+    getModels: () => ({ data: [] })
+  }
+}));
+
+import {
+  convertGenericToolCallsToOpenAI,
+  convertOpenAIToolCallsToGeneric
+} from '../../../server/adapters/toolCalling/OpenAIConverter.js';
+import { convertGoogleResponseToGeneric } from '../../../server/adapters/toolCalling/GoogleConverter.js';
+import { THOUGHT_SIGNATURE_SKIP_SENTINEL } from '../../../server/adapters/toolCalling/thoughtSignatures.js';
+import GoogleAdapter from '../../../server/adapters/google.js';
+
+const SIGNATURE = 'ErUBCsIBAcu98PBcCK...';
+
+/** A Gemini response carrying one function call plus its thought signature. */
+function geminiToolCallResponse({ signature = SIGNATURE, name = 'get_weather' } = {}) {
+  return JSON.stringify({
+    candidates: [
+      {
+        content: {
+          parts: [
+            {
+              functionCall: { name, args: { city: 'Berlin' } },
+              ...(signature ? { thoughtSignature: signature } : {})
+            }
+          ],
+          role: 'model'
+        },
+        finishReason: 'STOP'
+      }
+    ]
+  });
+}
+
+function firstFunctionCallPart(contents) {
+  return contents.flatMap(entry => entry.parts || []).find(part => part.functionCall);
+}
+
+describe('Gemini thought signatures over the OpenAI-compatible surface', () => {
+  it('carries the signature out to the client as extra_content', async () => {
+    const generic = await convertGoogleResponseToGeneric(geminiToolCallResponse(), 'stream-1');
+    expect(generic.tool_calls).toHaveLength(1);
+
+    const [toolCall] = convertGenericToolCallsToOpenAI(generic.tool_calls);
+
+    expect(toolCall.extra_content).toEqual({ google: { thought_signature: SIGNATURE } });
+    // The rest of the tool call must stay standard OpenAI shape.
+    expect(toolCall.type).toBe('function');
+    expect(toolCall.function.name).toBe('get_weather');
+  });
+
+  it('omits extra_content when the provider returned no signature', () => {
+    const [toolCall] = convertGenericToolCallsToOpenAI([
+      {
+        id: 'call_0',
+        name: 'someTool',
+        arguments: {},
+        index: 0,
+        metadata: { originalFormat: 'openai' }
+      }
+    ]);
+
+    expect(toolCall.extra_content).toBeUndefined();
+  });
+
+  it('reads an echoed extra_content signature back into generic metadata', () => {
+    const [generic] = convertOpenAIToolCallsToGeneric([
+      {
+        id: 'call_0',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"Berlin"}' },
+        extra_content: { google: { thought_signature: SIGNATURE } }
+      }
+    ]);
+
+    expect(generic.metadata.thoughtSignature).toBe(SIGNATURE);
+  });
+
+  it('sends an echoed signature back to Gemini on the part it came from', () => {
+    // Exactly what a cooperative caller posts back: the assistant message it
+    // received from /api/inference, unchanged, plus the tool result.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'What is the weather in Berlin?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Berlin"}' },
+            extra_content: { google: { thought_signature: SIGNATURE } }
+          }
+        ]
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'call_0',
+        name: 'get_weather',
+        content: JSON.stringify({ tempC: 21 })
+      }
+    ]);
+
+    expect(firstFunctionCallPart(contents).thoughtSignature).toBe(SIGNATURE);
+
+    // The tool result has to follow the model turn as its own functionResponse
+    // content — Gemini rejects interleaved call/response ordering.
+    const modelTurnIndex = contents.findIndex(entry => entry.role === 'model');
+    expect(contents[modelTurnIndex + 1].parts.some(part => part.functionResponse)).toBe(true);
+  });
+
+  it('accepts the flat thought_signature variant some clients emit', () => {
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'What is the weather in Berlin?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{}' },
+            thought_signature: SIGNATURE
+          }
+        ]
+      }
+    ]);
+
+    expect(firstFunctionCallPart(contents).thoughtSignature).toBe(SIGNATURE);
+  });
+
+  it('substitutes the skip sentinel when the caller dropped the signature', () => {
+    // Strict OpenAI SDKs discard unknown fields, so extra_content never returns.
+    // Without a stand-in Gemini 3 fails the whole request with a 400.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'What is the weather in Berlin?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Berlin"}' }
+          }
+        ]
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'call_0',
+        name: 'get_weather',
+        content: JSON.stringify({ tempC: 21 })
+      }
+    ]);
+
+    expect(firstFunctionCallPart(contents).thoughtSignature).toBe(THOUGHT_SIGNATURE_SKIP_SENTINEL);
+  });
+
+  it('signs only the first of several parallel function calls', () => {
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'Weather in Berlin and Hamburg?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Berlin"}' },
+            extra_content: { google: { thought_signature: SIGNATURE } }
+          },
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Hamburg"}' }
+          }
+        ]
+      }
+    ]);
+
+    const parts = contents
+      .flatMap(entry => entry.parts || [])
+      .filter(part => part.functionCall)
+      .map(part => part.thoughtSignature);
+
+    expect(parts).toEqual([SIGNATURE, undefined]);
+  });
+
+  it('leaves function calls from previous turns untouched', () => {
+    // Gemini only validates the current turn — the one opening at the most
+    // recent user message with real content. Older calls must go back as they
+    // were, without invented signatures.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'first question' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_old', type: 'function', function: { name: 'oldTool', arguments: '{}' } }
+        ]
+      },
+      { role: 'tool', tool_call_id: 'call_old', name: 'oldTool', content: '{"ok":true}' },
+      { role: 'assistant', content: 'here you go' },
+      { role: 'user', content: 'second question' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_new', type: 'function', function: { name: 'newTool', arguments: '{}' } }
+        ]
+      }
+    ]);
+
+    const signatures = contents
+      .flatMap(entry => entry.parts || [])
+      .filter(part => part.functionCall)
+      .map(part => part.thoughtSignature);
+
+    expect(signatures).toEqual([undefined, THOUGHT_SIGNATURE_SKIP_SENTINEL]);
+  });
+
+  it('keeps a tool result turn inside the current turn', () => {
+    // A functionResponse is not a turn boundary, so the model turn that follows
+    // one is still current and still needs a signature.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'check the flight and book a taxi if delayed' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'check_flight', arguments: '{}' },
+            extra_content: { google: { thought_signature: SIGNATURE } }
+          }
+        ]
+      },
+      { role: 'tool', tool_call_id: 'call_0', name: 'check_flight', content: '{"delayed":true}' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: 'book_taxi', arguments: '{}' } }
+        ]
+      }
+    ]);
+
+    const signatures = contents
+      .flatMap(entry => entry.parts || [])
+      .filter(part => part.functionCall)
+      .map(part => part.thoughtSignature);
+
+    expect(signatures).toEqual([SIGNATURE, THOUGHT_SIGNATURE_SKIP_SENTINEL]);
+  });
+});

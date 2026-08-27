@@ -63,6 +63,43 @@ Tool calling works across all providers: iHub converts OpenAI-format tools into 
 format, dispatches to the provider, and converts the response (including streamed tool-call
 deltas) back into OpenAI format.
 
+### Tool calling with Gemini — thought signatures
+
+Thinking Gemini models (the 2.5 and 3 series) return a **thought signature** with each function
+call: an encrypted snapshot of the model's reasoning that Gemini requires back in the
+conversation history. Gemini 3 validates this strictly and rejects a continuation request
+whose function calls are missing it:
+
+```
+400 ... Function call is missing a thought_signature in functionCall parts.
+```
+
+The OpenAI schema has no field for this, so iHub follows Google's own compatibility
+convention and nests the signature inside each tool call:
+
+```json
+{
+  "id": "call_0_1732531200000",
+  "type": "function",
+  "function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" },
+  "extra_content": { "google": { "thought_signature": "AgQKA..." } }
+}
+```
+
+**What callers should do:** echo the assistant message's `tool_calls` back **verbatim**,
+including `extra_content`, alongside the `role: "tool"` result. Reconstructing tool calls
+field-by-field, or using a client that drops unknown fields, loses the signature.
+
+If the signature does not come back, iHub substitutes Google's documented
+`skip_thought_signature_validator` sentinel on the affected function call so the request
+succeeds instead of failing with a 400. The conversation continues, but the model loses the
+reasoning context behind that tool call, which can degrade multi-step tool use — so
+round-tripping the real signature is always preferable. iHub logs a warning
+(`No thought signature for current-turn function call`) whenever it falls back.
+
+Other providers are unaffected: `extra_content` is only present when the upstream model
+actually returned a signature.
+
 ---
 
 ## Setup
@@ -360,4 +397,5 @@ primary sources are:
 | `404` model not found            | The `model` id does not match any configured model. Check `GET .../models`.        |
 | `429 Too many requests`          | Inference rate limit hit. Back off or raise `rateLimit.inferenceApi.limit`.        |
 | `500` API key not found          | The underlying provider's API key is not configured on the server.                 |
+| `400 missing a thought_signature` (Gemini) | The tool call was sent back without its `extra_content.google.thought_signature`. Echo `tool_calls` verbatim — see [Tool calling with Gemini](#tool-calling-with-gemini--thought-signatures). |
 | Empty/blocked from a browser     | Add your origin to the `cors` configuration (see Server Configuration).            |

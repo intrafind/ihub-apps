@@ -1,0 +1,129 @@
+/**
+ * Gemini thought signature helpers.
+ *
+ * Thinking Gemini models (the 2.5 and 3 series) return a `thoughtSignature`
+ * field on the content parts of a response — an encrypted snapshot of the
+ * model's reasoning state. For function calling, Gemini 3 *strictly validates*
+ * that those signatures come back in the conversation history:
+ *
+ *   - The signature sits on the FIRST `functionCall` part of a model response.
+ *     With parallel function calls the remaining parts carry no signature.
+ *   - Validation covers every function call in the *current turn* — the turn
+ *     starts at the most recent user message with standard content (text), not
+ *     at a `functionResponse`. Earlier turns are not validated.
+ *   - Omitting a required signature fails the request with
+ *     `400 ... Function call <name> in the <n> content block is missing a
+ *     thought_signature`.
+ *
+ * On an OpenAI-compatible surface there is no field for this, so Google's
+ * compatibility layer nests it inside each tool call as
+ * `extra_content.google.thought_signature`. We both emit that shape (so callers
+ * of our own `/api/inference` endpoint can round-trip it) and accept it on the
+ * way back in.
+ *
+ * When a caller cannot give us a signature at all — a strict OpenAI SDK that
+ * drops unknown fields, or history replayed from another model — Google
+ * documents two sentinel values that skip validation instead of erroring. We
+ * use one as a last resort so the request degrades to "no preserved reasoning
+ * context" rather than a hard 400.
+ *
+ * @see https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
+ */
+
+/**
+ * Documented sentinel that makes Gemini skip thought signature validation for a
+ * function call part we have no real signature for.
+ */
+export const THOUGHT_SIGNATURE_SKIP_SENTINEL = 'skip_thought_signature_validator';
+
+function firstNonEmptyString(...candidates) {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Read a thought signature off a tool call, wherever the caller put it.
+ *
+ * Checked in priority order:
+ *   1. `metadata.thoughtSignature` — our own generic tool-calling format, set by
+ *      GoogleConverter when parsing a Gemini response.
+ *   2. `extra_content.google.thought_signature` — Google's documented
+ *      OpenAI-compatibility location, what external callers of `/api/inference`
+ *      get back from us and are expected to echo.
+ *   3. A flat `thought_signature` / `thoughtSignature` on the call or its
+ *      `function` object — used by some OpenAI-compatible clients in the wild.
+ *
+ * @param {Object} toolCall - Tool call in generic or OpenAI shape
+ * @returns {string|undefined} The signature, or undefined if the call has none
+ */
+export function extractThoughtSignature(toolCall) {
+  if (!toolCall || typeof toolCall !== 'object') return undefined;
+
+  const extra = toolCall.extra_content ?? toolCall.extraContent;
+  const google = extra && typeof extra === 'object' ? extra.google : undefined;
+
+  return firstNonEmptyString(
+    toolCall.metadata?.thoughtSignature,
+    toolCall.metadata?.thought_signature,
+    google?.thought_signature,
+    google?.thoughtSignature,
+    toolCall.thought_signature,
+    toolCall.thoughtSignature,
+    toolCall.function?.thought_signature,
+    toolCall.function?.thoughtSignature
+  );
+}
+
+/**
+ * Build the `extra_content` payload that carries a thought signature across an
+ * OpenAI-compatible boundary. Keeping the wire shape in one place means the
+ * emit side and the accept side above can never drift apart.
+ * @param {string} signature - Thought signature to carry
+ * @returns {{google: {thought_signature: string}}} extra_content value
+ */
+export function buildThoughtSignatureExtraContent(signature) {
+  return { google: { thought_signature: signature } };
+}
+
+function hasStandardContent(message) {
+  if (message.imageData || message.audioData) return true;
+
+  const { content } = message;
+  if (typeof content === 'string') return content.trim().length > 0;
+
+  // OpenAI multipart content: any text part with real text, or any non-text
+  // part (image/audio/file) counts as standard content.
+  if (Array.isArray(content)) {
+    return content.some(part => {
+      if (!part || typeof part !== 'object') return false;
+      if (part.type === 'text') return typeof part.text === 'string' && part.text.trim().length > 0;
+      return true;
+    });
+  }
+
+  return false;
+}
+
+/**
+ * Index of the message that starts the current turn, mirroring how Gemini scopes
+ * thought signature validation: walk the history newest to oldest and stop at
+ * the most recent user message carrying standard content. Tool results (`role:
+ * 'tool'`) are function responses, not turn boundaries, so they are skipped.
+ *
+ * @param {Object[]} messages - Conversation history in our internal/OpenAI shape
+ * @returns {number} Index of the turn-opening user message, or -1 when there is
+ *   none — in which case the whole history is the current turn.
+ */
+export function findCurrentTurnStartIndex(messages = []) {
+  if (!Array.isArray(messages)) return -1;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.role !== 'user') continue;
+    if (hasStandardContent(message)) return i;
+  }
+
+  return -1;
+}
