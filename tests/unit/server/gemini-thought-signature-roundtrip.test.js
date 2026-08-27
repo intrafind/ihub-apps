@@ -407,6 +407,25 @@ describe('Gemini thought signatures over the OpenAI-compatible surface', () => {
       expect(modelConsumesThoughtSignature(undefined)).toBe(false);
     });
 
+    it('matches the URL host rather than a substring of the whole URL', () => {
+      // A look-alike host or a path/query mentioning googleapis.com must not
+      // count as Google — otherwise extra_content would be forwarded to a
+      // provider that rejects the request for carrying it.
+      expect(
+        modelConsumesThoughtSignature({ id: 'x', url: 'https://googleapis.com.evil.example/v1' })
+      ).toBe(false);
+      expect(
+        modelConsumesThoughtSignature({ id: 'x', url: 'https://evil.example/?to=googleapis.com' })
+      ).toBe(false);
+      expect(modelConsumesThoughtSignature({ id: 'x', url: 'not-a-url-googleapis.com' })).toBe(
+        false
+      );
+      // Real Google hosts still match, apex and subdomain alike.
+      expect(
+        modelConsumesThoughtSignature({ id: 'x', url: 'https://aiplatform.googleapis.com/v1' })
+      ).toBe(true);
+    });
+
     it('strips extra_content when forwarding to a non-Gemini OpenAI model', () => {
       const formatted = OpenAIAdapter.formatMessages(geminiToolCallMessage, { id: 'gpt-4o' });
       const [toolCall] = formatted.find(m => m.tool_calls).tool_calls;

@@ -118,10 +118,22 @@ export function modelConsumesThoughtSignature(model) {
   if (names.includes('gemini') || names.includes('gemma')) return true;
 
   // A Google-hosted endpoint is conclusive on its own, whatever the model is
-  // called locally.
-  return String(model.url || '')
-    .toLowerCase()
-    .includes('googleapis.com');
+  // called locally. Match the parsed hostname rather than searching the whole
+  // URL for a substring: `googleapis.com` can appear in a path or query, and
+  // `googleapis.com.example.net` is not a Google host.
+  return isGoogleHost(model.url);
+}
+
+function isGoogleHost(url) {
+  if (typeof url !== 'string' || url.length === 0) return false;
+  let hostname;
+  try {
+    ({ hostname } = new URL(url));
+  } catch {
+    return false;
+  }
+  const host = hostname.toLowerCase();
+  return host === 'googleapis.com' || host.endsWith('.googleapis.com');
 }
 
 /**
