@@ -44,13 +44,31 @@ jest.mock('../../../server/configCache.js', () => ({
   }
 }));
 
+// openai.js reaches ModelDiscoveryService -> requestThrottler -> httpConfig ->
+// node-fetch, which is ESM-only in node_modules and cannot be loaded through
+// jest's CJS transform. None of it is touched by message formatting.
+jest.mock('../../../server/services/ModelDiscoveryService.js', () => ({ default: {} }));
+jest.mock('../../../server/requestThrottler.js', () => ({ throttledFetch: jest.fn() }));
+jest.mock('../../../server/utils/httpConfig.js', () => ({
+  getSSLConfig: jest.fn(() => ({})),
+  getProxyConfig: jest.fn(() => ({})),
+  createAgent: jest.fn(),
+  enhanceFetchOptions: jest.fn(options => options),
+  httpFetch: jest.fn()
+}));
+
 import {
   convertGenericToolCallsToOpenAI,
   convertOpenAIToolCallsToGeneric
 } from '../../../server/adapters/toolCalling/OpenAIConverter.js';
 import { convertGoogleResponseToGeneric } from '../../../server/adapters/toolCalling/GoogleConverter.js';
-import { THOUGHT_SIGNATURE_SKIP_SENTINEL } from '../../../server/adapters/toolCalling/thoughtSignatures.js';
+import {
+  THOUGHT_SIGNATURE_SKIP_SENTINEL,
+  modelConsumesThoughtSignature
+} from '../../../server/adapters/toolCalling/thoughtSignatures.js';
 import GoogleAdapter from '../../../server/adapters/google.js';
+import OpenAIAdapter from '../../../server/adapters/openai.js';
+import MistralAdapter from '../../../server/adapters/mistral.js';
 
 const SIGNATURE = 'ErUBCsIBAcu98PBcCK...';
 
@@ -259,6 +277,85 @@ describe('Gemini thought signatures over the OpenAI-compatible surface', () => {
       .map(part => part.thoughtSignature);
 
     expect(signatures).toEqual([undefined, THOUGHT_SIGNATURE_SKIP_SENTINEL]);
+  });
+
+  // Hermes Agent documents why this matters: Gemini requires extra_content on
+  // replayed tool calls, while "every other strict OpenAI-compatible provider
+  // (Fireworks, Mistral, ...) rejects the request with 400 if extra_content *is*
+  // present". Now that iHub emits the field, a caller replaying that history
+  // against a non-Gemini model must not have it forwarded upstream.
+  describe('cross-provider replay guard', () => {
+    const geminiToolCallMessage = [
+      { role: 'user', content: 'What is the weather in Berlin?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_0',
+            type: 'function',
+            function: { name: 'get_weather', arguments: '{"city":"Berlin"}' },
+            extra_content: { google: { thought_signature: SIGNATURE } }
+          }
+        ]
+      }
+    ];
+
+    it('identifies which models consume thought signatures', () => {
+      expect(modelConsumesThoughtSignature({ id: 'gemini-flash-latest' })).toBe(true);
+      expect(modelConsumesThoughtSignature({ id: 'gemma-3-27b' })).toBe(true);
+      // An alias whose wire name is still Gemini, e.g. the openai adapter
+      // pointed at Gemini's OpenAI-compatible endpoint.
+      expect(modelConsumesThoughtSignature({ id: 'fast', modelId: 'gemini-3-pro' })).toBe(true);
+      expect(
+        modelConsumesThoughtSignature({
+          id: 'fast',
+          url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        })
+      ).toBe(true);
+
+      expect(modelConsumesThoughtSignature({ id: 'gpt-4o' })).toBe(false);
+      expect(modelConsumesThoughtSignature({ id: 'mistral-large-latest' })).toBe(false);
+      expect(modelConsumesThoughtSignature(undefined)).toBe(false);
+    });
+
+    it('strips extra_content when forwarding to a non-Gemini OpenAI model', () => {
+      const formatted = OpenAIAdapter.formatMessages(geminiToolCallMessage, { id: 'gpt-4o' });
+      const [toolCall] = formatted.find(m => m.tool_calls).tool_calls;
+
+      expect(toolCall.extra_content).toBeUndefined();
+      // Everything else has to survive untouched.
+      expect(toolCall.id).toBe('call_0');
+      expect(toolCall.function).toEqual({ name: 'get_weather', arguments: '{"city":"Berlin"}' });
+    });
+
+    it('strips extra_content when forwarding to Mistral', () => {
+      const formatted = MistralAdapter.formatMessages(geminiToolCallMessage, {
+        id: 'mistral-large-latest'
+      });
+      const [toolCall] = formatted.find(m => m.tool_calls).tool_calls;
+
+      expect(toolCall.extra_content).toBeUndefined();
+    });
+
+    it('keeps extra_content for the openai adapter pointed at Gemini', () => {
+      const formatted = OpenAIAdapter.formatMessages(geminiToolCallMessage, {
+        id: 'gemini-3-pro-compat',
+        url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+      });
+      const [toolCall] = formatted.find(m => m.tool_calls).tool_calls;
+
+      expect(toolCall.extra_content).toEqual({ google: { thought_signature: SIGNATURE } });
+    });
+
+    it("does not mutate the caller's messages while stripping", () => {
+      const messages = JSON.parse(JSON.stringify(geminiToolCallMessage));
+      OpenAIAdapter.formatMessages(messages, { id: 'gpt-4o' });
+
+      expect(messages[1].tool_calls[0].extra_content).toEqual({
+        google: { thought_signature: SIGNATURE }
+      });
+    });
   });
 
   it('keeps a tool result turn inside the current turn', () => {

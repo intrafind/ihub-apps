@@ -80,11 +80,68 @@ export function extractThoughtSignature(toolCall) {
  * Build the `extra_content` payload that carries a thought signature across an
  * OpenAI-compatible boundary. Keeping the wire shape in one place means the
  * emit side and the accept side above can never drift apart.
+ *
+ * This exact shape is not just Google's documented convention, it is what real
+ * OpenAI-compatible agents key on. Hermes Agent, for instance, captures
+ * `extra_content` off each tool call and replays it whenever the model name
+ * looks Gemini-family — while dropping every other unrecognised field. A
+ * provider-neutral alias would therefore buy nothing.
+ *
  * @param {string} signature - Thought signature to carry
  * @returns {{google: {thought_signature: string}}} extra_content value
  */
 export function buildThoughtSignatureExtraContent(signature) {
   return { google: { thought_signature: signature } };
+}
+
+/**
+ * Whether a model is one that consumes `extra_content` thought signatures, i.e.
+ * a Gemini-family model — reached either through the native Google adapter or
+ * through the `openai` adapter pointed at Gemini's OpenAI-compatible endpoint.
+ *
+ * The distinction matters on the way *out*: Gemini requires the field, while
+ * strict OpenAI-compatible providers (Mistral, Fireworks, …) reject a request
+ * that carries it. A caller replaying Gemini-originated history against a
+ * different model would otherwise forward a field that fails the request.
+ *
+ * @param {Object} [model] - Model configuration
+ * @returns {boolean} True when the target model consumes thought signatures
+ */
+export function modelConsumesThoughtSignature(model) {
+  if (!model || typeof model !== 'object') return false;
+
+  // Model naming is the primary signal — the same one Gemini-aware OpenAI
+  // clients use. `modelId` is what actually goes on the wire, so an operator
+  // pointing the `openai` adapter at Gemini's compatible endpoint still has a
+  // Gemini name there even if the local `id` is an alias.
+  const names = `${model.id || ''} ${model.modelId || ''}`.toLowerCase();
+  if (names.includes('gemini') || names.includes('gemma')) return true;
+
+  // A Google-hosted endpoint is conclusive on its own, whatever the model is
+  // called locally.
+  return String(model.url || '')
+    .toLowerCase()
+    .includes('googleapis.com');
+}
+
+/**
+ * Drop the Gemini `extra_content` vendor extension from OpenAI-format tool
+ * calls, leaving everything else untouched. Returns the original array when
+ * there is nothing to strip so the common path allocates nothing.
+ *
+ * @param {Object[]} toolCalls - OpenAI-format tool calls
+ * @returns {Object[]} Tool calls without `extra_content`
+ */
+export function stripThoughtSignatureExtraContent(toolCalls) {
+  if (!Array.isArray(toolCalls)) return toolCalls;
+  if (!toolCalls.some(call => call && typeof call === 'object' && 'extra_content' in call)) {
+    return toolCalls;
+  }
+  return toolCalls.map(call => {
+    if (!call || typeof call !== 'object' || !('extra_content' in call)) return call;
+    const { extra_content: _dropped, ...rest } = call;
+    return rest;
+  });
 }
 
 function hasStandardContent(message) {

@@ -190,12 +190,21 @@ history; the OpenAI response format has no field for it, so iHub was dropping it
   `extra_content.google.thought_signature`, the same location Google's own OpenAI-compatibility
   layer uses. Callers that echo the assistant message's `tool_calls` back unchanged keep full
   multi-turn tool calling.
+  This is the field Gemini-aware OpenAI clients already look for, so agents like Hermes Agent
+  work against iHub unchanged.
 - Signatures echoed back in that field — or in the flat `thought_signature` variant some clients
   use — are accepted and forwarded to Gemini.
 - Clients that strip unknown fields no longer break the conversation: iHub substitutes Google's
   documented skip-validation value for the missing signature so the request succeeds, and logs a
   warning. Those turns lose the model's preserved reasoning context, so echoing the real signature
   is still the better path.
-- Only affects Google models — no other provider's responses gain the field.
+- Only affects Google models — no other provider's responses gain the field. Because strict
+  providers such as Mistral reject a request that carries it, it is also stripped from outgoing
+  requests whenever the target model is not Gemini-family, so replaying a Gemini conversation
+  against another model stays safe.
+- **Name Gemini models with `gemini` (or `gemma`) in the model id.** OpenAI-compatible clients
+  decide whether to replay the signature by matching the model name — it is the only signal they
+  have on a generic endpoint — so a Gemini model published under an unrelated id falls back to the
+  degraded path.
 - In-product chats, workflows and agents were never affected; they already preserved signatures
   internally.
