@@ -4,6 +4,7 @@
 **Status:** Concept / design proposal
 **Decision recorded:** The unification only succeeds if *everyone* uses the same loop. Therefore this is **not** a lift-and-delegate refactor that leaves old paths alive: every caller is changed, every old implementation is **deleted**, the SSE contract is redesigned and the frontend migrated with it, and the whole effort is driven test-first.
 **Related:** `concepts/2026-08-26 Agent Harness Comparison — DeepSeek Harness, Hermes, Deep Agents vs iHub.md` (combines roadmap items P0.1 RunLog, P0.2 server-side sessions, P1.4 approval seam, P2.10 chat-loop parity)
+**Tracking:** epic #2233 with stage sub-issues #2234 (C0) · #2235 (C1) · #2236 (C2) · #2237 (C3) · #2238 (C4) · #2239 (C5)
 **Sources:** `server/services/chat/{ToolExecutor,StreamingHandler,NonStreamingHandler,ChatService,appToolsGateway}.js`, `server/services/workflow/executors/{PromptNodeExecutor,HumanNodeExecutor,VerifierNodeExecutor,PlannerNodeExecutor,DecisionNodeExecutor}.js`, `server/services/workflow/WorkflowLLMHelper.js`, `server/routes/openaiProxy.js`, `server/tools/{askUser,workflowRunner}.js`, `server/actionTracker.js`, `client/src/features/chat/hooks/useAppChat.js`, `client/src/features/workflows/hooks/useWorkflowExecution.js`, `tests/` + `server/tests/`
 
 ---
