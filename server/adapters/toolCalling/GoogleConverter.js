@@ -456,16 +456,11 @@ export function convertGenericResponseToGoogle(genericResponse) {
     }
   }
 
-  // Add function calls
+  // Add function calls. Reuse the tool-call converter so this path keeps the
+  // thought signature too — every public Google conversion has to preserve it,
+  // not just the ones on the hot path.
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    for (const toolCall of genericResponse.tool_calls) {
-      parts.push({
-        functionCall: {
-          name: toolCall.name,
-          args: toolCall.arguments
-        }
-      });
-    }
+    parts.push(...convertGenericToolCallsToGoogle(genericResponse.tool_calls));
   }
 
   const response = {

@@ -148,14 +148,20 @@ function hasStandardContent(message) {
   if (message.imageData || message.audioData) return true;
 
   const { content } = message;
-  if (typeof content === 'string') return content.trim().length > 0;
 
-  // OpenAI multipart content: any text part with real text, or any non-text
-  // part (image/audio/file) counts as standard content.
+  // Deliberately "non-empty", not "non-blank": the Google adapter forwards any
+  // truthy string as a real `{ text: … }` user part, whitespace included, so
+  // Gemini counts it as the standard content that opens a turn. Treating a
+  // whitespace-only message as blank here would put the boundary at an older
+  // user message and leak sentinels into function calls from a previous turn.
+  if (typeof content === 'string') return content.length > 0;
+
+  // OpenAI multipart content: any text part with text, or any non-text part
+  // (image/audio/file) counts as standard content.
   if (Array.isArray(content)) {
     return content.some(part => {
       if (!part || typeof part !== 'object') return false;
-      if (part.type === 'text') return typeof part.text === 'string' && part.text.trim().length > 0;
+      if (part.type === 'text') return typeof part.text === 'string' && part.text.length > 0;
       return true;
     });
   }

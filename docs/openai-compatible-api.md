@@ -65,17 +65,21 @@ deltas) back into OpenAI format.
 
 ### Tool calling with Gemini — thought signatures
 
-Thinking Gemini models (the 2.5 and 3 series) return a **thought signature** with each function
-call: an encrypted snapshot of the model's reasoning that Gemini requires back in the
-conversation history. Gemini 3 validates this strictly and rejects a continuation request
-whose function calls are missing it:
+Thinking Gemini models (the 2.5 and 3 series) return a **thought signature** on tool calls: an
+encrypted snapshot of the model's reasoning that Gemini requires back in the conversation
+history. Gemini 3 validates this strictly and rejects a continuation request whose current-turn
+function calls are missing it:
 
 ```
 400 ... Function call is missing a thought_signature in functionCall parts.
 ```
 
+Gemini puts the signature on the **first** tool call of a response — with parallel tool calls,
+the rest carry none. Preserve it on exactly the call it came back on; do not copy it onto the
+others or synthesise one where there was none.
+
 The OpenAI schema has no field for this, so iHub follows Google's own compatibility
-convention and nests the signature inside each tool call:
+convention and nests the signature inside the tool call it belongs to:
 
 ```json
 {

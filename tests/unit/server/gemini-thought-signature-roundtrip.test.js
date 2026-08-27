@@ -8,10 +8,11 @@
  *
  *   400 ... Function call is missing a thought_signature in functionCall parts.
  *
- * Gemini 3 attaches a thought signature to the first functionCall part of every
- * response and strictly validates that it comes back for each function call in
- * the current turn. The OpenAI tool-call schema has no field for it, so the
- * proxy dropped it on the way out and had nothing to send back.
+ * Gemini 3 attaches a thought signature to the FIRST functionCall part of a
+ * response — parallel calls after it carry none — and validates that it comes
+ * back for the function calls of the current turn. The OpenAI tool-call schema
+ * has no field for it, so the proxy dropped it on the way out and had nothing to
+ * send back.
  *
  * The contract pinned here:
  *   - the signature leaves as `extra_content.google.thought_signature`, the
@@ -19,9 +20,12 @@
  *   - it is read back out of that field (and the flat variants clients use) and
  *     lands on the Gemini functionCall part it came from
  *   - a caller that dropped the field gets the documented skip sentinel rather
- *     than a 400
+ *     than a 400 — decided on the first functionCall part itself, since a
+ *     Gemini 2.5 text-part signature does not satisfy Gemini 3
  *   - only the first of several parallel calls is signed, and previous turns are
  *     left exactly as they were
+ *   - the field is stripped again on the way to a non-Gemini model, which would
+ *     otherwise reject the request for carrying it
  *
  * @see https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
  */
@@ -61,7 +65,10 @@ import {
   convertGenericToolCallsToOpenAI,
   convertOpenAIToolCallsToGeneric
 } from '../../../server/adapters/toolCalling/OpenAIConverter.js';
-import { convertGoogleResponseToGeneric } from '../../../server/adapters/toolCalling/GoogleConverter.js';
+import {
+  convertGenericResponseToGoogle,
+  convertGoogleResponseToGeneric
+} from '../../../server/adapters/toolCalling/GoogleConverter.js';
 import {
   THOUGHT_SIGNATURE_SKIP_SENTINEL,
   modelConsumesThoughtSignature
@@ -277,6 +284,87 @@ describe('Gemini thought signatures over the OpenAI-compatible surface', () => {
       .map(part => part.thoughtSignature);
 
     expect(signatures).toEqual([undefined, THOUGHT_SIGNATURE_SKIP_SENTINEL]);
+  });
+
+  it('signs the first function call even when only the text part carried a signature', () => {
+    // Gemini 2.5 places its signature on the first part whatever the type, so a
+    // text part can legitimately hold one while the function call holds none.
+    // That does NOT satisfy Gemini 3, which validates the first functionCall
+    // part specifically — treating any-part-signed as good enough left the call
+    // unsigned and still produced the 400.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'do a thing' },
+      {
+        role: 'assistant',
+        content: 'Let me look that up.',
+        thoughtSignatures: [SIGNATURE],
+        tool_calls: [
+          { id: 'call_0', type: 'function', function: { name: 'search', arguments: '{}' } }
+        ]
+      }
+    ]);
+
+    const modelMessage = contents.find(m => m.role === 'model');
+    const textPart = modelMessage.parts.find(part => part.text);
+    const functionCallPart = modelMessage.parts.find(part => part.functionCall);
+
+    // The text part keeps the real signature it was given...
+    expect(textPart.thoughtSignature).toBe(SIGNATURE);
+    // ...and the function call still gets a signature of its own.
+    expect(functionCallPart.thoughtSignature).toBe(THOUGHT_SIGNATURE_SKIP_SENTINEL);
+  });
+
+  it('treats a whitespace-only user message as a turn boundary', () => {
+    // GoogleAdapter forwards any truthy string as a real { text } user part, so
+    // Gemini sees it as the standard content that opens a turn. If the boundary
+    // scan skipped it, the turn would start at the earlier user message and
+    // sentinels would leak into the previous turn's function calls.
+    const { contents } = GoogleAdapter.formatMessages([
+      { role: 'user', content: 'first question' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_old', type: 'function', function: { name: 'oldTool', arguments: '{}' } }
+        ]
+      },
+      { role: 'tool', tool_call_id: 'call_old', name: 'oldTool', content: '{"ok":true}' },
+      { role: 'user', content: '   ' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_new', type: 'function', function: { name: 'newTool', arguments: '{}' } }
+        ]
+      }
+    ]);
+
+    const signatures = contents
+      .flatMap(entry => entry.parts || [])
+      .filter(part => part.functionCall)
+      .map(part => part.thoughtSignature);
+
+    expect(signatures).toEqual([undefined, THOUGHT_SIGNATURE_SKIP_SENTINEL]);
+  });
+
+  it('preserves the signature through convertGenericResponseToGoogle', () => {
+    // Every public Google conversion path has to keep it, not just the hot one.
+    const response = convertGenericResponseToGoogle({
+      content: [],
+      tool_calls: [
+        {
+          id: 'call_0',
+          name: 'get_weather',
+          arguments: { city: 'Berlin' },
+          index: 0,
+          metadata: { originalFormat: 'google', thoughtSignature: SIGNATURE }
+        }
+      ],
+      finishReason: 'tool_calls'
+    });
+
+    const part = response.candidates[0].content.parts.find(p => p.functionCall);
+    expect(part.thoughtSignature).toBe(SIGNATURE);
   });
 
   // Hermes Agent documents why this matters: Gemini requires extra_content on

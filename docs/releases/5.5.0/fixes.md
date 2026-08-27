@@ -183,7 +183,7 @@ which also leaves room for variable names longer than a few characters.
 An external application calling the OpenAI-compatible Inference API with a Google model and tools
 got the first tool call back fine, then failed the moment it sent the tool result:
 `HTTP 400 ... Function call is missing a thought_signature in functionCall parts`. Gemini's thinking
-models attach a **thought signature** to every function call and require it back in the conversation
+models attach a **thought signature** to a tool call and require it back in the conversation
 history; the OpenAI response format has no field for it, so iHub was dropping it on the way out.
 
 - Tool calls returned by the Inference API now carry the signature in
@@ -193,7 +193,8 @@ history; the OpenAI response format has no field for it, so iHub was dropping it
   This is the field Gemini-aware OpenAI clients already look for, so agents like Hermes Agent
   work against iHub unchanged.
 - Signatures echoed back in that field — or in the flat `thought_signature` variant some clients
-  use — are accepted and forwarded to Gemini.
+  use — are accepted and forwarded to Gemini, on the same tool call they arrived on. Gemini signs
+  only the first tool call of a response, so parallel calls after it correctly carry no signature.
 - Clients that strip unknown fields no longer break the conversation: iHub substitutes Google's
   documented skip-validation value for the missing signature so the request succeeds, and logs a
   warning. Those turns lose the model's preserved reasoning context, so echoing the real signature
