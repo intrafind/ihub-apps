@@ -1,5 +1,6 @@
 import { verifyOAuthToken } from '../utils/oauthTokenService.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
+import { isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scopes.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -115,6 +116,45 @@ export default async function mcpAuth(req, res, next) {
       allowedApps: client.allowedApps || [],
       allowedModels: client.allowedModels || [],
       allowedPrompts: client.allowedPrompts || []
+    };
+  } else if (decoded.authMode === 'oauth_personal_key') {
+    // Personal API key: the acting user comes from the client record, never
+    // from the token, so a revoked key or a disabled feature stops working
+    // immediately on the gateway too.
+    if (!isPersonalKeysEnabled(platform)) {
+      return sendUnauthorized(req, res, 'invalid_token', 'Personal API keys are not enabled');
+    }
+
+    if (client.personal !== true || client.ownerUserId !== decoded.sub) {
+      return sendUnauthorized(req, res, 'invalid_token', 'API key has been revoked');
+    }
+
+    // Second granularity on both sides: see the equivalent check in jwtAuth.
+    if (
+      client.lastRotated &&
+      decoded.iat < Math.floor(new Date(client.lastRotated).getTime() / 1000)
+    ) {
+      return sendUnauthorized(
+        req,
+        res,
+        'invalid_token',
+        'API key was issued before the last rotation'
+      );
+    }
+
+    user = {
+      id: client.ownerUserId,
+      username: client.ownerUsername || client.ownerUserId,
+      name: client.ownerName || client.ownerUsername || client.ownerUserId,
+      email: client.ownerEmail || '',
+      groups: Array.isArray(client.ownerGroups) ? client.ownerGroups : [],
+      authMode: 'oauth_personal_key',
+      isPersonalApiKey: true,
+      clientId: client.clientId,
+      scopes: decoded.scopes || [],
+      clientAllowedApps: client.allowedApps || [],
+      clientAllowedModels: client.allowedModels || [],
+      clientAllowedPrompts: client.allowedPrompts || []
     };
   } else if (decoded.authMode === 'oauth_authorization_code') {
     user = {

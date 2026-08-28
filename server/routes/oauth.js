@@ -4,7 +4,12 @@ import {
   findClientById,
   loadOAuthClients
 } from '../utils/oauthClientManager.js';
-import { generateOAuthToken, introspectOAuthToken } from '../utils/oauthTokenService.js';
+import {
+  generateOAuthToken,
+  introspectOAuthToken,
+  isPersonalClient
+} from '../utils/oauthTokenService.js';
+import { isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -497,6 +502,29 @@ export default function registerOAuthRoutes(app) {
           'access_denied',
           'Client account is suspended. Please contact your administrator'
         );
+      }
+
+      // A personal key acts as its owner, so it may only exchange credentials
+      // while the administrator still offers the feature and the key was issued
+      // with the client-credentials grant.
+      if (isPersonalClient(client)) {
+        if (!isPersonalKeysEnabled(platform)) {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_client',
+            'Personal API keys are not enabled on this server'
+          );
+        }
+
+        if (!(client.grantTypes || []).includes('client_credentials')) {
+          return sendOAuthError(
+            res,
+            400,
+            'unauthorized_client',
+            'This API key is not authorized for the client_credentials grant'
+          );
+        }
       }
 
       // Generate token

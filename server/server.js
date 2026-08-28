@@ -51,6 +51,7 @@ import nextcloudRoutes from './routes/integrations/nextcloud.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
+import personalApiKeyRoutes from './routes/integrations/personalApiKeys.js';
 import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
 import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
@@ -565,6 +566,7 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
   app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
   app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes);
+  app.use(buildApiPath('/integrations/api-keys'), personalApiKeyRoutes);
   app.use(buildApiPath('/integrations/nextcloud-embed'), nextcloudEmbedRoutes);
 
   // --- Session Management handled in sessionRoutes ---

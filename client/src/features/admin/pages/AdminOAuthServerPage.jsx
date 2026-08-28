@@ -22,8 +22,17 @@ function AdminOAuthServerPage() {
     refreshTokenEnabled: false,
     refreshTokenExpirationDays: 30,
     consentRequired: true,
-    consentMemoryDays: 90
+    consentMemoryDays: 90,
+    personalKeys: {
+      enabled: false,
+      allowedGroups: [],
+      maxKeysPerUser: 5,
+      defaultExpirationDays: 90,
+      maxExpirationDays: 365,
+      allowClientCredentials: true
+    }
   });
+  const [clientsEnabled, setClientsEnabled] = useState(false);
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
 
@@ -48,9 +57,14 @@ function AdminOAuthServerPage() {
           refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
           refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
           consentRequired: data.oauth.consentRequired ?? true,
-          consentMemoryDays: data.oauth.consentMemoryDays ?? 90
+          consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
+          personalKeys: {
+            ...prev.personalKeys,
+            ...(data.oauth.personalKeys || {})
+          }
         }));
       }
+      setClientsEnabled(data?.oauth?.enabled?.clients || false);
       setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
     } catch (error) {
       console.error('Failed to load OAuth config:', error);
@@ -62,6 +76,13 @@ function AdminOAuthServerPage() {
       setLoading(false);
     }
   };
+
+  const updatePersonalKeys = useCallback((field, value) => {
+    setOauthConfig(prev => ({
+      ...prev,
+      personalKeys: { ...prev.personalKeys, [field]: value }
+    }));
+  }, []);
 
   const updateOAuthConfig = useCallback((field, value) => {
     setOauthConfig(prev => ({ ...prev, [field]: value }));
@@ -151,7 +172,11 @@ function AdminOAuthServerPage() {
           refreshTokenEnabled: oauthConfig.refreshTokenEnabled,
           refreshTokenExpirationDays: oauthConfig.refreshTokenExpirationDays,
           consentRequired: oauthConfig.consentRequired,
-          consentMemoryDays: oauthConfig.consentMemoryDays
+          consentMemoryDays: oauthConfig.consentMemoryDays,
+          personalKeys: {
+            ...(currentPlatformConfig.oauth?.personalKeys || {}),
+            ...oauthConfig.personalKeys
+          }
         }
       };
 
@@ -629,6 +654,182 @@ function AdminOAuthServerPage() {
                     />
                   </div>
                 )}
+
+                {/* Personal API Keys */}
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('admin.auth.oauth.personalKeys.enable', 'Personal API Keys')}
+                      </label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.auth.oauth.personalKeys.enableDesc',
+                          'Let users generate API keys for themselves under Settings > Integrations. Each key acts as its owner and inherits that user’s permissions.'
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        updatePersonalKeys('enabled', !oauthConfig.personalKeys.enabled)
+                      }
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        oauthConfig.personalKeys.enabled
+                          ? 'bg-blue-600'
+                          : 'bg-gray-200 dark:bg-gray-600'
+                      }`}
+                    >
+                      <span className="sr-only">
+                        {t('admin.auth.oauth.personalKeys.enable', 'Personal API Keys')}
+                      </span>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          oauthConfig.personalKeys.enabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {oauthConfig.personalKeys.enabled && !clientsEnabled && (
+                    <div className="mt-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+                      <p className="text-sm text-amber-800 dark:text-amber-300">
+                        {t(
+                          'admin.auth.oauth.personalKeys.clientsRequired',
+                          'Personal keys are stored as OAuth clients. Enable OAuth clients on the Clients tab before users can generate keys.'
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {oauthConfig.personalKeys.enabled && (
+                    <div className="mt-4 ml-4 pl-4 border-l-2 border-gray-200 dark:border-gray-600 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.auth.oauth.personalKeys.maxKeys', 'Keys per user')}
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={oauthConfig.personalKeys.maxKeysPerUser}
+                            onChange={e =>
+                              updatePersonalKeys('maxKeysPerUser', Number(e.target.value))
+                            }
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t(
+                              'admin.auth.oauth.personalKeys.defaultExpiry',
+                              'Default expiry (days)'
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={oauthConfig.personalKeys.maxExpirationDays}
+                            value={oauthConfig.personalKeys.defaultExpirationDays}
+                            onChange={e =>
+                              updatePersonalKeys('defaultExpirationDays', Number(e.target.value))
+                            }
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.auth.oauth.personalKeys.maxExpiry', 'Maximum expiry (days)')}
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={3650}
+                            value={oauthConfig.personalKeys.maxExpirationDays}
+                            onChange={e =>
+                              updatePersonalKeys('maxExpirationDays', Number(e.target.value))
+                            }
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {t('admin.auth.oauth.personalKeys.allowedGroups', 'Allowed groups')}
+                        </label>
+                        <input
+                          type="text"
+                          value={(oauthConfig.personalKeys.allowedGroups || []).join(', ')}
+                          onChange={e =>
+                            updatePersonalKeys(
+                              'allowedGroups',
+                              e.target.value
+                                .split(',')
+                                .map(group => group.trim())
+                                .filter(Boolean)
+                            )
+                          }
+                          placeholder={t(
+                            'admin.auth.oauth.personalKeys.allowedGroupsPlaceholder',
+                            'Leave empty to allow every signed-in user'
+                          )}
+                          className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.auth.oauth.personalKeys.allowedGroupsHint',
+                            'Comma-separated group IDs. Empty means every signed-in user may create keys.'
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t(
+                              'admin.auth.oauth.personalKeys.clientCredentials',
+                              'Offer client credentials'
+                            )}
+                          </label>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.auth.oauth.personalKeys.clientCredentialsDesc',
+                              'Also hand out a client ID and secret so users can request short-lived tokens from the token endpoint.'
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() =>
+                            updatePersonalKeys(
+                              'allowClientCredentials',
+                              !oauthConfig.personalKeys.allowClientCredentials
+                            )
+                          }
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                            oauthConfig.personalKeys.allowClientCredentials
+                              ? 'bg-blue-600'
+                              : 'bg-gray-200 dark:bg-gray-600'
+                          }`}
+                        >
+                          <span className="sr-only">
+                            {t(
+                              'admin.auth.oauth.personalKeys.clientCredentials',
+                              'Offer client credentials'
+                            )}
+                          </span>
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              oauthConfig.personalKeys.allowClientCredentials
+                                ? 'translate-x-5'
+                                : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* JWT Algorithm (read-only) */}
                 <div className="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-700">

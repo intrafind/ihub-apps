@@ -1155,3 +1155,26 @@ building the loop containers exposed.
   `originalContentLength`, `returnedContentLength` and the `maxLength` it applied, so a workflow
   reads the flag off the result instead of re-deriving it from a length comparison. The iFinder
   review's per-document loop is three steps as a result: fetch, extract, record.
+
+## Users Can Generate Their Own API Keys
+
+**Settings → Integrations** now offers a **Personal API Key** card. A user clicks once and gets
+credentials that let external tools call iHub Apps as them, plus the endpoint URLs those
+credentials work against — no ticket to an administrator, no shared service account.
+
+- A personal key acts as its owner: calls made with it see exactly the apps, models and prompts
+  that user sees in the web UI, and never get admin access, even when the owner is an
+  administrator.
+- Each key comes with a long-lived API key and, optionally, a client ID and secret for the
+  OAuth token endpoint. Both are shown once, when the key is created or rotated.
+- The card lists the endpoints the key works against — the base URL, the OpenAI-compatible API,
+  the MCP gateway when it is enabled, and the token endpoint — so there is no URL to look up.
+- Users can rotate a key (fresh credentials, everything older stops working) or revoke it
+  outright. Rotating also refreshes the group membership the key acts with.
+- Keys show up in **Admin → OAuth → Clients** next to service accounts, so administrators keep
+  full visibility and can suspend or delete any of them. Create, rotate and revoke are audit-logged.
+
+Personal keys are off by default. Turn them on under **Admin → OAuth → Authorization Server**,
+where you also set who may create keys, how many each user may hold, and the default and maximum
+lifetime. The feature requires OAuth clients to be enabled. See
+[Personal API Keys](../../personal-api-keys.md) for the full reference.
