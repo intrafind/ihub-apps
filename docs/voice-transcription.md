@@ -38,7 +38,7 @@ The protocol is iHub-defined (both ends are ours):
 
 | Direction        | Frame                                | Meaning                                                        |
 | ---------------- | ------------------------------------ | -------------------------------------------------------------- |
-| client → server  | `{"type":"start", "modelId"?}`       | Begin a session. With `modelId`: use that transcription model. Without: use the platform dictation backend. |
+| client → server  | `{"type":"start", "modelId"?, "appId"?}` | Begin a session. With `modelId`: use that transcription model. Without: use the platform dictation backend. `appId` selects whose [custom vocabulary](#custom-vocabulary-context-biasing) applies — only the id travels, never the terms. |
 | client → server  | binary frames                        | PCM16 audio, 16 kHz mono, little-endian                        |
 | client → server  | `{"type":"stop"}`                    | No more audio; flush and finish                                 |
 | server → client  | `{"type":"ready"}`                   | Upstream session initialized — safe to stream at full speed     |
@@ -118,6 +118,7 @@ Field notes:
 - **`modelId`** — the upstream model name announced to vLLM in the session handshake.
 - **`apiKey`** — optional. Plaintext values are encrypted at rest (AES-256-GCM `ENC[...]`) when saved through the admin UI; `${ENV_VAR}` placeholders are also supported. Sent upstream as a Bearer token, never to browsers.
 - **`enabled`** — must be `true` for the model to be usable.
+- **`vocabulary`** — optional [custom vocabulary](#custom-vocabulary-context-biasing) for this model.
 
 Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. Use the **Test connection** button in Admin → Voice/Models to validate reachability and protocol without streaming audio.
 
@@ -135,7 +136,8 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
     "defaultEnabled": true,
     "streaming": true,
     "maxDurationSeconds": 900,
-    "inputs": { "upload": true, "record": true, "video": true }
+    "inputs": { "upload": true, "record": true, "video": true },
+    "vocabulary": { "terms": ["Schadensfall", "Teilkasko"] }
   },
   "upload": {
     "enabled": true,
@@ -159,6 +161,7 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 | `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
 | `inputs.record`      | `true`  | Show the record→transcribe button.                                                          |
 | `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
+| `vocabulary`         | –       | Subject-area terms for this app, merged on top of the platform-wide and model-level ones. Also applies to dictation in this app. See [Custom vocabulary](#custom-vocabulary-context-biasing). |
 
 `upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. The `maxDurationSeconds` cap is the better lever for bounding work.
 
@@ -197,7 +200,8 @@ Dictation (microphone → input field) predates transcription models and is conf
       "enabled": true,
       "url": "ws://voxtral.internal:8080/v1/realtime",
       "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
-      "apiKey": ""
+      "apiKey": "",
+      "vocabulary": { "terms": ["IntraFind", "iHub"], "biasScore": 3 }
     }
   }
 }
@@ -206,6 +210,67 @@ Dictation (microphone → input field) predates transcription models and is conf
 Both backends can point at the same vLLM deployment. The WebSocket endpoint is available when **either** the dictation backend is enabled **or** at least one enabled transcription model exists.
 
 > **Note:** the dictation backend (`platform.speech.realtime.url/model/apiKey`) and a transcription model's config are **independent copies** — the V073 migration seeds the model from the platform values once, but afterwards updating one does not update the other. When you move the vLLM endpoint, update both places.
+
+## Custom vocabulary (context biasing)
+
+General-purpose speech models mis-transcribe exactly the words that matter most: product
+names, domain jargon, abbreviations and people. **Context biasing** fixes that by handing the
+decoder a list of terms to prefer — iHub sends them upstream in the session handshake as
+`context_biasing: { words, bias_score }`, so "Voxtral" stops coming back as "Vox Trawl".
+
+### Where to configure it
+
+The same `vocabulary` block is accepted at three levels, and they are **merged**, not
+overridden:
+
+| Level        | Location                                | Use it for                                      |
+| ------------ | --------------------------------------- | ----------------------------------------------- |
+| Platform     | `platform.json` → `speech.realtime.vocabulary` (Admin → Voice Input) | Organization-wide terms: company, product and team names. Applies to **every** session, dictation and transcription alike. |
+| Model        | the transcription model's `vocabulary` (Admin → Models) | Terms tied to one speech backend.               |
+| App          | the app's `transcription.vocabulary` (Admin → Apps → Edit → Transcription) | One app's subject area. Also applies to dictation inside that app. |
+
+```json
+{
+  "vocabulary": {
+    "enabled": true,
+    "terms": ["Voxtral", "vLLM", "IntraFind", "Deutsche Bahn"],
+    "biasScore": 3
+  }
+}
+```
+
+- **`terms`** — up to 250 terms, 80 characters each. Multi-word phrases are allowed.
+- **`biasScore`** — `0`–`10`, default `3`. Only the **most specific level that sets one** wins
+  (app beats model beats platform), so an app can turn the pressure up without touching the
+  platform. A level that only lists terms inherits the score already in effect.
+- **`enabled`** — optional, treated as `true` when omitted. Set it to `false` to park a term
+  list without deleting it; that level then contributes nothing, including its bias score.
+
+Merging means an app **adds to** the org-wide list instead of replacing it. Terms are deduped
+exactly — case-sensitively, because `SAP` and `Sap` are different token sequences to the model.
+
+### Choosing a bias score
+
+The score is added to the logits of the biased token sequences, so it trades recall against
+hallucination. `2`–`5` is the useful band. Push it much higher and the model starts emitting
+the term even when it was never spoken. Start at the default `3`, then raise it only for terms
+that are still coming back wrong.
+
+### Notes and limits
+
+- **Nothing configured means nothing sent.** iHub only adds `context_biasing` to the handshake
+  once at least one term resolves, so an endpoint build that does not understand the field is
+  unaffected until you deliberately configure a vocabulary. Verify support with **Test
+  connection** in Admin → Voice Input — it sends the same payload a real session would.
+- **Spelling and capitalization matter.** Write a term the way it should appear in the
+  transcript. Tokenizers are also sensitive to a leading space; if an important term is still
+  missed, adding both `"Voxtral"` and `" Voxtral"` gives the decoder both token sequences.
+- **Terms stay server-side.** The browser sends only a model id and an app id; the term lists
+  are resolved from config on the server, and the public models API strips `vocabulary` along
+  with `url` and `apiKey`. An app's vocabulary is applied only for users permitted to use that
+  app.
+- **The vocabulary is not a prompt.** It biases how audio is spelled out; it does not tell the
+  model what to do with the text.
 
 ## Runtime limits and tuning
 

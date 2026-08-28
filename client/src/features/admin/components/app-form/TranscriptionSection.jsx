@@ -1,4 +1,5 @@
 import { getLocalizedContent } from '../../../../utils/localizeContent';
+import SpeechVocabularyEditor from '../SpeechVocabularyEditor';
 
 function TranscriptionSection({
   app,
@@ -148,6 +149,19 @@ function TranscriptionSection({
                       })
                     }
                     className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs dark:bg-gray-700 dark:border-gray-600"
+                  />
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                  <SpeechVocabularyEditor
+                    t={t}
+                    idPrefix="app-transcription"
+                    value={app.transcription?.vocabulary}
+                    onChange={next => handleTranscriptionChange({ vocabulary: next })}
+                    scopeHint={t(
+                      'admin.apps.edit.transcriptionVocabularyScope',
+                      'They are added to the platform-wide and model-level terms, and also apply to dictation in this app.'
+                    )}
                   />
                 </div>
               </div>

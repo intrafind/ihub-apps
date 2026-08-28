@@ -13,6 +13,11 @@
   "provider": "vllm-realtime",
   "modelType": "transcription",
   "apiKey": "",
+  "vocabulary": {
+    "enabled": true,
+    "terms": [],
+    "biasScore": 3
+  },
   "enabled": false,
   "default": false
 }

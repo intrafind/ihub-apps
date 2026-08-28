@@ -47,14 +47,17 @@ function resolveApiKey(rawApiKey) {
 
 /**
  * @param {Object} model - The transcription model config (as stored in cache).
- * @returns {{ url: string, apiKey: string, model: string }} Upstream connection
- *   details. `model` is the upstream model id sent in the vLLM session.update.
+ * @returns {{ url: string, apiKey: string, model: string, vocabulary: Object|null }}
+ *   Upstream connection details. `model` is the upstream model id sent in the
+ *   vLLM session.update; `vocabulary` is this model's raw custom-vocabulary
+ *   block, which the bridge merges with the platform-wide and per-app layers.
  */
 export function resolveUpstream(model) {
   return {
     url: expandEnvVars(model?.url || '').trim(),
     apiKey: resolveApiKey(model?.apiKey),
-    model: model?.modelId || ''
+    model: model?.modelId || '',
+    vocabulary: model?.vocabulary || null
   };
 }
 

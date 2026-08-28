@@ -181,6 +181,9 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
           // Streams mic audio to iHub, which proxies to a vLLM realtime endpoint.
           // The endpoint is configured server-side, so no host is needed here.
           recognition = new VllmRealtimeRecognition();
+          // The app id lets the server apply this app's custom vocabulary to
+          // dictation as well; the terms stay server-side.
+          recognition.appId = app?.id || '';
           break;
         case 'default':
         default:

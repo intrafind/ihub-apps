@@ -26,7 +26,7 @@
  *     bounds how LONG one connection can pin an upstream session.
  *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
- *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
+ *   client -> server: JSON `{type:'start', modelId?, appId?, lang?}`, then binary PCM16
  *                     frames, then JSON `{type:'stop'}`
  *   server -> client: JSON `{type:'ready'}` once upstream is initialized,
  *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
@@ -48,6 +48,7 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import { mergeVocabularies, buildContextBiasing } from '../../shared/speechVocabulary.js';
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -288,6 +289,44 @@ export function hasEnabledTranscriptionModel() {
 }
 
 /**
+ * The app-level custom vocabulary for `appId`, or null.
+ *
+ * The browser sends only an app *id*; the terms are read server-side from the
+ * app config, so a client cannot inject arbitrary biasing words upstream. An
+ * app the user may not use contributes nothing — and does so silently, since a
+ * mismatched vocabulary must degrade transcription quality, never break the
+ * session with an error.
+ *
+ * @param {string|undefined} appId
+ * @param {Object|undefined} user
+ * @returns {Object|null} The raw `transcription.vocabulary` block.
+ */
+export function resolveAppVocabulary(appId, user) {
+  if (!appId || typeof appId !== 'string') return null;
+  const { data: apps = [] } = configCache.getApps(true);
+  const app = apps.find(a => a?.id === appId);
+  if (!app?.transcription?.vocabulary) return null;
+  const allowed = user?.permissions?.apps;
+  if (!allowed || !(allowed.has('*') || allowed.has(appId))) return null;
+  return app.transcription.vocabulary;
+}
+
+/**
+ * Merge the custom vocabulary layers that apply to one session and render the
+ * upstream context-biasing payload.
+ *
+ * Least to most specific: platform-wide terms, then the transcription model's
+ * own, then the app's. Returns null when nothing is configured, so the bridge
+ * omits the field entirely and keeps sending the exact frames it always has.
+ *
+ * @param {{ platformVocabulary?: Object, modelVocabulary?: Object, appVocabulary?: Object }} layers
+ * @returns {{ words: string[], bias_score: number }|null}
+ */
+export function resolveContextBiasing({ platformVocabulary, modelVocabulary, appVocabulary } = {}) {
+  return buildContextBiasing(mergeVocabularies(platformVocabulary, modelVocabulary, appVocabulary));
+}
+
+/**
  * Resolve the upstream connection for a transcription session.
  *
  * With a `modelId`, the model is looked up in the models cache, required to be
@@ -297,13 +336,18 @@ export function hasEnabledTranscriptionModel() {
  * dictation backend (unchanged behavior).
  *
  * A raw upstream URL is NEVER accepted from the client — only a server-resolved
- * model id — so the vLLM URL/API key never reach the browser.
+ * model id — so the vLLM URL/API key never reach the browser. The same holds
+ * for custom vocabulary: `appId` selects a server-side term list, it does not
+ * carry one.
  *
- * @param {{ modelId?: string, user?: Object }} params
- * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string } }
- *   | { ok: false, error: string }>}
+ * @param {{ modelId?: string, appId?: string, user?: Object }} params
+ * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string,
+ *   contextBiasing: Object|null } } | { ok: false, error: string }>}
  */
-export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
+export async function resolveTranscriptionUpstream({ modelId, appId, user } = {}) {
+  const platformVocabulary = (configCache.getPlatform() || {}).speech?.realtime?.vocabulary;
+  const appVocabulary = resolveAppVocabulary(appId, user);
+
   // No model id → platform-wide dictation backend (unchanged).
   if (!modelId) {
     const cfg = getRealtimeConfig();
@@ -316,7 +360,12 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
     }
     return {
       ok: true,
-      upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model }
+      upstream: {
+        url: cfg.url,
+        apiKey: cfg.apiKey || '',
+        model: cfg.model,
+        contextBiasing: resolveContextBiasing({ platformVocabulary, appVocabulary })
+      }
     };
   }
 
@@ -369,7 +418,17 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
       error: `Transcription model "${modelId}" has no endpoint URL`
     };
   }
-  return { ok: true, upstream };
+  return {
+    ok: true,
+    upstream: {
+      ...upstream,
+      contextBiasing: resolveContextBiasing({
+        platformVocabulary,
+        modelVocabulary: upstream.vocabulary,
+        appVocabulary
+      })
+    }
+  };
 }
 
 // --- Upstream error diagnostics (pure, unit-tested) ---
@@ -618,13 +677,22 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clearTimeout(sessionInitTimer);
       sessionInitTimer = null;
     }
-    sendJson(upstream, { type: 'session.update', model: cfg.model });
+    // `context_biasing` is added ONLY when a vocabulary is configured: an
+    // endpoint build without biasing support may reject an unknown session
+    // field, and a deployment that configured nothing must keep sending the
+    // exact frame it sent before this feature existed.
+    const sessionUpdate = { type: 'session.update', model: cfg.model };
+    if (cfg.contextBiasing) sessionUpdate.context_biasing = cfg.contextBiasing;
+    sendJson(upstream, sessionUpdate);
     sendJson(upstream, { type: 'input_audio_buffer.commit' });
     upstreamReady = true;
     logger.info('Realtime STT: upstream ready', {
       component: 'RealtimeSTT',
       userId: user.id,
       model: cfg.model,
+      // Log the term COUNT, not the terms: a vocabulary can carry customer or
+      // employee names, which do not belong in the server log.
+      vocabularyTerms: cfg.contextBiasing?.words?.length || 0,
       trigger
     });
     sendJson(clientWs, { type: 'ready' });
@@ -793,7 +861,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // waits for {type:'ready'} before streaming) and false for dictation, where
   // the upstream opens lazily on the first audio frame. Buffered audio forces an
   // open even in the lazy case so a fast dictation client isn't stranded.
-  const resolveAndPrepare = async (modelId, { openImmediately } = {}) => {
+  const resolveAndPrepare = async (modelId, { appId, openImmediately } = {}) => {
     if (cfg || resolvingCfg || upstream) {
       if (cfg && !upstream && (openImmediately || pending.length > 0)) openUpstream();
       return;
@@ -801,7 +869,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     resolvingCfg = true;
     let result;
     try {
-      result = await resolveTranscriptionUpstream({ modelId, user });
+      result = await resolveTranscriptionUpstream({ modelId, appId, user });
     } catch (err) {
       resolvingCfg = false;
       failBridge('resolve-failed', 'Failed to resolve transcription model', {
@@ -869,7 +937,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // modelId falls back to the platform dictation backend (lazy open).
       // `msg.lang` is accepted but unused — Voxtral auto-detects the language;
       // the field is kept in the protocol for future language-pinned backends.
-      resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
+      // `msg.appId` selects the app whose custom vocabulary applies; the terms
+      // themselves are read server-side, never sent by the browser.
+      resolveAndPrepare(msg.modelId, {
+        appId: msg.appId,
+        openImmediately: msg.modelId != null
+      });
     } else if (msg.type === 'stop') {
       stopRequested = true;
       logger.info('Realtime STT: stop received, committing buffer', {
@@ -1101,7 +1174,11 @@ export function attachRealtimeTranscription(httpServer) {
  * endpoint is reachable and speaks the realtime protocol. Used by the admin
  * "Test connection" button.
  *
- * @param {{url?: string, model?: string, apiKey?: string}} cfg
+ * When a `vocabulary` is passed the handshake carries the same
+ * `context_biasing` payload a real session would, so an endpoint build that
+ * rejects the field is caught here instead of at dictation time.
+ *
+ * @param {{url?: string, model?: string, apiKey?: string, vocabulary?: Object}} cfg
  * @param {number} [timeoutMs=8000]
  * @returns {Promise<{ok: boolean, message: string}>}
  */
@@ -1150,7 +1227,10 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
 
     ws.on('open', () => {
       opened = true;
-      sendJson(ws, { type: 'session.update', model: cfg.model });
+      const sessionUpdate = { type: 'session.update', model: cfg.model };
+      const contextBiasing = buildContextBiasing(mergeVocabularies(cfg.vocabulary));
+      if (contextBiasing) sessionUpdate.context_biasing = contextBiasing;
+      sendJson(ws, sessionUpdate);
     });
 
     ws.on('message', data => {

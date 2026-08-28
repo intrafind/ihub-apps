@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { speechVocabularySchema } from './common.js';
 import {
   CONTEXT_WINDOW_MIN,
   CONTEXT_WINDOW_MAX,
@@ -178,7 +179,12 @@ const baseModelConfigSchema = z
 
     // Model auto-discovery - automatically detect model ID from /v1/models endpoint
     // Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the active model can change
-    autoDiscovery: z.boolean().optional().default(false)
+    autoDiscovery: z.boolean().optional().default(false),
+
+    // Custom vocabulary / context biasing for transcription models. Terms
+    // listed here are merged with the platform-wide and per-app vocabularies
+    // and sent to the upstream so domain jargon is transcribed correctly.
+    vocabulary: speechVocabularySchema.optional()
   })
   .strict(); // Use strict instead of passthrough for better validation
 
@@ -191,6 +197,15 @@ export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) =
       code: z.ZodIssueCode.custom,
       message: 'Provider "vllm-realtime" is only valid for modelType "transcription"',
       path: ['provider']
+    });
+  }
+  // Context biasing is a speech-to-text feature; on a chat model the field
+  // would be silently ignored, which reads as "configured but broken".
+  if (data.vocabulary && data.modelType !== 'transcription') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Custom vocabulary is only valid for modelType "transcription"',
+      path: ['vocabulary']
     });
   }
 });

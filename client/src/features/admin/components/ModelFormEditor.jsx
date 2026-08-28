@@ -11,6 +11,7 @@ import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from './formValidationContext';
+import SpeechVocabularyEditor from './SpeechVocabularyEditor';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -524,6 +525,22 @@ function ModelFormEditor({
             </div>
           </div>
         </div>
+
+        {/* Custom vocabulary (transcription models only) */}
+        {isTranscription && (
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <SpeechVocabularyEditor
+              t={t}
+              idPrefix="model"
+              value={data.vocabulary}
+              onChange={next => handleChange('vocabulary', next)}
+              scopeHint={t(
+                'admin.models.vocabularyScope',
+                'They are added to the platform-wide terms and to the terms of whichever app uses this model.'
+              )}
+            />
+          </div>
+        )}
 
         {/* Configuration */}
         <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">

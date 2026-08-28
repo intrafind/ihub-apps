@@ -6,6 +6,7 @@ import {
   LANGUAGE_CODE_PATTERN,
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
+import { speechVocabularySchema } from './common.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -232,7 +233,11 @@ const transcriptionSchema = z
     // Stream partial transcription deltas into the assistant bubble.
     streaming: z.boolean().optional().default(true),
     // Client-enforced cap on decoded audio / recording length (seconds).
-    maxDurationSeconds: z.number().int().min(1).max(7200).optional().default(900)
+    maxDurationSeconds: z.number().int().min(1).max(7200).optional().default(900),
+    // Subject-area vocabulary for this app, merged on top of the platform-wide
+    // and model-level terms so an app adds jargon instead of replacing it.
+    // Resolved server-side from the app id — the browser never sends terms.
+    vocabulary: speechVocabularySchema.optional()
   })
   .optional();
 

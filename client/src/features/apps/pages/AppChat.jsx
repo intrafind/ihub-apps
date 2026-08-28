@@ -1397,6 +1397,9 @@ function AppChat({ preloadedApp = null }) {
 
             const transcript = await transcribeAudioBuffer(audioBuffer, {
               modelId,
+              // Lets the server apply this app's custom vocabulary. Only the id
+              // is sent — the terms are resolved from the app config.
+              appId,
               signal: abortController.signal,
               onDelta: streaming
                 ? text => {
@@ -1438,7 +1441,7 @@ function AppChat({ preloadedApp = null }) {
         transcribeAbortRef.current = null;
       }
     },
-    [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
+    [app, appId, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
   );
 
   // Cancel an in-flight upload/video transcription (wired to the Stop button).

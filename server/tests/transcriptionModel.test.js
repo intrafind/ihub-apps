@@ -5,6 +5,10 @@
  * transcription provider registry, and the model-aware upstream resolution used
  * by the realtime WebSocket proxy (permission enforcement, modelType/enabled
  * checks, and the platform.speech.realtime dictation fallback).
+ *
+ * Also covers how a custom vocabulary (context biasing) is resolved across the
+ * platform / model / app layers. The pure merge rules behind it are tested in
+ * `tests/unit/server/speechVocabulary.test.js`.
  */
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
@@ -12,9 +16,12 @@ import { getTranscriptionProvider } from '../transcription/index.js';
 import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
 import {
   resolveTranscriptionUpstream,
+  resolveAppVocabulary,
+  resolveContextBiasing,
   hasEnabledTranscriptionModel,
   extractTranscriptText
 } from '../websocket/realtimeTranscription.js';
+import { VOCABULARY_DEFAULT_BIAS_SCORE } from '../../shared/speechVocabulary.js';
 import configCache from '../configCache.js';
 
 const baseModel = {
@@ -266,5 +273,142 @@ describe('resolveTranscriptionUpstream / hasEnabledTranscriptionModel', () => {
     const r = await resolveTranscriptionUpstream({ user: wildcard });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/not configured/i);
+  });
+});
+
+describe('resolveContextBiasing', () => {
+  test('merges the three layers into one upstream payload', () => {
+    expect(
+      resolveContextBiasing({
+        platformVocabulary: { terms: ['IntraFind'] },
+        modelVocabulary: { terms: ['Voxtral'], biasScore: 4 },
+        appVocabulary: { terms: ['Schadensfall'] }
+      })
+    ).toEqual({ words: ['IntraFind', 'Voxtral', 'Schadensfall'], bias_score: 4 });
+  });
+
+  test('is null when nothing is configured anywhere', () => {
+    expect(resolveContextBiasing({})).toBeNull();
+  });
+});
+
+describe('vocabulary resolution in the realtime bridge', () => {
+  const transcriptionModel = {
+    id: 'voxtral-mini-realtime',
+    modelId: 'mistralai/Voxtral-Mini-4B-Realtime-2602',
+    name: { en: 'Voxtral' },
+    description: { en: 'd' },
+    url: 'ws://localhost:8080/v1/realtime',
+    provider: 'vllm-realtime',
+    modelType: 'transcription',
+    apiKey: '',
+    enabled: true,
+    vocabulary: { terms: ['Voxtral'], biasScore: 4 }
+  };
+  const claimsApp = {
+    id: 'claims',
+    transcription: { enabled: true, vocabulary: { terms: ['Schadensfall'] } }
+  };
+  const plainApp = { id: 'plain' };
+
+  const user = {
+    permissions: { models: new Set(['*']), apps: new Set(['claims', 'plain']) }
+  };
+  const otherUser = { permissions: { models: new Set(['*']), apps: new Set(['plain']) } };
+
+  const seedPlatform = vocabulary => {
+    configCache.setCacheEntry('config/platform.json', {
+      speech: {
+        realtime: {
+          enabled: true,
+          url: 'ws://platform-dictation:8080/v1/realtime',
+          model: 'platform-model',
+          apiKey: '',
+          ...(vocabulary ? { vocabulary } : {})
+        }
+      }
+    });
+  };
+
+  beforeEach(() => {
+    configCache.setCacheEntry('config/models.json', [transcriptionModel]);
+    configCache.setCacheEntry('config/apps.json', [claimsApp, plainApp]);
+    seedPlatform({ terms: ['IntraFind'] });
+  });
+
+  afterAll(() => {
+    for (const key of ['config/models.json', 'config/apps.json', 'config/platform.json']) {
+      const timer = configCache.refreshTimers?.get(key);
+      if (timer) clearTimeout(timer);
+      configCache.refreshTimers?.delete(key);
+    }
+  });
+
+  describe('resolveAppVocabulary', () => {
+    test('returns the app block for a permitted user', () => {
+      expect(resolveAppVocabulary('claims', user)).toEqual({ terms: ['Schadensfall'] });
+    });
+
+    test('ignores an app the user may not use', () => {
+      expect(resolveAppVocabulary('claims', otherUser)).toBeNull();
+    });
+
+    test('ignores an unknown app id and an app with no vocabulary', () => {
+      expect(resolveAppVocabulary('nope', user)).toBeNull();
+      expect(resolveAppVocabulary('plain', user)).toBeNull();
+    });
+
+    test('ignores a missing app id', () => {
+      expect(resolveAppVocabulary(undefined, user)).toBeNull();
+    });
+  });
+
+  describe('resolveTranscriptionUpstream', () => {
+    test('merges platform, model and app terms for a model-based session', async () => {
+      const r = await resolveTranscriptionUpstream({
+        modelId: 'voxtral-mini-realtime',
+        appId: 'claims',
+        user
+      });
+      expect(r.ok).toBe(true);
+      expect(r.upstream.contextBiasing).toEqual({
+        words: ['IntraFind', 'Voxtral', 'Schadensfall'],
+        bias_score: 4
+      });
+    });
+
+    test('leaves out an app the user may not use', async () => {
+      const r = await resolveTranscriptionUpstream({
+        modelId: 'voxtral-mini-realtime',
+        appId: 'claims',
+        user: otherUser
+      });
+      expect(r.ok).toBe(true);
+      expect(r.upstream.contextBiasing.words).toEqual(['IntraFind', 'Voxtral']);
+    });
+
+    test('applies platform and app terms on the dictation fallback (no model id)', async () => {
+      const r = await resolveTranscriptionUpstream({ appId: 'claims', user });
+      expect(r.ok).toBe(true);
+      expect(r.upstream.url).toBe('ws://platform-dictation:8080/v1/realtime');
+      expect(r.upstream.contextBiasing).toEqual({
+        words: ['IntraFind', 'Schadensfall'],
+        bias_score: VOCABULARY_DEFAULT_BIAS_SCORE
+      });
+    });
+
+    test('produces no payload at all when nothing is configured', async () => {
+      seedPlatform(null);
+      configCache.setCacheEntry('config/models.json', [
+        { ...transcriptionModel, vocabulary: undefined }
+      ]);
+      const r = await resolveTranscriptionUpstream({
+        modelId: 'voxtral-mini-realtime',
+        appId: 'plain',
+        user
+      });
+      expect(r.ok).toBe(true);
+      expect(r.upstream.contextBiasing).toBeNull();
+    });
   });
 });
