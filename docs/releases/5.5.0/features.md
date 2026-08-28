@@ -1158,21 +1158,22 @@ building the loop containers exposed.
 
 ## Speech-to-Text Custom Vocabulary
 
-Transcription and dictation now accept a list of terms the speech model should prefer — product
-names, domain jargon, abbreviations, people. The terms are sent to the speech endpoint as context
-biasing, so words a general-purpose model tends to guess phonetically come back spelled correctly.
+Transcription and dictation now accept a list of terms the speech model should pay extra
+attention to — product names, domain jargon, abbreviations, people. The terms are sent to the
+speech endpoint as `hotwords`, so words a general-purpose model tends to guess phonetically come
+back spelled correctly.
 
 - Configure a vocabulary in **Admin → Voice Input** (organization-wide), on a transcription model
   under **Admin → Models**, or per app under **Admin → Apps → Edit → Transcription**. The three
   levels are merged, so an app adds its subject-area terms to the org-wide list instead of
   replacing it.
-- Each level takes up to 250 terms plus an optional bias strength (`0`–`10`, default `3`). The most
-  specific level that sets a strength wins; `2`–`5` works well, higher values make the model emit a
-  term even when it was not spoken.
-- The org-wide list also applies to microphone dictation, and an app's list applies to dictation
-  inside that app.
+- Each level takes up to 250 terms. The org-wide list also applies to microphone dictation, and
+  an app's list applies to dictation inside that app.
+- **This requires a speech endpoint that applies hotwords to realtime sessions.** A stock vLLM
+  `/v1/realtime` build reads only the model from the session handshake and ignores the list, in
+  which case the terms are stored and sent but do not change the transcript.
 - Nothing is sent upstream until at least one term is configured, so existing installations are
-  unaffected until an admin fills a list. **Test connection** in Admin → Voice Input now sends the
-  same payload a real session would, which surfaces an endpoint that does not support biasing.
-- Terms never reach the browser: only a model id and an app id are sent, and the public models API
-  strips the vocabulary along with the endpoint URL and API key.
+  unaffected until an admin fills a list.
+- Terms never reach the browser: only a model id and an app id are sent, the public models API
+  strips the vocabulary along with the endpoint URL and API key, and `/api/apps` strips an app's
+  term list.

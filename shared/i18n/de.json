@@ -2113,12 +2113,11 @@
     },
     "speechVocabulary": {
       "title": "Eigenes Vokabular",
-      "description": "Begriffe, die das Transkriptionsmodell bevorzugen soll — Produktnamen, Fachvokabular, Eigennamen. Sie werden dem Sprachdienst als Context Biasing übergeben, damit sie korrekt geschrieben und nicht lautmalerisch geraten werden.",
+      "description": "Begriffe, auf die das Transkriptionsmodell besonders achten soll — Produktnamen, Fachvokabular, Eigennamen. Sie werden dem Sprachdienst als Hotwords übergeben, damit sie korrekt geschrieben und nicht lautmalerisch geraten werden.",
       "enabled": "Diese Begriffe anwenden",
       "terms": "Begriffe (einer pro Zeile)",
       "termsHint": "{{used}} von {{max}} Begriffen. Mehrwortbegriffe sind erlaubt. Schreibweise und Groß-/Kleinschreibung zählen — tragen Sie einen Begriff so ein, wie er im Transkript erscheinen soll.",
-      "biasScore": "Gewichtung",
-      "biasScoreHint": "Wie stark diese Begriffe bevorzugt werden ({{min}}–{{max}}, Standard {{fallback}}). 2–5 funktioniert gut; höhere Werte lassen das Modell den Begriff auch dann ausgeben, wenn er nicht gesprochen wurde."
+      "upstreamSupportHint": "Erfordert einen Sprachdienst, der Hotwords auf Echtzeitsitzungen anwendet. Ein unveränderter vLLM-/v1/realtime-Build liest aus dem Session-Handshake nur das Modell und ignoriert diese Liste."
     }
   },
   "cloudStorage": {

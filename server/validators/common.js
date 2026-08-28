@@ -1,11 +1,6 @@
 import { z } from 'zod';
 import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';
-import {
-  VOCABULARY_MAX_TERMS,
-  VOCABULARY_MAX_TERM_LENGTH,
-  VOCABULARY_BIAS_SCORE_MIN,
-  VOCABULARY_BIAS_SCORE_MAX
-} from '../../shared/speechVocabulary.js';
+import { VOCABULARY_MAX_TERMS, VOCABULARY_MAX_TERM_LENGTH } from '../../shared/speechVocabulary.js';
 
 export const zSafeId = z
   .string()
@@ -15,7 +10,7 @@ export const zSafeId = z
   );
 
 /**
- * Custom vocabulary / context biasing for speech-to-text.
+ * Custom vocabulary ("hotwords") for speech-to-text.
  *
  * Reused by the platform (`speech.realtime.vocabulary`), model
  * (`<transcription model>.vocabulary`) and app (`transcription.vocabulary`)
@@ -23,8 +18,8 @@ export const zSafeId = z
  *
  * `enabled` is optional and treated as TRUE when omitted (see
  * `normalizeVocabulary`), so a hand-written block that only lists terms works.
- * No `.default()` here: the merge needs to tell "score not set" (inherit the
- * less specific layer) apart from "score set to the default value".
+ * There is no per-term weight: vLLM's `hotwords` is a plain term string with no
+ * score, and a knob that maps to nothing upstream is worse than no knob.
  */
 export const speechVocabularySchema = z
   .object({
@@ -32,11 +27,6 @@ export const speechVocabularySchema = z
     terms: z
       .array(z.string().trim().min(1).max(VOCABULARY_MAX_TERM_LENGTH))
       .max(VOCABULARY_MAX_TERMS, `At most ${VOCABULARY_MAX_TERMS} vocabulary terms are supported`)
-      .optional(),
-    biasScore: z
-      .number()
-      .min(VOCABULARY_BIAS_SCORE_MIN, `Bias score must be at least ${VOCABULARY_BIAS_SCORE_MIN}`)
-      .max(VOCABULARY_BIAS_SCORE_MAX, `Bias score cannot exceed ${VOCABULARY_BIAS_SCORE_MAX}`)
       .optional()
   })
   .strict();

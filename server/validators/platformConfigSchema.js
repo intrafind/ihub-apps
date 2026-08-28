@@ -249,7 +249,7 @@ export const platformConfigSchema = z
             maxConnections: z.number().int().positive().optional(),
             maxConnectionsPerUser: z.number().int().positive().optional(),
             maxFrameBytes: z.number().int().positive().optional(),
-            // Organization-wide custom vocabulary / context biasing. Applies to
+            // Organization-wide custom vocabulary ("hotwords"). Applies to
             // every transcription session — browser dictation on this backend
             // AND sessions routed to a transcription model, whose own terms are
             // merged on top (shared/speechVocabulary.js).

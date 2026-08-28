@@ -1,19 +1,16 @@
 import { useRef, useState } from 'react';
 import {
-  VOCABULARY_BIAS_SCORE_MAX,
-  VOCABULARY_BIAS_SCORE_MIN,
-  VOCABULARY_DEFAULT_BIAS_SCORE,
   VOCABULARY_MAX_TERMS,
   formatVocabularyTerms,
   parseVocabularyTerms
 } from '../../../../../shared/speechVocabulary.js';
 
 /**
- * Editor for a speech-to-text custom vocabulary (context biasing).
+ * Editor for a speech-to-text custom vocabulary (vLLM "hotwords").
  *
  * One component for all three configuration levels — platform (Voice Input),
  * transcription model, and app — because they store the identical shape
- * `{ enabled, terms, biasScore }` and the server merges them
+ * `{ enabled, terms }` and the server merges them
  * (`shared/speechVocabulary.js`). Callers differ only in the `scopeHint` they
  * pass, which explains how that level combines with the others.
  *
@@ -23,7 +20,7 @@ import {
  * normalized away under the cursor.
  *
  * @param {Object} props
- * @param {{enabled?: boolean, terms?: string[], biasScore?: number}} [props.value]
+ * @param {{enabled?: boolean, terms?: string[]}} [props.value]
  * @param {(next: Object|undefined) => void} props.onChange - Called with the new
  *   vocabulary, or `undefined` once it holds nothing worth persisting.
  * @param {Function} props.t - Translation function.
@@ -47,7 +44,7 @@ function SpeechVocabularyEditor({ value, onChange, t, idPrefix, scopeHint }) {
   // Emit a complete vocabulary, or `undefined` once it holds nothing worth
   // persisting, so config files don't accumulate empty blocks.
   const emit = next => {
-    const isEmpty = !next.terms?.length && next.enabled !== false && next.biasScore === undefined;
+    const isEmpty = !next.terms?.length && next.enabled !== false;
     onChange(isEmpty ? undefined : next);
   };
 
@@ -58,20 +55,6 @@ function SpeechVocabularyEditor({ value, onChange, t, idPrefix, scopeHint }) {
     const parsed = parseVocabularyTerms(text);
     lastEmittedRef.current = formatVocabularyTerms(parsed);
     patch({ terms: parsed });
-  };
-
-  const handleBiasScoreChange = raw => {
-    // Blank means "not set" — this level then inherits the bias strength of a
-    // less specific one (app → model → platform → built-in default).
-    if (raw === '') {
-      const next = { ...(value || {}) };
-      delete next.biasScore;
-      emit(next);
-      return;
-    }
-    const parsed = Number.parseFloat(raw);
-    if (Number.isNaN(parsed)) return;
-    patch({ biasScore: parsed });
   };
 
   const enabled = value?.enabled !== false;
@@ -88,7 +71,7 @@ function SpeechVocabularyEditor({ value, onChange, t, idPrefix, scopeHint }) {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {t(
             'admin.speechVocabulary.description',
-            'Terms the transcription model should prefer — product names, domain jargon, people. They are sent to the speech endpoint as context biasing so they are spelled correctly instead of guessed phonetically.'
+            'Terms the transcription model should pay extra attention to — product names, domain jargon, people. They are sent to the speech endpoint as hotwords so they are spelled correctly instead of guessed phonetically.'
           )}
           {scopeHint ? ` ${scopeHint}` : ''}
         </p>
@@ -128,31 +111,12 @@ function SpeechVocabularyEditor({ value, onChange, t, idPrefix, scopeHint }) {
         </p>
       </div>
 
-      <div>
-        <label className={labelClass} htmlFor={`${idPrefix}-vocabulary-bias-score`}>
-          {t('admin.speechVocabulary.biasScore', 'Bias strength')}
-        </label>
-        <input
-          id={`${idPrefix}-vocabulary-bias-score`}
-          type="number"
-          step="0.5"
-          min={VOCABULARY_BIAS_SCORE_MIN}
-          max={VOCABULARY_BIAS_SCORE_MAX}
-          value={value?.biasScore ?? ''}
-          onChange={e => handleBiasScoreChange(e.target.value)}
-          className={`${inputClass} sm:w-32`}
-          placeholder={String(VOCABULARY_DEFAULT_BIAS_SCORE)}
-        />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {t('admin.speechVocabulary.biasScoreHint', {
-            defaultValue:
-              'How strongly to prefer these terms ({{min}}–{{max}}, default {{fallback}}). 2–5 works well; higher values make the model produce the term even when it was not spoken.',
-            min: VOCABULARY_BIAS_SCORE_MIN,
-            max: VOCABULARY_BIAS_SCORE_MAX,
-            fallback: VOCABULARY_DEFAULT_BIAS_SCORE
-          })}
-        </p>
-      </div>
+      <p className="text-xs text-amber-600 dark:text-amber-400">
+        {t(
+          'admin.speechVocabulary.upstreamSupportHint',
+          'Requires a speech endpoint that applies hotwords to realtime sessions. A stock vLLM /v1/realtime build reads only the model from the session handshake and ignores this list.'
+        )}
+      </p>
     </div>
   );
 }

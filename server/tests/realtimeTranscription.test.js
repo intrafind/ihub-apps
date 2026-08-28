@@ -321,7 +321,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     await jest.advanceTimersByTimeAsync(0);
   };
 
-  describe('custom vocabulary (context biasing)', () => {
+  describe('custom vocabulary (hotwords)', () => {
     const startAndInit = async () => {
       const { client, upstream } = setup();
       client.emit('message', JSON.stringify({ type: 'start' }), false);
@@ -333,11 +333,11 @@ describe('bridgeConnection state machine (fake sockets)', () => {
       return { client, upstream };
     };
 
-    test('omits context_biasing entirely when no vocabulary is configured', async () => {
+    test('omits hotwords entirely when no vocabulary is configured', async () => {
       const { upstream } = await startAndInit();
       const sessionUpdate = upstream.framesOfType('session.update')[0];
       expect(sessionUpdate.model).toBe('fake-model');
-      expect(sessionUpdate).not.toHaveProperty('context_biasing');
+      expect(sessionUpdate).not.toHaveProperty('hotwords');
     });
 
     test('sends the merged terms upstream when a vocabulary is configured', async () => {
@@ -349,15 +349,12 @@ describe('bridgeConnection state machine (fake sockets)', () => {
             enabled: true,
             url: 'ws://fake-upstream:9/v1/realtime',
             model: 'fake-model',
-            vocabulary: { terms: ['Voxtral', 'IntraFind'], biasScore: 4.5 }
+            vocabulary: { terms: ['Voxtral', 'IntraFind'] }
           }
         }
       });
       const { upstream } = await startAndInit();
-      expect(upstream.framesOfType('session.update')[0].context_biasing).toEqual({
-        words: ['Voxtral', 'IntraFind'],
-        bias_score: 4.5
-      });
+      expect(upstream.framesOfType('session.update')[0].hotwords).toBe('Voxtral, IntraFind');
     });
 
     test('a disabled vocabulary sends nothing', async () => {
@@ -374,7 +371,7 @@ describe('bridgeConnection state machine (fake sockets)', () => {
         }
       });
       const { upstream } = await startAndInit();
-      expect(upstream.framesOfType('session.update')[0]).not.toHaveProperty('context_biasing');
+      expect(upstream.framesOfType('session.update')[0]).not.toHaveProperty('hotwords');
     });
   });
 

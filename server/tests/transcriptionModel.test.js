@@ -6,7 +6,7 @@
  * by the realtime WebSocket proxy (permission enforcement, modelType/enabled
  * checks, and the platform.speech.realtime dictation fallback).
  *
- * Also covers how a custom vocabulary (context biasing) is resolved across the
+ * Also covers how a custom vocabulary (vLLM "hotwords") is resolved across the
  * platform / model / app layers. The pure merge rules behind it are tested in
  * `tests/unit/server/speechVocabulary.test.js`.
  */
@@ -17,11 +17,11 @@ import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
 import {
   resolveTranscriptionUpstream,
   resolveAppVocabulary,
-  resolveContextBiasing,
+  resolveHotwords,
   hasEnabledTranscriptionModel,
   extractTranscriptText
 } from '../websocket/realtimeTranscription.js';
-import { VOCABULARY_DEFAULT_BIAS_SCORE } from '../../shared/speechVocabulary.js';
+import { HOTWORDS_SEPARATOR } from '../../shared/speechVocabulary.js';
 import configCache from '../configCache.js';
 
 const baseModel = {
@@ -276,19 +276,19 @@ describe('resolveTranscriptionUpstream / hasEnabledTranscriptionModel', () => {
   });
 });
 
-describe('resolveContextBiasing', () => {
-  test('merges the three layers into one upstream payload', () => {
+describe('resolveHotwords', () => {
+  test('merges the three layers into one hotwords string', () => {
     expect(
-      resolveContextBiasing({
+      resolveHotwords({
         platformVocabulary: { terms: ['IntraFind'] },
-        modelVocabulary: { terms: ['Voxtral'], biasScore: 4 },
+        modelVocabulary: { terms: ['Voxtral'] },
         appVocabulary: { terms: ['Schadensfall'] }
       })
-    ).toEqual({ words: ['IntraFind', 'Voxtral', 'Schadensfall'], bias_score: 4 });
+    ).toBe(['IntraFind', 'Voxtral', 'Schadensfall'].join(HOTWORDS_SEPARATOR));
   });
 
   test('is null when nothing is configured anywhere', () => {
-    expect(resolveContextBiasing({})).toBeNull();
+    expect(resolveHotwords({})).toBeNull();
   });
 });
 
@@ -303,7 +303,7 @@ describe('vocabulary resolution in the realtime bridge', () => {
     modelType: 'transcription',
     apiKey: '',
     enabled: true,
-    vocabulary: { terms: ['Voxtral'], biasScore: 4 }
+    vocabulary: { terms: ['Voxtral'] }
   };
   const claimsApp = {
     id: 'claims',
@@ -361,6 +361,13 @@ describe('vocabulary resolution in the realtime bridge', () => {
     test('ignores a missing app id', () => {
       expect(resolveAppVocabulary(undefined, user)).toBeNull();
     });
+
+    test('rejects a browser-supplied id that fails the shared id validation', () => {
+      expect(resolveAppVocabulary('../claims', user)).toBeNull();
+      expect(resolveAppVocabulary('__proto__', user)).toBeNull();
+      expect(resolveAppVocabulary('a'.repeat(101), user)).toBeNull();
+      expect(resolveAppVocabulary(42, user)).toBeNull();
+    });
   });
 
   describe('resolveTranscriptionUpstream', () => {
@@ -371,10 +378,9 @@ describe('vocabulary resolution in the realtime bridge', () => {
         user
       });
       expect(r.ok).toBe(true);
-      expect(r.upstream.contextBiasing).toEqual({
-        words: ['IntraFind', 'Voxtral', 'Schadensfall'],
-        bias_score: 4
-      });
+      expect(r.upstream.hotwords).toBe(
+        ['IntraFind', 'Voxtral', 'Schadensfall'].join(HOTWORDS_SEPARATOR)
+      );
     });
 
     test('leaves out an app the user may not use', async () => {
@@ -384,17 +390,14 @@ describe('vocabulary resolution in the realtime bridge', () => {
         user: otherUser
       });
       expect(r.ok).toBe(true);
-      expect(r.upstream.contextBiasing.words).toEqual(['IntraFind', 'Voxtral']);
+      expect(r.upstream.hotwords).toBe(['IntraFind', 'Voxtral'].join(HOTWORDS_SEPARATOR));
     });
 
     test('applies platform and app terms on the dictation fallback (no model id)', async () => {
       const r = await resolveTranscriptionUpstream({ appId: 'claims', user });
       expect(r.ok).toBe(true);
       expect(r.upstream.url).toBe('ws://platform-dictation:8080/v1/realtime');
-      expect(r.upstream.contextBiasing).toEqual({
-        words: ['IntraFind', 'Schadensfall'],
-        bias_score: VOCABULARY_DEFAULT_BIAS_SCORE
-      });
+      expect(r.upstream.hotwords).toBe(['IntraFind', 'Schadensfall'].join(HOTWORDS_SEPARATOR));
     });
 
     test('produces no payload at all when nothing is configured', async () => {
@@ -408,7 +411,7 @@ describe('vocabulary resolution in the realtime bridge', () => {
         user
       });
       expect(r.ok).toBe(true);
-      expect(r.upstream.contextBiasing).toBeNull();
+      expect(r.upstream.hotwords).toBeNull();
     });
   });
 });

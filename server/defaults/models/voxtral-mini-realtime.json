@@ -15,8 +15,7 @@
   "apiKey": "",
   "vocabulary": {
     "enabled": true,
-    "terms": [],
-    "biasScore": 3
+    "terms": []
   },
   "enabled": false,
   "default": false

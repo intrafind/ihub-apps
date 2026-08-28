@@ -47,8 +47,9 @@ import {
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
+import { isValidId } from '../utils/pathSecurity.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
-import { mergeVocabularies, buildContextBiasing } from '../../shared/speechVocabulary.js';
+import { mergeVocabularies, buildHotwords } from '../../shared/speechVocabulary.js';
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -84,6 +85,12 @@ const KEEPALIVE_INTERVAL_MS = 25_000;
 const UPSTREAM_HIGH_WATER_BYTES = 4 * 1024 * 1024;
 const UPSTREAM_RESUME_BYTES = 1 * 1024 * 1024;
 const BACKPRESSURE_POLL_MS = 250;
+// How long the admin "Test connection" probe waits after sending session.update
+// for the endpoint to reject it. vLLM emits `session.created` on connect, before
+// it has read the update, so resolving on the first frame would report success
+// for a session the endpoint went on to refuse.
+const POST_UPDATE_ERROR_WINDOW_MS = 1_500;
+
 // Hard ceiling on a single bridge session's lifetime, so a (possibly scripted)
 // client streaming forever can't pin a GPU-backed upstream session
 // indefinitely. Overridable via platform.speech.realtime.maxSessionSeconds.
@@ -297,12 +304,16 @@ export function hasEnabledTranscriptionModel() {
  * mismatched vocabulary must degrade transcription quality, never break the
  * session with an error.
  *
+ * The id is browser-controlled, so it goes through the same `isValidId` gate as
+ * every other id that reaches a lookup — length, character set, traversal
+ * sequences and prototype-polluting keys — rather than a local typeof check.
+ *
  * @param {string|undefined} appId
  * @param {Object|undefined} user
  * @returns {Object|null} The raw `transcription.vocabulary` block.
  */
 export function resolveAppVocabulary(appId, user) {
-  if (!appId || typeof appId !== 'string') return null;
+  if (!isValidId(appId)) return null;
   const { data: apps = [] } = configCache.getApps(true);
   const app = apps.find(a => a?.id === appId);
   if (!app?.transcription?.vocabulary) return null;
@@ -312,18 +323,18 @@ export function resolveAppVocabulary(appId, user) {
 }
 
 /**
- * Merge the custom vocabulary layers that apply to one session and render the
- * upstream context-biasing payload.
+ * Merge the custom vocabulary layers that apply to one session and render them
+ * into vLLM's `hotwords` string.
  *
  * Least to most specific: platform-wide terms, then the transcription model's
  * own, then the app's. Returns null when nothing is configured, so the bridge
  * omits the field entirely and keeps sending the exact frames it always has.
  *
  * @param {{ platformVocabulary?: Object, modelVocabulary?: Object, appVocabulary?: Object }} layers
- * @returns {{ words: string[], bias_score: number }|null}
+ * @returns {string|null}
  */
-export function resolveContextBiasing({ platformVocabulary, modelVocabulary, appVocabulary } = {}) {
-  return buildContextBiasing(mergeVocabularies(platformVocabulary, modelVocabulary, appVocabulary));
+export function resolveHotwords({ platformVocabulary, modelVocabulary, appVocabulary } = {}) {
+  return buildHotwords(mergeVocabularies(platformVocabulary, modelVocabulary, appVocabulary));
 }
 
 /**
@@ -342,7 +353,7 @@ export function resolveContextBiasing({ platformVocabulary, modelVocabulary, app
  *
  * @param {{ modelId?: string, appId?: string, user?: Object }} params
  * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string,
- *   contextBiasing: Object|null } } | { ok: false, error: string }>}
+ *   hotwords: string|null } } | { ok: false, error: string }>}
  */
 export async function resolveTranscriptionUpstream({ modelId, appId, user } = {}) {
   const platformVocabulary = (configCache.getPlatform() || {}).speech?.realtime?.vocabulary;
@@ -364,7 +375,7 @@ export async function resolveTranscriptionUpstream({ modelId, appId, user } = {}
         url: cfg.url,
         apiKey: cfg.apiKey || '',
         model: cfg.model,
-        contextBiasing: resolveContextBiasing({ platformVocabulary, appVocabulary })
+        hotwords: resolveHotwords({ platformVocabulary, appVocabulary })
       }
     };
   }
@@ -422,7 +433,7 @@ export async function resolveTranscriptionUpstream({ modelId, appId, user } = {}
     ok: true,
     upstream: {
       ...upstream,
-      contextBiasing: resolveContextBiasing({
+      hotwords: resolveHotwords({
         platformVocabulary,
         modelVocabulary: upstream.vocabulary,
         appVocabulary
@@ -677,12 +688,14 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clearTimeout(sessionInitTimer);
       sessionInitTimer = null;
     }
-    // `context_biasing` is added ONLY when a vocabulary is configured: an
-    // endpoint build without biasing support may reject an unknown session
-    // field, and a deployment that configured nothing must keep sending the
-    // exact frame it sent before this feature existed.
+    // `hotwords` is added ONLY when a vocabulary is configured, so a deployment
+    // that configured nothing keeps sending the exact frame it sent before this
+    // feature existed. Note that vLLM's realtime handler currently reads only
+    // `model` off session.update and never builds SpeechToTextParams for a
+    // realtime session, so a stock build ignores this; it takes effect on an
+    // endpoint that forwards speech-to-text params into the realtime session.
     const sessionUpdate = { type: 'session.update', model: cfg.model };
-    if (cfg.contextBiasing) sessionUpdate.context_biasing = cfg.contextBiasing;
+    if (cfg.hotwords) sessionUpdate.hotwords = cfg.hotwords;
     sendJson(upstream, sessionUpdate);
     sendJson(upstream, { type: 'input_audio_buffer.commit' });
     upstreamReady = true;
@@ -690,9 +703,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       component: 'RealtimeSTT',
       userId: user.id,
       model: cfg.model,
-      // Log the term COUNT, not the terms: a vocabulary can carry customer or
-      // employee names, which do not belong in the server log.
-      vocabularyTerms: cfg.contextBiasing?.words?.length || 0,
+      // Log whether hotwords were sent, not the terms themselves: a vocabulary
+      // can carry customer or employee names, which do not belong in a log.
+      hotwordsSent: Boolean(cfg.hotwords),
       trigger
     });
     sendJson(clientWs, { type: 'ready' });
@@ -1174,9 +1187,10 @@ export function attachRealtimeTranscription(httpServer) {
  * endpoint is reachable and speaks the realtime protocol. Used by the admin
  * "Test connection" button.
  *
- * When a `vocabulary` is passed the handshake carries the same
- * `context_biasing` payload a real session would, so an endpoint build that
- * rejects the field is caught here instead of at dictation time.
+ * The handshake carries the same `hotwords` a real session would, and the probe
+ * does NOT stop at the upstream's `session.created` (vLLM emits that on connect,
+ * before it has seen session.update) — it waits a short window afterwards so an
+ * error the update provokes is actually observed rather than raced past.
  *
  * @param {{url?: string, model?: string, apiKey?: string, vocabulary?: Object}} cfg
  * @param {number} [timeoutMs=8000]
@@ -1192,12 +1206,15 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
 
     let settled = false;
     let opened = false;
+    let updateSent = false;
     let ws;
+    let errorWindowTimer = null;
 
     const finish = result => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (errorWindowTimer) clearTimeout(errorWindowTimer);
       if (ws && ws.readyState <= WebSocket.OPEN) {
         try {
           ws.close();
@@ -1228,9 +1245,17 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
     ws.on('open', () => {
       opened = true;
       const sessionUpdate = { type: 'session.update', model: cfg.model };
-      const contextBiasing = buildContextBiasing(mergeVocabularies(cfg.vocabulary));
-      if (contextBiasing) sessionUpdate.context_biasing = contextBiasing;
+      const hotwords = buildHotwords(mergeVocabularies(cfg.vocabulary));
+      if (hotwords) sessionUpdate.hotwords = hotwords;
       sendJson(ws, sessionUpdate);
+      updateSent = true;
+      // Give the endpoint a moment to reject session.update before calling the
+      // connection healthy. Without this the probe would resolve on the
+      // `session.created` frame vLLM sends immediately on connect and never see
+      // a model_not_found (or any other) error the update produces.
+      errorWindowTimer = setTimeout(() => {
+        finish({ ok: true, message: 'Connected — endpoint accepted the session' });
+      }, POST_UPDATE_ERROR_WINDOW_MS);
     });
 
     ws.on('message', data => {
@@ -1244,10 +1269,13 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
       }
       if (msg.type === 'error') {
         finish({ ok: false, message: `Endpoint error: ${msg.error || 'unknown'}` });
-      } else {
-        // session.created / transcription.* / any control frame = healthy.
-        finish({ ok: true, message: `Connected — received "${msg.type}"` });
+        return;
       }
+      // `session.created` arrives before the endpoint has read our
+      // session.update, so it proves reachability but not acceptance — keep
+      // waiting out the error window. Any later frame does prove acceptance.
+      if (msg.type === 'session.created' && updateSent) return;
+      finish({ ok: true, message: `Connected — received "${msg.type}"` });
     });
 
     ws.on('error', err => {

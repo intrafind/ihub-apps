@@ -1,5 +1,5 @@
 /**
- * Speech-to-text custom vocabulary (context biasing) — unit tests.
+ * Speech-to-text custom vocabulary (vLLM "hotwords") — unit tests.
  *
  * Covers the pure merge/normalization rules in `shared/speechVocabulary.js` and
  * the schema changes that let a vocabulary be configured at platform, model and
@@ -8,16 +8,14 @@
  * under the server's native-ESM Jest config (configCache needs `import.meta`).
  *
  * The behavior guarded most carefully here is the opt-in one: with nothing
- * configured, NO context-biasing payload is produced, so a vLLM build that does
- * not understand the field keeps receiving exactly the session.update it always
- * did.
+ * configured, NO hotwords string is produced, so an endpoint keeps receiving
+ * exactly the session.update it always did.
  */
 import {
-  VOCABULARY_DEFAULT_BIAS_SCORE,
+  HOTWORDS_SEPARATOR,
   VOCABULARY_MAX_TERMS,
   VOCABULARY_MAX_TERM_LENGTH,
-  buildContextBiasing,
-  clampBiasScore,
+  buildHotwords,
   formatVocabularyTerms,
   mergeVocabularies,
   normalizeVocabulary,
@@ -26,6 +24,7 @@ import {
 import { modelConfigSchema } from '../../../server/validators/modelConfigSchema.js';
 import { appConfigSchema } from '../../../server/validators/appConfigSchema.js';
 import { platformConfigSchema } from '../../../server/validators/platformConfigSchema.js';
+import { sanitizeAppForPublic, sanitizeAppsForPublic } from '../../../server/utils/publicApp.js';
 
 describe('parseVocabularyTerms', () => {
   test('accepts an array and trims each entry', () => {
@@ -61,25 +60,11 @@ describe('formatVocabularyTerms', () => {
   });
 });
 
-describe('clampBiasScore', () => {
-  test('clamps to the supported range', () => {
-    expect(clampBiasScore(-5)).toBe(0);
-    expect(clampBiasScore(99)).toBe(10);
-    expect(clampBiasScore(3.5)).toBe(3.5);
-  });
-
-  test('falls back to the default rather than disabling biasing', () => {
-    expect(clampBiasScore('nonsense')).toBe(VOCABULARY_DEFAULT_BIAS_SCORE);
-    expect(clampBiasScore(undefined)).toBe(VOCABULARY_DEFAULT_BIAS_SCORE);
-  });
-});
-
 describe('normalizeVocabulary', () => {
   test('treats a block without an explicit `enabled` as enabled', () => {
     expect(normalizeVocabulary({ terms: ['Voxtral'] })).toEqual({
       enabled: true,
-      terms: ['Voxtral'],
-      biasScore: VOCABULARY_DEFAULT_BIAS_SCORE
+      terms: ['Voxtral']
     });
   });
 
@@ -108,14 +93,16 @@ describe('normalizeVocabulary', () => {
     expect(normalizeVocabulary({ terms: many }).terms).toHaveLength(VOCABULARY_MAX_TERMS);
   });
 
-  test('clamps the bias score', () => {
-    expect(normalizeVocabulary({ terms: ['a'], biasScore: 42 }).biasScore).toBe(10);
+  test('folds a comma inside a term to a space so it cannot split on the wire', () => {
+    expect(normalizeVocabulary({ terms: [['Meier', ' Schmidt'].join(',')] }).terms).toEqual([
+      'Meier Schmidt'
+    ]);
   });
 });
 
 describe('mergeVocabularies', () => {
   const platform = { terms: ['IntraFind', 'iHub'] };
-  const model = { terms: ['Voxtral', 'iHub'], biasScore: 4 };
+  const model = { terms: ['Voxtral', 'iHub'] };
   const app = { terms: ['Schadensfall'] };
 
   test('unions terms from least to most specific, without duplicates', () => {
@@ -127,24 +114,9 @@ describe('mergeVocabularies', () => {
     ]);
   });
 
-  test('the most specific EXPLICIT bias score wins', () => {
-    expect(mergeVocabularies(platform, model, app).biasScore).toBe(4);
-    expect(mergeVocabularies(platform, model, { ...app, biasScore: 2 }).biasScore).toBe(2);
-  });
-
-  test('a layer that only lists terms inherits the score already in effect', () => {
-    expect(mergeVocabularies({ terms: ['a'], biasScore: 5 }, { terms: ['b'] }).biasScore).toBe(5);
-  });
-
-  test('falls back to the default score when no layer set one', () => {
-    expect(mergeVocabularies(platform, app).biasScore).toBe(VOCABULARY_DEFAULT_BIAS_SCORE);
-  });
-
   test('skips a disabled layer but keeps the others', () => {
     const merged = mergeVocabularies(platform, { ...model, enabled: false }, app);
     expect(merged.terms).toEqual(['IntraFind', 'iHub', 'Schadensfall']);
-    // The disabled layer's bias score does not leak through either.
-    expect(merged.biasScore).toBe(VOCABULARY_DEFAULT_BIAS_SCORE);
   });
 
   test('returns null when every layer is empty', () => {
@@ -159,17 +131,16 @@ describe('mergeVocabularies', () => {
   });
 });
 
-describe('buildContextBiasing', () => {
-  test('renders the snake_case upstream payload', () => {
-    expect(buildContextBiasing({ terms: ['Voxtral'], biasScore: 4 })).toEqual({
-      words: ['Voxtral'],
-      bias_score: 4
-    });
+describe('buildHotwords', () => {
+  test("renders vLLM's single hotwords string", () => {
+    expect(buildHotwords({ terms: ['Voxtral', 'Deutsche Bahn'] })).toBe(
+      ['Voxtral', 'Deutsche Bahn'].join(HOTWORDS_SEPARATOR)
+    );
   });
 
   test('returns null when nothing is configured, so the field is omitted', () => {
-    expect(buildContextBiasing(null)).toBeNull();
-    expect(buildContextBiasing({ terms: [] })).toBeNull();
+    expect(buildHotwords(null)).toBeNull();
+    expect(buildHotwords({ terms: [] })).toBeNull();
   });
 });
 
@@ -196,7 +167,7 @@ describe('config schemas accept a vocabulary at each level', () => {
   test('model: a transcription model may carry one', () => {
     const r = modelConfigSchema.safeParse({
       ...transcriptionModel,
-      vocabulary: { enabled: true, terms: ['Voxtral'], biasScore: 4 }
+      vocabulary: { enabled: true, terms: ['Voxtral'] }
     });
     expect(r.success).toBe(true);
     expect(r.data.vocabulary.terms).toEqual(['Voxtral']);
@@ -215,21 +186,12 @@ describe('config schemas accept a vocabulary at each level', () => {
     expect(r.success).toBe(false);
   });
 
-  test('model: an out-of-range bias score is rejected', () => {
+  test('model: a per-term weight is rejected — vLLM hotwords have no score', () => {
     const r = modelConfigSchema.safeParse({
       ...transcriptionModel,
-      vocabulary: { terms: ['Voxtral'], biasScore: 50 }
+      vocabulary: { terms: ['Voxtral'], biasScore: 4 }
     });
     expect(r.success).toBe(false);
-  });
-
-  test('model: the bias score stays absent when unset, so merging can inherit', () => {
-    const r = modelConfigSchema.safeParse({
-      ...transcriptionModel,
-      vocabulary: { terms: ['Voxtral'] }
-    });
-    expect(r.success).toBe(true);
-    expect(r.data.vocabulary.biasScore).toBeUndefined();
   });
 
   test('app: the transcription block may carry one', () => {
@@ -243,17 +205,54 @@ describe('config schemas accept a vocabulary at each level', () => {
 
   test('platform: speech.realtime may carry one', () => {
     const r = platformConfigSchema.safeParse({
-      speech: { realtime: { enabled: true, vocabulary: { terms: ['IntraFind'], biasScore: 2 } } }
+      speech: { realtime: { enabled: true, vocabulary: { terms: ['IntraFind'] } } }
     });
     expect(r.success).toBe(true);
-    expect(r.data.speech.realtime.vocabulary).toEqual({ terms: ['IntraFind'], biasScore: 2 });
+    expect(r.data.speech.realtime.vocabulary).toEqual({ terms: ['IntraFind'] });
   });
 
   test('unknown vocabulary keys are rejected rather than silently dropped', () => {
     const r = modelConfigSchema.safeParse({
       ...transcriptionModel,
-      vocabulary: { terms: ['Voxtral'], biasScoreTypo: 4 }
+      vocabulary: { terms: ['Voxtral'], weight: 4 }
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe('sanitizeAppForPublic', () => {
+  const app = {
+    id: 'claims',
+    name: { en: 'Claims' },
+    transcription: {
+      enabled: true,
+      modelId: 'voxtral-mini-realtime',
+      vocabulary: { terms: ['Schadensfall'] }
+    }
+  };
+
+  test('strips the vocabulary — a term list can name customers or staff', () => {
+    const clean = sanitizeAppForPublic(app);
+    expect(clean.transcription).not.toHaveProperty('vocabulary');
+    // Everything the client actually needs survives.
+    expect(clean.transcription.enabled).toBe(true);
+    expect(clean.transcription.modelId).toBe('voxtral-mini-realtime');
+    expect(clean.id).toBe('claims');
+  });
+
+  test('does not mutate the cached app object', () => {
+    sanitizeAppForPublic(app);
+    expect(app.transcription.vocabulary).toEqual({ terms: ['Schadensfall'] });
+  });
+
+  test('passes through an app with no vocabulary untouched', () => {
+    const plain = { id: 'plain', transcription: { enabled: true } };
+    expect(sanitizeAppForPublic(plain)).toBe(plain);
+    expect(sanitizeAppForPublic({ id: 'none' })).toEqual({ id: 'none' });
+  });
+
+  test('sanitizes a whole list', () => {
+    const [first] = sanitizeAppsForPublic([app]);
+    expect(first.transcription).not.toHaveProperty('vocabulary');
   });
 });

@@ -1,11 +1,22 @@
 /**
- * Custom vocabulary / context biasing for speech-to-text.
+ * Custom vocabulary ("hotwords") for speech-to-text.
  *
  * Domain jargon, product names and people's names are what a general-purpose
- * STT model gets wrong most often. Context biasing fixes that by handing the
- * decoder a list of terms to prefer: the upstream raises the likelihood of the
- * token sequences that spell those terms, so "Voxtral" stops coming back as
- * "vox tral" or "Vox Trawl".
+ * STT model gets wrong most often. A hotword list fixes that by naming the
+ * terms the decoder should pay extra attention to, so "Voxtral" stops coming
+ * back as "vox tral" or "Vox Trawl".
+ *
+ * `hotwords` is vLLM's own name and shape for this: a single string of terms
+ * (see `SpeechToTextParams.hotwords` in vllm/config/speech_to_text.py). It is
+ * deliberately NOT the `context_biasing: { words, bias_score }` object that
+ * Mistral's hosted Voxtral Transcribe API uses — that shape does not exist in
+ * vLLM, and there is no per-term weight to configure here.
+ *
+ * IMPORTANT — upstream support: vLLM's realtime WebSocket endpoint currently
+ * reads only `model` off `session.update` and never builds SpeechToTextParams
+ * for a realtime session, so a stock build ignores the hotwords iHub sends.
+ * The field takes effect on an endpoint that forwards speech-to-text params
+ * into the realtime session. See docs/voice-transcription.md.
  *
  * A vocabulary can be configured at three levels, each optional:
  *
@@ -15,25 +26,18 @@
  *   3. `<app>.transcription.vocabulary` — terms for one app's subject area.
  *
  * They are MERGED, not overridden (see `mergeVocabularies`): the term lists are
- * unioned so an app adds to the org-wide list instead of replacing it, while
- * the bias score of the most specific layer wins.
+ * unioned so an app adds to the org-wide list instead of replacing it.
  *
  * Shared between server and client so the admin UI enforces exactly the limits
  * the server validates against.
  */
 
-/** Hard cap on merged term count. Long lists cost upstream tokenization time. */
+/** Hard cap on merged term count. Long lists cost upstream prompt space. */
 export const VOCABULARY_MAX_TERMS = 250;
-/** Hard cap on one term's length. Biasing works on words/short phrases. */
+/** Hard cap on one term's length. Hotwords are words and short phrases. */
 export const VOCABULARY_MAX_TERM_LENGTH = 80;
-/**
- * Bias score bounds. The score is added to the logits of the biased token
- * sequences, so it trades recall for hallucination: too high and the model
- * emits the term even when it was never spoken. 2–5 is the useful band.
- */
-export const VOCABULARY_BIAS_SCORE_MIN = 0;
-export const VOCABULARY_BIAS_SCORE_MAX = 10;
-export const VOCABULARY_DEFAULT_BIAS_SCORE = 3;
+/** Separator used to render the term list into vLLM's single hotwords string. */
+export const HOTWORDS_SEPARATOR = ', ';
 
 /**
  * Parse the free-form text an admin types into a term list. Accepts one term
@@ -63,26 +67,15 @@ export function formatVocabularyTerms(terms) {
 }
 
 /**
- * Clamp a bias score into the supported range. Non-numeric input falls back to
- * the default rather than disabling biasing, so a malformed value degrades to
- * "sensible" instead of "silently off".
- */
-export function clampBiasScore(value) {
-  const score = typeof value === 'number' ? value : Number.parseFloat(value);
-  if (!Number.isFinite(score)) return VOCABULARY_DEFAULT_BIAS_SCORE;
-  return Math.min(VOCABULARY_BIAS_SCORE_MAX, Math.max(VOCABULARY_BIAS_SCORE_MIN, score));
-}
-
-/**
  * Normalize one configured vocabulary layer.
  *
  * `enabled` defaults to TRUE when omitted: a layer that lists terms is meant to
  * be used, and requiring a second opt-in flag is the kind of trap where
  * hand-edited config silently does nothing. `enabled: false` is the off switch.
  *
- * @param {{enabled?: boolean, terms?: string[]|string, biasScore?: number}} [vocabulary]
- * @returns {{enabled: boolean, terms: string[], biasScore: number}|null} Null
- *   when the layer contributes nothing (absent, disabled, or no usable terms).
+ * @param {{enabled?: boolean, terms?: string[]|string}} [vocabulary]
+ * @returns {{enabled: boolean, terms: string[]}|null} Null when the layer
+ *   contributes nothing (absent, disabled, or no usable terms).
  */
 export function normalizeVocabulary(vocabulary) {
   if (!vocabulary || typeof vocabulary !== 'object') return null;
@@ -91,25 +84,19 @@ export function normalizeVocabulary(vocabulary) {
   const seen = new Set();
   const terms = [];
   for (const term of parseVocabularyTerms(vocabulary.terms)) {
-    // Case matters to a tokenizer ("SAP" and "Sap" are different sequences), so
-    // dedupe exactly rather than case-insensitively.
+    // Case matters to the model ("SAP" and "Sap" read differently), so dedupe
+    // exactly rather than case-insensitively.
     const trimmed = term.slice(0, VOCABULARY_MAX_TERM_LENGTH).trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    terms.push(trimmed);
+    // A term containing the separator would split into two on the wire.
+    const safe = trimmed.split(',').join(' ').replace(/\s+/g, ' ').trim();
+    if (!safe || seen.has(safe)) continue;
+    seen.add(safe);
+    terms.push(safe);
     if (terms.length >= VOCABULARY_MAX_TERMS) break;
   }
   if (!terms.length) return null;
 
-  return {
-    enabled: true,
-    terms,
-    biasScore: clampBiasScore(
-      vocabulary.biasScore === undefined || vocabulary.biasScore === null
-        ? VOCABULARY_DEFAULT_BIAS_SCORE
-        : vocabulary.biasScore
-    )
-  };
+  return { enabled: true, terms };
 }
 
 /**
@@ -117,25 +104,17 @@ export function normalizeVocabulary(vocabulary) {
  *
  * Terms are UNIONED in layer order — an app's vocabulary adds to the org-wide
  * one rather than replacing it, which is what an admin who set both expects.
- * The bias score comes from the most specific layer that explicitly set one,
- * so a single app can turn the pressure up without touching the platform.
  *
  * @param {...(Object|null|undefined)} layers - Raw (unnormalized) vocabularies.
- * @returns {{enabled: boolean, terms: string[], biasScore: number}|null}
+ * @returns {{enabled: boolean, terms: string[]}|null}
  */
 export function mergeVocabularies(...layers) {
   const seen = new Set();
   const terms = [];
-  let biasScore = null;
 
   for (const layer of layers) {
     const normalized = normalizeVocabulary(layer);
     if (!normalized) continue;
-    // Only an explicit score overrides a less specific layer; a layer that just
-    // lists terms inherits the score already in effect.
-    if (layer.biasScore !== undefined && layer.biasScore !== null) {
-      biasScore = normalized.biasScore;
-    }
     for (const term of normalized.terms) {
       if (seen.has(term) || terms.length >= VOCABULARY_MAX_TERMS) continue;
       seen.add(term);
@@ -143,46 +122,31 @@ export function mergeVocabularies(...layers) {
     }
   }
 
-  if (!terms.length) return null;
-  return {
-    enabled: true,
-    terms,
-    biasScore: biasScore === null ? VOCABULARY_DEFAULT_BIAS_SCORE : biasScore
-  };
+  return terms.length ? { enabled: true, terms } : null;
 }
 
 /**
- * Build the upstream context-biasing payload for a vLLM realtime session.
- *
- * Snake_case because it goes on the wire to vLLM, which mirrors the
- * OpenAI-compatible request shape (`context_biasing: { words, bias_score }`).
+ * Render the merged vocabulary into vLLM's `hotwords` string.
  *
  * Returns null when nothing is configured — the caller must then omit the field
- * entirely. That is deliberate: an endpoint build without context-biasing
- * support may reject an unknown session field, so deployments that configure no
- * vocabulary keep sending exactly the frames they send today.
+ * entirely. That is deliberate: deployments that configure no vocabulary keep
+ * sending exactly the frames they send today.
  *
- * @param {{terms: string[], biasScore: number}|null} vocabulary - Merged result.
- * @returns {{words: string[], bias_score: number}|null}
+ * @param {{terms: string[]}|null} vocabulary - Merged result.
+ * @returns {string|null}
  */
-export function buildContextBiasing(vocabulary) {
+export function buildHotwords(vocabulary) {
   if (!vocabulary?.terms?.length) return null;
-  return {
-    words: vocabulary.terms,
-    bias_score: clampBiasScore(vocabulary.biasScore)
-  };
+  return vocabulary.terms.join(HOTWORDS_SEPARATOR);
 }
 
 export default {
   VOCABULARY_MAX_TERMS,
   VOCABULARY_MAX_TERM_LENGTH,
-  VOCABULARY_BIAS_SCORE_MIN,
-  VOCABULARY_BIAS_SCORE_MAX,
-  VOCABULARY_DEFAULT_BIAS_SCORE,
+  HOTWORDS_SEPARATOR,
   parseVocabularyTerms,
   formatVocabularyTerms,
-  clampBiasScore,
   normalizeVocabulary,
   mergeVocabularies,
-  buildContextBiasing
+  buildHotwords
 };

@@ -505,8 +505,8 @@ export default function registerAdminConfigRoutes(app) {
         return res.json({ ok: false, message: 'No realtime URL configured' });
       }
 
-      // Send the same context-biasing payload a real session would, so an
-      // endpoint that rejects the field fails the test instead of the dictation.
+      // Send the same hotwords a real session would, so an endpoint that
+      // rejects the field fails the test instead of the dictation.
       const vocabulary = body.vocabulary ?? saved.vocabulary ?? null;
 
       const result = await testRealtimeConnection({ url, model, apiKey, vocabulary });

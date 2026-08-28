@@ -190,7 +190,7 @@ Currently one transcription provider ships:
   "provider": "vllm-realtime",
   "modelType": "transcription",
   "apiKey": "",
-  "vocabulary": { "terms": ["Voxtral", "vLLM"], "biasScore": 3 },
+  "vocabulary": { "terms": ["Voxtral", "vLLM"] },
   "enabled": false
 }
 ```
@@ -201,7 +201,7 @@ Key points:
 - **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
 - **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
 - **Dictation** (`platform.speech.realtime`, `settings.speechRecognition.service: "vllm-realtime"`) is a separate feature and continues to work unchanged. When a realtime session carries no `modelId` it falls back to the platform dictation backend.
-- **Custom vocabulary.** An optional `vocabulary` block (`{ enabled?, terms, biasScore? }`) lists terms the model should prefer — product names, jargon, people. It is merged with the platform-wide and per-app vocabularies and sent upstream as context biasing. Only valid on transcription models. See [Custom vocabulary](voice-transcription.md#custom-vocabulary-context-biasing).
+- **Custom vocabulary.** An optional `vocabulary` block (`{ enabled?, terms }`) lists terms the model should pay extra attention to — product names, jargon, people. It is merged with the platform-wide and per-app vocabularies and sent upstream as vLLM `hotwords`. Only valid on transcription models, and it requires an endpoint that applies hotwords to realtime sessions — a stock vLLM `/v1/realtime` build ignores it. See [Custom vocabulary](voice-transcription.md#custom-vocabulary-hotwords).
 
 A default `voxtral-mini-realtime` model file ships disabled; enable it and point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
 

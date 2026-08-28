@@ -1860,12 +1860,11 @@
     },
     "speechVocabulary": {
       "title": "Custom vocabulary",
-      "description": "Terms the transcription model should prefer — product names, domain jargon, people. They are sent to the speech endpoint as context biasing so they are spelled correctly instead of guessed phonetically.",
+      "description": "Terms the transcription model should pay extra attention to — product names, domain jargon, people. They are sent to the speech endpoint as hotwords so they are spelled correctly instead of guessed phonetically.",
       "enabled": "Apply these terms",
       "terms": "Terms (one per line)",
       "termsHint": "{{used}} of {{max}} terms. Multi-word phrases are allowed. Spelling and capitalization matter — list a term the way it should appear in the transcript.",
-      "biasScore": "Bias strength",
-      "biasScoreHint": "How strongly to prefer these terms ({{min}}–{{max}}, default {{fallback}}). 2–5 works well; higher values make the model produce the term even when it was not spoken."
+      "upstreamSupportHint": "Requires a speech endpoint that applies hotwords to realtime sessions. A stock vLLM /v1/realtime build reads only the model from the session handshake and ignores this list."
     }
   },
   "cloudStorage": {

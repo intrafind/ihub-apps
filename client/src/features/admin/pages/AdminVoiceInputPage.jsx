@@ -97,8 +97,8 @@ function AdminVoiceInputPage() {
           url: config.realtime.url,
           model: config.realtime.model,
           apiKey: config.realtime.apiKey,
-          // Included so the handshake carries the same context_biasing payload
-          // a real session would — an endpoint that rejects it fails here.
+          // Included so the handshake carries the same hotwords a real session
+          // would — an endpoint that rejects them fails here.
           vocabulary: config.realtime.vocabulary
         }
       });
