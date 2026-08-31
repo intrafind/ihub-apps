@@ -35,7 +35,7 @@
     "croner": "^10.0.1",
     "dotenv": "^16.0.3",
     "envalid": "^8.2.0",
-    "eventsource-parser": "^3.1.0",
+    "eventsource-parser": "^4.1.0",
     "express": "^5.2.1",
     "express-ntlm": "^2.7.0",
     "express-rate-limit": "^8.6.2",
