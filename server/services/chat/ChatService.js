@@ -84,7 +84,6 @@ class ChatService {
         variables
       });
       if (!prepResult.success) {
-        sink.stopListening();
         return {
           status: 'error',
           error: prepResult.error,
@@ -169,7 +168,6 @@ class ChatService {
       }
       return result;
     } catch (error) {
-      sink.stopListening();
       logger.error('invokeAppInternal failed', {
         component: 'ChatService',
         appId,
@@ -182,6 +180,11 @@ class ChatService {
         finalMessage: null,
         toolCalls: []
       };
+    } finally {
+      // Defense-in-depth: sink.getResult() already releases the listener on
+      // every exit path it controls, but this also covers callers that throw
+      // before getResult() is reached (e.g. prepareChatRequest/processChat*).
+      sink.stopListening();
     }
   }
 }
