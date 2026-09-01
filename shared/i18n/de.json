@@ -148,6 +148,10 @@
     "toggleLabel": "Websuche",
     "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
   },
+  "documentOnly": {
+    "toggleLabel": "Allgemeinwissen verwenden",
+    "toggleDescription": "Wenn deaktiviert, beschränken sich Antworten auf die hochgeladenen Dokumente"
+  },
   "office": {
     "showTaskPane": "Aufgabenbereich anzeigen",
     "insertIntoEmail": "In E-Mail einfügen",

@@ -455,16 +455,26 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
+      // Document-only mode promises answers limited to the uploaded
+      // document(s). Web search would let the model pull in outside
+      // information, contradicting that promise, so force it off whenever
+      // document-only mode is enabled for the turn.
+      const effectiveWebsearchEnabled = documentOnlyEnabled ? false : websearchEnabled;
+
       const context = {
         user,
         chatId,
         language,
         enabledTools,
         modelProvider: model.provider,
-        websearchEnabled
+        websearchEnabled: effectiveWebsearchEnabled
       };
       const tools = await getToolsForApp(app, language, context);
-      const nativeWebSearch = resolveAppNativeWebSearch(app, model.provider, websearchEnabled);
+      const nativeWebSearch = resolveAppNativeWebSearch(
+        app,
+        model.provider,
+        effectiveWebsearchEnabled
+      );
 
       // A web-search-enabled app's system prompt typically instructs the model
       // to "use the web search tool". When web search is toggled OFF for the
@@ -476,7 +486,7 @@ class RequestBuilder {
       // intermittently and especially on a resend. Appending a short directive
       // that web search is unavailable removes the contradiction so the model
       // answers directly instead of attempting a phantom tool call.
-      appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
+      appendWebSearchDisabledNotice(llmMessages, app, effectiveWebsearchEnabled);
 
       // When the user has turned on "document only" mode, tell the model to
       // stick to the uploaded document(s) instead of blending in general

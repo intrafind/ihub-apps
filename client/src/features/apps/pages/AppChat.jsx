@@ -1057,6 +1057,8 @@ function AppChat({ preloadedApp = null }) {
       thinkingBudget,
       thinkingThoughts,
       effectiveEnabledTools,
+      websearchEnabled,
+      documentOnlyEnabled,
       imageAspectRatio,
       imageQuality
     ]
