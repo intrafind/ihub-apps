@@ -456,6 +456,19 @@ async function run() {
       .length
   );
 
+  console.log('\n🧪 prototype-polluting key ids\n');
+  resetClientStore();
+  await createPersonalKey({ user: USER, platform: platformConfig() });
+  for (const dangerous of ['__proto__', 'constructor', 'prototype']) {
+    await checkRejects(
+      `a "${dangerous}" key id is reported as missing`,
+      404,
+      rotatePersonalKey({ user: USER, platform: platformConfig(), keyId: dangerous })
+    );
+  }
+  check('Object.prototype is untouched', undefined, {}.keyGeneration);
+  check('Object.prototype has no grant list', undefined, {}.grantTypes);
+
   console.log('\n🧪 generated client identifiers\n');
   resetClientStore();
   const longName = await createPersonalKey({

@@ -387,7 +387,14 @@ function requireOwnedKey(clientsFilePath, keyId, user) {
  */
 async function issueApiKey(client, expirationDays, clientsFilePath, config) {
   const clientsConfig = loadOAuthClients(clientsFilePath);
-  const stored = clientsConfig.clients?.[client.clientId];
+
+  // The key id reaches here from the request path, so look it up as an own
+  // property: a plain index would resolve `__proto__` to Object.prototype and
+  // the writes below would pollute it. Same guard the rest of the client store
+  // uses.
+  const stored = Object.hasOwn(clientsConfig.clients || {}, client.clientId)
+    ? clientsConfig.clients[client.clientId]
+    : undefined;
 
   if (!stored) {
     throw new PersonalKeyError('API key not found', 404);
