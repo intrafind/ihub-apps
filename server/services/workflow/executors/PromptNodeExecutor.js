@@ -22,6 +22,7 @@ import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { resolveDotPath } from '../pathResolver.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import { getLocalizedString } from '../../../utils/localize.js';
@@ -1112,17 +1113,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   getNestedValue(path, obj) {
-    const parts = path.split('.');
-    let current = obj;
-
-    for (const part of parts) {
-      if (current === undefined || current === null) {
-        return undefined;
-      }
-      current = current[part];
-    }
-
-    return current;
+    return resolveDotPath(path, obj);
   }
 
   /**

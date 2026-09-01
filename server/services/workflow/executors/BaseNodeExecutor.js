@@ -13,6 +13,7 @@
 
 import logger from '../../../utils/logger.js';
 import promptService from '../../PromptService.js';
+import { resolveDotPath } from '../pathResolver.js';
 
 /**
  * Execution result returned by node executors
@@ -124,44 +125,16 @@ export class BaseNodeExecutor {
       return path;
     }
 
-    // Remove the leading '$.' and split into parts
+    // Remove the leading '$.' and resolve the remainder against the state object
     const normalizedPath = path.startsWith('$.') ? path.slice(2) : path.slice(1);
-    const parts = normalizedPath.split('.');
-
-    // Navigate through the state object
-    let current = state;
-    for (const part of parts) {
-      if (current === null || current === undefined) {
-        this.logger.debug('Variable path resolved to undefined', {
-          component: 'BaseNodeExecutor',
-          path,
-          part
-        });
-        return undefined;
-      }
-
-      // Handle array index notation (e.g., items[0])
-      const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
-      if (arrayMatch) {
-        const [, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
-        current = current[arrayName];
-        if (Array.isArray(current)) {
-          current = current[index];
-        } else {
-          this.logger.debug('Expected array at path but found non-array', {
-            component: 'BaseNodeExecutor',
-            arrayName,
-            foundType: typeof current
-          });
-          return undefined;
-        }
-      } else {
-        current = current[part];
-      }
+    const value = resolveDotPath(normalizedPath, state);
+    if (value === undefined) {
+      this.logger.debug('Variable path resolved to undefined', {
+        component: 'BaseNodeExecutor',
+        path
+      });
     }
-
-    return current;
+    return value;
   }
 
   /**

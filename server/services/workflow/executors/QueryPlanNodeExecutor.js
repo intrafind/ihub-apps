@@ -78,14 +78,6 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
     if (!model) {
       return this.createErrorResult('No model available for query planning', { nodeId: node.id });
     }
-    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-    if (!apiKeyResult.success) {
-      return this.createErrorResult(
-        apiKeyResult.error?.message || 'API key verification failed for query-plan',
-        { nodeId: node.id }
-      );
-    }
-
     const system =
       `You build search-query plans for an enterprise document index (iFinder, Elasticsearch-style query DSL). ` +
       `Given a user question and optional topic seeds, produce a plan that maximises recall over a permitted, indexed corpus. ` +
@@ -111,24 +103,20 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
       );
     }
 
-    let plan = null;
-    try {
-      const response = await this.llmHelper.executeStreamingRequest({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userParts.join('\n\n') }
-        ],
-        apiKey: apiKeyResult.apiKey,
-        options: { temperature: 0.2, ...thinkingConfigToOptions(config.thinking) },
-        language
-      });
-      plan = parsePlan(response?.content || '');
-    } catch (err) {
-      return this.createErrorResult(`query-plan LLM call failed: ${err.message}`, {
-        nodeId: node.id
-      });
+    const llmResult = await this.llmHelper.runSingleShotLLM({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userParts.join('\n\n') }
+      ],
+      options: { temperature: 0.2, ...thinkingConfigToOptions(config.thinking) },
+      language,
+      errorLabel: 'query-plan LLM call'
+    });
+    if (!llmResult.success) {
+      return this.createErrorResult(llmResult.error, { nodeId: node.id });
     }
+    const plan = parsePlan(llmResult.content);
 
     if (!plan) {
       return this.createErrorResult('query-plan: LLM returned no parseable plan', {

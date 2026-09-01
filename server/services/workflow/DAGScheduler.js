@@ -1,5 +1,6 @@
 import logger from '../../utils/logger.js';
 import { evaluateBooleanExpression } from './expressionEvaluator.js';
+import { resolveDotPath } from './pathResolver.js';
 
 /**
  * DAGScheduler handles dependency resolution and execution ordering for workflow graphs.
@@ -553,31 +554,7 @@ export class DAGScheduler {
       return undefined;
     }
 
-    const parts = path.split('.');
-    let current = context;
-
-    for (const part of parts) {
-      if (current === null || current === undefined) {
-        return undefined;
-      }
-
-      // Handle array access (e.g., "items[0]")
-      const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
-      if (arrayMatch) {
-        const [, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
-        current = current[arrayName];
-        if (Array.isArray(current)) {
-          current = current[index];
-        } else {
-          return undefined;
-        }
-      } else {
-        current = current[part];
-      }
-    }
-
-    return current;
+    return resolveDotPath(path, context);
   }
 
   /**

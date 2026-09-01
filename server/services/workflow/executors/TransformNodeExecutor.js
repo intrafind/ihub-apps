@@ -21,6 +21,7 @@ import memoryFile from '../../../agents/memory/memoryFile.js';
 import { sliceMemorySection } from '../memorySection.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../../validators/agentProfileSchema.js';
 import { evaluateBooleanExpression } from '../expressionEvaluator.js';
+import { resolveDotPath } from '../pathResolver.js';
 
 /**
  * Compact debug-friendly representation of a value for log lines.
@@ -611,18 +612,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
     if (!path || typeof path !== 'string') {
       return undefined;
     }
-
-    const parts = path.split('.');
-    let current = obj;
-
-    for (const part of parts) {
-      if (current === undefined || current === null) {
-        return undefined;
-      }
-      current = current[part];
-    }
-
-    return current;
+    return resolveDotPath(path, obj);
   }
 
   /**
