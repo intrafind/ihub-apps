@@ -208,6 +208,7 @@ function AppChat({ preloadedApp = null }) {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    documentOnlyEnabled,
     imageAspectRatio,
     imageQuality,
     models,
@@ -223,6 +224,7 @@ function AppChat({ preloadedApp = null }) {
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,
+    setDocumentOnlyEnabled,
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
@@ -702,6 +704,7 @@ function AppChat({ preloadedApp = null }) {
             ? { enabledTools: effectiveEnabledTools }
             : {}),
           ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
+          ...(app?.upload?.enabled ? { documentOnlyEnabled } : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {})
         };
@@ -1014,6 +1017,7 @@ function AppChat({ preloadedApp = null }) {
           ? { enabledTools: effectiveEnabledTools }
           : {}),
         ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
+        ...(app?.upload?.enabled ? { documentOnlyEnabled } : {}),
         ...(imageAspectRatio ? { imageAspectRatio } : {}),
         ...(imageQuality ? { imageQuality } : {})
       };
@@ -1053,6 +1057,8 @@ function AppChat({ preloadedApp = null }) {
       thinkingBudget,
       thinkingThoughts,
       effectiveEnabledTools,
+      websearchEnabled,
+      documentOnlyEnabled,
       imageAspectRatio,
       imageQuality
     ]
@@ -1698,6 +1704,7 @@ function AppChat({ preloadedApp = null }) {
         ? { enabledTools: effectiveEnabledTools }
         : {}),
       ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
+      ...(app?.upload?.enabled ? { documentOnlyEnabled } : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {}),
       ...(documentId ? { documentIds: [documentId] } : {})
@@ -1937,6 +1944,8 @@ function AppChat({ preloadedApp = null }) {
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       websearchEnabled,
       onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
+      documentOnlyEnabled,
+      onDocumentOnlyEnabledChange: app?.upload?.enabled ? setDocumentOnlyEnabled : undefined,
       // Ephemeral chat toggle (rendered next to the send button)
       ephemeral,
       onEphemeralChange: setEphemeral,

@@ -127,6 +127,10 @@
     "toggleLabel": "Web Search",
     "toggleDescription": "Search the web for up-to-date information"
   },
+  "documentOnly": {
+    "toggleLabel": "Use general knowledge",
+    "toggleDescription": "When off, answers are limited to the uploaded document(s)"
+  },
   "office": {
     "showTaskPane": "Show Task Pane",
     "insertIntoEmail": "Add to email",
