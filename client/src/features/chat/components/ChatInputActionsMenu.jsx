@@ -486,7 +486,9 @@ function ChatInputActionsMenu({
           {hostContextToggles.length > 0 && (
             <div
               className={`p-3 ${
-                hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''
+                hasTools || hasWebsearch || hasDocumentOnly
+                  ? 'border-b border-gray-200 dark:border-gray-700'
+                  : ''
               }`}
             >
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
