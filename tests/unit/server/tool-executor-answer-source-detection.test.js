@@ -46,22 +46,29 @@ jest.mock('../../../server/requestThrottler.js', () => ({
   }))
 }));
 
-// convertResponseToGeneric turns each SSE data frame into a normalized result.
-// Return a final answer with no tool calls so the loop terminates immediately.
 jest.mock('../../../server/adapters/toolCalling/index.js', () => ({
-  convertResponseToGeneric: jest.fn(async () => ({
-    content: ['Here is your answer.'],
-    finishReason: 'stop',
-    complete: true,
-    tool_calls: []
-  })),
   clearStreamingState: jest.fn(),
-  normalizeToolName: x => x
+  normalizeToolName: x => x,
+  // Unused by ToolExecutor directly, but utils.js (a transitive dependency)
+  // statically imports it, so the mock module must still provide it.
+  convertResponseToGeneric: jest.fn(async () => ({}))
 }));
 
+// ToolExecutor delegates stream parsing to the provider adapter's
+// parseResponseStream(); yield a final answer with no tool calls so the loop
+// terminates immediately.
 jest.mock('../../../server/adapters/index.js', () => ({
   createCompletionRequest: jest.fn(),
-  getAdapter: () => ({})
+  getAdapter: () => ({
+    parseResponseStream: async function* () {
+      yield {
+        content: ['Here is your answer.'],
+        finishReason: 'stop',
+        complete: true,
+        tool_calls: []
+      };
+    }
+  })
 }));
 
 jest.mock('../../../server/toolLoader.js', () => ({

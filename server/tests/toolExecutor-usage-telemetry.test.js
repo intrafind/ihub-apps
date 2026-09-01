@@ -22,20 +22,27 @@ jest.unstable_mockModule('../adapters/index.js', () => ({
     headers: {},
     body: { model: model.modelId, temperature: opts.temperature }
   }),
-  // StreamingHandler (imported transitively by ToolExecutor) needs this export
-  // to exist even though these tests never reach it.
-  getAdapter: () => {
-    throw new Error('getAdapter should not be called in this test');
-  }
+  // ToolExecutor now delegates stream parsing to the provider adapter (like
+  // StreamingHandler already did) instead of hand-rolling SSE parsing, so the
+  // fake adapter just replays the pre-built generic result chunks directly —
+  // bypassing real provider-specific wire-format parsing, which isn't what's
+  // under test here.
+  getAdapter: () => ({
+    parseResponseStream: async function* (response) {
+      for (const chunk of response.chunks) {
+        yield chunk;
+      }
+    }
+  })
 }));
 
 jest.unstable_mockModule('../adapters/toolCalling/index.js', () => ({
   normalizeToolName: id => id,
   isFailureFinishReason: () => false,
   clearStreamingState: () => {},
-  // Each mocked SSE event's `data` is a JSON-encoded generic result chunk —
-  // bypass real provider-specific parsing since that's not what's under test.
-  convertResponseToGeneric: async data => JSON.parse(data)
+  // Unused by ToolExecutor directly, but utils.js (a transitive dependency)
+  // statically imports it, so the mock module must still provide it.
+  convertResponseToGeneric: async () => ({})
 }));
 
 // usageTracker.js also schedules an un-refed, module-scope setInterval (its
@@ -70,21 +77,11 @@ jest.unstable_mockModule('../requestThrottler.js', () => ({
 const { default: ToolExecutor } = await import('../services/chat/ToolExecutor.js');
 
 /**
- * Build a fetch-like Response whose body streams the given generic result
- * chunks as SSE `data:` events (matching what convertResponseToGeneric, mocked
- * above, expects to receive as its raw `data` argument).
+ * Build a fetch-like Response carrying the pre-built generic result chunks
+ * that the fake adapter (mocked above) replays as-is via parseResponseStream.
  */
 function sseResponse(chunks) {
-  const encoder = new TextEncoder();
-  const body = new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-      }
-      controller.close();
-    }
-  });
-  return { ok: true, body };
+  return { ok: true, chunks };
 }
 
 function buildLogData() {
