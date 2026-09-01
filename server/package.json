@@ -57,7 +57,7 @@
     "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.3.31",
+    "pdfjs-dist": "^6.2.108",
     "playwright": "^1.62.1",
     "pngjs": "^7.0.0",
     "selenium-webdriver": "^4.47.0",
