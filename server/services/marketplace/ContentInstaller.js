@@ -52,12 +52,8 @@ const CONTENT_CONFIG = {
     ext: '.json',
     cacheRefresh: 'refreshAppsCache',
     validate: async data => {
-      try {
-        const { validateAppConfig } = await import('../../validators/appConfigSchema.js');
-        return validateAppConfig ? validateAppConfig(data) : { success: true };
-      } catch {
-        return { success: true };
-      }
+      const { appConfigSchema } = await import('../../validators/appConfigSchema.js');
+      return validateWithZodSchema(appConfigSchema, data);
     }
   },
   model: {
@@ -65,12 +61,8 @@ const CONTENT_CONFIG = {
     ext: '.json',
     cacheRefresh: 'refreshModelsCache',
     validate: async data => {
-      try {
-        const { validateModelConfig } = await import('../../validators/modelConfigSchema.js');
-        return validateModelConfig ? validateModelConfig(data) : { success: true };
-      } catch {
-        return { success: true };
-      }
+      const { modelConfigSchema } = await import('../../validators/modelConfigSchema.js');
+      return validateWithZodSchema(modelConfigSchema, data);
     }
   },
   prompt: {
@@ -89,9 +81,31 @@ const CONTENT_CONFIG = {
     dir: 'workflows',
     ext: '.json',
     cacheRefresh: 'refreshWorkflowsCache',
-    validate: async () => ({ success: true })
+    validate: async data => {
+      const { workflowConfigSchema } = await import('../../validators/workflowConfigSchema.js');
+      return validateWithZodSchema(workflowConfigSchema, data);
+    }
   }
 };
+
+/**
+ * Run a Zod schema's safeParse and adapt the result to the { success, errors }
+ * shape ContentInstaller callers expect.
+ *
+ * @param {import('zod').ZodSchema} schema
+ * @param {*} data
+ * @returns {{ success: boolean, errors?: string[] }}
+ */
+function validateWithZodSchema(schema, data) {
+  const result = schema.safeParse(data);
+  if (result.success) {
+    return { success: true };
+  }
+  return {
+    success: false,
+    errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Installations manifest helpers
