@@ -1,5 +1,16 @@
 # Fixes — 5.5.0
 
+## Google Grounding Link Resolution Honours Proxy and SSL Settings
+
+Workflow prompt nodes resolve Google grounding redirect links before handing citations back. That
+one call used raw `fetch()` and so ignored the platform's proxy, `NO_PROXY` and SSL settings,
+unlike every other outbound call in the server. On deployments that require an egress proxy the
+resolution silently failed and citations fell back to a stripped URL.
+
+- The call now goes through the same `httpFetch` path as everything else, so it honours
+  `proxy.*` and `ssl.*` from `platform.json` and shows up in the HTTP interceptor's outbound log.
+- No configuration changes are required.
+
 ## The Admin Dashboard No Longer Waits for the GitHub Update Check
 
 On installations without outbound internet access, the admin start page showed nothing but grey

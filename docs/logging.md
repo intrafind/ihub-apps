@@ -47,6 +47,9 @@ Logging is configured in `contents/config/platform.json`:
 - **`file.path`**: Path to log file (default: `logs/app.log`)
 - **`file.maxSize`**: Maximum log file size in bytes (default: 10MB)
 - **`file.maxFiles`**: Maximum number of log files to keep (default: 5)
+- **`components`**: Optional per-component filtering (see the admin page)
+- **`anonymizeIp`**: Truncate or omit client IPs before they reach the log (`off` | `mask` | `drop`)
+- **`http`**: Raw request/response capture — see [HTTP Interceptor](#http-interceptor-requestresponse-capture). Off by default.
 
 ## Admin Interface
 
@@ -367,6 +370,171 @@ File logging includes automatic log rotation:
 - Old files are kept up to `maxFiles` count
 - Files are named: `app.log`, `app.log.1`, `app.log.2`, etc.
 - Oldest files are automatically deleted
+
+## HTTP Interceptor (Request/Response Capture)
+
+Some problems only show up in the raw traffic: a provider that rejects a header you thought you
+were sending, a proxy that rewrites a path, an integration that answers `200` with an error body.
+The HTTP interceptor records that traffic on both sides.
+
+| Direction    | What it covers                                                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Inbound**  | Every request Express serves. Static assets are always skipped; `/api/health` is excluded by default.                                       |
+| **Outbound** | Every request the server makes — LLM providers, iFinder, Jira, Nextcloud, Google Drive, web search, model discovery, JWKS, MCP servers, OpenAPI tools. |
+
+Everything is **off by default**. Configure it under **Admin → Logging → HTTP Interceptor**, or
+directly in `contents/config/platform.json`.
+
+### Records are written at the `debug` level
+
+Records are emitted through the normal logger under component `HttpInterceptor`, so they land in
+whatever transports are already configured (console, file). This also means **`logging.level` has
+to be `debug` or `silly` for records to appear at all** — the admin page warns when capture is on
+and the level is higher.
+
+Turning capture on also writes one `info`-level line naming exactly what was enabled, so the act
+of enabling wire capture is visible even at the default level.
+
+### Correlating inbound and outbound
+
+Every record carries the `requestId` from the per-request context (see
+[Automatic Request Context](#automatic-request-context-userid-oauthclientid-ip)). An outbound LLM
+call therefore joins to the inbound `/api/chat` request that caused it:
+
+```bash
+# Everything that happened while serving one request
+jq 'select(.component == "HttpInterceptor" and .requestId == "c32c469b-2753-4a80-95ec-24fba1c11c89")' logs/app.log
+
+# Just the outbound side, slowest first
+jq -c 'select(.direction == "outbound") | {url, status, durationMs}' logs/app.log | sort -t: -k4 -rn
+```
+
+This is the single most useful thing the interceptor does, and it costs nothing to have.
+
+### Configuration
+
+```json
+{
+  "logging": {
+    "http": {
+      "inbound": {
+        "enabled": false,
+        "includeHeaders": true,
+        "includeRequestBody": false,
+        "includeResponseBody": false,
+        "methods": [],
+        "pathAllowlist": [],
+        "pathDenylist": ["/api/health"]
+      },
+      "outbound": {
+        "enabled": false,
+        "includeHeaders": true,
+        "includeRequestBody": false,
+        "includeResponseBody": false,
+        "hostAllowlist": [],
+        "hostDenylist": []
+      },
+      "maxBodyBytes": 8192,
+      "rawBodies": false,
+      "autoDisableAfterMinutes": 60
+    }
+  }
+}
+```
+
+| Option                              | Default            | Meaning                                                                                                                                      |
+| ----------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inbound.enabled`                   | `false`            | Capture requests this server serves.                                                                                                          |
+| `outbound.enabled`                  | `false`            | Capture requests this server makes.                                                                                                           |
+| `*.includeHeaders`                  | `true`             | Include request and response headers. Credential values are masked; header names are always kept.                                              |
+| `*.includeRequestBody`              | `false`            | Include the request body.                                                                                                                     |
+| `*.includeResponseBody`             | `false`            | Include the response body, subject to the content-type rules below.                                                                            |
+| `inbound.methods`                   | `[]` (all)         | Restrict to these HTTP methods. Case-insensitive.                                                                                              |
+| `inbound.pathAllowlist`             | `[]` (all)         | Restrict to these paths. Entries match a path exactly or as a path-segment prefix: `/api/health` also covers `/api/health/live`, not `/api/healthcheck`. |
+| `inbound.pathDenylist`              | `["/api/health"]`  | Exclude these paths. The denylist wins over the allowlist.                                                                                      |
+| `outbound.hostAllowlist`            | `[]` (all)         | Restrict to these hosts. Same pattern semantics as `ssl.domainWhitelist`: `*.example.com` and `.example.com` match subdomains only.              |
+| `outbound.hostDenylist`             | `[]`               | Exclude these hosts. The denylist wins over the allowlist.                                                                                      |
+| `maxBodyBytes`                      | `8192`             | Byte cap per captured body. The record says how much was dropped. `0` means uncapped.                                                           |
+| `rawBodies`                         | `false`            | Skip redaction **and** the byte cap. See the warning below.                                                                                     |
+| `autoDisableAfterMinutes`           | `60`               | Stop capturing this long after capture was switched on. `0` = never.                                                                            |
+
+### Streamed responses are never buffered
+
+`/api/chat`, `/api/inference`, agent runs and workflow runs are `text/event-stream` and run to
+megabytes. Their status, headers and timing are recorded; their bodies are not. The record marks
+this explicitly:
+
+```json
+{ "component": "HttpInterceptor", "direction": "inbound", "url": "/api/chat", "responseBody": "[STREAM]" }
+```
+
+Bodies are also skipped for non-textual content types (`application/octet-stream`, images, PDFs) —
+a base64 blob in a log helps nobody. Multipart uploads and typed arrays are recorded as
+`[FORM-DATA]` / `[BINARY n bytes]` instead of being serialised.
+
+### What is redacted
+
+Redaction is on unless `rawBodies` is set:
+
+- **URLs** — basic-auth userinfo (`http://user:pass@host`) and credential query parameters
+  (Google's `?key=`, `access_token`, `client_secret`, `code`, …). Non-secret parameters such as
+  `model` survive, because a wire log that hides the model name is useless.
+- **Headers** — values of `Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`,
+  `<vendor>-api-key`, `*-auth-token` and similar. Header **names** are always kept: a missing or
+  misspelled header is half the reason to look here. The auth scheme survives too, so
+  `Authorization: Bearer sk-p...[REDACTED]` still tells you the scheme was right. `Set-Cookie`
+  attributes (`Path`, `SameSite`, `Max-Age`) are left intact — they are usually the answer to
+  "why isn't this cookie sticking".
+- **Bodies** — values under credential-shaped keys (`api_key`, `password`, `clientSecret`,
+  `access_token`, …) in JSON, form-encoded and XML payloads. LLM token bookkeeping
+  (`maxTokens`, `promptTokens`, `totalTokens`, `tokenCount`) is deliberately **not** masked.
+
+Redaction lives in `server/utils/httpInterceptor.js` (`redactUrl`, `redactHeaders`, `redactBody`)
+and is reusable from other logging code. Prefer it over ad-hoc masking: URLs are not safe to log
+verbatim (Google embeds API keys in the query string), and neither are raw request objects.
+
+### Raw mode
+
+`rawBodies: true` disables redaction and the byte cap. It exists for the case where the redaction
+is hiding the exact value you are chasing.
+
+> **It writes API keys, tokens, cookies and full request bodies to the log in clear text.** With
+> `maxBodyBytes: 0` it will also hold a whole upload in memory. Pair it with a short
+> `autoDisableAfterMinutes`, and turn it off as soon as you have your answer.
+
+### Auto-disable
+
+Capture stops on its own `autoDisableAfterMinutes` after it was switched on, so an interceptor
+left running in production turns itself off instead of filling a disk with prompt bodies. Expiry
+is announced once at `info` level so it is clear why records stopped. Saving the logging
+configuration again restarts the window; `0` disables the guard.
+
+The window is anchored per worker process, so a server restart re-arms it rather than silently
+extending it.
+
+### Worked example
+
+Find out why one provider keeps returning `401`:
+
+1. **Admin → Logging**, set **Log Level** to `debug`.
+2. In **HTTP Interceptor**, tick **Capture outbound requests** and **Include headers**, set
+   **Host allowlist** to the provider's host, and save. Leave bodies off.
+3. Reproduce the failure once, then untick capture and save again.
+4. Read the records:
+
+   ```bash
+   jq -c 'select(.direction == "outbound") | {url, status, requestHeaders}' logs/app.log
+   ```
+
+   A masked-but-present `Authorization` header means the key is being sent and the provider is
+   rejecting it; an absent one means the key never made it out of the config.
+
+### Clustered deployments
+
+Each worker keeps its own capture state. A configuration save reaches every worker through
+`configSync` within milliseconds, so the settings and the auto-disable windows stay aligned.
+Records are written by whichever worker served the request, which is why the `requestId` matters
+when reading a merged log.
 
 ## Filtering and Querying Logs
 

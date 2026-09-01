@@ -3,6 +3,7 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 import configCache from '../../configCache.js';
+import { isOutboundEnabled, interceptedFetch } from '../../utils/httpInterceptor.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -147,7 +148,7 @@ function makePinnedAgent(pinnedAddress, family, isHttps) {
  * The original hostname is preserved in the `Host` header (and SNI) so TLS
  * cert validation still works against the public name.
  */
-export async function safeFetch(input, init = {}, opts = {}) {
+async function pinnedFetch(input, init = {}, opts = {}) {
   const url = typeof input === 'string' ? new URL(input) : input;
   if (!['http:', 'https:'].includes(url.protocol)) {
     const e = new Error(`Unsupported protocol: ${url.protocol}`);
@@ -176,6 +177,36 @@ export async function safeFetch(input, init = {}, opts = {}) {
   }
 
   return await nodeHttpFetch(url, init, agent);
+}
+
+/**
+ * `pinnedFetch` plus the outbound wire log (off by default — see logging.http
+ * in platform.json).
+ *
+ * This transport needs its own hook because it deliberately bypasses
+ * `httpFetch`: the socket has to stay pinned to the address the SSRF guard
+ * vetted. Splitting observation from the transport keeps `pinnedFetch` focused
+ * on that guarantee, and mirrors how `utils/httpConfig.js` wraps its own
+ * `proxiedFetch`.
+ *
+ * A rejected URL (bad protocol, SSRF-blocked host) is recorded and rethrown, so
+ * the wire log shows the refusal rather than going silent on it.
+ *
+ * @param {string|URL} input - Target URL.
+ * @param {Object} [init] - Standard fetch options.
+ * @param {Object} [opts] - `allowHosts` / `blockPrivateIps` for the SSRF guard.
+ * @returns {Promise<Response>}
+ */
+export async function safeFetch(input, init = {}, opts = {}) {
+  const intercept = isOutboundEnabled(input);
+  if (!intercept) return pinnedFetch(input, init, opts);
+  return interceptedFetch(
+    (target, options) => pinnedFetch(target, options, opts),
+    input,
+    init,
+    intercept,
+    'safeFetch'
+  );
 }
 
 /**

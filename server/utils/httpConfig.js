@@ -11,6 +11,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { isOutboundEnabled, interceptedFetch } from './httpInterceptor.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -461,11 +462,12 @@ export function redactUrlSecrets(url) {
 }
 
 /**
- * Fetch wrapper that automatically applies proxy and SSL configuration.
- * Uses node-fetch (not native fetch) to support the agent option required
- * by http-proxy-agent/https-proxy-agent.
+ * Apply proxy and SSL configuration, then perform the request.
  *
- * All outbound HTTP calls in the server should use this function.
+ * Split out from `httpFetch` so that observing a call and making one stay
+ * separate concerns: this half owns the transport, `httpFetch` below owns the
+ * wire log. It also makes the shape uniform with `services/mcp/safeFetch.js`,
+ * which hands its own transport to the same wrapper.
  *
  * @param {string} url - The URL to fetch
  * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
@@ -474,7 +476,7 @@ export function redactUrlSecrets(url) {
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
-export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+async function proxiedFetch(url, options = {}, forceIgnoreSSL = null) {
   // Validate URL scheme - admin-configured URLs are trusted but must use http(s).
   // Include the offending URL (secrets redacted) in the error: a bad scheme
   // usually means a model/tool has no valid endpoint URL and its id or an
@@ -493,4 +495,31 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
   const { lookup = null, ...fetchOptions } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
   return nodeFetch(url, enhanced);
+}
+
+/**
+ * Fetch wrapper that automatically applies proxy and SSL configuration.
+ * Uses node-fetch (not native fetch) to support the agent option required
+ * by http-proxy-agent/https-proxy-agent.
+ *
+ * All outbound HTTP calls in the server should use this function. It is also
+ * the chokepoint for the outbound wire log (off by default — see logging.http
+ * in platform.json); the only outbound path not covered here is the MCP/OpenAPI
+ * transport, which has its own hook in `services/mcp/safeFetch.js`.
+ *
+ * @param {string} url - The URL to fetch
+ * @param {Object} [options] - Standard fetch options; see proxiedFetch above.
+ * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
+ * @returns {Promise<Response>} node-fetch Response
+ */
+export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+  const intercept = isOutboundEnabled(url);
+  if (!intercept) return proxiedFetch(url, options, forceIgnoreSSL);
+  return interceptedFetch(
+    (target, opts) => proxiedFetch(target, opts, forceIgnoreSSL),
+    url,
+    options,
+    intercept,
+    'httpFetch'
+  );
 }

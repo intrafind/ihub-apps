@@ -20,6 +20,12 @@ admins explicitly opt in. Activating telemetry only emits structural data (model
 provider, token counts, durations, error type) and the iHub-specific dimensions
 described below.
 
+Telemetry describes *what happened* — spans, counters, durations. It is not the raw wire
+data. When a problem needs the actual bytes on the wire (a header a provider rejected, a
+path a proxy rewrote, a `200` carrying an error body), use the
+[HTTP interceptor](logging.md#http-interceptor-requestresponse-capture) instead. Both share
+the per-request `requestId`, so a span and the raw exchange behind it can be lined up.
+
 ## Quick start
 
 1. **Enable in the admin UI**

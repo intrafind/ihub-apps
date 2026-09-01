@@ -32,6 +32,7 @@ import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
 import path from 'path';
 import logger from '../../../utils/logger.js';
+import { httpFetch } from '../../../utils/httpConfig.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
@@ -3277,7 +3278,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         try {
           const ac = new AbortController();
           const timer = setTimeout(() => ac.abort(), 5000);
-          const resp = await fetch(url, {
+          // httpFetch, not raw fetch: this call has to honour the platform's
+          // proxy/SSL configuration (it goes out to a Google redirector) and it
+          // belongs in the outbound wire log like every other outbound call.
+          const resp = await httpFetch(url, {
             method: 'HEAD',
             redirect: 'manual',
             signal: ac.signal,

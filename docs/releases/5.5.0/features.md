@@ -1,5 +1,37 @@
 # Features — 5.5.0
 
+## HTTP Request and Response Interceptor
+
+Some problems only show up in the raw traffic — a provider that rejects a header you thought you
+were sending, a proxy that rewrites a path, an integration that answers `200` with an error body.
+**Admin → Logging → HTTP Interceptor** now captures that traffic on both sides, so it no longer
+takes a code change to see it.
+
+- **Both directions.** Inbound covers every request the server serves; outbound covers every
+  request it makes — LLM providers, iFinder, Jira, Nextcloud, Google Drive, web search, model
+  discovery, JWKS lookups, MCP servers and OpenAPI tools.
+- **Records join up.** Every record carries the request ID, so an outbound provider call can be
+  traced back to the chat request that caused it:
+  `jq 'select(.component == "HttpInterceptor" and .requestId == "…")'`.
+- **Off by default, and narrowable.** Headers, request bodies and response bodies are separate
+  switches. Inbound can be restricted by method and path, outbound by host; static assets and
+  `/api/health` are excluded out of the box.
+- **Credentials are masked.** API keys in URLs and headers, cookies, and credential-shaped body
+  fields are redacted. Header names, auth schemes, `Set-Cookie` attributes and LLM token counts are
+  kept, because those are usually what you came to look at. A raw mode is available for the case
+  where redaction hides the value you are chasing — it writes secrets in clear text, so it warns
+  accordingly.
+- **Streamed responses are never buffered.** Chat, agent and workflow responses are recorded with
+  status, headers and timing, but their bodies are marked `[STREAM]` rather than held in memory.
+- **It turns itself off.** Capture stops on its own 60 minutes after being switched on (
+  configurable, `0` to disable), so an interceptor left running in production does not quietly fill
+  a disk with prompt bodies.
+
+Records are written at the `debug` level under the component `HttpInterceptor`, so the log level
+has to be `debug` for them to appear — the admin page says so when capture is on and the level is
+higher. Full reference in `docs/logging.md`.
+
+
 ## OAuth Login for MCP Clients No Longer Fails With "Authorization code is invalid or expired"
 
 Fixed a bug that made the OAuth 2.0 authorization code flow fail on any multi-worker deployment

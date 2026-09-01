@@ -20,6 +20,7 @@ import logger from '../utils/logger.js';
 import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
 import { auditLogger } from './auditLogger.js';
+import { httpInterceptorMiddleware } from './httpInterceptor.js';
 import { randomUUID } from 'crypto';
 
 /**
@@ -583,6 +584,11 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(express.json({ limit: `${limitMb}mb` }));
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
   app.use(cookieParser()); // Add cookie parser middleware
+
+  // Wire-level request/response log. Registered here so `req.body` is already
+  // parsed and cookies are available, and before the rate limiters so a 429 is
+  // still recorded. Off by default; see logging.http in platform.json.
+  app.use(httpInterceptorMiddleware);
 
   // Store the boot-time platform config for backward compatibility.
   // NOTE: body-size limit, rate limiters, session store, and the NTLM static-asset
