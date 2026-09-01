@@ -8,7 +8,7 @@ import {
   saveOAuthClients,
   updatePersonalClientOwner
 } from './oauthClientManager.js';
-import { generatePersonalApiKey } from './oauthTokenService.js';
+import { generatePersonalApiKey, personalKeyGeneration } from './oauthTokenService.js';
 import { buildPublicBaseUrl } from './publicBaseUrl.js';
 import { MCP_SCOPES } from '../services/mcp/scopes.js';
 import logger from './logger.js';
@@ -35,6 +35,23 @@ const DEFAULT_CONFIG = {
 
 const ABSOLUTE_MAX_EXPIRATION_DAYS = 3650;
 const MAX_KEY_NAME_LENGTH = 60;
+
+/**
+ * Credentials that act on behalf of somebody rather than being an interactive
+ * session of their own. None of them may mint a personal key: a credential that
+ * can create further credentials outlives every limit placed on it, and an
+ * authorization-code token would be able to trade its narrow, short-lived
+ * delegation for a long-lived key carrying the owner's full permissions.
+ *
+ * `authorization.js` states the same rule for the admin gate; both lists deny
+ * the same principals for the same reason.
+ */
+const DELEGATED_AUTH_MODES = [
+  'oauth_client_credentials',
+  'oauth_static_api_key',
+  'oauth_authorization_code',
+  'oauth_personal_key'
+];
 
 /**
  * Resolve the effective personal-key configuration, applying defaults for
@@ -77,6 +94,23 @@ export function getPersonalKeyConfig(platform = {}) {
 }
 
 /**
+ * Whether the key behind a credential has passed the lifetime it was issued
+ * with. The API key JWT carries its own `exp`, but a token minted from the
+ * client credentials does not, so both authentication paths and the token
+ * endpoint check the key's own expiry to keep `maxExpirationDays` meaningful.
+ *
+ * @param {Object} client - Stored OAuth client
+ * @returns {boolean} True when the backing key has expired
+ */
+export function isPersonalKeyExpired(client) {
+  const expiresAt = client?.metadata?.apiKeyExpiresAt;
+  if (!expiresAt) return false;
+
+  const expiry = new Date(expiresAt).getTime();
+  return Number.isFinite(expiry) && expiry <= Date.now();
+}
+
+/**
  * Personal keys require the OAuth client store, since that is where they live.
  *
  * @param {Object} platform - Platform configuration
@@ -99,8 +133,9 @@ export function canUserManagePersonalKeys(user, platform = {}) {
   if (!isPersonalKeysEnabled(platform)) return false;
   if (!user?.id || user.id === 'anonymous') return false;
 
-  // Credentials minted by a key must not be able to mint further credentials.
-  if (user.isOAuthClient || user.authMode === 'oauth_personal_key') return false;
+  // Only an interactive session may manage credentials - see DELEGATED_AUTH_MODES.
+  if (user.isOAuthClient || user.isAgent === true) return false;
+  if (DELEGATED_AUTH_MODES.includes(user.authMode)) return false;
 
   const { allowedGroups } = getPersonalKeyConfig(platform);
   if (allowedGroups.length === 0) return true;
@@ -189,6 +224,12 @@ export function listPersonalKeys(user, platform = {}) {
  * @throws {PersonalKeyError} When the request violates the administrator's policy
  */
 export async function createPersonalKey({ user, platform = {}, name, expirationDays }) {
+  return withOwnerLock(user.id, () =>
+    createPersonalKeyExclusively({ user, platform, name, expirationDays })
+  );
+}
+
+async function createPersonalKeyExclusively({ user, platform, name, expirationDays }) {
   const config = getPersonalKeyConfig(platform);
   const clientsFilePath = resolveClientsFilePath(platform);
 
@@ -230,7 +271,7 @@ export async function createPersonalKey({ user, platform = {}, name, expirationD
     user.id
   );
 
-  const apiKey = await issueApiKey(client, lifetimeDays, clientsFilePath);
+  const apiKey = await issueApiKey(client, lifetimeDays, clientsFilePath, config);
 
   logger.info('Personal API key created', {
     component: 'PersonalApiKeyManager',
@@ -269,8 +310,8 @@ export async function rotatePersonalKey({ user, platform = {}, keyId, expiration
   await updatePersonalClientOwner(keyId, user, clientsFilePath);
 
   const { clientSecret } = await rotateClientSecret(keyId, clientsFilePath, user.id);
+  const apiKey = await issueApiKey({ clientId: keyId }, lifetimeDays, clientsFilePath, config);
   const rotated = findClientById(loadOAuthClients(clientsFilePath), keyId);
-  const apiKey = await issueApiKey(rotated, lifetimeDays, clientsFilePath);
 
   logger.info('Personal API key rotated', {
     component: 'PersonalApiKeyManager',
@@ -339,20 +380,68 @@ function requireOwnedKey(clientsFilePath, keyId, user) {
 }
 
 /**
- * Mint the key and record its expiry alongside the client, so the integrations
- * page can warn before it dies. The token stays the only copy of the secret.
+ * Mint the key and record its generation and expiry alongside the client. The
+ * store is updated before the token is signed, so the credential handed out and
+ * the record that validates it can never disagree. The token stays the only
+ * copy of the key itself.
  */
-async function issueApiKey(client, expirationDays, clientsFilePath) {
-  const apiKey = generatePersonalApiKey(client, expirationDays);
-
+async function issueApiKey(client, expirationDays, clientsFilePath, config) {
   const clientsConfig = loadOAuthClients(clientsFilePath);
   const stored = clientsConfig.clients?.[client.clientId];
-  if (stored) {
-    stored.metadata = { ...(stored.metadata || {}), apiKeyExpiresAt: apiKey.expires_at };
-    await saveOAuthClients(clientsConfig, clientsFilePath);
+
+  if (!stored) {
+    throw new PersonalKeyError('API key not found', 404);
   }
 
+  // Every issue is a new generation, which is what invalidates the credentials
+  // issued for the previous one.
+  const keyGeneration = personalKeyGeneration(stored) + 1;
+
+  // Reconcile the grant list with the policy in force now. Without this, a key
+  // created while client credentials were disallowed would keep an empty grant
+  // list, and rotating it would show a client secret the token endpoint always
+  // rejects.
+  stored.grantTypes = config.allowClientCredentials ? ['client_credentials'] : [];
+  stored.metadata = { ...(stored.metadata || {}), keyGeneration };
+
+  const apiKey = generatePersonalApiKey(stored, expirationDays);
+
+  stored.metadata.apiKeyExpiresAt = apiKey.expires_at;
+  await saveOAuthClients(clientsConfig, clientsFilePath);
+
   return apiKey;
+}
+
+/**
+ * Serialize work per owner.
+ *
+ * Counting a user's keys and inserting a new one are two separate store
+ * operations, so two requests arriving together could both find room under
+ * `maxKeysPerUser`. Chaining per owner keeps the check and the insert from
+ * interleaving. Across cluster workers the client store remains last-write-wins,
+ * as it is for every other write to it.
+ */
+const ownerLocks = new Map();
+
+function withOwnerLock(ownerUserId, task) {
+  const previous = ownerLocks.get(ownerUserId) || Promise.resolve();
+
+  // Run regardless of how the previous task settled, but keep its rejection out
+  // of the chain so one failure does not reject every request queued behind it.
+  const result = previous.then(task, task);
+  const settled = result.then(
+    () => {},
+    () => {}
+  );
+
+  ownerLocks.set(ownerUserId, settled);
+  settled.then(() => {
+    if (ownerLocks.get(ownerUserId) === settled) {
+      ownerLocks.delete(ownerUserId);
+    }
+  });
+
+  return result;
 }
 
 function buildSecrets(client, apiKey, config) {
@@ -399,8 +488,17 @@ function sanitizeKeyName(name) {
 }
 
 function defaultKeyName(user, existingCount) {
-  const owner = user.username || user.name || user.id;
-  return existingCount > 0 ? `${owner} API key ${existingCount + 1}` : `${owner} API key`;
+  const suffix = existingCount > 0 ? ` API key ${existingCount + 1}` : ' API key';
+
+  // The client ID is derived from the name and has to stay a valid path segment,
+  // so a long user name is trimmed rather than the suffix that makes the name
+  // readable.
+  const owner = String(user.username || user.name || user.id).slice(
+    0,
+    Math.max(1, MAX_KEY_NAME_LENGTH - suffix.length)
+  );
+
+  return `${owner}${suffix}`;
 }
 
 function clampNumber(value, fallback, min, max) {

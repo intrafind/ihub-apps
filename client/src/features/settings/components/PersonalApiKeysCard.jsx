@@ -12,8 +12,12 @@ function CopyField({ label, value, mono = true, secret = false }) {
   const [revealed, setRevealed] = useState(!secret);
 
   const handleCopy = async () => {
+    // Optional chaining alone would resolve to undefined where the Clipboard API
+    // is missing, and the button would claim it copied something it did not.
+    if (typeof navigator?.clipboard?.writeText !== 'function') return;
+
     try {
-      await navigator.clipboard?.writeText(value);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

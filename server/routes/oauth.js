@@ -9,7 +9,11 @@ import {
   introspectOAuthToken,
   isPersonalClient
 } from '../utils/oauthTokenService.js';
-import { isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
+import {
+  getPersonalKeyConfig,
+  isPersonalKeyExpired,
+  isPersonalKeysEnabled
+} from '../utils/personalApiKeyManager.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -517,7 +521,26 @@ export default function registerOAuthRoutes(app) {
           );
         }
 
-        if (!(client.grantTypes || []).includes('client_credentials')) {
+        // The API key itself carries an `exp`; the client credentials do not.
+        // Without this check they would keep minting owner-bound tokens forever,
+        // and `maxExpirationDays` would bind only the key the user was shown.
+        if (isPersonalKeyExpired(client)) {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_client',
+            'This API key has expired. Generate a new one to continue'
+          );
+        }
+
+        // Both the grant recorded on the key and the policy in force right now:
+        // turning the administrator's switch off has to stop the keys that
+        // already exist, not only the ones created afterwards.
+        const clientCredentialsAllowed =
+          getPersonalKeyConfig(platform).allowClientCredentials &&
+          (client.grantTypes || []).includes('client_credentials');
+
+        if (!clientCredentialsAllowed) {
           return sendOAuthError(
             res,
             400,

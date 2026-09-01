@@ -296,7 +296,11 @@ export default function IntegrationsPage() {
         return null;
       }
 
-      await refreshApiKeys();
+      // The key already exists on the server and `data` may carry secrets shown
+      // exactly once, so a failed list refresh must not turn a success into an
+      // error and discard them.
+      await refreshApiKeys().catch(() => {});
+
       return data;
     } catch (error) {
       setMessage({ type: 'error', text: t(errorKey, { message: error.message }) });

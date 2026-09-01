@@ -19,14 +19,20 @@ import {
   canUserManagePersonalKeys,
   createPersonalKey,
   getPersonalKeyConfig,
+  isPersonalKeyExpired,
   isPersonalKeysEnabled,
   listPersonalKeys,
   revokePersonalKey,
   rotatePersonalKey
 } from '../utils/personalApiKeyManager.js';
-import { verifyOAuthToken } from '../utils/oauthTokenService.js';
+import {
+  verifyOAuthToken,
+  personalKeyGeneration,
+  isCurrentKeyGeneration
+} from '../utils/oauthTokenService.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { isAdminEligiblePrincipal } from '../utils/authorization.js';
+import { isValidId } from '../utils/pathSecurity.js';
 
 let failures = 0;
 
@@ -162,6 +168,38 @@ async function run() {
     'an OAuth service account may not mint keys',
     false,
     canUserManagePersonalKeys({ ...USER, isOAuthClient: true }, platformConfig())
+  );
+  check(
+    'a delegated authorization-code token may not mint keys',
+    false,
+    canUserManagePersonalKeys({ ...USER, authMode: 'oauth_authorization_code' }, platformConfig())
+  );
+  check(
+    'a static API key may not mint keys',
+    false,
+    canUserManagePersonalKeys({ ...USER, authMode: 'oauth_static_api_key' }, platformConfig())
+  );
+  check(
+    'an agent principal may not mint keys',
+    false,
+    canUserManagePersonalKeys({ ...USER, isAgent: true }, platformConfig())
+  );
+
+  console.log('\n🧪 isPersonalKeyExpired\n');
+  check('a key without a recorded expiry has not expired', false, isPersonalKeyExpired({}));
+  check(
+    'a key expiring in the future has not expired',
+    false,
+    isPersonalKeyExpired({
+      metadata: { apiKeyExpiresAt: new Date(Date.now() + 60_000).toISOString() }
+    })
+  );
+  check(
+    'a key past its expiry has expired',
+    true,
+    isPersonalKeyExpired({
+      metadata: { apiKeyExpiresAt: new Date(Date.now() - 60_000).toISOString() }
+    })
   );
 
   console.log('\n🧪 buildPersonalKeyEndpoints\n');
@@ -318,6 +356,115 @@ async function run() {
     true,
     new Date(rotatedClient.lastRotated).getTime() >= new Date(toRotate.key.createdAt).getTime()
   );
+
+  console.log('\n🧪 rotation generations\n');
+  // The generation, not `iat`, is what invalidates older credentials: two keys
+  // minted in the same second are indistinguishable by timestamp.
+  check('rotation advances the stored generation', 2, personalKeyGeneration(rotatedClient));
+  check(
+    'the original key carries the superseded generation',
+    1,
+    verifyOAuthToken(toRotate.secrets.apiKey).key_generation
+  );
+  check(
+    'the rotated key carries the current generation',
+    2,
+    verifyOAuthToken(rotated.secrets.apiKey).key_generation
+  );
+  check(
+    'the superseded key is refused for the current client',
+    false,
+    isCurrentKeyGeneration(verifyOAuthToken(toRotate.secrets.apiKey), rotatedClient)
+  );
+  check(
+    'the rotated key is accepted for the current client',
+    true,
+    isCurrentKeyGeneration(verifyOAuthToken(rotated.secrets.apiKey), rotatedClient)
+  );
+  // The generation is written by the same request that mints the credential and
+  // the client store is served from a per-worker cache, so a reader that has not
+  // caught up yet must not reject a credential that was just issued.
+  check(
+    'a credential is accepted against a client whose generation lags behind it',
+    true,
+    isCurrentKeyGeneration({ key_generation: 2 }, { metadata: { keyGeneration: 1 } })
+  );
+  check(
+    'a credential from an earlier generation is refused',
+    false,
+    isCurrentKeyGeneration({ key_generation: 1 }, { metadata: { keyGeneration: 2 } })
+  );
+  check(
+    'a credential without a generation claim is refused',
+    false,
+    isCurrentKeyGeneration({}, { metadata: { keyGeneration: 1 } })
+  );
+
+  console.log('\n🧪 grant list reconciliation\n');
+  resetClientStore();
+  const noGrantKey = await createPersonalKey({
+    user: USER,
+    platform: platformConfig({ allowClientCredentials: false })
+  });
+  check(
+    'a key created without client credentials records no grant',
+    0,
+    (storedClient(noGrantKey.key.id).grantTypes || []).length
+  );
+  check('and is not handed a client secret', undefined, noGrantKey.secrets.clientSecret);
+  // Turning the policy on has to reach keys that already exist, otherwise a
+  // rotation would show a secret the token endpoint always rejects.
+  const reconciled = await rotatePersonalKey({
+    user: USER,
+    platform: platformConfig({ allowClientCredentials: true }),
+    keyId: noGrantKey.key.id
+  });
+  check(
+    'enabling the policy adds the grant on the next issue',
+    true,
+    (storedClient(noGrantKey.key.id).grantTypes || []).includes('client_credentials')
+  );
+  check('and hands out a client secret', 'string', typeof reconciled.secrets.clientSecret);
+  // And back off again.
+  await rotatePersonalKey({
+    user: USER,
+    platform: platformConfig({ allowClientCredentials: false }),
+    keyId: noGrantKey.key.id
+  });
+  check(
+    'disabling the policy removes the grant again',
+    0,
+    (storedClient(noGrantKey.key.id).grantTypes || []).length
+  );
+
+  console.log('\n🧪 per-user limit under concurrency\n');
+  resetClientStore();
+  const limited = platformConfig({ maxKeysPerUser: 2 });
+  const outcomes = await Promise.allSettled(
+    Array.from({ length: 5 }, () => createPersonalKey({ user: USER, platform: limited }))
+  );
+  check(
+    'never creates more keys than the limit allows',
+    2,
+    outcomes.filter(outcome => outcome.status === 'fulfilled').length
+  );
+  check('and the store agrees', 2, listPersonalKeys(USER, limited).length);
+  check(
+    'the rejected requests report the limit',
+    3,
+    outcomes.filter(outcome => outcome.status === 'rejected' && outcome.reason.status === 409)
+      .length
+  );
+
+  console.log('\n🧪 generated client identifiers\n');
+  resetClientStore();
+  const longName = await createPersonalKey({
+    user: { ...USER, id: 'x'.repeat(120), username: 'y'.repeat(120) },
+    platform: platformConfig()
+  });
+  // The client ID is derived from the key name and is later validated as a path
+  // segment, so an unbounded user name must not produce an unusable key.
+  check('a very long user name still yields a usable key id', true, isValidId(longName.key.id));
 
   console.log('\n🧪 revokePersonalKey\n');
   resetClientStore();

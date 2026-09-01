@@ -84,11 +84,14 @@ The admin page says so when the toggle is on but clients are off.
 | Risk                                           | Mitigation                                                                                |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | A key grants more than its owner has           | Permissions come from the owner's groups on every request; `adminAccess` is forced to false |
-| A key mints further keys                       | The management endpoints reject callers authenticated by a key or a service account         |
+| A key mints further keys                       | The management endpoints accept only interactive sessions - every delegated or machine credential is rejected |
 | An anonymous session mints a key               | Rejected explicitly, even where anonymous access is enabled platform-wide                   |
 | A user enumerates or revokes somebody else's key | Ownership is checked on every operation, and a foreign key is reported as 404, not 403      |
-| A rotated key keeps working                    | `lastRotated` invalidates anything issued earlier, compared at second granularity           |
+| A rotated key keeps working                    | Each issue advances the key's generation; a credential from an earlier generation is refused |
 | A rotation hands back the same token           | Each key carries a `jti`, so two keys minted in the same second still differ                |
+| An expired key keeps working through its client credentials | The key's own expiry is checked at the token endpoint and on every request, not only by the API key's `exp` |
+| A user exceeds the configured key limit by racing | Counting and inserting are serialized per owner, so the check and the insert cannot interleave |
+| Turning off client credentials leaves existing secrets usable | The token endpoint checks the policy in force now, not only the grant recorded on the key |
 
 ## Hardening the admin gate
 
@@ -133,11 +136,48 @@ non-admin APIs are untouched, which the end-to-end check confirms.
 
 - `server/tests/personalApiKeys.test.js`, wired into `npm run test:quick`
 
+## Why rotation is a counter, not a timestamp
+
+The first version compared `decoded.iat` against `client.lastRotated`. Timestamps cannot express
+"issued before this rotation" reliably: `iat` has second granularity, so a credential minted in the
+same second as the rotation that replaced it compares equal and survives, whichever direction the
+comparison is written. A `jti` does not help - it makes two credentials different without making
+either one checkable.
+
+Each personal client therefore carries `metadata.keyGeneration`. Every issue advances it, and both
+minting paths stamp the value into the token as `key_generation`. Rotation invalidates the previous
+generation outright, including the access tokens exchanged from that generation's client credentials.
+
+Authentication compares the claim with `>=`, not equality. iHub runs clustered, and each worker
+serves the client store from its own cache that a cluster announcement refreshes asynchronously - so
+the request that mints a credential writes the new generation on one worker while the request that
+first uses it may land on another that has not caught up. Under equality that is a rejected key on
+its first use: measured against a four-worker cluster, 13 of 15 rotate-then-use sequences failed.
+With `>=` a credential is only ever refused for carrying a *lower* generation than the client, which
+is exactly the superseded case, and a lagging reader can never reject something newer than what it
+knows about.
+
+The relaxation is that during the lag window a just-superseded credential can still be accepted by a
+worker that has not seen the rotation. That is the same window in which a deleted or suspended
+client is also still accepted, so it is a property of the store's cache rather than of this check.
+
+The key's stored expiry is checked only for credentials that do not carry their own. The API key is
+a JWT whose `exp` is set from the same lifetime and verified on every request, so `apiKeyExpiresAt`
+is a mirror of it and re-checking it would only reintroduce the lag window; an access token
+exchanged from the client credentials has a short lifetime of its own that can outlast the key, so
+for those the stored expiry is what keeps `maxExpirationDays` binding - at the token endpoint
+primarily, and on each request as a backstop.
+
 ## Known adjacent issue (not changed here)
 
-`jwtAuth` compares `decoded.iat * 1000 < new Date(client.lastRotated).getTime()` for
-`oauth_client_credentials` and `oauth_static_api_key` tokens. Because `iat` has second granularity
-and `lastRotated` has millisecond granularity, a token issued in the same second as a rotation can
-be rejected on its first use. The personal-key branch compares in seconds and does not have this
-problem. Fixing the older branch would change auth behaviour for existing service accounts, so it is
-left alone and noted here.
+`jwtAuth` still compares `decoded.iat * 1000 < new Date(client.lastRotated).getTime()` for
+`oauth_client_credentials` and `oauth_static_api_key` tokens, which has the mirror-image bug: a
+token issued in the same second as a rotation can be rejected on its first use. Fixing it would
+change auth behaviour for existing service accounts, so it is left alone and noted here.
+
+## Known limitation: the client store is not transactional
+
+The per-owner serialization that makes `maxKeysPerUser` reliable is in-process. Across cluster
+workers `oauth-clients.json` remains last-write-wins, as it is for every other write to it, so two
+workers admitting a key at the same instant could still exceed the cap by one. Making the store
+transactional would change every caller and belongs in its own change.

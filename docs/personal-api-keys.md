@@ -74,7 +74,7 @@ The equivalent configuration in `contents/config/platform.json`:
 | `maxKeysPerUser`         | How many keys one user may hold at once (1–100).                                             |
 | `defaultExpirationDays`  | Lifetime used when the user does not choose one.                                             |
 | `maxExpirationDays`      | Upper bound the user cannot exceed (1–3650).                                                 |
-| `allowClientCredentials` | Also hand out a client ID and secret for the token endpoint.                                 |
+| `allowClientCredentials` | Also hand out a client ID and secret for the token endpoint. Turning it off stops existing keys from using theirs, too. |
 | `scopes`                 | Scopes stamped on each key. Empty falls back to `mcpServer.defaultScopes`.                   |
 
 `oauth.enabled.authz` is what makes the token endpoint available; without it the client ID and
@@ -140,11 +140,16 @@ The resulting access token also acts as the owner and expires after
 ## Rotating and revoking
 
 **Rotate** issues a fresh API key and client secret and invalidates everything issued for that key
-earlier. It also refreshes the owner snapshot, so a user who has since joined or left a group gets
-credentials that reflect their current membership.
+earlier - including any access token already exchanged from the previous client secret. It also
+refreshes the owner snapshot, so a user who has since joined or left a group gets credentials that
+reflect their current membership.
 
 **Revoke** deletes the backing client. Every credential ever issued for it stops working on the next
 request.
+
+A key also stops working once its lifetime is up. The API key itself expires on its own, and the
+client ID and secret stop being accepted at the token endpoint at the same moment, so
+`maxExpirationDays` binds both credentials rather than only the one the user was shown.
 
 ## Administration
 
@@ -159,10 +164,17 @@ is written to the audit log as the `personalApiKey` resource.
 - **A key never reaches the admin API.** `/api/admin/*` is closed to personal keys — and to every
   other delegated or machine token — even when the owner is an administrator. Administration stays a
   browser-session activity.
-- **A key cannot mint another key.** The endpoints that manage keys reject requests authenticated
-  with a personal key or an OAuth service account.
-- **A key cannot outlive its policy.** The lifetime is capped by `maxExpirationDays`, and disabling
-  the feature stops every existing key at once.
+- **A key cannot mint another key.** The endpoints that manage keys accept only an interactive
+  session. A personal key, an OAuth service account, a static API key, a delegated
+  authorization-code token and an agent principal are all refused - otherwise a narrow, short-lived
+  delegation could be traded for a long-lived key carrying the owner's full permissions.
+- **A key cannot outlive its policy.** The lifetime is capped by `maxExpirationDays` and enforced on
+  both credentials; disabling the feature, or the client-credentials option, stops every existing
+  key at once.
+- **A rotated credential is refused, not merely replaced.** Each key carries a generation that every
+  issue advances, and both credentials are bound to the generation they were issued for. In a
+  clustered deployment a worker that has not yet seen the rotation may accept the superseded
+  credential for a moment, exactly as it would still accept a key deleted a moment ago.
 - **Group changes need a rotation.** The owner snapshot is written when the key is created and
   refreshed when it is rotated. If a user's group membership changes, rotate or revoke their keys so
   the change applies to credentials issued earlier.

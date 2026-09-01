@@ -438,7 +438,8 @@ export function intersectWithClientAllowList(userAllowed, clientAllowed) {
  * Used for user-delegated tokens (`oauth_authorization_code` and the personal API
  * keys users mint for themselves): the token acts as a specific user, and the OAuth
  * client (e.g. the Outlook add-in) may define additional restrictions. If the client
- * configures no restrictions, the user keeps their full group-granted permissions. *
+ * configures no restrictions, the user keeps their full group-granted permissions.
+ *
  * @param {Object} permissions - User permissions object with apps/models/prompts Sets.
  * @param {Object} user - User object carrying clientAllowedApps/clientAllowedModels/clientAllowedPrompts.
  * @returns {Object} Filtered permissions object.

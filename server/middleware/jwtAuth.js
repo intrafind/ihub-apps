@@ -1,5 +1,10 @@
-import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
-import { isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
+import {
+  loadOAuthClients,
+  findClientById,
+  updateClientLastUsed
+} from '../utils/oauthClientManager.js';
+import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
+import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
@@ -280,14 +285,27 @@ export default function jwtAuthMiddleware(req, res, next) {
         });
       }
 
-      // Rotating a key invalidates everything issued before the rotation.
-      // `iat` has second granularity while `lastRotated` has milliseconds, so
-      // compare in seconds — otherwise a key minted moments after the rotation
-      // looks older than it and gets rejected on its very first use.
-      if (
-        client.lastRotated &&
-        decoded.iat < Math.floor(new Date(client.lastRotated).getTime() / 1000)
-      ) {
+      // The API key JWT carries its own `exp`, already verified, so its
+      // lifetime needs no second opinion from the store. A token exchanged from
+      // this key's client credentials has a short lifetime of its own that can
+      // outlast the key, so for those the key's expiry is what keeps
+      // `maxExpirationDays` binding.
+      if (!decoded.static_key && isPersonalKeyExpired(client)) {
+        logger.warn('Personal API key rejected: key expired', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key has expired'
+        });
+      }
+
+      // Rotating a key invalidates every credential issued for an earlier
+      // generation. A counter rather than a timestamp: `iat` has second
+      // granularity, so a credential minted in the same second as the rotation
+      // that replaced it compares equal and would survive.
+      if (!isCurrentKeyGeneration(decoded, client)) {
         logger.warn('Personal API key rejected: issued before the last rotation', {
           component: 'JwtAuth',
           clientId: decoded.client_id
@@ -315,8 +333,23 @@ export default function jwtAuthMiddleware(req, res, next) {
         clientAllowedModels: Array.isArray(client.allowedModels) ? client.allowedModels : [],
         clientAllowedPrompts: Array.isArray(client.allowedPrompts) ? client.allowedPrompts : []
       };
+
+      // Record the use so the integrations page reports keys used through the
+      // HTTP APIs, not only those exchanged at the token endpoint. Best effort:
+      // a failed bookkeeping write must not fail the request.
+      updateClientLastUsed(
+        client.clientId,
+        platform.oauth?.clientsFile || 'contents/config/oauth-clients.json'
+      ).catch(error => {
+        logger.error('Failed to record personal API key usage', {
+          component: 'JwtAuth',
+          clientId: client.clientId,
+          error
+        });
+      });
     } else if (decoded.authMode === 'oauth_authorization_code') {
-      // OAuth authorization code - this is a user-delegated token      // The token carries user identity, validate the user is still active
+      // OAuth authorization code - this is a user-delegated token.
+      // The token carries user identity, validate the user is still active.
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.authz) {
         try {

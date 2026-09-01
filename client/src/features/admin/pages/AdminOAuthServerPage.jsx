@@ -670,6 +670,9 @@ function AdminOAuthServerPage() {
                       </p>
                     </div>
                     <button
+                      type="button"
+                      role="switch"
+                      aria-checked={oauthConfig.personalKeys.enabled}
                       onClick={() =>
                         updatePersonalKeys('enabled', !oauthConfig.personalKeys.enabled)
                       }
@@ -800,6 +803,9 @@ function AdminOAuthServerPage() {
                           </p>
                         </div>
                         <button
+                          type="button"
+                          role="switch"
+                          aria-checked={oauthConfig.personalKeys.allowClientCredentials}
                           onClick={() =>
                             updatePersonalKeys(
                               'allowClientCredentials',

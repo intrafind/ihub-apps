@@ -6,6 +6,7 @@ import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import {
@@ -197,6 +198,10 @@ router.post('/:keyId/rotate', authRequired, async (req, res) => {
   const context = requireKeyManager(req, res);
   if (!context) return;
 
+  // Checked after the feature gate so a disabled feature still answers 404 for
+  // every request, but before the identifier reaches the client store.
+  if (!validateIdForPath(req.params.keyId, 'API key', res)) return;
+
   const { platform, user } = context;
 
   try {
@@ -247,6 +252,8 @@ router.post('/:keyId/rotate', authRequired, async (req, res) => {
 router.delete('/:keyId', authRequired, async (req, res) => {
   const context = requireKeyManager(req, res);
   if (!context) return;
+
+  if (!validateIdForPath(req.params.keyId, 'API key', res)) return;
 
   const { platform, user } = context;
 

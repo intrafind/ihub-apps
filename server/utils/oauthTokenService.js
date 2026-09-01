@@ -79,7 +79,10 @@ export function generateOAuthToken(client, options = {}) {
         client_name: client.name,
         scopes: tokenScopes,
         authMode: 'oauth_personal_key',
-        iat: Math.floor(Date.now() / 1000)
+        iat: Math.floor(Date.now() / 1000),
+        // Bound to the key's current generation, so rotating the key also
+        // invalidates the access tokens exchanged from its client credentials.
+        key_generation: personalKeyGeneration(client)
       }
     : {
         sub: client.clientId, // Subject is the client ID
@@ -300,6 +303,38 @@ export function generateStaticApiKey(client, expirationDays = 365) {
  * @param {number} expirationDays - Expiration in days
  * @returns {Object} Object containing the API key and its expiration
  */
+export function personalKeyGeneration(client) {
+  const generation = client?.metadata?.keyGeneration;
+  return Number.isInteger(generation) && generation > 0 ? generation : 0;
+}
+
+/**
+ * Whether a credential still belongs to its key's current generation.
+ *
+ * Compared with `>=`, not equality. The generation is written by the very
+ * request that mints the credential, and the client store is served from a
+ * cache that a cluster announcement reloads asynchronously - so for a short
+ * window a reader can still see the generation as it was just before the write.
+ * Equality would reject a credential on its very first use in that window,
+ * which is the failure this comparison exists to avoid; a superseded credential
+ * carries a strictly lower generation and is refused either way.
+ *
+ * @param {Object} decoded - Verified token claims
+ * @param {Object} client - Stored OAuth client
+ * @returns {boolean} True when the credential has not been superseded
+ */
+export function isCurrentKeyGeneration(decoded, client) {
+  const claimed = Number.isInteger(decoded?.key_generation) ? decoded.key_generation : 0;
+  return claimed >= personalKeyGeneration(client);
+}
+
+/**
+ * Mint the long-lived API key for a personal OAuth client.
+ *
+ * @param {Object} client - Stored personal OAuth client
+ * @param {number} expirationDays - Lifetime in days
+ * @returns {Object} The API key and its metadata
+ */
 export function generatePersonalApiKey(client, expirationDays) {
   if (!isPersonalClient(client)) {
     throw new Error(
@@ -323,9 +358,13 @@ export function generatePersonalApiKey(client, expirationDays) {
     scopes: client.scopes || [],
     authMode: 'oauth_personal_key',
     iat: Math.floor(Date.now() / 1000),
+    // The generation this credential belongs to. Rotation increments the
+    // client's generation, which is what makes every credential issued earlier
+    // stop working - `iat` cannot do it, because a credential minted in the same
+    // second as the rotation is indistinguishable from the one it replaces.
+    key_generation: personalKeyGeneration(client),
     // Without a unique id, two keys minted in the same second for the same
-    // client are byte-identical, so a rotation would hand back the key it was
-    // meant to replace.
+    // client and generation would be byte-identical.
     jti: crypto.randomUUID(),
     static_key: true
   };
