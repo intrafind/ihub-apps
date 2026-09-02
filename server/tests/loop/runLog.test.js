@@ -183,3 +183,32 @@ test('identity modes: full keeps PII, default id-only, pseudonymized hashes, ano
   assert.equal(agent.isAgent, true);
   assert.equal(agent.profileId, 'p1');
 });
+
+test('appendRecovered continues the persisted sequence for a run this process never started', async () => {
+  const { log, baseDir } = await tmpLog();
+  const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u1' } });
+  log.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'hi' });
+  await log.flush();
+
+  // another worker (a second RunLog over the same directory) answers into the run
+  const other = new RunLog({
+    baseDir,
+    forceEnabled: true,
+    getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
+    getFeatures: () => ({ runLog: true })
+  });
+  const ev = await other.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+    kind: 'stop',
+    by: 'u1',
+    at: new Date().toISOString()
+  });
+  assert.equal(ev.seq, 3, 'seq continues after the two persisted events');
+  await other.flush();
+  const events = await other.readEvents(runId);
+  assert.deepEqual(
+    events.map(e => e.seq),
+    [1, 2, 3]
+  );
+  await other.stop();
+  await log.stop();
+});

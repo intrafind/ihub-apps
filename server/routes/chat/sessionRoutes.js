@@ -1035,10 +1035,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       const { chatId } = req.params;
       if (hasChatClient(chatId)) {
         // The stop is a human event on the run bound to this chat stream.
-        const boundRunId = getStreamRun(chatId);
+        const bound = getStreamRun(chatId);
+        const boundRunId = bound && typeof bound === 'object' ? bound.runId : bound;
         if (boundRunId) {
           try {
-            runLog.append(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+            // The turn may run on another worker: continue its persisted sequence.
+            await runLog.appendRecovered(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
               kind: 'stop',
               by: req.user?.id ? String(req.user.id) : 'anonymous',
               at: new Date().toISOString()

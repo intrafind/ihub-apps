@@ -365,7 +365,9 @@ export function chatQuestionOptions({
       const { maxClarifications, ...wire } = draft;
       let interaction = wire;
       try {
-        const principalId = runLog.getRunMeta(wire.runId)?.principalId || null;
+        const runMeta = runLog.getRunMeta(wire.runId);
+        const principalId = runMeta?.principalId || null;
+        const identityMode = runMeta?.identityMode || null;
         interaction = await interactionService.raise({
           id: wire.id,
           runId: wire.runId,
@@ -374,7 +376,11 @@ export function chatQuestionOptions({
           origin: wire.origin,
           prompt: wire.prompt,
           policy: { timeoutMs: CLARIFICATION_TTL_MS, onTimeout: 'fail', fallback: 'park' },
-          source: { ...wire.source, ...(principalId ? { principalId: String(principalId) } : {}) },
+          source: {
+            ...wire.source,
+            ...(principalId ? { principalId: String(principalId) } : {}),
+            ...(identityMode ? { identityMode } : {})
+          },
           ordinal: wire.ordinal
         });
       } catch (raiseErr) {

@@ -11,11 +11,14 @@ data: { "v": 2, "seq": 12, "runId": "chat-8f3…", "ts": "2026-09-02T12:00:00.00
 ```
 
 - `v` is always `2`.
-- `seq` is a per-stream monotonic counter. A gap tells the client it missed
-  frames (cluster relay, reconnect); it re-syncs from
-  `GET /api/runs/:runId/events?after=<seq>&view=sse`, which returns the same
-  envelopes projected from the run ledger (no `step/delta` frames — the
-  completed steps carry the full content).
+- `seq` is a per-stream monotonic counter, assigned by the worker that
+  delivers the stream (frames of one stream may be produced on several
+  workers and relayed). A gap tells the client it missed frames (cluster
+  relay, reconnect); it then rebuilds the affected run from its ledger,
+  `GET /api/runs/:runId/events?view=sse`, which returns the run's events as
+  envelopes (no `step/delta` frames — the completed steps carry the full
+  content). The ledger's `seq` is the run's own sequence and is never compared
+  with the stream's.
 - `runId` is the run the event belongs to. A chat turn is one run (the server
   mints it and announces it with `run/started`, whose `data.refs` carries
   `chatId`, `appId` and the client's `messageId`); a workflow execution is one

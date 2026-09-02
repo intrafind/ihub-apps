@@ -13,7 +13,8 @@ import {
   INTERACTION_KINDS,
   INTERACTION_ORIGINS,
   INTERACTION_STATUSES,
-  HUMAN_EVENT_KINDS
+  HUMAN_EVENT_KINDS,
+  LEDGER_IDENTITY_MODES
 } from '../../../../shared/runEvents.js';
 
 const ts = z.string().datetime({ offset: true });
@@ -116,7 +117,10 @@ export const interactionSourceSchema = z.object({
   appId: z.string().optional(),
   profileId: z.string().optional(),
   /** Legacy checkpoint id for the workflow `human` node bridge. */
-  checkpointId: z.string().optional()
+  checkpointId: z.string().optional(),
+  /** Owner of the run (its ledger principal id) and the identity mode it was recorded in. */
+  principalId: z.string().optional(),
+  identityMode: z.enum(LEDGER_IDENTITY_MODES).optional()
 });
 
 export const interactionSchema = z.object({
@@ -133,7 +137,9 @@ export const interactionSchema = z.object({
   updatedAt: ts.optional(),
   answer: interactionAnswerSchema.optional(),
   /** Sequence number within the run (n-th interaction) — clarification caps key off it. */
-  ordinal: z.number().int().positive().optional()
+  ordinal: z.number().int().positive().optional(),
+  /** Set while a worker is answering the interaction (see InteractionService.answer). */
+  claim: z.object({ pid: z.number().int(), at: ts }).optional()
 });
 
 /** Body of POST /api/runs/:runId/interactions/:id/answer */

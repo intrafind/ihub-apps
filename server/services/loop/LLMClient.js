@@ -58,6 +58,9 @@ import { normalizeUsage, mergeUsage } from './llmUsage.js';
 import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 
+/** Upper bound on runs whose last request hash is kept for request/header dedupe. */
+const MAX_TRACKED_RUN_HASHES = 5000;
+
 const COMPONENT = 'LLMClient';
 
 /** Providers whose adapters only speak a streaming protocol. */
@@ -351,7 +354,7 @@ export class LLMClient {
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
-    this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe)
+    this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe), LRU-bounded
   }
 
   // ── Model catalog ──────────────────────────────────────────────────────
@@ -915,7 +918,13 @@ export class LLMClient {
     const messagesHash = hashPayload(messages);
     const previous = this._lastMessagesHash.get(runId);
     const reason = !previous ? 'initial' : previous === messagesHash ? 'same' : 'change';
+    // Re-insert to keep Map order as LRU order; evict the oldest past the cap so
+    // a long-lived process does not keep one hash per run it ever served.
+    this._lastMessagesHash.delete(runId);
     this._lastMessagesHash.set(runId, messagesHash);
+    while (this._lastMessagesHash.size > MAX_TRACKED_RUN_HASHES) {
+      this._lastMessagesHash.delete(this._lastMessagesHash.keys().next().value);
+    }
     const tools = Array.isArray(adapterOptions.tools) ? adapterOptions.tools : null;
     const callConfig = {
       temperature:

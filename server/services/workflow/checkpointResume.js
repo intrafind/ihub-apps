@@ -201,15 +201,24 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
 /** Ledger marker after the answer was accepted: `run/resumed` follows `interaction/answered`. */
 function appendRunResumed(interaction, runLog) {
   const executionId = interaction.source?.executionId || interaction.runId;
-  try {
-    runLog.append(executionId, RUN_LOG_EVENTS.RUN_RESUMED, { interactionId: interaction.id });
-  } catch (err) {
-    logger.debug('Ledger run/resumed append failed', {
-      component: 'CheckpointResume',
-      executionId,
-      error: err.message
+  // The answer may land on a worker that did not start the execution's run:
+  // re-register it so the sequence continues from the persisted ledger.
+  Promise.resolve()
+    .then(() =>
+      runLog.appendRecovered(
+        executionId,
+        RUN_LOG_EVENTS.RUN_RESUMED,
+        { interactionId: interaction.id },
+        { kind: 'workflow' }
+      )
+    )
+    .catch(err => {
+      logger.debug('Ledger run/resumed append failed', {
+        component: 'CheckpointResume',
+        executionId,
+        error: err.message
+      });
     });
-  }
 }
 
 function wrapEngineError(err) {

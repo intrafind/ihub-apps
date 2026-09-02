@@ -139,14 +139,20 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
             const access = await authorizeRun(runId, req.user);
             const runChatId = access.meta?.refs?.chatId;
             if (access.ok && (!runChatId || runChatId === chatId)) {
-              runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
-                kind: 'feedback',
-                messageId,
-                rating,
-                ...(feedback ? { message: String(feedback) } : {}),
-                by: req.user?.id ? String(req.user.id) : 'anonymous',
-                at: new Date().toISOString()
-              });
+              // The run may live on another worker: continue its persisted sequence.
+              await runLog.appendRecovered(
+                runId,
+                RUN_LOG_EVENTS.HUMAN_EVENT,
+                {
+                  kind: 'feedback',
+                  messageId,
+                  rating,
+                  ...(feedback ? { message: String(feedback) } : {}),
+                  by: req.user?.id ? String(req.user.id) : 'anonymous',
+                  at: new Date().toISOString()
+                },
+                { kind: access.meta?.kind || 'chat' }
+              );
             } else {
               logger.debug('Feedback human/event skipped: run not accessible for this chat', {
                 component: 'feedbackRoutes',

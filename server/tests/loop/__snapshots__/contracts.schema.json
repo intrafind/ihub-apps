@@ -1225,6 +1225,13 @@
                           },
                           "checkpointId": {
                             "type": "string"
+                          },
+                          "principalId": {
+                            "type": "string"
+                          },
+                          "identityMode": {
+                            "type": "string",
+                            "enum": ["full", "default", "pseudonymized"]
                           }
                         },
                         "additionalProperties": false,
@@ -1275,6 +1282,20 @@
                       "ordinal": {
                         "type": "integer",
                         "exclusiveMinimum": 0
+                      },
+                      "claim": {
+                        "type": "object",
+                        "properties": {
+                          "pid": {
+                            "type": "integer"
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": ["pid", "at"],
+                        "additionalProperties": false
                       }
                     },
                     "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
@@ -1997,6 +2018,13 @@
               },
               "checkpointId": {
                 "type": "string"
+              },
+              "principalId": {
+                "type": "string"
+              },
+              "identityMode": {
+                "type": "string",
+                "enum": ["full", "default", "pseudonymized"]
               }
             },
             "additionalProperties": false,
@@ -2047,6 +2075,20 @@
           "ordinal": {
             "type": "integer",
             "exclusiveMinimum": 0
+          },
+          "claim": {
+            "type": "object",
+            "properties": {
+              "pid": {
+                "type": "integer"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["pid", "at"],
+            "additionalProperties": false
           }
         },
         "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
@@ -2859,6 +2901,13 @@
                   },
                   "checkpointId": {
                     "type": "string"
+                  },
+                  "principalId": {
+                    "type": "string"
+                  },
+                  "identityMode": {
+                    "type": "string",
+                    "enum": ["full", "default", "pseudonymized"]
                   }
                 },
                 "additionalProperties": false,
@@ -2909,6 +2958,20 @@
               "ordinal": {
                 "type": "integer",
                 "exclusiveMinimum": 0
+              },
+              "claim": {
+                "type": "object",
+                "properties": {
+                  "pid": {
+                    "type": "integer"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": ["pid", "at"],
+                "additionalProperties": false
               }
             },
             "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
@@ -4097,6 +4160,13 @@
                           },
                           "checkpointId": {
                             "type": "string"
+                          },
+                          "principalId": {
+                            "type": "string"
+                          },
+                          "identityMode": {
+                            "type": "string",
+                            "enum": ["full", "default", "pseudonymized"]
                           }
                         },
                         "additionalProperties": false,
@@ -4147,6 +4217,20 @@
                       "ordinal": {
                         "type": "integer",
                         "exclusiveMinimum": 0
+                      },
+                      "claim": {
+                        "type": "object",
+                        "properties": {
+                          "pid": {
+                            "type": "integer"
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": ["pid", "at"],
+                        "additionalProperties": false
                       }
                     },
                     "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],

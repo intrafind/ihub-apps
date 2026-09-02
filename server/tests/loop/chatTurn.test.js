@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import ChatService, { markInteractiveTools } from '../../services/chat/ChatService.js';
 import { AgentLoop } from '../../services/loop/AgentLoop.js';
-import { setEnvelopeDelivery } from '../../services/loop/RunStream.js';
+import { setEnvelopeDelivery, stampSeq } from '../../services/loop/RunStream.js';
 import { sseV2EventSchema } from '../../services/loop/contracts/sseV2.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { activeRequests, routeEnvelope } from '../../sse.js';
@@ -59,8 +59,9 @@ const RUN_ID_RE = /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const sinks = new Map();
 
 test.before(() => {
+  // Like server/sse.js, the delivering side owns the stream sequence.
   setEnvelopeDelivery((streamId, envelope) => {
-    sinks.get(streamId)?.push(envelope);
+    sinks.get(streamId)?.push(stampSeq(streamId, envelope));
   });
 });
 

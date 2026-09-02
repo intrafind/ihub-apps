@@ -346,3 +346,83 @@ test('cluster: a mutation on one worker is visible on the others; waiters settle
   await workerB.stop();
   await runLog.stop();
 });
+
+test('answer: a concurrent answer is rejected while the first one is being applied; a failed handler releases the claim', async () => {
+  const { runLog, svc, runId } = await setup();
+  const it = await svc.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] }
+  });
+  let release;
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  const calls = [];
+  svc.onAnswer(async interaction => {
+    calls.push(interaction.answer.by);
+    await gate;
+    if (interaction.answer.by === 'fail') throw new Error('handler failed');
+  });
+
+  const first = svc.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
+  await new Promise(r => setImmediate(r));
+  await assert.rejects(
+    svc.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
+    e => e.code === 'ANSWER_IN_PROGRESS' && e.status === 409
+  );
+  assert.deepEqual(calls, ['alice'], 'the handler ran once');
+  release();
+  assert.equal((await first).status, 'answered');
+  assert.equal((await svc.get(it.id)).claim, undefined, 'the claim is gone once answered');
+
+  // a failing handler releases the claim so the human can retry
+  const it2 = await svc.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Again?', options: [{ value: 'approve', label: 'Approve' }] }
+  });
+  await assert.rejects(
+    svc.answer(it2.id, { value: 'approve' }, { user: { id: 'fail' } }),
+    /handler failed/
+  );
+  const pending = await svc.get(it2.id);
+  assert.equal(pending.status, 'pending');
+  assert.equal(pending.claim, undefined);
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('cluster: a claim replicated from another worker blocks a concurrent answer there', async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-claim-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const bus = fakeBus();
+  const workerA = new InteractionService({ runLog, bus, pid: 1, persist: false });
+  const workerB = new InteractionService({ runLog, bus, pid: 2, persist: false });
+  const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
+  const it = await workerA.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] }
+  });
+  let release;
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  workerA.onAnswer(() => gate);
+  const first = workerA.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
+  await new Promise(r => setImmediate(r));
+  await assert.rejects(
+    workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
+    e => e.code === 'ANSWER_IN_PROGRESS'
+  );
+  release();
+  await first;
+  assert.equal((await workerB.get(it.id)).status, 'answered');
+  await workerA.stop();
+  await workerB.stop();
+  await runLog.stop();
+});

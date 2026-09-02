@@ -341,14 +341,20 @@ export default function registerRunRoutes(app) {
           : sendInsufficientPermissions(res, 'send human event');
       }
       const { kind, message, messageId, rating } = parsed.data;
-      const event = runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
-        kind,
-        ...(message !== undefined ? { message } : {}),
-        ...(messageId !== undefined ? { messageId } : {}),
-        ...(rating !== undefined ? { rating } : {}),
-        by: isAnonymousUser(req.user) ? 'anonymous' : String(req.user.id),
-        at: new Date().toISOString()
-      });
+      // The run may live on another worker: continue its persisted sequence.
+      const event = await runLog.appendRecovered(
+        runId,
+        RUN_LOG_EVENTS.HUMAN_EVENT,
+        {
+          kind,
+          ...(message !== undefined ? { message } : {}),
+          ...(messageId !== undefined ? { messageId } : {}),
+          ...(rating !== undefined ? { rating } : {}),
+          by: isAnonymousUser(req.user) ? 'anonymous' : String(req.user.id),
+          at: new Date().toISOString()
+        },
+        { kind: auth.meta?.kind || 'chat' }
+      );
       const effect = kind === 'stop' ? await stopRun(runId, auth.meta) : null;
       res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
     } catch (error) {
@@ -391,7 +397,15 @@ export default function registerRunRoutes(app) {
         kind: typeof req.query.kind === 'string' ? req.query.kind : undefined
       });
       const groups = Array.isArray(req.user.groups) ? req.user.groups : [];
-      const me = await resolvePrincipal(req.user, { mode: runLog.identityMode() });
+      // Owner ids were recorded in the identity mode of their run; resolve the
+      // caller in each mode that occurs so runs written before an identityMode
+      // change still match.
+      const modeOf = i =>
+        i.source?.identityMode || runLog.getRunMeta(i.runId)?.identityMode || runLog.identityMode();
+      const myIdByMode = new Map();
+      for (const mode of new Set(all.map(modeOf))) {
+        myIdByMode.set(mode, (await resolvePrincipal(req.user, { mode })).id);
+      }
       const visible = admin
         ? all
         : all.filter(i => {
@@ -399,7 +413,7 @@ export default function registerRunRoutes(app) {
             if (Array.isArray(approvers) && approvers.length > 0) {
               return approvers.some(g => groups.includes(g));
             }
-            return i.source?.principalId === me.id;
+            return !!i.source?.principalId && i.source.principalId === myIdByMode.get(modeOf(i));
           });
       res.json({ interactions: visible });
     } catch (error) {

@@ -133,18 +133,23 @@ check(
 reset();
 const target = fakeClient();
 clients.set('chat-3', target.entry);
-check('deliverEnvelope writes `event: <type>` + `data: <envelope>` to the local client', () => {
-  const envelope = envelopeFor('chat-3', { seq: 7 });
-  assert.strictEqual(deliverEnvelope('chat-3', envelope), true);
-  assert.strictEqual(target.writes.length, 2);
-  const { event, payload } = parseFrame(target.writes);
-  assert.strictEqual(event, 'step/delta');
-  assert.deepStrictEqual(payload, envelope);
-  assert.strictEqual(payload.v, 2);
-  assert.strictEqual(payload.seq, 7);
-  assert.strictEqual(payload.runId, 'chat-run-1', 'runId is the run, not the stream');
-  assert.deepStrictEqual(payload.data, { step: 1, kind: 'text', content: 'hi' });
-});
+check(
+  'deliverEnvelope writes `event: <type>` + `data: <envelope>` to the local client, stamping the stream seq',
+  () => {
+    resetStream('chat-3');
+    const envelope = envelopeFor('chat-3', { seq: 7 });
+    assert.strictEqual(deliverEnvelope('chat-3', envelope), true);
+    assert.strictEqual(target.writes.length, 2);
+    const { event, payload } = parseFrame(target.writes);
+    assert.strictEqual(event, 'step/delta');
+    assert.deepStrictEqual(payload, { ...envelope, seq: 1 });
+    assert.strictEqual(payload.v, 2);
+    assert.strictEqual(payload.seq, 1, 'the delivering worker owns the sequence');
+    assert.strictEqual(envelope.seq, 7, 'the caller envelope is not mutated');
+    assert.strictEqual(payload.runId, 'chat-run-1', 'runId is the run, not the stream');
+    assert.deepStrictEqual(payload.data, { step: 1, kind: 'text', content: 'hi' });
+  }
+);
 check('deliverEnvelope refreshes lastActivity on the entry it wrote to', () => {
   assert.ok(target.entry.lastActivity.getTime() > 0);
   assert.strictEqual(clients.get('chat-3'), target.entry);
@@ -162,7 +167,7 @@ check('routeEnvelope delivers locally when this worker holds the stream', () => 
   const before = target.writes.length;
   assert.strictEqual(routeEnvelope('chat-3', envelopeFor('chat-3', { seq: 8 })), true);
   assert.strictEqual(target.writes.length, before + 2);
-  assert.strictEqual(parseFrame(target.writes, before).payload.seq, 8);
+  assert.strictEqual(parseFrame(target.writes, before).payload.seq, 2, 'stream counter continues');
 });
 check(
   'routeEnvelope reports false for an unknown stream outside a cluster (nobody to relay to)',
@@ -183,9 +188,9 @@ check(
     const a = parseFrame(target.writes, before);
     const b = parseFrame(target.writes, before + 2);
     assert.strictEqual(a.event, 'run/started');
-    assert.deepStrictEqual(a.payload, first);
+    assert.deepStrictEqual(a.payload, { ...first, seq: 1 });
     assert.strictEqual(b.event, 'step/delta');
-    assert.deepStrictEqual(b.payload, second);
+    assert.deepStrictEqual(b.payload, { ...second, seq: 2 });
     assert.strictEqual(a.payload.runId, 'chat-run-9');
     assert.strictEqual(a.payload.seq, 1, 'fresh stream counter starts at 1');
     assert.strictEqual(b.payload.seq, 2, 'seq climbs per stream');

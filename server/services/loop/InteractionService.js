@@ -35,6 +35,14 @@ import defaultRunLog from './RunLog.js';
 /** Cluster bus channel carrying every interaction mutation to the other workers. */
 export const INTERACTION_BUS_CHANNEL = 'interaction:mutation';
 
+/**
+ * How long an answer claim blocks other answers. A claim is taken before the
+ * answer handlers run (they resume the paused run) and cleared when the answer
+ * is persisted or the handler failed; the TTL only matters if the claiming
+ * worker died in between.
+ */
+export const ANSWER_CLAIM_TTL_MS = 30 * 1000;
+
 export class InteractionError extends Error {
   constructor(message, code, status = 400) {
     super(message);
@@ -78,6 +86,8 @@ export class InteractionService extends EventEmitter {
      * interaction stays pending. @type {Set<Function>}
      */
     this._answerHandlers = new Set();
+    /** @type {Set<string>} interactions this worker is answering right now */
+    this._answering = new Set();
     this._loaded = false;
     this._unhookDelete = this.runLog.onDelete(runId => this._deleteForRun(runId));
     // Every worker keeps the same in-memory view: mutations made here are
@@ -250,7 +260,9 @@ export class InteractionService extends EventEmitter {
     });
     await this._save(interaction);
     try {
-      this.runLog.append(params.runId, RUN_LOG_EVENTS.INTERACTION_RAISED, { interaction });
+      await this.runLog.appendRecovered(params.runId, RUN_LOG_EVENTS.INTERACTION_RAISED, {
+        interaction
+      });
     } catch (err) {
       logger.warn('InteractionService: ledger append failed', {
         component: 'InteractionService',
@@ -397,6 +409,22 @@ export class InteractionService extends EventEmitter {
     }
     this.assertCanAnswer(interaction, user);
     this.validateAnswer(interaction, answer);
+    // One answer at a time: claim the interaction (synchronously, before any
+    // await) so a concurrent answer — on this worker or, via replication, on
+    // another — is rejected instead of resuming the same run twice.
+    const liveClaim =
+      interaction.claim &&
+      interaction.claim.pid !== this._pid &&
+      this._now() - new Date(interaction.claim.at).getTime() < ANSWER_CLAIM_TTL_MS;
+    if (liveClaim || this._answering.has(id)) {
+      throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
+    }
+    this._answering.add(id);
+    const claimed = {
+      ...interaction,
+      claim: { pid: this._pid, at: new Date(this._now()).toISOString() }
+    };
+    this._byId.set(id, claimed);
     const full = interactionAnswerSchema.parse({
       value: answer.value ?? answer.decision ?? (answer.skipped ? null : undefined),
       data: answer.data,
@@ -407,20 +435,30 @@ export class InteractionService extends EventEmitter {
       at: new Date(this._now()).toISOString(),
       channel
     });
+    const { claim: _claim, ...unclaimed } = interaction;
     const answered = {
-      ...interaction,
+      ...unclaimed,
       status: 'answered',
       answer: full,
       updatedAt: full.at
     };
-    // Let the owner of the paused run take the answer first; a throwing handler
-    // leaves the interaction pending so the human can try again.
-    for (const handler of this._answerHandlers) {
-      await handler(answered, { user, channel });
-    }
-    await this._save(answered);
     try {
-      this.runLog.append(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
+      await this._save(claimed);
+      // Let the owner of the paused run take the answer first; a throwing
+      // handler releases the claim and leaves the interaction pending so the
+      // human can try again.
+      for (const handler of this._answerHandlers) {
+        await handler(answered, { user, channel });
+      }
+      await this._save(answered);
+    } catch (err) {
+      if (this._byId.get(id)?.status === 'pending') await this._save({ ...unclaimed });
+      throw err;
+    } finally {
+      this._answering.delete(id);
+    }
+    try {
+      await this.runLog.appendRecovered(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
         interactionId: id,
         kind: interaction.kind,
         answer: full

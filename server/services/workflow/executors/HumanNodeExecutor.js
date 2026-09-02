@@ -132,7 +132,9 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       executionId: context.executionId,
       step: state?.data?._currentStep || 0
     });
-    const principalId = runLog.getRunMeta(context.executionId)?.principalId || null;
+    const runMeta = runLog.getRunMeta(context.executionId);
+    const principalId = runMeta?.principalId || null;
+    const identityMode = runMeta?.identityMode || null;
     try {
       await interactionService.raise({
         id: checkpoint.id,
@@ -149,7 +151,8 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
         source: {
           ...template.source,
           ...(profileId ? { profileId } : {}),
-          ...(principalId ? { principalId: String(principalId) } : {})
+          ...(principalId ? { principalId: String(principalId) } : {}),
+          ...(identityMode ? { identityMode } : {})
         }
       });
     } catch (raiseErr) {

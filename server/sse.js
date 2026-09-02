@@ -14,7 +14,7 @@
  */
 
 import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
-import { setEnvelopeDelivery, resetStream } from './services/loop/RunStream.js';
+import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
 
 /** streamId → { response, lastActivity, appId? } for locally held SSE streams. */
@@ -50,7 +50,10 @@ export function deliverEnvelope(streamId, envelope) {
   const clientEntry = clients.get(streamId);
   clientEntry.lastActivity = new Date(); // Keep connection marked as active
   try {
-    sendSSE(clientEntry.response, envelope.type, envelope);
+    // This worker owns the stream, so it owns the stream's sequence: frames
+    // produced here and frames relayed from other workers get one counter.
+    const stamped = stampSeq(streamId, envelope);
+    sendSSE(clientEntry.response, stamped.type, stamped);
     return true;
   } catch (error) {
     // The socket is most likely dead (peer closed, write-after-end, etc.).

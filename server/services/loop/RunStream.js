@@ -3,9 +3,14 @@
  *
  * One stream per subscription id (a chat, a workflow execution, an agent run).
  * `RunStreamEmitter.emit(type, data)` builds a validated envelope
- * `{ v: 2, seq, runId, ts, type, data }` (contracts/sseV2.js) with a
- * per-stream monotonic `seq` and hands it to the delivery layer
- * (`deliverEnvelope`, wired by server/sse.js: local client or cluster relay).
+ * `{ v: 2, seq, runId, ts, type, data }` (contracts/sseV2.js) and hands it to
+ * the delivery layer (wired by server/sse.js: local client or cluster relay).
+ * The per-stream monotonic `seq` is assigned by the worker that delivers the
+ * stream (`deliverEnvelope` stamps `nextSeq(streamId)`), not by the producer:
+ * frames of one stream are produced on several workers (the SSE owner emits
+ * `stream/connected`, the worker running the turn relays its frames), and only
+ * one counter per stream keeps the client's ordering and gap detection exact.
+ * Envelopes leave `emit()` with `seq: 0` until they are delivered.
  *
  * Also here: the translation of internal workflow / agent bus events onto v2
  * (`translateInternalEvent`), the projection of ledger events onto v2 for
@@ -78,17 +83,28 @@ export function resetStream(streamId) {
 /**
  * Build one v2 envelope. Validates `data` against the contract for `type`
  * (throws a ZodError on mismatch — a producer bug, never a runtime condition).
+ * `seq` is 0 unless given explicitly (ledger projections carry the ledger seq);
+ * the delivering worker stamps the stream sequence (`stampSeq`).
  */
 export function buildEnvelope({ streamId, runId, type, data, seq }) {
   const parsed = parseSseV2EventData(type, data ?? {});
   return {
     v: 2,
-    seq: Number.isInteger(seq) ? seq : nextSeq(streamId),
+    seq: Number.isInteger(seq) ? seq : 0,
     runId: runId || streamId,
     ts: new Date().toISOString(),
     type,
     data: parsed
   };
+}
+
+/**
+ * Assign the next stream sequence number to an envelope about to be written to
+ * the client. Called by the delivering worker only (server/sse.js).
+ * @returns {Object} a stamped copy
+ */
+export function stampSeq(streamId, envelope) {
+  return { ...envelope, seq: nextSeq(streamId) };
 }
 
 /**

@@ -277,6 +277,26 @@ export class RunLog {
   }
 
   /**
+   * Append to a run that may have been started on another worker (or before a
+   * restart): re-registers it first so the sequence continues from the
+   * persisted ledger instead of restarting at 1. Use this for appends made on
+   * behalf of a request (answers, human events); `append` is for the worker
+   * that owns the run.
+   *
+   * @param {string} runId
+   * @param {string} type
+   * @param {Object} data
+   * @param {Object} [opts]
+   * @param {string} [opts.kind='chat'] - run kind when the run has to be re-registered
+   * @returns {Promise<{seq:number, ts:string, runId:string, type:string, data:Object}|null>}
+   */
+  async appendRecovered(runId, type, data, { kind = 'chat' } = {}) {
+    assertRunId(runId);
+    if (!this._runs.has(runId)) await this.resumeRun(runId, { kind });
+    return this.append(runId, type, data);
+  }
+
+  /**
    * Append an event. Validates `data` against the contract, assigns seq/ts,
    * notifies subscribers synchronously, and persists when enabled.
    *

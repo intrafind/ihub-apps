@@ -30,7 +30,8 @@ import {
   emitToolProgress,
   checkpointToInteraction,
   translateInternalEvent,
-  projectLedgerEvent
+  projectLedgerEvent,
+  stampSeq
 } from '../../services/loop/RunStream.js';
 import { sseV2EventSchema, parseSseV2EventData } from '../../services/loop/contracts/sseV2.js';
 import { interactionSchema } from '../../services/loop/contracts/interaction.js';
@@ -136,7 +137,10 @@ test('nextSeq / currentSeq / resetStream: a per-stream counter starting at 1', t
 test('seq is monotonic per stream across two emitters (two runs) on the same stream', t => {
   const s = freshStream(t, 'two-emitters');
   const delivered = [];
-  const deliver = (streamId, envelope) => delivered.push({ streamId, envelope });
+  // The delivering worker owns the sequence (server/sse.js stamps it); emit()
+  // hands over envelopes with seq 0.
+  const deliver = (streamId, envelope) =>
+    delivered.push({ streamId, envelope: stampSeq(streamId, envelope) });
   const a = new RunStreamEmitter({ streamId: s, runId: 'chat-run-a', deliver });
   const b = new RunStreamEmitter({ streamId: s, runId: 'chat-run-b', deliver });
 
@@ -149,7 +153,13 @@ test('seq is monotonic per stream across two emitters (two runs) on the same str
 
   assert.deepEqual(
     [e1, e2, e3, e4, e5, e6].map(e => e.seq),
-    [1, 2, 3, 4, 5, 6]
+    [0, 0, 0, 0, 0, 0],
+    'emit() leaves the sequence to the delivering worker'
+  );
+  assert.deepEqual(
+    delivered.map(d => d.envelope.seq),
+    [1, 2, 3, 4, 5, 6],
+    'one counter per stream across both emitters'
   );
   assert.deepEqual(
     [e1, e2, e3, e4, e5, e6].map(e => e.runId),
@@ -161,15 +171,16 @@ test('seq is monotonic per stream across two emitters (two runs) on the same str
     Array(6).fill(s)
   );
   assert.deepEqual(
-    delivered.map(d => d.envelope),
+    delivered.map(d => ({ ...d.envelope, seq: 0 })),
     [e1, e2, e3, e4, e5, e6],
-    'delivery receives the same envelope emit returns'
+    'delivery receives the envelope emit returns (plus the stamped seq)'
   );
   for (const envelope of delivered.map(d => d.envelope)) assertValidEnvelope(envelope);
 
   const elsewhere = freshStream(t, 'elsewhere');
   const c = new RunStreamEmitter({ streamId: elsewhere, deliver });
-  assert.equal(c.emit(RUN_STARTED, { kind: 'agent' }).seq, 1, 'another stream starts at 1');
+  c.emit(RUN_STARTED, { kind: 'agent' });
+  assert.equal(delivered.at(-1).envelope.seq, 1, 'another stream starts at 1');
 });
 
 // ── buildEnvelope ───────────────────────────────────────────────────────────
@@ -186,7 +197,7 @@ test('buildEnvelope: shape { v:2, seq, runId, ts, type, data } with contract def
   assertValidEnvelope(envelope);
   assert.deepEqual(Object.keys(envelope).sort(), ['data', 'runId', 'seq', 'ts', 'type', 'v']);
   assert.equal(envelope.v, 2);
-  assert.equal(envelope.seq, 1);
+  assert.equal(envelope.seq, 0, 'the sequence is assigned at delivery');
   assert.equal(envelope.runId, 'chat-run-1');
   assert.equal(envelope.type, RUN_STARTED);
   assert.deepEqual(envelope.data, { kind: 'chat', refs: {} }, 'schema defaults (refs) applied');
@@ -194,7 +205,10 @@ test('buildEnvelope: shape { v:2, seq, runId, ts, type, data } with contract def
   assert.ok(Date.parse(envelope.ts) >= before - 1000);
 
   const next = buildEnvelope({ streamId: s, type: STREAM_CONNECTED, data: undefined });
-  assert.equal(next.seq, 2, 'seq comes from the stream counter');
+  assert.equal(next.seq, 0, 'building never consumes the stream counter');
+  assert.equal(currentSeq(s), 0);
+  assert.equal(stampSeq(s, next).seq, 1, 'stampSeq (delivery) assigns from the stream counter');
+  assert.equal(next.seq, 0, 'stampSeq returns a copy');
   assert.equal(next.runId, s, 'runId falls back to the stream id');
   assert.deepEqual(next.data, { lastSeq: 0, protocol: 2 }, 'missing data → {} → defaults');
 
@@ -206,7 +220,7 @@ test('buildEnvelope: shape { v:2, seq, runId, ts, type, data } with contract def
     seq: 42
   });
   assert.equal(explicit.seq, 42, 'an explicit seq is honoured');
-  assert.equal(currentSeq(s), 2, '…and does not touch the stream counter');
+  assert.equal(currentSeq(s), 1, '…and does not touch the stream counter');
 });
 
 test('buildEnvelope: an invalid payload or unknown type throws (producer bug, never swallowed here)', t => {
@@ -245,10 +259,11 @@ test('emit: builds, delivers and returns the envelope; runId comes from opts, th
   assert.deepEqual(
     deliver.calls.map(([streamId, envelope]) => [streamId, envelope.seq]),
     [
-      [s, 1],
-      [s, 2],
-      [s, 3]
-    ]
+      [s, 0],
+      [s, 0],
+      [s, 0]
+    ],
+    'seq is stamped by the delivering worker, not here'
   );
   assert.equal(deliver.calls[2][1], e3, 'delivery gets the very object emit returns');
   for (const [, envelope] of deliver.calls) assertValidEnvelope(envelope);
@@ -279,7 +294,7 @@ test('emit: an invalid payload is dropped — returns null, nothing delivered, l
   assert.equal(error.calls.length, 2);
 
   const ok = emitter.emit(STEP_DELTA, { step: 1, kind: 'text', content: 'still works' });
-  assert.equal(ok.seq, 1, 'the emitter keeps working after a drop');
+  assert.ok(ok && ok.type === STEP_DELTA, 'the emitter keeps working after a drop');
 });
 
 test('emit: a throwing delivery is caught and logged as a warning; the envelope is still returned', t => {
