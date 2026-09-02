@@ -215,8 +215,10 @@ export class StateManager {
    * }
    */
   async get(executionId) {
-    // Validate executionId before using it in filesystem paths
-    if (!isValidId(executionId)) {
+    // Validate executionId before using it in filesystem paths. `isValidId`
+    // already rejects traversal; the explicit `..` check keeps the barrier
+    // visible to static analysis at the sink (js/path-injection).
+    if (!isValidId(executionId) || executionId.includes('..')) {
       logger.warn('Invalid executionId for state lookup', {
         component: 'StateManager',
         executionId
@@ -255,7 +257,7 @@ export class StateManager {
    */
   async checkpoint(executionId, reason = 'auto') {
     // Validate executionId before using it in filesystem paths
-    if (!isValidId(executionId)) {
+    if (!isValidId(executionId) || executionId.includes('..')) {
       logger.warn('Invalid executionId for checkpoint', { component: 'StateManager', executionId });
       throw new Error('Invalid executionId for checkpoint');
     }
@@ -313,7 +315,7 @@ export class StateManager {
    * console.log('Restored from checkpoint:', state.status);
    */
   async restore(executionId) {
-    if (!isValidId(executionId)) {
+    if (!isValidId(executionId) || executionId.includes('..')) {
       logger.warn('Invalid executionId for state restore', {
         component: 'StateManager',
         executionId
@@ -561,7 +563,7 @@ export class StateManager {
    * await stateManager.cleanup('exec-123', true);
    */
   async cleanup(executionId, keepCheckpoints = false) {
-    if (!isValidId(executionId)) {
+    if (!isValidId(executionId) || executionId.includes('..')) {
       logger.warn('Invalid executionId for state cleanup', {
         component: 'StateManager',
         executionId
