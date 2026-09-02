@@ -35,6 +35,7 @@ import registerMcpServerRoutes from './routes/mcpServer.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
+import registerRunRoutes from './routes/runs.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -554,6 +555,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerWorkflowRoutes(app, { getLocalizedError });
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
+  registerRunRoutes(app);
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
 

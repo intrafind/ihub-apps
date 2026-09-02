@@ -1,0 +1,4437 @@
+{
+  "runLogEventSchema": {
+    "$ref": "#/definitions/runLogEventSchema",
+    "definitions": {
+      "runLogEventSchema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "run/start"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "chat",
+                      "workflow",
+                      "agent",
+                      "subagent",
+                      "inference",
+                      "utility",
+                      "diagnostic"
+                    ]
+                  },
+                  "parentRunId": {
+                    "type": "string"
+                  },
+                  "principal": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": ["full", "default", "pseudonymized"]
+                      },
+                      "anonymous": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "isAgent": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "groups": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "profileId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "mode"],
+                    "additionalProperties": false
+                  },
+                  "trigger": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["user", "api", "schedule", "webhook", "tool", "system", "test"]
+                      },
+                      "source": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type"],
+                    "additionalProperties": false,
+                    "default": {
+                      "type": "user"
+                    }
+                  },
+                  "refs": {
+                    "type": "object",
+                    "properties": {
+                      "chatId": {
+                        "type": "string"
+                      },
+                      "appId": {
+                        "type": "string"
+                      },
+                      "executionId": {
+                        "type": "string"
+                      },
+                      "workflowId": {
+                        "type": "string"
+                      },
+                      "profileId": {
+                        "type": "string"
+                      },
+                      "nodeId": {
+                        "type": "string"
+                      },
+                      "requestId": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "policies": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": ["kind", "principal"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "run/end"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "paused",
+                      "aborted",
+                      "error",
+                      "budget_exhausted"
+                    ]
+                  },
+                  "finishReason": {
+                    "type": ["string", "null"],
+                    "default": null
+                  },
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "cost": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "durationMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "providerCode": {
+                        "type": ["string", "null"]
+                      }
+                    },
+                    "required": ["code", "message"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "run/paused"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "enum": ["interaction", "manual", "system"]
+                  },
+                  "interactionId": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pausedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": ["reason"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "run/resumed"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interactionId": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pausedMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "segment/start"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "segment": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string"
+                  },
+                  "parentSegment": {
+                    "type": "string"
+                  },
+                  "supersedes": {
+                    "type": "string"
+                  }
+                },
+                "required": ["segment", "purpose"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "request/header"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "segment": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "modelId": {
+                    "type": "string"
+                  },
+                  "requestHash": {
+                    "type": "string"
+                  },
+                  "messagesHash": {
+                    "type": "string"
+                  },
+                  "messageCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["initial", "change", "same"]
+                  },
+                  "messages": {
+                    "type": "array"
+                  },
+                  "renderedSystemPrompt": {
+                    "type": "string"
+                  },
+                  "toolSchemasHash": {
+                    "type": ["string", "null"]
+                  },
+                  "toolSchemas": {
+                    "type": "array"
+                  },
+                  "toolExecution": {
+                    "type": "string",
+                    "enum": ["server", "caller", "none"],
+                    "default": "none"
+                  },
+                  "callConfig": {
+                    "type": "object",
+                    "properties": {
+                      "temperature": {
+                        "type": "number"
+                      },
+                      "maxTokens": {
+                        "type": "integer"
+                      },
+                      "responseFormat": {
+                        "type": ["string", "null"]
+                      },
+                      "responseSchemaHash": {
+                        "type": ["string", "null"]
+                      },
+                      "thinking": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "nativeWebSearch": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "toolChoice": {},
+                      "stream": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  },
+                  "language": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "step",
+                  "requestId",
+                  "model",
+                  "provider",
+                  "requestHash",
+                  "messagesHash",
+                  "messageCount",
+                  "reason",
+                  "toolSchemasHash"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "request/retry"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "attempt": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "delayMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["step", "requestId", "attempt", "code", "delayMs"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "message/user"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "messageId": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "attachments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "bytes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["type"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "synthetic": {
+                    "type": "string",
+                    "enum": ["nudge", "steer", "system"]
+                  }
+                },
+                "required": ["step"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "message/assistant"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "messageId": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "contentSpill": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "sha256": {
+                        "type": "string"
+                      },
+                      "contentType": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["path", "bytes"],
+                    "additionalProperties": false
+                  },
+                  "toolCalls": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": ["string", "null"]
+                        },
+                        "index": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "type": {
+                          "type": "string",
+                          "default": "function"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "arguments": {
+                          "type": "string",
+                          "default": ""
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": ["id", "name"],
+                      "additionalProperties": false
+                    },
+                    "default": []
+                  },
+                  "thinkingChars": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "finishReason": {
+                    "type": ["string", "null"],
+                    "default": null
+                  },
+                  "hasImages": {
+                    "type": "boolean"
+                  },
+                  "groundingMetadata": {}
+                },
+                "required": ["step"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/call"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "args": {},
+                  "argsRepaired": {
+                    "type": "boolean"
+                  },
+                  "execution": {
+                    "type": "string",
+                    "enum": ["server", "caller", "clarification", "passthrough"],
+                    "default": "server"
+                  },
+                  "parallelGroup": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["step", "callId", "toolId", "name"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/result"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "resultPreview": {},
+                  "resultBytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "spillRef": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "sha256": {
+                        "type": "string"
+                      },
+                      "contentType": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["path", "bytes"],
+                    "additionalProperties": false
+                  },
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "rateLimited": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": ["message"],
+                    "additionalProperties": false
+                  },
+                  "durationMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "hasImage": {
+                    "type": "boolean"
+                  },
+                  "knowledgeSource": {
+                    "type": "string"
+                  }
+                },
+                "required": ["step", "callId", "toolId", "name", "durationMs"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/disabled"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["rate_limited", "repeated_failures", "policy"]
+                  },
+                  "failures": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "lastMessage": {
+                    "type": "string"
+                  }
+                },
+                "required": ["step", "toolId", "reason", "failures"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "interaction/raised"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interaction": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "runId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "step": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": ["question", "approval", "review", "notify"]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "enum": ["tool", "node", "policy", "system"]
+                      },
+                      "prompt": {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "inputType": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "single_select",
+                              "multi_select",
+                              "confirm",
+                              "number",
+                              "date",
+                              "date_range",
+                              "file",
+                              "form"
+                            ],
+                            "default": "text"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "style": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["value", "label"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "inputSchema": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "showData": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "displayData": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "allowSkip": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "allowOther": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "placeholder": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "validation": {
+                            "type": "object",
+                            "properties": {
+                              "pattern": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "min": {
+                                "type": "number"
+                              },
+                              "max": {
+                                "type": "number"
+                              },
+                              "message": {
+                                "type": "string",
+                                "maxLength": 200
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "context": {
+                            "type": "string",
+                            "maxLength": 500
+                          }
+                        },
+                        "required": ["message"],
+                        "additionalProperties": false
+                      },
+                      "policy": {
+                        "type": "object",
+                        "properties": {
+                          "approverGroups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expiresAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "timeoutMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "onTimeout": {
+                            "type": "string",
+                            "pattern": "^(fail|deny|branch:.+)$",
+                            "default": "fail"
+                          },
+                          "fallback": {
+                            "type": "string",
+                            "pattern": "^(park|deny|default:.+)$",
+                            "default": "park"
+                          },
+                          "notify": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["email", "teams", "webhook"]
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "default": {}
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["pending", "answered", "expired", "cancelled"],
+                        "default": "pending"
+                      },
+                      "source": {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string"
+                          },
+                          "toolId": {
+                            "type": "string"
+                          },
+                          "nodeId": {
+                            "type": "string"
+                          },
+                          "nodeName": {
+                            "type": "string"
+                          },
+                          "executionId": {
+                            "type": "string"
+                          },
+                          "chatId": {
+                            "type": "string"
+                          },
+                          "appId": {
+                            "type": "string"
+                          },
+                          "profileId": {
+                            "type": "string"
+                          },
+                          "checkpointId": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "default": {}
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "answer": {
+                        "type": "object",
+                        "properties": {
+                          "value": {},
+                          "data": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": ["approve", "edit", "reject", "respond"]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "skipped": {
+                            "type": "boolean"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                            "default": "api"
+                          }
+                        },
+                        "required": ["by", "at"],
+                        "additionalProperties": false
+                      },
+                      "ordinal": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["interaction"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "interaction/answered"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interactionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "answer": {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "data": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "decision": {
+                        "type": "string",
+                        "enum": ["approve", "edit", "reject", "respond"]
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "skipped": {
+                        "type": "boolean"
+                      },
+                      "by": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                        "default": "api"
+                      }
+                    },
+                    "required": ["by", "at"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["interactionId", "kind", "answer"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "budget/checkpoint"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "runUsage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "limits": {
+                    "type": "object",
+                    "properties": {
+                      "maxTokensPerRun": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxToolRounds": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxQuestions": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  }
+                },
+                "required": ["step", "usage", "runUsage"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "budget/exhausted"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": ["tokens", "rounds", "tools_dead", "questions"]
+                  },
+                  "runUsage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "limits": {
+                    "type": "object",
+                    "properties": {
+                      "maxTokensPerRun": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxToolRounds": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxQuestions": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  }
+                },
+                "required": ["step", "reason"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "context/compaction"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": ["proactive", "overflow"]
+                  },
+                  "collapsed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "freedChars": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "shadowedRange": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "summaryRef": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "sha256": {
+                        "type": "string"
+                      },
+                      "contentType": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["path", "bytes"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["step", "trigger", "collapsed", "freedChars"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "const": "error"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "providerCode": {
+                    "type": ["string", "null"]
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "recoverable": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": ["code", "message"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "interactionSchema": {
+    "$ref": "#/definitions/interactionSchema",
+    "definitions": {
+      "interactionSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "step": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["question", "approval", "review", "notify"]
+          },
+          "origin": {
+            "type": "string",
+            "enum": ["tool", "node", "policy", "system"]
+          },
+          "prompt": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "inputType": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "single_select",
+                  "multi_select",
+                  "confirm",
+                  "number",
+                  "date",
+                  "date_range",
+                  "file",
+                  "form"
+                ],
+                "default": "text"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["value", "label"],
+                  "additionalProperties": false
+                }
+              },
+              "inputSchema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "showData": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "displayData": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "allowSkip": {
+                "type": "boolean",
+                "default": false
+              },
+              "allowOther": {
+                "type": "boolean",
+                "default": false
+              },
+              "placeholder": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "validation": {
+                "type": "object",
+                "properties": {
+                  "pattern": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "min": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "additionalProperties": false
+              },
+              "context": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "required": ["message"],
+            "additionalProperties": false
+          },
+          "policy": {
+            "type": "object",
+            "properties": {
+              "approverGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expiresAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "timeoutMs": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "onTimeout": {
+                "type": "string",
+                "pattern": "^(fail|deny|branch:.+)$",
+                "default": "fail"
+              },
+              "fallback": {
+                "type": "string",
+                "pattern": "^(park|deny|default:.+)$",
+                "default": "park"
+              },
+              "notify": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["email", "teams", "webhook"]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "answered", "expired", "cancelled"],
+            "default": "pending"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "toolCallId": {
+                "type": "string"
+              },
+              "toolId": {
+                "type": "string"
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "nodeName": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              },
+              "chatId": {
+                "type": "string"
+              },
+              "appId": {
+                "type": "string"
+              },
+              "profileId": {
+                "type": "string"
+              },
+              "checkpointId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answer": {
+            "type": "object",
+            "properties": {
+              "value": {},
+              "data": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "decision": {
+                "type": "string",
+                "enum": ["approve", "edit", "reject", "respond"]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "skipped": {
+                "type": "boolean"
+              },
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "channel": {
+                "type": "string",
+                "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                "default": "api"
+              }
+            },
+            "required": ["by", "at"],
+            "additionalProperties": false
+          },
+          "ordinal": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "interactionAnswerRequestSchema": {
+    "$ref": "#/definitions/interactionAnswerRequestSchema",
+    "definitions": {
+      "interactionAnswerRequestSchema": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["approve", "edit", "reject", "respond"]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "humanEventSchema": {
+    "$ref": "#/definitions/humanEventSchema",
+    "definitions": {
+      "humanEventSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["answer", "steer", "stop", "feedback"]
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "rating": {
+            "type": ["number", "string"]
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["kind", "runId", "by", "at"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "loopRequestSchema": {
+    "$ref": "#/definitions/loopRequestSchema",
+    "definitions": {
+      "loopRequestSchema": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["chat", "workflow", "agent", "subagent", "inference", "utility", "diagnostic"],
+            "default": "chat"
+          },
+          "parentRunId": {
+            "type": "string"
+          },
+          "principal": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["full", "default", "pseudonymized"]
+              },
+              "anonymous": {
+                "type": "boolean",
+                "default": false
+              },
+              "isAgent": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "profileId": {
+                "type": "string"
+              }
+            },
+            "required": ["id"],
+            "additionalProperties": false
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "minItems": 1
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "passthrough": {
+                  "type": "boolean"
+                },
+                "readOnly": {
+                  "type": "boolean"
+                },
+                "interactive": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id"],
+              "additionalProperties": true
+            },
+            "default": []
+          },
+          "toolExecution": {
+            "type": "string",
+            "enum": ["server", "caller"],
+            "default": "server"
+          },
+          "policies": {
+            "type": "object",
+            "properties": {
+              "budgets": {
+                "type": "object",
+                "properties": {
+                  "maxTokensPerRun": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "maxToolRounds": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 10
+                  },
+                  "maxWallClockMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "tools": {
+                "type": "object",
+                "properties": {
+                  "maxRateLimitFailures": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 2
+                  },
+                  "maxConsecutiveFailures": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 3
+                  },
+                  "parallel": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "maxParallel": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 4
+                  },
+                  "applyDefaults": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "compactThresholdTokens": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 16000
+                  },
+                  "compactKeepRecent": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 6
+                  },
+                  "maxReactiveAttempts": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 2
+                  },
+                  "reactiveKeepRecent": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 4
+                  },
+                  "spillThresholdBytes": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "default": 65536
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "interactions": {
+                "type": "object",
+                "properties": {
+                  "maxQuestions": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 10
+                  },
+                  "pauseOnQuestion": {
+                    "type": "boolean",
+                    "default": true
+                  },
+                  "questionTimeoutMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "headlessFallback": {
+                    "type": "string",
+                    "enum": ["park", "deny", "fail"],
+                    "default": "park"
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "approval": {
+                "type": "object",
+                "properties": {
+                  "requireApprovalFor": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": []
+                  },
+                  "approverGroups": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "timeoutMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "onTimeout": {
+                    "type": "string",
+                    "enum": ["deny", "fail"],
+                    "default": "deny"
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "maxTokens": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "responseFormat": {
+                "type": ["string", "null"]
+              },
+              "responseSchema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolChoice": {},
+              "thinkingEnabled": {
+                "type": "boolean"
+              },
+              "thinkingBudget": {
+                "type": "number"
+              },
+              "thinkingThoughts": {
+                "type": "boolean"
+              },
+              "thinkingLevel": {
+                "type": "string"
+              },
+              "nativeWebSearch": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "imageConfig": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "stream": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true,
+            "default": {}
+          },
+          "language": {
+            "type": "string",
+            "default": "en"
+          },
+          "refs": {
+            "type": "object",
+            "additionalProperties": {},
+            "default": {}
+          },
+          "resume": {
+            "type": "object",
+            "properties": {
+              "interactionId": {
+                "type": "string"
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "completedCallIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "required": ["interactionId", "step"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["model", "messages"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "loopResultSchema": {
+    "$ref": "#/definitions/loopResultSchema",
+    "definitions": {
+      "loopResultSchema": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed", "paused", "aborted", "error", "budget_exhausted"]
+          },
+          "content": {
+            "type": "string",
+            "default": ""
+          },
+          "structured": {},
+          "finishReason": {
+            "type": ["string", "null"],
+            "default": null
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "promptTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "completionTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "totalTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "cacheReadTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cacheWriteTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reasoningTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "type": "string",
+                "enum": ["provider", "estimate", "mixed"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "runUsage": {
+            "type": "object",
+            "properties": {
+              "promptTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "completionTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "totalTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "cacheReadTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cacheWriteTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reasoningTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "type": "string",
+                "enum": ["provider", "estimate", "mixed"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "toolId": {
+                  "type": "string"
+                },
+                "taskId": {
+                  "type": ["string", "null"]
+                }
+              },
+              "additionalProperties": true
+            },
+            "default": []
+          },
+          "toolCalls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": ["string", "null"]
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "type": {
+                  "type": "string",
+                  "default": "function"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "arguments": {
+                  "type": "string",
+                  "default": ""
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          },
+          "thoughtSignatures": {
+            "type": "array"
+          },
+          "pendingInteraction": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["question", "approval", "review", "notify"]
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["tool", "node", "policy", "system"]
+              },
+              "prompt": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "inputType": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "single_select",
+                      "multi_select",
+                      "confirm",
+                      "number",
+                      "date",
+                      "date_range",
+                      "file",
+                      "form"
+                    ],
+                    "default": "text"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "style": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["value", "label"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "inputSchema": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "showData": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "displayData": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "allowSkip": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "allowOther": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "placeholder": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "validation": {
+                    "type": "object",
+                    "properties": {
+                      "pattern": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "message": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "context": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": ["message"],
+                "additionalProperties": false
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "approverGroups": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expiresAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "timeoutMs": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "onTimeout": {
+                    "type": "string",
+                    "pattern": "^(fail|deny|branch:.+)$",
+                    "default": "fail"
+                  },
+                  "fallback": {
+                    "type": "string",
+                    "pattern": "^(park|deny|default:.+)$",
+                    "default": "park"
+                  },
+                  "notify": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["email", "teams", "webhook"]
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "answered", "expired", "cancelled"],
+                "default": "pending"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "toolCallId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "nodeName": {
+                    "type": "string"
+                  },
+                  "executionId": {
+                    "type": "string"
+                  },
+                  "chatId": {
+                    "type": "string"
+                  },
+                  "appId": {
+                    "type": "string"
+                  },
+                  "profileId": {
+                    "type": "string"
+                  },
+                  "checkpointId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "default": {}
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "answer": {
+                "type": "object",
+                "properties": {
+                  "value": {},
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": ["approve", "edit", "reject", "respond"]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "skipped": {
+                    "type": "boolean"
+                  },
+                  "by": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                    "default": "api"
+                  }
+                },
+                "required": ["by", "at"],
+                "additionalProperties": false
+              },
+              "ordinal": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
+            "additionalProperties": false
+          },
+          "disabledTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "budgetExhausted": {
+            "type": "boolean",
+            "default": false
+          },
+          "messages": {
+            "type": "array",
+            "default": []
+          },
+          "knowledgeSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "providerCode": {
+                "type": ["string", "null"]
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["runId", "status", "usage", "iterations"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "llmRequestSchema": {
+    "$ref": "#/definitions/llmRequestSchema",
+    "definitions": {
+      "llmRequestSchema": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "minItems": 1
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "passthrough": {
+                  "type": "boolean"
+                },
+                "readOnly": {
+                  "type": "boolean"
+                },
+                "interactive": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id"],
+              "additionalProperties": true
+            }
+          },
+          "apiKey": {
+            "type": ["string", "null"]
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "maxTokens": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "responseFormat": {
+                "type": ["string", "null"]
+              },
+              "responseSchema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolChoice": {},
+              "thinkingEnabled": {
+                "type": "boolean"
+              },
+              "thinkingBudget": {
+                "type": "number"
+              },
+              "thinkingThoughts": {
+                "type": "boolean"
+              },
+              "thinkingLevel": {
+                "type": "string"
+              },
+              "nativeWebSearch": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "imageConfig": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "stream": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true,
+            "default": {}
+          },
+          "telemetry": {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "chat",
+                  "workflow",
+                  "agent",
+                  "subagent",
+                  "inference",
+                  "utility",
+                  "diagnostic"
+                ]
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "segment": {
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              },
+              "chatId": {
+                "type": "string"
+              },
+              "appId": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "principal": {}
+            },
+            "additionalProperties": false,
+            "default": {}
+          },
+          "language": {
+            "type": "string",
+            "default": "en"
+          },
+          "maxRetries": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["model", "messages"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "sseV2EventSchema": {
+    "$ref": "#/definitions/sseV2EventSchema",
+    "definitions": {
+      "sseV2EventSchema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "stream/connected"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string"
+                  },
+                  "lastSeq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "protocol": {
+                    "type": "number",
+                    "const": 2,
+                    "default": 2
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "stream/error"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "details": {},
+                  "retryable": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "isContextWindowError": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["code", "message"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "run/started"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "chat",
+                      "workflow",
+                      "agent",
+                      "subagent",
+                      "inference",
+                      "utility",
+                      "diagnostic"
+                    ]
+                  },
+                  "parentRunId": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "refs": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "default": {}
+                  }
+                },
+                "required": ["kind"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "run/ended"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "paused",
+                      "aborted",
+                      "error",
+                      "budget_exhausted"
+                    ]
+                  },
+                  "finishReason": {
+                    "type": ["string", "null"],
+                    "default": null
+                  },
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "toolName": {
+                    "type": "string"
+                  },
+                  "knowledgeSources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "run/paused"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "enum": ["interaction", "manual", "system"]
+                  },
+                  "interactionId": {
+                    "type": "string"
+                  }
+                },
+                "required": ["reason"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "run/resumed"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interactionId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "step/delta"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["text", "thinking", "image"]
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "object",
+                    "properties": {
+                      "mimeType": {
+                        "type": "string"
+                      },
+                      "data": {
+                        "type": "string"
+                      },
+                      "thoughtSignature": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["mimeType", "data"],
+                    "additionalProperties": false
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": ["step", "kind"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "step/completed"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "messageId": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "toolCalls": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": ["string", "null"]
+                        },
+                        "index": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "type": {
+                          "type": "string",
+                          "default": "function"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "arguments": {
+                          "type": "string",
+                          "default": ""
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": ["id", "name"],
+                      "additionalProperties": false
+                    },
+                    "default": []
+                  },
+                  "finishReason": {
+                    "type": ["string", "null"],
+                    "default": null
+                  },
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "promptTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "completionTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "totalTokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "cacheReadTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cacheWriteTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["provider", "estimate", "mixed"]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "citations": {},
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "groundingMetadata": {}
+                },
+                "required": ["step"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/started"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "args": {},
+                  "execution": {
+                    "type": "string",
+                    "enum": ["server", "caller", "clarification", "passthrough"],
+                    "default": "server"
+                  }
+                },
+                "required": ["step", "callId", "toolId", "name"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/progress"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "phase": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "data": {}
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "tool/completed"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "resultPreview": {},
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["message"],
+                    "additionalProperties": false
+                  },
+                  "durationMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "knowledgeSource": {
+                    "type": "string"
+                  }
+                },
+                "required": ["step", "callId", "toolId", "name"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "interaction/raised"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interaction": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "runId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "step": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": ["question", "approval", "review", "notify"]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "enum": ["tool", "node", "policy", "system"]
+                      },
+                      "prompt": {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "inputType": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "single_select",
+                              "multi_select",
+                              "confirm",
+                              "number",
+                              "date",
+                              "date_range",
+                              "file",
+                              "form"
+                            ],
+                            "default": "text"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "style": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["value", "label"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "inputSchema": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "showData": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "displayData": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "allowSkip": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "allowOther": {
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "placeholder": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "validation": {
+                            "type": "object",
+                            "properties": {
+                              "pattern": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "min": {
+                                "type": "number"
+                              },
+                              "max": {
+                                "type": "number"
+                              },
+                              "message": {
+                                "type": "string",
+                                "maxLength": 200
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          "context": {
+                            "type": "string",
+                            "maxLength": 500
+                          }
+                        },
+                        "required": ["message"],
+                        "additionalProperties": false
+                      },
+                      "policy": {
+                        "type": "object",
+                        "properties": {
+                          "approverGroups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expiresAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "timeoutMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "onTimeout": {
+                            "type": "string",
+                            "pattern": "^(fail|deny|branch:.+)$",
+                            "default": "fail"
+                          },
+                          "fallback": {
+                            "type": "string",
+                            "pattern": "^(park|deny|default:.+)$",
+                            "default": "park"
+                          },
+                          "notify": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["email", "teams", "webhook"]
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "default": {}
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["pending", "answered", "expired", "cancelled"],
+                        "default": "pending"
+                      },
+                      "source": {
+                        "type": "object",
+                        "properties": {
+                          "toolCallId": {
+                            "type": "string"
+                          },
+                          "toolId": {
+                            "type": "string"
+                          },
+                          "nodeId": {
+                            "type": "string"
+                          },
+                          "nodeName": {
+                            "type": "string"
+                          },
+                          "executionId": {
+                            "type": "string"
+                          },
+                          "chatId": {
+                            "type": "string"
+                          },
+                          "appId": {
+                            "type": "string"
+                          },
+                          "profileId": {
+                            "type": "string"
+                          },
+                          "checkpointId": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "default": {}
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "answer": {
+                        "type": "object",
+                        "properties": {
+                          "value": {},
+                          "data": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": ["approve", "edit", "reject", "respond"]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "skipped": {
+                            "type": "boolean"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "channel": {
+                            "type": "string",
+                            "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                            "default": "api"
+                          }
+                        },
+                        "required": ["by", "at"],
+                        "additionalProperties": false
+                      },
+                      "ordinal": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": ["id", "runId", "kind", "origin", "prompt", "createdAt"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["interaction"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "interaction/answered"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "interactionId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "answer": {
+                    "type": "object",
+                    "properties": {
+                      "value": {},
+                      "data": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "decision": {
+                        "type": "string",
+                        "enum": ["approve", "edit", "reject", "respond"]
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "skipped": {
+                        "type": "boolean"
+                      },
+                      "by": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": ["chat", "run_page", "queue", "api", "system", "headless"],
+                        "default": "api"
+                      }
+                    },
+                    "required": ["by", "at"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["interactionId", "kind", "answer"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "progress/node"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "executionId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "nodeName": {
+                    "type": "string"
+                  },
+                  "nodeType": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "running",
+                      "completed",
+                      "failed",
+                      "skipped",
+                      "paused",
+                      "cancelled"
+                    ]
+                  },
+                  "iteration": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "progress": {},
+                  "output": {},
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": ["nodeId", "status"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 2
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "const": "meta"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "messageId": {
+                    "type": "string"
+                  },
+                  "responseMessageId": {
+                    "type": "string"
+                  },
+                  "chatId": {
+                    "type": "string"
+                  },
+                  "executionId": {
+                    "type": "string"
+                  },
+                  "extra": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["v", "seq", "runId", "ts", "type", "data"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "usageSchema": {
+    "$ref": "#/definitions/usageSchema",
+    "definitions": {
+      "usageSchema": {
+        "type": "object",
+        "properties": {
+          "promptTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "completionTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "totalTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "cacheReadTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cacheWriteTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string",
+            "enum": ["provider", "estimate", "mixed"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "principalSchema": {
+    "$ref": "#/definitions/principalSchema",
+    "definitions": {
+      "principalSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["full", "default", "pseudonymized"]
+          },
+          "anonymous": {
+            "type": "boolean",
+            "default": false
+          },
+          "isAgent": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "profileId": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "mode"],
+        "additionalProperties": false
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "LLM_ERROR_CODES": [
+    "CONTEXT_WINDOW_EXCEEDED",
+    "RATE_LIMITED",
+    "CONTENT_POLICY",
+    "EMPTY_RESPONSE",
+    "TIMEOUT",
+    "NETWORK",
+    "PROVIDER_ERROR",
+    "AUTH_FAILED",
+    "MODEL_NOT_FOUND",
+    "INVALID_REQUEST",
+    "ABORTED"
+  ],
+  "RUN_LOG_EVENTS": [
+    "run/start",
+    "run/end",
+    "run/paused",
+    "run/resumed",
+    "segment/start",
+    "request/header",
+    "request/retry",
+    "message/user",
+    "message/assistant",
+    "tool/call",
+    "tool/result",
+    "tool/disabled",
+    "interaction/raised",
+    "interaction/answered",
+    "budget/checkpoint",
+    "budget/exhausted",
+    "context/compaction",
+    "error"
+  ],
+  "SSE_V2_EVENTS": [
+    "stream/connected",
+    "stream/error",
+    "run/started",
+    "run/ended",
+    "run/paused",
+    "run/resumed",
+    "step/delta",
+    "step/completed",
+    "tool/started",
+    "tool/progress",
+    "tool/completed",
+    "interaction/raised",
+    "interaction/answered",
+    "progress/node",
+    "meta"
+  ],
+  "INTERACTION_KINDS": ["question", "approval", "review", "notify"]
+}
