@@ -479,6 +479,27 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 
 > This returns the complete response in one JSON payload instead of streaming chunks.
 
+Response:
+
+```json
+{
+  "messageId": null,
+  "model": "gpt-4o",
+  "content": "2 + 2 = 4.",
+  "finishReason": "stop",
+  "usage": {
+    "promptTokens": 42,
+    "completionTokens": 8,
+    "totalTokens": 50
+  }
+}
+```
+
+`messageId` echoes the `messageId` of the last request message (`null` when the
+client did not send one). Tools configured on the app still run in this mode,
+but there is no user to answer `ask_user` clarifications — they are refused — so
+use the SSE flow for interactive apps.
+
 ---
 
 ## 4. Complete End-to-End Script

@@ -6,7 +6,7 @@ export class ActionTracker extends EventEmitter {
   constructor() {
     super();
     this.stepCounts = new Map();
-    // Every listener attached below (InMemorySink, agents/runs.js, workflowRoutes.js,
+    // Every listener attached below (agents/runs.js, workflowRoutes.js,
     // workflowRunner.js) is request/connection-scoped and pairs its on() with an off()
     // in a cleanup path, so concurrent chats/connections legitimately exceed the
     // default 10-listener warning threshold without leaking.

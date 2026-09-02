@@ -8,15 +8,14 @@
  * - Parse structured output according to a schema
  * - Maintain conversation context within the workflow
  *
- * This executor integrates with the existing ChatService and ToolExecutor
- * to provide full LLM capabilities within a workflow context.
+ * Model turns run through the shared AgentLoop (see executeLLMWithTools),
+ * so workflow nodes get the same tool loop as chat.
  *
  * @module services/workflow/executors/PromptNodeExecutor
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
-import ChatService from '../../chat/ChatService.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
@@ -116,7 +115,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   constructor(options = {}) {
     super(options);
-    this.chatService = options.chatService || new ChatService();
     this.llmClient = options.llmClient || llmClient;
     this.maxIterations = options.maxIterations || 10;
     this.contextSummarizer =

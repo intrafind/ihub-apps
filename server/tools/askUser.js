@@ -302,7 +302,7 @@ export default async function askUser({
   });
 
   // Return the clarification request
-  // The ToolExecutor will detect this is an ask_user tool and emit the appropriate event
+  // The chat turn marks ask_user as interactive; the loop's question seam raises the clarification
   return {
     requiresUserInput: true,
     clarification: clarificationRequest

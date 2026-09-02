@@ -210,11 +210,13 @@ logger.info('User logged in', {
 Use descriptive component names that identify the source of the log:
 
 - **Server**: Main server operations
-- **ChatService**: Chat-related operations
+- **ChatService**: Chat turns (request preparation, SSE projection, chat seams)
 - **AuthService**: Authentication and authorization
 - **ConfigCache**: Configuration caching
 - **Adapter**: LLM adapter operations (e.g., OpenAIAdapter, AnthropicAdapter)
-- **ToolExecutor**: Tool execution
+- **AgentLoop**: The shared tool loop (model rounds, tool execution, compaction, budgets)
+- **LLMClient**: Model calls (retries, throttling, provider errors)
+- **ToolLoader**: Tool script loading and execution
 - **RequestBuilder**: Request building
 - **[RouteName]**: Route-specific logs (e.g., DataRoutes, AdminRoutes)
 

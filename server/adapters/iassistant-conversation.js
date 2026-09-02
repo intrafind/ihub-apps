@@ -171,8 +171,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       url,
       method: 'POST',
       headers,
-      body, // StreamingHandler will JSON.stringify
-      // Attach metadata for StreamingHandler to use
+      body, // LLMClient will JSON.stringify
+      // Attach metadata for the chat channel to use
       _conversationId: state.conversationId,
       _chatId: chatId,
       _searchProfile: config.searchProfile

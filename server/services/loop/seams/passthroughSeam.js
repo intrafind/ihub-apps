@@ -70,7 +70,8 @@ export function passthroughSeam({ runTool, onChunk, onComplete, onError, buildPa
           terminate: {
             status: 'completed',
             finishReason: 'tool_passthrough_complete',
-            toolName: toolId
+            toolName: toolId,
+            content: text
           }
         };
       } catch (err) {
@@ -90,6 +91,7 @@ export function passthroughSeam({ runTool, onChunk, onComplete, onError, buildPa
             status: 'completed',
             finishReason: 'tool_passthrough_complete',
             toolName: toolId,
+            content: message,
             error: err
           }
         };

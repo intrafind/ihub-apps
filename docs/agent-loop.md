@@ -1,9 +1,9 @@
 # AgentLoop — the one tool loop
 
 Every tool-using model turn in the server runs through `AgentLoop`
-(`server/services/loop/AgentLoop.js`). Workflow prompt/agent nodes and the
-tool-enabled verifier already use it; chat, app-as-tool and the MCP gateway
-move onto it next (epic stage C3). There is no second loop: a loop behaviour is
+(`server/services/loop/AgentLoop.js`): workflow prompt/agent nodes, the
+tool-enabled verifier, chat (`ChatService`), the app-as-tool gateway and the
+MCP `tools/call` surface. There is no second loop: a loop behaviour is
 implemented once, tested once (`server/tests/loop/agentLoop.test.js`) and every
 caller gets it.
 
@@ -41,7 +41,7 @@ A segment never throws for model or tool failures: cancellation returns
 ```js
 const result = await agentLoop.run({
   runId,                    // ledger run this segment belongs to (optional)
-  kind: 'workflow',         // chat | workflow | agent | inference | utility
+  kind: 'workflow',         // chat | workflow | agent | subagent | inference | utility
   model,                    // resolved model object (see llmClient.resolveModel)
   messages,                 // starting transcript, system message first
   tools,                    // ToolSpec[]: { id, description, parameters, readOnly?, interactive?, passthrough? }
@@ -148,6 +148,59 @@ through `state.data._budget` on the workflow state. Before the loop existed
 the profile budgets were read from a context field no caller populated, so
 they were never enforced; profiles that set `maxTokensPerRun` or
 `maxToolRoundsPerNode` now see them applied.
+
+### Chat
+
+`ChatService` (`server/services/chat/ChatService.js`) is the chat adapter:
+`prepareChatRequest()` resolves app, model, messages and tools through
+`RequestBuilder`; `runTurn()` runs one `kind: 'chat'` segment and projects it
+onto the chat SSE dialect; `invokeAppInternal()` runs an app headlessly for the
+app-as-tool gateway and MCP `tools/call`. There is no chat-specific model loop:
+budgets, tool execution, argument repair, compaction and abort handling are the
+loop's.
+
+Chat policies:
+
+| Policy                   | Value                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `budgets.maxToolRounds`  | 10 (`CHAT_MAX_TOOL_ROUNDS`); the last round is spent on a forced final answer         |
+| `tools.parallel`         | **false** — chat tools have side effects and the client renders tool events in order |
+| `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
+| `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
+
+Tools execute through
+`toolLoader.runTool(toolId, { language, ...args, chatId, user, appConfig })`:
+model-provided arguments may override `language` but never `chatId`, `user` or
+`appConfig`. Before the tools are offered, `markInteractiveTools()` flags
+`ask_user` (and any tool with `requiresUserInput: true`) as `interactive: true`,
+so the built-in `questionSeam` takes clarifications over.
+
+Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
+
+| Seam                                      | Hooks                 | Adds                                                                                                                                                                              |
+| ----------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chatToolSeam`                            | `preTool`, `postTool` | `tool.call.start` / `tool.call.end` SSE events, `tool_usage` / `tool_error` interaction logs, the error envelope handed back to the model when a tool fails                        |
+| `questionSeam(chatQuestionOptions)`       | `preTool`             | `ask_user` → `clarification` event with the client payload; per-chat counter capped at `MAX_CLARIFICATIONS_PER_CONVERSATION`; the segment pauses (`finishReason: 'clarification'`) |
+| `passthroughSeam(chatPassthroughOptions)` | `preTool`             | Workflow tools stream their own answer as `chunk` events with `source: 'tool'`, then `tool-stream-complete`; the turn ends with `tool_passthrough_complete`                         |
+| `imageLiftSeam`                           | `postTool`            | Image payloads in tool results become message image data                                                                                                                          |
+| `knowledgeSourceSeam`                     | `postTool`            | Search / source / grounding tools feed the `answer.source` badge                                                                                                                  |
+| `chatTurnSeam`                            | `preStep`, `stepEnd`  | Upload / email knowledge sources on the first step, `chatTelemetry` usage and metrics once per model call, the "Using tool(s)" status line                                          |
+
+Streamed chunks go to the channel (`server/services/chat/chatChannel.js`),
+which projects them onto `chunk`, `thinking`, `image`, `grounding` and
+`citation` events (plus the iAssistant conversation events) through
+`actionTracker` → `sse.js`. `ChatService` emits the terminal events itself:
+`answer.source`, `error` (payload from `chatErrors.describeChatError()`) and
+`done`.
+
+**Headless mode.** `runTurn({ streaming: false })` — a POST without an open SSE
+connection — and `invokeAppInternal()` (app-as-tool gateway, MCP `tools/call`)
+register the question seam with `headless: true`: tools still execute, but
+nobody can answer a question, so `ask_user` gets a `NO_USER_AVAILABLE` error
+result instead of pausing the segment. The non-SSE POST answers with
+`{ messageId, model, content, finishReason, usage }`; `invokeAppInternal()`
+runs a `kind: 'subagent'` segment and returns
+`{ status, finalMessage, toolCalls, citations, usage, finishReason, model }`.
 
 ### Degenerate runs
 

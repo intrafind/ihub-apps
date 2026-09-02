@@ -5,7 +5,7 @@
  * `index` (id + name first, then argument fragments, sometimes `{}` placeholders,
  * sometimes the whole call at once). This merges them into one finalized call
  * per index using the union of the rules previously duplicated in the chat
- * ToolExecutor and the workflow LLM helper:
+ * the former chat ToolExecutor and the workflow LLM helper:
  *
  *   - a call without `index` is ignored (not enough identity to merge)
  *   - `id` / `type` / `function.name` are filled in when they arrive

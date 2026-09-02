@@ -1,10 +1,10 @@
 import path from 'path';
-import RequestBuilder from '../chat/RequestBuilder.js';
-import llmClient from '../loop/LLMClient.js';
-import { processMessageTemplates } from '../../serverHelpers.js';
+import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+
+const chatService = new ChatService();
 
 /**
  * Invoke an iHub app through the MCP gateway in **non-streaming** mode and
@@ -13,16 +13,11 @@ import logger from '../../utils/logger.js';
  * The iHub web UI drives apps via SSE streaming over `/api/chat`. MCP
  * `tools/call` is request-response, so we reuse `RequestBuilder` (which
  * already handles prompt templating, system prompt, variables, model
- * selection, API key resolution, and token budgeting) but skip the SSE
- * machinery. The model call itself goes through `LLMClient.complete()` —
- * the single provider gateway — which owns throttling, transient retries,
- * the canonical `LLMError` taxonomy, response parsing for every provider
- * and the run-ledger envelope (`kind: 'subagent'`).
- *
- * Tool calling, structured output, and multi-modal generation are not
- * yet supported on this path — those need the full chat pipeline. Apps
- * that depend on those features should still be called via the web UI
- * or the streaming /api/chat endpoint.
+ * selection, API key resolution, and token budgeting) and run the turn
+ * headlessly on the shared agent loop (`ChatService.invokeAppInternal`):
+ * tools execute server-side, structured output applies, interactive tools
+ * are refused because no user can answer, and the model calls go through
+ * `LLMClient` (throttling, retries, `LLMError` taxonomy, run ledger).
  *
  * @param {Object} params
  * @param {string} params.appId - App id; validated against the configCache app list
@@ -32,8 +27,7 @@ import logger from '../../utils/logger.js';
  * @param {string} [params.language] - Response language; defaults to the platform default
  * @param {number} [params.timeoutMs=60000] - Hard timeout for the model call
  * @returns {Promise<string>} Assistant text ('' when the model produced none)
- * @throws {Error} Invalid input, unknown app, or request preparation failure (`err.code`)
- * @throws {import('../loop/contracts/errors.js').LLMError} Provider failures (`err.code`, `err.status`)
+ * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
  */
 export async function invokeAppNonStreaming({ appId, args, user, language, timeoutMs = 60000 }) {
   // The caller (McpServerService) binds appId at MCP tool registration
@@ -78,61 +72,32 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
   delete variables.message;
   delete variables.modelId;
 
-  const builder = new RequestBuilder();
-  const prep = await builder.prepareChatRequest({
+  // The shared chat service runs the app exactly like a chat turn — tools
+  // execute server-side, interactive tools are refused (no user can answer) —
+  // and hands back the assembled answer.
+  const result = await chatService.invokeAppInternal({
     appId: app.id, // trusted value from configCache, not user input
-    modelId, // undefined → RequestBuilder picks app.preferredModel
-    messages: [{ role: 'user', content: message, variables }],
-    temperature: undefined,
-    style: undefined,
-    outputFormat: undefined,
-    language: language || configCache.getPlatform()?.defaultLanguage || 'en',
-    bypassAppPrompts: false,
-    processMessageTemplates,
-    // No res/clientRes — RequestBuilder treats this as non-streaming.
-    res: null,
-    clientRes: null,
     user,
-    chatId: `mcp-${Date.now()}`
+    messages: [{ role: 'user', content: message }],
+    variables,
+    modelOverride: modelId, // undefined → RequestBuilder picks app.preferredModel
+    language: language || configCache.getPlatform()?.defaultLanguage || 'en',
+    runId: `mcp-${Date.now()}`,
+    timeoutMs
   });
 
-  if (!prep.success) {
-    const err = new Error(prep.error?.message || 'Failed to prepare chat request');
-    err.code = prep.error?.code || 'PREP_FAILED';
+  if (result.status !== 'ok') {
+    const err = new Error(result.error?.message || 'App invocation failed');
+    err.code = result.error?.code || 'APP_INVOCATION_FAILED';
     throw err;
   }
 
-  // RequestBuilder already resolved the model, the API key and the fully
-  // templated message list; hand those to LLMClient rather than re-resolving.
-  const { model, llmMessages, tools, apiKey, temperature, maxTokens } = prep.data;
-
-  const result = await llmClient.complete({
-    model,
-    apiKey,
-    messages: llmMessages,
-    options: {
-      temperature,
-      maxTokens,
-      tools: Array.isArray(tools) && tools.length > 0 ? tools : undefined
-    },
-    stream: false,
-    // Hard timeout so a wedged provider doesn't keep an MCP session blocked.
-    timeoutMs,
-    telemetry: {
-      kind: 'subagent',
-      purpose: 'mcp-app-invoke',
-      user,
-      refs: { appId: app.id }
-    }
-  });
-
-  const text = result.content || '';
+  const text = result.finalMessage?.content || '';
   if (!text) {
     logger.warn('MCP app invocation produced empty content', {
       component: 'McpAppInvoker',
       appId: app.id,
-      modelId: model.id,
-      provider: model.provider,
+      modelId: result.model,
       finishReason: result.finishReason,
       toolCallCount: result.toolCalls?.length ?? 0
     });

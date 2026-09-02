@@ -6,7 +6,7 @@
  * validated for that hop.
  *
  * Uses `jest.unstable_mockModule` + dynamic imports since the source is
- * native ESM (see toolExecutor-usage-telemetry.test.js for the same pattern).
+ * native ESM (see mcp/appInvoker.test.js for the same pattern).
  */
 
 import { jest } from '@jest/globals';

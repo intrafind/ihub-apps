@@ -5,7 +5,7 @@
  * inference API, admin utilities, title generation, OCR, …) goes through this
  * class. It owns what used to be scattered across WorkflowLLMHelper,
  * `simpleCompletion`, the inference proxy's private plumbing and the chat
- * ToolExecutor's stream edge handling:
+ * the former chat ToolExecutor's stream edge handling:
  *
  *   - model lookup (`resolveModel`, `findModel`) over the live model catalog
  *   - API key resolution (`resolveApiKey`) via ApiKeyVerifier

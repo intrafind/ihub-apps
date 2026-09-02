@@ -289,7 +289,7 @@ class WebSearchService {
         errorCause: error?.cause?.message || error?.cause
       });
       const wrapped = new Error(`Search failed with ${providerName}: ${error.message}`);
-      // Preserve original code/cause so admins (and the ToolExecutor error report)
+      // Preserve original code/cause so admins (and the chat tool error report)
       // can see proxy/network/TLS specifics instead of a generic "Search failed" line.
       if (error?.code) wrapped.code = error.code;
       wrapped.cause = error;

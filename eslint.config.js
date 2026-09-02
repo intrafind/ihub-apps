@@ -117,9 +117,8 @@ export default [
     ignores: [
       'server/services/loop/**',
       'server/adapters/**',
-      'server/tests/**',
+      'server/tests/**'
       // The chat service still owns its own loop until it moves onto AgentLoop.
-      'server/services/chat/**'
     ],
     rules: {
       'no-restricted-imports': [

@@ -6,7 +6,12 @@
  * questions into an error result the model has to work around.
  *
  *   questionSeam({ raise(info, ctx) → interaction, validate(args) → { valid, error },
- *                  getCount(key, ctx), incrementCount(key, ctx), maxQuestions })
+ *                  getCount(key, ctx), incrementCount(key, ctx), maxQuestions,
+ *                  headless, onRejected(reason, info, ctx, payload) })
+ *
+ * `headless: true` (no user can answer — app-as-tool, MCP, scheduled runs)
+ * turns every question into a `NO_USER_AVAILABLE` error result instead of
+ * pausing a turn nobody resumes.
  *
  * @module services/loop/seams/questionSeam
  */
@@ -17,7 +22,9 @@ export function questionSeam({
   getCount,
   incrementCount,
   maxQuestions,
-  key
+  key,
+  headless = false,
+  onRejected
 } = {}) {
   return {
     name: 'question',
@@ -30,34 +37,42 @@ export function questionSeam({
         name: info.name,
         content: JSON.stringify(payload)
       });
+      if (headless) {
+        // No user can answer (app-as-tool, MCP, scheduled runs): hand the
+        // model an explicit refusal instead of pausing a turn nobody resumes.
+        const payload = {
+          error: true,
+          message:
+            'No user is available to answer questions in this context. Proceed with the available information or make reasonable assumptions.',
+          code: 'NO_USER_AVAILABLE'
+        };
+        await onRejected?.('headless', info, ctx, payload);
+        return { handled: true, execution: 'clarification', message: toolMessage(payload) };
+      }
       const cap = Number.isInteger(maxQuestions)
         ? maxQuestions
         : ctx.policies.interactions.maxQuestions;
       const counterKey = key ? key(ctx) : ctx.refs.chatId || ctx.runId || 'run';
       const count = getCount ? getCount(counterKey, ctx) : ctx._questionCount || 0;
       if (cap > 0 && count >= cap) {
-        return {
-          handled: true,
-          execution: 'clarification',
-          message: toolMessage({
-            error: true,
-            message: `Maximum clarification limit (${cap}) reached for this conversation. Please proceed with the available information or make reasonable assumptions.`,
-            code: 'CLARIFICATION_LIMIT_REACHED'
-          })
+        const payload = {
+          error: true,
+          message: `Maximum clarification limit (${cap}) reached for this conversation. Please proceed with the available information or make reasonable assumptions.`,
+          code: 'CLARIFICATION_LIMIT_REACHED'
         };
+        await onRejected?.('limit', info, ctx, payload);
+        return { handled: true, execution: 'clarification', message: toolMessage(payload) };
       }
       if (validate) {
         const verdict = validate(info.args);
         if (verdict && verdict.valid === false) {
-          return {
-            handled: true,
-            execution: 'clarification',
-            message: toolMessage({
-              error: true,
-              message: `Invalid clarification request: ${verdict.error}`,
-              code: 'INVALID_CLARIFICATION_PARAMS'
-            })
+          const payload = {
+            error: true,
+            message: `Invalid clarification request: ${verdict.error}`,
+            code: 'INVALID_CLARIFICATION_PARAMS'
           };
+          await onRejected?.('invalid', info, ctx, payload);
+          return { handled: true, execution: 'clarification', message: toolMessage(payload) };
         }
       }
       const nextCount = count + 1;

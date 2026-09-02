@@ -53,7 +53,7 @@ const MAX_EXECUTION_ITERATIONS = 10000;
  *
  * // Register executors for different node types
  * engine.registerExecutor('llm', new LLMExecutor());
- * engine.registerExecutor('tool', new ToolExecutor());
+ * engine.registerExecutor('tool', new ToolNodeExecutor());
  *
  * // Start workflow execution
  * const state = await engine.start(workflowDefinition, { userInput: 'Hello' });

@@ -581,7 +581,7 @@ export default async function workflowRunner(params = {}) {
           }
         }
 
-        // Return readable output string for passthrough (ToolExecutor streams it),
+        // Return readable output string for passthrough (the chat passthrough seam streams it),
         // or full output object for @mention / non-chat callers.
         resolve(
           passthrough

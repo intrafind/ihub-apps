@@ -131,6 +131,7 @@ export class AgentLoop {
    * @param {Object} [request.meta] - opaque caller data forwarded to seams
    * @param {Array} [request.seams] - per-run seams (in addition to `use()`d ones)
    * @param {string} [request.purpose='agent-step']
+   * @param {number} [request.timeoutMs] - hard timeout for each model call
    * @returns {Promise<Object>} LoopResult
    */
   async run(request) {
@@ -180,6 +181,7 @@ export class AgentLoop {
       tools,
       policies,
       messages: [...request.messages],
+      stream: null,
       iteration: 0,
       disabledTools: new Set(),
       knowledgeSources: new Set(),
@@ -276,6 +278,7 @@ export class AgentLoop {
             },
             language: request.language,
             signal,
+            timeoutMs: request.timeoutMs,
             telemetry: {
               runId,
               step: iteration,
@@ -288,6 +291,7 @@ export class AgentLoop {
               executionId: ctx.refs.executionId
             }
           });
+          ctx.stream = stream;
           for await (const chunk of stream) {
             for (const seam of seams) {
               if (typeof seam.onChunk === 'function') await seam.onChunk(ctx, chunk);
@@ -501,7 +505,8 @@ export class AgentLoop {
           return buildResult(terminal.status || 'completed', {
             finishReason: terminal.finishReason || finishReason,
             pendingInteraction: terminal.pendingInteraction,
-            content: terminal.content !== undefined ? content + terminal.content : content
+            content: terminal.content !== undefined ? content + terminal.content : content,
+            terminate: terminal
           });
         }
 

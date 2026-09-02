@@ -1,11 +1,11 @@
 import configCache from '../../configCache.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
 import llmClient, {
   usageToOpenAI,
   isLLMError,
   LLM_ERROR_CODES
 } from '../../services/loop/LLMClient.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import {
   clients,
   abortChatRequest,
@@ -417,77 +417,50 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     }
   );
 
-  // Extract common chat processing logic to reduce duplication
+  /**
+   * Run one chat turn through the shared chat service. With an SSE client the
+   * turn streams over the chat channel and this resolves once it ended; without
+   * one the answer is written to the HTTP response.
+   */
   async function processChatRequest({
     prep,
     buildLogData,
     messageId,
     streaming,
     res,
-    clientRes,
     chatId,
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage,
     user
   }) {
-    // Log the request
-    const requestLog = buildLogData(streaming);
-    await logInteraction('chat_request', requestLog);
+    await logInteraction('chat_request', buildLogData(streaming));
 
-    // Handle requests with tools
-    if (prep.tools && prep.tools.length > 0) {
-      if (streaming) {
-        logger.info('Processing chat with tools', { component: 'sessionRoutes', chatId });
-        return await chatService.processChatWithTools({
-          prep,
-          clientRes,
-          chatId,
-          buildLogData,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage,
-          user
-        });
-      } else {
-        return await chatService.processChatWithTools({
-          prep,
-          res,
-          buildLogData,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage,
-          user
-        });
-      }
-    }
+    const outcome = await chatService.runTurn({
+      prep,
+      chatId,
+      streaming,
+      buildLogData,
+      timeoutMs: DEFAULT_TIMEOUT,
+      getLocalizedError,
+      language: clientLanguage,
+      user
+    });
+    if (streaming) return outcome;
 
-    // Handle standard requests without tools
-    if (streaming) {
-      return await chatService.processStreamingChat({
-        request: prep.request,
-        chatId,
-        clientRes,
-        buildLogData,
-        model: prep.model,
-        llmMessages: prep.llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
-    } else {
-      return await chatService.processNonStreamingChat({
-        request: prep.request,
-        res,
-        buildLogData,
-        messageId,
-        model: prep.model,
-        llmMessages: prep.llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
+    if (outcome.status === 'error') {
+      if (outcome.error) return sendLLMError(res, outcome.error, { context: 'chat' });
+      return res
+        .status(502)
+        .json({ error: outcome.errorInfo?.message, code: outcome.errorInfo?.code || 'ERROR' });
     }
+    return res.json({
+      messageId,
+      model: prep.model?.id,
+      content: outcome.content,
+      finishReason: outcome.finishReason,
+      usage: outcome.usage || null
+    });
   }
 
   /**
@@ -773,7 +746,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             imageQuality,
             requestedSkill,
             documentIds,
-            res,
             user: req.user,
             chatId
           });
@@ -804,8 +776,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             messageId,
             streaming: false,
             res,
-            clientRes: null,
-            chatId: null,
+            chatId,
             DEFAULT_TIMEOUT,
             getLocalizedError,
             clientLanguage,
@@ -819,7 +790,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // defeat that check, letting a dead socket's close handler bail out
           // and leak the Map entry + activeRequests controller for up to
           // 5 minutes until cleanupInactiveClients evicts it.
-          const clientRes = chatSink;
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
@@ -838,7 +808,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             imageQuality,
             requestedSkill,
             documentIds,
-            clientRes,
             user: req.user,
             chatId
           });
@@ -870,7 +839,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             messageId,
             streaming: true,
             res: null,
-            clientRes,
             chatId,
             DEFAULT_TIMEOUT,
             getLocalizedError,

@@ -2,24 +2,18 @@ import { jest, describe, it, expect, beforeAll, beforeEach } from '@jest/globals
 
 /**
  * `invokeAppNonStreaming` — the MCP gateway's request/response path into an
- * iHub app. Input validation runs before any config lookup; the model call
- * must go through `LLMClient.complete()` (mocked here) with the request
- * RequestBuilder prepared.
+ * iHub app. Input validation runs before any config lookup; the app itself
+ * runs headlessly through `ChatService.invokeAppInternal` (mocked here), which
+ * owns request preparation, the tool loop and the model calls.
  */
 
-const completeMock = jest.fn();
-const prepareChatRequestMock = jest.fn();
+const invokeAppInternalMock = jest.fn();
 
-jest.unstable_mockModule('../../services/loop/LLMClient.js', () => ({
+jest.unstable_mockModule('../../services/chat/ChatService.js', () => ({
   __esModule: true,
-  default: { complete: completeMock }
-}));
-
-jest.unstable_mockModule('../../services/chat/RequestBuilder.js', () => ({
-  __esModule: true,
-  default: class RequestBuilder {
-    prepareChatRequest(params) {
-      return prepareChatRequestMock(params);
+  default: class ChatServiceMock {
+    invokeAppInternal(opts) {
+      return invokeAppInternalMock(opts);
     }
   }
 }));
@@ -30,11 +24,6 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getApps: () => ({ data: [{ id: 'chat', name: { en: 'Chat' }, enabled: true }] }),
     getPlatform: () => ({ defaultLanguage: 'en' })
   }
-}));
-
-jest.unstable_mockModule('../../serverHelpers.js', () => ({
-  __esModule: true,
-  processMessageTemplates: jest.fn(messages => messages)
 }));
 
 jest.unstable_mockModule('../../utils/logger.js', () => ({
@@ -48,23 +37,19 @@ beforeAll(async () => {
   ({ invokeAppNonStreaming } = await import('../../services/mcp/appInvoker.js'));
 });
 
-const preparedRequest = () => ({
-  success: true,
-  data: {
-    app: { id: 'chat' },
-    model: { id: 'm1', provider: 'openai', modelId: 'gpt-x' },
-    llmMessages: [
-      { role: 'system', content: 'You are Chat.' },
-      { role: 'user', content: 'hi' }
-    ],
-    tools: [],
-    apiKey: 'sk-test',
-    temperature: 0.3,
-    maxTokens: 512
-  }
+const okResult = (content = 'hello back') => ({
+  status: 'ok',
+  finalMessage: { role: 'assistant', content },
+  toolCalls: [],
+  citations: [],
+  usage: { promptTokens: 5, completionTokens: 3, totalTokens: 8 },
+  finishReason: 'stop',
+  model: 'm1'
 });
 
 describe('invokeAppNonStreaming — input validation', () => {
+  beforeEach(() => invokeAppInternalMock.mockReset());
+
   it('throws when message is missing', async () => {
     await expect(invokeAppNonStreaming({ appId: 'chat', args: {}, user: {} })).rejects.toThrow(
       /Missing required argument/
@@ -99,86 +84,83 @@ describe('invokeAppNonStreaming — input validation', () => {
     await expect(
       invokeAppNonStreaming({ appId: 'nope', args: { message: 'hi' }, user: {} })
     ).rejects.toThrow(/App not found/);
-    expect(prepareChatRequestMock).not.toHaveBeenCalled();
-    expect(completeMock).not.toHaveBeenCalled();
+    expect(invokeAppInternalMock).not.toHaveBeenCalled();
   });
 });
 
-describe('invokeAppNonStreaming — LLMClient wiring', () => {
+describe('invokeAppNonStreaming — ChatService wiring', () => {
   beforeEach(() => {
-    prepareChatRequestMock.mockResolvedValue(preparedRequest());
-    completeMock.mockResolvedValue({ content: 'hello back', finishReason: 'stop', toolCalls: [] });
+    invokeAppInternalMock.mockReset();
+    invokeAppInternalMock.mockResolvedValue(okResult());
   });
 
-  it('forwards the prepared request to llmClient.complete and returns the text', async () => {
+  it('runs the app headlessly through ChatService and returns the text', async () => {
     const user = { id: 'u1' };
     const text = await invokeAppNonStreaming({
       appId: 'chat',
       args: { message: 'hi', modelId: 'm1', tone: 'formal' },
       user,
+      language: 'de',
       timeoutMs: 1234
     });
 
     expect(text).toBe('hello back');
-
-    // Non-reserved args become app variables; modelId is passed as the override.
-    const prepParams = prepareChatRequestMock.mock.calls[0][0];
-    expect(prepParams.appId).toBe('chat');
-    expect(prepParams.modelId).toBe('m1');
-    expect(prepParams.messages[0].variables).toEqual({ tone: 'formal' });
-    expect(prepParams.res).toBeNull();
-
-    expect(completeMock).toHaveBeenCalledTimes(1);
-    const call = completeMock.mock.calls[0][0];
+    expect(invokeAppInternalMock).toHaveBeenCalledTimes(1);
+    const call = invokeAppInternalMock.mock.calls[0][0];
     expect(call).toMatchObject({
-      model: { id: 'm1', provider: 'openai' },
-      apiKey: 'sk-test',
-      messages: preparedRequest().data.llmMessages,
-      options: { temperature: 0.3, maxTokens: 512 },
-      stream: false,
-      timeoutMs: 1234,
-      telemetry: { kind: 'subagent', purpose: 'mcp-app-invoke', user, refs: { appId: 'chat' } }
+      appId: 'chat',
+      user,
+      messages: [{ role: 'user', content: 'hi' }],
+      // Non-reserved args become app variables; modelId is the override.
+      variables: { tone: 'formal' },
+      modelOverride: 'm1',
+      language: 'de',
+      timeoutMs: 1234
     });
-    expect(call.options.tools).toBeUndefined();
+    expect(call.runId).toMatch(/^mcp-/);
   });
 
-  it('forwards app tools when RequestBuilder loaded any', async () => {
-    const prep = preparedRequest();
-    prep.data.tools = [{ type: 'function', function: { name: 'lookup' } }];
-    prepareChatRequestMock.mockResolvedValue(prep);
-
+  it('falls back to the platform default language', async () => {
     await invokeAppNonStreaming({ appId: 'chat', args: { message: 'hi' }, user: {} });
-
-    expect(completeMock.mock.calls[0][0].options.tools).toEqual(prep.data.tools);
+    expect(invokeAppInternalMock.mock.calls[0][0].language).toBe('en');
+    expect(invokeAppInternalMock.mock.calls[0][0].modelOverride).toBeUndefined();
   });
 
   it('returns an empty string when the model produced no text', async () => {
-    completeMock.mockResolvedValue({ content: '', finishReason: 'stop', toolCalls: [] });
+    invokeAppInternalMock.mockResolvedValue(okResult(''));
     await expect(
       invokeAppNonStreaming({ appId: 'chat', args: { message: 'hi' }, user: {} })
     ).resolves.toBe('');
   });
 
-  it('surfaces RequestBuilder failures with their code', async () => {
-    prepareChatRequestMock.mockResolvedValue({
-      success: false,
-      error: Object.assign(new Error('no key'), { code: 'AUTH_FAILED' })
+  it('surfaces preparation failures with their code', async () => {
+    invokeAppInternalMock.mockResolvedValue({
+      status: 'error',
+      error: Object.assign(new Error('no key'), { code: 'AUTH_FAILED' }),
+      finalMessage: null,
+      toolCalls: []
     });
     await expect(
       invokeAppNonStreaming({ appId: 'chat', args: { message: 'hi' }, user: {} })
     ).rejects.toMatchObject({ message: 'no key', code: 'AUTH_FAILED' });
-    expect(completeMock).not.toHaveBeenCalled();
   });
 
-  it('propagates LLMClient errors untouched', async () => {
-    const llmError = Object.assign(new Error('rate limited'), {
-      name: 'LLMError',
-      code: 'RATE_LIMITED',
-      status: 429
+  it('surfaces loop failures with their code', async () => {
+    invokeAppInternalMock.mockResolvedValue({
+      status: 'error',
+      error: { message: 'rate limited', code: 'RATE_LIMITED' },
+      finalMessage: null,
+      toolCalls: []
     });
-    completeMock.mockRejectedValue(llmError);
     await expect(
       invokeAppNonStreaming({ appId: 'chat', args: { message: 'hi' }, user: {} })
-    ).rejects.toBe(llmError);
+    ).rejects.toMatchObject({ message: 'rate limited', code: 'RATE_LIMITED' });
+  });
+
+  it('uses a generic code when the failure carries none', async () => {
+    invokeAppInternalMock.mockResolvedValue({ status: 'error', error: {}, finalMessage: null });
+    await expect(
+      invokeAppNonStreaming({ appId: 'chat', args: { message: 'hi' }, user: {} })
+    ).rejects.toMatchObject({ code: 'APP_INVOCATION_FAILED' });
   });
 });

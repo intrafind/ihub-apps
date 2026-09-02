@@ -30,7 +30,7 @@ const gemini3ResponseWithToolCall = {
   ]
 };
 
-const result = convertGoogleResponseToGeneric(JSON.stringify(gemini3ResponseWithToolCall));
+const result = await convertGoogleResponseToGeneric(JSON.stringify(gemini3ResponseWithToolCall));
 
 console.log('Response conversion result:', JSON.stringify(result, null, 2));
 
