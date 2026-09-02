@@ -1222,6 +1222,9 @@ default (`features.runLog`) and ships with identity modes (`default` id-only, `f
   (`GET /api/runs/:runId/events?after=<seq>&view=sse`).
 - Workflow executions and agent runs are runs too (run id = execution id), so one API covers
   chat, workflows and agents.
+- A tool loop records only the messages it appended per step (`request/header` with
+  `messagesDelta`); reconstruction replays the deltas and reports a tampered context as a
+  mismatch. Nothing is hashed or recorded while the ledger is off and nobody is listening.
 
 See [Run Ledger](../../run-ledger.md).
 
@@ -1256,7 +1259,9 @@ server restart, is answered through one endpoint and shows up in one queue.
 - `POST /api/runs/:runId/human-events` records a `steer`, `stop` or `feedback` event on a run;
   `stop` aborts it. The chat stop button and message feedback record the same events.
 - Chat clarifications keep their flow: the next chat message answers the pending question;
-  unanswered ones are cancelled by the next message or expire after a day.
+  unanswered ones are cancelled by the next message or expire after a day. Either way the run
+  the question paused ends (`finishReason` `clarification_answered` / `clarification_superseded`
+  / `clarification_expired`), so it never lingers as running.
 - Pending interactions are stored whether or not the run ledger is enabled, and in a cluster
   exactly one worker accepts an answer: a concurrent second answer is rejected instead of
   resuming the same execution twice.

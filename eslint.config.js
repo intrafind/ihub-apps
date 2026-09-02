@@ -114,12 +114,7 @@ export default [
     // provider requests or parsing provider responses anywhere else is a lint
     // error, so a second private LLM path can never grow back.
     files: ['server/**/*.js'],
-    ignores: [
-      'server/services/loop/**',
-      'server/adapters/**',
-      'server/tests/**'
-      // The chat service still owns its own loop until it moves onto AgentLoop.
-    ],
+    ignores: ['server/services/loop/**', 'server/adapters/**', 'server/tests/**'],
     rules: {
       'no-restricted-imports': [
         'error',

@@ -355,7 +355,7 @@ test('unlimited budget (0) never forces a finish before the round cap', async ()
   assert.equal(result.status, 'completed');
 });
 
-test('round cap: last round is spent on a tool-less final answer; max_iterations when the model never answers', async () => {
+test('round cap: last round is spent on a tool-less final answer; budget_exhausted when the model never answers', async () => {
   const { loop, requests } = makeLoop([
     toolTurn([{ name: 'webSearch', args: {} }]),
     toolTurn([{ name: 'webSearch', args: {} }]),
@@ -390,8 +390,11 @@ test('round cap: last round is spent on a tool-less final answer; max_iterations
   assert.equal(r2.iterations, 2);
 });
 
-test('round cap of 1: single tool round, then max_iterations without a final turn', async () => {
-  const { loop, requests } = makeLoop([toolTurn([{ name: 'webSearch', args: {} }])]);
+test('round cap of 1: the single tool round is followed by one extra tool-less call for the final answer', async () => {
+  const { loop, requests } = makeLoop([
+    toolTurn([{ name: 'webSearch', args: {} }]),
+    textTurn('Answer from one round.')
+  ]);
   const result = await loop.run({
     model,
     messages: baseMessages,
@@ -399,9 +402,30 @@ test('round cap of 1: single tool round, then max_iterations without a final tur
     policies: { budgets: { maxToolRounds: 1 } },
     executeTool: okTool
   });
-  assert.equal(requests.length, 1);
-  assert.equal(result.finishReason, 'max_iterations');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].request.body.tools, undefined);
+  assert.equal(result.content, 'Answer from one round.');
+  assert.equal(result.status, 'completed');
+  assert.equal(result.finishReason, 'stop');
+  assert.equal(result.iterations, 2);
   assert.equal(result.budgetExhausted, true);
+  assert.equal(result.budgetReason, 'rounds');
+
+  // A model that still calls tools on that extra call ends as budget_exhausted.
+  const { loop: stubborn, requests: stubbornRequests } = makeLoop([
+    toolTurn([{ name: 'webSearch', args: {} }]),
+    toolTurn([{ name: 'webSearch', args: {} }])
+  ]);
+  const r2 = await stubborn.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { budgets: { maxToolRounds: 1 } },
+    executeTool: okTool
+  });
+  assert.equal(stubbornRequests.length, 2);
+  assert.equal(r2.status, 'budget_exhausted');
+  assert.equal(r2.finishReason, 'budget_exhausted');
 });
 
 // ── circuit breakers ────────────────────────────────────────────────────────

@@ -338,3 +338,31 @@ test('appendRecovered: the owner allocates the sequence; without an owner recove
   await workerB.stop();
   await workerC.stop();
 });
+
+test('run/end is idempotent, hasEnded / lastSeq / readStart use the file head and tail', async () => {
+  const { log, baseDir } = await tmpLog();
+  const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u1' } });
+  log.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'x'.repeat(200_000) });
+  assert.equal(await log.hasEnded(runId), false);
+  assert.ok(log.endRun(runId));
+  assert.equal(log.endRun(runId), null, 'a second run/end is a no-op');
+  assert.equal(await log.hasEnded(runId), true);
+  await log.flush();
+
+  // another process: no memory, answers from the file's first / last line
+  const other = new RunLog({
+    baseDir,
+    forceEnabled: true,
+    getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
+    getFeatures: () => ({ runLog: true })
+  });
+  assert.equal(await other.hasEnded(runId), true);
+  assert.equal(await other.lastSeq(runId), 3);
+  const start = await other.readStart(runId);
+  assert.equal(start.type, 'run/start');
+  assert.equal(start.data.principal.id, 'u1');
+  assert.equal(await other.readStart('run-does-not-exist'), null);
+  assert.equal(await other.hasEnded('run-does-not-exist'), false);
+  await other.stop();
+  await log.stop();
+});

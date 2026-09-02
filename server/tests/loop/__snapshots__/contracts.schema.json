@@ -430,9 +430,12 @@
                   },
                   "reason": {
                     "type": "string",
-                    "enum": ["initial", "change", "same"]
+                    "enum": ["initial", "change", "same", "append"]
                   },
                   "messages": {
+                    "type": "array"
+                  },
+                  "messagesDelta": {
                     "type": "array"
                   },
                   "renderedSystemPrompt": {

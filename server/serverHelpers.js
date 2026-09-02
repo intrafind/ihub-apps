@@ -19,11 +19,6 @@ export function validateApiKeys() {
   return apiKeyVerifier.validateApiKeys();
 }
 
-export async function verifyApiKey(model, res, clientRes = null, language) {
-  const result = await apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
-  return result.success ? result.apiKey : false;
-}
-
 // Export the class for direct use
 export { ApiKeyVerifier };
 

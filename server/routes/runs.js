@@ -48,15 +48,6 @@ import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
 
-/** Whether the run has already recorded `run/end` (memory first, then the persisted ledger). */
-async function runHasEnded(runId) {
-  const meta = runLog.getRunMeta(runId);
-  if (meta) return meta.ended === true;
-  if (!runLog.isEnabled()) return false;
-  const events = await runLog.readEvents(runId);
-  return events.some(e => e.type === RUN_LOG_EVENTS.RUN_END);
-}
-
 /**
  * `stop` is the one human event with a side effect: abort the run. A chat run
  * aborts its active model call (and any workflow it launched); a workflow or
@@ -71,7 +62,7 @@ async function runHasEnded(runId) {
 async function stopRun(runId, meta) {
   const refs = runLog.getRunMeta(runId)?.refs || meta?.refs || {};
   if (meta?.kind === 'chat' && refs.chatId) {
-    if (await runHasEnded(runId)) return null;
+    if (await runLog.hasEnded(runId)) return null;
     const bound = getStreamRun(refs.chatId);
     if (bound && bound.runId !== runId) return null;
     abortChatRequest(refs.chatId);

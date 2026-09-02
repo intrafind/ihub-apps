@@ -374,6 +374,7 @@
     "useLocalOfficejs": false
   },
   "runLog": {
+    "enabled": true,
     "identityMode": "default",
     "retentionDays": 90,
     "cleanupEnabled": true,

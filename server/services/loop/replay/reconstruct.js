@@ -72,8 +72,17 @@ export async function verifyRequestReconstruction(
     if (event.type !== RUN_LOG_EVENTS.REQUEST_HEADER) continue;
     const data = event.data || {};
     if (Array.isArray(data.messages)) lastMessages = data.messages;
+    else if (Array.isArray(data.messagesDelta)) {
+      lastMessages = [...(lastMessages || []), ...data.messagesDelta];
+    }
     if (Array.isArray(data.toolSchemas)) lastTools = data.toolSchemas;
     else if (data.toolSchemasHash === null) lastTools = null;
+    // Everything recorded "on change" is tracked before any verdict on this
+    // header, so a header that fails does not hide what later ones rely on.
+    const callConfig = data.callConfig || {};
+    if (callConfig.responseSchema) lastSchema = callConfig.responseSchema;
+    if (data.modelSnapshot) lastModelSnapshot = data.modelSnapshot;
+    if (data.optionsSnapshot) lastOptionsSnapshot = data.optionsSnapshot;
 
     const skip = reason => {
       report.skipped.push({ seq: event.seq, requestId: data.requestId, reason });
@@ -82,10 +91,23 @@ export async function verifyRequestReconstruction(
       skip('no messages recorded before this request');
       continue;
     }
-    const callConfig = data.callConfig || {};
-    if (callConfig.responseSchema) lastSchema = callConfig.responseSchema;
-    if (data.modelSnapshot) lastModelSnapshot = data.modelSnapshot;
-    if (data.optionsSnapshot) lastOptionsSnapshot = data.optionsSnapshot;
+    if (data.messagesHash) {
+      const replayed = hashPayload(lastMessages);
+      if (replayed !== data.messagesHash) {
+        // The replayed context is not what the model saw: a tampered or
+        // truncated ledger, reported like any other mismatch.
+        report.checked += 1;
+        report.mismatched.push({
+          seq: event.seq,
+          requestId: data.requestId,
+          expected: data.messagesHash,
+          actual: replayed,
+          reason: data.reason,
+          field: 'messages'
+        });
+        continue;
+      }
+    }
     if (data.configHash && !lastModelSnapshot) {
       skip('model / options snapshot not recorded before this request');
       continue;

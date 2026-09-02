@@ -59,6 +59,58 @@ export function isCheckpointInteraction(interaction) {
   );
 }
 
+/**
+ * A node raises its interaction before the engine has written the paused
+ * state, so an answer that arrives at once (the queue, a script) can find the
+ * execution still `running`. The resume waits this long for the pause to land
+ * before it rejects the answer.
+ */
+const PAUSE_SETTLE_MS = 1500;
+const PAUSE_SETTLE_INTERVAL_MS = 50;
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function awaitPaused(engine, executionId, state, maxMs) {
+  const deadline = Date.now() + maxMs;
+  let current = state;
+  while (current?.status === 'running' && Date.now() < deadline) {
+    await sleep(Math.min(PAUSE_SETTLE_INTERVAL_MS, Math.max(0, deadline - Date.now())));
+    current = (await engine.getState(executionId)) ?? current;
+  }
+  return current;
+}
+
+/** Engine failures that mean the execution moved on: nothing to put back. */
+const STATE_MOVED_ON = new Set(['INVALID_STATE_FOR_RESUME', 'EXECUTION_NOT_FOUND']);
+
+/**
+ * `engine.resume` failed after the checkpoint was cleared and the state
+ * advanced: put the execution back where the answer found it, so the
+ * interaction — which stays pending — can be answered again instead of
+ * pointing at an execution nothing can resume. When the engine reports that
+ * the execution is no longer paused (resumed or gone elsewhere), the state is
+ * left alone.
+ */
+async function restorePausedState({ engine, registry, executionId, state, pending, cause }) {
+  if (STATE_MOVED_ON.has(cause?.code)) return;
+  try {
+    await engine.stateManager.update(executionId, {
+      status: 'paused',
+      completedNodes: state.completedNodes || [],
+      currentNodes: state.currentNodes || [],
+      data: { ...state.data, pendingCheckpoint: pending }
+    });
+    registry.setPendingCheckpoint(executionId, pending);
+  } catch (err) {
+    logger.error('Could not restore the paused execution after a failed resume', {
+      component: 'CheckpointResume',
+      executionId,
+      checkpointId: pending.id,
+      error: err.message
+    });
+  }
+}
+
 const ENGINE_ERROR_STATUS = Object.freeze({
   EXECUTION_NOT_FOUND: 404,
   INVALID_STATE_FOR_RESUME: 409,
@@ -76,6 +128,7 @@ const ENGINE_ERROR_STATUS = Object.freeze({
  * @param {Object} [opts.engine] - WorkflowEngine (default: shared singleton)
  * @param {Object} [opts.registry] - ExecutionRegistry (default: shared singleton)
  * @param {Object} [opts.executor] - HumanNodeExecutor (default: new instance)
+ * @param {number} [opts.pauseSettleMs] - how long to wait for a just-raised checkpoint's pause to land
  * @returns {Promise<Object>} the execution state after resume
  * @throws {CheckpointResumeError} when the execution is not paused on this checkpoint or rejects the answer
  */
@@ -84,7 +137,8 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
     user = null,
     engine = getWorkflowEngine(),
     registry = getExecutionRegistry(),
-    executor = new HumanNodeExecutor()
+    executor = new HumanNodeExecutor(),
+    pauseSettleMs = PAUSE_SETTLE_MS
   } = opts;
   const executionId = interaction.source?.executionId || interaction.runId;
   const checkpointId = interaction.source?.checkpointId || interaction.id;
@@ -98,6 +152,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
   let state;
   try {
     state = await engine.getState(executionId);
+    if (state) state = await awaitPaused(engine, executionId, state, pauseSettleMs);
   } catch (err) {
     throw wrapEngineError(err);
   }
@@ -212,6 +267,7 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       }
     );
   } catch (err) {
+    await restorePausedState({ engine, registry, executionId, state, pending, cause: err });
     throw wrapEngineError(err);
   }
 
@@ -282,6 +338,7 @@ async function resumeQuestion({
       }
     );
   } catch (err) {
+    await restorePausedState({ engine, registry, executionId, state, pending, cause: err });
     throw wrapEngineError(err);
   }
 }

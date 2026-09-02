@@ -354,7 +354,7 @@ export class LLMClient {
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
-    this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe), LRU-bounded
+    this._lastMessagesHash = new Map(); // runId -> { hash, count } of the last messages (request/header dedupe), LRU-bounded
     this._lastSchemaHash = new Map(); // runId -> responseSchema hash (recorded on change), LRU-bounded
     this._lastToolsHash = new Map(); // runId -> tool schemas hash (recorded on change), LRU-bounded
     this._lastConfigHash = new Map(); // runId -> model/options snapshot hash (recorded on change), LRU-bounded
@@ -429,7 +429,7 @@ export class LLMClient {
    */
   async resolveApiKey(model, { language, apiKey } = {}) {
     if (apiKey !== undefined && apiKey !== null) return { success: true, apiKey };
-    const result = await this.apiKeyVerifier.verifyApiKey(model, null, null, language || undefined);
+    const result = await this.apiKeyVerifier.verifyApiKey(model, language || undefined);
     return result.success
       ? { success: true, apiKey: result.apiKey ?? null }
       : { success: false, apiKey: null, error: result.error };
@@ -940,13 +940,30 @@ export class LLMClient {
     language
   }) {
     if (!runId) return;
+    // Nothing to hash or validate when neither persistence nor a subscriber
+    // would see the event (the default install has the ledger off).
+    if (typeof this.runLog.isRecording === 'function' && !this.runLog.isRecording(runId)) return;
     const messagesHash = hashPayload(messages);
-    const previous = this._lastMessagesHash.get(runId);
-    const reason = !previous ? 'initial' : previous === messagesHash ? 'same' : 'change';
+    const previous = this._lastMessagesHash.get(runId) || null;
+    // A tool loop grows the context by appending: when the previous messages
+    // are a prefix of the new ones only the delta is recorded (`append`);
+    // reconstruction replays the deltas. Compaction or a rewritten history is
+    // a `change` and records the whole array again.
+    let reason;
+    let messagesDelta;
+    if (!previous) reason = 'initial';
+    else if (previous.hash === messagesHash) reason = 'same';
+    else if (
+      messages.length > previous.count &&
+      hashPayload(messages.slice(0, previous.count)) === previous.hash
+    ) {
+      reason = 'append';
+      messagesDelta = messages.slice(previous.count);
+    } else reason = 'change';
     // Re-insert to keep Map order as LRU order; evict the oldest past the cap so
     // a long-lived process does not keep one hash per run it ever served.
     this._lastMessagesHash.delete(runId);
-    this._lastMessagesHash.set(runId, messagesHash);
+    this._lastMessagesHash.set(runId, { hash: messagesHash, count: messages.length });
     while (this._lastMessagesHash.size > MAX_TRACKED_RUN_HASHES) {
       this._lastMessagesHash.delete(this._lastMessagesHash.keys().next().value);
     }
@@ -1008,13 +1025,14 @@ export class LLMClient {
       messagesHash,
       messageCount: messages.length,
       reason,
-      ...(reason !== 'same' ? { messages } : {}),
+      ...(reason === 'initial' || reason === 'change' ? { messages } : {}),
+      ...(reason === 'append' ? { messagesDelta } : {}),
       toolSchemasHash,
-      ...(tools && (reason !== 'same' || toolsChanged) ? { toolSchemas: tools } : {}),
+      ...(tools && (reason === 'initial' || toolsChanged) ? { toolSchemas: tools } : {}),
       toolExecution: telemetry.toolExecution || (tools ? 'caller' : 'none'),
       callConfig,
       configHash,
-      ...(reason !== 'same' || configChanged ? { modelSnapshot, optionsSnapshot } : {}),
+      ...(reason === 'initial' || configChanged ? { modelSnapshot, optionsSnapshot } : {}),
       language
     });
   }

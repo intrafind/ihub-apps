@@ -283,7 +283,8 @@ export default async function workflowRunner(params = {}) {
   // Note: workflows with human-checkpoint nodes are supported in chat. The
   // engine emits `workflow.human.required` when it pauses; the bridge below
   // forwards it as a `workflow.checkpoint` chat event so the chat UI can
-  // render the prompt and POST the response to /workflows/executions/:id/respond.
+  // render the prompt and answer it through the one answer endpoint
+  // (POST /api/runs/:runId/interactions/:interactionId/answer).
 
   // 3. Prepare initial data from input variables
   const initialData = {

@@ -10,11 +10,12 @@ export async function precondition(ctx) {
 
 export async function up(ctx) {
   const platform = await ctx.readJson('config/platform.json');
+  ctx.setDefault(platform, 'runLog.enabled', true);
   ctx.setDefault(platform, 'runLog.identityMode', 'default');
   ctx.setDefault(platform, 'runLog.retentionDays', 90);
   ctx.setDefault(platform, 'runLog.cleanupEnabled', true);
   ctx.setDefault(platform, 'runLog.flushIntervalMs', 2000);
   ctx.setDefault(platform, 'runLog.spillThresholdBytes', 65536);
   await ctx.writeJson('config/platform.json', platform);
-  ctx.log('Added runLog defaults (identityMode=default, retentionDays=90)');
+  ctx.log('Added runLog defaults (enabled=true, identityMode=default, retentionDays=90)');
 }

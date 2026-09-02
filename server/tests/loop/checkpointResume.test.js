@@ -87,8 +87,12 @@ function fakeEngine({ state, agent = false } = {}) {
   };
   const registry = {
     cleared: [],
+    restored: [],
     clearPendingCheckpoint(id) {
       this.cleared.push(id);
+    },
+    setPendingCheckpoint(id, checkpoint) {
+      this.restored.push({ id, checkpoint });
     }
   };
   const executor = {
@@ -275,7 +279,7 @@ test('execution state guards: not paused / checkpoint mismatch / unknown executi
   const running = fakeEngine();
   running.paused.status = 'running';
   await assert.rejects(
-    resumeWorkflowFromAnswer(answered, { ...running, runLog }),
+    resumeWorkflowFromAnswer(answered, { ...running, runLog, pauseSettleMs: 0 }),
     e => e.code === 'INVALID_STATE_FOR_RESUME' && e.status === 409
   );
 
@@ -496,4 +500,161 @@ test('an answered question checkpoint resumes the paused node with the answer on
     AGENT_NODE_TIMEOUT_MS,
     'agent runs keep their node budget'
   );
+});
+
+test('an answer that arrives before the pause is written waits for it instead of rejecting', async () => {
+  const { runLog, svc } = await setup();
+  const fake = fakeEngine();
+  fake.paused.status = 'running';
+  let reads = 0;
+  const realGetState = fake.engine.getState.bind(fake.engine);
+  fake.engine.getState = async id => {
+    reads += 1;
+    if (reads >= 3) fake.paused.status = 'paused';
+    return realGetState(id);
+  };
+  const it = checkpointToInteraction(fakeCheckpoint(), {
+    runId: EXECUTION_ID,
+    executionId: EXECUTION_ID
+  });
+  const answered = {
+    ...it,
+    status: 'answered',
+    answer: { value: 'approve', by: 'alice', at: new Date().toISOString(), channel: 'api' }
+  };
+  const started = Date.now();
+  const result = await resumeWorkflowFromAnswer(answered, {
+    ...fake,
+    runLog,
+    pauseSettleMs: 1000
+  });
+  assert.equal(result.status, 'running');
+  assert.ok(reads >= 3, 'the state was re-read until the pause landed');
+  assert.ok(Date.now() - started < 1000, 'resumed as soon as the pause landed');
+  assert.equal(fake.calls.resume.length, 1);
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('a failing engine.resume restores the paused state and its checkpoint; the answer can be retried', async () => {
+  const { runLog, svc } = await setup();
+  const { engine, registry, executor, calls } = fakeEngine();
+  let failNext = true;
+  const realResume = engine.resume.bind(engine);
+  engine.resume = async (...args) => {
+    if (failNext) {
+      failNext = false;
+      const err = new Error('Workflow definition not available');
+      err.code = 'WORKFLOW_NOT_AVAILABLE';
+      throw err;
+    }
+    return realResume(...args);
+  };
+  registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const template = checkpointToInteraction(fakeCheckpoint({ options: undefined }), {
+    runId: EXECUTION_ID,
+    executionId: EXECUTION_ID
+  });
+  await svc.raise({
+    id: template.id,
+    runId: EXECUTION_ID,
+    kind: template.kind,
+    origin: 'node',
+    prompt: template.prompt,
+    source: template.source
+  });
+
+  await assert.rejects(
+    svc.answer('ckpt-1', { value: 'approve' }, { user: { id: 'alice' } }),
+    e =>
+      e instanceof CheckpointResumeError && e.code === 'WORKFLOW_NOT_AVAILABLE' && e.status === 409
+  );
+  assert.equal((await svc.get('ckpt-1')).status, 'pending');
+  const restore = calls.update.at(-1).patch;
+  assert.equal(restore.status, 'paused');
+  assert.deepEqual(restore.completedNodes, ['plan']);
+  assert.deepEqual(restore.currentNodes, ['approval']);
+  assert.equal(restore.data.pendingCheckpoint.id, 'ckpt-1');
+  assert.deepEqual(registry.cleared, [EXECUTION_ID]);
+  assert.deepEqual(
+    registry.restored.map(r => [r.id, r.checkpoint.id]),
+    [[EXECUTION_ID, 'ckpt-1']]
+  );
+
+  // …and the retry goes through.
+  const answered = await svc.answer('ckpt-1', { value: 'approve' }, { user: { id: 'alice' } });
+  assert.equal(answered.status, 'answered');
+  assert.equal(calls.resume.length, 1);
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('a failing engine.resume after a question answer restores the checkpoint too', async () => {
+  const { runLog, svc } = await setup();
+  const pending = {
+    id: 'ckpt-q1',
+    nodeId: 'research',
+    type: 'question',
+    message: 'Which quarter?',
+    inputType: 'text'
+  };
+  const workflow = {
+    id: 'wf-q',
+    nodes: [{ id: 'research', type: 'prompt', config: {} }],
+    edges: []
+  };
+  const state = {
+    executionId: EXECUTION_ID,
+    status: 'paused',
+    completedNodes: [],
+    currentNodes: ['research'],
+    data: { pendingCheckpoint: pending, _workflowDefinition: workflow }
+  };
+  const { engine, registry, calls } = fakeEngine({ state });
+  let code = 'WORKFLOW_NOT_AVAILABLE';
+  engine.resume = async () => {
+    const err = new Error('resume failed');
+    err.code = code;
+    throw err;
+  };
+  const interaction = {
+    id: 'ckpt-q1',
+    runId: EXECUTION_ID,
+    kind: 'question',
+    origin: 'tool',
+    status: 'answered',
+    prompt: { message: 'Which quarter?', inputType: 'text' },
+    source: {
+      checkpointId: 'ckpt-q1',
+      executionId: EXECUTION_ID,
+      nodeId: 'research',
+      toolCallId: 'call_1'
+    },
+    answer: { value: 'Q3', by: 'alice', at: new Date().toISOString(), channel: 'run_page' }
+  };
+  await assert.rejects(
+    resumeWorkflowFromAnswer(interaction, { engine, registry, runLog }),
+    e => e.code === 'WORKFLOW_NOT_AVAILABLE'
+  );
+  const restore = calls.update.at(-1).patch;
+  assert.equal(restore.status, 'paused');
+  assert.equal(restore.data.pendingCheckpoint.id, 'ckpt-q1');
+  assert.deepEqual(
+    registry.restored.map(r => r.checkpoint.id),
+    ['ckpt-q1']
+  );
+
+  // The engine saying the execution is no longer paused means it moved on
+  // (resumed or finished elsewhere): nothing is put back.
+  code = 'INVALID_STATE_FOR_RESUME';
+  const updatesBefore = calls.update.length;
+  await assert.rejects(
+    resumeWorkflowFromAnswer(interaction, { engine, registry, runLog }),
+    e => e.code === 'INVALID_STATE_FOR_RESUME' && e.status === 409
+  );
+  assert.equal(calls.update.length, updatesBefore + 1, 'only the answer was written');
+  assert.notEqual(calls.update.at(-1).patch.status, 'paused');
+  assert.equal(registry.restored.length, 1);
+  await svc.stop();
+  await runLog.stop();
 });

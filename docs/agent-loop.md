@@ -67,7 +67,7 @@ defaults.
 
 | Policy                            | Default | Effect                                                                 |
 | --------------------------------- | ------- | ---------------------------------------------------------------------- |
-| `budgets.maxToolRounds`           | 10      | Round cap; the last round is spent on a forced final answer            |
+| `budgets.maxToolRounds`           | 10      | Round cap; the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)            |
 | `budgets.maxTokensPerRun`         | 0       | Run-level token cap across every segment sharing `state.budget` (0 = unlimited) |
 | `budgets.maxWallClockMs`          | —       | Wall-clock deadline for the invocation, enforced as an abort signal: it cuts the in-flight model call or tool short (a tool that ignores the signal is abandoned) |
 | `tools.maxRateLimitFailures`      | 2       | 429/503-style failures before a tool is withheld for the segment       |
@@ -84,7 +84,7 @@ defaults.
 ```js
 {
   runId, status,            // completed | paused | aborted | error | budget_exhausted
-  content, finishReason,    // finishReason: provider value, or 'budget_exhausted' | 'max_iterations' | 'clarification' | 'tool_passthrough_complete'
+  content, finishReason,    // finishReason: provider value, or 'budget_exhausted' | 'clarification' | 'tool_passthrough_complete'
   usage, runUsage,          // this segment / the whole run (promptTokens, completionTokens, totalTokens)
   iterations, messages,     // rounds used; final provider-valid transcript
   citations, knowledgeSources, thoughtSignatures, images,
@@ -172,7 +172,7 @@ Chat policies:
 
 | Policy                   | Value                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------- |
-| `budgets.maxToolRounds`  | 10 (`CHAT_MAX_TOOL_ROUNDS`); the last round is spent on a forced final answer         |
+| `budgets.maxToolRounds`  | 10 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
 | `tools.parallel`         | **false** — chat tools have side effects and the client renders tool events in order |
 | `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |

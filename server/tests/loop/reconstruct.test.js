@@ -3,6 +3,10 @@
  * rebuilt provider request hashes to what was sent (report-only check).
  */
 import test from 'node:test';
+import { RunLog } from '../../services/loop/RunLog.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { LLMClient } from '../../services/loop/LLMClient.js';
 import {
@@ -232,4 +236,83 @@ test('reconstruction rebuilds from the recorded model / options snapshot, not th
   });
   assert.equal(edited.matched, 1);
   await runLog.stop();
+});
+
+test('a growing tool-loop context records only the appended messages and still reconstructs', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const base = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'go' }
+  ];
+  const grown = [
+    ...base,
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'c1', function: { name: 't', arguments: '{}' } }]
+    },
+    { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}' }
+  ];
+  await client.complete({ model, messages: base, telemetry: { runId, step: 0 } });
+  await client.complete({ model, messages: grown, telemetry: { runId, step: 1 } });
+  // compaction rewrote the history: a full record again
+  const rewritten = [base[0], { role: 'user', content: 'go (compacted)' }];
+  await client.complete({ model, messages: rewritten, telemetry: { runId, step: 2 } });
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.deepEqual(
+    headers.map(h => h.data.reason),
+    ['initial', 'append', 'change']
+  );
+  assert.equal(headers[1].data.messages, undefined);
+  assert.deepEqual(headers[1].data.messagesDelta, grown.slice(2));
+  assert.deepEqual(headers[2].data.messages, rewritten);
+  const report = await verifyRequestReconstruction(events, { findModel: () => model });
+  assert.equal(report.checked, 3);
+  assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
+
+  // A tampered prefix is a mismatch on the tampered header and on every delta
+  // replayed onto it; the rewritten (fully recorded) header still verifies.
+  const tampered = events.map(e =>
+    e.type === 'request/header' && e.data.step === 0
+      ? { ...e, data: { ...e.data, messages: [{ role: 'user', content: 'TAMPERED' }] } }
+      : e
+  );
+  const detected = await verifyRequestReconstruction(tampered, { findModel: () => model });
+  assert.equal(detected.ok, false);
+  assert.equal(detected.checked, 3);
+  assert.equal(detected.matched, 1);
+  assert.deepEqual(
+    detected.mismatched.map(m => m.field),
+    ['messages', 'messages']
+  );
+  assert.deepEqual(detected.skipped, []);
+  await runLog.stop();
+});
+
+test('nothing is hashed or recorded when the ledger is off and nobody listens', async () => {
+  const off = new RunLog({
+    baseDir: await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-off-')),
+    forceEnabled: false,
+    getPlatformConfig: () => ({}),
+    getFeatures: () => ({})
+  });
+  assert.equal(off.isRecording('run-anything'), false);
+  const client = realClient(off);
+  const { runId } = await off.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const result = await client.complete({
+    model,
+    messages: [{ role: 'user', content: 'a' }],
+    telemetry: { runId, step: 0 }
+  });
+  assert.equal(result.content, 'ok');
+  assert.equal(
+    off.currentSeq(runId),
+    1,
+    'only run/start sits in memory; no request/header was built'
+  );
+  off.subscribe(runId, () => {});
+  assert.equal(off.isRecording(runId), true, 'a subscriber turns recording on');
+  await off.stop();
 });

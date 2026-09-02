@@ -2,7 +2,7 @@
  * Regression test for #1722: Google streaming emitted the same tool_calls index (0)
  * for every chunk because GoogleConverter derived it from result.tool_calls.length,
  * which resets to 0 on every fresh streaming chunk. When Gemini splits parallel
- * function calls across separate SSE chunks, ToolExecutor's dedup-by-index merge
+ * function calls across separate SSE chunks, the agent loop's dedup-by-index merge
  * (collectedToolCalls.find(c => c.index === call.index)) then collided the second
  * call into the first, concatenating JSON arguments into an invalid '{...}{...}'
  * blob and silently dropping a tool call.
@@ -51,9 +51,9 @@ assert.strictEqual(chunk1.tool_calls[0].index, 0, 'First call should get index 0
 assert.strictEqual(chunk2.tool_calls[0].index, 1, 'Second call should get index 1, not 0');
 logger.info('✓ Test 1 passed\n');
 
-// Test 2: simulate ToolExecutor's dedup-by-index merge to prove both tool calls
+// Test 2: simulate the agent loop's dedup-by-index merge to prove both tool calls
 // survive independently with valid, non-concatenated JSON arguments.
-logger.info('Test 2: simulated ToolExecutor merge keeps both calls intact');
+logger.info('Test 2: simulated agent-loop merge keeps both calls intact');
 const collectedToolCalls = [];
 for (const result of [chunk1, chunk2]) {
   for (const call of result.tool_calls) {

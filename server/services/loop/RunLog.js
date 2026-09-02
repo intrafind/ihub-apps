@@ -50,21 +50,24 @@ import {
   createPresenceMap
 } from '../../clusterBus.js';
 import { withFileLock } from '../../utils/fileLock.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_FLUSH_MS = 2000;
 const MAX_QUEUE = 20000;
-const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$/;
 /** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
 /** Presence kind announcing which worker owns (allocates the sequence of) a run. */
 export const RUN_PRESENCE_KIND = 'run';
 const REMOTE_APPEND_TIMEOUT_MS = 2000;
 
-/** Whether `runId` is acceptable as a ledger run id (also a safe path segment). */
+/**
+ * Whether `runId` is acceptable as a ledger run id: the same rule as every
+ * other id that becomes a file name (`pathSecurity.isValidId`).
+ */
 export function isValidRunId(runId) {
-  return typeof runId === 'string' && RUN_ID_PATTERN.test(runId);
+  return isValidId(runId);
 }
 
 function assertRunId(runId) {
@@ -418,8 +421,8 @@ export class RunLog {
 
   /** Highest seq on disk for a run (0 when persistence is off or the run has no file). */
   async _diskLastSeq(runId) {
-    const events = await this.readEvents(runId);
-    return events.length ? events[events.length - 1].seq : 0;
+    if (!this.isEnabled()) return 0;
+    return (await this._diskLastEvent(runId))?.seq || 0;
   }
 
   /**
@@ -430,13 +433,19 @@ export class RunLog {
    */
   append(runId, type, data) {
     assertRunId(runId);
-    const parsed = parseRunLogEventData(type, data ?? {});
     let entry = this._runs.get(runId);
     if (!entry && !this.isEnabled() && this._globalListeners.size === 0) {
       // Ledger off and nobody listening: don't accumulate in-memory run entries
-      // for runs that were never started here (e.g. workflow executions).
+      // for runs that were never started here (e.g. workflow executions) — and
+      // don't pay for validating an event nobody will see.
       return null;
     }
+    if (type === RUN_LOG_EVENTS.RUN_END && entry?.ended) {
+      // A run ends once; a second run/end (settling a paused chat run twice,
+      // a relayed cancel racing the owner) is a no-op.
+      return null;
+    }
+    const parsed = parseRunLogEventData(type, data ?? {});
     if (!entry) {
       // Unknown run (no startRun/resumeRun) — register lazily so we never lose
       // an event, but flag it: seq continuity after a restart requires resumeRun().
@@ -507,6 +516,28 @@ export class RunLog {
 
   hasRun(runId) {
     return this._runs.has(runId);
+  }
+
+  /**
+   * Whether an event appended to `runId` would be seen by anyone (persisted
+   * or delivered to a subscriber). Callers use it to skip building payloads —
+   * hashing a whole context per step — on installs with the ledger off.
+   */
+  isRecording(runId) {
+    if (this.isEnabled() || this._globalListeners.size > 0) return true;
+    return (this._runs.get(runId)?.listeners.size || 0) > 0;
+  }
+
+  /**
+   * Whether the run has recorded `run/end`: memory first, then the last
+   * persisted event (a tail read, not the whole file).
+   */
+  async hasEnded(runId) {
+    const meta = this._runs.get(runId);
+    if (meta) return meta.ended === true;
+    if (!this.isEnabled()) return false;
+    const last = await this._diskLastEvent(runId);
+    return last?.type === RUN_LOG_EVENTS.RUN_END;
   }
 
   getRunMeta(runId) {
@@ -612,7 +643,9 @@ export class RunLog {
    */
   async readEvents(runId, { afterSeq = 0, limit = Infinity } = {}) {
     if (!this.isEnabled()) return [];
-    await this.flush();
+    // Only flush when something is buffered: a read must never cost a disk
+    // write when the appender is idle.
+    if (this._appender.queueLength() > 0) await this.flush();
     const file = this.runFilePath(runId);
     try {
       await fs.access(file);
@@ -637,13 +670,109 @@ export class RunLog {
     return out;
   }
 
-  /** Highest seq known for a run (memory first, then disk). */
+  /** Highest seq known for a run (memory first, then the last persisted line). */
   async lastSeq(runId) {
     const mem = this._runs.get(runId)?.seq;
     if (mem) return mem;
     if (!this.isEnabled()) return 0;
-    const events = await this.readEvents(runId);
-    return events.length ? events[events.length - 1].seq : 0;
+    return (await this._diskLastEvent(runId))?.seq || 0;
+  }
+
+  /**
+   * The run's `run/start` event from disk (the first line), without flushing
+   * or reading the rest of the file. `null` when persistence is off or the
+   * run has no file.
+   */
+  async readStart(runId) {
+    if (!this.isEnabled()) return null;
+    const file = this.runFilePath(runId);
+    let first = await this._readFirstLine(file);
+    if (first === null && this._appender.queueLength() > 0) {
+      // The start may still sit in the buffer.
+      await this.flush();
+      first = await this._readFirstLine(file);
+    }
+    if (!first) return null;
+    try {
+      const evt = JSON.parse(first);
+      return evt?.type === RUN_LOG_EVENTS.RUN_START ? evt : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async _readFirstLine(file) {
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+    } catch (err) {
+      if (err.code === 'ENOENT') return null;
+      throw err;
+    }
+    try {
+      const chunks = [];
+      const buf = Buffer.alloc(16 * 1024);
+      let position = 0;
+      for (;;) {
+        const { bytesRead } = await handle.read(buf, 0, buf.length, position);
+        if (bytesRead === 0) break;
+        const text = buf.toString('utf8', 0, bytesRead);
+        const nl = text.indexOf('\n');
+        if (nl >= 0) {
+          chunks.push(text.slice(0, nl));
+          return chunks.join('');
+        }
+        chunks.push(text);
+        position += bytesRead;
+      }
+      return chunks.length ? chunks.join('') : null;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  /**
+   * The last complete event on disk, read from the file's tail (the last
+   * 64 KiB, growing backwards when a line is longer). Flushes first only when
+   * the appender holds buffered events.
+   * @private
+   */
+  async _diskLastEvent(runId) {
+    if (this._appender.queueLength() > 0) await this.flush();
+    const file = this.runFilePath(runId);
+    let handle;
+    try {
+      handle = await fs.open(file, 'r');
+    } catch (err) {
+      if (err.code === 'ENOENT') return null;
+      throw err;
+    }
+    try {
+      const { size } = await handle.stat();
+      let span = Math.min(size, 64 * 1024);
+      for (;;) {
+        const buf = Buffer.alloc(span);
+        await handle.read(buf, 0, span, size - span);
+        const lines = buf
+          .toString('utf8')
+          .split('\n')
+          .filter(l => l.trim());
+        // The first line of the chunk may be cut; use it only when the chunk
+        // starts at the beginning of the file.
+        const usable = span === size ? lines : lines.slice(1);
+        for (let i = usable.length - 1; i >= 0; i--) {
+          try {
+            return JSON.parse(usable[i]);
+          } catch {
+            /* a partial line: keep looking backwards */
+          }
+        }
+        if (span >= size) return null;
+        span = Math.min(size, span * 4);
+      }
+    } finally {
+      await handle.close();
+    }
   }
 
   /**

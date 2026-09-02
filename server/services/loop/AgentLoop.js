@@ -267,8 +267,7 @@ export class AgentLoop {
     let usage = null;
     const thoughtSignatures = [];
     const images = [];
-    let structuredLifted = false;
-    let answered = false; // the model produced a turn without tool calls
+    let forcedFinalOffered = false; // a tool-less final call was made after a budget gate fired
     let terminal = null; // { status, finishReason, pendingInteraction?, toolCalls? }
 
     this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, { segment: segmentId, purpose });
@@ -282,7 +281,6 @@ export class AgentLoop {
       runId,
       status,
       content,
-      structured: undefined,
       finishReason: extra.finishReason ?? finishReason,
       usage: usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, source: 'estimate' },
       runUsage: {
@@ -305,7 +303,10 @@ export class AgentLoop {
     });
 
     try {
-      while (iteration < maxRounds) {
+      // Past the round cap, exactly one more call is allowed when a budget gate
+      // fired on the last round without a tool-less final call having been
+      // made yet (a cap of 1 spends its only round on tools).
+      while (iteration < maxRounds || (forceFinish && !forcedFinalOffered)) {
         iteration++;
         ctx.iteration = iteration;
         assertNotAborted();
@@ -407,7 +408,6 @@ export class AgentLoop {
           const jsonCall = toolCalls.find(c => c.function.name === 'json');
           if (jsonCall?.function?.arguments) {
             content += jsonCall.function.arguments;
-            structuredLifted = true;
             toolCalls = toolCalls.filter(c => c !== jsonCall);
           }
         }
@@ -462,8 +462,9 @@ export class AgentLoop {
           toolCalls
         });
 
+        if (forceFinish) forcedFinalOffered = true;
+
         if (toolCalls.length === 0) {
-          answered = true;
           if (!finishReason) finishReason = result.finishReason || 'stop';
           break;
         }
@@ -634,15 +635,9 @@ export class AgentLoop {
         }
       }
 
-      if (iteration >= maxRounds && !answered && finishReason !== 'budget_exhausted') {
-        this.logger.warn('Max tool rounds reached', { component: COMPONENT, runId, maxRounds });
-        finishReason = 'max_iterations';
-        forceFinish = true;
-        forceReason = forceReason || 'rounds';
-      }
       const status =
         forceFinish && finishReason === 'budget_exhausted' ? 'budget_exhausted' : 'completed';
-      return buildResult(status, { structured: structuredLifted ? undefined : undefined });
+      return buildResult(status);
     } catch (caught) {
       // A model call or tool cut short by the wall-clock deadline surfaces as
       // an abort; report it as the budget failure it is.

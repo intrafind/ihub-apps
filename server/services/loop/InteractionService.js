@@ -52,6 +52,12 @@ export const INTERACTION_BUS_CHANNEL = 'interaction:mutation';
  */
 export const ANSWER_CLAIM_TTL_MS = 30 * 1000;
 
+/**
+ * How long a settled (answered / cancelled / expired) interaction stays
+ * readable in memory — for late readers and a repeated answer — before it is
+ * dropped. It lives on in the run's ledger; only pending ones are kept.
+ */
+const SETTLED_RETENTION_MS = 60 * 1000;
 /** Directory (next to the pending store) holding the exclusive answer claim markers. */
 export const CLAIM_DIR_NAME = 'interaction-claims';
 
@@ -91,6 +97,9 @@ export class InteractionService extends EventEmitter {
     });
     /** @type {Map<string, Object>} in-memory mirror (id → interaction) */
     this._byId = new Map();
+    this._settledRetentionMs = opts.settledRetentionMs ?? SETTLED_RETENTION_MS;
+    /** @type {Map<string, NodeJS.Timeout>} eviction timers of settled interactions */
+    this._evictTimers = new Map();
     /** @type {Map<string, {resolve:Function, reject:Function}>} awaiting answers */
     this._waiters = new Map();
     /**
@@ -143,6 +152,7 @@ export class InteractionService extends EventEmitter {
 
   async _save(interaction, { replicate = true } = {}) {
     this._byId.set(interaction.id, interaction);
+    this._scheduleEviction(interaction);
     if (replicate) {
       try {
         this._bus.publish(INTERACTION_BUS_CHANNEL, { interaction, pid: this._pid });
@@ -163,6 +173,29 @@ export class InteractionService extends EventEmitter {
       delete data.interactions[interaction.id];
     }
     this._store.markDirty();
+  }
+
+  /**
+   * A settled interaction is dropped from memory after the grace period, so a
+   * long-lived worker does not hold every interaction it ever saw; a pending
+   * one stays until it settles. The timer never keeps the process alive.
+   * @private
+   */
+  _scheduleEviction(interaction) {
+    this._clearEviction(interaction.id);
+    if (interaction.status === 'pending') return;
+    const timer = setTimeout(() => {
+      this._evictTimers.delete(interaction.id);
+      if (this._byId.get(interaction.id)?.status !== 'pending') this._byId.delete(interaction.id);
+    }, this._settledRetentionMs);
+    if (typeof timer.unref === 'function') timer.unref();
+    this._evictTimers.set(interaction.id, timer);
+  }
+
+  _clearEviction(id) {
+    const timer = this._evictTimers.get(id);
+    if (timer) clearTimeout(timer);
+    this._evictTimers.delete(id);
   }
 
   /**
@@ -205,6 +238,7 @@ export class InteractionService extends EventEmitter {
     for (const [id, it] of this._byId) {
       if (it.runId === runId) {
         this._byId.delete(id);
+        this._clearEviction(id);
         const w = this._waiters.get(id);
         if (w) {
           this._waiters.delete(id);
@@ -252,7 +286,8 @@ export class InteractionService extends EventEmitter {
    * @param {Object} [params.source]
    * @param {number} [params.step]
    * @param {string} [params.id]
-   * @param {number} [params.ordinal] - caller-tracked sequence (default: n-th of this kind on the run)
+   * @param {number} [params.ordinal] - caller-tracked sequence (default: n-th of this kind on the
+   *   run among the interactions this worker still holds — loops that need an exact count track it)
    * @returns {Promise<Object>} the persisted interaction
    */
   async raise(params) {
@@ -296,7 +331,7 @@ export class InteractionService extends EventEmitter {
     return interaction;
   }
 
-  /** Get an interaction by id (pending or recently resolved in this process). */
+  /** Get an interaction by id (pending, or settled within the retention grace period). */
   async get(id) {
     await this._ensureLoaded();
     return this._byId.get(id) || null;
@@ -826,6 +861,7 @@ export class InteractionService extends EventEmitter {
 
   async stop() {
     this.stopExpirySweep();
+    for (const id of [...this._evictTimers.keys()]) this._clearEviction(id);
     this._unsubscribeBus?.();
     this._unhookDelete?.();
     if (this._persist()) {

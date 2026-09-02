@@ -71,10 +71,15 @@ contracts in `server/services/loop/contracts/runLogEvents.js`
 `context/compaction`, `error`).
 
 `request/header` carries the exact model-visible messages on the first request
-and whenever they change (hash-deduplicated in between), the tool schemas, the
-call configuration and a hash of the provider request body. The
-`server/services/loop/replay/reconstruct.js` check rebuilds the request from
-these fields and verifies the hash — the ledger is complete enough to replay.
+(`messages`), only the appended ones when a tool loop grows the context
+(`messagesDelta`, `reason: append`), and the whole array again when the history
+was rewritten (`reason: change`, e.g. after a compaction); an identical repeat
+carries just the hash. It also records the tool schemas and the model / option
+snapshot when they change, the call configuration and a hash of the provider
+request body. The `server/services/loop/replay/reconstruct.js` check replays
+the deltas, rebuilds every request from these fields and verifies the hashes —
+the ledger is complete enough to replay, and a tampered context is reported as
+a mismatch.
 
 ## API
 
@@ -153,6 +158,29 @@ worker that does not own the run. They are routed to the worker that owns the
 run's sequence (the one that started or resumed it); when no worker owns it any
 more, the sequence continues from the persisted ledger under a per-run lock
 file (`locks/`), so two recovering workers never allocate the same number.
+
+## Deployment assumptions
+
+- **One filesystem per cluster.** Every worker must see the same
+  `contents/data/run-log/`: a run file is appended by the worker that owns the
+  run, each worker rewrites `interactions.json` from its own replicated view,
+  and the answer claim markers (`interaction-claims/`) and recovery lock files
+  (`locks/`) are how workers agree. Workers on separate disks would each keep a
+  partial ledger and could accept the same answer twice.
+- **Gap re-sync needs the ledger.** A client that reconnects to a live stream
+  fills the gap from `GET /api/runs/:runId/events`. With `features.runLog` off
+  there is nothing to read back; the client rebuilds its view from the events
+  it receives from then on.
+- **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
+  is the only chat / workflow / run stream; the ledger flag decides what is
+  persisted, not what is sent.
+- **Paused chat runs end on their own.** A chat turn that asks a clarification
+  leaves its run paused; the run ends (`run/end` with `finishReason`
+  `clarification_answered` / `clarification_superseded` /
+  `clarification_expired`) when the next message answers or supersedes the
+  question, or when it expires. The answer feeds the next turn, a new run.
+- **`runLog.enabled` defaults to `true`.** Migration V085 adds the block to an
+  existing `platform.json`; like every migration it is forward-only.
 
 ## Deleting data
 

@@ -414,7 +414,7 @@ class RequestBuilder {
       // Fail fast on a missing provider key so the route can answer with a
       // clean HTTP error before any stream is opened. The verifier never
       // writes to a response here — the caller owns the reply.
-      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, null, null, language);
+      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, language);
       if (!apiKeyResult.success) {
         return { success: false, error: apiKeyResult.error };
       }

@@ -57,9 +57,9 @@ console.log(
   '✓ Test passed: Adapter correctly converts STOP to tool_calls when function calls exist'
 );
 
-// Test the logic that should be used in ToolExecutor
+// Test the logic the agent loop uses
 // The condition should be: finishReason !== 'tool_calls' && collectedToolCalls.length === 0
-console.log('\nTesting ToolExecutor early return logic...');
+console.log('\nTesting the agent loop early return logic...');
 
 // Scenario 1: finishReason='tool_calls' with tool calls (should NOT return early)
 const scenario1_finishReason = 'tool_calls';
@@ -112,5 +112,5 @@ console.log('✓ Scenario 4: finishReason=tool_calls + no tool calls → continu
 console.log('\n✅ All tests passed! Tool execution logic is correct.');
 console.log('\nSummary:');
 console.log('- Adapter correctly converts Gemini STOP → tool_calls when function calls exist');
-console.log('- ToolExecutor uses AND (&&) logic, not OR (||)');
+console.log('- The agent loop uses AND (&&) logic, not OR (||)');
 console.log('- Tool calls are executed even when Gemini returns STOP finishReason');

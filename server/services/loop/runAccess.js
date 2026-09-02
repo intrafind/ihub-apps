@@ -16,7 +16,6 @@
  */
 import runLog from './RunLog.js';
 import { resolvePrincipal, isAnonymousUser, isAdminUser } from './runIdentity.js';
-import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
 
 /**
@@ -60,8 +59,8 @@ export async function authorizeLedgerRun(runId, user) {
   let refs = mem?.refs ?? null;
   let identityMode = mem?.identityMode ?? null;
   if (principalId === null) {
-    const events = await runLog.readEvents(runId, { limit: 1 });
-    const start = events.find(e => e.type === RUN_LOG_EVENTS.RUN_START);
+    // Only the first line of the run file is needed here.
+    const start = await runLog.readStart(runId);
     if (!start) return { ok: false, status: 404 };
     principalId = start.data.principal?.id ?? null;
     anonymous = start.data.principal?.anonymous === true;

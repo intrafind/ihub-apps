@@ -654,3 +654,23 @@ test('approval: admins may answer regardless of the approver groups; agents stil
   await svc.stop();
   await runLog.stop();
 });
+
+test('settled interactions leave memory after the retention grace; pending ones stay', async () => {
+  const { runLog, svc, runId } = await setup({ settledRetentionMs: 20 });
+  const prompt = { message: 'Which region?', inputType: 'text' };
+  const a = await svc.raise({ runId, kind: 'question', origin: 'tool', prompt });
+  const b = await svc.raise({ runId, kind: 'question', origin: 'tool', prompt });
+  await svc.answer(a.id, { value: 'EU' }, { user: { id: 'alice' } });
+  assert.equal((await svc.get(a.id)).status, 'answered');
+
+  await new Promise(r => setTimeout(r, 60));
+  assert.equal(await svc.get(a.id), null, 'the answered one was dropped from memory');
+  assert.equal((await svc.get(b.id)).status, 'pending', 'the pending one stays');
+  assert.deepEqual(
+    (await svc.listPending({ runId })).map(i => i.id),
+    [b.id]
+  );
+  await assert.rejects(svc.answer(a.id, { value: 'EU' }), e => e.code === 'NOT_FOUND');
+  await svc.stop();
+  await runLog.stop();
+});

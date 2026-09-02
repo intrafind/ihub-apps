@@ -437,11 +437,16 @@ test('ledger — request/header per call with hash dedupe, retry and error event
   assert.equal(headers.length, 3);
   assert.deepEqual(
     headers.map(h => h.data.reason),
-    ['initial', 'same', 'change']
+    ['initial', 'same', 'append']
   );
   assert.ok(Array.isArray(headers[0].data.messages), 'initial records messages');
   assert.equal(headers[1].data.messages, undefined, 'same omits messages');
-  assert.ok(Array.isArray(headers[2].data.messages), 'change records messages');
+  assert.equal(headers[2].data.messages, undefined, 'append omits the full array');
+  assert.deepEqual(
+    headers[2].data.messagesDelta,
+    [{ role: 'assistant', content: 'ok' }],
+    'append records only the new messages'
+  );
   assert.equal(headers[0].data.step, 2);
   assert.equal(headers[0].data.purpose, 'planner');
   assert.equal(headers[0].data.toolExecution, 'server');

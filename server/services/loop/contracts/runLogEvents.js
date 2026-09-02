@@ -158,9 +158,14 @@ export const requestHeaderData = z.object({
   /** SHA-256 over the model-visible messages array (pre-adapter). */
   messagesHash: z.string(),
   messageCount: z.number().int().nonnegative(),
-  /** Full messages are recorded on 'initial' and 'change', omitted on 'same' (hash-dedupe, concept §8.3). */
-  reason: z.enum(['initial', 'change', 'same']),
+  /**
+   * Full messages are recorded on 'initial' and 'change'; 'append' records only
+   * the messages added since the previous header (`messagesDelta`); 'same'
+   * records neither (hash-dedupe, concept §8.3).
+   */
+  reason: z.enum(['initial', 'change', 'same', 'append']),
   messages: z.array(z.any()).optional(),
+  messagesDelta: z.array(z.any()).optional(),
   renderedSystemPrompt: z.string().optional(),
   toolSchemasHash: z.string().nullable(),
   toolSchemas: z.array(z.any()).optional(),

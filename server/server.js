@@ -38,6 +38,7 @@ import registerAgentRoutes from './routes/agents/index.js';
 import registerRunRoutes from './routes/runs.js';
 import runLog from './services/loop/RunLog.js';
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
+import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
@@ -65,7 +66,6 @@ import { setupMiddleware } from './middleware/setup.js';
 import {
   getLocalizedError,
   validateApiKeys,
-  verifyApiKey,
   processMessageTemplates,
   cleanupInactiveClients
 } from './serverHelpers.js';
@@ -546,7 +546,6 @@ if (cluster.isPrimary && workerCount > 1) {
   registerAppSessionStartRoute(app);
   registerMagicPromptRoutes(app);
   registerChatRoutes(app, {
-    verifyApiKey,
     processMessageTemplates,
     getLocalizedError,
     DEFAULT_TIMEOUT
@@ -562,6 +561,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();
+  // A chat clarification that is settled (answered, superseded or expired)
+  // ends the run its question paused.
+  registerChatClarificationLifecycle();
   // Process-wide singletons run once per cluster: on the worker in slot 0
   // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never reused).
   const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
