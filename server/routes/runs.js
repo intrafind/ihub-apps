@@ -32,8 +32,14 @@ import {
   interactionAnswerRequestSchema,
   humanEventRequestSchema
 } from '../services/loop/contracts/interaction.js';
-import { resolvePrincipal, resolveActorId, isAnonymousUser } from '../services/loop/runIdentity.js';
-import { authorizeRun, isAdminUser } from '../services/loop/runAccess.js';
+import {
+  resolvePrincipal,
+  resolveActorId,
+  isAnonymousUser,
+  isAdminUser
+} from '../services/loop/runIdentity.js';
+import { authorizeRun } from '../services/loop/runAccess.js';
+import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
@@ -74,8 +80,10 @@ async function stopRun(runId, meta) {
   }
   if (meta?.kind === 'workflow' || meta?.kind === 'agent' || getExecutionRegistry().get(runId)) {
     try {
-      await getWorkflowEngine().cancel(runId, 'user_stop');
-      return 'execution_cancelled';
+      // The execution may run on another worker: the engine relays the
+      // cancellation to whoever holds its abort controller.
+      const state = await getWorkflowEngine().cancelAnywhere(runId, 'user_stop');
+      return state?.cancelRelayed ? 'execution_cancel_relayed' : 'execution_cancelled';
     } catch (err) {
       if (err.code === 'EXECUTION_NOT_FOUND') return null;
       throw err;
@@ -374,7 +382,15 @@ export default function registerRunRoutes(app) {
         },
         { kind: auth.meta?.kind || 'chat' }
       );
-      const effect = kind === 'stop' ? await stopRun(runId, auth.meta) : null;
+      let effect = null;
+      if (kind === 'stop') effect = await stopRun(runId, auth.meta);
+      // A steer reaches the running loop at its next step boundary (queued on
+      // the worker that owns the run, relayed there in a cluster); without an
+      // active loop it is recorded only.
+      if (kind === 'steer') {
+        const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
+        effect = routed ? `steer_${routed}` : null;
+      }
       res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
     } catch (error) {
       sendFailedOperationError(res, 'send human event', error);

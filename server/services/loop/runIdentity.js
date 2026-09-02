@@ -17,6 +17,14 @@ import { LEDGER_IDENTITY_MODES } from '../../../shared/runEvents.js';
 
 export const ANONYMOUS_USER_ID = 'anonymous';
 
+/** Whether `user` has admin access (permission flag or admin group membership). */
+export function isAdminUser(user) {
+  if (!user) return false;
+  if (user.permissions?.adminAccess === true) return true;
+  const groups = Array.isArray(user.groups) ? user.groups : [];
+  return groups.includes('admin') || groups.includes('admins');
+}
+
 export function isAnonymousUser(user) {
   if (!user) return true;
   if (user.anonymous === true) return true;

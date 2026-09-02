@@ -21,6 +21,13 @@ import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../.
 import configCache from '../../../configCache.js';
 import llmClient from '../../loop/LLMClient.js';
 import { AgentLoop } from '../../loop/AgentLoop.js';
+import { questionSeam, markInteractiveTools } from '../../loop/seams/questionSeam.js';
+import { buildQuestionPrompt } from '../../loop/questionPrompt.js';
+import interactionService from '../../loop/InteractionService.js';
+import runLog from '../../loop/RunLog.js';
+import { validateAskUserParams } from '../../../tools/askUser.js';
+import { buildQuestionCheckpoint, pausedLoopState, resumeTranscript } from '../questionPause.js';
+import { v4 as uuidv4 } from 'uuid';
 import { repairToolArguments, matchTool } from '../../loop/toolArgs.js';
 import { classifyToolResult } from '../../loop/toolClassify.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
@@ -566,16 +573,27 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
       contextForLLM._stepLog = stepLog;
 
+      // A node resumed after an `ask_user` question continues its paused
+      // loop transcript (the answer replaces the awaiting tool result)
+      // instead of starting the step over.
+      const resumedTranscript = this._resumedQuestionTranscript(node, state);
+
       // Execute LLM call (with tool loop if tools are available)
       const response = await this.executeLLMWithTools({
         model,
-        messages,
+        messages: resumedTranscript || messages,
         tools,
         config,
         context: contextForLLM,
         nodeId: node.id,
         nativeWebSearch
       });
+
+      // The model asked the user: the execution pauses on a question
+      // checkpoint and this node runs again once the answer is in.
+      if (response.status === 'paused' && response.pendingInteraction) {
+        return this._pauseForQuestion({ node, context, response, language });
+      }
 
       // Finalise the step transcript with timing + outcome.
       const stepCompletedMs = Date.now();
@@ -627,7 +645,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Build state updates (include source cache if sources were loaded)
       const stateUpdates = {
         ...(config.outputVariable ? { [config.outputVariable]: output } : {}),
-        ...(cacheUpdates ? { _sourceContent: cacheUpdates } : {})
+        ...(cacheUpdates ? { _sourceContent: cacheUpdates } : {}),
+        ...(resumedTranscript ? { _pausedLoops: { [node.id]: null } } : {})
       };
 
       // ── Runtime-owned lifecycle: auto-persist task results and synthesizer
@@ -1476,7 +1495,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       kind: context.user?.isAgent ? 'agent' : 'workflow',
       model,
       messages,
-      tools: toolList,
+      tools: markInteractiveTools(toolList),
       toolExecution: 'server',
       policies: {
         budgets: { maxToolRounds: roundCap, maxTokensPerRun },
@@ -1512,7 +1531,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       },
       state: { budget: runBudget },
       meta: { stepLog: context._stepLog || null },
-      seams: [this._workflowSeam({ context, nodeId })],
+      seams: [
+        this._workflowSeam({ context, nodeId }),
+        questionSeam(this._questionSeamOptions({ context, nodeId, runState }))
+      ],
       executeTool: (call, { toolDef, args }) =>
         this.executeToolCall(call, toolList, context, { toolDef, args })
     });
@@ -1522,6 +1544,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     }
 
     return {
+      pendingInteraction: result.pendingInteraction || null,
       content: result.content,
       iterations: result.iterations,
       tokens: {
@@ -1547,6 +1570,93 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
+  /**
+   * Options for the shared question seam inside a workflow / agent node: an
+   * `ask_user` call raises a durable `question` interaction on the execution's
+   * run (parked in the interactions queue, no timeout) and pauses the node;
+   * the answer resumes the same step (`checkpointResume.js`).
+   * @private
+   */
+  _questionSeamOptions({ context, nodeId, runState }) {
+    const executionId = context.executionId || runState?.executionId;
+    return {
+      validate: validateAskUserParams,
+      raise: async (info, ctx) => {
+        const checkpointId = `ckpt-${uuidv4()}`;
+        const runMeta = runLog.getRunMeta(executionId);
+        const profileId = runState?.data?._agent?.profileId || context._agentProfile?.id || null;
+        return interactionService.raise({
+          id: checkpointId,
+          runId: executionId,
+          step: ctx.iteration,
+          kind: 'question',
+          origin: 'tool',
+          prompt: buildQuestionPrompt(info.args),
+          policy: { fallback: 'park' },
+          source: {
+            checkpointId,
+            executionId,
+            nodeId,
+            ...(info.call?.id ? { toolCallId: String(info.call.id) } : {}),
+            toolId: String(info.toolId || 'ask_user'),
+            ...(context.chatId && context.chatId !== executionId ? { chatId: context.chatId } : {}),
+            ...(profileId ? { profileId: String(profileId) } : {}),
+            ...(runMeta?.principalId ? { principalId: String(runMeta.principalId) } : {}),
+            ...(runMeta?.identityMode ? { identityMode: runMeta.identityMode } : {})
+          },
+          ordinal: info.ordinal
+        });
+      }
+    };
+  }
+
+  /**
+   * The paused node result for an `ask_user` question: a checkpoint (shown
+   * like a `human` node's) plus the loop transcript persisted on the state so
+   * the step continues from the answer.
+   * @private
+   */
+  _pauseForQuestion({ node, context, response, language }) {
+    const interaction = response.pendingInteraction;
+    const checkpoint = buildQuestionCheckpoint({ node, interaction, language });
+    const executionId = context.executionId;
+    this.logger.info('Agent node paused on a question', {
+      component: 'PromptNodeExecutor',
+      executionId,
+      nodeId: node.id,
+      checkpointId: checkpoint.id
+    });
+    actionTracker.emit('fire-sse', {
+      event: 'workflow.human.required',
+      chatId: context.chatId || executionId,
+      executionId,
+      checkpoint
+    });
+    return {
+      status: 'paused',
+      output: { awaitingHuman: true, checkpointId: checkpoint.id },
+      checkpoint,
+      pauseReason: 'question',
+      stateUpdates: {
+        pendingCheckpoint: checkpoint,
+        _pausedLoops: {
+          [node.id]: pausedLoopState({
+            checkpointId: checkpoint.id,
+            toolCallId: interaction.source?.toolCallId || null,
+            messages: response.messages
+          })
+        }
+      }
+    };
+  }
+
+  /** The resumed loop transcript for this node, or null when it was not paused on a question. */
+  _resumedQuestionTranscript(node, state) {
+    const paused = state?.data?._pausedLoops?.[node.id];
+    if (!paused) return null;
+    return resumeTranscript(paused, state.data?._questionAnswers?.[paused.checkpointId] || null);
+  }
+
   _workflowSeam({ context, nodeId }) {
     return {
       name: 'workflow-node',

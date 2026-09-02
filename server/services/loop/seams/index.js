@@ -20,4 +20,4 @@
 export { imageLiftSeam, extractImageData } from './imageLiftSeam.js';
 export { knowledgeSourceSeam, classifyKnowledgeSource } from './knowledgeSourceSeam.js';
 export { passthroughSeam } from './passthroughSeam.js';
-export { questionSeam } from './questionSeam.js';
+export { questionSeam, markInteractiveTools } from './questionSeam.js';

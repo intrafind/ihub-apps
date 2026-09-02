@@ -622,3 +622,35 @@ test("prompt.validation is enforced server-side according to the prompt's input 
   await svc.stop();
   await runLog.stop();
 });
+
+test('approval: admins may answer regardless of the approver groups; agents still may not', async () => {
+  const { runLog, svc, runId } = await setup();
+  const it = await svc.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] },
+    policy: { approverGroups: ['finance-approvers'] }
+  });
+  await assert.rejects(
+    svc.answer(it.id, { value: 'approve' }, { user: { id: 'bob', groups: ['users'] } }),
+    e => e.code === 'UNAUTHORIZED_APPROVER'
+  );
+  await assert.rejects(
+    svc.answer(
+      it.id,
+      { value: 'approve' },
+      { user: { id: 'agent:p1', isAgent: true, groups: ['admin'] } }
+    ),
+    e => e.code === 'APPROVER_REQUIRED'
+  );
+  const answered = await svc.answer(
+    it.id,
+    { value: 'approve' },
+    { user: { id: 'root', groups: ['admin'] } }
+  );
+  assert.equal(answered.status, 'answered');
+  assert.equal(answered.answer.by, 'root');
+  await svc.stop();
+  await runLog.stop();
+});

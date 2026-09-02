@@ -29,6 +29,7 @@ import { addUsage, normalizeUsage, usageToBudget } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { planToolBatches } from './segmentPlanner.js';
+import { takeSteers, steerMessage } from './steering.js';
 import {
   compactIfOversized,
   microcompactMessages,
@@ -308,6 +309,18 @@ export class AgentLoop {
         iteration++;
         ctx.iteration = iteration;
         assertNotAborted();
+
+        // Human steer messages queued for this run are delivered here, at the
+        // step boundary, inside an explicit trust marker (see steering.js).
+        for (const steer of takeSteers(runId)) {
+          const message = steerMessage(steer);
+          ctx.messages.push(message);
+          this._ledger(ledgerId, RUN_LOG_EVENTS.MESSAGE_USER, {
+            step: iteration,
+            content: message.content,
+            synthetic: 'steer'
+          });
+        }
 
         await runHooks(seams, 'preStep', ctx);
 

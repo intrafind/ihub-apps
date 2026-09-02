@@ -27,6 +27,7 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   imageLiftSeam,
   knowledgeSourceSeam,
+  markInteractiveTools,
   passthroughSeam,
   questionSeam
 } from '../loop/seams/index.js';
@@ -51,20 +52,6 @@ export const CHAT_MAX_TOOL_ROUNDS = 10;
  * bounded (insertion-ordered, evict-oldest) — mirrors searchCache.js.
  */
 const MAX_CHAT_ENTRIES = 5000;
-
-/**
- * Tools that ask the user (today `ask_user`, or anything flagged
- * `requiresUserInput`) are `interactive` for the loop's question seam.
- * @param {Array} tools
- * @returns {Array}
- */
-export function markInteractiveTools(tools) {
-  return (Array.isArray(tools) ? tools : []).map(tool =>
-    tool && (tool.id === 'ask_user' || tool.requiresUserInput === true) && tool.interactive !== true
-      ? { ...tool, interactive: true }
-      : tool
-  );
-}
 
 /** Attach app variables to the last user message (where PromptService reads them). */
 function withVariables(messages, variables) {

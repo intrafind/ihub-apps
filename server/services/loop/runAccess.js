@@ -15,16 +15,9 @@
  * @module services/loop/runAccess
  */
 import runLog from './RunLog.js';
-import { resolvePrincipal, isAnonymousUser } from './runIdentity.js';
+import { resolvePrincipal, isAnonymousUser, isAdminUser } from './runIdentity.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
-
-export function isAdminUser(user) {
-  if (!user) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.includes('admin') || groups.includes('admins');
-}
 
 /**
  * Authorize against the execution registry (workflow / agent executions).

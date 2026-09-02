@@ -3,7 +3,8 @@
  * the legacy workflow `checkpoint` shape that `HumanCheckpoint.jsx` renders:
  *
  *   { id, nodeId, nodeName, type, message, title, options, inputSchema,
- *     showData, displayData, expiresAt, timeout, createdAt }
+ *     showData, displayData, expiresAt, timeout, createdAt,
+ *     inputType, placeholder, allowSkip, validation }   // free-text questions
  *
  * Shared by the chat projection (`features/chat/runToMessage.js`) and the
  * workflow projection (`features/workflows/workflowRunProjection.js`) so both
@@ -62,6 +63,12 @@ export function interactionToCheckpoint(interaction) {
     ...(source.nodeName ? { nodeName: source.nodeName } : {}),
     type: KIND_TO_CHECKPOINT_TYPE[interaction.kind] || 'approval',
     message: prompt.message,
+    // Free-text questions (ask_user inside a workflow / agent node) state their
+    // widget; approval / review checkpoints keep the legacy shape.
+    ...(interaction.kind === 'question' && prompt.inputType ? { inputType: prompt.inputType } : {}),
+    ...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
+    ...(prompt.allowSkip ? { allowSkip: true } : {}),
+    ...(prompt.validation ? { validation: prompt.validation } : {}),
     ...(prompt.title !== undefined ? { title: prompt.title } : {}),
     ...(prompt.options !== undefined ? { options: prompt.options } : {}),
     inputSchema: prompt.inputSchema ?? null,

@@ -174,7 +174,7 @@ function useWorkflowExecution(executionId, options = {}) {
   // that run is the child execution), answered through the one answer
   // endpoint, which resumes the execution.
   const respondToCheckpoint = useCallback(
-    async ({ checkpointId, response, data }) => {
+    async ({ checkpointId, response, data, skipped = false }) => {
       if (!executionId) return;
 
       if (!isFeatureEnabled()) {
@@ -189,7 +189,7 @@ function useWorkflowExecution(executionId, options = {}) {
         const result = await answerInteraction(
           ownerRunId,
           checkpointId,
-          { value: response, ...(data ? { data } : {}) },
+          skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
           { channel: 'run_page' }
         );
 

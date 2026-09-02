@@ -201,7 +201,11 @@ function useRunStream({
     const rid = runId || rootRunIdRef.current || streamIdRef.current;
     if (!rid) return null;
     try {
-      const { events: envelopes, lastSeq } = await fetchAllLedgerEvents(async (after, limit) => {
+      const {
+        events: envelopes,
+        lastSeq,
+        complete
+      } = await fetchAllLedgerEvents(async (after, limit) => {
         const res = await fetchWithAuthRetry(
           buildApiUrl(
             `runs/${encodeURIComponent(rid)}/events?after=${after}&limit=${limit}&view=sse`
@@ -211,6 +215,14 @@ function useRunStream({
         if (!res.ok) throw new Error(`Run re-sync failed (${res.status})`);
         return res.json();
       });
+      if (!complete) {
+        // The page bound was hit before the ledger's end: a truncated
+        // projection must not replace the live state as if it were complete.
+        // Clear the gap (an empty rebuild) and leave the run as it is.
+        console.warn('Run re-sync incomplete: ledger larger than the page bound', rid);
+        if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes: [] });
+        return null;
+      }
       if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
       return { runId: rid, events: envelopes, lastSeq };
     } catch (err) {

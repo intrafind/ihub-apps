@@ -10,7 +10,13 @@ import runLog from '../loop/RunLog.js';
 import { resetStream } from '../loop/RunStream.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { isValidId } from '../../utils/pathSecurity.js';
+import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
+
+/** Presence kind announcing which worker holds a running execution's abort controller. */
+export const EXECUTION_PRESENCE_KIND = 'execution';
+/** Cluster bus channel relaying a cancellation to the worker running the execution. */
+export const EXECUTION_CANCEL_CHANNEL = 'execution:cancel';
 
 /**
  * Default timeout for node execution in milliseconds (5 minutes)
@@ -113,6 +119,8 @@ export class WorkflowEngine {
    * @param {StateManager} [options.stateManager] - Custom state manager instance
    * @param {DAGScheduler} [options.scheduler] - Custom scheduler instance
    * @param {number} [options.defaultTimeout] - Default node execution timeout in ms
+   * @param {{createPresenceMap: Function, hasRemote: Function, publish: Function, subscribe: Function}} [options.bus]
+   *   cluster bus (default: clusterBus) — tests inject a fake to simulate workers
    */
   constructor(options = {}) {
     /**
@@ -145,7 +153,13 @@ export class WorkflowEngine {
      * @type {Map<string, AbortController>}
      * @private
      */
-    this.abortControllers = new Map();
+    this._bus = options.bus || { createPresenceMap, hasRemote, publish, subscribe };
+    // A presence map: every worker knows which one holds a running execution's
+    // abort controller, so a cancellation landing elsewhere can be relayed.
+    this.abortControllers = this._bus.createPresenceMap(EXECUTION_PRESENCE_KIND);
+    this._unsubscribeCancel = this._bus.subscribe(EXECUTION_CANCEL_CHANNEL, message =>
+      this._onRemoteCancel(message)
+    );
   }
 
   /**
@@ -1526,6 +1540,56 @@ export class WorkflowEngine {
    * @example
    * await engine.cancel('exec-123', 'User requested cancellation');
    */
+  /**
+   * Cancel an execution wherever it runs. The abort controller of a running
+   * execution lives in the worker executing it; a request landing on another
+   * worker relays the cancellation there instead of only flipping the
+   * persisted state while the node keeps running. Without a running owner
+   * (paused, or nobody holds it) the state is cancelled here.
+   *
+   * @param {string} executionId
+   * @param {string} [reason]
+   * @returns {Promise<Object>} the execution state; `cancelRelayed: true` when another worker performs it
+   */
+  async cancelAnywhere(executionId, reason = 'user_cancelled') {
+    if (
+      !this.abortControllers.has(executionId) &&
+      this._bus.hasRemote(EXECUTION_PRESENCE_KIND, executionId)
+    ) {
+      const state = await this.stateManager.get(executionId);
+      if (!state) {
+        const error = new Error(`Execution not found: ${executionId}`);
+        error.code = 'EXECUTION_NOT_FOUND';
+        throw error;
+      }
+      this._bus.publish(
+        EXECUTION_CANCEL_CHANNEL,
+        { executionId, reason },
+        { kind: EXECUTION_PRESENCE_KIND, key: executionId }
+      );
+      logger.info('Relayed cancellation to the worker running the execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        reason
+      });
+      return { ...state, cancelRelayed: true };
+    }
+    return this.cancel(executionId, reason);
+  }
+
+  /** A cancellation relayed by another worker for an execution running here. */
+  _onRemoteCancel(message) {
+    const executionId = message?.executionId;
+    if (typeof executionId !== 'string' || !this.abortControllers.has(executionId)) return;
+    this.cancel(executionId, message.reason || 'user_cancelled').catch(error => {
+      logger.warn('Relayed cancellation failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: error.message
+      });
+    });
+  }
+
   async cancel(executionId, reason = 'user_cancelled') {
     const state = await this.stateManager.get(executionId);
 

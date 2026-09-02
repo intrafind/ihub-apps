@@ -244,6 +244,14 @@ POST /api/runs/:runId/interactions/:checkpointId/answer
 { "value": "approve", "data": { … } }
 ```
 
+An agent can also **ask**: when a prompt or agent node's model calls `ask_user`,
+the run pauses on a `question` checkpoint (free text, number or options,
+skippable when the model allowed it) that is answered from the run page, the
+chat that launched the run, or the queue (`kind=question`). The node then
+continues the same step with the answer as the tool result. A `steer` human
+event delivers an operator's instruction into the running loop at its next
+step boundary (see [Run Ledger](run-ledger.md#human-events)).
+
 The server enforces the approver groups, validates the option, routes the
 workflow on the chosen branch and resumes the run (`interaction/answered`,
 `run/resumed`); a rejected answer leaves the interaction pending. The run id of

@@ -23,6 +23,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { getWorkflowEngine } from './WorkflowEngine.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { HumanNodeExecutor } from './executors/HumanNodeExecutor.js';
+import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -42,13 +43,19 @@ export class CheckpointResumeError extends InteractionError {
   }
 }
 
-/** True for interactions raised by a workflow `human` node. */
+/**
+ * True for interactions that pause a workflow execution on a checkpoint: a
+ * `human` node's approval / review / input (`origin: node`) or an `ask_user`
+ * question raised inside a prompt / agent node (`origin: tool`). Both carry
+ * `source.checkpointId` and `source.executionId`.
+ */
 export function isCheckpointInteraction(interaction) {
   return (
     !!interaction &&
-    interaction.origin === 'node' &&
     typeof interaction.source?.checkpointId === 'string' &&
-    interaction.source.checkpointId.length > 0
+    interaction.source.checkpointId.length > 0 &&
+    typeof interaction.source?.executionId === 'string' &&
+    interaction.source.executionId.length > 0
   );
 }
 
@@ -127,6 +134,19 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
       'WORKFLOW_NOT_AVAILABLE'
     );
   }
+  if (pending.type === 'question') {
+    return resumeQuestion({
+      pending,
+      workflow,
+      state,
+      executionId,
+      answer,
+      user,
+      engine,
+      registry
+    });
+  }
+
   const humanNode = (workflow.nodes || []).find(n => n.id === pending.nodeId);
   if (!humanNode) {
     throw new CheckpointResumeError('Human node not found in workflow', 'HUMAN_NODE_NOT_FOUND');
@@ -196,6 +216,74 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
   }
 
   return newState;
+}
+
+/**
+ * Resume an execution paused by an `ask_user` question inside a prompt /
+ * agent node: the answer is stored on the state, the pending checkpoint
+ * cleared, and the engine re-runs the paused node, which continues its loop
+ * from the persisted transcript with the answer as the tool result
+ * (`questionPause.resumeTranscript`).
+ * @private
+ */
+async function resumeQuestion({
+  pending,
+  workflow,
+  state,
+  executionId,
+  answer,
+  user,
+  engine,
+  registry
+}) {
+  const node = (workflow.nodes || []).find(n => n.id === pending.nodeId);
+  if (!node) {
+    throw new CheckpointResumeError('Paused node not found in workflow', 'NODE_NOT_FOUND');
+  }
+  registry.clearPendingCheckpoint(executionId);
+  await engine.stateManager.update(executionId, {
+    data: {
+      pendingCheckpoint: null,
+      _questionAnswers: {
+        ...(state.data?._questionAnswers || {}),
+        [pending.id]: {
+          value: answer.value ?? null,
+          skipped: answer.skipped === true,
+          by: answer.by || null,
+          at: answer.at || new Date().toISOString()
+        }
+      }
+    }
+  });
+  actionTracker.emit('fire-sse', {
+    event: 'workflow.human.responded',
+    chatId: executionId,
+    executionId,
+    nodeId: node.id,
+    checkpointId: pending.id,
+    response: answer.skipped ? null : (answer.value ?? null)
+  });
+  logger.info('Question answered; resuming the paused node', {
+    component: 'CheckpointResume',
+    executionId,
+    nodeId: node.id,
+    checkpointId: pending.id,
+    skipped: answer.skipped === true
+  });
+  const isAgentRun = !!state.data?._agent?.profileId;
+  try {
+    return await engine.resume(
+      executionId,
+      {},
+      {
+        user: user || { id: answer.by || 'system', groups: [] },
+        workflow,
+        ...(isAgentRun ? { timeout: AGENT_NODE_TIMEOUT_MS } : {})
+      }
+    );
+  } catch (err) {
+    throw wrapEngineError(err);
+  }
 }
 
 /** Ledger marker after the answer was accepted: `run/resumed` follows `interaction/answered`. */

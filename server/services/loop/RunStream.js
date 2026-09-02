@@ -217,7 +217,12 @@ export function emitToolProgress(chatId, progress) {
 
 // ── checkpoint → interaction ────────────────────────────────────────────────
 
-const CHECKPOINT_KIND = { approval: 'approval', review: 'review', input: 'question' };
+const CHECKPOINT_KIND = {
+  approval: 'approval',
+  review: 'review',
+  input: 'question',
+  question: 'question'
+};
 
 /**
  * Map a workflow `human` node checkpoint onto the interaction contract.
@@ -234,14 +239,17 @@ export function checkpointToInteraction(checkpoint, ctx = {}) {
         ...(o.style ? { style: String(o.style) } : {})
       }))
     : undefined;
+  // A question checkpoint (ask_user inside a node) states its widget; a
+  // human `input` node is a text / form widget regardless of options.
   const inputType =
-    cp.type === 'input'
+    cp.inputType ||
+    (cp.type === 'input' || cp.type === 'question'
       ? cp.inputSchema
         ? 'form'
         : 'text'
       : options?.length
         ? 'single_select'
-        : 'confirm';
+        : 'confirm');
   return {
     id: String(cp.id || `${ctx.executionId || ctx.runId}:${cp.nodeId || 'checkpoint'}`),
     runId: ctx.runId || ctx.executionId,
@@ -256,7 +264,10 @@ export function checkpointToInteraction(checkpoint, ctx = {}) {
       inputSchema: cp.inputSchema ?? null,
       showData: Array.isArray(cp.showData) ? cp.showData : null,
       ...(cp.displayData ? { displayData: cp.displayData } : {}),
-      allowSkip: false,
+      ...(cp.placeholder ? { placeholder: String(cp.placeholder) } : {}),
+      ...(cp.validation && typeof cp.validation === 'object' ? { validation: cp.validation } : {}),
+      ...(cp.context ? { context: String(cp.context) } : {}),
+      allowSkip: cp.allowSkip === true,
       allowOther: false
     },
     policy: {

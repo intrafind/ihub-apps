@@ -640,8 +640,13 @@ export default function registerAgentRunRoutes(app) {
         const { runId } = req.params;
         if (!validateIdForPath(runId, 'run', res)) return;
         if (!(await authorizeRunAccess(req, res, runId))) return;
-        const state = await getEngine().cancel(runId, req.body?.reason || 'user_cancelled');
-        res.json({ ok: true, status: state.status });
+        // The run may execute on another worker: the engine relays the cancel.
+        const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
+        res.json({
+          ok: true,
+          status: state.status,
+          ...(state.cancelRelayed ? { relayed: true } : {})
+        });
       } catch (error) {
         sendFailedOperationError(res, 'cancel agent run', error);
       }

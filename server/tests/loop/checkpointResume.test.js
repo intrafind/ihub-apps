@@ -117,14 +117,23 @@ async function setup() {
   return { runLog, svc };
 }
 
-test('isCheckpointInteraction: node origin + source.checkpointId', () => {
+test('isCheckpointInteraction: source.checkpointId + executionId, from a human node or an ask_user call', () => {
   const it = checkpointToInteraction(fakeCheckpoint(), {
     runId: EXECUTION_ID,
     executionId: EXECUTION_ID
   });
   assert.equal(isCheckpointInteraction(it), true);
   assert.equal(isCheckpointInteraction({ ...it, source: {} }), false);
-  assert.equal(isCheckpointInteraction({ ...it, origin: 'tool' }), false);
+  assert.equal(
+    isCheckpointInteraction({ ...it, origin: 'tool' }),
+    true,
+    'an ask_user question inside a node pauses the execution too'
+  );
+  assert.equal(
+    isCheckpointInteraction({ ...it, source: { checkpointId: 'ckpt-1' } }),
+    false,
+    'a chat clarification (no execution) is not a checkpoint'
+  );
   assert.equal(isCheckpointInteraction(null), false);
 });
 
@@ -404,4 +413,87 @@ test('the expiry sweep transitions overdue interactions and is idempotent to sta
   svc.stopExpirySweep();
   await svc.stop();
   await runLog.stop();
+});
+
+test('an answered question checkpoint resumes the paused node with the answer on the state', async () => {
+  const workflow = {
+    id: 'wf-q',
+    nodes: [
+      { id: 'research', type: 'prompt', config: {} },
+      { id: 'write', type: 'prompt' }
+    ],
+    edges: [{ from: 'research', to: 'write' }]
+  };
+  const pending = {
+    id: 'ckpt-q1',
+    nodeId: 'research',
+    type: 'question',
+    message: 'Which quarter?',
+    inputType: 'text',
+    allowSkip: true
+  };
+  const state = {
+    executionId: EXECUTION_ID,
+    status: 'paused',
+    completedNodes: [],
+    currentNodes: ['research'],
+    data: {
+      pendingCheckpoint: pending,
+      _pausedLoops: { research: { checkpointId: 'ckpt-q1', toolCallId: 'call_1', messages: [] } },
+      _workflowDefinition: workflow,
+      _agent: { profileId: 'p1' }
+    }
+  };
+  const { engine, registry, calls } = fakeEngine({ state });
+  const interaction = {
+    id: 'ckpt-q1',
+    runId: EXECUTION_ID,
+    kind: 'question',
+    origin: 'tool',
+    status: 'answered',
+    prompt: { message: 'Which quarter?', inputType: 'text' },
+    source: {
+      checkpointId: 'ckpt-q1',
+      executionId: EXECUTION_ID,
+      nodeId: 'research',
+      toolCallId: 'call_1'
+    },
+    answer: { value: 'Q3 2025', by: 'alice', at: '2026-09-02T12:00:00.000Z', channel: 'run_page' }
+  };
+  assert.equal(
+    isCheckpointInteraction(interaction),
+    true,
+    'a tool-origin question with a checkpoint id pauses an execution'
+  );
+
+  const executor = {
+    resume() {
+      throw new Error('the human node executor must not be involved');
+    }
+  };
+  const newState = await resumeWorkflowFromAnswer(interaction, {
+    user: { id: 'alice' },
+    engine,
+    registry,
+    executor
+  });
+  assert.equal(newState.status, 'running');
+  assert.deepEqual(registry.cleared, [EXECUTION_ID]);
+  assert.equal(calls.getNextNodes.length, 0, 'no branch routing: the same node runs again');
+  assert.equal(calls.update.length, 1);
+  const patch = calls.update[0].patch;
+  assert.equal(patch.data.pendingCheckpoint, null);
+  assert.equal(patch.data._questionAnswers['ckpt-q1'].value, 'Q3 2025');
+  assert.equal(patch.data._questionAnswers['ckpt-q1'].skipped, false);
+  assert.equal(
+    patch.currentNodes,
+    undefined,
+    'currentNodes untouched: the paused node stays current'
+  );
+  assert.equal(calls.resume.length, 1);
+  assert.equal(
+    calls.resume[0].options.timeout,
+    AGENT_NODE_TIMEOUT_MS,
+    'agent runs keep their node budget'
+  );
 });

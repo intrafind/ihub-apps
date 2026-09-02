@@ -22,7 +22,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import ChatService, { markInteractiveTools } from '../../services/chat/ChatService.js';
+import ChatService from '../../services/chat/ChatService.js';
+import { markInteractiveTools } from '../../services/loop/seams/questionSeam.js';
 import { AgentLoop } from '../../services/loop/AgentLoop.js';
 import { setEnvelopeDelivery, stampSeq } from '../../services/loop/RunStream.js';
 import { sseV2EventSchema } from '../../services/loop/contracts/sseV2.js';

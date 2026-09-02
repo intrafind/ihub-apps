@@ -21,6 +21,7 @@ import {
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { planToolBatches } from '../../services/loop/segmentPlanner.js';
+import { steerRun, takeSteers, STEER_MARKER } from '../../services/loop/steering.js';
 import {
   makeClient,
   sseResponse,
@@ -603,6 +604,46 @@ test('wall clock: the deadline aborts an in-flight tool and a hanging model call
   });
   assert.equal(done.status, 'completed');
   assert.deepEqual(seen, [true]);
+});
+
+test('steer: a queued human message reaches the next model call inside the trust marker and the ledger', async () => {
+  const { runLog, events } = await captureRunLog();
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const { loop, requests } = makeLoop(
+    [toolTurn([{ name: 'webSearch', args: { query: 'x' } }]), textTurn('done')],
+    { runLog }
+  );
+  const result = await loop.run({
+    runId,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    executeTool: async () => {
+      // the human steers while the tool runs: delivered at the next step boundary
+      assert.equal(
+        steerRun(runId, { message: 'Focus on 2025 figures only', by: 'alice' }, { runLog }),
+        'queued'
+      );
+      return { ok: true };
+    }
+  });
+  assert.equal(result.status, 'completed');
+  const second = requests[1].request.body.messages;
+  const steer = second.find(m => m.role === 'user' && String(m.content).startsWith(STEER_MARKER));
+  assert.ok(steer, 'the steer is in the second request');
+  assert.match(steer.content, /Focus on 2025 figures only/);
+  assert.equal(
+    second.indexOf(steer),
+    second.length - 1,
+    'appended at the step boundary, after the tool result'
+  );
+  const ledgered = events.find(
+    e => e.type === RUN_LOG_EVENTS.MESSAGE_USER && e.data.synthetic === 'steer'
+  );
+  assert.ok(ledgered);
+  assert.equal(ledgered.data.step, 2);
+  assert.deepEqual(takeSteers(runId), [], 'drained');
+  await runLog.stop();
 });
 
 test('spill: a tool result above the threshold is spilled and previewed, never sent in full', async () => {

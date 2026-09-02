@@ -34,7 +34,7 @@ import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
-import { resolveActorId } from './runIdentity.js';
+import { resolveActorId, isAdminUser } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -331,6 +331,9 @@ export class InteractionService extends EventEmitter {
     if (!user || user.isAgent === true) {
       throw new InteractionError('An approver is required', 'APPROVER_REQUIRED', 403);
     }
+    // Admins see every interaction in the queue and may answer every one of
+    // them — the same access rule the run routes apply.
+    if (isAdminUser(user)) return;
     const userGroups = user.groups || [];
     if (!groups.some(g => userGroups.includes(g))) {
       throw new InteractionError(

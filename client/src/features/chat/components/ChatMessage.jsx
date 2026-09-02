@@ -38,11 +38,11 @@ function ChatCheckpoint({ executionId, checkpoint }) {
         key={checkpoint.id}
         checkpoint={checkpoint}
         displayData={checkpoint.displayData}
-        onRespond={async ({ checkpointId, response, data }) => {
+        onRespond={async ({ checkpointId, response, data, skipped = false }) => {
           await answerInteraction(
             executionId,
             checkpointId,
-            { value: response, ...(data ? { data } : {}) },
+            skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
             { channel: 'chat' }
           );
           setRespondedId(checkpointId);

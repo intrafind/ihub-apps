@@ -16,6 +16,21 @@
  * @module services/loop/seams/questionSeam
  */
 
+/**
+ * Tools that ask the user (today `ask_user`, or anything flagged
+ * `requiresUserInput`) are `interactive` for the question seam. Every caller
+ * that offers tools to the loop (chat, workflow and agent nodes) marks them.
+ * @param {Array} tools
+ * @returns {Array}
+ */
+export function markInteractiveTools(tools) {
+  return (Array.isArray(tools) ? tools : []).map(tool =>
+    tool && (tool.id === 'ask_user' || tool.requiresUserInput === true) && tool.interactive !== true
+      ? { ...tool, interactive: true }
+      : tool
+  );
+}
+
 export function questionSeam({
   raise,
   validate,

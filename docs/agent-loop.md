@@ -114,9 +114,17 @@ is an object with any of these hooks; register it for every run with
 
 Built-in seams live in `server/services/loop/seams/`:
 
-- `questionSeam` — `interactive: true` tools (today `ask_user`) raise a question
-  interaction and pause the segment; a per-conversation cap turns further
-  questions into an error the model has to work around.
+- `questionSeam` — `interactive: true` tools (today `ask_user`; every caller
+  marks them with `markInteractiveTools`) raise a question interaction and
+  pause the segment; a per-conversation cap turns further questions into an
+  error the model has to work around. Chat answers the question with the next
+  message; a workflow or agent node pauses its execution on a question
+  checkpoint and resumes the same step from the answer
+  (`services/workflow/questionPause.js`).
+- Steer — a `steer` human event (`POST /api/runs/:runId/human-events`) is
+  queued for the run's loop (`services/loop/steering.js`) and appended before
+  the next model call as a `role: 'user'` message carrying the `[steer]` trust
+  marker; the ledger records it as `message/user { synthetic: 'steer' }`.
 - `passthroughSeam` — `passthrough: true` tools stream their own answer to the
   user and end the turn.
 - `imageLiftSeam` — image payloads in tool results become `message.imageData`.

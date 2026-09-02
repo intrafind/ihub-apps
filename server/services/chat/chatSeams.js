@@ -15,6 +15,7 @@ import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../.
 import * as defaultTelemetry from './chatTelemetry.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog from '../loop/RunLog.js';
+import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -219,48 +220,15 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
   };
 }
 
-const INPUT_TYPE_MAPPING = {
-  select: 'single_select',
-  multiselect: 'multi_select',
-  confirm: 'confirm',
-  text: 'text',
-  number: 'number',
-  date: 'date'
-};
-
 /**
- * Build the `question` interaction for an `ask_user` call (interaction
- * contract, client vocabulary for the input type).
+ * Build the `question` interaction for a chat `ask_user` call (the shared
+ * prompt from `questionPrompt.js` plus the chat source).
  */
 export function buildQuestionInteraction(
   args = {},
   { runId, step, chatId, appId, toolCallId, toolId, ordinal, max }
 ) {
-  const rawInputType = args.input_type || 'text';
-  const prompt = {
-    message: String(args.question ?? ''),
-    inputType: INPUT_TYPE_MAPPING[rawInputType] || 'text',
-    allowSkip: Boolean(args.allow_skip),
-    allowOther: Boolean(args.allow_other)
-  };
-  if (Array.isArray(args.options) && args.options.length > 0) {
-    prompt.options = args.options.map(opt => ({
-      value: String(opt.value !== undefined ? opt.value : opt.label),
-      label: String(opt.label ?? opt.value ?? '')
-    }));
-  }
-  if (args.placeholder) prompt.placeholder = String(args.placeholder).substring(0, 200);
-  if (args.validation && typeof args.validation === 'object') {
-    prompt.validation = {};
-    if (args.validation.pattern)
-      prompt.validation.pattern = String(args.validation.pattern).slice(0, 200);
-    if (args.validation.min !== undefined) prompt.validation.min = Number(args.validation.min);
-    if (args.validation.max !== undefined) prompt.validation.max = Number(args.validation.max);
-    if (args.validation.message) {
-      prompt.validation.message = String(args.validation.message).substring(0, 200);
-    }
-  }
-  if (args.context) prompt.context = String(args.context).substring(0, 500);
+  const prompt = buildQuestionPrompt(args);
   return {
     id: `clarify-${chatId}-${ordinal}-${Date.now()}`,
     runId,

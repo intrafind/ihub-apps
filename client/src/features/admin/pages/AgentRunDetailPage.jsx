@@ -10,6 +10,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import { cancelAgentRun, fetchRunArtifacts, resumeAgentRun } from '../../../api/agentsAdminApi';
 import { answerInteraction } from '../../../api';
+import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -942,7 +943,27 @@ export default function AgentRunDetailPage() {
             </div>
           )}
 
-          {isPaused && pendingCheckpoint && (
+          {isPaused && pendingCheckpoint && pendingCheckpoint.type === 'question' && (
+            <div className="mb-6">
+              <HumanCheckpoint
+                key={pendingCheckpoint.id}
+                checkpoint={pendingCheckpoint}
+                displayData={pendingCheckpoint.displayData}
+                onRespond={async ({ checkpointId, response, data, skipped = false }) => {
+                  setActionError(null);
+                  await answerInteraction(
+                    runId,
+                    checkpointId,
+                    skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+                    { channel: 'run_page' }
+                  );
+                  refetch();
+                }}
+              />
+            </div>
+          )}
+
+          {isPaused && pendingCheckpoint && pendingCheckpoint.type !== 'question' && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
               <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
                 ⏸ Awaiting approval

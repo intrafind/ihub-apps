@@ -1287,7 +1287,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         if (!authorizeExecutionAccess(req, res, executionId)) return;
 
-        const state = await workflowEngine.cancel(executionId, reason);
+        // The execution may run on another worker: the engine relays the cancel.
+        const state = await workflowEngine.cancelAnywhere(executionId, reason);
 
         logger.info('Workflow execution cancelled', {
           component: 'WorkflowRoutes',
