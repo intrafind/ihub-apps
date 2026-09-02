@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { verifyJwt, decodeJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
 import logger from './logger.js';
@@ -6,6 +7,18 @@ import logger from './logger.js';
  * OAuth-specific token service for Client Credentials flow
  * Extends the existing tokenService.js with OAuth-specific functionality
  */
+
+/**
+ * A personal OAuth client is one a user created for themselves from the
+ * integrations page. Tokens issued for it act as that user rather than as a
+ * standalone service account.
+ *
+ * @param {Object} client - OAuth client object
+ * @returns {boolean} True when the client belongs to a specific user
+ */
+export function isPersonalClient(client) {
+  return Boolean(client && client.personal && client.ownerUserId);
+}
 
 /**
  * Generate JWT token for OAuth client credentials
@@ -24,7 +37,6 @@ export function generateOAuthToken(client, options = {}) {
   if (!client || !client.clientId) {
     throw new Error('Client object with clientId is required for OAuth token generation');
   }
-
   const algorithm = getJwtAlgorithm();
   const signingKey = getJwtSigningKey();
 
@@ -56,17 +68,32 @@ export function generateOAuthToken(client, options = {}) {
   // NOTE: allowedApps and allowedModels are NOT stored in the token
   // They are retrieved from the client configuration at runtime
   // This allows revoking access without invalidating tokens
-  const tokenPayload = {
-    sub: client.clientId, // Subject is the client ID
-    client_id: client.clientId,
-    client_name: client.name,
-    scopes: tokenScopes,
-    authMode: 'oauth_client_credentials',
-    iat: Math.floor(Date.now() / 1000),
-    // OAuth tokens are machine-to-machine, no user context
-    groups: ['oauth_clients'] // Special group for OAuth clients
-  };
-
+  // Personal clients act as their owner: the subject is the user, and the
+  // identity details (name, e-mail, groups) are resolved from the client record
+  // on every request rather than frozen into the token, so a group change or a
+  // revocation takes effect immediately.
+  const tokenPayload = isPersonalClient(client)
+    ? {
+        sub: client.ownerUserId,
+        client_id: client.clientId,
+        client_name: client.name,
+        scopes: tokenScopes,
+        authMode: 'oauth_personal_key',
+        iat: Math.floor(Date.now() / 1000),
+        // Bound to the key's current generation, so rotating the key also
+        // invalidates the access tokens exchanged from its client credentials.
+        key_generation: personalKeyGeneration(client)
+      }
+    : {
+        sub: client.clientId, // Subject is the client ID
+        client_id: client.clientId,
+        client_name: client.name,
+        scopes: tokenScopes,
+        authMode: 'oauth_client_credentials',
+        iat: Math.floor(Date.now() / 1000),
+        // OAuth tokens are machine-to-machine, no user context
+        groups: ['oauth_clients'] // Special group for OAuth clients
+      };
   const token = jwt.sign(tokenPayload, signingKey, {
     expiresIn: `${expiresIn}s`,
     issuer: 'ihub-apps',
@@ -116,7 +143,8 @@ export function verifyOAuthToken(token) {
     const validAuthModes = [
       'oauth_client_credentials',
       'oauth_authorization_code',
-      'oauth_static_api_key'
+      'oauth_static_api_key',
+      'oauth_personal_key'
     ];
     if (!validAuthModes.includes(decoded.authMode)) {
       logger.warn('Token is not an OAuth token', {
@@ -248,6 +276,107 @@ export function generateStaticApiKey(client, expirationDays = 365) {
   });
 
   logger.info('Static API key generated', {
+    component: 'OAuthTokenService',
+    clientId: client.clientId,
+    expirationDays
+  });
+
+  return {
+    api_key: token,
+    token_type: 'Bearer',
+    expires_in: expiresInSeconds,
+    expires_at: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+    scope: (client.scopes || []).join(' ')
+  };
+}
+
+/**
+ * Generate a personal API key for a user-owned OAuth client.
+ *
+ * Unlike a static API key, the resulting token authenticates as the client's
+ * owner: `sub` is the user ID and the request is authorized against that user's
+ * group permissions. Identity details are deliberately kept out of the token so
+ * that jwtAuth/mcpAuth resolve them from the client record on every request —
+ * revoking or suspending the client cuts access immediately.
+ *
+ * @param {Object} client - Personal OAuth client (must have ownerUserId)
+ * @param {number} expirationDays - Expiration in days
+ * @returns {Object} Object containing the API key and its expiration
+ */
+export function personalKeyGeneration(client) {
+  const generation = client?.metadata?.keyGeneration;
+  return Number.isInteger(generation) && generation > 0 ? generation : 0;
+}
+
+/**
+ * Whether a credential still belongs to its key's current generation.
+ *
+ * Compared with `>=`, not equality. The generation is written by the very
+ * request that mints the credential, and the client store is served from a
+ * cache that a cluster announcement reloads asynchronously - so for a short
+ * window a reader can still see the generation as it was just before the write.
+ * Equality would reject a credential on its very first use in that window,
+ * which is the failure this comparison exists to avoid; a superseded credential
+ * carries a strictly lower generation and is refused either way.
+ *
+ * @param {Object} decoded - Verified token claims
+ * @param {Object} client - Stored OAuth client
+ * @returns {boolean} True when the credential has not been superseded
+ */
+export function isCurrentKeyGeneration(decoded, client) {
+  const claimed = Number.isInteger(decoded?.key_generation) ? decoded.key_generation : 0;
+  return claimed >= personalKeyGeneration(client);
+}
+
+/**
+ * Mint the long-lived API key for a personal OAuth client.
+ *
+ * @param {Object} client - Stored personal OAuth client
+ * @param {number} expirationDays - Lifetime in days
+ * @returns {Object} The API key and its metadata
+ */
+export function generatePersonalApiKey(client, expirationDays) {
+  if (!isPersonalClient(client)) {
+    throw new Error(
+      'A personal OAuth client with an ownerUserId is required for API key generation'
+    );
+  }
+
+  const algorithm = getJwtAlgorithm();
+  const signingKey = getJwtSigningKey();
+
+  if (!signingKey) {
+    throw new Error(`JWT signing key not configured for API key generation with ${algorithm}`);
+  }
+
+  const expiresInSeconds = expirationDays * 24 * 60 * 60;
+
+  const tokenPayload = {
+    sub: client.ownerUserId,
+    client_id: client.clientId,
+    client_name: client.name,
+    scopes: client.scopes || [],
+    authMode: 'oauth_personal_key',
+    iat: Math.floor(Date.now() / 1000),
+    // The generation this credential belongs to. Rotation increments the
+    // client's generation, which is what makes every credential issued earlier
+    // stop working - `iat` cannot do it, because a credential minted in the same
+    // second as the rotation is indistinguishable from the one it replaces.
+    key_generation: personalKeyGeneration(client),
+    // Without a unique id, two keys minted in the same second for the same
+    // client and generation would be byte-identical.
+    jti: crypto.randomUUID(),
+    static_key: true
+  };
+
+  const token = jwt.sign(tokenPayload, signingKey, {
+    expiresIn: `${expiresInSeconds}s`,
+    issuer: 'ihub-apps',
+    audience: 'ihub-apps',
+    algorithm: algorithm
+  });
+
+  logger.info('Personal API key generated', {
     component: 'OAuthTokenService',
     clientId: client.clientId,
     expirationDays

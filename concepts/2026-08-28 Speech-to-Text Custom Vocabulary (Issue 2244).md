@@ -110,7 +110,7 @@ browser-supplied `appId` goes through the shared `isValidId` gate before any loo
 | Model-level terms surfaced to the bridge | `server/transcription/vllmRealtimeProvider.js` |
 | Public API sanitization | `server/routes/modelRoutes.js`, `server/utils/publicApp.js` |
 | Connection test | `server/routes/admin/configs.js` |
-| Platform defaults | `server/migrations/V084__add_speech_vocabulary.js` |
+| Platform defaults | `server/migrations/V085__add_speech_vocabulary.js` |
 | Admin UI (all three levels) | `client/src/features/admin/components/SpeechVocabularyEditor.jsx` |
 | `appId` on the start frame | `transcribeAudioBuffer.js`, `vllmRealtimeRecognitionService.js`, `AppChat.jsx`, `useVoiceRecognition.js` |
 

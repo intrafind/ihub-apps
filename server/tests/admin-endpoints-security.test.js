@@ -94,6 +94,7 @@ jest.mock('../configCache.js', () => ({
 
 // Mock authorization utilities
 jest.mock('../utils/authorization.js', () => ({
+  isAdminEligiblePrincipal: () => true,
   loadGroupsConfiguration: () => mockGroupPermissions,
   enhanceUserWithPermissions: (user, config) => {
     if (!user || !user.groups) return user;

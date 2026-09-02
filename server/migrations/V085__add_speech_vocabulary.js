@@ -1,4 +1,4 @@
-export const version = '084';
+export const version = '085';
 export const description = 'add_speech_vocabulary';
 
 export async function precondition(ctx) {

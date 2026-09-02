@@ -104,6 +104,7 @@ jest.mock('../configCache.js', () => ({
 
 // Mock authorization utils
 jest.mock('../utils/authorization.js', () => ({
+  isAdminEligiblePrincipal: () => true,
   enhanceUserWithPermissions: user => {
     if (!user || user.id === 'anonymous') {
       return {
