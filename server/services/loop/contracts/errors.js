@@ -99,3 +99,15 @@ export function isLLMError(err) {
     (!!err && typeof err === 'object' && err.name === 'LLMError' && typeof err.code === 'string')
   );
 }
+
+/**
+ * Whether `err` represents a deliberate cancellation — either our canonical
+ * `LLMError` with code `ABORTED` or a raw DOM/node-fetch `AbortError`.
+ * @param {*} err
+ * @returns {boolean}
+ */
+export function isAbortError(err) {
+  if (!err) return false;
+  if (isLLMError(err)) return err.code === LLM_ERROR_CODES.ABORTED;
+  return err.name === 'AbortError' || err.code === 'ABORT_ERR' || err.code === 'ABORTED';
+}

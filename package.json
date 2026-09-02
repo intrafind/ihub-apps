@@ -96,7 +96,7 @@
     "test:export-formats": "node client/src/utils/exportFormats.test.js",
     "test:feature-flags": "node shared/featureFlags.test.js",
     "test:personal-api-keys": "node server/tests/personalApiKeys.test.js",
-    "test:loop": "node --test server/tests/loop/*.test.js",
+    "test:loop": "node --test --test-force-exit server/tests/loop/*.test.js",
     "test:tool-calling": "cd server && node tests/toolCalling.test.js",
     "test:tool-integration": "cd server && node tests/toolCallingIntegration.test.js",
     "test:real-llm": "cd server && node tests/real-llm-integration.test.js",

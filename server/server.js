@@ -36,6 +36,7 @@ import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
 import registerRunRoutes from './routes/runs.js';
+import runLog from './services/loop/RunLog.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -556,6 +557,8 @@ if (cluster.isPrimary && workerCount > 1) {
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
   registerRunRoutes(app);
+  // Retention sweep once per process; in cluster mode only the first worker runs it.
+  if (!cluster.isWorker || cluster.worker?.id === 1) runLog.startCleanupScheduler();
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
 

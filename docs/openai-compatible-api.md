@@ -58,6 +58,7 @@ https://your-ihub-instance.com/api/inference/v1
 | `max_tokens`  | Maximum tokens to generate.                                    |
 | `tools`       | OpenAI tool/function definitions — translated to each provider.|
 | `tool_choice` | `none` \| `auto` \| `{ ... }`.                                 |
+| `stream_options` | `{ "include_usage": true }` appends a final chunk with `usage` (and empty `choices`) before `[DONE]`, as OpenAI does. |
 
 Tool calling works across all providers: iHub converts OpenAI-format tools into its generic
 format, dispatches to the provider, and converts the response (including streamed tool-call
@@ -394,13 +395,30 @@ primary sources are:
 
 ---
 
+## Errors
+
+Errors are JSON objects with a `code` from iHub's canonical LLM error taxonomy
+(see [LLM Client](llm-client.md#error-taxonomy)):
+
+```json
+{ "error": "Rate limit exceeded for openai API. Please try again later.", "code": "RATE_LIMITED", "details": "<raw provider body>" }
+```
+
+- Provider failures keep the **upstream HTTP status** (`429`, `503`, …) and carry the provider's
+  raw response in `details`.
+- Validation failures use `400`/`403`/`404` with a localized `error` message (`Accept-Language`
+  selects the language).
+- When a **stream** fails after it started, the error is sent in-band as
+  `data: {"error": {"message": …, "type": "server_error", "code": …}}` followed by `data: [DONE]`.
+- If the client disconnects mid-stream the upstream model call is aborted immediately.
+
 ## Limitations
 
-- **Authentication is always required.** Anonymous access is not available on this endpoint, even
-  if anonymous access is enabled elsewhere on the platform.
-- **`usage` token counts are not populated** in non-streaming responses — `prompt_tokens`,
-  `completion_tokens`, and `total_tokens` are returned as `0`. Use iHub telemetry for accurate
-  usage accounting.
+- **Authentication follows the platform.** The endpoint sits behind `authRequired`: when anonymous
+  access is disabled on the platform, a token is required; when it is enabled, unauthenticated
+  calls are served and see every enabled model. Restrict access with groups / OAuth client scopes.
+- **Reasoning content is not forwarded.** Provider "thinking" deltas are consumed server-side and
+  never appear in the OpenAI wire.
 - **Compatibility scope.** The proxy implements `chat/completions` and `models`. Other OpenAI
   endpoints (e.g. legacy `completions`, `embeddings`, `images`) are not exposed here.
 

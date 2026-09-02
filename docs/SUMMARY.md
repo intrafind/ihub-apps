@@ -93,6 +93,8 @@
     - [Telemetry & Observability](telemetry.md)
   - [Development & Deployment]()
     - [Developer Onboarding](developer-onboarding.md)
+    - [LLM Client](llm-client.md)
+    - [Run Ledger](run-ledger.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)
     - [Architecture Diagrams](diagrams.md)
     - [Troubleshooting](troubleshooting.md)

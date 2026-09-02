@@ -258,7 +258,7 @@ export class RunLog {
     if (!entry) {
       // Unknown run (no startRun/resumeRun) — register lazily so we never lose
       // an event, but flag it: seq continuity after a restart requires resumeRun().
-      logger.warn('RunLog append on unregistered run — registering lazily', {
+      logger.debug('RunLog append on unregistered run — registering lazily', {
         component: 'RunLog',
         runId,
         type

@@ -37,6 +37,9 @@ const env = cleanEnv(
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
     NO_PROXY: str({ optional: true }),
+    // Documented defaults for the magic-prompt feature (model id / system prompt).
+    MAGIC_PROMPT_MODEL: str({ optional: true }),
+    MAGIC_PROMPT_PROMPT: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
     NODE_ENV: str({ default: 'development', optional: true })
   },
@@ -78,6 +81,8 @@ const config = Object.freeze({
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
   NO_PROXY: env.NO_PROXY,
+  MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
+  MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
   USE_HTTPS: env.USE_HTTPS,
   NODE_ENV: env.NODE_ENV
 });
