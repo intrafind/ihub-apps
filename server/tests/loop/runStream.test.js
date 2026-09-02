@@ -1141,3 +1141,27 @@ test('projectLedgerEvent: error → stream/error with retryable = recoverable', 
   const [notRecoverable] = projected(RUN_LOG_EVENTS.ERROR, { recoverable: 'yes' });
   assert.equal(notRecoverable.data.retryable, false, 'only boolean true counts');
 });
+
+test('stream registry: resetStream forgets the counter and binding; the registry is bounded', async () => {
+  const {
+    nextSeq,
+    currentSeq,
+    resetStream,
+    bindStreamRun,
+    getStreamRun,
+    trackedStreamCount,
+    MAX_TRACKED_STREAMS
+  } = await import('../../services/loop/RunStream.js');
+  const id = `evict-${Date.now()}`;
+  nextSeq(id);
+  nextSeq(id);
+  bindStreamRun(id, 'run-x', { emit() {} });
+  assert.equal(currentSeq(id), 2);
+  const bound = getStreamRun(id);
+  assert.equal(bound && typeof bound === 'object' ? bound.runId : bound, 'run-x');
+  resetStream(id);
+  assert.equal(currentSeq(id), 0);
+  assert.equal(getStreamRun(id), null);
+  assert.ok(Number.isInteger(MAX_TRACKED_STREAMS) && MAX_TRACKED_STREAMS > 0);
+  assert.ok(trackedStreamCount() <= MAX_TRACKED_STREAMS);
+});

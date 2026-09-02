@@ -33,6 +33,7 @@ import {
   humanEventRequestSchema
 } from '../services/loop/contracts/interaction.js';
 import { resolvePrincipal, isAnonymousUser } from '../services/loop/runIdentity.js';
+import { authorizeRun, isAdminUser } from '../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent } from '../services/loop/RunStream.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
@@ -40,82 +41,6 @@ import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
-
-function isAdminUser(user) {
-  if (!user) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  const groups = Array.isArray(user.groups) ? user.groups : [];
-  return groups.includes('admin') || groups.includes('admins');
-}
-
-/**
- * Workflow executions / agent runs that the ledger does not know (persistence
- * off, or a run restored from a checkpoint before it was re-registered) are
- * authorized against the execution registry: the launching principal or, for
- * agent runs, the human who triggered the run.
- * @returns {{ok:boolean, meta:Object}|null}
- */
-function authorizeExecution(executionId, user) {
-  if (!executionId || isAnonymousUser(user)) return null;
-  const execution = getExecutionRegistry().get(executionId);
-  if (!execution) return null;
-  const userId = String(user.id);
-  const isAgentRun = typeof execution.userId === 'string' && execution.userId.startsWith('agent:');
-  const allowed =
-    isAdminUser(user) ||
-    execution.userId === userId ||
-    (execution.triggeredBy && String(execution.triggeredBy.userId) === userId);
-  if (!allowed) return null;
-  return {
-    ok: true,
-    meta: {
-      runId: executionId,
-      kind: isAgentRun ? 'agent' : 'workflow',
-      anonymous: false,
-      startedAt: execution.startedAt || null,
-      principalId: execution.userId
-    }
-  };
-}
-
-/**
- * Resolve the run's start record (memory first, then ledger, then the
- * execution registry) and decide whether `user` may access it. Anonymous runs
- * are accessible by id possession only.
- * @param {string} runId
- * @param {Object} user
- * @param {Object} [opts]
- * @param {string} [opts.executionId] - execution to fall back to (default: runId)
- * @returns {Promise<{ok:boolean, status?:number, meta?:Object}>}
- */
-async function authorizeRun(runId, user, { executionId } = {}) {
-  const ledger = await authorizeLedgerRun(runId, user);
-  if (ledger.ok) return ledger;
-  return authorizeExecution(executionId || runId, user) || ledger;
-}
-
-async function authorizeLedgerRun(runId, user) {
-  const mem = runLog.getRunMeta(runId);
-  let principalId = mem?.principalId ?? null;
-  let anonymous = mem?.anonymous ?? null;
-  let kind = mem?.kind ?? null;
-  let startedAt = mem?.startedAt ?? null;
-  if (principalId === null) {
-    const events = await runLog.readEvents(runId, { limit: 1 });
-    const start = events.find(e => e.type === RUN_LOG_EVENTS.RUN_START);
-    if (!start) return { ok: false, status: 404 };
-    principalId = start.data.principal?.id ?? null;
-    anonymous = start.data.principal?.anonymous === true;
-    kind = start.data.kind;
-    startedAt = start.ts;
-  }
-  const meta = { runId, kind, anonymous, startedAt, principalId };
-  if (isAdminUser(user) || anonymous) return { ok: true, meta };
-  if (isAnonymousUser(user)) return { ok: false, status: 403 };
-  const me = await resolvePrincipal(user, { mode: runLog.identityMode() });
-  if (me.id === principalId) return { ok: true, meta };
-  return { ok: false, status: 403 };
-}
 
 /**
  * `stop` is the one human event with a side effect: abort the run. A chat run

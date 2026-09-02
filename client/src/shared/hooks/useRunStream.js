@@ -1,5 +1,10 @@
 import { useReducer, useRef, useCallback, useEffect, useState } from 'react';
-import { createStreamState, reduceRunEvent, foldResyncEvents, RUN_EVENTS } from '../run/runReducer';
+import {
+  createStreamState,
+  reduceRunEvent,
+  rebuildRunFromLedger,
+  RUN_EVENTS
+} from '../run/runReducer';
 import {
   openSseStream,
   toRunEnvelope,
@@ -14,7 +19,7 @@ import { buildApiUrl } from '../../utils/runtimeBasePath';
  */
 const ACTION = Object.freeze({
   ENVELOPE: 'envelope',
-  FOLD: 'fold',
+  REBUILD: 'rebuild',
   RESET: 'reset',
   DISCONNECTED: 'disconnected'
 });
@@ -23,10 +28,10 @@ function streamReducer(state, action) {
   switch (action.type) {
     case ACTION.ENVELOPE:
       return reduceRunEvent(state, action.envelope);
-    case ACTION.FOLD:
-      // A re-sync page (already deduplicated against the live seqs by the
-      // hook — reducers must stay pure); folding clears the gap.
-      return foldResyncEvents(state, action.envelopes);
+    case ACTION.REBUILD:
+      // A re-sync page: the run is rebuilt from its ledger (authoritative) and
+      // swapped in; rebuilding clears the gap.
+      return rebuildRunFromLedger(state, action.runId, action.envelopes);
     case ACTION.RESET: {
       const fresh = createStreamState(action.streamId ?? state.streamId);
       return {
@@ -50,8 +55,9 @@ function streamReducer(state, action) {
  * - fetch-based transport (`openSseStream`: Bearer header, 401 refresh, no
  *   native EventSource)
  * - `useReducer` over `reduceRunEvent`
- * - sequence-gap detection → re-sync from
- *   `GET /api/runs/:runId/events?after=<seq>&view=sse` (dedupe by seq)
+ * - sequence-gap detection → the affected run is rebuilt from its ledger
+ *   (`GET /api/runs/:runId/events?view=sse`); ledger and stream sequence
+ *   numbers are different spaces, so nothing is merged by seq
  * - optional `closeOnRunEnd`: the root run's `run/ended` ends the stream
  *
  * Transport failures are NOT folded into the reducer (they are not run
@@ -180,51 +186,42 @@ function useRunStream({
   }, []);
 
   /**
-   * Re-sync a run from the ledger projection and fold the page (dedupe by seq).
+   * Re-sync a run: fetch its whole ledger projection and rebuild the run from
+   * it (the ledger is authoritative). The live stream's `seq` and the ledger's
+   * `seq` are independent sequence spaces, so no cursor is carried over.
    *
    * @param {string} [runId] - Defaults to the root run
-   * @param {number} [after=0] - Only events with seq > after
    * @returns {Promise<Object|null>} the response body or null on failure
    */
-  const resync = useCallback(async (runId, after = 0) => {
+  const resync = useCallback(async runId => {
     const rid = runId || rootRunIdRef.current || streamIdRef.current;
     if (!rid) return null;
-    const afterSeq = Number.isInteger(after) && after > 0 ? after : 0;
     try {
       const res = await fetchWithAuthRetry(
-        buildApiUrl(`runs/${encodeURIComponent(rid)}/events?after=${afterSeq}&view=sse`),
+        buildApiUrl(`runs/${encodeURIComponent(rid)}/events?after=0&view=sse`),
         { method: 'GET', headers: { Accept: 'application/json' } }
       );
       if (!res.ok) throw new Error(`Run re-sync failed (${res.status})`);
       const body = await res.json();
-      const envelopes = (Array.isArray(body?.events) ? body.events : [])
-        .filter(e => e && e.v === 2 && typeof e.type === 'string')
-        .filter(e => !Number.isInteger(e.seq) || !seenSeqRef.current.has(e.seq))
-        .sort(
-          (a, b) => (Number.isInteger(a.seq) ? a.seq : 0) - (Number.isInteger(b.seq) ? b.seq : 0)
-        );
-      for (const e of envelopes) {
-        if (Number.isInteger(e.seq)) seenSeqRef.current.add(e.seq);
-      }
-      if (mountedRef.current) dispatch({ type: ACTION.FOLD, envelopes });
+      const envelopes = Array.isArray(body?.events) ? body.events : [];
+      if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
       return body;
     } catch (err) {
       console.warn('Run re-sync failed:', err);
       // Clear the gap so a failed re-sync does not block later detection.
-      if (mountedRef.current) dispatch({ type: ACTION.FOLD, envelopes: [] });
+      if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes: [] });
       return null;
     }
   }, []);
 
-  // Sequence gap → re-sync the affected run once per gap.
+  // Sequence gap → rebuild the affected run once per gap.
   useEffect(() => {
     const gap = state.gap;
     if (!gap) return;
-    const after = Math.max((gap.expected || 1) - 1, 0);
-    const key = `${gap.runId}:${after}`;
+    const key = `${gap.runId}:${gap.expected}`;
     if (resyncInFlightRef.current.has(key)) return;
     resyncInFlightRef.current.add(key);
-    resync(gap.runId, after).finally(() => resyncInFlightRef.current.delete(key));
+    resync(gap.runId).finally(() => resyncInFlightRef.current.delete(key));
   }, [state.gap, resync]);
 
   /**

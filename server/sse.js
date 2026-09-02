@@ -14,7 +14,7 @@
  */
 
 import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
-import { setEnvelopeDelivery } from './services/loop/RunStream.js';
+import { setEnvelopeDelivery, resetStream } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
 
 /** streamId → { response, lastActivity, appId? } for locally held SSE streams. */
@@ -80,6 +80,7 @@ export function deliverEnvelope(streamId, envelope) {
     // wiping out a freshly-reconnected entry on the same streamId.
     if (clients.get(streamId) === clientEntry) {
       clients.delete(streamId);
+      resetStream(streamId);
     }
     return false;
   }
@@ -186,6 +187,7 @@ export function closeChatClient(chatId) {
       });
     }
     clients.delete(chatId);
+    resetStream(chatId);
     return true;
   }
   if (hasRemote('sse', chatId)) {
@@ -223,4 +225,5 @@ subscribe(CLOSE_CHANNEL, ({ chatId }) => {
     });
   }
   clients.delete(chatId);
+  resetStream(chatId);
 });

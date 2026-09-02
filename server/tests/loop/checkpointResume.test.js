@@ -339,3 +339,69 @@ test('an execution id that is not a safe run id is rejected before the engine is
   await svc.stop();
   await runLog.stop();
 });
+
+test('an expired checkpoint interaction cancels its execution (policy onTimeout: fail)', async () => {
+  const { runLog, svc } = await setup();
+  const cancelled = [];
+  const { engine, registry, executor } = fakeEngine();
+  engine.cancel = async (id, reason) => {
+    cancelled.push({ id, reason });
+    return { executionId: id, status: 'cancelled' };
+  };
+  const unregister = registerCheckpointResume(svc, { engine, registry, executor, runLog });
+  const template = checkpointToInteraction(fakeCheckpoint({ timeout: 1000 }), {
+    runId: EXECUTION_ID,
+    executionId: EXECUTION_ID
+  });
+  const raised = await svc.raise({
+    id: template.id,
+    runId: EXECUTION_ID,
+    kind: template.kind,
+    origin: 'node',
+    prompt: template.prompt,
+    policy: { timeoutMs: 1000, onTimeout: 'fail' },
+    source: template.source
+  });
+  await svc.expire(raised.id);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(cancelled, [{ id: EXECUTION_ID, reason: 'human_checkpoint_expired' }]);
+  assert.equal((await svc.get(raised.id)).status, 'expired');
+
+  // a chat question expiring never touches the engine
+  const q = await svc.raise({
+    runId: EXECUTION_ID,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'Which?' },
+    source: { chatId: 'chat-1' }
+  });
+  await svc.expire(q.id);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(cancelled.length, 1);
+  unregister();
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('the expiry sweep transitions overdue interactions and is idempotent to start', async () => {
+  let now = Date.parse('2026-01-01T00:00:00Z');
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'checkpoint-sweep-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const svc = new InteractionService({ runLog, saveIntervalMs: 10, now: () => now });
+  await runLog.startRun({ runId: EXECUTION_ID, kind: 'workflow', user: { id: 'u1' } });
+  const it = await svc.raise({
+    runId: EXECUTION_ID,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'Soon?' },
+    policy: { timeoutMs: 1000 }
+  });
+  svc.startExpirySweep({ intervalMs: 5 });
+  svc.startExpirySweep({ intervalMs: 5 });
+  now += 5000;
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal((await svc.get(it.id)).status, 'expired');
+  svc.stopExpirySweep();
+  await svc.stop();
+  await runLog.stop();
+});

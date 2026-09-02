@@ -2,11 +2,13 @@
  * Segment planner — decides which tool calls of one assistant turn may run
  * concurrently.
  *
- * Rules (concept §5.3): read-only tools always run in parallel; other tools run
- * in parallel only when their argument "targets" (the values of the arguments)
- * don't overlap with any other call in the same group; anything ambiguous runs
- * sequentially. Results are always re-ordered into the original call order by
- * the loop, so planning never changes what the model sees.
+ * Rules (concept §5.3): read-only tools always run in parallel with each
+ * other; other tools run in parallel only when their argument "targets" (the
+ * values of the arguments) are known and don't overlap with any other call in
+ * the same group; anything ambiguous — a call whose target cannot be inferred
+ * from its arguments — runs sequentially. Results are always re-ordered into
+ * the original call order by the loop, so planning never changes what the
+ * model sees.
  *
  * @module services/loop/segmentPlanner
  */
@@ -64,13 +66,14 @@ export function planToolBatches(items, policy = {}) {
     }
     const readOnly = def.readOnly === true;
     const targets = targetsOf(item.args);
-    const canJoin =
-      current.length < maxParallel &&
-      (readOnly
-        ? current.every(other =>
-            other.toolDef?.readOnly === true ? true : !overlaps(targets, other._targets)
-          )
-        : currentTargets.every(other => !overlaps(targets, other)));
+    const known = targets.size > 0;
+    // Two calls may share a batch when both are read-only, or when both
+    // targets are known and disjoint. A mutable call with no inferable target
+    // (empty / opaque arguments) is ambiguous and never overlaps anything.
+    const disjoint = other =>
+      (readOnly && other.toolDef?.readOnly === true) ||
+      (known && other._targets.size > 0 && !overlaps(targets, other._targets));
+    const canJoin = current.length < maxParallel && current.every(disjoint);
     if (!canJoin) flush();
     current.push({ ...item, _targets: targets });
     currentTargets.push(targets);

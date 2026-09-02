@@ -11,17 +11,49 @@
  * @module services/loop/seams/passthroughSeam
  */
 
-async function drainToolResponse(response, emit) {
+/**
+ * Ceiling for the text a passthrough tool may leave in the transcript
+ * (10 MB, the limit the old in-memory sink enforced). Streaming to the client
+ * continues past it; the collected copy is truncated with a marker so a huge
+ * or hostile tool response cannot exhaust the heap.
+ */
+export const MAX_PASSTHROUGH_TEXT_CHARS = 10 * 1024 * 1024;
+const TRUNCATION_MARKER = '\n\n[… output truncated: passthrough response exceeded the 10 MB limit]';
+
+/** Accumulates streamed text up to the ceiling; keeps streaming afterwards. */
+function boundedCollector(limit = MAX_PASSTHROUGH_TEXT_CHARS) {
   let full = '';
+  let truncated = false;
+  return {
+    add(text) {
+      if (truncated) return;
+      if (full.length + text.length <= limit) {
+        full += text;
+        return;
+      }
+      full += text.slice(0, Math.max(0, limit - full.length)) + TRUNCATION_MARKER;
+      truncated = true;
+    },
+    get text() {
+      return full;
+    },
+    get truncated() {
+      return truncated;
+    }
+  };
+}
+
+async function drainToolResponse(response, emit, { limit } = {}) {
+  const collected = boundedCollector(limit);
   if (response && typeof response[Symbol.asyncIterator] === 'function') {
     for await (const chunk of response) {
       if (chunk) {
         const text = typeof chunk === 'string' ? chunk : String(chunk);
-        full += text;
+        collected.add(text);
         await emit(text);
       }
     }
-    return full;
+    return collected.text;
   }
   if (response && response.body && typeof response.body.getReader === 'function') {
     const reader = response.body.getReader();
@@ -32,25 +64,38 @@ async function drainToolResponse(response, emit) {
         if (done) break;
         const text = decoder.decode(value, { stream: true });
         if (text) {
-          full += text;
+          collected.add(text);
           await emit(text);
         }
       }
     } finally {
       reader.releaseLock();
     }
-    return full;
+    return collected.text;
   }
+  let full;
   if (typeof response === 'string') full = response;
   else if (response && typeof response === 'object') {
     full =
       typeof response.answer === 'string' ? response.answer : JSON.stringify(response, null, 2);
   } else full = String(response);
-  if (full) await emit(full);
-  return full;
+  if (full) {
+    collected.add(full);
+    await emit(full);
+  }
+  return collected.text;
 }
 
-export function passthroughSeam({ runTool, onChunk, onComplete, onError, buildParams } = {}) {
+export { drainToolResponse };
+
+export function passthroughSeam({
+  runTool,
+  onChunk,
+  onComplete,
+  onError,
+  buildParams,
+  maxTextChars
+} = {}) {
   return {
     name: 'passthrough',
     async preTool(ctx, info) {
@@ -61,7 +106,9 @@ export function passthroughSeam({ runTool, onChunk, onComplete, onError, buildPa
         : { ...args, chatId: ctx.refs.chatId, passthrough: true };
       try {
         const response = await runTool(toolId, params, { ctx, info });
-        const text = await drainToolResponse(response, chunk => onChunk?.(chunk, info, ctx));
+        const text = await drainToolResponse(response, chunk => onChunk?.(chunk, info, ctx), {
+          limit: maxTextChars
+        });
         await onComplete?.(text, info, ctx);
         return {
           handled: true,

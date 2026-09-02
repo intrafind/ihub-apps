@@ -12,6 +12,7 @@ import conversationApiService from '../../services/integrations/ConversationApiS
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import runLog, { isValidRunId } from '../../services/loop/RunLog.js';
+import { authorizeRun } from '../../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
@@ -129,17 +130,31 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           return sendBadRequest(res, errorMessage);
         }
 
-        // Feedback is a human event on the run that produced the message.
+        // Feedback is a human event on the run that produced the message — only
+        // on a run the caller may access (same check as /api/runs/:runId/*) and
+        // only when that run belongs to this chat. Anything else is ignored;
+        // the feedback itself is still stored below.
         if (runId && isValidRunId(runId)) {
           try {
-            runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
-              kind: 'feedback',
-              messageId,
-              rating,
-              ...(feedback ? { message: String(feedback) } : {}),
-              by: req.user?.id ? String(req.user.id) : 'anonymous',
-              at: new Date().toISOString()
-            });
+            const access = await authorizeRun(runId, req.user);
+            const runChatId = access.meta?.refs?.chatId;
+            if (access.ok && (!runChatId || runChatId === chatId)) {
+              runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+                kind: 'feedback',
+                messageId,
+                rating,
+                ...(feedback ? { message: String(feedback) } : {}),
+                by: req.user?.id ? String(req.user.id) : 'anonymous',
+                at: new Date().toISOString()
+              });
+            } else {
+              logger.debug('Feedback human/event skipped: run not accessible for this chat', {
+                component: 'feedbackRoutes',
+                runId,
+                chatId,
+                status: access.status || null
+              });
+            }
           } catch (ledgerErr) {
             logger.debug('Feedback human/event not recorded', {
               component: 'feedbackRoutes',

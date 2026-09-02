@@ -3,6 +3,7 @@ import { clients, activeRequests } from './sse.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import { startInactiveClientSweep } from './utils/sseChannel.js';
+import { resetStream } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
 
 const errorHandler = new ErrorHandler();
@@ -56,6 +57,8 @@ export function cleanupInactiveClients() {
   startInactiveClientSweep(clients, {
     component: 'SSE',
     onEvict: chatId => {
+      // The stream is gone for good: drop its seq counter and run binding.
+      resetStream(chatId);
       if (!activeRequests.has(chatId)) return;
       try {
         const controller = activeRequests.get(chatId);

@@ -6,6 +6,9 @@ import { handleApiResponse } from '../utils/requestHandler';
  * HTTP surface. Every human touchpoint (chat clarification, workflow `human`
  * node checkpoint, agent approval) is an interaction answered through the one
  * answer endpoint; steer / stop / feedback are human events on the run.
+ *
+ * Like every endpoint module, these resolve with the response body
+ * (`handleApiResponse` unwraps the HTTP response).
  */
 
 /**
@@ -16,7 +19,7 @@ import { handleApiResponse } from '../utils/requestHandler';
  * @param {Object} answer - `{ value?, data?, decision?, reason?, skipped? }`
  * @param {Object} [options]
  * @param {'chat'|'run_page'|'queue'|'api'} [options.channel='run_page'] - where the answer was given
- * @returns {Promise<{ data: { success: boolean, interaction: Object } }>}
+ * @returns {Promise<{ success: boolean, interaction: Object }>} the response body
  */
 export const answerInteraction = async (runId, interactionId, answer, options = {}) => {
   const { channel = 'run_page' } = options;
@@ -35,7 +38,7 @@ export const answerInteraction = async (runId, interactionId, answer, options = 
 /**
  * Pending interactions of one run.
  * @param {string} runId
- * @returns {Promise<{ data: { runId: string, interactions: Object[] } }>}
+ * @returns {Promise<{ runId: string, interactions: Object[] }>} the response body
  */
 export const fetchRunInteractions = async runId => {
   return handleApiResponse(
@@ -51,7 +54,7 @@ export const fetchRunInteractions = async runId => {
  * (admins see all, approvers see their groups', owners see their own).
  * @param {Object} [options]
  * @param {string} [options.kind] - `question` | `approval` | `review` | `notify`
- * @returns {Promise<{ data: { interactions: Object[] } }>}
+ * @returns {Promise<{ interactions: Object[] }>} the response body
  */
 export const fetchPendingInteractions = async (options = {}) => {
   const { kind } = options;
@@ -63,7 +66,7 @@ export const fetchPendingInteractions = async (options = {}) => {
  * Deliver a human event into a run. `stop` aborts the run.
  * @param {string} runId
  * @param {{ kind: 'steer'|'stop'|'feedback', message?: string, messageId?: string, rating?: number|string }} event
- * @returns {Promise<{ data: { success: boolean, runId: string, seq: number|null, effect?: string } }>}
+ * @returns {Promise<{ success: boolean, runId: string, seq: number|null, effect?: string }>} the response body
  */
 export const sendHumanEvent = async (runId, event) => {
   return handleApiResponse(
@@ -80,7 +83,7 @@ export const sendHumanEvent = async (runId, event) => {
  * @param {Object} [options]
  * @param {number} [options.after=0]
  * @param {'sse'} [options.view] - `sse` returns SSE v2 envelopes
- * @returns {Promise<{ data: { runId: string, after: number, events: Object[], lastSeq: number } }>}
+ * @returns {Promise<{ runId: string, after: number, events: Object[], lastSeq: number }>} the response body
  */
 export const fetchRunEvents = async (runId, options = {}) => {
   const { after = 0, view } = options;

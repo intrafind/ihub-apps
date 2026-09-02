@@ -2,13 +2,16 @@
  * Classify a tool result message for the circuit breaker.
  *
  * A tool "failed" when its serialized result is a JSON object with a truthy
- * `error`; it is "rate limited" when the error message looks like a 429/503.
+ * `error`; it is "rate limited" when the numeric `status` is 429/503 or the
+ * error text looks like a rate limit. Both documented failure shapes are
+ * understood: `{ error, message, code }` and `{ error, status, statusText, body }`.
  * Non-JSON content is real tool output, never an error.
  *
  * @module services/loop/toolClassify
  */
 
-export const RATE_LIMIT_PATTERN = /\b(429|503)\b|too many requests|rate[ -]?limit/i;
+export const RATE_LIMIT_PATTERN = /\b(429|503)\b|too many requests|rate[ _-]?limit/i;
+const RATE_LIMIT_STATUSES = new Set([429, 503]);
 
 /**
  * @param {{content?: unknown}|null} toolMessage - the `role: 'tool'` message
@@ -30,8 +33,19 @@ export function classifyToolResult(toolMessage) {
     return none;
   }
   if (!parsed || typeof parsed !== 'object' || !parsed.error) return none;
-  const message = String(parsed.message || 'tool error');
-  return { failed: true, rateLimited: RATE_LIMIT_PATTERN.test(message), message };
+  const status = Number(parsed.status ?? parsed.statusCode);
+  const message = String(
+    parsed.message ||
+      (typeof parsed.error === 'string' && parsed.error !== 'true' ? parsed.error : '') ||
+      parsed.statusText ||
+      (typeof parsed.body === 'string' ? parsed.body.slice(0, 200) : '') ||
+      'tool error'
+  );
+  const rateLimited =
+    RATE_LIMIT_STATUSES.has(status) ||
+    RATE_LIMIT_PATTERN.test(message) ||
+    RATE_LIMIT_PATTERN.test(String(parsed.code || ''));
+  return { failed: true, rateLimited, message };
 }
 
 /**

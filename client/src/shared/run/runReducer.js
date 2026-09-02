@@ -239,10 +239,23 @@ export function reduceRunEvent(state, envelope) {
     case SSE_V2_EVENTS.STEP_COMPLETED: {
       const stepNo = Number.isInteger(data.step) ? data.step : run.currentStep;
       const prev = ensureStep(run, stepNo);
+      // The completed content is the authoritative text of the step (the
+      // ledger's message, or the model's final output): it replaces whatever
+      // this step streamed, so lost or never-received deltas cannot leave the
+      // answer truncated. A step without content (tool-call only) keeps the
+      // streamed text untouched.
+      const streamed = prev.text || '';
+      const content = data.content || '';
+      const base =
+        streamed && run.text.endsWith(streamed)
+          ? run.text.slice(0, run.text.length - streamed.length)
+          : run.text;
+      const text = content ? base + content : run.text;
       const step = {
         ...prev,
         completed: true,
-        content: data.content || '',
+        content,
+        text: content || streamed,
         toolCalls: data.toolCalls || [],
         finishReason: data.finishReason ?? null,
         usage: data.usage || null,
@@ -250,9 +263,6 @@ export function reduceRunEvent(state, envelope) {
         sources: data.sources,
         groundingMetadata: data.groundingMetadata
       };
-      // No deltas were streamed for this step (re-sync from the ledger): adopt
-      // the completed content as the answer text.
-      const text = prev.text === '' && data.content ? run.text + data.content : run.text;
       run = {
         ...run,
         text,
@@ -441,19 +451,56 @@ export function reduceRunEvents(state, envelopes) {
  * @param {Set<number>} [seenSeqs] - Seqs already folded from the live stream
  * @returns {Object} new StreamState with `gap: null`
  */
-export function foldResyncEvents(state, envelopes, seenSeqs) {
-  const seen = new Set();
+/**
+ * Rebuild one run from its ledger projection
+ * (`GET /api/runs/:runId/events?view=sse`, ledger `seq` space).
+ *
+ * The ledger is authoritative: the run is recomputed from the page alone and
+ * swapped into the stream state; the stream's own bookkeeping (`lastSeq`,
+ * order, other runs) is untouched and the gap is cleared. Ledger `seq` values
+ * belong to the run's own sequence space, so they are never compared with the
+ * live stream's `seq`. Client-only accumulations the ledger does not carry
+ * (node progress, meta) are kept from the live run when the page has none.
+ *
+ * @param {StreamState} state
+ * @param {string} runId
+ * @param {Array<Object>} envelopes - v2 envelopes of that run
+ * @returns {StreamState}
+ */
+export function rebuildRunFromLedger(state, runId, envelopes) {
+  const clearGap = s => (s.gap === null ? s : { ...s, gap: null });
+  if (!runId) return clearGap(state);
   const page = (envelopes || [])
-    .filter(e => e && e.v === 2 && typeof e.type === 'string')
-    .filter(e => {
-      if (!Number.isInteger(e.seq)) return true;
-      if ((seenSeqs && seenSeqs.has(e.seq)) || seen.has(e.seq)) return false;
-      seen.add(e.seq);
-      return true;
-    })
-    .sort((a, b) => (Number.isInteger(a.seq) ? a.seq : 0) - (Number.isInteger(b.seq) ? b.seq : 0));
-  const next = reduceRunEvents(state, page);
-  return next.gap === null ? next : { ...next, gap: null };
+    .filter(e => e && e.v === 2 && typeof e.type === 'string' && e.runId === runId)
+    .sort((a, b) => (Number.isInteger(a.seq) ? a.seq : 0) - (Number.isInteger(b.seq) ? b.seq : 0))
+    // strip the ledger seq: it must not drive the live stream's gap detection
+    .map(({ seq: _ledgerSeq, ...rest }) => rest);
+  if (page.length === 0) return clearGap(state);
+  const scratch = reduceRunEvents(createStreamState(state.streamId), page);
+  const rebuilt = scratch.runs[runId];
+  if (!rebuilt) return clearGap(state);
+  const live = state.runs[runId];
+  const run = live
+    ? {
+        ...rebuilt,
+        progress: rebuilt.progress.length ? rebuilt.progress : live.progress,
+        nodes: Object.keys(rebuilt.nodes).length ? rebuilt.nodes : live.nodes,
+        nodeOrder: rebuilt.nodeOrder.length ? rebuilt.nodeOrder : live.nodeOrder,
+        meta: {
+          ...live.meta,
+          ...rebuilt.meta,
+          extra: { ...live.meta?.extra, ...rebuilt.meta?.extra }
+        }
+      }
+    : rebuilt;
+  const order = state.order.includes(runId) ? state.order : [...state.order, runId];
+  return {
+    ...state,
+    runs: { ...state.runs, [runId]: run },
+    order,
+    activeRunId: state.activeRunId || runId,
+    gap: null
+  };
 }
 
 // ── selectors ──────────────────────────────────────────────────────────────

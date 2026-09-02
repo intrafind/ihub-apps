@@ -20,11 +20,30 @@ import logger from '../../utils/logger.js';
 
 const COMPONENT = 'RunStream';
 
+/**
+ * Upper bound on streams remembered at once. Entries are evicted explicitly
+ * when a stream is torn down (`resetStream`: chat client gone, execution
+ * terminal) and, as a backstop, least-recently-used once the map is full —
+ * a forgotten stream simply restarts its `seq` at 1, which the client treats
+ * as a fresh stream.
+ */
+export const MAX_TRACKED_STREAMS = 10000;
+
 /** streamId → last seq, so reconnects on the same stream keep increasing. */
 const seqByStream = new Map();
 /** streamId → current run binding `{ runId, emitter }` (chat turns register themselves). */
 const currentByStream = new Map();
 let deliver = null;
+
+/** Re-insert `key` so Map iteration order doubles as LRU order; evict the oldest past the cap. */
+function touch(map, key, value) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  while (map.size > MAX_TRACKED_STREAMS) {
+    const oldest = map.keys().next().value;
+    map.delete(oldest);
+  }
+}
 
 /** Install the delivery function `(streamId, envelope) => boolean` (server/sse.js). */
 export function setEnvelopeDelivery(fn) {
@@ -33,15 +52,24 @@ export function setEnvelopeDelivery(fn) {
 
 export function nextSeq(streamId) {
   const next = (seqByStream.get(streamId) || 0) + 1;
-  seqByStream.set(streamId, next);
+  touch(seqByStream, streamId, next);
   return next;
+}
+
+/** Number of streams currently tracked (tests / diagnostics). */
+export function trackedStreamCount() {
+  return seqByStream.size;
 }
 
 export function currentSeq(streamId) {
   return seqByStream.get(streamId) || 0;
 }
 
-/** Forget a stream's counter (tests / stream teardown). */
+/**
+ * Forget a stream: its `seq` counter and run binding. Called when the stream
+ * is gone for good — the chat's SSE client entry was removed, a workflow /
+ * agent execution reached a terminal state — so the registry stays bounded.
+ */
 export function resetStream(streamId) {
   seqByStream.delete(streamId);
   currentByStream.delete(streamId);
@@ -131,7 +159,7 @@ export class RunStreamEmitter {
 
 /** Register the emitter that currently produces a stream's run (chat turn in flight). */
 export function bindStreamRun(streamId, runId, emitter) {
-  currentByStream.set(streamId, { runId, emitter });
+  touch(currentByStream, streamId, { runId, emitter });
 }
 
 export function unbindStreamRun(streamId, runId) {

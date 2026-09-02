@@ -6,7 +6,7 @@ import {
   createStreamState,
   reduceRunEvent,
   reduceRunEvents,
-  foldResyncEvents,
+  rebuildRunFromLedger,
   getRun,
   getRuns,
   getPendingInteraction,
@@ -106,6 +106,32 @@ describe('runReducer — chat turn', () => {
   test('a re-sync page (no deltas) adopts step/completed content as the answer text', () => {
     const state = fold([turn[1], turn[8], turn[9]]);
     expect(getRun(state, 'run-a').text).toBe('Hello world');
+  });
+
+  test('step/completed content is authoritative: lost deltas cannot leave the text truncated', () => {
+    const state = fold([
+      turn[1],
+      env(2, 'run-a', 'step/delta', { step: 0, kind: 'text', content: 'Hello' }),
+      // the " wor" delta never arrived
+      env(4, 'run-a', 'step/completed', { step: 0, content: 'Hello world', toolCalls: [] })
+    ]);
+    const run = getRun(state, 'run-a');
+    expect(run.text).toBe('Hello world');
+    expect(run.steps[0].text).toBe('Hello world');
+
+    // a tool-call step without content keeps the streamed text of earlier steps
+    const twoSteps = fold([
+      turn[1],
+      env(2, 'run-a', 'step/delta', { step: 0, kind: 'text', content: 'A' }),
+      env(3, 'run-a', 'step/completed', { step: 0, content: 'A', toolCalls: [] }),
+      env(4, 'run-a', 'step/delta', { step: 1, kind: 'text', content: 'B' }),
+      env(5, 'run-a', 'step/completed', {
+        step: 1,
+        content: '',
+        toolCalls: [{ id: 'c', name: 't', args: {} }]
+      })
+    ]);
+    expect(getRun(twoSteps, 'run-a').text).toBe('AB');
   });
 
   test('ignores malformed envelopes and run-scoped frames without a runId', () => {
@@ -225,22 +251,37 @@ describe('runReducer — sequence gaps and re-sync', () => {
     expect(fold([env(7, 'r', 'run/started', { kind: 'chat', refs: {} })]).gap).toBeNull();
   });
 
-  test('foldResyncEvents dedupes by seq (live + in-page), sorts, folds and clears the gap', () => {
+  test('rebuildRunFromLedger replaces the run from its ledger (own seq space) and clears the gap', () => {
     const live = [...base, env(5, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'D' })];
     const state = fold(live);
-    const seen = new Set(live.map(e => e.seq));
+    expect(state.gap).not.toBeNull();
 
+    // the ledger projection: its seq starts at 1 and has nothing to do with the stream's
     const page = [
-      env(4, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'C' }),
-      env(2, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'DUPLICATE' }),
-      env(3, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'B' }),
-      env(3, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'IN-PAGE-DUP' }),
+      env(3, 'run-c', 'step/completed', {
+        step: 0,
+        content: 'ABCD',
+        toolCalls: [],
+        finishReason: 'stop'
+      }),
+      env(1, 'run-c', 'run/started', { kind: 'chat', refs: { chatId: 'chat-c' } }),
+      env(2, 'run-c', 'tool/started', { step: 0, callId: 'c1', toolId: 't', name: 't', args: {} }),
+      env(4, 'run-c', 'run/ended', { status: 'completed', finishReason: 'stop' }),
+      env(9, 'other-run', 'step/delta', { step: 0, kind: 'text', content: 'ignored' }),
       { v: 1, seq: 6, type: 'step/delta' }
     ];
-    const next = foldResyncEvents(state, page, seen);
+    const next = rebuildRunFromLedger(state, 'run-c', page);
     expect(next.gap).toBeNull();
-    expect(getRun(next, 'run-c').text).toBe('ADBC');
-    expect(seen.size).toBe(3); // never mutated
-    expect(next.lastSeq).toBe(5);
+    expect(next.lastSeq).toBe(5); // the stream's own cursor is untouched
+    const run = getRun(next, 'run-c');
+    expect(run.text).toBe('ABCD');
+    expect(run.status).toBe('completed');
+    expect(run.tools).toHaveLength(1);
+    expect(next.runs['other-run']).toBeUndefined();
+
+    // an empty page (failed re-sync) only clears the gap
+    const cleared = rebuildRunFromLedger(state, 'run-c', []);
+    expect(cleared.gap).toBeNull();
+    expect(getRun(cleared, 'run-c').text).toBe(getRun(state, 'run-c').text);
   });
 });

@@ -20,8 +20,8 @@ export default function AdminAgentApprovalsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetchPendingInteractions({ kind: 'approval' });
-        setPending(res?.data?.interactions || []);
+        const body = await fetchPendingInteractions({ kind: 'approval' });
+        setPending(Array.isArray(body?.interactions) ? body.interactions : []);
       } catch (err) {
         setError(err?.response?.data?.error || err?.message || String(err));
       } finally {

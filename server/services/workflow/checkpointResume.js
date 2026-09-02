@@ -237,8 +237,35 @@ export function registerCheckpointResume(service = interactionService, deps = {}
     if (isCheckpointInteraction(interaction)) appendRunResumed(interaction, runLog);
   };
   service.on('answered', onAnswered);
+  // `policy.onTimeout: 'fail'` — a checkpoint nobody answered in time ends its
+  // execution instead of leaving it paused forever.
+  const onExpired = interaction => {
+    if (!isCheckpointInteraction(interaction)) return;
+    const executionId = interaction.source?.executionId || interaction.runId;
+    if (!isValidRunId(executionId)) return;
+    const engine = deps.engine || getWorkflowEngine();
+    Promise.resolve()
+      .then(() => engine.cancel(executionId, 'human_checkpoint_expired'))
+      .then(() =>
+        logger.info('Execution cancelled: human checkpoint expired', {
+          component: 'CheckpointResume',
+          executionId,
+          interactionId: interaction.id
+        })
+      )
+      .catch(err => {
+        if (err?.code === 'EXECUTION_NOT_FOUND') return;
+        logger.warn('Could not cancel execution after checkpoint expiry', {
+          component: 'CheckpointResume',
+          executionId,
+          error: err.message
+        });
+      });
+  };
+  service.on('expired', onExpired);
   return () => {
     unregisterAnswer();
     service.off('answered', onAnswered);
+    service.off('expired', onExpired);
   };
 }

@@ -463,11 +463,39 @@ export class InteractionService extends EventEmitter {
     });
   }
 
+  /**
+   * Start the periodic expiry sweep: overdue pending interactions transition to
+   * `expired` (listeners apply the `onTimeout` policy). Idempotent; the timer
+   * never keeps the process alive.
+   *
+   * @param {Object} [opts]
+   * @param {number} [opts.intervalMs=60000]
+   */
+  startExpirySweep({ intervalMs = 60 * 1000 } = {}) {
+    if (this._expiryTimer) return;
+    const run = () => {
+      this.expireOverdue().catch(err =>
+        logger.warn('InteractionService: expiry sweep failed', {
+          component: 'InteractionService',
+          error: err.message
+        })
+      );
+    };
+    this._expiryTimer = setInterval(run, intervalMs);
+    if (typeof this._expiryTimer.unref === 'function') this._expiryTimer.unref();
+  }
+
+  stopExpirySweep() {
+    if (this._expiryTimer) clearInterval(this._expiryTimer);
+    this._expiryTimer = null;
+  }
+
   async flush() {
     if (this._persist()) await this._store.flush();
   }
 
   async stop() {
+    this.stopExpirySweep();
     this._unhookDelete?.();
     if (this._persist()) {
       await this._store.flush();

@@ -6,7 +6,6 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ModelNameCell({ model, currentLanguage }) {
@@ -116,41 +115,24 @@ function AdminModelsPage() {
 
   const testModel = async modelId => {
     setTestingModel(modelId);
-    // Use fetch directly to bypass the axios auth interceptor. The test endpoint
-    // maps upstream provider failures onto HTTP statuses (an invalid provider
-    // key becomes 401) — that is a test outcome, not an expired admin session,
-    // so it must not trigger the global re-authentication flow. Same pattern as
-    // AdminProvidersPage.testProvider.
-    const authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken');
-    const headers = { 'Content-Type': 'application/json' };
-    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    // The test endpoint maps a provider rejecting the server's key onto 502 (not
+    // 401), so the shared admin client is safe here: a 401 really is an expired
+    // admin session and must go through the global re-authentication flow.
     try {
-      const response = await fetch(buildApiUrl(`admin/models/${modelId}/test`), {
-        method: 'POST',
-        headers,
-        credentials: 'include'
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
+        method: 'POST'
       });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok) {
-        setTestResults(prev => ({ ...prev, [modelId]: data }));
-      } else {
-        // Server body: { error: headline, details: remediation text, code }
-        setTestResults(prev => ({
-          ...prev,
-          [modelId]: {
-            success: false,
-            message: data.error || t('admin.models.test.failed', 'Test Failed'),
-            error: data.details || `HTTP ${response.status}`
-          }
-        }));
-      }
+      setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
     } catch (err) {
+      // Server body: { error: headline, details: remediation text, code }
+      const body = err?.response?.data || {};
       setTestResults(prev => ({
         ...prev,
         [modelId]: {
           success: false,
-          message: t('admin.models.test.failed', 'Test Failed'),
-          error: err.message
+          message: body.error || t('admin.models.test.failed', 'Test Failed'),
+          error:
+            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         }
       }));
     } finally {

@@ -224,7 +224,7 @@ function useWorkflowExecution(executionId, options = {}) {
           prev ? { ...prev, pendingCheckpoint: null, status: 'running' } : prev
         );
 
-        return result.data;
+        return result;
       } catch (err) {
         console.error('Failed to respond to checkpoint:', err);
         throw err;

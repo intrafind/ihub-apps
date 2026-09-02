@@ -7,6 +7,7 @@ import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
 import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
 import runLog from '../loop/RunLog.js';
+import { resetStream } from '../loop/RunStream.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -1765,6 +1766,17 @@ export class WorkflowEngine {
     });
 
     this._mirrorToLedger(eventType, data);
+
+    // The execution's own stream (workflow / agent run pages) is done once the
+    // run is terminal: the frames above were already sequenced and delivered.
+    if (
+      data?.executionId &&
+      (eventType === 'workflow.complete' ||
+        eventType === 'workflow.failed' ||
+        eventType === 'workflow.cancelled')
+    ) {
+      resetStream(data.executionId);
+    }
 
     logger.debug('Emitted workflow event', {
       component: 'WorkflowEngine',
