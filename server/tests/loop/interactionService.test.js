@@ -226,3 +226,63 @@ test('cancel rejects waiters and hides from pending', async () => {
   await svc.stop();
   await runLog.stop();
 });
+
+test('onAnswer handlers run before the answer is accepted; a throwing handler keeps it pending', async () => {
+  const { runLog, svc, runId } = await setup();
+  const seen = [];
+  const unregister = svc.onAnswer((interaction, ctx) => {
+    seen.push({ status: interaction.status, value: interaction.answer.value, ctx });
+    if (interaction.answer.value === 'later') throw new InteractionError('not now', 'BUSY', 409);
+  });
+  const answeredEvents = [];
+  svc.on('answered', (it, ctx) => answeredEvents.push({ id: it.id, ctx }));
+  const it = await svc.raise({
+    runId,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'When?' },
+    source: { chatId: 'chat-9' }
+  });
+
+  await assert.rejects(
+    svc.answer(it.id, { value: 'later' }, { user: { id: 'bob' }, channel: 'chat' }),
+    e => e.code === 'BUSY' && e.status === 409
+  );
+  assert.equal((await svc.get(it.id)).status, 'pending');
+  assert.deepEqual(await svc.listPending({ chatId: 'chat-9' }), [it]);
+  assert.equal(answeredEvents.length, 0);
+
+  const answered = await svc.answer(
+    it.id,
+    { value: 'now' },
+    { user: { id: 'bob' }, channel: 'chat' }
+  );
+  assert.equal(answered.status, 'answered');
+  assert.deepEqual(
+    seen.map(s => [s.status, s.value, s.ctx.user.id, s.ctx.channel]),
+    [
+      ['answered', 'later', 'bob', 'chat'],
+      ['answered', 'now', 'bob', 'chat']
+    ]
+  );
+  assert.deepEqual(answeredEvents, [{ id: it.id, ctx: { user: { id: 'bob' }, channel: 'chat' } }]);
+  assert.deepEqual(await svc.listPending({ chatId: 'chat-9' }), []);
+
+  unregister();
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('raise honours a caller-tracked ordinal', async () => {
+  const { runLog, svc, runId } = await setup();
+  const it = await svc.raise({
+    runId,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'Third?' },
+    ordinal: 3
+  });
+  assert.equal(it.ordinal, 3);
+  await svc.stop();
+  await runLog.stop();
+});

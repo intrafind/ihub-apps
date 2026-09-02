@@ -7,7 +7,12 @@
  *   DELETE /api/runs/:runId                           erase a run with cascade (owner or admin)
  *   GET    /api/runs/:runId/interactions              pending interactions of a run
  *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint
+ *   POST   /api/runs/:runId/human-events              steer / stop / feedback into a run
  *   GET    /api/interactions/pending                  the interactions queue (approver-group filtered)
+ *
+ * Workflow executions and agent runs are ledger runs too (runId === executionId),
+ * so a paused `human` node is answered here; the answer resumes the execution
+ * (services/workflow/checkpointResume.js).
  *
  * @module routes/runs
  */
@@ -23,10 +28,18 @@ import {
 } from '../utils/responseHelpers.js';
 import runLog from '../services/loop/RunLog.js';
 import interactionService, { InteractionError } from '../services/loop/InteractionService.js';
-import { interactionAnswerRequestSchema } from '../services/loop/contracts/interaction.js';
+import {
+  interactionAnswerRequestSchema,
+  humanEventRequestSchema
+} from '../services/loop/contracts/interaction.js';
 import { resolvePrincipal, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent } from '../services/loop/RunStream.js';
+import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
+import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { abortChatRequest } from '../sse.js';
+import { cancelChatWorkflow } from '../tools/workflowRunner.js';
+import logger from '../utils/logger.js';
 
 function isAdminUser(user) {
   if (!user) return false;
@@ -36,11 +49,52 @@ function isAdminUser(user) {
 }
 
 /**
- * Resolve the run's start record (memory first, then ledger) and decide whether
- * `user` may access it. Anonymous runs are accessible by id possession only.
+ * Workflow executions / agent runs that the ledger does not know (persistence
+ * off, or a run restored from a checkpoint before it was re-registered) are
+ * authorized against the execution registry: the launching principal or, for
+ * agent runs, the human who triggered the run.
+ * @returns {{ok:boolean, meta:Object}|null}
+ */
+function authorizeExecution(executionId, user) {
+  if (!executionId || isAnonymousUser(user)) return null;
+  const execution = getExecutionRegistry().get(executionId);
+  if (!execution) return null;
+  const userId = String(user.id);
+  const isAgentRun = typeof execution.userId === 'string' && execution.userId.startsWith('agent:');
+  const allowed =
+    isAdminUser(user) ||
+    execution.userId === userId ||
+    (execution.triggeredBy && String(execution.triggeredBy.userId) === userId);
+  if (!allowed) return null;
+  return {
+    ok: true,
+    meta: {
+      runId: executionId,
+      kind: isAgentRun ? 'agent' : 'workflow',
+      anonymous: false,
+      startedAt: execution.startedAt || null,
+      principalId: execution.userId
+    }
+  };
+}
+
+/**
+ * Resolve the run's start record (memory first, then ledger, then the
+ * execution registry) and decide whether `user` may access it. Anonymous runs
+ * are accessible by id possession only.
+ * @param {string} runId
+ * @param {Object} user
+ * @param {Object} [opts]
+ * @param {string} [opts.executionId] - execution to fall back to (default: runId)
  * @returns {Promise<{ok:boolean, status?:number, meta?:Object}>}
  */
-async function authorizeRun(runId, user) {
+async function authorizeRun(runId, user, { executionId } = {}) {
+  const ledger = await authorizeLedgerRun(runId, user);
+  if (ledger.ok) return ledger;
+  return authorizeExecution(executionId || runId, user) || ledger;
+}
+
+async function authorizeLedgerRun(runId, user) {
   const mem = runLog.getRunMeta(runId);
   let principalId = mem?.principalId ?? null;
   let anonymous = mem?.anonymous ?? null;
@@ -61,6 +115,36 @@ async function authorizeRun(runId, user) {
   const me = await resolvePrincipal(user, { mode: runLog.identityMode() });
   if (me.id === principalId) return { ok: true, meta };
   return { ok: false, status: 403 };
+}
+
+/**
+ * `stop` is the one human event with a side effect: abort the run. A chat run
+ * aborts its active model call (and any workflow it launched); a workflow or
+ * agent run is cancelled on the engine.
+ * @returns {Promise<string|null>} what was stopped
+ */
+async function stopRun(runId, meta) {
+  const refs = runLog.getRunMeta(runId)?.refs || {};
+  if (meta?.kind === 'chat' && refs.chatId) {
+    abortChatRequest(refs.chatId);
+    await cancelChatWorkflow(refs.chatId);
+    return 'chat_aborted';
+  }
+  if (meta?.kind === 'workflow' || meta?.kind === 'agent' || getExecutionRegistry().get(runId)) {
+    try {
+      await getWorkflowEngine().cancel(runId, 'user_stop');
+      return 'execution_cancelled';
+    } catch (err) {
+      if (err.code === 'EXECUTION_NOT_FOUND') return null;
+      throw err;
+    }
+  }
+  logger.debug('human/event stop recorded without an abortable target', {
+    component: 'RunRoutes',
+    runId,
+    kind: meta?.kind || null
+  });
+  return null;
 }
 
 function sendInteractionError(res, err, operation) {
@@ -160,6 +244,73 @@ export default function registerRunRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /runs/{runId}/interactions/{interactionId}/answer:
+   *   post:
+   *     summary: Answer an interaction (question, approval, review)
+   *     description: |
+   *       The one answer endpoint for every human touchpoint: a chat clarification
+   *       (`ask_user`), a workflow `human` node checkpoint or an agent approval.
+   *       For a checkpoint the run id is the execution id and the interaction id is
+   *       the checkpoint id; the answer is validated against the node, the workflow
+   *       routes on the chosen branch and the execution resumes before the answer is
+   *       accepted. A rejected answer (invalid option, missing form field,
+   *       unauthorized approver, execution not paused on this checkpoint) returns
+   *       4xx with a `code` and leaves the interaction pending.
+   *     tags:
+   *       - Runs
+   *       - Human Checkpoint
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: runId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: interactionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               value:
+   *                 description: Chosen option value, free text or decision keyword
+   *               data:
+   *                 type: object
+   *                 description: Structured payload (form data) when the prompt has an inputSchema
+   *               decision:
+   *                 type: string
+   *                 enum: [approve, edit, reject, respond]
+   *               reason:
+   *                 type: string
+   *               skipped:
+   *                 type: boolean
+   *               channel:
+   *                 type: string
+   *                 enum: [chat, run_page, queue, api]
+   *     responses:
+   *       200:
+   *         description: Answer accepted; the interaction is returned with its answer
+   *       400:
+   *         description: Invalid answer, or the execution rejected it
+   *       403:
+   *         description: Not an approver / not the run's owner
+   *       404:
+   *         description: Run or interaction not found
+   *       409:
+   *         description: Interaction already answered, or the execution is not paused on it
+   *       410:
+   *         description: Interaction expired
+   */
   app.post(
     buildServerPath('/api/runs/:runId/interactions/:interactionId/answer'),
     authRequired,
@@ -180,7 +331,9 @@ export default function registerRunRoutes(app) {
           Array.isArray(interaction.policy?.approverGroups) &&
           interaction.policy.approverGroups.length > 0;
         if (!hasApproverPolicy) {
-          const auth = await authorizeRun(runId, req.user);
+          const auth = await authorizeRun(runId, req.user, {
+            executionId: interaction.source?.executionId
+          });
           if (!auth.ok) {
             return auth.status === 404
               ? sendNotFound(res, 'Run')
@@ -199,6 +352,112 @@ export default function registerRunRoutes(app) {
     }
   );
 
+  /**
+   * @swagger
+   * /runs/{runId}/human-events:
+   *   post:
+   *     summary: Deliver a human event (steer, stop, feedback) into a run
+   *     description: |
+   *       Records a `human/event` on the run's ledger. `stop` also aborts the run:
+   *       a chat run's active model call (and any workflow it launched), or the
+   *       engine cancels the workflow / agent execution.
+   *     tags:
+   *       - Runs
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: runId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [kind]
+   *             properties:
+   *               kind:
+   *                 type: string
+   *                 enum: [steer, stop, feedback]
+   *               message:
+   *                 type: string
+   *               messageId:
+   *                 type: string
+   *               rating:
+   *                 oneOf:
+   *                   - type: number
+   *                   - type: string
+   *     responses:
+   *       200:
+   *         description: Event recorded (`effect` names what a stop aborted)
+   *       400:
+   *         description: Invalid body
+   *       403:
+   *         description: Not the run's owner
+   *       404:
+   *         description: Run not found
+   */
+  app.post(buildServerPath('/api/runs/:runId/human-events'), authRequired, async (req, res) => {
+    try {
+      const { runId } = req.params;
+      if (!validateIdForPath(runId, 'run', res)) return;
+      const parsed = humanEventRequestSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return sendBadRequest(res, 'Invalid human event body', parsed.error.flatten());
+      }
+      const auth = await authorizeRun(runId, req.user);
+      if (!auth.ok) {
+        return auth.status === 404
+          ? sendNotFound(res, 'Run')
+          : sendInsufficientPermissions(res, 'send human event');
+      }
+      const { kind, message, messageId, rating } = parsed.data;
+      const event = runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+        kind,
+        ...(message !== undefined ? { message } : {}),
+        ...(messageId !== undefined ? { messageId } : {}),
+        ...(rating !== undefined ? { rating } : {}),
+        by: isAnonymousUser(req.user) ? 'anonymous' : String(req.user.id),
+        at: new Date().toISOString()
+      });
+      const effect = kind === 'stop' ? await stopRun(runId, auth.meta) : null;
+      res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
+    } catch (error) {
+      sendFailedOperationError(res, 'send human event', error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /interactions/pending:
+   *   get:
+   *     summary: The interactions queue
+   *     description: |
+   *       Every pending interaction the caller may answer — admins see all,
+   *       approvers those of their groups, users their own runs'. Filter with
+   *       `kind` (question | approval | review | notify).
+   *     tags:
+   *       - Runs
+   *       - Human Checkpoint
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: kind
+   *         schema:
+   *           type: string
+   *           enum: [question, approval, review, notify]
+   *     responses:
+   *       200:
+   *         description: Pending interactions
+   *       403:
+   *         description: Anonymous users have no queue
+   */
   app.get(buildServerPath('/api/interactions/pending'), authRequired, async (req, res) => {
     try {
       if (isAnonymousUser(req.user)) return sendInsufficientPermissions(res, 'list interactions');

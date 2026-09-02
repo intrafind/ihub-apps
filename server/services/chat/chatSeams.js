@@ -13,6 +13,14 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
 import * as defaultTelemetry from './chatTelemetry.js';
+import defaultInteractionService from '../loop/InteractionService.js';
+import defaultRunLog from '../loop/RunLog.js';
+
+/**
+ * A clarification nobody answers expires after a day, so abandoned chats do
+ * not accumulate pending interactions.
+ */
+export const CLARIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 const COMPONENT = 'ChatService';
 const PREVIEW_CHARS = 4096;
@@ -287,7 +295,9 @@ export function chatQuestionOptions({
   logInteraction,
   headless,
   getCount,
-  incrementCount
+  incrementCount,
+  interactionService = defaultInteractionService,
+  runLog = defaultRunLog
 }) {
   const max = MAX_CLARIFICATIONS_PER_CONVERSATION;
   return {
@@ -331,7 +341,7 @@ export function chatQuestionOptions({
       }
     },
     async raise(info, ctx) {
-      const interaction = buildQuestionInteraction(info.args, {
+      const draft = buildQuestionInteraction(info.args, {
         runId: ctx.runId || chatId,
         step: ctx.iteration,
         chatId,
@@ -345,12 +355,36 @@ export function chatQuestionOptions({
         component: COMPONENT,
         chatId,
         clarificationNumber: info.ordinal,
-        inputType: interaction.prompt.inputType,
-        question: interaction.prompt.message.substring(0, 100)
+        inputType: draft.prompt.inputType,
+        question: draft.prompt.message.substring(0, 100)
       });
-      // Strip the UI-only cap before validation; the frame carries the contract shape.
-      const { maxClarifications, ...wire } = interaction;
-      emit(ctx, SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: wire });
+      // The UI-only cap is not part of the contract; the frame carries the
+      // persisted interaction (pending store + `interaction/raised` on the
+      // ledger) so the answer — the next chat message, or the answer endpoint —
+      // resolves the same record.
+      const { maxClarifications, ...wire } = draft;
+      let interaction = wire;
+      try {
+        const principalId = runLog.getRunMeta(wire.runId)?.principalId || null;
+        interaction = await interactionService.raise({
+          id: wire.id,
+          runId: wire.runId,
+          step: wire.step,
+          kind: wire.kind,
+          origin: wire.origin,
+          prompt: wire.prompt,
+          policy: { timeoutMs: CLARIFICATION_TTL_MS, onTimeout: 'fail', fallback: 'park' },
+          source: { ...wire.source, ...(principalId ? { principalId: String(principalId) } : {}) },
+          ordinal: wire.ordinal
+        });
+      } catch (raiseErr) {
+        logger.warn('Clarification could not be persisted as an interaction', {
+          component: COMPONENT,
+          chatId,
+          error: raiseErr.message
+        });
+      }
+      emit(ctx, SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
       await logInteraction(
         'clarification_request',
         buildLogData(true, {
@@ -367,7 +401,7 @@ export function chatQuestionOptions({
         name: String(info.name || info.toolId),
         resultPreview: { clarificationRequested: true, clarificationNumber: info.ordinal }
       });
-      return interaction;
+      return { ...interaction, maxClarifications };
     }
   };
 }

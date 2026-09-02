@@ -11,6 +11,8 @@ import logger from '../../utils/logger.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
+import runLog, { isValidRunId } from '../../services/loop/RunLog.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   /**
@@ -117,13 +119,34 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           feedback,
           modelId,
           conversationId,
-          ifinderMessageId
+          ifinderMessageId,
+          runId
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
         if (!messageId || !rating || !appId || !chatId) {
           const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
           return sendBadRequest(res, errorMessage);
+        }
+
+        // Feedback is a human event on the run that produced the message.
+        if (runId && isValidRunId(runId)) {
+          try {
+            runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+              kind: 'feedback',
+              messageId,
+              rating,
+              ...(feedback ? { message: String(feedback) } : {}),
+              by: req.user?.id ? String(req.user.id) : 'anonymous',
+              at: new Date().toISOString()
+            });
+          } catch (ledgerErr) {
+            logger.debug('Feedback human/event not recorded', {
+              component: 'feedbackRoutes',
+              runId,
+              error: ledgerErr.message
+            });
+          }
         }
 
         // Check if this is an iAssistant message that should be routed to iFinder

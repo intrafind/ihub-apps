@@ -136,17 +136,6 @@ export async function resumeAgentRun(runId) {
   });
 }
 
-export async function approveAgentRun(runId, payload) {
-  return await makeAdminApiCall(`/agents/runs/${runId}/approve`, {
-    method: 'POST',
-    body: payload
-  });
-}
-
-export async function fetchPendingApprovals() {
-  return await makeAdminApiCall('/agents/approvals');
-}
-
 export async function fetchRunArtifacts(runId) {
   return await makeAdminApiCall(`/agents/runs/${runId}/artifacts`);
 }

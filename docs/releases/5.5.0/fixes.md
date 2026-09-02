@@ -223,3 +223,31 @@ already treats those principals as never-admin, but the two middlewares never ch
 - Browser sessions are unaffected: an administrator signed in to the web UI keeps full access.
 - Non-admin APIs are unaffected: a token still reaches chat, models and the MCP gateway with its
   owner's normal permissions.
+
+## Inference API Reports Real Usage and Surfaces Errors In-Band
+
+The OpenAI-compatible inference API (`/api/inference/v1/chat/completions`) used to return zero
+token counts and turned a provider failure mid-stream into a normal `finish_reason: "stop"`.
+
+- `usage` now carries the provider's actual prompt and completion counts, and
+  `stream_options.include_usage` is honoured for streaming requests.
+- A provider error during a stream is sent as an OpenAI-style `error` event followed by exactly
+  one `[DONE]`, so clients can tell a failed answer from a complete one.
+- A client that disconnects mid-stream now aborts the upstream model call instead of letting it
+  run (and bill) to completion.
+- Error responses carry `{ error, code, details }` with the provider's status where applicable,
+  instead of the untranslated literal `Error: providerError`.
+
+## MCP App Invocations Execute Tools and Receive App Variables
+
+Invoking an app through the MCP gateway (`tools/call`) or as a tool inside another app dropped
+the model's tool calls and silently ignored the app's variables. App invocations now run the same
+loop as a chat turn: tools execute server-side, passthrough tools' output becomes the answer, and
+variables reach the prompt template. A question the model asks (`ask_user`) is refused with a
+clear `NO_USER_AVAILABLE` result, since nobody can answer it there.
+
+## Provider Response Parsing Fixes Found by the Adapter Conformance Matrix
+
+A wire-level conformance suite now runs every provider adapter through the same scenarios. It
+surfaced two parsing bugs that are fixed: Anthropic non-streaming responses lost their token
+usage, and OpenAI Responses-API tool-call argument deltas were merged incorrectly.

@@ -589,7 +589,7 @@ graph TB
 
 ### Human-in-the-Loop Flow
 
-When a `human` node is reached, the workflow pauses and emits a `workflow.human.required` Server-Sent Event to the client. The user responds via `POST /api/workflows/executions/:id/respond`, and the workflow resumes automatically.
+When a `human` node is reached, the workflow pauses and raises the checkpoint as an interaction of the execution's run: the stream carries `interaction/raised` followed by `run/paused` (see [SSE v2 Streaming](sse-v2.md)). The user answers it through the one answer endpoint, `POST /api/runs/:executionId/interactions/:checkpointId/answer` with `{ value, data? }`; the server validates the answer, routes the workflow on the chosen branch and resumes it (`interaction/answered`, `run/resumed`). Workflow executions and agent runs are runs on the [run ledger](run-ledger.md) (run id = execution id), so the same endpoint serves chat-launched workflows, the workflow execution page and agent runs.
 
 ### Client UI
 

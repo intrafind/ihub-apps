@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { fetchPendingApprovals } from '../../../api/agentsAdminApi';
+import { fetchPendingInteractions } from '../../../api';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
-import { getAdminApiErrorMessage } from '../../../api/adminApi';
+/**
+ * Pending approvals — the interactions queue filtered to `approval`: every
+ * paused agent run or workflow execution waiting on a human the caller may
+ * answer (admins see all, approvers see their groups'). Rows open the run
+ * where the checkpoint is answered.
+ */
 export default function AdminAgentApprovalsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -15,15 +20,24 @@ export default function AdminAgentApprovalsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetchPendingApprovals();
-        setPending(res?.data || []);
+        const res = await fetchPendingInteractions({ kind: 'approval' });
+        setPending(res?.data?.interactions || []);
       } catch (err) {
-        setError(getAdminApiErrorMessage(err));
+        setError(err?.response?.data?.error || err?.message || String(err));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  const openRun = interaction => {
+    const executionId = interaction.source?.executionId || interaction.runId;
+    if (interaction.source?.profileId) {
+      navigate(`/admin/agents/runs/${executionId}`);
+    } else {
+      navigate(`/workflows/executions/${executionId}`);
+    }
+  };
 
   return (
     <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
@@ -51,24 +65,30 @@ export default function AdminAgentApprovalsPage() {
           </div>
         ) : (
           <ul className="space-y-3">
-            {pending.map(p => (
+            {pending.map(interaction => (
               <li
-                key={p.runId}
+                key={interaction.id}
                 className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-4"
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-mono text-xs text-gray-600 dark:text-gray-400">
-                      {p.profileId}
+                <div className="flex justify-between items-start gap-4">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {interaction.source?.profileId || interaction.runId}
+                      {interaction.source?.nodeName ? ` · ${interaction.source.nodeName}` : ''}
                     </p>
                     <p className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">
-                      {p.checkpoint?.message ||
+                      {interaction.prompt?.message ||
                         t('admin.agents.approvals.defaultMessage', 'Approval requested')}
                     </p>
+                    {interaction.createdAt && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {new Date(interaction.createdAt).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                   <button
-                    onClick={() => navigate(`/admin/agents/runs/${p.runId}`)}
-                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm"
+                    onClick={() => openRun(interaction)}
+                    className="shrink-0 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm"
                   >
                     {t('admin.agents.approvals.openRun', 'Open run')}
                   </button>

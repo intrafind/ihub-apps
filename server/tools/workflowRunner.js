@@ -365,7 +365,14 @@ export default async function workflowRunner(params = {}) {
   const engine = getWorkflowEngine();
   let state;
   try {
-    state = await engine.start(workflow, initialData, { user, checkpointOnNode: true });
+    // A chat-launched workflow is the run the chat stream announced: the
+    // execution adopts that run id so its ledger, interactions and answer
+    // endpoint all key off one id.
+    state = await engine.start(workflow, initialData, {
+      user,
+      checkpointOnNode: true,
+      ...(chatRunId ? { executionId: chatRunId } : {})
+    });
   } catch (error) {
     logger.error('Failed to start workflow', {
       component: 'workflowRunner',
@@ -517,7 +524,9 @@ export default async function workflowRunner(params = {}) {
         if (stream) {
           const interaction = checkpointToInteraction(
             { ...event.checkpoint, nodeName },
-            { runId: stream.runId || chatId, executionId, chatId }
+            // The interaction belongs to the execution's run — that is the
+            // run id the answer endpoint expects.
+            { runId: executionId, executionId, chatId }
           );
           stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
           stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {

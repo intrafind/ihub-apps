@@ -86,10 +86,48 @@ these fields and verifies the hash — the ledger is complete enough to replay.
 | `DELETE /api/runs/:runId`                                 | owner or admin            | Delete the run, its spill files and its interactions (cascade) |
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
 | `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, approver or admin  | Answer a question / approval / review                          |
+| `POST /api/runs/:runId/human-events`                      | owner or admin            | Deliver a `steer`, `stop` or `feedback` event into the run     |
 | `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may answer                    |
 
 Ownership is decided by the recorded principal in the current identity mode;
-an anonymous run is readable by whoever presents its random id.
+an anonymous run is readable by whoever presents its random id. Workflow
+executions and agent runs are runs too (run id = execution id): when the
+ledger does not know one (persistence off), the launching principal — or, for
+agent runs, the human who triggered the run — is authorized through the
+execution registry.
+
+## Interactions
+
+Every human touchpoint is one model, the **interaction** (`kind` `question` |
+`approval` | `review` | `notify`, `origin` `tool` | `node` | `policy` |
+`system`), raised through `InteractionService` and answered through the one
+answer endpoint. Pending interactions survive a restart (`interactions.json`);
+the raise and the answer are on the run's ledger (`interaction/raised`,
+`interaction/answered`).
+
+| Touchpoint                              | Raised by                                  | Answered by                                                                                                  |
+| --------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Chat clarification (`ask_user`)         | the chat turn's question seam (`origin: tool`, `source.chatId`) | the next chat message (`clarificationResponse.questionId`, channel `chat`) or the answer endpoint; unanswered ones expire after 24 h or are cancelled by the next message |
+| Workflow `human` node checkpoint        | `HumanNodeExecutor` (`origin: node`, `source.checkpointId`, id = checkpoint id) | the answer endpoint (`channel` `run_page` / `queue` / `chat`): `checkpointResume` validates the option, routes the branch and resumes the execution before the answer is persisted |
+| Agent HITL approval                     | same as above with `policy.approverGroups` from `profile.hitl.approverGroups` | same; the service enforces the approver groups                                                                |
+
+The answer body is `{ value?, data?, decision?, reason?, skipped? }`. A
+rejected answer (invalid option, missing required form field, unauthorized
+approver, execution no longer paused on this checkpoint) returns 4xx with a
+`code` and leaves the interaction pending.
+
+## Human events
+
+`POST /api/runs/:runId/human-events` records a `human/event` on the ledger:
+
+| `kind`     | Body                                      | Effect                                                                                       |
+| ---------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `steer`    | `{ message }`                             | Recorded for the run's history                                                               |
+| `stop`     | –                                         | Aborts the run: a chat run's active model call (and any workflow it launched), or the engine cancels the execution |
+| `feedback` | `{ rating?, message?, messageId? }`       | Recorded; the chat feedback form sends the same event through `POST /api/feedback` (`runId`) |
+
+The chat stop button records a `stop` event on the run bound to the chat
+stream; answers are recorded as `interaction/answered`, not as human events.
 
 ## Deleting data
 

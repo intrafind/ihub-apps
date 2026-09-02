@@ -8,12 +8,8 @@ import StepDetails from '../components/StepDetails';
 import { aggregateTokenUsage, formatTokenCount } from '../utils/tokenStats';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
-import {
-  approveAgentRun,
-  cancelAgentRun,
-  fetchRunArtifacts,
-  resumeAgentRun
-} from '../../../api/agentsAdminApi';
+import { cancelAgentRun, fetchRunArtifacts, resumeAgentRun } from '../../../api/agentsAdminApi';
+import { answerInteraction } from '../../../api';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -104,15 +100,18 @@ export default function AgentRunDetailPage() {
     }
   }
 
+  // The checkpoint is the run's pending interaction (checkpoint id ===
+  // interaction id); answering it resumes the run. Approver groups from the
+  // profile are enforced by the server.
   async function handleApprove(response) {
     const checkpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
     if (!checkpoint) return;
     setActionError(null);
     try {
-      await approveAgentRun(runId, { checkpointId: checkpoint.id, response });
+      await answerInteraction(runId, checkpoint.id, { value: response }, { channel: 'run_page' });
       refetch();
     } catch (err) {
-      setActionError(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.error || err?.response?.data?.message || err.message);
     }
   }
 

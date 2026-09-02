@@ -37,6 +37,7 @@ import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
 import registerRunRoutes from './routes/runs.js';
 import runLog from './services/loop/RunLog.js';
+import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -557,6 +558,8 @@ if (cluster.isPrimary && workerCount > 1) {
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
   registerRunRoutes(app);
+  // An answered workflow checkpoint resumes its execution (one answer endpoint).
+  registerCheckpointResume();
   // Retention sweep once per process; in cluster mode only the first worker runs it.
   if (!cluster.isWorker || cluster.worker?.id === 1) runLog.startCleanupScheduler();
   registerVoiceRoutes(app);

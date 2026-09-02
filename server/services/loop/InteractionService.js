@@ -62,6 +62,12 @@ export class InteractionService extends EventEmitter {
     this._byId = new Map();
     /** @type {Map<string, {resolve:Function, reject:Function}>} awaiting answers */
     this._waiters = new Map();
+    /**
+     * Answer handlers: consulted before an answer is accepted (e.g. resume the
+     * paused workflow). A handler that throws rejects the answer and the
+     * interaction stays pending. @type {Set<Function>}
+     */
+    this._answerHandlers = new Set();
     this._loaded = false;
     this._unhookDelete = this.runLog.onDelete(runId => this._deleteForRun(runId));
   }
@@ -127,6 +133,21 @@ export class InteractionService extends EventEmitter {
   }
 
   /**
+   * Register a handler that runs when an interaction is answered, BEFORE the
+   * answer is persisted: `handler(interaction, { user, channel })` where
+   * `interaction` already carries `status: 'answered'` and `answer`. Throwing
+   * rejects the answer (the caller sees the error, the interaction stays
+   * pending) — this is how a paused workflow takes the answer atomically.
+   *
+   * @param {(interaction: Object, ctx: {user: Object|null, channel: string}) => Promise<void>|void} handler
+   * @returns {() => void} unregister
+   */
+  onAnswer(handler) {
+    this._answerHandlers.add(handler);
+    return () => this._answerHandlers.delete(handler);
+  }
+
+  /**
    * Raise a new interaction.
    *
    * @param {Object} params
@@ -138,6 +159,7 @@ export class InteractionService extends EventEmitter {
    * @param {Object} [params.source]
    * @param {number} [params.step]
    * @param {string} [params.id]
+   * @param {number} [params.ordinal] - caller-tracked sequence (default: n-th of this kind on the run)
    * @returns {Promise<Object>} the persisted interaction
    */
   async raise(params) {
@@ -148,9 +170,11 @@ export class InteractionService extends EventEmitter {
       policy.expiresAt = new Date(this._now() + policy.timeoutMs).toISOString();
     }
     const ordinal =
-      1 +
-      [...this._byId.values()].filter(i => i.runId === params.runId && i.kind === params.kind)
-        .length;
+      Number.isInteger(params.ordinal) && params.ordinal > 0
+        ? params.ordinal
+        : 1 +
+          [...this._byId.values()].filter(i => i.runId === params.runId && i.kind === params.kind)
+            .length;
     const interaction = interactionSchema.parse({
       id: params.id || `int-${crypto.randomUUID()}`,
       runId: params.runId,
@@ -184,11 +208,12 @@ export class InteractionService extends EventEmitter {
   }
 
   /** List pending interactions, optionally filtered. */
-  async listPending({ runId, kind, approverGroups, principalId } = {}) {
+  async listPending({ runId, kind, approverGroups, principalId, chatId } = {}) {
     await this._ensureLoaded();
     let items = [...this._byId.values()].filter(i => i.status === 'pending');
     if (runId) items = items.filter(i => i.runId === runId);
     if (kind) items = items.filter(i => i.kind === kind);
+    if (chatId) items = items.filter(i => i.source?.chatId === chatId);
     if (Array.isArray(approverGroups)) {
       items = items.filter(i => {
         const groups = i.policy?.approverGroups;
@@ -328,6 +353,11 @@ export class InteractionService extends EventEmitter {
       answer: full,
       updatedAt: full.at
     };
+    // Let the owner of the paused run take the answer first; a throwing handler
+    // leaves the interaction pending so the human can try again.
+    for (const handler of this._answerHandlers) {
+      await handler(answered, { user, channel });
+    }
     await this._save(answered);
     try {
       this.runLog.append(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
@@ -346,7 +376,7 @@ export class InteractionService extends EventEmitter {
       this._waiters.delete(id);
       w.resolve(answered);
     }
-    this.emit('answered', answered);
+    this.emit('answered', answered, { user, channel });
     return answered;
   }
 

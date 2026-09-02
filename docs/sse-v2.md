@@ -84,7 +84,8 @@ run/ended                   { status: 'completed', finishReason: 'stop', usage, 
 
 A clarification (`ask_user`) ends the turn with `interaction/raised`
 (kind `question`) → `tool/completed` → `run/paused { reason: 'interaction' }`;
-the user's answer arrives as the next chat message. A passthrough tool (a
+the user's answer arrives as the next chat message (or through
+`POST /api/runs/:runId/interactions/:id/answer`; the interaction is persisted). A passthrough tool (a
 workflow launched from chat) streams its answer as `step/delta` frames and ends
 with `run/ended { finishReason: 'tool_passthrough_complete', toolName }`. A
 failure is `stream/error` followed by `run/ended { status: 'error' }`; a stop

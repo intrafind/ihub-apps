@@ -122,6 +122,8 @@ export function projectRunToMessage(run, options = {}) {
   const extras = {};
   const finished = isRunFinished(run);
   const interactions = getInteractions(run);
+  // The run behind the message: feedback and human events are recorded on it.
+  if (run.runId) extras.runId = run.runId;
 
   // ── content ───────────────────────────────────────────────────────────
   let content = run.text || '';

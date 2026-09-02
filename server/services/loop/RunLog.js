@@ -224,6 +224,7 @@ export class RunLog {
       principalId: principal.id,
       startedAt,
       refs,
+      trigger: trigger || null,
       listeners: this._runs.get(runId)?.listeners || new Set(),
       ended: false
     });
@@ -381,6 +382,7 @@ export class RunLog {
       principalId: e.principalId,
       startedAt: e.startedAt,
       refs: e.refs,
+      trigger: e.trigger || null,
       seq: e.seq,
       ended: e.ended
     };

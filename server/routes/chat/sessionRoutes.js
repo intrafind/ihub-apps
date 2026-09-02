@@ -13,9 +13,10 @@ import {
   hasActiveChatRequest,
   hasChatClient
 } from '../../sse.js';
-import { RunStreamEmitter, currentSeq } from '../../services/loop/RunStream.js';
-import { newRunId } from '../../services/loop/RunLog.js';
-import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
+import runLog, { newRunId } from '../../services/loop/RunLog.js';
+import interactionService from '../../services/loop/InteractionService.js';
+import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
@@ -473,6 +474,41 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   );
 
   /**
+   * Settle the chat's pending clarifications for an incoming message: the
+   * message that carries `clarificationResponse` answers its interaction
+   * (channel `chat`); any other message cancels clarifications the user
+   * skipped past. Never blocks the turn.
+   */
+  async function settleChatClarifications({ chatId, user, lastMessage }) {
+    const response = lastMessage?.clarificationResponse;
+    const answeredId =
+      response && typeof response === 'object'
+        ? String(response.interactionId || response.questionId || '')
+        : '';
+    try {
+      const pending = await interactionService.listPending({ chatId, kind: 'question' });
+      for (const interaction of pending) {
+        if (interaction.id === answeredId) {
+          await interactionService.answer(
+            interaction.id,
+            response.skipped ? { skipped: true } : { value: response.value },
+            { user, channel: 'chat' }
+          );
+        } else {
+          await interactionService.cancel(interaction.id, 'superseded');
+        }
+      }
+    } catch (err) {
+      logger.warn('Chat clarification not settled', {
+        component: 'sessionRoutes',
+        chatId,
+        interactionId: answeredId || null,
+        error: err.message
+      });
+    }
+  }
+
+  /**
    * Run one chat turn through the shared chat service. With an SSE client the
    * turn streams over the chat channel and this resolves once it ended; without
    * one the answer is written to the HTTP response.
@@ -648,6 +684,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           }
         }
         const userSessionId = req.headers['x-session-id'];
+        // A clarification (`ask_user`) is answered by the next message: settle the
+        // pending interaction (channel `chat`) before the turn runs; any other
+        // message supersedes clarifications the user chose not to answer.
+        await settleChatClarifications({
+          chatId,
+          user: req.user,
+          lastMessage: Array.isArray(messages) ? messages[messages.length - 1] : null
+        });
         let model;
         let llmMessages;
         function buildLogData(streaming, extra = {}) {
@@ -990,6 +1034,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     async (req, res) => {
       const { chatId } = req.params;
       if (hasChatClient(chatId)) {
+        // The stop is a human event on the run bound to this chat stream.
+        const boundRunId = getStreamRun(chatId);
+        if (boundRunId) {
+          try {
+            runLog.append(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+              kind: 'stop',
+              by: req.user?.id ? String(req.user.id) : 'anonymous',
+              at: new Date().toISOString()
+            });
+          } catch (ledgerErr) {
+            logger.debug('Stop human/event not recorded', {
+              component: 'sessionRoutes',
+              chatId,
+              error: ledgerErr.message
+            });
+          }
+        }
         // Each of the three teardown steps targets state that may live on a
         // different worker than this POST landed on: the LLM call, the workflow
         // execution and the SSE stream are registered independently, so each

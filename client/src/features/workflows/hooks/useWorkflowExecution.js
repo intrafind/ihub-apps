@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiClient } from '../../../api/client';
+import { answerInteraction } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import useRunStream from '../../../shared/hooks/useRunStream';
@@ -26,14 +27,13 @@ const REFETCH_AFTER_COMPLETE_MS = 500;
  * @param {string|string[]} [options.requireFeature='workflows'] - Feature flag id(s); any one enabled suffices
  * @param {string} [options.stateEndpoint='workflows/executions'] - REST base path (relative to the API root)
  * @param {string} [options.streamEndpoint='workflows/executions'] - Stream base path (buildApiUrl prepends /api)
- * @param {string} [options.respondEndpoint='respond'] - Suffix for the HITL respond endpoint
  * @param {string} [options.cancelEndpoint='cancel'] - Suffix for the cancel endpoint
  * @returns {Object} Execution state and methods
  * @property {Object|null} state - Current execution state (REST state + live projection)
  * @property {boolean} loading - Whether initial state is loading
  * @property {boolean} connected - Whether the stream is open
  * @property {string|null} error - Error message if any
- * @property {Function} respondToCheckpoint - Respond to a human checkpoint
+ * @property {Function} respondToCheckpoint - Answer a human checkpoint (the execution's pending interaction)
  * @property {Function} cancelExecution - Cancel the execution
  * @property {Function} reconnect - Reconnect the stream
  * @property {Function} refetch - Refetch the REST state
@@ -43,7 +43,6 @@ function useWorkflowExecution(executionId, options = {}) {
     requireFeature = 'workflows',
     stateEndpoint = 'workflows/executions',
     streamEndpoint = 'workflows/executions',
-    respondEndpoint = 'respond',
     cancelEndpoint = 'cancel'
   } = options;
 
@@ -170,7 +169,10 @@ function useWorkflowExecution(executionId, options = {}) {
   }, [executionId, streamEndpoint, isFeatureEnabled, connect]);
   connectRef.current = connectSSE;
 
-  // Respond to human checkpoint
+  // Answer a human checkpoint: the checkpoint is a pending interaction of the
+  // run that raised it (checkpoint id === interaction id; for a sub-workflow
+  // that run is the child execution), answered through the one answer
+  // endpoint, which resumes the execution.
   const respondToCheckpoint = useCallback(
     async ({ checkpointId, response, data }) => {
       if (!executionId) return;
@@ -180,19 +182,20 @@ function useWorkflowExecution(executionId, options = {}) {
       }
 
       try {
-        const result = await apiClient.post(`/${stateEndpoint}/${executionId}/${respondEndpoint}`, {
-          checkpointId,
-          response,
-          data
-        });
-
-        // Optimistic local update until the server's interaction/answered +
-        // run/resumed frames arrive: answer the interaction (checkpoint id ===
-        // interaction id) on the run that raised it.
-        const now = new Date().toISOString();
         const owner =
           getRuns(streamStateRef.current).find(r => r.interactions?.[checkpointId]) || null;
-        const ownerRunId = owner?.runId || executionId;
+        const ownerRunId =
+          owner?.interactions?.[checkpointId]?.runId || owner?.runId || executionId;
+        const result = await answerInteraction(
+          ownerRunId,
+          checkpointId,
+          { value: response, ...(data ? { data } : {}) },
+          { channel: 'run_page' }
+        );
+
+        // Optimistic local update until the server's interaction/answered +
+        // run/resumed frames arrive.
+        const now = new Date().toISOString();
         push({
           v: 2,
           runId: ownerRunId,
@@ -210,18 +213,15 @@ function useWorkflowExecution(executionId, options = {}) {
             }
           }
         });
-        const newStatus = result.data?.newStatus || 'running';
-        if (newStatus === 'running') {
-          push({
-            v: 2,
-            runId: ownerRunId,
-            ts: now,
-            type: RUN_EVENTS.RUN_RESUMED,
-            data: { interactionId: checkpointId }
-          });
-        }
+        push({
+          v: 2,
+          runId: ownerRunId,
+          ts: now,
+          type: RUN_EVENTS.RUN_RESUMED,
+          data: { interactionId: checkpointId }
+        });
         setBaseState(prev =>
-          prev ? { ...prev, pendingCheckpoint: null, status: newStatus } : prev
+          prev ? { ...prev, pendingCheckpoint: null, status: 'running' } : prev
         );
 
         return result.data;
@@ -231,7 +231,7 @@ function useWorkflowExecution(executionId, options = {}) {
       }
     },
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-    [executionId, stateEndpoint, respondEndpoint, isFeatureEnabled, push]
+    [executionId, isFeatureEnabled, push]
   );
 
   // Cancel execution

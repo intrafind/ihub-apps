@@ -6,6 +6,8 @@ import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
 import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
+import runLog from '../loop/RunLog.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -371,6 +373,11 @@ export class WorkflowEngine {
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
 
+    // 5b. The execution is a run on the ledger (runId === executionId): its
+    // interactions, pause/resume and end are recorded there and the run routes
+    // (`/api/runs/:runId/…`) authorize against it.
+    await this._startLedgerRun(executionId, workflowDefinition, initialData, options);
+
     // 6. Emit workflow start event
     this._emitEvent('workflow.start', {
       executionId,
@@ -468,6 +475,19 @@ export class WorkflowEngine {
 
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
+
+    // Re-register the run on the ledger so its sequence continues after a restart.
+    try {
+      await runLog.resumeRun(executionId, {
+        kind: state.data?._agent?.profileId ? 'agent' : 'workflow'
+      });
+    } catch (err) {
+      logger.debug('Ledger resumeRun failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
 
     logger.info('Resuming workflow execution from checkpoint', {
       component: 'WorkflowEngine',
@@ -1734,11 +1754,101 @@ export class WorkflowEngine {
       ...data
     });
 
+    this._mirrorToLedger(eventType, data);
+
     logger.debug('Emitted workflow event', {
       component: 'WorkflowEngine',
       eventType,
       executionId: data.executionId
     });
+  }
+
+  /**
+   * Start the execution's run on the ledger. Never throws — the ledger must not
+   * break an execution.
+   * @private
+   */
+  async _startLedgerRun(executionId, workflowDefinition, initialData, options) {
+    const agent = initialData?._agent;
+    const triggerKind = agent?.triggeredBy?.kind;
+    const trigger =
+      triggerKind === 'schedule' || triggerKind === 'webhook'
+        ? { type: triggerKind }
+        : triggerKind === 'inbox' || triggerKind === 'system'
+          ? { type: 'system', source: triggerKind }
+          : initialData?._chatHistory !== undefined || initialData?._chatId
+            ? { type: 'tool', source: 'chat' }
+            : { type: 'user' };
+    try {
+      await runLog.startRun({
+        runId: executionId,
+        kind: agent?.profileId ? 'agent' : 'workflow',
+        user: options.user || null,
+        trigger,
+        refs: {
+          executionId,
+          ...(workflowDefinition.id ? { workflowId: String(workflowDefinition.id) } : {}),
+          ...(agent?.profileId ? { profileId: String(agent.profileId) } : {}),
+          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {})
+        },
+        ...(initialData?.language ? { language: String(initialData.language) } : {})
+      });
+    } catch (err) {
+      logger.warn('Ledger startRun failed for execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Mirror the lifecycle events onto the execution's ledger run
+   * (`run/paused`, `run/end`). Never throws.
+   * @private
+   */
+  _mirrorToLedger(eventType, data) {
+    const runId = data?.executionId;
+    if (!runId) return;
+    try {
+      switch (eventType) {
+        case 'workflow.paused':
+          runLog.append(runId, RUN_LOG_EVENTS.RUN_PAUSED, {
+            reason: 'interaction',
+            ...(data.checkpoint?.id ? { interactionId: String(data.checkpoint.id) } : {}),
+            pausedAt: new Date().toISOString()
+          });
+          break;
+        case 'workflow.complete':
+          runLog.endRun(runId, {
+            status: 'completed',
+            finishReason: data.status && data.status !== 'completed' ? String(data.status) : null
+          });
+          break;
+        case 'workflow.failed':
+          runLog.endRun(runId, {
+            status: 'error',
+            finishReason: 'error',
+            error: {
+              code: String(data.error?.code || 'WORKFLOW_FAILED'),
+              message: String(data.error?.message || data.error || 'Workflow failed')
+            }
+          });
+          break;
+        case 'workflow.cancelled':
+          runLog.endRun(runId, { status: 'aborted', finishReason: 'cancelled' });
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      logger.debug('Ledger mirror failed', {
+        component: 'WorkflowEngine',
+        executionId: runId,
+        eventType,
+        error: err.message
+      });
+    }
   }
 
   /**

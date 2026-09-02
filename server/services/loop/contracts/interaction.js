@@ -145,6 +145,14 @@ export const interactionAnswerRequestSchema = z.object({
   skipped: z.boolean().optional()
 });
 
+/** Body of POST /api/runs/:runId/human-events (`answer` goes through the answer endpoint). */
+export const humanEventRequestSchema = z.object({
+  kind: z.enum(['steer', 'stop', 'feedback']),
+  message: z.string().max(4000).optional(),
+  messageId: z.string().max(200).optional(),
+  rating: z.union([z.number(), z.string().max(50)]).optional()
+});
+
 /** A human→agent event delivered into a run (steer / stop / feedback). */
 export const humanEventSchema = z.object({
   kind: humanEventKindSchema,

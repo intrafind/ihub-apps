@@ -14,6 +14,9 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import interactionService from '../../loop/InteractionService.js';
+import runLog from '../../loop/RunLog.js';
+import { checkpointToInteraction } from '../../loop/RunStream.js';
 import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../../../actionTracker.js';
 import configCache from '../../../configCache.js';
@@ -115,6 +118,47 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpointId: checkpoint.id
     });
 
+    // The checkpoint IS an interaction: persist it through the one service so
+    // it survives a restart, shows up in the interactions queue and is answered
+    // through the one answer endpoint (which resumes the execution, see
+    // checkpointResume.js). Approver groups come from the agent profile when
+    // this is an agent run; the service enforces them on answer. A checkpoint
+    // that cannot be raised fails the node instead of pausing a run nobody
+    // could ever resume.
+    const profileId = state?.data?._agent?.profileId || null;
+    const approverGroups = profileId ? this._approverGroupsFor(profileId) : [];
+    const template = checkpointToInteraction(checkpoint, {
+      runId: context.executionId,
+      executionId: context.executionId,
+      step: state?.data?._currentStep || 0
+    });
+    const principalId = runLog.getRunMeta(context.executionId)?.principalId || null;
+    try {
+      await interactionService.raise({
+        id: checkpoint.id,
+        runId: context.executionId,
+        step: template.step,
+        kind: template.kind,
+        origin: 'node',
+        prompt: template.prompt,
+        policy: {
+          ...(approverGroups.length > 0 ? { approverGroups } : {}),
+          ...(checkpoint.timeout ? { timeoutMs: checkpoint.timeout } : {}),
+          onTimeout: 'fail'
+        },
+        source: {
+          ...template.source,
+          ...(profileId ? { profileId } : {}),
+          ...(principalId ? { principalId: String(principalId) } : {})
+        }
+      });
+    } catch (raiseErr) {
+      return this.createErrorResult(`Could not raise the human checkpoint: ${raiseErr.message}`, {
+        executionId: context.executionId,
+        checkpointId: checkpoint.id
+      });
+    }
+
     // Emit event for real-time notification
     actionTracker.emit('fire-sse', {
       event: 'workflow.human.required',
@@ -172,48 +216,10 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       response
     });
 
-    // ── Agent HITL: approver-group validation ──────────────────────────────
-    // When this workflow is an agent run (has state.data._agent.profileId),
-    // and the resumer is a real human (not the agent itself), validate that
-    // they are in one of the configured approver groups.
+    // Approver groups (agent runs) are enforced by InteractionService.answer on
+    // the interaction's policy — the answer never reaches this point otherwise.
     const agentEnvelope = state?.data?._agent;
     const requester = context?.user;
-    const requesterIsRealUser = !!requester && requester.isAgent !== true;
-    if (agentEnvelope?.profileId && requesterIsRealUser) {
-      try {
-        const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
-        const profile = profiles?.data?.find(p => p.id === agentEnvelope.profileId);
-        const approverGroups = profile?.hitl?.approverGroups || [];
-        if (Array.isArray(approverGroups) && approverGroups.length > 0) {
-          const userGroups = requester.groups || [];
-          const allowed = approverGroups.some(g => userGroups.includes(g));
-          if (!allowed) {
-            this.logger.warn('HITL approval denied: user not in approver groups', {
-              component: 'HumanNodeExecutor',
-              profileId: agentEnvelope.profileId,
-              userId: requester.id,
-              approverGroups
-            });
-            actionTracker.emit('fire-sse', {
-              event: 'agent.hitl.rejected',
-              chatId: context?.executionId,
-              executionId: context?.executionId,
-              reason: 'unauthorized_approver',
-              userId: requester.id,
-              profileId: agentEnvelope.profileId
-            });
-            return this.createErrorResult(
-              `User ${requester.id} is not a member of any approver group (${approverGroups.join(', ')})`
-            );
-          }
-        }
-      } catch (groupErr) {
-        this.logger.warn('Failed to validate approver groups', {
-          component: 'HumanNodeExecutor',
-          error: groupErr.message
-        });
-      }
-    }
 
     // Validate response against options if options were specified
     const { config } = node;
@@ -291,6 +297,26 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
         branch: response // Use the response value as the branch for decision routing
       }
     );
+  }
+
+  /**
+   * Approver groups configured on an agent profile (`hitl.approverGroups`).
+   * @private
+   */
+  _approverGroupsFor(profileId) {
+    try {
+      const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
+      const profile = profiles?.data?.find(p => p.id === profileId);
+      const groups = profile?.hitl?.approverGroups;
+      return Array.isArray(groups) ? groups.filter(g => typeof g === 'string') : [];
+    } catch (err) {
+      this.logger.warn('Failed to resolve approver groups', {
+        component: 'HumanNodeExecutor',
+        profileId,
+        error: err.message
+      });
+      return [];
+    }
   }
 
   /**

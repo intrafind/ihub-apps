@@ -19,7 +19,7 @@ leave durable artifacts behind.
 | **Service-account identity** | Agent runs execute as `agent:<profileId>` principals. Groups in `profile.serviceAccount.groups` determine what apps/tools/models the agent can use. `isAdmin` is forced false. |
 | **Dynamic tasks** | Agents may call `create_task` to enqueue work onto `state.data._taskQueue`. A drain-mode loop processes the queue until empty (bounded by `dynamicTasks.maxDepth` and the existing 200-iteration cap). |
 | **App-as-tool** | When `features.appAsTool: true` and a node has `config.apps: [appId, ...]`, the LLM sees `app__<appId>` synthetic tools that call into `ChatService.invokeAppInternal` via the shared gateway (`server/services/chat/appToolsGateway.js`). Regular chat apps can use the same mechanism through their own `apps: [...]` config field (see [App Configuration](apps.md#apps-as-tools-concierge-pattern)). App→App nesting is forbidden. |
-| **HITL** | Explicit `human` nodes in the workflow pause until an operator in `profile.hitl.approverGroups` approves via `POST /api/agents/runs/:runId/approve`. |
+| **HITL** | Explicit `human` nodes in the workflow pause until an operator in `profile.hitl.approverGroups` answers the run's pending interaction via `POST /api/runs/:runId/interactions/:id/answer`. |
 | **Artifacts** | Agents call `write_artifact({ name, content })` to persist to `contents/data/agent-artifacts/<execId>/`. Each run can produce multiple artifacts. |
 
 ## Quick start
@@ -232,10 +232,22 @@ loop microcompacts older/bulky tool results in-place and retries before failing
 ## HITL approval
 
 Place a `human` node anywhere in the workflow. When it executes, the run pauses
-and `agent.hitl.requested` is emitted. An operator (member of
-`profile.hitl.approverGroups`) calls `POST /api/agents/runs/:runId/approve`
-with `{ checkpointId, response }` to resume; `agent.hitl.approved` /
-`agent.hitl.rejected` fires.
+and the checkpoint is raised as an **interaction** of the run (kind `approval`,
+`policy.approverGroups` = `profile.hitl.approverGroups`): the stream carries
+`interaction/raised` + `run/paused`, the ledger records `interaction/raised`
+and the interaction shows up in the queue (`GET /api/interactions/pending?kind=approval`,
+Admin → Agents → Pending Approvals). An operator answers it through the one
+answer endpoint:
+
+```http
+POST /api/runs/:runId/interactions/:checkpointId/answer
+{ "value": "approve", "data": { … } }
+```
+
+The server enforces the approver groups, validates the option, routes the
+workflow on the chosen branch and resumes the run (`interaction/answered`,
+`run/resumed`); a rejected answer leaves the interaction pending. The run id of
+an agent run is its execution id.
 
 ## Demos shipped
 
@@ -300,7 +312,7 @@ run-detail page):
 - `agent.task.created` / `.completed` / `.failed`
 - `agent.plan.updated` — emitted after any `_taskQueue` mutation (create/set/update/done); carries a compact plan snapshot (`tasks[]`, `counts`, `reason`) for live run-detail rendering
 - `agent.artifact.written`
-- `agent.hitl.requested` / `.approved` / `.rejected`
+- `agent.hitl.requested` / `.approved` / `.rejected` (the checkpoint itself is delivered as `interaction/raised` / `interaction/answered`)
 - `agent.app.call` / `agent.app.result` (when App-as-tool is enabled)
 
 ## File layout
