@@ -704,20 +704,7 @@ export class RunLog {
    */
   async deleteRun(runId) {
     assertRunId(runId);
-    const cascaded = [];
-    for (const hook of this._deleteHooks) {
-      try {
-        const res = await hook(runId);
-        if (res) cascaded.push(typeof res === 'string' ? res : 'hook');
-      } catch (err) {
-        logger.warn('RunLog delete hook failed', {
-          component: 'RunLog',
-          runId,
-          error: err.message
-        });
-      }
-    }
-    this._drop(runId);
+    const cascaded = await this._cascadeDelete(runId);
     if (!this.isEnabled()) return { runId, deleted: false, cascaded };
     await this._appender.withWriteLock(async () => {
       await this._appender.drainToDisk().catch(() => {});
@@ -743,7 +730,34 @@ export class RunLog {
   }
 
   /**
-   * Remove run files (and their spill dirs / index files) older than `retentionDays`.
+   * Run the delete cascade for a run: every registered hook (pending
+   * interactions, …) and this worker's in-memory entry. Shared by `deleteRun`
+   * and the retention sweep so both remove the same things.
+   * @returns {Promise<string[]>} what the hooks reported as cascaded
+   * @private
+   */
+  async _cascadeDelete(runId) {
+    const cascaded = [];
+    for (const hook of this._deleteHooks) {
+      try {
+        const res = await hook(runId);
+        if (res) cascaded.push(typeof res === 'string' ? res : 'hook');
+      } catch (err) {
+        logger.warn('RunLog delete hook failed', {
+          component: 'RunLog',
+          runId,
+          error: err.message
+        });
+      }
+    }
+    this._drop(runId);
+    return cascaded;
+  }
+
+  /**
+   * Remove runs older than `retentionDays`: run file, spill dir and the same
+   * cascade `deleteRun` performs (delete hooks, e.g. the run's interactions);
+   * index files older than the cutoff are removed as well.
    */
   async cleanup(retentionDays) {
     if (!Number.isFinite(retentionDays) || retentionDays <= 0) return { removed: 0 };
@@ -765,11 +779,13 @@ export class RunLog {
         try {
           const st = await fs.stat(abs);
           if (st.mtimeMs < cutoff) {
+            const runId = f.replace(/\.jsonl$/, '');
             await fs.unlink(abs);
-            await fs.rm(path.join(this._baseDir, 'spill', f.replace(/\.jsonl$/, '')), {
+            await fs.rm(path.join(this._baseDir, 'spill', runId), {
               recursive: true,
               force: true
             });
+            if (isValidRunId(runId)) await this._cascadeDelete(runId);
             removed++;
           }
         } catch {

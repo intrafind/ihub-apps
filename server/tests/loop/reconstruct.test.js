@@ -97,7 +97,7 @@ test('a multi-step run reconstructs byte-for-byte through the real adapter', asy
   await runLog.stop();
 });
 
-test('tampered messages are detected; unknown models and schema-only calls are skipped', async () => {
+test('tampered messages are detected; schema-constrained calls are verified; unknown models are skipped', async () => {
   const { runLog, events } = await captureRunLog();
   const client = realClient(runLog);
   const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
@@ -118,11 +118,32 @@ test('tampered messages are detected; unknown models and schema-only calls are s
       : e
   );
   const report = await verifyRequestReconstruction(tampered, { findModel: () => model });
-  assert.equal(report.checked, 1);
+  assert.equal(report.checked, 2);
   assert.equal(report.mismatched.length, 1);
-  assert.equal(report.skipped.length, 1);
-  assert.match(report.skipped[0].reason, /responseSchema/);
+  assert.equal(
+    report.matched,
+    1,
+    'the schema-constrained request is rebuilt from the recorded schema'
+  );
+  assert.deepEqual(report.skipped, []);
   assert.equal(report.ok, false);
+
+  // The schema is recorded once (on change) and referenced by hash afterwards;
+  // a header whose hash has no recorded schema is skipped, not guessed.
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.equal(headers[0].data.callConfig.responseSchema, undefined);
+  assert.deepEqual(headers[1].data.callConfig.responseSchema, { type: 'object' });
+  const withoutSchema = events.map(e =>
+    e.type === 'request/header' && e.data.step === 1
+      ? {
+          ...e,
+          data: { ...e.data, callConfig: { ...e.data.callConfig, responseSchema: undefined } }
+        }
+      : e
+  );
+  const partial = await verifyRequestReconstruction(withoutSchema, { findModel: () => model });
+  assert.equal(partial.skipped.length, 1);
+  assert.match(partial.skipped[0].reason, /schema/);
 
   const unknown = await verifyRequestReconstruction(events, { findModel: () => null });
   assert.equal(unknown.checked, 0);

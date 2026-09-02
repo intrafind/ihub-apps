@@ -35,22 +35,39 @@ import {
 import { resolvePrincipal, resolveActorId, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { authorizeRun, isAdminUser } from '../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
-import { projectLedgerEvent } from '../services/loop/RunStream.js';
+import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
 
+/** Whether the run has already recorded `run/end` (memory first, then the persisted ledger). */
+async function runHasEnded(runId) {
+  const meta = runLog.getRunMeta(runId);
+  if (meta) return meta.ended === true;
+  if (!runLog.isEnabled()) return false;
+  const events = await runLog.readEvents(runId);
+  return events.some(e => e.type === RUN_LOG_EVENTS.RUN_END);
+}
+
 /**
  * `stop` is the one human event with a side effect: abort the run. A chat run
  * aborts its active model call (and any workflow it launched); a workflow or
  * agent run is cancelled on the engine.
+ *
+ * Abortable chat work is keyed by chat id, so the side effect is applied only
+ * when the addressed run is the one currently producing on that chat: a run
+ * that already ended, or that is no longer the run bound to the chat's stream,
+ * records the event without aborting a newer turn of the same chat.
  * @returns {Promise<string|null>} what was stopped
  */
 async function stopRun(runId, meta) {
-  const refs = runLog.getRunMeta(runId)?.refs || {};
+  const refs = runLog.getRunMeta(runId)?.refs || meta?.refs || {};
   if (meta?.kind === 'chat' && refs.chatId) {
+    if (await runHasEnded(runId)) return null;
+    const bound = getStreamRun(refs.chatId);
+    if (bound && bound.runId !== runId) return null;
     abortChatRequest(refs.chatId);
     await cancelChatWorkflow(refs.chatId);
     return 'chat_aborted';

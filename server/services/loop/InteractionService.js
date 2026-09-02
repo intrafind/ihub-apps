@@ -33,6 +33,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
+import { compileSafeRegex } from '../../utils/safeRegex.js';
 import { resolveActorId } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -341,8 +342,9 @@ export class InteractionService extends EventEmitter {
   }
 
   /**
-   * Validate an answer against the prompt: options, inputSchema (required
-   * keys / basic types), skip permission.
+   * Validate an answer against the prompt: options, the prompt's `validation`
+   * rules (pattern / min / max), inputSchema (required keys / basic types),
+   * skip permission.
    */
   validateAnswer(interaction, answer) {
     const { prompt } = interaction;
@@ -378,6 +380,9 @@ export class InteractionService extends EventEmitter {
         }
       }
     }
+    if (prompt.validation && answer.value !== undefined && answer.value !== null) {
+      this._enforceValidationRules(prompt, answer.value);
+    }
     if (prompt.inputSchema && typeof prompt.inputSchema === 'object') {
       const data = answer.data || {};
       const required = Array.isArray(prompt.inputSchema.required)
@@ -403,6 +408,50 @@ export class InteractionService extends EventEmitter {
         if (!ok) {
           throw new InteractionError(`Field '${key}' must be of type ${t}`, 'INVALID_INPUT');
         }
+      }
+    }
+  }
+
+  /**
+   * Enforce `prompt.validation` on the answered value(s), by input type:
+   * `pattern` on the text of every value; `min` / `max` as numeric bounds for
+   * `number`, as the number of selections for `multi_select`, and as the text
+   * length for `text`. An unsafe or invalid pattern is ignored (never rejects).
+   * @private
+   */
+  _enforceValidationRules(prompt, value) {
+    const rules = prompt.validation || {};
+    const values = Array.isArray(value) ? value : [value];
+    const fail = fallback => {
+      throw new InteractionError(rules.message || fallback, 'VALIDATION_FAILED');
+    };
+    if (rules.pattern) {
+      const re = compileSafeRegex(rules.pattern);
+      if (re) {
+        for (const v of values) {
+          if (!re.test(String(v))) fail(`Answer does not match the required format`);
+        }
+      }
+    }
+    const hasMin = typeof rules.min === 'number';
+    const hasMax = typeof rules.max === 'number';
+    if (!hasMin && !hasMax) return;
+    const type = prompt.inputType || 'text';
+    if (type === 'number') {
+      for (const v of values) {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) fail('Answer must be a number');
+        if (hasMin && n < rules.min) fail(`Answer must be at least ${rules.min}`);
+        if (hasMax && n > rules.max) fail(`Answer must be at most ${rules.max}`);
+      }
+    } else if (type === 'multi_select') {
+      if (hasMin && values.length < rules.min) fail(`Select at least ${rules.min} options`);
+      if (hasMax && values.length > rules.max) fail(`Select at most ${rules.max} options`);
+    } else if (type === 'text') {
+      for (const v of values) {
+        const len = String(v).length;
+        if (hasMin && len < rules.min) fail(`Answer must be at least ${rules.min} characters`);
+        if (hasMax && len > rules.max) fail(`Answer must be at most ${rules.max} characters`);
       }
     }
   }

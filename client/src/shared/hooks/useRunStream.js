@@ -12,6 +12,7 @@ import {
   TRANSPORT_ERROR_CODES
 } from '../utils/openSseStream';
 import { buildApiUrl } from '../../utils/runtimeBasePath';
+import { fetchAllLedgerEvents } from '../run/ledgerPages';
 
 /**
  * Reducer actions layered over `reduceRunEvent` (the pure run reducer only
@@ -186,26 +187,32 @@ function useRunStream({
   }, []);
 
   /**
-   * Re-sync a run: fetch its whole ledger projection and rebuild the run from
-   * it (the ledger is authoritative). The live stream's `seq` and the ledger's
-   * `seq` are independent sequence spaces, so no cursor is carried over.
+   * Re-sync a run: fetch its whole ledger projection (page by page — the
+   * endpoint pages by ledger sequence) and rebuild the run from it in one
+   * step (the ledger is authoritative). The live stream's `seq` and the
+   * ledger's `seq` are independent sequence spaces, so no cursor is carried
+   * over.
    *
    * @param {string} [runId] - Defaults to the root run
-   * @returns {Promise<Object|null>} the response body or null on failure
+   * @returns {Promise<{runId: string, events: Array, lastSeq: number|null}|null>}
+   *   the collected projection or null on failure
    */
   const resync = useCallback(async runId => {
     const rid = runId || rootRunIdRef.current || streamIdRef.current;
     if (!rid) return null;
     try {
-      const res = await fetchWithAuthRetry(
-        buildApiUrl(`runs/${encodeURIComponent(rid)}/events?after=0&view=sse`),
-        { method: 'GET', headers: { Accept: 'application/json' } }
-      );
-      if (!res.ok) throw new Error(`Run re-sync failed (${res.status})`);
-      const body = await res.json();
-      const envelopes = Array.isArray(body?.events) ? body.events : [];
+      const { events: envelopes, lastSeq } = await fetchAllLedgerEvents(async (after, limit) => {
+        const res = await fetchWithAuthRetry(
+          buildApiUrl(
+            `runs/${encodeURIComponent(rid)}/events?after=${after}&limit=${limit}&view=sse`
+          ),
+          { method: 'GET', headers: { Accept: 'application/json' } }
+        );
+        if (!res.ok) throw new Error(`Run re-sync failed (${res.status})`);
+        return res.json();
+      });
       if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
-      return body;
+      return { runId: rid, events: envelopes, lastSeq };
     } catch (err) {
       console.warn('Run re-sync failed:', err);
       // Clear the gap so a failed re-sync does not block later detection.

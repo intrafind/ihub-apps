@@ -171,6 +171,8 @@ export const requestHeaderData = z.object({
       maxTokens: z.number().int().optional(),
       responseFormat: z.string().nullable().optional(),
       responseSchemaHash: z.string().nullable().optional(),
+      /** Full schema, recorded when it first appears on the run and whenever its hash changes. */
+      responseSchema: z.any().optional(),
       thinking: z.record(z.any()).nullable().optional(),
       nativeWebSearch: z.any().nullable().optional(),
       toolChoice: z.any().optional(),

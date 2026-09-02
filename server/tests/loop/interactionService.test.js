@@ -555,3 +555,60 @@ test("answer.by is recorded in the run's identity mode, never as the raw user id
   await svc.stop();
   await runLog.stop();
 });
+
+test("prompt.validation is enforced server-side according to the prompt's input type", async () => {
+  const { runLog, svc, runId } = await setup();
+  const raise = prompt => svc.raise({ runId, kind: 'question', origin: 'tool', prompt });
+
+  const number = await raise({
+    message: 'How many?',
+    inputType: 'number',
+    validation: { min: 1, max: 10, message: 'Pick 1 to 10' }
+  });
+  await assert.rejects(
+    svc.answer(number.id, { value: 42 }),
+    e => e.code === 'VALIDATION_FAILED' && e.message === 'Pick 1 to 10'
+  );
+  await assert.rejects(
+    svc.answer(number.id, { value: 'many' }),
+    e => e.code === 'VALIDATION_FAILED'
+  );
+  assert.equal((await svc.answer(number.id, { value: '7' })).answer.value, '7');
+
+  const text = await raise({
+    message: 'Ticket id?',
+    inputType: 'text',
+    validation: { pattern: '^[A-Z]+-\\d+$', max: 12 }
+  });
+  await assert.rejects(
+    svc.answer(text.id, { value: 'not a ticket' }),
+    e => e.code === 'VALIDATION_FAILED' && /format/.test(e.message)
+  );
+  await assert.rejects(
+    svc.answer(text.id, { value: 'ABC-1234567890' }),
+    e => e.code === 'VALIDATION_FAILED' && /at most 12/.test(e.message)
+  );
+  assert.equal((await svc.answer(text.id, { value: 'ABC-42' })).status, 'answered');
+
+  const multi = await raise({
+    message: 'Pick two',
+    inputType: 'multi_select',
+    options: ['a', 'b', 'c'].map(v => ({ value: v, label: v })),
+    validation: { min: 1, max: 2 }
+  });
+  await assert.rejects(
+    svc.answer(multi.id, { value: ['a', 'b', 'c'] }),
+    e => e.code === 'VALIDATION_FAILED' && /at most 2/.test(e.message)
+  );
+  assert.equal((await svc.answer(multi.id, { value: ['a', 'b'] })).status, 'answered');
+
+  // an unsafe (ReDoS) pattern never rejects an answer
+  const unsafe = await raise({ message: 'x', validation: { pattern: '(a+)+$' } });
+  assert.equal((await svc.answer(unsafe.id, { value: 'anything' })).status, 'answered');
+
+  // skipping bypasses validation only when the prompt allows it
+  const skippable = await raise({ message: 'y', allowSkip: true, validation: { min: 5 } });
+  assert.equal((await svc.answer(skippable.id, { skipped: true })).answer.skipped, true);
+  await svc.stop();
+  await runLog.stop();
+});

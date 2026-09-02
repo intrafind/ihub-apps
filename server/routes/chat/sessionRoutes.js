@@ -16,6 +16,7 @@ import {
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
+import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
@@ -489,6 +490,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     try {
       const pending = await interactionService.listPending({ chatId, kind: 'question' });
       for (const interaction of pending) {
+        // `chatAuthRequired` authorizes the app, not the chat: only the
+        // principal who owns the interaction's run may settle it (a chat id
+        // alone must not let someone answer another user's question).
+        if (!(await authorizeInteraction(interaction, user))) {
+          logger.warn('Chat clarification belongs to another principal; not settled', {
+            component: 'sessionRoutes',
+            chatId,
+            interactionId: interaction.id
+          });
+          continue;
+        }
         if (interaction.id === answeredId) {
           await interactionService.answer(
             interaction.id,

@@ -120,10 +120,16 @@ recorded that way, `anonymous` for anonymous users), never a raw user id.
 | Workflow `human` node checkpoint        | `HumanNodeExecutor` (`origin: node`, `source.checkpointId`, id = checkpoint id) | the answer endpoint (`channel` `run_page` / `queue` / `chat`): `checkpointResume` validates the option, routes the branch and resumes the execution before the answer is persisted |
 | Agent HITL approval                     | same as above with `policy.approverGroups` from `profile.hitl.approverGroups` | same; the service enforces the approver groups                                                                |
 
-The answer body is `{ value?, data?, decision?, reason?, skipped? }`. A
-rejected answer (invalid option, missing required form field, unauthorized
+The answer body is `{ value?, data?, decision?, reason?, skipped? }`. It is
+validated server-side against the prompt: the options, the prompt's
+`validation` rules (`pattern`, and `min` / `max` as numeric bounds for a
+`number` question, selection count for `multi_select`, text length for
+`text`), the `inputSchema` of a form, and the skip permission. A rejected
+answer (invalid option or value, missing required form field, unauthorized
 approver, execution no longer paused on this checkpoint) returns 4xx with a
-`code` and leaves the interaction pending.
+`code` and leaves the interaction pending. A chat message that answers or
+supersedes a clarification settles only interactions whose run the sender may
+access — a chat id alone does not let anyone settle another user's question.
 
 ## Human events
 
@@ -132,7 +138,7 @@ approver, execution no longer paused on this checkpoint) returns 4xx with a
 | `kind`     | Body                                      | Effect                                                                                       |
 | ---------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `steer`    | `{ message }`                             | Recorded for the run's history                                                               |
-| `stop`     | –                                         | Aborts the run: a chat run's active model call (and any workflow it launched), or the engine cancels the execution |
+| `stop`     | –                                         | Aborts the run: a chat run's active model call (and any workflow it launched), or the engine cancels the execution. Only the run currently producing on its chat is aborted; a `stop` on a run that has ended, or that is no longer bound to the chat's stream, is recorded without a side effect |
 | `feedback` | `{ rating?, message?, messageId? }`       | Recorded; the chat feedback form sends the same event through `POST /api/feedback` (`runId`) |
 
 The chat stop button records a `stop` event on the run bound to the chat
@@ -150,6 +156,6 @@ file (`locks/`), so two recovering workers never allocate the same number.
 `DELETE /api/runs/:runId` removes the run file, its spill directory and every
 interaction that references it, and writes a tombstone to the index so the run
 no longer appears in listings. The retention sweep does the same for runs
-older than `retentionDays`. Deleting a chat conversation or a workflow
+older than `retentionDays`, including the cascade (their interactions). Deleting a chat conversation or a workflow
 execution through their own endpoints triggers the same cascade for the run
 they belong to.

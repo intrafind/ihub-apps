@@ -64,6 +64,7 @@ export async function verifyRequestReconstruction(
   };
   let lastMessages = null;
   let lastTools = null;
+  let lastSchema = null;
 
   for (const event of events) {
     if (event.type !== RUN_LOG_EVENTS.REQUEST_HEADER) continue;
@@ -79,9 +80,15 @@ export async function verifyRequestReconstruction(
       skip('no messages recorded before this request');
       continue;
     }
-    if (data.callConfig?.responseSchemaHash) {
-      skip('responseSchema is recorded as a hash only');
-      continue;
+    const callConfig = data.callConfig || {};
+    if (callConfig.responseSchema) lastSchema = callConfig.responseSchema;
+    let responseSchema;
+    if (callConfig.responseSchemaHash) {
+      if (!lastSchema || hashPayload(lastSchema) !== callConfig.responseSchemaHash) {
+        skip('response schema changed without being recorded');
+        continue;
+      }
+      responseSchema = lastSchema;
     }
     if (lastTools && data.toolSchemasHash && hashPayload(lastTools) !== data.toolSchemasHash) {
       skip('tool schemas changed without being recorded');
@@ -96,7 +103,10 @@ export async function verifyRequestReconstruction(
     report.checked += 1;
     try {
       const apiKey = resolveApiKey ? await resolveApiKey(model) : REDACTED_KEY;
-      const options = optionsFromCallConfig(data.callConfig, { tools: lastTools || undefined });
+      const options = optionsFromCallConfig(callConfig, {
+        tools: lastTools || undefined,
+        responseSchema
+      });
       const rebuilt = await createRequest(model, lastMessages, apiKey, options);
       const actual = hashPayload(rebuilt?.body ?? {});
       if (actual === data.requestHash) {

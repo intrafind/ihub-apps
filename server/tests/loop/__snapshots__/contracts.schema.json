@@ -464,6 +464,7 @@
                       "responseSchemaHash": {
                         "type": ["string", "null"]
                       },
+                      "responseSchema": {},
                       "thinking": {
                         "anyOf": [
                           {

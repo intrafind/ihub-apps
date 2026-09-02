@@ -112,3 +112,29 @@ export async function authorizeRun(runId, user, { executionId } = {}) {
   if (ledger.ok) return ledger;
   return authorizeExecution(executionId || runId, user) || ledger;
 }
+
+/**
+ * Decide whether `user` may act on an interaction (answer or cancel it):
+ * admins may; the principal recorded on the interaction's `source` (resolved
+ * in that source's identity mode, so this works without the ledger and across
+ * workers) may; otherwise whoever may access the interaction's run.
+ *
+ * @param {Object} interaction
+ * @param {Object} user - req.user
+ * @returns {Promise<boolean>}
+ */
+export async function authorizeInteraction(interaction, user) {
+  if (!interaction || typeof interaction.runId !== 'string') return false;
+  if (isAdminUser(user)) return true;
+  const source = interaction.source || {};
+  if (source.principalId && !isAnonymousUser(user)) {
+    const me = await resolvePrincipal(user, {
+      mode: source.identityMode || runLog.identityMode()
+    });
+    if (me.id === source.principalId) return true;
+  }
+  const access = await authorizeRun(interaction.runId, user, {
+    executionId: source.executionId
+  });
+  return access.ok === true;
+}

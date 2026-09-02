@@ -48,6 +48,8 @@ const result = await llmClient.complete({
   modelId: 'gpt-4o', // or model: <resolved model object>
   messages: [{ role: 'user', content: 'Hello' }],
   options: { temperature: 0.2, maxTokens: 512, responseFormat: 'json', responseSchema },
+  // the ledger records `responseSchema` in full when it first appears on the run and
+  // whenever it changes (a hash otherwise), so the request stays reconstructable
   language: 'en', // localized error messages
   signal: abortController.signal, // optional
   timeoutMs: 60_000, // optional hard timeout → LLMError TIMEOUT

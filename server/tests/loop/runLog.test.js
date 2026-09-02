@@ -143,10 +143,16 @@ test('persistence off: in-memory stream still works, nothing hits disk', async (
   await log.stop();
 });
 
-test('cleanup removes run files older than retention', async () => {
+test('cleanup removes run files older than retention and runs the delete cascade', async () => {
   const { log, baseDir } = await tmpLog();
+  const cascaded = [];
+  log.onDelete(runId => {
+    cascaded.push(runId);
+    return 'interactions:1';
+  });
   const { runId } = await log.startRun({ kind: 'chat', user: { id: 'u' } });
   log.endRun(runId);
+  const { runId: recent } = await log.startRun({ kind: 'chat', user: { id: 'u' } });
   await log.flush();
   const file = path.join(baseDir, 'runs', `${runId}.jsonl`);
   const old = new Date(Date.now() - 10 * 24 * 3600 * 1000);
@@ -154,6 +160,9 @@ test('cleanup removes run files older than retention', async () => {
   const { removed } = await log.cleanup(5);
   assert.equal(removed, 1);
   await assert.rejects(fs.access(file));
+  assert.deepEqual(cascaded, [runId], 'the same cascade as deleteRun, for the expired run only');
+  assert.equal(log.getRunMeta(runId), null);
+  assert.ok(log.getRunMeta(recent));
   await log.stop();
 });
 

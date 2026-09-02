@@ -355,6 +355,7 @@ export class LLMClient {
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe), LRU-bounded
+    this._lastSchemaHash = new Map(); // runId -> responseSchema hash (recorded on change), LRU-bounded
   }
 
   // ── Model catalog ──────────────────────────────────────────────────────
@@ -925,15 +926,25 @@ export class LLMClient {
     while (this._lastMessagesHash.size > MAX_TRACKED_RUN_HASHES) {
       this._lastMessagesHash.delete(this._lastMessagesHash.keys().next().value);
     }
+    // The structured-output schema follows the same change-based dedupe as the
+    // messages: recorded in full the first time and whenever it changes, so a
+    // schema-constrained request stays reconstructable from the ledger.
+    const responseSchema = adapterOptions.responseSchema || null;
+    const responseSchemaHash = responseSchema ? hashPayload(responseSchema) : null;
+    const schemaChanged = responseSchemaHash !== (this._lastSchemaHash.get(runId) ?? null);
+    this._lastSchemaHash.delete(runId);
+    this._lastSchemaHash.set(runId, responseSchemaHash);
+    while (this._lastSchemaHash.size > MAX_TRACKED_RUN_HASHES) {
+      this._lastSchemaHash.delete(this._lastSchemaHash.keys().next().value);
+    }
     const tools = Array.isArray(adapterOptions.tools) ? adapterOptions.tools : null;
     const callConfig = {
       temperature:
         typeof adapterOptions.temperature === 'number' ? adapterOptions.temperature : undefined,
       maxTokens: Number.isInteger(adapterOptions.maxTokens) ? adapterOptions.maxTokens : undefined,
       responseFormat: adapterOptions.responseFormat ?? null,
-      responseSchemaHash: adapterOptions.responseSchema
-        ? hashPayload(adapterOptions.responseSchema)
-        : null,
+      responseSchemaHash,
+      ...(responseSchema && schemaChanged ? { responseSchema } : {}),
       thinking: pickThinking(adapterOptions),
       nativeWebSearch: adapterOptions.nativeWebSearch ?? null,
       toolChoice: adapterOptions.toolChoice,
