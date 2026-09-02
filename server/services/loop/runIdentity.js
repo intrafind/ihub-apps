@@ -69,3 +69,19 @@ export async function resolvePrincipal(user, { mode = 'default' } = {}) {
       return { id: String(user.id), ...base };
   }
 }
+
+/**
+ * The id recorded for a human acting on a run (answering an interaction,
+ * sending a human event): the literal `anonymous` for anonymous users, else
+ * the principal id in the run's identity mode — so a pseudonymized ledger
+ * never carries a raw user id.
+ *
+ * @param {Object|null} user
+ * @param {Object} [opts]
+ * @param {string} [opts.mode='default'] - the run's identity mode
+ * @returns {Promise<string>}
+ */
+export async function resolveActorId(user, { mode = 'default' } = {}) {
+  if (isAnonymousUser(user)) return ANONYMOUS_USER_ID;
+  return (await resolvePrincipal(user, { mode })).id;
+}

@@ -14,7 +14,8 @@ import { authRequired, authenticatedOnly } from '../../middleware/authRequired.j
 import {
   translateInternalEvent,
   buildEnvelope,
-  currentSeq
+  currentSeq,
+  stampSeq
 } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
@@ -543,7 +544,9 @@ export default function registerAgentRunRoutes(app) {
         type: SSE_V2_EVENTS.STREAM_CONNECTED,
         data: { runId, lastSeq: currentSeq(runId) }
       });
-      channel.send(connected.type, connected);
+      // Direct channel writes bypass `sse.js` delivery, so this route stamps
+      // the stream sequence on every frame it sends.
+      channel.send(connected.type, stampSeq(runId, connected));
 
       logger.info('SSE connection established for agent run', {
         component: 'AgentRuns',
@@ -611,7 +614,7 @@ export default function registerAgentRunRoutes(app) {
               type: frame.type,
               data: frame.data
             });
-            channel.send(envelope.type, envelope);
+            channel.send(envelope.type, stampSeq(runId, envelope));
           } catch (err) {
             logger.warn('Dropped agent run event that does not fit the SSE v2 contract', {
               component: 'AgentRuns',

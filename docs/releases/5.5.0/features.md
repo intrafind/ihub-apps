@@ -1257,3 +1257,6 @@ server restart, is answered through one endpoint and shows up in one queue.
   `stop` aborts it. The chat stop button and message feedback record the same events.
 - Chat clarifications keep their flow: the next chat message answers the pending question;
   unanswered ones are cancelled by the next message or expire after a day.
+- Pending interactions are stored whether or not the run ledger is enabled, and in a cluster
+  exactly one worker accepts an answer: a concurrent second answer is rejected instead of
+  resuming the same execution twice.

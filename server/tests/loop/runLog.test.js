@@ -212,3 +212,120 @@ test('appendRecovered continues the persisted sequence for a run this process ne
   await other.stop();
   await log.stop();
 });
+
+/**
+ * A fake cluster: per-worker buses sharing one ownership table and one set of
+ * responders, so `hasRemote` / routed `request` behave like the real bus.
+ */
+function fakeCluster() {
+  const owners = new Map(); // `${kind}:${key}` -> workerId
+  const responders = new Map(); // type -> Map<workerId, handler>
+  return {
+    worker(id) {
+      return {
+        createPresenceMap(kind) {
+          class PresenceMap extends Map {
+            set(key, value) {
+              owners.set(`${kind}:${key}`, id);
+              return super.set(key, value);
+            }
+            delete(key) {
+              if (owners.get(`${kind}:${key}`) === id) owners.delete(`${kind}:${key}`);
+              return super.delete(key);
+            }
+            clear() {
+              for (const key of [...this.keys()]) this.delete(key);
+            }
+          }
+          return new PresenceMap();
+        },
+        hasRemote(kind, key) {
+          const owner = owners.get(`${kind}:${key}`);
+          return owner !== undefined && owner !== id;
+        },
+        respond(type, handler) {
+          if (!responders.has(type)) responders.set(type, new Map());
+          responders.get(type).set(id, handler);
+          return () => responders.get(type)?.delete(id);
+        },
+        async request(type, payload, { route } = {}) {
+          const handlers = responders.get(type) || new Map();
+          const target = route ? owners.get(`${route.kind}:${route.key}`) : undefined;
+          if (target !== undefined) {
+            const handler = target === id ? null : handlers.get(target);
+            if (!handler) return null;
+            const reply = await handler(payload);
+            return reply === undefined ? null : reply;
+          }
+          for (const [workerId, handler] of handlers) {
+            if (workerId === id) continue;
+            const reply = await handler(payload);
+            if (reply !== undefined) return reply;
+          }
+          return null;
+        }
+      };
+    }
+  };
+}
+
+test('appendRecovered: the owner allocates the sequence; without an owner recovery is serialized by a lock', async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-cluster-'));
+  const cluster = fakeCluster();
+  const mk = id =>
+    new RunLog({
+      baseDir,
+      forceEnabled: true,
+      bus: cluster.worker(id),
+      getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
+      getFeatures: () => ({ runLog: true })
+    });
+  const workerA = mk(1);
+  const workerB = mk(2);
+
+  const { runId } = await workerA.startRun({ kind: 'chat', user: { id: 'u1' } });
+  workerA.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'hi' }); // seq 2, not flushed
+  const seenOnA = [];
+  workerA.subscribe(runId, e => seenOnA.push(e.seq));
+
+  // B does not own the run: the append is routed to A, which continues its
+  // in-memory sequence (a disk read would have missed the unflushed seq 2).
+  const routed = await workerB.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+    kind: 'steer',
+    message: 'faster',
+    by: 'u1',
+    at: new Date().toISOString()
+  });
+  assert.equal(routed.seq, 3);
+  assert.deepEqual(seenOnA, [3], 'the owner appended it (its subscribers saw the event)');
+  assert.equal(workerB.getRunMeta(runId), null, 'the requester did not register the run');
+  assert.equal(workerA.getRunMeta(runId).owned, true);
+
+  // The owner goes away: recovery reads the persisted ledger under the per-run
+  // lock, so two workers recovering at once never allocate the same seq.
+  await workerA.stop();
+  const workerC = mk(3);
+  const human = n => ({ kind: 'steer', message: `m${n}`, by: 'u1', at: new Date().toISOString() });
+  const [fromB, fromC] = await Promise.all([
+    workerB.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(1)),
+    workerC.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(2))
+  ]);
+  assert.deepEqual([fromB.seq, fromC.seq].sort(), [4, 5]);
+  assert.equal(workerB.getRunMeta(runId).owned, false, 'recovering does not take ownership');
+  const events = await workerC.readEvents(runId);
+  assert.deepEqual(
+    events.map(e => e.seq),
+    [1, 2, 3, 4, 5]
+  );
+  assert.deepEqual(await fs.readdir(path.join(baseDir, 'locks')), [], 'locks are released');
+
+  // A worker that resumes the run (the engine resuming a paused execution)
+  // owns it again, and the others route to it.
+  await workerC.resumeRun(runId);
+  assert.equal(workerC.getRunMeta(runId).owned, true);
+  const routedToC = await workerB.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(3));
+  assert.equal(routedToC.seq, 6);
+  assert.equal(workerC.currentSeq(runId), 6);
+  await workerB.stop();
+  await workerC.stop();
+});

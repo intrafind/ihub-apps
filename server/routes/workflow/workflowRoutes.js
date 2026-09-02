@@ -12,7 +12,8 @@ import { promises as fs } from 'fs';
 import {
   translateInternalEvent,
   buildEnvelope,
-  currentSeq
+  currentSeq,
+  stampSeq
 } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { join } from 'path';
@@ -1646,7 +1647,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         type: SSE_V2_EVENTS.STREAM_CONNECTED,
         data: { runId: executionId, lastSeq: currentSeq(executionId) }
       });
-      channel.send(connected.type, connected);
+      // This route writes to the channel directly (no `sse.js` delivery), so it
+      // stamps the stream sequence itself — on every frame it sends.
+      channel.send(connected.type, stampSeq(executionId, connected));
 
       logger.info('SSE connection established for workflow execution', {
         component: 'WorkflowRoutes',
@@ -1712,7 +1715,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
               type: frame.type,
               data: frame.data
             });
-            sent = channel.send(envelope.type, envelope) || sent;
+            sent = channel.send(envelope.type, stampSeq(executionId, envelope)) || sent;
           } catch (err) {
             logger.warn('Dropped workflow event that does not fit the SSE v2 contract', {
               component: 'WorkflowRoutes',

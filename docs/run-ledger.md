@@ -101,9 +101,18 @@ execution registry.
 Every human touchpoint is one model, the **interaction** (`kind` `question` |
 `approval` | `review` | `notify`, `origin` `tool` | `node` | `policy` |
 `system`), raised through `InteractionService` and answered through the one
-answer endpoint. Pending interactions survive a restart (`interactions.json`);
-the raise and the answer are on the run's ledger (`interaction/raised`,
-`interaction/answered`).
+answer endpoint. Pending interactions survive a restart (`interactions.json`,
+written whether or not the ledger feature is enabled); the raise and the answer
+are on the run's ledger (`interaction/raised`, `interaction/answered`).
+
+In a cluster every worker sees every interaction (mutations replicate over the
+cluster bus), and an answer is accepted by exactly one worker: before the
+answer handlers run, the answering worker creates an exclusive claim marker
+(`interaction-claims/<id>.json`) on the shared filesystem. A concurrent answer
+gets `409 ANSWER_IN_PROGRESS`, a late one `409 NOT_PENDING`, even when that
+worker's replica still shows the interaction as pending. `answer.by` is the
+actor in the run's identity mode (the pseudonymized hash when the run was
+recorded that way, `anonymous` for anonymous users), never a raw user id.
 
 | Touchpoint                              | Raised by                                  | Answered by                                                                                                  |
 | --------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
@@ -128,6 +137,13 @@ approver, execution no longer paused on this checkpoint) returns 4xx with a
 
 The chat stop button records a `stop` event on the run bound to the chat
 stream; answers are recorded as `interaction/answered`, not as human events.
+`by` follows the run's identity mode like `answer.by`.
+
+Appends made on behalf of a request (answers, human events) may land on a
+worker that does not own the run. They are routed to the worker that owns the
+run's sequence (the one that started or resumed it); when no worker owns it any
+more, the sequence continues from the persisted ledger under a per-run lock
+file (`locks/`), so two recovering workers never allocate the same number.
 
 ## Deleting data
 

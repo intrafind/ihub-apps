@@ -119,9 +119,9 @@ export function generateRunTitleAsync({
         messages,
         options: { temperature: 0.2, maxTokens: 24 },
         language,
-        // No parent runId: the client records this as its own small utility
-        // run in the ledger so the call stays attributable to the execution.
-        telemetry: { kind: 'utility', purpose: 'run-title', refs: { executionId }, user: null }
+        // The call is part of the execution's run: recorded on its ledger
+        // (segment `title`) instead of as a separate utility run.
+        telemetry: { runId: executionId, segment: 'title', purpose: 'run-title' }
       });
       title = (response?.content || '').replace(/^["'\s]+|["'\s.,!?:]+$/g, '').trim();
       // Hard guards: single line, max 60 chars (≈ 6 short words).

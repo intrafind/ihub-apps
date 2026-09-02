@@ -309,8 +309,8 @@ test('cluster: a mutation on one worker is visible on the others; waiters settle
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-cluster-'));
   const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
   const bus = fakeBus();
-  const workerA = new InteractionService({ runLog, bus, pid: 1, persist: false });
-  const workerB = new InteractionService({ runLog, bus, pid: 2, persist: false });
+  const workerA = new InteractionService({ runLog, bus, pid: 1, saveIntervalMs: 10 });
+  const workerB = new InteractionService({ runLog, bus, pid: 2, saveIntervalMs: 10 });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
 
   // raised on A → listed on B
@@ -367,7 +367,7 @@ test('answer: a concurrent answer is rejected while the first one is being appli
   });
 
   const first = svc.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
-  await new Promise(r => setImmediate(r));
+  await until(() => calls.includes('alice'));
   await assert.rejects(
     svc.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
     e => e.code === 'ANSWER_IN_PROGRESS' && e.status === 409
@@ -399,8 +399,8 @@ test('cluster: a claim replicated from another worker blocks a concurrent answer
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-claim-'));
   const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
   const bus = fakeBus();
-  const workerA = new InteractionService({ runLog, bus, pid: 1, persist: false });
-  const workerB = new InteractionService({ runLog, bus, pid: 2, persist: false });
+  const workerA = new InteractionService({ runLog, bus, pid: 1, saveIntervalMs: 10 });
+  const workerB = new InteractionService({ runLog, bus, pid: 2, saveIntervalMs: 10 });
   const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
   const it = await workerA.raise({
     runId,
@@ -412,9 +412,13 @@ test('cluster: a claim replicated from another worker blocks a concurrent answer
   const gate = new Promise(resolve => {
     release = resolve;
   });
-  workerA.onAnswer(() => gate);
+  let claimed = false;
+  workerA.onAnswer(() => {
+    claimed = true;
+    return gate;
+  });
   const first = workerA.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
-  await new Promise(r => setImmediate(r));
+  await until(() => claimed);
   await assert.rejects(
     workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
     e => e.code === 'ANSWER_IN_PROGRESS'
@@ -424,5 +428,130 @@ test('cluster: a claim replicated from another worker blocks a concurrent answer
   assert.equal((await workerB.get(it.id)).status, 'answered');
   await workerA.stop();
   await workerB.stop();
+  await runLog.stop();
+});
+
+async function until(predicate, { timeoutMs = 2000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('condition not met in time');
+    await new Promise(r => setTimeout(r, 5));
+  }
+}
+
+test('cluster: the shared-filesystem claim decides when a replica lags behind', async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-lag-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
+  // Two workers whose buses are NOT connected: B only knows what the shared
+  // store holds, so its replica never learns about A's claim or answer.
+  const workerA = new InteractionService({ runLog, bus: fakeBus(), pid: 1, saveIntervalMs: 10 });
+  const it = await workerA.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] }
+  });
+  await workerA.flush();
+  const workerB = new InteractionService({ runLog, bus: fakeBus(), pid: 2, saveIntervalMs: 10 });
+  assert.equal((await workerB.get(it.id)).status, 'pending');
+
+  const calls = [];
+  let release;
+  const gate = new Promise(resolve => {
+    release = resolve;
+  });
+  workerA.onAnswer(async () => {
+    calls.push('A');
+    await gate;
+  });
+  workerB.onAnswer(() => calls.push('B'));
+
+  const first = workerA.answer(it.id, { value: 'approve' }, { user: { id: 'alice' } });
+  await until(() => calls.includes('A'));
+  // B sees "pending" and no replicated claim — the marker on disk still rejects it
+  await assert.rejects(
+    workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
+    e => e.code === 'ANSWER_IN_PROGRESS' && e.status === 409
+  );
+  release();
+  assert.equal((await first).status, 'answered');
+
+  // After A is done, B's replica is still stale, yet a second answer is not a
+  // second resume: the settled marker says the interaction is answered.
+  assert.equal((await workerB.get(it.id)).status, 'pending');
+  await assert.rejects(
+    workerB.answer(it.id, { value: 'approve' }, { user: { id: 'bob' } }),
+    e => e.code === 'NOT_PENDING' && e.status === 409
+  );
+  assert.deepEqual(calls, ['A'], 'the run was resumed exactly once');
+
+  const markers = await fs.readdir(path.join(baseDir, 'interaction-claims'));
+  assert.equal(markers.length, 1);
+  await workerA.stop();
+  await workerB.stop();
+  await runLog.stop();
+});
+
+test('pending interactions are persisted even when the run ledger is disabled', async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-noledger-'));
+  const runLog = new RunLog({
+    baseDir,
+    forceEnabled: false,
+    getPlatformConfig: () => ({}),
+    getFeatures: () => ({})
+  });
+  assert.equal(runLog.isEnabled(), false);
+  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const it = await svc.raise({
+    runId: 'run-noledger',
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'Still here after a restart?' }
+  });
+  await svc.flush();
+  const raw = JSON.parse(await fs.readFile(path.join(baseDir, 'interactions.json'), 'utf8'));
+  assert.equal(raw.interactions[it.id].status, 'pending');
+  const again = new InteractionService({ runLog, saveIntervalMs: 10 });
+  assert.equal((await again.get(it.id)).status, 'pending');
+  await svc.stop();
+  await again.stop();
+  await runLog.stop();
+});
+
+test("answer.by is recorded in the run's identity mode, never as the raw user id when pseudonymized", async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-actor-'));
+  const runLog = new RunLog({
+    baseDir,
+    forceEnabled: true,
+    getPlatformConfig: () => ({ runLog: { identityMode: 'pseudonymized' } })
+  });
+  const svc = new InteractionService({ runLog, saveIntervalMs: 10 });
+  const { runId, principal } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
+  assert.notEqual(principal.id, 'u1');
+  const ledger = [];
+  runLog.subscribe(runId, e => ledger.push(e));
+  const it = await svc.raise({
+    runId,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: 'Proceed?' },
+    source: { principalId: principal.id, identityMode: 'pseudonymized' }
+  });
+  const answered = await svc.answer(it.id, { value: 'yes' }, { user: { id: 'u1' } });
+  assert.equal(answered.answer.by, principal.id, 'the same hash the run principal carries');
+  const event = ledger.find(e => e.type === 'interaction/answered');
+  assert.equal(event.data.answer.by, principal.id);
+  assert.equal(JSON.stringify(event).includes('"u1"'), false);
+  // anonymous users stay the literal marker
+  const it2 = await svc.raise({
+    runId,
+    kind: 'question',
+    origin: 'tool',
+    prompt: { message: '?' }
+  });
+  const anon = await svc.answer(it2.id, { value: 'x' }, { user: null });
+  assert.equal(anon.answer.by, 'anonymous');
+  await svc.stop();
   await runLog.stop();
 });

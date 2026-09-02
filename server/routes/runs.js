@@ -32,7 +32,7 @@ import {
   interactionAnswerRequestSchema,
   humanEventRequestSchema
 } from '../services/loop/contracts/interaction.js';
-import { resolvePrincipal, isAnonymousUser } from '../services/loop/runIdentity.js';
+import { resolvePrincipal, resolveActorId, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { authorizeRun, isAdminUser } from '../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent } from '../services/loop/RunStream.js';
@@ -350,7 +350,9 @@ export default function registerRunRoutes(app) {
           ...(message !== undefined ? { message } : {}),
           ...(messageId !== undefined ? { messageId } : {}),
           ...(rating !== undefined ? { rating } : {}),
-          by: isAnonymousUser(req.user) ? 'anonymous' : String(req.user.id),
+          by: await resolveActorId(req.user, {
+            mode: auth.meta?.identityMode || runLog.identityMode()
+          }),
           at: new Date().toISOString()
         },
         { kind: auth.meta?.kind || 'chat' }

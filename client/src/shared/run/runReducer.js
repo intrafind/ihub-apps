@@ -136,7 +136,20 @@ export function reduceRunEvent(state, envelope) {
 
   // ── stream-level frames ───────────────────────────────────────────────
   if (type === SSE_V2_EVENTS.STREAM_CONNECTED) {
-    return { ...next, connected: true, protocol: data.protocol || 2, error: null };
+    // A connection starts a new sequence epoch: the counter belongs to the
+    // worker delivering this connection and may not continue the previous
+    // one. When it does not (frames missed while disconnected, a counter that
+    // restarted), the run announced by the frame is rebuilt from its ledger.
+    const epochSeq = Number.isInteger(seq) ? seq : 0;
+    const continues = state.lastSeq === 0 || epochSeq === state.lastSeq + 1;
+    return {
+      ...next,
+      lastSeq: epochSeq,
+      gap: continues ? null : { expected: state.lastSeq + 1, received: epochSeq, runId },
+      connected: true,
+      protocol: data.protocol || 2,
+      error: null
+    };
   }
   if (type === SSE_V2_EVENTS.STREAM_ERROR && !state.runs[runId]) {
     return { ...next, error: data };

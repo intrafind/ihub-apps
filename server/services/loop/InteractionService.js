@@ -9,13 +9,18 @@
  *  - answer(): validate the answer (options, approver groups, expiry), persist,
  *    append `interaction/answered`, resolve any awaiting promise.
  *  - Durable pending store (`contents/data/run-log/interactions.json`,
- *    debounced atomic writes) so a paused run survives a restart. Persistence
- *    follows the RunLog flag; in-memory behavior is identical either way.
+ *    debounced atomic writes) so a paused run survives a restart. Pending
+ *    interactions are persisted whenever the service is used — independently
+ *    of the run-ledger feature flag, which only governs the event ledger.
  *  - Cascade: deleting a run removes its interactions (registered as a RunLog
  *    delete hook).
  *  - Cluster: every mutation is published on the cluster bus so all workers
  *    share one view (a checkpoint raised on worker A is listed and answered on
- *    worker B); each worker persists the converged snapshot.
+ *    worker B); each worker persists the converged snapshot. An answer is
+ *    accepted by exactly one worker: before the handlers run, the answering
+ *    worker creates an exclusive claim marker on the shared filesystem
+ *    (`interaction-claims/<id>.json`), the one compare-and-set the workers
+ *    have in common, so a lagging replica can never resume the same run twice.
  *
  * C0 ships the skeleton (store + lifecycle + one answer path). C5 moves the
  * chat clarification, workflow `human` node and agent approvals onto it.
@@ -23,9 +28,12 @@
  * @module services/loop/InteractionService
  */
 import { EventEmitter } from 'events';
+import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
+import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
+import { resolveActorId } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -43,6 +51,9 @@ export const INTERACTION_BUS_CHANNEL = 'interaction:mutation';
  */
 export const ANSWER_CLAIM_TTL_MS = 30 * 1000;
 
+/** Directory (next to the pending store) holding the exclusive answer claim markers. */
+export const CLAIM_DIR_NAME = 'interaction-claims';
+
 export class InteractionError extends Error {
   constructor(message, code, status = 400) {
     super(message);
@@ -57,7 +68,7 @@ export class InteractionService extends EventEmitter {
    * @param {Object} [opts]
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
    * @param {string} [opts.storePath] - override pending-store file (tests)
-   * @param {boolean} [opts.persist] - override persistence (defaults to runLog.isEnabled())
+   * @param {boolean} [opts.persist] - disable the durable store and claim markers (tests; default true)
    * @param {() => number} [opts.now]
    * @param {{publish: Function, subscribe: Function}} [opts.bus] - cluster bus (default: clusterBus)
    */
@@ -70,6 +81,7 @@ export class InteractionService extends EventEmitter {
     this._persistOverride = opts.persist ?? null;
     this._now = opts.now || (() => Date.now());
     this._storePath = opts.storePath || path.join(this.runLog.baseDir, 'interactions.json');
+    this._claimDir = path.join(path.dirname(this._storePath), CLAIM_DIR_NAME);
     this._store = createDebouncedJsonStore({
       filePath: this._storePath,
       createDefault: () => ({ version: 1, interactions: {} }),
@@ -88,7 +100,8 @@ export class InteractionService extends EventEmitter {
     this._answerHandlers = new Set();
     /** @type {Set<string>} interactions this worker is answering right now */
     this._answering = new Set();
-    this._loaded = false;
+    /** @type {Promise<void>|null} the one store load, awaited by every caller until it settles */
+    this._loading = null;
     this._unhookDelete = this.runLog.onDelete(runId => this._deleteForRun(runId));
     // Every worker keeps the same in-memory view: mutations made here are
     // published to the others, theirs are applied here (see _applyRemote).
@@ -99,12 +112,20 @@ export class InteractionService extends EventEmitter {
   }
 
   _persist() {
-    return this._persistOverride ?? this.runLog.isEnabled();
+    return this._persistOverride ?? true;
   }
 
-  async _ensureLoaded() {
-    if (this._loaded) return;
-    this._loaded = true;
+  /**
+   * Load the pending store once. Every caller awaits the same load, so a
+   * request (or a replicated mutation) arriving while the file is being read
+   * sees the loaded view instead of an empty one.
+   */
+  _ensureLoaded() {
+    if (!this._loading) this._loading = this._loadStore();
+    return this._loading;
+  }
+
+  async _loadStore() {
     if (!this._persist()) return;
     try {
       const data = await this._store.load();
@@ -188,6 +209,7 @@ export class InteractionService extends EventEmitter {
           this._waiters.delete(id);
           w.reject(new InteractionError('Run deleted', 'RUN_DELETED', 410));
         }
+        await this._releaseAnswerClaim(this._claimPath(id));
         n++;
       }
     }
@@ -409,9 +431,14 @@ export class InteractionService extends EventEmitter {
     }
     this.assertCanAnswer(interaction, user);
     this.validateAnswer(interaction, answer);
-    // One answer at a time: claim the interaction (synchronously, before any
-    // await) so a concurrent answer — on this worker or, via replication, on
-    // another — is rejected instead of resuming the same run twice.
+    // The actor is recorded the way the run's principal is (a pseudonymized
+    // ledger never carries a raw user id).
+    const by = await this._actorId(interaction, user);
+    // One answer at a time, three layers from cheapest to decisive: this
+    // worker's in-flight set (synchronous, so two requests here cannot both
+    // pass the pending check), the claim replicated from another worker, and
+    // the exclusive claim marker on the shared filesystem — the only check
+    // that is atomic across workers, taken before any handler runs.
     const liveClaim =
       interaction.claim &&
       interaction.claim.pid !== this._pid &&
@@ -420,6 +447,23 @@ export class InteractionService extends EventEmitter {
       throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
     }
     this._answering.add(id);
+    let claimFile = null;
+    try {
+      claimFile = await this._acquireAnswerClaim(id);
+      // A settle replicated from another worker may have landed meanwhile.
+      const current = this._byId.get(id);
+      if (!current || current.status !== 'pending') {
+        throw new InteractionError(
+          `Interaction is ${current?.status || 'gone'}`,
+          'NOT_PENDING',
+          409
+        );
+      }
+    } catch (err) {
+      this._answering.delete(id);
+      await this._releaseAnswerClaim(claimFile); // held only if the pending re-check failed
+      throw err;
+    }
     const claimed = {
       ...interaction,
       claim: { pid: this._pid, at: new Date(this._now()).toISOString() }
@@ -431,7 +475,7 @@ export class InteractionService extends EventEmitter {
       decision: answer.decision,
       reason: answer.reason,
       skipped: answer.skipped,
-      by: user?.id || 'anonymous',
+      by,
       at: new Date(this._now()).toISOString(),
       channel
     });
@@ -453,10 +497,14 @@ export class InteractionService extends EventEmitter {
       await this._save(answered);
     } catch (err) {
       if (this._byId.get(id)?.status === 'pending') await this._save({ ...unclaimed });
+      await this._releaseAnswerClaim(claimFile);
       throw err;
     } finally {
       this._answering.delete(id);
     }
+    // The marker now says "answered": a worker whose replica still shows
+    // pending gets NOT_PENDING instead of a second resume.
+    await this._settleAnswerClaim(claimFile, id, full.at);
     try {
       await this.runLog.appendRecovered(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
         interactionId: id,
@@ -488,6 +536,7 @@ export class InteractionService extends EventEmitter {
       updatedAt: new Date(this._now()).toISOString()
     };
     await this._save(cancelled);
+    await this._releaseAnswerClaim(this._claimPath(id));
     const w = this._waiters.get(id);
     if (w) {
       this._waiters.delete(id);
@@ -503,6 +552,7 @@ export class InteractionService extends EventEmitter {
     if (!it || it.status !== 'pending') return it || null;
     const expired = { ...it, status: 'expired', updatedAt: new Date(this._now()).toISOString() };
     await this._save(expired);
+    await this._releaseAnswerClaim(this._claimPath(id));
     const w = this._waiters.get(id);
     if (w) {
       this._waiters.delete(id);
@@ -512,7 +562,10 @@ export class InteractionService extends EventEmitter {
     return expired;
   }
 
-  /** Expire every pending interaction whose policy.expiresAt has passed. */
+  /**
+   * Expire every pending interaction whose policy.expiresAt has passed, and
+   * drop answer claim markers old enough to be of no use any more.
+   */
   async expireOverdue() {
     await this._ensureLoaded();
     const now = this._now();
@@ -526,7 +579,124 @@ export class InteractionService extends EventEmitter {
         out.push(await this.expire(it.id));
       }
     }
+    await this._sweepAnswerClaims();
     return out;
+  }
+
+  // ── answer claims (shared-filesystem CAS) ──────────────────────────────
+
+  _claimPath(id) {
+    const safe = String(id)
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .slice(0, 160);
+    return path.join(this._claimDir, `${path.basename(safe)}.json`);
+  }
+
+  /**
+   * Take the exclusive answer claim for `id`: creating the marker file is
+   * atomic on the shared filesystem, so exactly one worker wins even when its
+   * replica of the interaction lags. Resolves the marker path (or null when
+   * persistence is off — a single process, where `_answering` suffices).
+   *
+   * @throws {InteractionError} ANSWER_IN_PROGRESS (live claim) / NOT_PENDING (already answered)
+   * @private
+   */
+  async _acquireAnswerClaim(id) {
+    if (!this._persist()) return null;
+    const file = this._claimPath(id);
+    const payload = JSON.stringify({
+      interactionId: id,
+      pid: this._pid,
+      at: new Date(this._now()).toISOString(),
+      status: 'claimed'
+    });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (await tryCreateExclusive(file, payload)) return file;
+      const existing = await readJsonMarker(file);
+      if (!existing) continue; // released between the two calls: retry at once
+      if (existing.data?.status === 'answered') {
+        throw new InteractionError('Interaction is answered', 'NOT_PENDING', 409);
+      }
+      const claimedAt = existing.data?.at ? new Date(existing.data.at).getTime() : existing.mtimeMs;
+      if (this._now() - claimedAt < ANSWER_CLAIM_TTL_MS) {
+        throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
+      }
+      // Left behind by a worker that died mid-answer: take it over.
+      await removeIfExists(file);
+    }
+    throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
+  }
+
+  /** Mark the claim as settled so a lagging worker sees "answered", not "free". */
+  async _settleAnswerClaim(file, id, at) {
+    if (!file) return;
+    try {
+      await fs.writeFile(
+        file,
+        JSON.stringify({ interactionId: id, pid: this._pid, at, status: 'answered' }),
+        'utf8'
+      );
+    } catch (err) {
+      logger.debug('InteractionService: could not settle answer claim', {
+        component: 'InteractionService',
+        interactionId: id,
+        error: err.message
+      });
+    }
+  }
+
+  /** Remove a claim marker (a failed handler, a cancel / expiry, a deleted run). */
+  async _releaseAnswerClaim(file) {
+    if (!file || !this._persist()) return;
+    try {
+      await removeIfExists(file);
+    } catch (err) {
+      logger.debug('InteractionService: could not release answer claim', {
+        component: 'InteractionService',
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Remove claim markers older than twice the claim TTL. A settled marker only
+   * has to outlive the replication of the answer; a stale live claim is taken
+   * over by the next answer attempt anyway.
+   * @private
+   */
+  async _sweepAnswerClaims() {
+    if (!this._persist()) return;
+    let names;
+    try {
+      names = await fs.readdir(this._claimDir);
+    } catch {
+      return;
+    }
+    const cutoff = this._now() - 2 * ANSWER_CLAIM_TTL_MS;
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      const file = path.join(this._claimDir, path.basename(name));
+      try {
+        const marker = await readJsonMarker(file);
+        if (!marker) continue;
+        const at = marker.data?.at ? new Date(marker.data.at).getTime() : marker.mtimeMs;
+        if (at <= cutoff) await removeIfExists(file);
+      } catch (err) {
+        logger.debug('InteractionService: claim sweep skipped a marker', {
+          component: 'InteractionService',
+          error: err.message
+        });
+      }
+    }
+  }
+
+  /** Actor id in the run's identity mode (`anonymous` for anonymous users). */
+  async _actorId(interaction, user) {
+    const mode =
+      interaction.source?.identityMode ||
+      this.runLog.getRunMeta?.(interaction.runId)?.identityMode ||
+      this.runLog.identityMode();
+    return resolveActorId(user, { mode });
   }
 
   /**

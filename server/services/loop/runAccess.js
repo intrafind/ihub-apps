@@ -77,7 +77,16 @@ export async function authorizeLedgerRun(runId, user) {
     startedAt = start.ts;
     refs = start.data.refs || {};
   }
-  const meta = { runId, kind, anonymous, startedAt, principalId, refs: refs || {} };
+  const meta = {
+    runId,
+    kind,
+    anonymous,
+    startedAt,
+    principalId,
+    refs: refs || {},
+    /** Identity mode the run's principal was recorded in (actor ids on the run use the same). */
+    identityMode: identityMode || null
+  };
   if (isAdminUser(user) || anonymous) return { ok: true, meta };
   if (isAnonymousUser(user)) return { ok: false, status: 403 };
   // Resolve the caller in the mode the run's principal was recorded in — a run

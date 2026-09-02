@@ -21,6 +21,13 @@
  * dir, index tombstone, and any registered cascade hooks (e.g. pending
  * interactions).
  *
+ * Sequence ownership in a cluster: the worker that started (or resumed) a run
+ * owns its sequence and announces that on the cluster bus. An append made on
+ * another worker on behalf of a request (`appendRecovered`: answers, human
+ * events) is routed to the owner; when no worker owns the run any more the
+ * recovering worker continues from the persisted ledger under a per-run lock
+ * file, so two recovering workers never allocate the same sequence number.
+ *
  * @module services/loop/RunLog
  */
 import { promises as fs, createReadStream } from 'fs';
@@ -36,12 +43,24 @@ import { createJsonlAppender } from '../../utils/jsonlAppender.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { parseRunLogEventData } from './contracts/runLogEvents.js';
 import { resolvePrincipal, isAnonymousUser } from './runIdentity.js';
+import {
+  request as busRequest,
+  respond as busRespond,
+  hasRemote as busHasRemote,
+  createPresenceMap
+} from '../../clusterBus.js';
+import { withFileLock } from '../../utils/fileLock.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_FLUSH_MS = 2000;
 const MAX_QUEUE = 20000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$/;
+/** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
+export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
+/** Presence kind announcing which worker owns (allocates the sequence of) a run. */
+export const RUN_PRESENCE_KIND = 'run';
+const REMOTE_APPEND_TIMEOUT_MS = 2000;
 
 /** Whether `runId` is acceptable as a ledger run id (also a safe path segment). */
 export function isValidRunId(runId) {
@@ -90,6 +109,8 @@ export class RunLog {
    * @param {() => Object} [opts.getPlatformConfig] - override platform config lookup
    * @param {() => Object} [opts.getFeatures] - override feature flags lookup
    * @param {boolean} [opts.forceEnabled] - bypass the feature flag (tests)
+   * @param {{request: Function, respond: Function, hasRemote: Function, createPresenceMap: Function}} [opts.bus]
+   *   cluster bus (default: clusterBus) — tests inject a fake to simulate workers
    */
   constructor(opts = {}) {
     this._baseDir =
@@ -97,11 +118,22 @@ export class RunLog {
     this._getPlatform = opts.getPlatformConfig || (() => configCache.getPlatform?.() || {});
     this._getFeatures = opts.getFeatures || (() => configCache.getFeatures?.() || {});
     this._forceEnabled = opts.forceEnabled ?? null;
-    /** @type {Map<string, {seq:number, kind:string, anonymous:boolean, principalId:string, startedAt:string, refs:Object, listeners:Set<Function>, ended:boolean}>} */
+    /** @type {Map<string, {seq:number, kind:string, anonymous:boolean, principalId:string, startedAt:string, refs:Object, listeners:Set<Function>, ended:boolean, owned:boolean}>} */
     this._runs = new Map();
     this._globalListeners = new Set();
     this._deleteHooks = new Set();
     this._cleanupTimer = null;
+    this._bus = opts.bus || {
+      request: busRequest,
+      respond: busRespond,
+      hasRemote: busHasRemote,
+      createPresenceMap
+    };
+    /** Runs whose sequence this worker allocates, announced to the other workers. */
+    this._owned = this._bus.createPresenceMap(RUN_PRESENCE_KIND);
+    this._unrespond = this._bus.respond(RUNLOG_APPEND_CHANNEL, payload =>
+      this._appendForRemote(payload)
+    );
 
     const flushIntervalMs = Number(this._runLogConfig().flushIntervalMs) || DEFAULT_FLUSH_MS;
     this._appender = createJsonlAppender({
@@ -217,7 +249,7 @@ export class RunLog {
       return { runId, principal, anonymous };
     }
     const startedAt = new Date().toISOString();
-    this._runs.set(runId, {
+    this._register(runId, {
       seq: this._runs.get(runId)?.seq || 0,
       kind,
       anonymous,
@@ -227,7 +259,8 @@ export class RunLog {
       refs,
       trigger: trigger || null,
       listeners: this._runs.get(runId)?.listeners || new Set(),
-      ended: false
+      ended: false,
+      owned: true
     });
     this.append(runId, RUN_LOG_EVENTS.RUN_START, {
       kind,
@@ -255,33 +288,35 @@ export class RunLog {
   }
 
   /**
-   * Re-register a run that is not in memory (after restart / on another
-   * worker). Recovers the last sequence number from disk when persisted.
+   * Adopt a run that is not in memory (after a restart, or on the worker that
+   * resumes a paused execution): this worker becomes the owner of its sequence,
+   * recovered from disk when persisted.
    */
   async resumeRun(runId, { kind = 'chat', anonymous = false } = {}) {
     assertRunId(runId);
-    if (this._runs.has(runId)) return this._runs.get(runId);
+    const existing = this._runs.get(runId);
+    if (existing) {
+      if (!existing.owned) {
+        existing.owned = true;
+        this._owned.set(runId, true);
+      }
+      return existing;
+    }
     const seq = await this.lastSeq(runId);
-    const entry = {
-      seq,
-      kind,
-      anonymous,
-      principalId: null,
-      startedAt: null,
-      refs: {},
-      listeners: new Set(),
-      ended: false
-    };
-    this._runs.set(runId, entry);
-    return entry;
+    return this._register(runId, this._newEntry({ seq, kind, anonymous, owned: true }));
   }
 
   /**
-   * Append to a run that may have been started on another worker (or before a
-   * restart): re-registers it first so the sequence continues from the
-   * persisted ledger instead of restarting at 1. Use this for appends made on
-   * behalf of a request (answers, human events); `append` is for the worker
-   * that owns the run.
+   * Append to a run this worker may not own (started on another worker, or
+   * before a restart). Use this for appends made on behalf of a request
+   * (answers, human events); `append` is for the worker that owns the run.
+   *
+   *  1. Owned here → plain `append`.
+   *  2. Owned by another worker (cluster presence) → the owner appends and
+   *     replies with the event, so one process allocates the sequence.
+   *  3. No owner → continue from the persisted ledger under a per-run lock
+   *     file: recovering workers take turns, and each flushes before releasing,
+   *     so the next one reads a complete file.
    *
    * @param {string} runId
    * @param {string} type
@@ -292,8 +327,99 @@ export class RunLog {
    */
   async appendRecovered(runId, type, data, { kind = 'chat' } = {}) {
     assertRunId(runId);
-    if (!this._runs.has(runId)) await this.resumeRun(runId, { kind });
-    return this.append(runId, type, data);
+    if (this._runs.get(runId)?.owned) return this.append(runId, type, data);
+
+    if (this._bus.hasRemote(RUN_PRESENCE_KIND, runId)) {
+      const reply = await this._bus.request(
+        RUNLOG_APPEND_CHANNEL,
+        { runId, type, data },
+        { route: { kind: RUN_PRESENCE_KIND, key: runId }, timeoutMs: REMOTE_APPEND_TIMEOUT_MS }
+      );
+      if (reply && typeof reply === 'object') {
+        if (reply.error) throw new Error(reply.error);
+        if ('event' in reply) return reply.event;
+      }
+      // The owner did not answer (gone, or the presence entry is stale):
+      // recover from disk below.
+      logger.warn('RunLog: run owner did not answer; recovering the sequence from disk', {
+        component: 'RunLog',
+        runId,
+        type
+      });
+    }
+
+    if (!this.isEnabled()) {
+      if (!this._runs.has(runId)) this._register(runId, this._newEntry({ kind, owned: false }));
+      return this.append(runId, type, data);
+    }
+
+    return withFileLock(
+      this._lockPath(runId),
+      async () => {
+        await this.flush();
+        const persisted = await this._diskLastSeq(runId);
+        const entry =
+          this._runs.get(runId) || this._register(runId, this._newEntry({ kind, owned: false }));
+        if (persisted > entry.seq) entry.seq = persisted;
+        const event = this.append(runId, type, data);
+        await this.flush();
+        return event;
+      },
+      { component: 'RunLog' }
+    );
+  }
+
+  /**
+   * Answer another worker's `appendRecovered` for a run this worker owns.
+   * Silent (`undefined`) for runs not owned here, so the requester falls back.
+   * @private
+   */
+  _appendForRemote(payload) {
+    const runId = payload?.runId;
+    if (typeof runId !== 'string' || !this._runs.get(runId)?.owned) return undefined;
+    try {
+      return { event: this.append(runId, payload.type, payload.data) };
+    } catch (err) {
+      return { error: err.message };
+    }
+  }
+
+  _newEntry({ seq = 0, kind = 'chat', anonymous = false, owned = false } = {}) {
+    return {
+      seq,
+      kind,
+      anonymous,
+      principalId: null,
+      startedAt: null,
+      refs: {},
+      listeners: new Set(),
+      ended: false,
+      owned
+    };
+  }
+
+  /** Put a run entry in memory and announce ownership when this worker allocates its sequence. */
+  _register(runId, entry) {
+    this._runs.set(runId, entry);
+    if (entry.owned) this._owned.set(runId, true);
+    else this._owned.delete(runId);
+    return entry;
+  }
+
+  /** Forget a run entry (and withdraw the ownership announcement). */
+  _drop(runId) {
+    this._runs.delete(runId);
+    this._owned.delete(runId);
+  }
+
+  _lockPath(runId) {
+    return this._containedPath('locks', `${safeSegment(runId)}.lock`);
+  }
+
+  /** Highest seq on disk for a run (0 when persistence is off or the run has no file). */
+  async _diskLastSeq(runId) {
+    const events = await this.readEvents(runId);
+    return events.length ? events[events.length - 1].seq : 0;
   }
 
   /**
@@ -319,17 +445,7 @@ export class RunLog {
         runId,
         type
       });
-      entry = {
-        seq: 0,
-        kind: 'chat',
-        anonymous: false,
-        principalId: null,
-        startedAt: null,
-        refs: {},
-        listeners: new Set(),
-        ended: false
-      };
-      this._runs.set(runId, entry);
+      entry = this._register(runId, this._newEntry({ owned: true }));
     }
     entry.seq += 1;
     const event = { seq: entry.seq, ts: new Date().toISOString(), runId, type, data: parsed };
@@ -371,7 +487,7 @@ export class RunLog {
       // read the final seq; then drop the in-memory entry.
       const timer = setTimeout(() => {
         const cur = this._runs.get(runId);
-        if (cur && cur.ended && cur.listeners.size === 0) this._runs.delete(runId);
+        if (cur && cur.ended && cur.listeners.size === 0) this._drop(runId);
       }, 60_000);
       if (typeof timer.unref === 'function') timer.unref();
     }
@@ -407,7 +523,9 @@ export class RunLog {
       /** Identity mode the principal was recorded in (owner checks must resolve the caller the same way). */
       identityMode: e.identityMode || null,
       seq: e.seq,
-      ended: e.ended
+      ended: e.ended,
+      /** Whether this worker allocates the run's sequence. */
+      owned: e.owned === true
     };
   }
 
@@ -424,25 +542,13 @@ export class RunLog {
   subscribe(runId, fn) {
     assertRunId(runId);
     let entry = this._runs.get(runId);
-    if (!entry) {
-      entry = {
-        seq: 0,
-        kind: 'chat',
-        anonymous: false,
-        principalId: null,
-        startedAt: null,
-        refs: {},
-        listeners: new Set(),
-        ended: false
-      };
-      this._runs.set(runId, entry);
-    }
+    if (!entry) entry = this._register(runId, this._newEntry({ owned: false }));
     entry.listeners.add(fn);
     return () => {
       const cur = this._runs.get(runId);
       if (cur) {
         cur.listeners.delete(fn);
-        if (cur.ended && cur.listeners.size === 0) this._runs.delete(runId);
+        if (cur.ended && cur.listeners.size === 0) this._drop(runId);
       }
     };
   }
@@ -611,7 +717,7 @@ export class RunLog {
         });
       }
     }
-    this._runs.delete(runId);
+    this._drop(runId);
     if (!this.isEnabled()) return { runId, deleted: false, cascaded };
     await this._appender.withWriteLock(async () => {
       await this._appender.drainToDisk().catch(() => {});
@@ -706,6 +812,9 @@ export class RunLog {
   async stop() {
     if (this._cleanupTimer) clearInterval(this._cleanupTimer);
     this._cleanupTimer = null;
+    this._unrespond?.();
+    this._unrespond = null;
+    this._owned.clear();
     this._appender.stop();
     this._indexAppender.stop();
     await this.flush();

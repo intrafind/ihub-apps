@@ -89,7 +89,7 @@ function useRunStream({
   const timeoutRef = useRef(null);
   const streamIdRef = useRef(null);
   const rootRunIdRef = useRef(null);
-  /** Stream seqs already folded — dedupe for re-sync pages and replays. */
+  /** Stream seqs already folded on the current connection (dedupe for replays). */
   const seenSeqRef = useRef(new Set());
   /** `${runId}:${after}` keys of re-syncs in flight (one per gap). */
   const resyncInFlightRef = useRef(new Set());
@@ -238,9 +238,12 @@ function useRunStream({
       disconnect();
       setTransportError(null);
 
+      // Every connection is a new sequence epoch: the server counter is
+      // per delivering worker and may restart (eviction, failover, restart),
+      // so seqs seen on the previous transport must not suppress new frames.
+      seenSeqRef.current = new Set();
       if (streamId && streamId !== streamIdRef.current) {
         streamIdRef.current = streamId;
-        seenSeqRef.current = new Set();
         resyncInFlightRef.current.clear();
         dispatch({ type: ACTION.RESET, streamId, keepConnection: false, keepSeq: false });
       }

@@ -251,6 +251,46 @@ describe('runReducer — sequence gaps and re-sync', () => {
     expect(fold([env(7, 'r', 'run/started', { kind: 'chat', refs: {} })]).gap).toBeNull();
   });
 
+  test('stream/connected starts a new sequence epoch', () => {
+    const live = fold([
+      env(1, 'wf-e', 'stream/connected', { runId: 'wf-e', lastSeq: 0, protocol: 2 }),
+      env(2, 'wf-e', 'run/started', { kind: 'workflow', refs: { executionId: 'wf-e' } }),
+      env(3, 'wf-e', 'progress/node', { nodeId: 'n1', status: 'running' })
+    ]);
+    expect(live.lastSeq).toBe(3);
+
+    // the same worker keeps counting: nothing was missed
+    const continued = reduceRunEvent(
+      live,
+      env(4, 'wf-e', 'stream/connected', { runId: 'wf-e', lastSeq: 3, protocol: 2 })
+    );
+    expect(continued.connected).toBe(true);
+    expect(continued.gap).toBeNull();
+    expect(continued.lastSeq).toBe(4);
+
+    // frames were delivered while disconnected: rebuild the run
+    const missed = reduceRunEvent(
+      live,
+      env(9, 'wf-e', 'stream/connected', { runId: 'wf-e', lastSeq: 8, protocol: 2 })
+    );
+    expect(missed.gap).toEqual({ expected: 4, received: 9, runId: 'wf-e' });
+    expect(missed.lastSeq).toBe(9);
+
+    // the counter restarted (eviction, failover): low seqs are live again
+    const restarted = reduceRunEvent(
+      live,
+      env(1, 'wf-e', 'stream/connected', { runId: 'wf-e', lastSeq: 0, protocol: 2 })
+    );
+    expect(restarted.gap).toEqual({ expected: 4, received: 1, runId: 'wf-e' });
+    expect(restarted.lastSeq).toBe(1);
+    const after = reduceRunEvent(
+      restarted,
+      env(2, 'wf-e', 'progress/node', { nodeId: 'n2', status: 'running' })
+    );
+    expect(after.lastSeq).toBe(2);
+    expect(after.gap).toEqual(restarted.gap); // the pending rebuild is kept
+  });
+
   test('rebuildRunFromLedger replaces the run from its ledger (own seq space) and clears the gap', () => {
     const live = [...base, env(5, 'run-c', 'step/delta', { step: 0, kind: 'text', content: 'D' })];
     const state = fold(live);

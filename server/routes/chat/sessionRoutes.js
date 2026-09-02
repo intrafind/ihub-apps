@@ -15,6 +15,7 @@ import {
 } from '../../sse.js';
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId } from '../../services/loop/RunLog.js';
+import { resolveActorId } from '../../services/loop/runIdentity.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
@@ -1042,7 +1043,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // The turn may run on another worker: continue its persisted sequence.
             await runLog.appendRecovered(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
               kind: 'stop',
-              by: req.user?.id ? String(req.user.id) : 'anonymous',
+              by: await resolveActorId(req.user, {
+                mode: runLog.getRunMeta(boundRunId)?.identityMode || runLog.identityMode()
+              }),
               at: new Date().toISOString()
             });
           } catch (ledgerErr) {

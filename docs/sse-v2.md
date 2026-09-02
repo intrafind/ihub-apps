@@ -18,7 +18,11 @@ data: { "v": 2, "seq": 12, "runId": "chat-8f3…", "ts": "2026-09-02T12:00:00.00
   `GET /api/runs/:runId/events?view=sse`, which returns the run's events as
   envelopes (no `step/delta` frames — the completed steps carry the full
   content). The ledger's `seq` is the run's own sequence and is never compared
-  with the stream's.
+  with the stream's. Every connection is a new sequence epoch: the client
+  resets its de-duplication when it (re)connects, and `stream/connected`
+  carries the first `seq` of the epoch. A reconnect whose counter does not
+  continue the previous one (frames missed while disconnected, a counter that
+  restarted after eviction or failover) rebuilds the run from its ledger.
 - `runId` is the run the event belongs to. A chat turn is one run (the server
   mints it and announces it with `run/started`, whose `data.refs` carries
   `chatId`, `appId` and the client's `messageId`); a workflow execution is one

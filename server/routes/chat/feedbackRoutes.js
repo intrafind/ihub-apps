@@ -12,6 +12,7 @@ import conversationApiService from '../../services/integrations/ConversationApiS
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import runLog, { isValidRunId } from '../../services/loop/RunLog.js';
+import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeRun } from '../../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
@@ -148,7 +149,9 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
                   messageId,
                   rating,
                   ...(feedback ? { message: String(feedback) } : {}),
-                  by: req.user?.id ? String(req.user.id) : 'anonymous',
+                  by: await resolveActorId(req.user, {
+                    mode: access.meta?.identityMode || runLog.identityMode()
+                  }),
                   at: new Date().toISOString()
                 },
                 { kind: access.meta?.kind || 'chat' }
