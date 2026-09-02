@@ -47,6 +47,18 @@ export function isClarificationInteraction(interaction) {
 }
 
 /**
+ * True when a checkpoint is a question to answer (free text, number, date,
+ * options…) rather than an approval / review decision — both the legacy
+ * `input` type and the `question` type a node's `ask_user` produces.
+ *
+ * @param {Object|null} checkpoint
+ * @returns {boolean}
+ */
+export function isQuestionCheckpoint(checkpoint) {
+  return !!checkpoint && (checkpoint.type === 'input' || checkpoint.type === 'question');
+}
+
+/**
  * Rebuild the legacy checkpoint object from an interaction.
  *
  * @param {Object} interaction - SSE v2 interaction
@@ -68,6 +80,7 @@ export function interactionToCheckpoint(interaction) {
     ...(interaction.kind === 'question' && prompt.inputType ? { inputType: prompt.inputType } : {}),
     ...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
     ...(prompt.allowSkip ? { allowSkip: true } : {}),
+    ...(prompt.allowOther ? { allowOther: true } : {}),
     ...(prompt.validation ? { validation: prompt.validation } : {}),
     ...(prompt.title !== undefined ? { title: prompt.title } : {}),
     ...(prompt.options !== undefined ? { options: prompt.options } : {}),

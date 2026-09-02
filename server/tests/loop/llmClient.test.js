@@ -172,6 +172,32 @@ test('execute — timeoutMs aborts a hung provider with TIMEOUT', async () => {
   });
 });
 
+test('execute — timeoutMs and the signal cover request construction (model discovery)', async () => {
+  // A request builder that hangs (discovery waiting on the network) until the
+  // call's own signal aborts: the whole-call deadline still applies.
+  const { client } = makeClient({ transport: async () => sseResponse(openaiText(['x'])) });
+  client.createRequest = (_model, _messages, _apiKey, _options, { signal }) =>
+    new Promise((_, reject) =>
+      signal.addEventListener('abort', () =>
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+      )
+    );
+  const started = Date.now();
+  await assert.rejects(client.execute({ modelId: 'oa', messages, timeoutMs: 20, retries: 0 }), {
+    code: LLM_ERROR_CODES.TIMEOUT
+  });
+  assert.ok(Date.now() - started < 2000);
+
+  // and a caller abort during construction is ABORTED, not a hang
+  const ac = new AbortController();
+  const pending = assert.rejects(
+    client.execute({ modelId: 'oa', messages, signal: ac.signal, retries: 0 }),
+    { code: LLM_ERROR_CODES.ABORTED }
+  );
+  ac.abort();
+  await pending;
+});
+
 test('execute — transient 503/429 retried with Retry-After, non-transient 4xx not retried', async () => {
   let attempt = 0;
   const delays = [];

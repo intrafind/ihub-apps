@@ -356,6 +356,7 @@ export class LLMClient {
     this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe), LRU-bounded
     this._lastSchemaHash = new Map(); // runId -> responseSchema hash (recorded on change), LRU-bounded
+    this._lastToolsHash = new Map(); // runId -> tool schemas hash (recorded on change), LRU-bounded
   }
 
   // ── Model catalog ──────────────────────────────────────────────────────
@@ -485,30 +486,66 @@ export class LLMClient {
       });
     }
 
+    // Abort/timeout plumbing: one signal for key resolution, request
+    // construction (model discovery may hit the network), the transport and
+    // the body reader — the advertised whole-call deadline starts here.
+    let timedOut = false;
+    let timer = null;
+    let callSignal = signal;
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      const controller = new AbortController();
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort(TIMEOUT_REASON);
+      }, timeoutMs);
+      callSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    }
+    const errCtx = () => ({ model, timedOut, timeoutMs });
+    const failEarly = err => {
+      if (timer) clearTimeout(timer);
+      throw err;
+    };
+
     const keyResult = await this.resolveApiKey(model, { language, apiKey: params.apiKey });
     if (!keyResult.success) {
       const err = keyResult.error;
-      throw new LLMError(err?.message || `API key for ${model.provider} not found`, {
-        code: LLM_ERROR_CODES.AUTH_FAILED,
-        providerCode: err?.code || 'API_KEY_MISSING',
-        provider: model.provider,
-        modelId: model.id,
-        cause: err
-      });
+      failEarly(
+        new LLMError(err?.message || `API key for ${model.provider} not found`, {
+          code: LLM_ERROR_CODES.AUTH_FAILED,
+          providerCode: err?.code || 'API_KEY_MISSING',
+          provider: model.provider,
+          modelId: model.id,
+          cause: err
+        })
+      );
     }
     const apiKey = keyResult.apiKey;
 
     const effectiveStream = STREAM_ONLY_PROVIDERS.has(model.provider) ? true : stream !== false;
     const adapterOptions = buildAdapterOptions(options, model, effectiveStream);
 
-    const request = await this.createRequest(model, messages, apiKey, adapterOptions);
-    if (!request || typeof request.url !== 'string') {
-      throw new LLMError(`Adapter for ${model.provider} produced no request URL`, {
-        code: LLM_ERROR_CODES.INVALID_REQUEST,
-        providerCode: 'ADAPTER_REQUEST_INVALID',
-        provider: model.provider,
-        modelId: model.id
+    let request;
+    try {
+      if (callSignal?.aborted) {
+        throw Object.assign(new Error('Aborted before the request was built'), {
+          name: 'AbortError'
+        });
+      }
+      request = await this.createRequest(model, messages, apiKey, adapterOptions, {
+        signal: callSignal
       });
+    } catch (err) {
+      failEarly(toLLMError(err, errCtx()));
+    }
+    if (!request || typeof request.url !== 'string') {
+      failEarly(
+        new LLMError(`Adapter for ${model.provider} produced no request URL`, {
+          code: LLM_ERROR_CODES.INVALID_REQUEST,
+          providerCode: 'ADAPTER_REQUEST_INVALID',
+          provider: model.provider,
+          modelId: model.id
+        })
+      );
     }
 
     const requestId = `req-${crypto.randomUUID()}`;
@@ -534,20 +571,6 @@ export class LLMClient {
     }
 
     const span = this._beginSpan({ model, messages, request, telemetry, effectiveStream });
-
-    // Abort/timeout plumbing: one signal for the transport and the body reader.
-    let timedOut = false;
-    let timer = null;
-    let callSignal = signal;
-    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-      const controller = new AbortController();
-      timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort(TIMEOUT_REASON);
-      }, timeoutMs);
-      callSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
-    }
-    const errCtx = () => ({ model, timedOut, timeoutMs });
 
     logger.debug('Executing LLM request', {
       component: COMPONENT,
@@ -938,6 +961,16 @@ export class LLMClient {
       this._lastSchemaHash.delete(this._lastSchemaHash.keys().next().value);
     }
     const tools = Array.isArray(adapterOptions.tools) ? adapterOptions.tools : null;
+    // Tool schemas follow their own change-based dedupe: a caller that repeats
+    // identical messages with a different tool set still records the schemas
+    // the model saw, so the request stays reconstructable from the ledger.
+    const toolSchemasHash = tools ? hashPayload(tools) : null;
+    const toolsChanged = toolSchemasHash !== (this._lastToolsHash.get(runId) ?? null);
+    this._lastToolsHash.delete(runId);
+    this._lastToolsHash.set(runId, toolSchemasHash);
+    while (this._lastToolsHash.size > MAX_TRACKED_RUN_HASHES) {
+      this._lastToolsHash.delete(this._lastToolsHash.keys().next().value);
+    }
     const callConfig = {
       temperature:
         typeof adapterOptions.temperature === 'number' ? adapterOptions.temperature : undefined,
@@ -963,8 +996,8 @@ export class LLMClient {
       messageCount: messages.length,
       reason,
       ...(reason !== 'same' ? { messages } : {}),
-      toolSchemasHash: tools ? hashPayload(tools) : null,
-      ...(tools && reason !== 'same' ? { toolSchemas: tools } : {}),
+      toolSchemasHash,
+      ...(tools && (reason !== 'same' || toolsChanged) ? { toolSchemas: tools } : {}),
       toolExecution: telemetry.toolExecution || (tools ? 'caller' : 'none'),
       callConfig,
       language

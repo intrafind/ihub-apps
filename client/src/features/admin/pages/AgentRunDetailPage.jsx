@@ -11,6 +11,7 @@ import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import { cancelAgentRun, fetchRunArtifacts, resumeAgentRun } from '../../../api/agentsAdminApi';
 import { answerInteraction } from '../../../api';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
+import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -943,7 +944,7 @@ export default function AgentRunDetailPage() {
             </div>
           )}
 
-          {isPaused && pendingCheckpoint && pendingCheckpoint.type === 'question' && (
+          {isPaused && pendingCheckpoint && isQuestionCheckpoint(pendingCheckpoint) && (
             <div className="mb-6">
               <HumanCheckpoint
                 key={pendingCheckpoint.id}
@@ -963,7 +964,7 @@ export default function AgentRunDetailPage() {
             </div>
           )}
 
-          {isPaused && pendingCheckpoint && pendingCheckpoint.type !== 'question' && (
+          {isPaused && pendingCheckpoint && !isQuestionCheckpoint(pendingCheckpoint) && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
               <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
                 ⏸ Awaiting approval

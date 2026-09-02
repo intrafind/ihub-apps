@@ -43,7 +43,7 @@ class ModelDiscoveryService {
    * @param {number} cacheTtlMs - Cache TTL in milliseconds (default: 5 minutes)
    * @returns {Promise<string|null>} - Discovered model ID or null if discovery fails
    */
-  async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS) {
+  async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS, { signal } = {}) {
     // Return cached result if still valid
     const cached = this.cache.get(model.id);
     if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
@@ -66,7 +66,7 @@ class ModelDiscoveryService {
     }
 
     // Create and track the discovery request
-    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs);
+    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs, { signal });
     this.pendingRequests.set(model.id, discoveryPromise);
 
     try {
@@ -82,7 +82,7 @@ class ModelDiscoveryService {
    * Internal method to perform the actual model discovery
    * @private
    */
-  async _performDiscovery(model, apiKey, cacheTtlMs) {
+  async _performDiscovery(model, apiKey, cacheTtlMs, { signal } = {}) {
     if (!model.url) {
       logger.warn('Cannot discover model: no URL configured', {
         component: 'ModelDiscoveryService',
@@ -114,7 +114,11 @@ class ModelDiscoveryService {
       const response = await throttledFetch(model.id, modelsUrl, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(10000) // 10 second timeout for discovery
+        // 10 second timeout for discovery, and the caller's deadline / abort
+        // when the discovery runs inside a model call.
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+          : AbortSignal.timeout(10000)
       });
 
       if (!response.ok) {
@@ -185,15 +189,19 @@ class ModelDiscoveryService {
    * Get the effective model ID, using discovery if enabled
    * @param {Object} model - Model configuration object
    * @param {string} apiKey - API key for authentication
+   * @param {Object} [opts]
+   * @param {AbortSignal} [opts.signal] - the calling request's abort / deadline signal
    * @returns {Promise<string>} - Model ID to use for the request
    */
-  async getEffectiveModelId(model, apiKey) {
+  async getEffectiveModelId(model, apiKey, { signal } = {}) {
     // Skip discovery if not enabled or not supported for this provider
     if (!model.autoDiscovery || !this._supportsDiscovery(model)) {
       return model.modelId;
     }
 
-    const discoveredModelId = await this.discoverModel(model, apiKey);
+    const discoveredModelId = await this.discoverModel(model, apiKey, this.DEFAULT_CACHE_TTL_MS, {
+      signal
+    });
 
     // Fall back to configured modelId if discovery fails
     if (!discoveredModelId) {

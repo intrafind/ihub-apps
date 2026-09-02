@@ -36,6 +36,9 @@ function isAcceptedFile(file) {
 }
 
 const TERMINAL_JOB_STATUSES = ['completed', 'error', 'cancelled'];
+/** Reconnect attempts for the progress stream (1s, 2s, 4s, 8s, 16s). */
+const MAX_PROGRESS_RECONNECTS = 5;
+const reconnectDelayMs = attempt => Math.min(16000, 1000 * 2 ** attempt);
 
 function JobCard({ job, onCancel }) {
   const abortRef = useRef(null);
@@ -52,26 +55,50 @@ function JobCard({ job, onCancel }) {
     const progressUrl = buildApiUrl(`/tools-service/jobs/${job.jobId}/progress`);
     const ac = new AbortController();
     abortRef.current = ac;
+    let terminal = false;
+    let retryTimer = null;
 
-    openSseStream(progressUrl, {
-      signal: ac.signal,
-      onEvent: (name, data) => {
-        if (name !== 'message' || !data || typeof data !== 'object' || 'raw' in data) return;
-        if (data.progress) setProgress(data.progress);
-        if (data.status) setStatus(data.status);
-        if (data.error) setError(data.error);
+    // The fetch-based stream is one-shot: a transient close before the job
+    // finished reconnects with bounded backoff (the job keeps running server
+    // side and the next frames catch the card up).
+    const connect = attempt => {
+      if (ac.signal.aborted || terminal) return;
+      openSseStream(progressUrl, {
+        signal: ac.signal,
+        onEvent: (name, data) => {
+          if (name !== 'message' || !data || typeof data !== 'object' || 'raw' in data) return;
+          if (data.progress) setProgress(data.progress);
+          if (data.status) setStatus(data.status);
+          if (data.error) setError(data.error);
 
-        if (TERMINAL_JOB_STATUSES.includes(data.status)) {
-          ac.abort();
-          if (abortRef.current === ac) abortRef.current = null;
+          if (TERMINAL_JOB_STATUSES.includes(data.status)) {
+            terminal = true;
+            ac.abort();
+            if (abortRef.current === ac) abortRef.current = null;
+          }
         }
+      })
+        .then(() => {
+          if (!terminal && !ac.signal.aborted) scheduleRetry(attempt);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError' || ac.signal.aborted) return;
+          console.warn('OCR progress stream error:', err);
+          scheduleRetry(attempt);
+        });
+    };
+    const scheduleRetry = attempt => {
+      if (attempt >= MAX_PROGRESS_RECONNECTS) {
+        console.warn('OCR progress stream gave up reconnecting', job.jobId);
+        if (abortRef.current === ac) abortRef.current = null;
+        return;
       }
-    }).catch(err => {
-      if (err.name !== 'AbortError') console.warn('OCR progress stream error:', err);
-      if (abortRef.current === ac) abortRef.current = null;
-    });
+      retryTimer = setTimeout(() => connect(attempt + 1), reconnectDelayMs(attempt));
+    };
+    connect(0);
 
     return () => {
+      if (retryTimer) clearTimeout(retryTimer);
       ac.abort();
       if (abortRef.current === ac) abortRef.current = null;
     };

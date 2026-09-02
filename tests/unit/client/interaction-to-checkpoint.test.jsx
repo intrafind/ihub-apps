@@ -4,7 +4,8 @@
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
-  isClarificationInteraction
+  isClarificationInteraction,
+  isQuestionCheckpoint
 } from '../../../client/src/shared/run/interactionToCheckpoint';
 
 const base = {
@@ -45,6 +46,34 @@ describe('interactionToCheckpoint', () => {
     expect(
       isClarificationInteraction({ kind: 'question', prompt: {}, source: { chatId: 'c' } })
     ).toBe(true);
+  });
+
+  test('a multi-select question with a custom entry keeps allowOther and its widget', () => {
+    const cp = interactionToCheckpoint({
+      ...base,
+      id: 'ckpt-q2',
+      kind: 'question',
+      origin: 'tool',
+      prompt: {
+        message: 'Which regions?',
+        inputType: 'multi_select',
+        options: [
+          { value: 'eu', label: 'EU' },
+          { value: 'us', label: 'US' }
+        ],
+        allowOther: true,
+        allowSkip: false
+      },
+      source: { checkpointId: 'ckpt-q2', executionId: 'wf-exec-1', nodeId: 'plan' }
+    });
+    expect(cp.inputType).toBe('multi_select');
+    expect(cp.allowOther).toBe(true);
+    expect(cp).not.toHaveProperty('allowSkip');
+    expect(cp.options).toHaveLength(2);
+    expect(isQuestionCheckpoint(cp)).toBe(true);
+    expect(isQuestionCheckpoint({ type: 'question' })).toBe(true);
+    expect(isQuestionCheckpoint({ type: 'approval' })).toBe(false);
+    expect(isQuestionCheckpoint(null)).toBe(false);
   });
 
   test('an approval checkpoint keeps the legacy shape (no widget fields)', () => {

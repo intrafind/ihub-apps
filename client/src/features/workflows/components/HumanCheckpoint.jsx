@@ -6,6 +6,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
 
 /**
  * Render any data value as a readable UI block.
@@ -221,14 +222,34 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
   const { t } = useTranslation();
   const [selectedOption, setSelectedOption] = useState(null);
   const [formData, setFormData] = useState({});
-  const [freeText, setFreeText] = useState('');
-  // A question asked by the workflow / agent (`ask_user`): free text or a
-  // number instead of options — answered with the typed value, or skipped.
+  // A question asked by the workflow / agent (`ask_user`, or a legacy `input`
+  // node): the widget follows `inputType` — text, number, date, confirm,
+  // single / multi select (with an optional "other" entry) — and the answer
+  // may be skipped when the prompt allows it. Approvals / reviews keep the
+  // option buttons below.
   const isQuestion =
-    (checkpoint.type === 'input' || checkpoint.type === 'question') &&
-    !(checkpoint.options && checkpoint.options.length > 0) &&
+    isQuestionCheckpoint(checkpoint) &&
     !(checkpoint.inputSchema && checkpoint.inputSchema.properties);
-  const canSubmit = isQuestion ? freeText.trim().length > 0 : !!selectedOption;
+  const hasOptions = Array.isArray(checkpoint.options) && checkpoint.options.length > 0;
+  const inputType = checkpoint.inputType || (hasOptions ? 'single_select' : 'text');
+  const isMulti = inputType === 'multi_select';
+  const [answer, setAnswer] = useState(isMulti ? [] : '');
+  const [otherText, setOtherText] = useState('');
+  const questionValue = () => {
+    const other = otherText.trim();
+    if (isMulti) {
+      const values = Array.isArray(answer) ? [...answer] : [];
+      if (checkpoint.allowOther && other) values.push(other);
+      return values;
+    }
+    if (checkpoint.allowOther && other) return other;
+    return typeof answer === 'string' ? answer.trim() : answer;
+  };
+  const questionAnswered = () => {
+    const v = questionValue();
+    return Array.isArray(v) ? v.length > 0 : v !== '' && v !== null && v !== undefined;
+  };
+  const canSubmit = isQuestion ? questionAnswered() : !!selectedOption;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [pendingConfirm, setPendingConfirm] = useState(null);
@@ -256,8 +277,8 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
 
   const handleSubmit = () => {
     if (isQuestion) {
-      if (!freeText.trim()) return;
-      submitResponse(freeText.trim());
+      if (!questionAnswered()) return;
+      submitResponse(questionValue());
       return;
     }
     if (!selectedOption) return;
@@ -321,7 +342,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
         <DisplayData displayData={displayData} showTechnical={showTechnical} />
       )}
 
-      {checkpoint.options && checkpoint.options.length > 0 && (
+      {!isQuestion && checkpoint.options && checkpoint.options.length > 0 && (
         <div className="mb-4">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t('workflows.checkpoint.selectOption', 'Select an option')}
@@ -354,22 +375,82 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
           >
             {t('workflows.checkpoint.yourAnswer', 'Your answer')}
           </label>
-          {checkpoint.inputType === 'number' ? (
+          {(inputType === 'single_select' || isMulti || inputType === 'confirm') && (
+            <div className="flex flex-wrap gap-3 mb-3" role="group">
+              {(hasOptions
+                ? checkpoint.options
+                : [
+                    { value: 'yes', label: t('common.yes', 'Yes') },
+                    { value: 'no', label: t('common.no', 'No') }
+                  ]
+              ).map(option => {
+                const selected = isMulti
+                  ? Array.isArray(answer) && answer.includes(option.value)
+                  : answer === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={submitting}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setAnswer(prev =>
+                        isMulti
+                          ? prev.includes(option.value)
+                            ? prev.filter(v => v !== option.value)
+                            : [...prev, option.value]
+                          : option.value
+                      )
+                    }
+                    className={getButtonClasses(option, selected)}
+                  >
+                    {option.label || option.value}
+                    {option.description && (
+                      <span className="block text-xs opacity-75 mt-1">{option.description}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {(inputType === 'single_select' || isMulti) && checkpoint.allowOther && (
+            <input
+              id={`checkpoint-answer-${checkpoint.id}`}
+              type="text"
+              value={otherText}
+              onChange={e => setOtherText(e.target.value)}
+              disabled={submitting}
+              placeholder={t('workflows.checkpoint.otherAnswer', 'Other (type your own answer)')}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {inputType === 'number' && (
             <input
               id={`checkpoint-answer-${checkpoint.id}`}
               type="number"
-              value={freeText}
-              onChange={e => setFreeText(e.target.value)}
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
               disabled={submitting}
               placeholder={checkpoint.placeholder || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
-          ) : (
+          )}
+          {inputType === 'date' && (
+            <input
+              id={`checkpoint-answer-${checkpoint.id}`}
+              type="date"
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              disabled={submitting}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {!['single_select', 'multi_select', 'confirm', 'number', 'date'].includes(inputType) && (
             <textarea
               id={`checkpoint-answer-${checkpoint.id}`}
               rows={3}
-              value={freeText}
-              onChange={e => setFreeText(e.target.value)}
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
               disabled={submitting}
               placeholder={
                 checkpoint.placeholder ||

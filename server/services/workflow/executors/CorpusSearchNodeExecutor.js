@@ -184,7 +184,9 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       if (!chatSessionId || !nodeName) return;
       try {
         progressStep += 1;
-        streamEmitter(chatSessionId).emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+        // Attributed to the workflow execution (its own run on the chat
+        // stream), not to the chat run the stream is currently bound to.
+        streamEmitter(chatSessionId, chatId).emit(SSE_V2_EVENTS.PROGRESS_NODE, {
           executionId: chatId,
           nodeId: `${chatId}:corpus-search:${progressStep}`,
           nodeName: String(nodeName),

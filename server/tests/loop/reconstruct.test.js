@@ -150,3 +150,40 @@ test('tampered messages are detected; schema-constrained calls are verified; unk
   assert.equal(unknown.skipped.length, 2);
   await runLog.stop();
 });
+
+test('a changed tool set with identical messages records the new schemas and stays reconstructable', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const sameMessages = [{ role: 'user', content: 'same prompt' }];
+  const toolA = { type: 'function', function: { name: 'a', parameters: { type: 'object' } } };
+  const toolB = { type: 'function', function: { name: 'b', parameters: { type: 'object' } } };
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolA] },
+    telemetry: { runId, step: 0 }
+  });
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolB] },
+    telemetry: { runId, step: 1 }
+  });
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolB] },
+    telemetry: { runId, step: 2 }
+  });
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.equal(headers.length, 3);
+  assert.equal(headers[1].data.reason, 'same', 'messages did not change');
+  assert.deepEqual(headers[1].data.toolSchemas, [toolB], 'but the tool set did: schemas recorded');
+  assert.equal(headers[2].data.toolSchemas, undefined, 'unchanged tools are referenced by hash');
+  const report = await verifyRequestReconstruction(events, { findModel: () => model });
+  assert.equal(report.checked, 3);
+  assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
+  assert.deepEqual(report.skipped, []);
+  await runLog.stop();
+});
