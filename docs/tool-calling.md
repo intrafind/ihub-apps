@@ -98,7 +98,8 @@ The round trip between model and tools is the shared [Agent Loop](agent-loop.md)
 chat, workflow nodes, app-as-tool and MCP all run tool calls through it (tool
 matching, argument repair, circuit breakers, round budgets), and the tool itself
 is executed by `toolLoader.runTool()`. In chat, one tool runs at a time and each
-call is surfaced to the client as `tool.call.start` / `tool.call.end` SSE events.
+call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frames
+(see [SSE v2 Streaming](sse-v2.md)).
 
 ### Tool Registration and Discovery
 

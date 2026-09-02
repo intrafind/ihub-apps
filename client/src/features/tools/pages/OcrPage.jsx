@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { openSseStream } from '../../../shared/utils/openSseStream';
 import { apiClient } from '../../../api/client';
 import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 import StatusBadge from '../../../shared/components/StatusBadge';
@@ -34,39 +35,45 @@ function isAcceptedFile(file) {
   return ACCEPTED_EXTENSIONS.includes(ext);
 }
 
+const TERMINAL_JOB_STATUSES = ['completed', 'error', 'cancelled'];
+
 function JobCard({ job, onCancel }) {
-  const eventSourceRef = useRef(null);
+  const abortRef = useRef(null);
   const [progress, setProgress] = useState(job.progress || { current: 0, total: 0 });
   const [status, setStatus] = useState(job.status || 'queued');
   const [error, setError] = useState(job.error || null);
 
   useEffect(() => {
-    if (status === 'completed' || status === 'error' || status === 'cancelled') return;
+    if (TERMINAL_JOB_STATUSES.includes(status)) return;
 
+    // Progress frames are default (`message`) SSE events carrying
+    // `{ progress?, status?, error? }`. Shared fetch-based transport so the
+    // Bearer header / 401 refresh apply here too (no native EventSource).
     const progressUrl = buildApiUrl(`/tools-service/jobs/${job.jobId}/progress`);
-    const es = new EventSource(progressUrl, { withCredentials: true });
-    eventSourceRef.current = es;
+    const ac = new AbortController();
+    abortRef.current = ac;
 
-    es.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.progress) setProgress(data.progress);
-      if (data.status) setStatus(data.status);
-      if (data.error) setError(data.error);
+    openSseStream(progressUrl, {
+      signal: ac.signal,
+      onEvent: (name, data) => {
+        if (name !== 'message' || !data || typeof data !== 'object' || 'raw' in data) return;
+        if (data.progress) setProgress(data.progress);
+        if (data.status) setStatus(data.status);
+        if (data.error) setError(data.error);
 
-      if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
-        es.close();
-        eventSourceRef.current = null;
+        if (TERMINAL_JOB_STATUSES.includes(data.status)) {
+          ac.abort();
+          if (abortRef.current === ac) abortRef.current = null;
+        }
       }
-    };
-
-    es.onerror = () => {
-      es.close();
-      eventSourceRef.current = null;
-    };
+    }).catch(err => {
+      if (err.name !== 'AbortError') console.warn('OCR progress stream error:', err);
+      if (abortRef.current === ac) abortRef.current = null;
+    });
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      ac.abort();
+      if (abortRef.current === ac) abortRef.current = null;
     };
   }, [job.jobId, status]);
 

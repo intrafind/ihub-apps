@@ -9,6 +9,12 @@
  */
 
 import { promises as fs } from 'fs';
+import {
+  translateInternalEvent,
+  buildEnvelope,
+  currentSeq
+} from '../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { join } from 'path';
 import { authRequired } from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -1603,11 +1609,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *           type: string
    *     responses:
    *       200:
-   *         description: SSE stream established
+   *         description: SSE stream established (SSE v2 envelopes, see docs/sse-v2.md)
    *         content:
    *           text/event-stream:
    *             schema:
    *               type: string
+   *               description: |
+   *                 `event: <type>` frames with a JSON envelope `{ v: 2, seq, runId, ts, type, data }`:
+   *                 `run/started`, `progress/node`, `interaction/raised`, `run/paused`,
+   *                 `run/resumed`, `tool/progress`, `meta`, `run/ended`.
    *       401:
    *         description: Authentication required
    *       500:
@@ -1631,7 +1641,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         onClose: () => actionTracker.off('fire-sse', handleWorkflowEvent)
       });
 
-      channel.send('connected', { executionId });
+      const connected = buildEnvelope({
+        streamId: executionId,
+        runId: executionId,
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        data: { runId: executionId, lastSeq: currentSeq(executionId) }
+      });
+      channel.send(connected.type, connected);
 
       logger.info('SSE connection established for workflow execution', {
         component: 'WorkflowRoutes',
@@ -1687,7 +1703,26 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           iteration: eventData.iteration
         });
 
-        const sent = channel.send(eventType, eventData);
+        // Project the internal event onto SSE v2 envelopes for this stream.
+        let sent = false;
+        for (const frame of translateInternalEvent(eventData)) {
+          try {
+            const envelope = buildEnvelope({
+              streamId: executionId,
+              runId: frame.runId || executionId,
+              type: frame.type,
+              data: frame.data
+            });
+            sent = channel.send(envelope.type, envelope) || sent;
+          } catch (err) {
+            logger.warn('Dropped workflow event that does not fit the SSE v2 contract', {
+              component: 'WorkflowRoutes',
+              executionId,
+              eventType,
+              error: err.message
+            });
+          }
+        }
 
         // Log successful send for important events
         if (sent && (eventType === 'workflow.node.complete' || eventType === 'workflow.complete')) {

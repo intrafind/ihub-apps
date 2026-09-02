@@ -1,4 +1,4 @@
-import { actionTracker } from '../actionTracker.js';
+import { emitToolProgress } from './loop/RunStream.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
@@ -85,7 +85,11 @@ class BraveSearchProvider extends SearchProvider {
       config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
 
     if (chatId) {
-      actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
+      emitToolProgress(chatId, {
+        phase: 'search',
+        message: query,
+        data: { query, provider: 'brave' }
+      });
     }
 
     // Query cache. Across re-plan/verify rounds the same query recurs; serving

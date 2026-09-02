@@ -110,6 +110,7 @@ test('every RunLog event type has a data schema and validates a minimal payload'
       kind: 'question',
       answer: { value: 'yes', by: 'u', at: new Date().toISOString() }
     },
+    'human/event': { kind: 'stop', by: 'u', at: new Date().toISOString() },
     'budget/checkpoint': { step: 1, usage: {}, runUsage: {} },
     'budget/exhausted': { step: 1, reason: 'tokens' },
     'context/compaction': { step: 1, trigger: 'proactive', collapsed: 1, freedChars: 10 },

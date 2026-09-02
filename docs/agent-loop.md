@@ -179,19 +179,19 @@ Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
 
 | Seam                                      | Hooks                 | Adds                                                                                                                                                                              |
 | ----------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chatToolSeam`                            | `preTool`, `postTool` | `tool.call.start` / `tool.call.end` SSE events, `tool_usage` / `tool_error` interaction logs, the error envelope handed back to the model when a tool fails                        |
-| `questionSeam(chatQuestionOptions)`       | `preTool`             | `ask_user` → `clarification` event with the client payload; per-chat counter capped at `MAX_CLARIFICATIONS_PER_CONVERSATION`; the segment pauses (`finishReason: 'clarification'`) |
-| `passthroughSeam(chatPassthroughOptions)` | `preTool`             | Workflow tools stream their own answer as `chunk` events with `source: 'tool'`, then `tool-stream-complete`; the turn ends with `tool_passthrough_complete`                         |
+| `knowledgeSourceSeam`                     | `postTool`, `stepEnd` | Search / source / grounding tools feed the knowledge-source badge (`tool/completed.knowledgeSource`, `run/ended.knowledgeSources`)                                                  |
+| `chatToolSeam`                            | `preTool`, `postTool` | `tool/started` / `tool/completed` frames, `tool_usage` / `tool_error` interaction logs, the error envelope handed back to the model when a tool fails                              |
+| `questionSeam(chatQuestionOptions)`       | `preTool`             | `ask_user` → `interaction/raised` with the persisted interaction; per-chat counter capped at `MAX_CLARIFICATIONS_PER_CONVERSATION`; the run pauses (`run/paused`)                    |
+| `passthroughSeam(chatPassthroughOptions)` | `preTool`             | Workflow tools stream their own answer as `step/delta` frames, then `tool/completed`; the turn ends with `tool_passthrough_complete`                                                |
 | `imageLiftSeam`                           | `postTool`            | Image payloads in tool results become message image data                                                                                                                          |
-| `knowledgeSourceSeam`                     | `postTool`            | Search / source / grounding tools feed the `answer.source` badge                                                                                                                  |
-| `chatTurnSeam`                            | `preStep`, `stepEnd`  | Upload / email knowledge sources on the first step, `chatTelemetry` usage and metrics once per model call, the "Using tool(s)" status line                                          |
+| `chatTurnSeam`                            | `preStep`, `stepEnd`  | Upload / email knowledge sources on the first step, `chatTelemetry` usage and metrics once per model call, `step/completed` per model call                                          |
 
 Streamed chunks go to the channel (`server/services/chat/chatChannel.js`),
-which projects them onto `chunk`, `thinking`, `image`, `grounding` and
-`citation` events (plus the iAssistant conversation events) through
-`actionTracker` → `sse.js`. `ChatService` emits the terminal events itself:
-`answer.source`, `error` (payload from `chatErrors.describeChatError()`) and
-`done`.
+which projects them onto `step/delta` (text, thinking, image), `tool/progress`
+(grounding, citations, search status) and `meta` frames through the run's
+`RunStreamEmitter` → `sse.js` (see [SSE v2 Streaming](sse-v2.md)). `ChatService`
+emits the run frames itself: `run/started`, `run/paused`, `stream/error`
+(payload from `chatErrors.describeChatError()`) and `run/ended`.
 
 **Headless mode.** `runTurn({ streaming: false })` — a POST without an open SSE
 connection — and `invokeAppInternal()` (app-as-tool gateway, MCP `tools/call`)

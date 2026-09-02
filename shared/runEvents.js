@@ -45,6 +45,7 @@ export const RUN_LOG_EVENTS = Object.freeze({
   TOOL_DISABLED: 'tool/disabled',
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
+  HUMAN_EVENT: 'human/event',
   BUDGET_CHECKPOINT: 'budget/checkpoint',
   BUDGET_EXHAUSTED: 'budget/exhausted',
   CONTEXT_COMPACTION: 'context/compaction',

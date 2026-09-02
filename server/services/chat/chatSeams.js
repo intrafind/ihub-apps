@@ -2,18 +2,20 @@
  * Chat-surface seams for the agent loop.
  *
  * Everything the chat turn adds on top of the shared loop is a seam here:
- * tool call events and interaction logs, per-call usage/metrics, the
- * upload/email knowledge sources, the clarification (ask_user) projection and
- * the passthrough (workflow) projection. The loop stays surface-agnostic.
+ * tool frames and interaction logs, per-call usage/metrics, the upload/email
+ * knowledge sources, the clarification (ask_user) projection and the
+ * passthrough (workflow) projection. Frames go out as SSE v2 through the
+ * turn's `RunStreamEmitter` (`ctx.meta.stream`); the loop stays surface-agnostic.
  *
  * @module services/chat/chatSeams
  */
-import { actionTracker } from '../../actionTracker.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 
 const COMPONENT = 'ChatService';
+const PREVIEW_CHARS = 4096;
 
 /** Markers the Office add-in puts around email / meeting context. */
 export const EMAIL_CONTEXT_MARKERS = [
@@ -46,8 +48,49 @@ export function detectContextSources(messages) {
 }
 
 /**
+ * Bounded, JSON-safe preview of a tool result for the wire (the full result
+ * stays in the transcript the model sees, never on the client).
+ */
+export function previewToolResult(value) {
+  if (value === undefined) return null;
+  if (typeof value === 'string') {
+    return value.length > PREVIEW_CHARS
+      ? `${value.slice(0, PREVIEW_CHARS)}…[truncated ${value.length - PREVIEW_CHARS} chars]`
+      : value;
+  }
+  let text;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    return '[unserialisable]';
+  }
+  if (typeof text !== 'string') return null;
+  if (text.length <= PREVIEW_CHARS) return value;
+  return `${text.slice(0, PREVIEW_CHARS)}…[truncated ${text.length - PREVIEW_CHARS} chars]`;
+}
+
+function emit(ctx, type, data) {
+  return ctx?.meta?.stream?.emit?.(type, data) ?? null;
+}
+
+function callIdOf(info) {
+  return String(info.call?.id || (info.call?.index ?? '0'));
+}
+
+function toolCallRecords(toolCalls) {
+  return (toolCalls || []).map(c => ({
+    id: c.id || `${c.index}`,
+    index: c.index,
+    type: c.type || 'function',
+    name: c.function?.name,
+    arguments: c.function?.arguments || '',
+    ...(c.metadata ? { metadata: c.metadata } : {})
+  }));
+}
+
+/**
  * Per-turn bookkeeping: prompt-implied knowledge sources on the first step,
- * usage/metrics for every model call, and the "Using tool(s)" status line.
+ * usage/metrics for every model call, and the `step/completed` frame.
  */
 export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defaultTelemetry }) {
   return {
@@ -71,19 +114,23 @@ export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defa
         content: step.result?.content || '',
         outcome: 'completed'
       });
-      if (streaming && step.toolCalls?.length > 0) {
-        const toolNames = step.toolCalls.map(c => c.function.name).join(', ');
-        actionTracker.trackAction(chatId, {
-          action: 'processing',
-          message: `Using tool(s): ${toolNames}...`
-        });
-      }
+      emit(ctx, SSE_V2_EVENTS.STEP_COMPLETED, {
+        step: ctx.iteration,
+        content: step.result?.content || '',
+        toolCalls: toolCallRecords(step.toolCalls),
+        finishReason: step.result?.finishReason ?? null,
+        ...(step.result?.usage ? { usage: step.result.usage } : {}),
+        sources: [...ctx.knowledgeSources],
+        ...(step.result?.groundingMetadata
+          ? { groundingMetadata: step.result.groundingMetadata }
+          : {})
+      });
     }
   };
 }
 
 /**
- * Tool call projection: `tool.call.start` / `tool.call.end` events, the
+ * Tool call projection: `tool/started` / `tool/completed` frames, the
  * interaction log, and the rich error envelope the chat model has always been
  * handed back on a failed tool.
  */
@@ -98,7 +145,18 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         isWorkflow: String(info.toolId).startsWith('workflow_'),
         argKeys: Object.keys(info.args || {}).join(', ')
       });
-      actionTracker.trackToolCallStart(chatId, { toolName: info.toolId, toolInput: info.args });
+      emit(ctx, SSE_V2_EVENTS.TOOL_STARTED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        args: info.args,
+        execution: info.toolDef?.passthrough
+          ? 'passthrough'
+          : info.toolDef?.interactive
+            ? 'clarification'
+            : 'server'
+      });
       return null;
     },
     async postTool(ctx, info, outcome) {
@@ -118,12 +176,17 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         };
         outcome.rawResult = errorResult;
         outcome.message.content = JSON.stringify(errorResult);
-        actionTracker.trackToolCallEnd(chatId, {
-          toolName: toolId,
-          toolOutput: errorResult,
-          error: true,
-          errorCode: errorResult.code,
-          errorMessage: errorResult.message
+        emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+          step: ctx.iteration,
+          callId: callIdOf(info),
+          toolId: String(toolId),
+          name: String(info.name || toolId),
+          resultPreview: previewToolResult({ error: true, message: errorResult.message }),
+          error: {
+            ...(errorResult.code ? { code: String(errorResult.code) } : {}),
+            message: errorResult.message
+          },
+          ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {})
         });
         await logInteraction(
           'tool_error',
@@ -131,7 +194,15 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         );
         return;
       }
-      actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: outcome.rawResult });
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(toolId),
+        name: String(info.name || toolId),
+        resultPreview: previewToolResult(outcome.rawResult),
+        ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
+        ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {})
+      });
       await logInteraction(
         'tool_usage',
         buildLogData(true, { toolId, toolInput: args, toolOutput: outcome.rawResult })
@@ -143,55 +214,75 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
 const INPUT_TYPE_MAPPING = {
   select: 'single_select',
   multiselect: 'multi_select',
-  confirm: 'single_select',
+  confirm: 'confirm',
   text: 'text',
   number: 'number',
   date: 'date'
 };
 
 /**
- * The `clarification` event payload (camelCase, client vocabulary) for an
- * `ask_user` call.
+ * Build the `question` interaction for an `ask_user` call (interaction
+ * contract, client vocabulary for the input type).
  */
-export function buildClarificationData(args = {}, { chatId, toolCallId, ordinal, max }) {
+export function buildQuestionInteraction(
+  args = {},
+  { runId, step, chatId, appId, toolCallId, toolId, ordinal, max }
+) {
   const rawInputType = args.input_type || 'text';
-  const data = {
-    questionId: `clarify-${chatId}-${ordinal}-${Date.now()}`,
-    toolCallId,
-    question: args.question,
-    inputType: INPUT_TYPE_MAPPING[rawInputType] || rawInputType,
+  const prompt = {
+    message: String(args.question ?? ''),
+    inputType: INPUT_TYPE_MAPPING[rawInputType] || 'text',
     allowSkip: Boolean(args.allow_skip),
-    allowOther: Boolean(args.allow_other),
-    clarificationNumber: ordinal,
-    maxClarifications: max,
-    timestamp: new Date().toISOString()
+    allowOther: Boolean(args.allow_other)
   };
   if (Array.isArray(args.options) && args.options.length > 0) {
-    data.options = args.options.map(opt => ({
-      label: opt.label,
-      value: opt.value !== undefined ? opt.value : opt.label
+    prompt.options = args.options.map(opt => ({
+      value: String(opt.value !== undefined ? opt.value : opt.label),
+      label: String(opt.label ?? opt.value ?? '')
     }));
   }
-  if (args.placeholder) data.placeholder = String(args.placeholder).substring(0, 200);
-  if (args.validation) {
-    data.validation = {};
-    if (args.validation.pattern) data.validation.pattern = args.validation.pattern;
-    if (args.validation.min !== undefined) data.validation.min = Number(args.validation.min);
-    if (args.validation.max !== undefined) data.validation.max = Number(args.validation.max);
+  if (args.placeholder) prompt.placeholder = String(args.placeholder).substring(0, 200);
+  if (args.validation && typeof args.validation === 'object') {
+    prompt.validation = {};
+    if (args.validation.pattern)
+      prompt.validation.pattern = String(args.validation.pattern).slice(0, 200);
+    if (args.validation.min !== undefined) prompt.validation.min = Number(args.validation.min);
+    if (args.validation.max !== undefined) prompt.validation.max = Number(args.validation.max);
     if (args.validation.message) {
-      data.validation.message = String(args.validation.message).substring(0, 200);
+      prompt.validation.message = String(args.validation.message).substring(0, 200);
     }
   }
-  if (args.context) data.context = String(args.context).substring(0, 500);
-  return data;
+  if (args.context) prompt.context = String(args.context).substring(0, 500);
+  return {
+    id: `clarify-${chatId}-${ordinal}-${Date.now()}`,
+    runId,
+    step: Number.isInteger(step) ? step : 0,
+    kind: 'question',
+    origin: 'tool',
+    prompt,
+    policy: {},
+    status: 'pending',
+    source: {
+      ...(toolCallId ? { toolCallId: String(toolCallId) } : {}),
+      toolId: String(toolId || 'ask_user'),
+      chatId,
+      ...(appId ? { appId } : {})
+    },
+    createdAt: new Date().toISOString(),
+    ordinal,
+    /** Cap for the UI ("question 2 of 10"). */
+    maxClarifications: max
+  };
 }
 
 /**
  * Options for the shared `questionSeam`: the chat projection of a
- * clarification (event, tool events, interaction log, per-chat counter).
+ * clarification (interaction frame, tool frames, interaction log, per-chat
+ * counter).
  */
 export function chatQuestionOptions({
   chatId,
+  appId,
   buildLogData,
   logInteraction,
   headless,
@@ -219,10 +310,13 @@ export function chatQuestionOptions({
           error: payload.message
         });
       }
-      actionTracker.trackToolCallEnd(chatId, {
-        toolName: info.toolId,
-        toolOutput: payload,
-        error: true
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: payload,
+        error: { code: String(payload.code || 'CLARIFICATION_REJECTED'), message: payload.message }
       });
       if (reason === 'limit') {
         await logInteraction(
@@ -236,10 +330,14 @@ export function chatQuestionOptions({
         );
       }
     },
-    async raise(info) {
-      const clarificationData = buildClarificationData(info.args, {
+    async raise(info, ctx) {
+      const interaction = buildQuestionInteraction(info.args, {
+        runId: ctx.runId || chatId,
+        step: ctx.iteration,
         chatId,
-        toolCallId: info.call.id,
+        appId,
+        toolCallId: info.call?.id,
+        toolId: info.toolId,
         ordinal: info.ordinal,
         max: info.max
       });
@@ -247,32 +345,37 @@ export function chatQuestionOptions({
         component: COMPONENT,
         chatId,
         clarificationNumber: info.ordinal,
-        inputType: clarificationData.inputType,
-        question: clarificationData.question?.substring(0, 100)
+        inputType: interaction.prompt.inputType,
+        question: interaction.prompt.message.substring(0, 100)
       });
-      actionTracker.trackClarification(chatId, clarificationData);
+      // Strip the UI-only cap before validation; the frame carries the contract shape.
+      const { maxClarifications, ...wire } = interaction;
+      emit(ctx, SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: wire });
       await logInteraction(
         'clarification_request',
         buildLogData(true, {
           toolId: info.toolId,
           toolInput: info.args,
           clarificationNumber: info.ordinal,
-          maxClarifications: info.max
+          maxClarifications
         })
       );
-      actionTracker.trackToolCallEnd(chatId, {
-        toolName: info.toolId,
-        toolOutput: { clarificationRequested: true, clarificationNumber: info.ordinal }
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: { clarificationRequested: true, clarificationNumber: info.ordinal }
       });
-      return clarificationData;
+      return interaction;
     }
   };
 }
 
 /**
  * Options for the shared `passthroughSeam`: run the tool with the chat
- * context, stream its text as `chunk{source:'tool'}` events, close with
- * `tool-stream-complete` and the tool/interaction log.
+ * context, stream its text as `step/delta` frames, close with `tool/completed`
+ * and the tool/interaction log.
  */
 export function chatPassthroughOptions({
   chatId,
@@ -294,15 +397,17 @@ export function chatPassthroughOptions({
         params._fileData = userFileData;
       return params;
     },
-    onChunk(text, info) {
-      if (!streaming) return;
-      actionTracker.trackChunk(chatId, { content: text, source: 'tool', toolName: info.toolId });
+    onChunk(text, info, ctx) {
+      if (!streaming || !text) return;
+      emit(ctx, SSE_V2_EVENTS.STEP_DELTA, { step: ctx.iteration, kind: 'text', content: text });
     },
-    async onComplete(text, info) {
-      actionTracker.trackToolStreamComplete(chatId, { toolName: info.toolId, content: text });
-      actionTracker.trackToolCallEnd(chatId, {
-        toolName: info.toolId,
-        toolOutput: { answer: text }
+    async onComplete(text, info, ctx) {
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: { answer: previewToolResult(text) }
       });
       await logInteraction(
         'tool_usage',
@@ -313,7 +418,7 @@ export function chatPassthroughOptions({
         })
       );
     },
-    async onError(err, info) {
+    async onError(err, info, ctx) {
       logger.error('Passthrough tool execution failed', {
         component: COMPONENT,
         toolId: info.toolId,
@@ -325,10 +430,13 @@ export function chatPassthroughOptions({
         toolId: info.toolId,
         details: err.stack || String(err)
       };
-      actionTracker.trackToolCallEnd(chatId, {
-        toolName: info.toolId,
-        toolOutput: errorResult,
-        error: true
+      emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: ctx.iteration,
+        callId: callIdOf(info),
+        toolId: String(info.toolId),
+        name: String(info.name || info.toolId),
+        resultPreview: { error: true, message: errorResult.message },
+        error: { message: errorResult.message }
       });
       await logInteraction(
         'tool_error',

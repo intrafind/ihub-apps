@@ -95,6 +95,7 @@
     - [Developer Onboarding](developer-onboarding.md)
     - [LLM Client](llm-client.md)
     - [Agent Loop](agent-loop.md)
+    - [SSE v2 Streaming](sse-v2.md)
     - [Run Ledger](run-ledger.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)
     - [Architecture Diagrams](diagrams.md)

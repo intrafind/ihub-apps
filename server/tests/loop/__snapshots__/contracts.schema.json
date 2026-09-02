@@ -1675,6 +1675,56 @@
               },
               "type": {
                 "type": "string",
+                "const": "human/event"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["answer", "steer", "stop", "feedback"]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "messageId": {
+                    "type": "string"
+                  },
+                  "rating": {
+                    "type": ["number", "string"]
+                  },
+                  "by": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": ["kind", "by", "at"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["seq", "ts", "runId", "type", "data"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ts": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
                 "const": "error"
               },
               "data": {
@@ -3334,6 +3384,20 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "output": {},
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["message"],
+                    "additionalProperties": false
                   }
                 },
                 "required": ["status"],
@@ -4411,6 +4475,7 @@
     "tool/disabled",
     "interaction/raised",
     "interaction/answered",
+    "human/event",
     "budget/checkpoint",
     "budget/exhausted",
     "context/compaction",

@@ -17,12 +17,8 @@ jest.unstable_mockModule('../requestThrottler.js', () => ({
   throttledFetch: throttledFetchMock
 }));
 
-jest.unstable_mockModule('../actionTracker.js', () => ({
-  actionTracker: {
-    trackToolCallStart: () => {},
-    trackToolCallProgress: () => {},
-    trackToolCallEnd: () => {}
-  }
+jest.unstable_mockModule('../services/loop/RunStream.js', () => ({
+  emitToolProgress: () => null
 }));
 
 jest.unstable_mockModule('../configCache.js', () => ({

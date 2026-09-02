@@ -10,6 +10,12 @@
 
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import {
+  translateInternalEvent,
+  buildEnvelope,
+  currentSeq
+} from '../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import {
   sendBadRequest,
   sendNotFound,
   sendFailedOperationError
@@ -535,7 +541,13 @@ export default function registerAgentRunRoutes(app) {
         onClose: () => actionTracker.off('fire-sse', handleEvent)
       });
 
-      channel.send('connected', { runId });
+      const connected = buildEnvelope({
+        streamId: runId,
+        runId,
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        data: { runId, lastSeq: currentSeq(runId) }
+      });
+      channel.send(connected.type, connected);
 
       logger.info('SSE connection established for agent run', {
         component: 'AgentRuns',
@@ -593,9 +605,26 @@ export default function registerAgentRunRoutes(app) {
           (eventData.executionId && trackedIds.has(eventData.executionId));
         if (!matchesRun) return;
 
-        // Always tag the event with the parent runId so the client can route
-        // it consistently regardless of which (sub)workflow emitted it.
-        channel.send(eventType, { ...eventData, _parentRunId: runId });
+        // Child sub-workflow events keep their own executionId as the envelope
+        // runId; the client reducer merges every run on this stream.
+        for (const frame of translateInternalEvent(eventData)) {
+          try {
+            const envelope = buildEnvelope({
+              streamId: runId,
+              runId: frame.runId || runId,
+              type: frame.type,
+              data: frame.data
+            });
+            channel.send(envelope.type, envelope);
+          } catch (err) {
+            logger.warn('Dropped agent run event that does not fit the SSE v2 contract', {
+              component: 'AgentRuns',
+              runId,
+              eventType,
+              error: err.message
+            });
+          }
+        }
       };
 
       actionTracker.on('fire-sse', handleEvent);

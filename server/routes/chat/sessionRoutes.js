@@ -10,11 +10,12 @@ import {
   clients,
   abortChatRequest,
   closeChatClient,
-  getChatResponseSink,
   hasActiveChatRequest,
   hasChatClient
 } from '../../sse.js';
-import { actionTracker } from '../../actionTracker.js';
+import { RunStreamEmitter, currentSeq } from '../../services/loop/RunStream.js';
+import { newRunId } from '../../services/loop/RunLog.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
@@ -36,6 +37,28 @@ import {
 } from '../../utils/responseHelpers.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
+
+/**
+ * Report a failure that happened before (or instead of) a model turn on the
+ * chat stream: a short-lived run that starts, errors and ends, so the client
+ * reducer can attach the message to the pending assistant bubble.
+ */
+function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs = {} }) {
+  const emitter = new RunStreamEmitter({ streamId: chatId, runId: newRunId(kind) });
+  emitter.emit(SSE_V2_EVENTS.RUN_STARTED, {
+    kind,
+    refs: { chatId, ...(messageId ? { messageId } : {}), ...refs }
+  });
+  emitter.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+    code: String(code || 'ERROR'),
+    message: String(message)
+  });
+  emitter.emit(SSE_V2_EVENTS.RUN_ENDED, {
+    status: 'error',
+    finishReason: 'error',
+    error: { ...(code ? { code: String(code) } : {}), message: String(message) }
+  });
+}
 
 export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
   const chatService = new ChatService();
@@ -321,12 +344,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *             schema:
    *               type: string
    *               description: |
-   *                 Newline-delimited Server-Sent Events. Each event is a JSON object.
-   *                 Common event types include `token`, `done`, `error`, and `action`.
+   *                 SSE v2 (see docs/sse-v2.md). Every frame is `event: <type>` with a
+   *                 JSON envelope `{ v: 2, seq, runId, ts, type, data }`. Each message turn is
+   *                 one run: `run/started`, `step/delta`, `tool/started`, `tool/completed`,
+   *                 `interaction/raised`, `run/paused`, `stream/error`, `run/ended`.
    *             example: |
-   *               data: {"type":"token","content":"Hello"}
+   *               event: step/delta
+   *               data: {"v":2,"seq":3,"runId":"chat-…","ts":"…","type":"step/delta","data":{"step":1,"kind":"text","content":"Hello"}}
    *
-   *               data: {"type":"done"}
+   *               event: run/ended
+   *               data: {"v":2,"seq":9,"runId":"chat-…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
    *       401:
    *         description: Authentication required
    *       500:
@@ -360,7 +387,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // appId is carried on the entry for parity with the previous shape;
         // nothing currently reads it back off the map, but keep it available.
         channel.entry.appId = appId;
-        actionTracker.trackConnected(chatId);
+        new RunStreamEmitter({ streamId: chatId }).emit(SSE_V2_EVENTS.STREAM_CONNECTED, {
+          runId: chatId,
+          lastSeq: currentSeq(chatId)
+        });
 
         // --- Workflow disconnect resilience ---
         // 1. If a workflow finished while the chat was disconnected, deliver
@@ -370,15 +400,31 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         try {
           const pending = drainPendingFinish(chatId);
           if (pending) {
-            actionTracker.trackWorkflowResult(chatId, {
-              workflowName: pending.workflowName,
-              status: pending.status,
+            const backfill = new RunStreamEmitter({
+              streamId: chatId,
+              runId: pending.runId || newRunId('workflow')
+            });
+            backfill.emit(SSE_V2_EVENTS.RUN_STARTED, {
+              kind: 'workflow',
+              refs: { chatId, executionId: pending.executionId }
+            });
+            backfill.emit(SSE_V2_EVENTS.META, {
               executionId: pending.executionId,
-              error: pending.errorMsg,
-              outputFormat: pending.outputFormat || 'markdown'
+              extra: {
+                workflow: {
+                  status: pending.status,
+                  workflowName: pending.workflowName,
+                  outputFormat: pending.outputFormat || 'markdown',
+                  ...(pending.errorMsg ? { error: String(pending.errorMsg) } : {})
+                }
+              }
             });
             if (!pending.passthrough && pending.outputText) {
-              actionTracker.trackChunk(chatId, { content: pending.outputText });
+              backfill.emit(SSE_V2_EVENTS.STEP_DELTA, {
+                step: 0,
+                kind: 'text',
+                content: pending.outputText
+              });
             }
             const finishReason =
               pending.status === 'cancelled'
@@ -386,7 +432,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                 : pending.status === 'failed'
                   ? 'error'
                   : 'stop';
-            actionTracker.trackDone(chatId, { finishReason });
+            backfill.emit(SSE_V2_EVENTS.RUN_ENDED, {
+              status:
+                pending.status === 'cancelled'
+                  ? 'aborted'
+                  : pending.status === 'failed'
+                    ? 'error'
+                    : 'completed',
+              finishReason,
+              ...(pending.errorMsg ? { error: { message: String(pending.errorMsg) } } : {})
+            });
             logger.info('Delivered pending workflow finish on SSE reconnect', {
               component: 'sessionRoutes',
               chatId,
@@ -411,7 +466,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         if (!res.headersSent) {
           return sendInternalError(res, error, 'establish SSE connection');
         }
-        actionTracker.trackError(chatId, { message: 'Internal server error' });
+        emitFailedRun(chatId, { code: 'INTERNAL_ERROR', message: 'Internal server error' });
         res.end();
       }
     }
@@ -426,6 +481,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     prep,
     buildLogData,
     messageId,
+    activatedSkill = null,
     streaming,
     res,
     chatId,
@@ -439,6 +495,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     const outcome = await chatService.runTurn({
       prep,
       chatId,
+      messageId,
+      activatedSkill,
       streaming,
       buildLogData,
       timeoutMs: DEFAULT_TIMEOUT,
@@ -611,10 +669,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           return sendBadRequest(res, errorMessage);
         }
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
-        actionTracker.trackSessionStart(chatId, {
-          sessionId: chatId,
-          timestamp: new Date().toISOString()
-        });
 
         // --- @mention workflow detection ---
         // Check if the last user message contains an @workflow-name mention
@@ -642,12 +696,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               const reason = isDisabled
                 ? `Workflow "${wfName}" is disabled.`
                 : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
-              actionTracker.trackError(chatId, { message: reason });
               if (!hasChatClient(chatId)) {
                 return res.status(400).json({ status: 'error', message: reason });
               }
-              actionTracker.trackChunk(chatId, { content: reason });
-              actionTracker.trackDone(chatId, { finishReason: 'error' });
+              emitFailedRun(chatId, {
+                kind: 'workflow',
+                messageId,
+                code: 'WORKFLOW_UNAVAILABLE',
+                message: reason,
+                refs: { workflowId: mentionedId }
+              });
               return res.json({ status: 'streaming', chatId });
             }
           }
@@ -676,6 +734,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               content: m.content
             }));
 
+            // The @mention launch owns a run on the chat stream: the bridge in
+            // workflowRunner streams progress and the answer under this runId.
+            const workflowRunId = newRunId('workflow');
+            const launch = new RunStreamEmitter({ streamId: chatId, runId: workflowRunId });
+            launch.emit(SSE_V2_EVENTS.RUN_STARTED, {
+              kind: 'workflow',
+              refs: { chatId, appId, messageId, workflowId: mentionedId }
+            });
+            const failLaunch = message => {
+              launch.emit(SSE_V2_EVENTS.STREAM_ERROR, { code: 'WORKFLOW_FAILED', message });
+              launch.emit(SSE_V2_EVENTS.RUN_ENDED, {
+                status: 'error',
+                finishReason: 'error',
+                error: { message }
+              });
+            };
+
             try {
               const workflowRunnerMod = await import('../../tools/workflowRunner.js');
 
@@ -685,6 +760,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                 .default({
                   workflowId: mentionedId,
                   chatId,
+                  runId: workflowRunId,
                   user: req.user,
                   input: strippedInput,
                   modelId,
@@ -697,18 +773,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                     component: 'sessionRoutes',
                     error
                   });
-                  actionTracker.trackError(chatId, {
-                    message: `Workflow execution failed: ${error.message}`
-                  });
+                  failLaunch(`Workflow execution failed: ${error.message}`);
                 });
 
               // Return immediately — the SSE channel delivers all progress + final output
               return res.json({ status: 'streaming', chatId });
             } catch (error) {
               logger.error('Error loading workflow runner', { component: 'sessionRoutes', error });
-              actionTracker.trackError(chatId, {
-                message: `Workflow execution failed: ${error.message}`
-              });
+              failLaunch(`Workflow execution failed: ${error.message}`);
               return res.json({ status: 'error', message: error.message });
             }
           }
@@ -721,9 +793,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // anywhere and the answer has to come back on this POST instead.
         // Deciding from the sink itself (rather than checking membership and
         // fetching separately) keeps the two in step.
-        const chatSink = getChatResponseSink(chatId);
+        const streamOpen = hasChatClient(chatId);
 
-        if (!chatSink) {
+        if (!streamOpen) {
           logger.info('No active SSE connection, creating response without streaming', {
             component: 'sessionRoutes',
             chatId
@@ -783,7 +855,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             user: req.user
           });
         } else {
-          // Note that `getChatResponseSink` refreshed lastActivity on the
+          // Note that `hasChatClient` refreshed lastActivity on the
           // existing map entry in place rather than replacing it: the SSE GET
           // handler pins that object reference via `myEntry` to identify a stale
           // `req.on('close')` after a reconnect, and replacing the entry would
@@ -817,26 +889,28 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               {},
               clientLanguage
             );
-            actionTracker.trackError(chatId, { message: errMsg, code: prep.error.code });
+            emitFailedRun(chatId, { messageId, code: prep.error.code, message: errMsg });
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
           }
           model = prep.data.model;
           llmMessages = prep.data.llmMessages;
 
-          // Emit skill.activation SSE event when a skill was pre-activated via slash command
+          // A skill pre-activated via slash command is announced on the turn's run.
+          let activatedSkill = null;
           if (requestedSkill) {
             const { data: skills = [] } = configCache.getSkills();
             const skillMeta = skills.find(s => s.name === requestedSkill);
-            actionTracker.trackSkillActivation(chatId, {
+            activatedSkill = {
               skillName: requestedSkill,
               description: skillMeta?.description || ''
-            });
+            };
           }
 
           await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
+            activatedSkill,
             streaming: true,
             res: null,
             chatId,
@@ -933,7 +1007,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // instead of dereferencing undefined. An unguarded
         // `client.response.end()` throws a TypeError that crashes the whole
         // process as an unhandled rejection on Node >= 15.
-        actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
         closeChatClient(chatId);
         logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });

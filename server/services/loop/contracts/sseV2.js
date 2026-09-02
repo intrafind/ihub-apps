@@ -47,7 +47,10 @@ export const runEndedData = z.object({
   usage: usageSchema.optional(),
   /** Surface hints preserved from the legacy `done` event. */
   toolName: z.string().optional(),
-  knowledgeSources: z.array(z.string()).optional()
+  knowledgeSources: z.array(z.string()).optional(),
+  /** Workflow output (chat-visible result) when the run produced one. */
+  output: z.any().optional(),
+  error: z.object({ code: z.string().optional(), message: z.string() }).optional()
 });
 
 export const runPausedData = z.object({

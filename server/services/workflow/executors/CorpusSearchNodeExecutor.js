@@ -22,7 +22,8 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import iFinderService from '../../integrations/iFinderService.js';
-import { actionTracker } from '../../../actionTracker.js';
+import { streamEmitter } from '../../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../../shared/runEvents.js';
 import { activeWorkflowExecutions } from '../../../tools/workflowRunner.js';
 
 export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
@@ -178,14 +179,18 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       }
       return null;
     })();
+    let progressStep = 0;
     const emitStep = (nodeName, status = 'completed') => {
       if (!chatSessionId || !nodeName) return;
       try {
-        actionTracker.trackWorkflowStep(chatSessionId, {
-          nodeName,
+        progressStep += 1;
+        streamEmitter(chatSessionId).emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+          executionId: chatId,
+          nodeId: `${chatId}:corpus-search:${progressStep}`,
+          nodeName: String(nodeName),
           nodeType: 'corpus-search',
           status,
-          chatVisible: true
+          progress: { chatVisible: true }
         });
       } catch {
         /* best-effort */

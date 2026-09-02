@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
@@ -7,10 +7,23 @@ import { sendAppChatMessage } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';
+import {
+  createStreamState,
+  reduceRunEvent,
+  getRun,
+  RUN_EVENTS
+} from '../../../shared/run/runReducer';
+import { projectRunToMessage } from '../runToMessage';
 
 /**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
+ *
+ * Streaming dialect: SSE v2 envelopes (`{ v: 2, seq, runId, ts, type, data }`).
+ * Every envelope is folded into a per-chat StreamState by the shared run
+ * reducer; the run is bound to the assistant placeholder via
+ * `run/started.data.refs.messageId` and projected onto the message with
+ * `projectRunToMessage`. This hook never interprets event payloads itself.
  *
  * @param {Object} options - Configuration options
  * @param {string} options.appId - The app ID
@@ -56,309 +69,233 @@ function useAppChat({
     addAssistantMessage,
     updateAssistantMessage,
     appendToAssistantMessage,
-    appendWorkflowStep,
     deleteMessage,
     editMessage,
     addSystemMessage,
     clearMessages,
     getMessagesForApi,
-    loadServerMessages,
-    mergeCitations
+    loadServerMessages
   } = useChatMessages(chatId, { ephemeral }); // Now this will properly react to chatId changes
 
   const cleanupEventSourceRef = useRef();
 
+  // Per-chat SSE v2 stream state (one reducer for every surface). Kept in a
+  // ref: it is the authoritative accumulation and is folded synchronously per
+  // envelope, so no React batching race can drop a frame.
+  const streamStateRef = useRef(createStreamState(chatId));
+  // runId → assistant message id (bound on run/started via refs.messageId).
+  const runMessageMapRef = useRef(new Map());
+
+  useEffect(() => {
+    streamStateRef.current = createStreamState(chatId);
+    runMessageMapRef.current = new Map();
+  }, [chatId]);
+
+  /**
+   * Send the message queued by sendMessage / submitClarificationResponse once
+   * the stream is connected. On failure the error is rendered into the
+   * assistant placeholder (401 → session expired) and the stream is closed.
+   */
+  const sendPendingMessage = useCallback(async () => {
+    if (!pendingMessageDataRef.current) return;
+    try {
+      const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+      await sendAppChatMessage(appId, chatId, messages, params);
+      pendingMessageDataRef.current = null;
+    } catch (error) {
+      if (lastMessageIdRef.current && !isCancellingRef.current) {
+        // Only show error if this wasn't a manual cancellation
+        let errorMessage;
+
+        // Check if this is a session expiration error (401)
+        if (error.isAuthRequired || error.status === 401) {
+          errorMessage = t(
+            'error.sessionExpired',
+            'Your session has expired. Please log in again to continue.'
+          );
+          debugLog('🔐 Session expired during chat message send');
+          // The authTokenExpired event should already be dispatched by the API client
+          // which will trigger the auto-redirect flow in AuthContext
+        } else {
+          // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
+          errorMessage =
+            error.userFriendlyMessage ||
+            error.message ||
+            t(
+              'error.failedToGenerateResponse',
+              'Failed to generate response. Please try again or select a different model.'
+            );
+        }
+
+        // Preserve any streamed content that might have been accumulated
+        const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+        updateAssistantMessage(
+          lastMessageIdRef.current,
+          (currentMessage?.content || '') + '\n\n' + errorMessage,
+          false
+        );
+      }
+      cleanupEventSourceRef.current?.();
+      setProcessing(false);
+    }
+  }, [t, messagesRef, updateAssistantMessage]);
+
+  /**
+   * Resolve the assistant message a run belongs to. `run/started` binds the
+   * run via `refs.messageId` (the exchange id we handed the server); anything
+   * else falls back to the current placeholder.
+   */
+  const bindRunToMessage = useCallback(
+    envelope => {
+      const runId = envelope.runId;
+      if (envelope.type === RUN_EVENTS.RUN_STARTED) {
+        const refMessageId = envelope.data?.refs?.messageId;
+        const known =
+          typeof refMessageId === 'string' && messagesRef.current.some(m => m.id === refMessageId);
+        runMessageMapRef.current.set(runId, known ? refMessageId : lastMessageIdRef.current);
+      }
+      return runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
+    },
+    [messagesRef]
+  );
+
   const handleEvent = useCallback(
     async event => {
-      const { type, fullContent, data } = event;
+      const envelope = event?.envelope;
+      if (!envelope) {
+        debugLog('🔍 Ignoring non-envelope stream event:', event?.type);
+        return;
+      }
+      const { type, runId, data } = envelope;
+
+      // Fold into the per-chat stream state. Turn boundaries legitimately skip
+      // stream seqs (the server keeps emitting after we abort), so the chat
+      // surface never re-syncs on a gap.
+      const streamState = { ...reduceRunEvent(streamStateRef.current, envelope), gap: null };
+      streamStateRef.current = streamState;
+
+      if (type === RUN_EVENTS.STREAM_CONNECTED) {
+        await sendPendingMessage();
+        return;
+      }
+
+      const messageId = bindRunToMessage(envelope);
+      const run = getRun(streamState, runId);
+
+      if (type === RUN_EVENTS.META) {
+        if (data?.title) setConversationTitle(data.title);
+        if (data?.conversationId && appId && shouldPersistConversationId) {
+          setConversationId(appId, data.conversationId);
+        }
+      }
+
+      // Stream-level error (transport failure / error before any run started):
+      // nothing to project, append the message like the legacy 'error' case.
+      if (type === RUN_EVENTS.STREAM_ERROR && !run) {
+        if (messageId && !isCancellingRef.current) {
+          const currentMessage = messagesRef.current.find(m => m.id === messageId);
+          const errorMessage =
+            data?.message || t('error.streamingError', 'An error occurred during streaming');
+          updateAssistantMessage(
+            messageId,
+            (currentMessage?.content || '') + '\n\n' + errorMessage,
+            false
+          );
+        }
+        setProcessing(false);
+        return;
+      }
+
+      if (!run || !messageId) {
+        debugLog('🔍 Stream event without a bound message:', type, runId);
+        return;
+      }
+
+      if (type === RUN_EVENTS.STREAM_ERROR && isCancellingRef.current) {
+        // Manual cancellation — don't render the error, just stop.
+        setProcessing(false);
+        return;
+      }
+
+      const { content, loading, extras } = projectRunToMessage(run, {
+        fallbackErrorMessage: t('error.streamingError', 'An error occurred during streaming')
+      });
+
       switch (type) {
-        case 'connected':
-          if (pendingMessageDataRef.current) {
-            try {
-              const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-              await sendAppChatMessage(appId, chatId, messages, params);
-              pendingMessageDataRef.current = null;
-            } catch (error) {
-              if (lastMessageIdRef.current && !isCancellingRef.current) {
-                // Only show error if this wasn't a manual cancellation
-                let errorMessage;
-
-                // Check if this is a session expiration error (401)
-                if (error.isAuthRequired || error.status === 401) {
-                  errorMessage = t(
-                    'error.sessionExpired',
-                    'Your session has expired. Please log in again to continue.'
-                  );
-                  debugLog('🔐 Session expired during chat message send');
-                  // The authTokenExpired event should already be dispatched by the API client
-                  // which will trigger the auto-redirect flow in AuthContext
-                } else {
-                  // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
-                  errorMessage =
-                    error.userFriendlyMessage ||
-                    error.message ||
-                    t(
-                      'error.failedToGenerateResponse',
-                      'Failed to generate response. Please try again or select a different model.'
-                    );
-                }
-
-                // Preserve any streamed content that might have been accumulated
-                const currentMessage = messagesRef.current.find(
-                  m => m.id === lastMessageIdRef.current
-                );
-                updateAssistantMessage(
-                  lastMessageIdRef.current,
-                  (currentMessage?.content || '') + '\n\n' + errorMessage,
-                  false
-                );
-              }
-              cleanupEventSourceRef.current?.();
-              setProcessing(false);
-            }
-          }
-          break;
-        case 'chunk':
-          if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
-          }
-          break;
-        case 'image':
-          if (lastMessageIdRef.current) {
-            // Add image to the current assistant message
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const existingImages = currentMessage?.images || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              images: [
-                ...existingImages,
-                {
-                  mimeType: data?.mimeType,
-                  data: data?.data,
-                  thoughtSignature: data?.thoughtSignature
-                }
-              ]
-            });
-          }
-          break;
-        case 'thinking':
-          if (lastMessageIdRef.current) {
-            // Add thinking content to the current assistant message
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const existingThoughts = currentMessage?.thoughts || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              thoughts: [
-                ...existingThoughts,
-                data?.name ? { name: data.name, content: data.content } : data?.content
-              ]
-            });
-          }
-          break;
-        case 'clarification':
-          if (lastMessageIdRef.current && data) {
-            debugLog('📝 Clarification event received:', data);
-            // Store the clarification data and set pending state
-            activeClarificationRef.current = data;
+        case RUN_EVENTS.INTERACTION_RAISED:
+          if (extras.awaitingInput && extras.clarification) {
+            debugLog('📝 Clarification raised:', extras.clarification);
+            activeClarificationRef.current = extras.clarification;
             setClarificationPending(true);
-            // Update the assistant message with clarification data
-            // Keep loading=true since we're waiting for user input
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              clarification: {
-                questionId: data.questionId,
-                question: data.question,
-                inputType: data.inputType || 'text',
-                options: data.options || [],
-                allowOther: data.allowOther || false,
-                allowSkip: data.allowSkip || false,
-                context: data.context
-              },
+          }
+          updateAssistantMessage(messageId, content, loading, extras);
+          break;
+
+        case RUN_EVENTS.RUN_PAUSED:
+          updateAssistantMessage(messageId, content, loading, extras);
+          if (extras.awaitingInput) {
+            // Legacy done{finishReason:'clarification'}: the turn hands control
+            // back to the user; processing stops but the clarification stays pending.
+            setProcessing(false);
+          }
+          break;
+
+        case RUN_EVENTS.RUN_ENDED: {
+          // Include stored metadata (customResponseRenderer, outputFormat) in the message.
+          // Preserve workflow-set outputFormat — don't let the app default overwrite it.
+          const metadata = {
+            finishReason: run.finishReason,
+            ...(messageMetadataRef.current || {}),
+            ...(extras.outputFormat && { outputFormat: extras.outputFormat })
+          };
+
+          if (extras.awaitingInput || run.finishReason === 'clarification') {
+            debugLog('📝 Run ended while a clarification is pending');
+            // Keep the message in awaiting-input state, don't mark it complete
+            updateAssistantMessage(messageId, content, false, {
+              ...extras,
+              ...metadata,
               awaitingInput: true
             });
+            // Processing stops but clarification is still pending
+            setProcessing(false);
+            // Don't call onMessageComplete yet - wait for clarification response
+            break;
           }
-          break;
-        case 'workflow.checkpoint':
-          // Human-in-the-loop pause from a chat-launched workflow. Attach
-          // the checkpoint payload to the current assistant message so the
-          // chat UI can render an interactive prompt (HumanCheckpoint).
-          if (lastMessageIdRef.current && data) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              workflowCheckpoint: {
-                checkpoint: data.checkpoint,
-                executionId: data.executionId
-              }
-            });
-          }
-          break;
-        case 'workflow.step': {
-          if (lastMessageIdRef.current && data) {
-            const newStep = {
-              nodeName: data.nodeName,
-              nodeType: data.nodeType,
-              status: data.status,
-              workflowName: data.workflowName,
-              chatVisible: data.chatVisible
-            };
 
-            // Functional update — reads prev steps from the LIVE state, not
-            // from `messagesRef.current` which lags one render. The old
-            // read-then-write pattern dropped events when many fired in
-            // rapid succession (e.g. a long string of "Skipped (already
-            // searched): …" emissions or a fast iFinder paging loop).
-            appendWorkflowStep(lastMessageIdRef.current, newStep, {
-              workflowStep: data.status === 'running' ? newStep : null
-            });
-          }
-          break;
-        }
-        case 'workflow.result':
-          if (lastMessageIdRef.current && data) {
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const prevSteps = currentMsg?.workflowSteps || [];
-            // Mark any still-running steps based on workflow result status
-            const finalSteps = prevSteps.map(s => {
-              if (s.status === 'running') {
-                // If workflow failed, mark running steps as error
-                // If workflow cancelled or completed, mark as completed
-                return {
-                  ...s,
-                  status: data.status === 'failed' ? 'error' : 'completed'
-                };
-              }
-              return s;
-            });
+          updateAssistantMessage(messageId, content, false, { ...extras, ...metadata });
 
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              workflowStep: null,
-              workflowSteps: finalSteps,
-              workflowCheckpoint: null,
-              workflowResult: {
-                status: data.status,
-                executionId: data.executionId,
-                workflowName: data.workflowName
-              },
-              outputFormat: data.outputFormat || 'markdown'
-            });
+          if (run.status === 'error' || run.error) {
+            // Legacy error path: content already carries the stream/error message.
+            setProcessing(false);
+            break;
           }
-          break;
-        case 'skill.activation':
-          if (lastMessageIdRef.current && data) {
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const prevSkills = currentMsg?.activeSkills || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              activeSkills: [...prevSkills, { name: data.skillName, description: data.description }]
-            });
-          }
-          break;
-        case 'citation':
-          if (lastMessageIdRef.current && data) {
-            // Use mergeCitations for race-safe merging via functional updater
-            mergeCitations(lastMessageIdRef.current, data);
-          }
-          break;
-        case 'search.status':
-          if (data && lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              searchStatus: data
-            });
-          }
-          break;
-        case 'conversation.title':
-          if (data?.title) {
-            setConversationTitle(data.title);
-          }
-          break;
-        case 'conversation.id':
-          if (data?.conversationId && appId && shouldPersistConversationId) {
-            setConversationId(appId, data.conversationId);
-          }
-          break;
-        case 'response.message.id':
-          // Store the iFinder message ID for feedback submission. This event
-          // is emitted before 'done', so the message is still streaming —
-          // preserve its current content and loading state and only attach
-          // the id via the shared updater (there is no standalone setMessages).
-          if (data?.messageId && lastMessageIdRef.current) {
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            if (currentMessage) {
-              updateAssistantMessage(
-                lastMessageIdRef.current,
-                currentMessage.content || '',
-                currentMessage.loading,
-                { ifinderMessageId: data.messageId }
-              );
-            }
-          }
-          break;
-        case 'answer.source':
-          // Store answer source information
-          if (data && lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              answerSource: data
-            });
-          }
-          break;
-        case 'done':
-          if (lastMessageIdRef.current) {
-            // Include stored metadata (customResponseRenderer, outputFormat) in the message
-            // Preserve workflow-set outputFormat — don't let app default overwrite it
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const metadata = {
-              finishReason: data?.finishReason,
-              ...(messageMetadataRef.current || {}),
-              ...(currentMsg?.outputFormat && { outputFormat: currentMsg.outputFormat })
-            };
 
-            // Check if this is a clarification finish reason
-            if (data?.finishReason === 'clarification') {
-              debugLog('📝 Done event with clarification finish reason');
-              // Keep the message in awaiting input state, don't mark as complete
-              updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-                ...metadata,
-                awaitingInput: true
-              });
-              // Processing stops but clarification is still pending
-              setProcessing(false);
-              // Don't call onMessageComplete yet - wait for clarification response
-              break;
-            }
-
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
-            if (onMessageComplete) {
-              onMessageComplete(fullContent, lastUserMessageRef.current);
-            }
+          if (onMessageComplete) {
+            onMessageComplete(content, lastUserMessageRef.current);
           }
           setProcessing(false);
           // Reset clarification state when done normally
           setClarificationPending(false);
           activeClarificationRef.current = null;
           break;
-        case 'error':
-          if (lastMessageIdRef.current && !isCancellingRef.current) {
-            // Only show error if this wasn't a manual cancellation
-            // Preserve any streamed content that was accumulated before the error
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const errorMessage =
-              data?.message || t('error.streamingError', 'An error occurred during streaming');
-            updateAssistantMessage(
-              lastMessageIdRef.current,
-              (currentMessage?.content || '') + '\n\n' + errorMessage,
-              false
-            );
-          }
+        }
+
+        case RUN_EVENTS.STREAM_ERROR:
+          // Preserve any streamed content (the projection appends the error text)
+          updateAssistantMessage(messageId, content, false, extras);
           setProcessing(false);
           break;
+
         default:
-          // TODO Implement proper handling of unknown messages as well as display them in the frontend
-          // if (data?.message) {
-          //   addSystemMessage('🔍 ' + data.message, false);
-          // }
-          debugLog('🔍 Unknown event type:', type, data);
+          updateAssistantMessage(messageId, content, loading, extras);
       }
     },
     [
       appId,
-      pendingMessageDataRef,
+      bindRunToMessage,
+      sendPendingMessage,
       updateAssistantMessage,
-      mergeCitations,
       onMessageComplete,
       t,
       messagesRef,

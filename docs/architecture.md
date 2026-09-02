@@ -334,10 +334,10 @@ graph TB
 
 #### Component Responsibilities
 
-- **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn on `AgentLoop` with the chat seams and channel and emits the terminal events (`answer.source`, `error`, `done`); `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
+- **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn as one run on the chat's SSE v2 stream (`run/started` … `run/ended`, see [SSE v2 Streaming](sse-v2.md)) on `AgentLoop` with the chat seams and channel; `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
 - **`RequestBuilder.js`**: Resolves app, model, messages, tools and model options for the turn (templates, variables, uploads, skills, sources)
-- **`chatChannel.js`**: Projects the loop's streamed chunks onto chat SSE events — `chunk`, `thinking`, `image`, `grounding`, `citation` and the iAssistant conversation events
-- **`chatSeams.js`**: Everything the chat surface adds to the loop, as seams: `tool.call.start` / `tool.call.end` events and interaction logs, the `ask_user` clarification projection, the passthrough (workflow tool) projection, upload/email knowledge sources and per-call usage telemetry
+- **`chatChannel.js`**: Projects the loop's streamed chunks onto SSE v2 frames — `step/delta` (text, thinking, image), `tool/progress` (grounding, citations, search status) and `meta` (conversation title / ids)
+- **`chatSeams.js`**: Everything the chat surface adds to the loop, as seams: `tool/started` / `tool/completed` frames and interaction logs, the `ask_user` clarification (`interaction/raised`), the passthrough (workflow tool) projection, upload/email knowledge sources and per-call usage telemetry
 - **`chatErrors.js`**: Maps a failed turn (`LLMError`, network fault, timeout) onto the localized `{ message, code, details, isContextWindowError }` payload the client renders
 - **`chatTelemetry.js`**: Usage tracking, user activity and per-app metrics per model call; the OpenTelemetry span itself is owned by `LLMClient`
 - **`AgentLoop.js`** (`server/services/loop/`): The shared tool loop — rounds, tool matching and argument repair, circuit breakers, compaction, budgets, abort handling, and the built-in `question` / `passthrough` / `imageLift` / `knowledgeSource` seams
@@ -357,7 +357,7 @@ sequenceDiagram
     participant LLMClient
     participant Tools as toolLoader.runTool
     participant Proj as chatChannel / chatSeams
-    participant SSE as actionTracker / sse.js
+    participant SSE as RunStream / sse.js
 
     Client->>Routes: POST /api/apps/:appId/chat/:chatId
     Routes->>ChatService: prepareChatRequest()
@@ -370,26 +370,26 @@ sequenceDiagram
     loop Tool rounds (max 10, one tool at a time)
         Loop->>LLMClient: execute() - one model call
         LLMClient-->>Proj: streamed chunks
-        Proj->>SSE: chunk / thinking / image / grounding / citation
+        Proj->>SSE: step/delta, tool/progress, meta
         alt Tool call
-            Proj->>SSE: tool.call.start
+            Proj->>SSE: tool/started
             Loop->>Tools: runTool(toolId, args)
             Tools->>Loop: result
-            Proj->>SSE: tool.call.end
+            Proj->>SSE: tool/completed
         else ask_user (interactive)
-            Proj->>SSE: clarification
-            Note over Loop: segment pauses (finishReason clarification)
+            Proj->>SSE: interaction/raised
+            Note over Loop: run pauses (run/paused)
         else Passthrough tool (workflow)
             Loop->>Tools: runTool(toolId, args + passthrough)
             Tools-->>Proj: streamed answer
-            Proj->>SSE: chunk (source tool), tool-stream-complete
+            Proj->>SSE: step/delta, tool/completed
             Note over Loop: turn ends (tool_passthrough_complete)
         end
     end
 
     Loop->>ChatService: LoopResult
-    ChatService->>SSE: answer.source, error?, done
-    SSE->>Client: SSE events
+    ChatService->>SSE: stream/error?, run/ended
+    SSE->>Client: SSE v2 envelopes
 ```
 
 Without an open SSE connection the route runs the same turn with

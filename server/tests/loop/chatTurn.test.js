@@ -1,27 +1,33 @@
 /**
- * Chat turn specs — `ChatService.runTurn` on the shared agent loop.
+ * Chat turn specs — `ChatService.runTurn` on the shared agent loop, SSE v2.
  *
- * Pins the chat SSE dialect (`processing`, `chunk`, `tool.call.*`,
- * `clarification`, `tool-stream-complete`, `answer.source`, `error`, `done`),
- * the interaction log, the per-call usage telemetry, the clarification
- * counter and the answer-source badge for every terminal path of a turn.
+ * Pins the chat wire dialect as SSE v2 envelopes (`run/started`, `step/delta`,
+ * `step/completed`, `tool/started`, `tool/completed`, `tool/progress`,
+ * `interaction/raised`, `run/paused`, `stream/error`, `run/ended`), the run
+ * ledger start/end per turn, the interaction log, the per-call usage
+ * telemetry, the clarification counter and the knowledge-source badge (now
+ * `run/ended.knowledgeSources`) for every terminal path of a turn.
  *
  * Driven like agentLoop.test.js: the real `AgentLoop` + `LLMClient` with a
  * scripted OpenAI-wire transport (no network), a `ChatService` whose
- * collaborators (tool runner, interaction logger, telemetry) are spies, and
- * SSE events captured straight off `actionTracker`'s `fire-sse` channel.
+ * collaborators (tool runner, interaction logger, telemetry, run ledger) are
+ * spies, and envelopes captured by replacing the RunStream delivery function
+ * (`setEnvelopeDelivery`) — the same seam `server/sse.js` installs itself on.
  *
- * Ported from: toolExecutor-error-done-events, toolExecutor-clarification-count-cap,
- * toolExecutor-usage-telemetry, tool-executor-knowledge-sources,
- * tool-executor-answer-source-detection, streaming-answer-source-detection.
+ * How to read a spec: `types(frames)` is the ordered list of envelope types
+ * for the chat's stream; `frame(frames, type)` is the first envelope of that
+ * type; `assertWellFormed` checks every envelope against the v2 contract
+ * (`sseV2EventSchema`), a strictly increasing `seq` and the turn's `runId`.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import ChatService, { markInteractiveTools } from '../../services/chat/ChatService.js';
 import { AgentLoop } from '../../services/loop/AgentLoop.js';
-import { actionTracker } from '../../actionTracker.js';
-import { activeRequests } from '../../sse.js';
+import { setEnvelopeDelivery } from '../../services/loop/RunStream.js';
+import { sseV2EventSchema } from '../../services/loop/contracts/sseV2.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { activeRequests, routeEnvelope } from '../../sse.js';
 import PromptService from '../../services/PromptService.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
@@ -31,6 +37,69 @@ import {
   openaiText,
   MODELS
 } from './helpers/llmFixtures.js';
+
+const {
+  RUN_STARTED,
+  RUN_ENDED,
+  RUN_PAUSED,
+  STEP_DELTA,
+  STEP_COMPLETED,
+  TOOL_STARTED,
+  TOOL_PROGRESS,
+  TOOL_COMPLETED,
+  INTERACTION_RAISED,
+  STREAM_ERROR
+} = SSE_V2_EVENTS;
+
+const RUN_ID_RE = /^chat-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// ── envelope capture ────────────────────────────────────────────────────────
+
+/** streamId (chatId) → the frames array of the test that owns it. */
+const sinks = new Map();
+
+test.before(() => {
+  setEnvelopeDelivery((streamId, envelope) => {
+    sinks.get(streamId)?.push(envelope);
+  });
+});
+
+test.after(() => {
+  setEnvelopeDelivery(routeEnvelope);
+});
+
+/** Capture every envelope delivered for one chatId; the sink is removed after the test. */
+function captureFrames(t, chatId) {
+  const frames = [];
+  sinks.set(chatId, frames);
+  t.after(() => sinks.delete(chatId));
+  return frames;
+}
+
+const types = frames => frames.map(f => f.type);
+const frame = (frames, type) => frames.find(f => f.type === type);
+const framesOf = (frames, type) => frames.filter(f => f.type === type);
+const has = (frames, type) => frames.some(f => f.type === type);
+
+/**
+ * Every captured envelope is a valid v2 envelope for this run, and `seq` is
+ * strictly increasing on the stream.
+ */
+function assertWellFormed(frames, { runId } = {}) {
+  let prevSeq = 0;
+  for (const envelope of frames) {
+    const verdict = sseV2EventSchema.safeParse(envelope);
+    assert.ok(
+      verdict.success,
+      `invalid v2 envelope ${envelope.type}: ${JSON.stringify(verdict.error?.issues)}`
+    );
+    assert.equal(envelope.v, 2);
+    assert.ok(Number.isInteger(envelope.seq) && envelope.seq > prevSeq, 'seq strictly increasing');
+    prevSeq = envelope.seq;
+    assert.ok(!Number.isNaN(Date.parse(envelope.ts)), 'ts is an ISO timestamp');
+    if (runId) assert.equal(envelope.runId, runId, `envelope ${envelope.type} belongs to the run`);
+  }
+}
 
 // ── scripted provider turns (OpenAI wire) ───────────────────────────────────
 
@@ -117,9 +186,14 @@ function spy(impl) {
   return fn;
 }
 
+/** Run ledger stub: records `startRun` / `endRun` calls, persists nothing. */
+function stubRunLog() {
+  return { startRun: spy(async () => ({})), endRun: spy(() => {}) };
+}
+
 /**
  * A ChatService wired to a scripted loop. Never touches the real toolLoader,
- * usage tracker or interaction log.
+ * usage tracker, interaction log or run ledger.
  */
 function makeService(turns, { runTool, maxRetries = 0 } = {}) {
   const { loop, requests } = makeLoop(turns, { maxRetries });
@@ -129,13 +203,15 @@ function makeService(turns, { runTool, maxRetries = 0 } = {}) {
     recordChatCallEnd: spy(async () => {})
   };
   const runToolSpy = spy(runTool || (async () => ({ ok: true })));
+  const runLog = stubRunLog();
   const service = new ChatService({
     agentLoop: loop,
     logInteraction,
     runTool: runToolSpy,
-    telemetry
+    telemetry,
+    runLog
   });
-  return { service, requests, logInteraction, telemetry, runTool: runToolSpy };
+  return { service, requests, logInteraction, telemetry, runTool: runToolSpy, runLog };
 }
 
 const USER = { id: 'u1', groups: ['users'] };
@@ -144,19 +220,6 @@ function newChatId(label) {
   return `chat-turn-${label}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-/** Capture every `fire-sse` event for one chatId; the listener is removed after the test. */
-function captureEvents(t, chatId) {
-  const events = [];
-  const listener = payload => {
-    if (payload?.chatId === chatId) events.push(payload);
-  };
-  actionTracker.on('fire-sse', listener);
-  t.after(() => actionTracker.off('fire-sse', listener));
-  return events;
-}
-
-const names = events => events.map(e => e.event);
-const indexOf = (events, name) => events.findIndex(e => e.event === name);
 const logTypes = logInteraction => logInteraction.calls.map(([type]) => type);
 const endOutcomes = telemetry => telemetry.recordChatCallEnd.calls.map(([p]) => p.outcome);
 
@@ -181,7 +244,10 @@ function baseLogFor(chatId, streaming = true) {
   return { appId: 'app1', user: { id: 'u1' }, userSessionId: 'sess', sessionId: chatId, streaming };
 }
 
-function runTurn(service, { chatId, prep, streaming = true, getLocalizedError }) {
+function runTurn(
+  service,
+  { chatId, prep, streaming = true, getLocalizedError, messageId, activatedSkill, runId }
+) {
   const buildLogData = (isStreaming, extra = {}) => ({
     ...baseLogFor(chatId, isStreaming),
     ...extra
@@ -189,12 +255,38 @@ function runTurn(service, { chatId, prep, streaming = true, getLocalizedError })
   return service.runTurn({
     prep,
     chatId,
+    ...(messageId ? { messageId } : {}),
+    ...(activatedSkill ? { activatedSkill } : {}),
+    ...(runId ? { runId } : {}),
     streaming,
     buildLogData,
     language: 'en',
     user: USER,
     getLocalizedError: getLocalizedError || (async () => null)
   });
+}
+
+/**
+ * The ledger is opened and closed exactly once per turn, for the run the
+ * frames and the summary carry.
+ */
+function assertLedger(runLog, summary, { status, finishReason, errorCode } = {}) {
+  assert.equal(runLog.startRun.calls.length, 1, 'startRun once per turn');
+  const [start] = runLog.startRun.calls[0];
+  assert.equal(start.runId, summary.runId);
+  assert.equal(start.kind, 'chat');
+  assert.equal(start.user, USER);
+  assert.equal(start.model, MODELS.openai.id);
+  assert.equal(start.language, 'en');
+
+  assert.equal(runLog.endRun.calls.length, 1, 'endRun once per turn');
+  const [endRunId, end] = runLog.endRun.calls[0];
+  assert.equal(endRunId, summary.runId);
+  assert.equal(end.status, status ?? summary.status);
+  assert.equal(end.finishReason, finishReason ?? summary.finishReason);
+  assert.ok(Number.isInteger(end.durationMs) && end.durationMs >= 0);
+  if (errorCode) assert.equal(end.error.code, errorCode);
+  else assert.equal(end.error, undefined);
 }
 
 // ── tool definitions ────────────────────────────────────────────────────────
@@ -227,23 +319,49 @@ const workflowTool = {
 
 // ── 1. plain streaming turn ─────────────────────────────────────────────────
 
-test('no tools, streaming: processing → chunks → done{stop}; log + telemetry once each', async t => {
+test('no tools, streaming: run/started → step/delta×2 → step/completed → run/ended{stop}; ledger, log + telemetry once each', async t => {
   const chatId = newChatId('plain');
-  const events = captureEvents(t, chatId);
-  const { service, requests, logInteraction, telemetry } = makeService([
+  const frames = captureFrames(t, chatId);
+  const { service, requests, logInteraction, telemetry, runLog } = makeService([
     openaiText(['Hello', ' there'])
   ]);
 
-  const summary = await runTurn(service, { chatId, prep: makePrep() });
+  const summary = await runTurn(service, { chatId, prep: makePrep(), messageId: 'msg-1' });
 
-  assert.deepEqual(names(events), ['processing', 'chunk', 'chunk', 'done']);
-  assert.equal(events[0].message, 'Processing your request...');
+  assert.match(summary.runId, RUN_ID_RE, 'runTurn mints a chat run id');
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [RUN_STARTED, STEP_DELTA, STEP_DELTA, STEP_COMPLETED, RUN_ENDED]);
+  assert.equal(frames[0].seq, 1, 'a fresh stream starts at seq 1');
+
+  assert.deepEqual(frames[0].data, {
+    kind: 'chat',
+    model: MODELS.openai.id,
+    refs: { chatId, appId: 'app1', messageId: 'msg-1' }
+  });
   assert.deepEqual(
-    events.filter(e => e.event === 'chunk').map(e => e.content),
-    ['Hello', ' there']
+    framesOf(frames, STEP_DELTA).map(f => f.data),
+    [
+      { step: 1, kind: 'text', content: 'Hello' },
+      { step: 1, kind: 'text', content: ' there' }
+    ]
   );
-  assert.equal(events[3].finishReason, 'stop');
-  assert.equal(indexOf(events, 'answer.source'), -1, 'no badge without a source');
+  const completed = frame(frames, STEP_COMPLETED).data;
+  assert.equal(completed.step, 1);
+  assert.equal(completed.content, 'Hello there');
+  assert.deepEqual(completed.toolCalls, []);
+  assert.equal(completed.finishReason, 'stop');
+  assert.deepEqual(completed.sources, []);
+
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'completed');
+  assert.equal(ended.finishReason, 'stop');
+  assert.deepEqual(ended.knowledgeSources, [], 'no badge without a source');
+  assert.equal(ended.toolName, undefined);
+  assert.equal(ended.error, undefined);
+  assert.equal(ended.usage.source, 'estimate', 'no provider usage on the wire → estimated');
+  assert.equal(ended.usage.totalTokens, ended.usage.promptTokens + ended.usage.completionTokens);
+  assert.equal(has(frames, STREAM_ERROR), false);
+  assert.equal(has(frames, TOOL_PROGRESS), false, 'no skill activation without a skill');
 
   assert.equal(summary.status, 'completed');
   assert.equal(summary.content, 'Hello there');
@@ -251,6 +369,10 @@ test('no tools, streaming: processing → chunks → done{stop}; log + telemetry
   assert.deepEqual(summary.knowledgeSources, []);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].request.body.tools, undefined, 'no tools offered');
+
+  assertLedger(runLog, summary);
+  assert.deepEqual(runLog.startRun.calls[0][0].refs, { chatId, appId: 'app1', messageId: 'msg-1' });
+  assert.deepEqual(runLog.endRun.calls[0][1].usage, ended.usage);
 
   assert.deepEqual(logTypes(logInteraction), ['chat_response']);
   const [, logData] = logInteraction.calls[0];
@@ -270,22 +392,95 @@ test('no tools, streaming: processing → chunks → done{stop}; log + telemetry
   assert.equal(activeRequests.has(chatId), false, 'in-flight controller released');
 });
 
-// ── 2. prompt-implied knowledge sources (upload / email context) ────────────
+test('run id: a caller-supplied ledger id is honoured, anything else is replaced by a minted one', async t => {
+  const given = `chat-${crypto.randomUUID()}`;
+  const chatId = newChatId('run-id');
+  const frames = captureFrames(t, chatId);
+  const { service, runLog } = makeService([textTurn('ok')]);
+
+  const summary = await runTurn(service, { chatId, prep: makePrep(), runId: given });
+  assert.equal(summary.runId, given);
+  assertWellFormed(frames, { runId: given });
+  assert.equal(runLog.startRun.calls[0][0].runId, given);
+
+  const chatId2 = newChatId('run-id-bogus');
+  const frames2 = captureFrames(t, chatId2);
+  const { service: service2 } = makeService([textTurn('ok')]);
+  const minted = await runTurn(service2, { chatId: chatId2, prep: makePrep(), runId: 'not a run' });
+  assert.match(minted.runId, RUN_ID_RE);
+  assert.notEqual(minted.runId, 'not a run');
+  assertWellFormed(frames2, { runId: minted.runId });
+});
+
+// ── 2. skill activation ─────────────────────────────────────────────────────
+
+test('activatedSkill: tool/progress{skill.activation} is the first frame after run/started; description defaults to ""', async t => {
+  const chatId = newChatId('skill');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService([textTurn('done')]);
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep(),
+    activatedSkill: { skillName: 'summarize', description: 'Summarize the thread' }
+  });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [
+    RUN_STARTED,
+    TOOL_PROGRESS,
+    STEP_DELTA,
+    STEP_COMPLETED,
+    RUN_ENDED
+  ]);
+  assert.deepEqual(frames[1].data, {
+    phase: 'skill.activation',
+    message: 'summarize',
+    data: { skillName: 'summarize', description: 'Summarize the thread' }
+  });
+
+  const chatId2 = newChatId('skill-nodesc');
+  const frames2 = captureFrames(t, chatId2);
+  const { service: service2 } = makeService([textTurn('done')]);
+  await runTurn(service2, {
+    chatId: chatId2,
+    prep: makePrep(),
+    activatedSkill: { skillName: 'translate' }
+  });
+  assert.deepEqual(frames2[1].data, {
+    phase: 'skill.activation',
+    message: 'translate',
+    data: { skillName: 'translate', description: '' }
+  });
+
+  const chatId3 = newChatId('skill-empty');
+  const frames3 = captureFrames(t, chatId3);
+  const { service: service3 } = makeService([textTurn('done')]);
+  await runTurn(service3, { chatId: chatId3, prep: makePrep(), activatedSkill: { skillName: '' } });
+  assert.equal(has(frames3, TOOL_PROGRESS), false, 'an empty skill name activates nothing');
+});
+
+// ── 3. prompt-implied knowledge sources (upload / email context) ────────────
 
 async function sourcesEmittedFor(t, label, llmMessages) {
   const chatId = newChatId(label);
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('Here is your answer.')]);
   const summary = await runTurn(service, { chatId, prep: makePrep({ llmMessages }) });
-  const badge = indexOf(events, 'answer.source');
-  const done = indexOf(events, 'done');
-  assert.ok(badge >= 0, `answer.source emitted for ${label}`);
-  assert.ok(badge < done, 'badge precedes done so the client attaches it to the message');
-  assert.equal(events[badge].type, 'mixed');
-  return { badge: events[badge], summary };
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(
+    types(frames),
+    [RUN_STARTED, STEP_DELTA, STEP_COMPLETED, RUN_ENDED],
+    `no extra badge frame for ${label}: sources ride on run/ended`
+  );
+  return {
+    completed: frame(frames, STEP_COMPLETED).data,
+    ended: frame(frames, RUN_ENDED).data,
+    summary
+  };
 }
 
-test('no tools: a message carrying fileData/imageData emits answer.source ["file"] before done', async t => {
+test('no tools: a message carrying fileData/imageData ends with run/ended.knowledgeSources ["file"]', async t => {
   const single = await sourcesEmittedFor(t, 'file', [
     {
       role: 'user',
@@ -293,7 +488,8 @@ test('no tools: a message carrying fileData/imageData emits answer.source ["file
       fileData: { fileName: 'report.txt', fileType: 'text/plain', content: 'numbers...' }
     }
   ]);
-  assert.deepEqual(single.badge.sources, ['file']);
+  assert.deepEqual(single.ended.knowledgeSources, ['file']);
+  assert.deepEqual(single.completed.sources, ['file'], 'the step frame carries the same sources');
   assert.deepEqual(single.summary.knowledgeSources, ['file']);
 
   const image = await sourcesEmittedFor(t, 'image', [
@@ -303,7 +499,7 @@ test('no tools: a message carrying fileData/imageData emits answer.source ["file
       imageData: { base64: 'AAAA', fileType: 'image/png', type: 'image' }
     }
   ]);
-  assert.deepEqual(image.badge.sources, ['file']);
+  assert.deepEqual(image.ended.knowledgeSources, ['file']);
 
   const many = await sourcesEmittedFor(t, 'files', [
     {
@@ -315,14 +511,14 @@ test('no tools: a message carrying fileData/imageData emits answer.source ["file
       ]
     }
   ]);
-  assert.deepEqual(many.badge.sources, ['file']);
+  assert.deepEqual(many.ended.knowledgeSources, ['file']);
 });
 
-test('no tools: the Office email marker emits answer.source ["email"]; email + upload emits both', async t => {
+test('no tools: the Office email marker yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
     { role: 'user', content: '--- Current email ---\nFrom: a@b.c\n\nSummarize this email' }
   ]);
-  assert.deepEqual(email.badge.sources, ['email']);
+  assert.deepEqual(email.ended.knowledgeSources, ['email']);
 
   const both = await sourcesEmittedFor(t, 'email-file', [
     {
@@ -331,16 +527,17 @@ test('no tools: the Office email marker emits answer.source ["email"]; email + u
       fileData: { fileName: 'deck.pdf', fileType: 'application/pdf', content: 'slides' }
     }
   ]);
-  assert.deepEqual(both.badge.sources.sort(), ['email', 'file']);
-  assert.deepEqual(both.summary.knowledgeSources.sort(), ['email', 'file']);
+  assert.deepEqual([...both.ended.knowledgeSources].sort(), ['email', 'file']);
+  assert.deepEqual([...both.completed.sources].sort(), ['email', 'file']);
+  assert.deepEqual([...both.summary.knowledgeSources].sort(), ['email', 'file']);
 });
 
-// ── 3. tool round ───────────────────────────────────────────────────────────
+// ── 4. tool round ───────────────────────────────────────────────────────────
 
-test('tools path: tool events, "Using tool(s)" status, websearch badge, done{stop}; runTool gets the chat context; telemetry per model call', async t => {
+test('tools path: step/completed{tool_calls} → tool/started → tool/completed → step/delta → step/completed → run/ended{websearch}; runTool gets the chat context; telemetry per model call', async t => {
   const chatId = newChatId('tools');
-  const events = captureEvents(t, chatId);
-  const { service, requests, runTool, logInteraction, telemetry } = makeService(
+  const frames = captureFrames(t, chatId);
+  const { service, requests, runTool, logInteraction, telemetry, runLog } = makeService(
     [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sunny.')],
     { runTool: async () => ({ results: ['sunny'] }) }
   );
@@ -348,25 +545,60 @@ test('tools path: tool events, "Using tool(s)" status, websearch badge, done{sto
 
   const summary = await runTurn(service, { chatId, prep });
 
-  assert.deepEqual(names(events), [
-    'action',
-    'tool.call.start',
-    'tool.call.end',
-    'chunk',
-    'answer.source',
-    'done'
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [
+    RUN_STARTED,
+    STEP_COMPLETED,
+    TOOL_STARTED,
+    TOOL_COMPLETED,
+    STEP_DELTA,
+    STEP_COMPLETED,
+    RUN_ENDED
   ]);
-  assert.equal(events[0].action, 'processing');
-  assert.equal(events[0].message, 'Using tool(s): webSearch...');
-  assert.equal(events[1].toolName, 'webSearch');
-  assert.deepEqual(events[1].toolInput, { query: 'berlin' });
-  assert.equal(events[2].toolName, 'webSearch');
-  assert.deepEqual(events[2].toolOutput, { results: ['sunny'] });
-  assert.equal(events[2].error, undefined);
-  assert.equal(events[3].content, 'Sunny.');
-  assert.deepEqual(events[4].sources, ['websearch']);
-  assert.equal(events[4].type, 'mixed');
-  assert.equal(events[5].finishReason, 'stop');
+
+  const [round1, round2] = framesOf(frames, STEP_COMPLETED).map(f => f.data);
+  assert.equal(round1.step, 1);
+  assert.equal(round1.content, '');
+  assert.equal(round1.finishReason, 'tool_calls');
+  assert.deepEqual(round1.sources, []);
+  assert.equal(round1.toolCalls.length, 1);
+  assert.equal(round1.toolCalls[0].id, 'call_1');
+  assert.equal(round1.toolCalls[0].index, 0);
+  assert.equal(round1.toolCalls[0].type, 'function');
+  assert.equal(round1.toolCalls[0].name, 'webSearch');
+  assert.deepEqual(JSON.parse(round1.toolCalls[0].arguments), { query: 'berlin' });
+
+  const started = frame(frames, TOOL_STARTED).data;
+  assert.deepEqual(started, {
+    step: 1,
+    callId: 'call_1',
+    toolId: 'webSearch',
+    name: 'webSearch',
+    args: { query: 'berlin' },
+    execution: 'server'
+  });
+
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.step, 1);
+  assert.equal(done.callId, 'call_1');
+  assert.equal(done.toolId, 'webSearch');
+  assert.equal(done.name, 'webSearch');
+  assert.deepEqual(done.resultPreview, { results: ['sunny'] });
+  assert.equal(done.error, undefined);
+  assert.ok(Number.isInteger(done.durationMs) && done.durationMs >= 0);
+  // knowledgeSourceSeam runs before chatToolSeam, so the per-tool hint is on the frame.
+  assert.equal(done.knowledgeSource, 'websearch');
+
+  assert.equal(round2.step, 2);
+  assert.equal(round2.content, 'Sunny.');
+  assert.equal(round2.finishReason, 'stop');
+  assert.deepEqual(round2.sources, ['websearch']);
+  assert.deepEqual(frame(frames, STEP_DELTA).data, { step: 2, kind: 'text', content: 'Sunny.' });
+
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'completed');
+  assert.equal(ended.finishReason, 'stop');
+  assert.deepEqual(ended.knowledgeSources, ['websearch']);
 
   assert.equal(runTool.calls.length, 1);
   assert.equal(runTool.calls[0][0], 'webSearch');
@@ -388,6 +620,7 @@ test('tools path: tool events, "Using tool(s)" status, websearch badge, done{sto
   assert.equal(summary.status, 'completed');
   assert.equal(summary.content, 'Sunny.');
   assert.deepEqual(summary.knowledgeSources, ['websearch']);
+  assertLedger(runLog, summary);
 
   assert.deepEqual(logTypes(logInteraction), ['tool_usage', 'chat_response']);
   assert.equal(logInteraction.calls[0][1].toolId, 'webSearch');
@@ -397,11 +630,11 @@ test('tools path: tool events, "Using tool(s)" status, websearch badge, done{sto
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
 });
 
-// ── 4. tool failure ─────────────────────────────────────────────────────────
+// ── 5. tool failure ─────────────────────────────────────────────────────────
 
-test('tool throws: tool.call.end carries the error envelope, the model gets it back, tool_error is logged, the turn still completes', async t => {
+test('tool throws: tool/completed carries the error envelope, the model gets it back, tool_error is logged, the turn still completes', async t => {
   const chatId = newChatId('tool-error');
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service, requests, logInteraction } = makeService(
     [toolTurn([{ name: 'webSearch', args: { query: 'x' } }]), textTurn('recovered')],
     {
@@ -413,13 +646,19 @@ test('tool throws: tool.call.end carries the error envelope, the model gets it b
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
 
-  const end = events.find(e => e.event === 'tool.call.end');
-  assert.equal(end.toolName, 'webSearch');
-  assert.equal(end.error, true);
-  assert.equal(end.errorCode, 'UPSTREAM_DOWN');
-  assert.equal(end.errorMessage, 'Tool execution failed: provider down');
-  assert.equal(end.toolOutput.error, true);
-  assert.equal(end.toolOutput.toolId, 'webSearch');
+  assertWellFormed(frames, { runId: summary.runId });
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.toolId, 'webSearch');
+  assert.equal(done.callId, 'call_1');
+  assert.deepEqual(done.error, {
+    code: 'UPSTREAM_DOWN',
+    message: 'Tool execution failed: provider down'
+  });
+  assert.deepEqual(done.resultPreview, {
+    error: true,
+    message: 'Tool execution failed: provider down'
+  });
+  assert.equal(has(frames, STREAM_ERROR), false, 'a failed tool is not a stream error');
 
   const toolMsg = requests[1].request.body.messages.at(-1);
   assert.equal(toolMsg.role, 'tool');
@@ -435,13 +674,14 @@ test('tool throws: tool.call.end carries the error envelope, the model gets it b
   assert.equal(logInteraction.calls[0][1].toolId, 'webSearch');
   assert.equal(logInteraction.calls[0][1].error.code, 'UPSTREAM_DOWN');
 
-  assert.equal(events.at(-1).event, 'done');
-  assert.equal(events.at(-1).finishReason, 'stop');
+  assert.equal(frames.at(-1).type, RUN_ENDED);
+  assert.equal(frames.at(-1).data.status, 'completed');
+  assert.equal(frames.at(-1).data.finishReason, 'stop');
   assert.equal(summary.status, 'completed');
   assert.equal(summary.content, 'recovered');
 });
 
-// ── 5. clarification (ask_user) ─────────────────────────────────────────────
+// ── 6. clarification (ask_user) ─────────────────────────────────────────────
 
 const askArgs = {
   question: 'Which year?',
@@ -449,57 +689,79 @@ const askArgs = {
   options: [{ label: '2024' }, { label: '2025' }]
 };
 
-test('clarification: ask_user pauses the turn with clarification + done{clarification} after exactly one model call', async t => {
+test('clarification: ask_user raises interaction/raised, closes the tool, pauses the run (no run/ended) after exactly one model call', async t => {
   const chatId = newChatId('clarify');
-  const events = captureEvents(t, chatId);
-  const { service, requests, runTool, logInteraction, telemetry } = makeService([
+  const frames = captureFrames(t, chatId);
+  const { service, requests, runTool, logInteraction, telemetry, runLog } = makeService([
     toolTurn([{ name: 'ask_user', args: askArgs }]),
     textTurn('never')
   ]);
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [askUserTool] }) });
 
-  assert.deepEqual(names(events), [
-    'action',
-    'tool.call.start',
-    'clarification',
-    'tool.call.end',
-    'done'
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [
+    RUN_STARTED,
+    STEP_COMPLETED,
+    TOOL_STARTED,
+    INTERACTION_RAISED,
+    TOOL_COMPLETED,
+    RUN_PAUSED
   ]);
-  assert.equal(events[1].toolName, 'ask_user');
-  assert.deepEqual(events[1].toolInput, askArgs);
+  assert.equal(has(frames, RUN_ENDED), false, 'a paused turn has no terminal frame yet');
 
-  const clarification = events[2];
-  assert.equal(clarification.question, 'Which year?');
-  assert.equal(clarification.inputType, 'single_select');
-  assert.deepEqual(clarification.options, [
-    { label: '2024', value: '2024' },
-    { label: '2025', value: '2025' }
+  const started = frame(frames, TOOL_STARTED).data;
+  assert.equal(started.toolId, 'ask_user');
+  assert.equal(started.callId, 'call_1');
+  assert.equal(started.execution, 'clarification');
+  assert.deepEqual(started.args, askArgs);
+
+  const { interaction } = frame(frames, INTERACTION_RAISED).data;
+  assert.ok(interaction.id.startsWith(`clarify-${chatId}-1-`));
+  assert.equal(interaction.runId, summary.runId);
+  assert.equal(interaction.step, 1);
+  assert.equal(interaction.kind, 'question');
+  assert.equal(interaction.origin, 'tool');
+  assert.equal(interaction.status, 'pending');
+  assert.equal(interaction.ordinal, 1);
+  assert.equal(interaction.prompt.message, 'Which year?');
+  assert.equal(interaction.prompt.inputType, 'single_select', 'input_type select → single_select');
+  assert.deepEqual(interaction.prompt.options, [
+    { value: '2024', label: '2024' },
+    { value: '2025', label: '2025' }
   ]);
-  assert.equal(clarification.clarificationNumber, 1);
-  assert.equal(clarification.maxClarifications, 10);
-  assert.equal(clarification.toolCallId, 'call_1');
-  assert.ok(clarification.questionId.startsWith(`clarify-${chatId}-1-`));
-  assert.equal(clarification.allowSkip, false);
-  assert.equal(clarification.allowOther, false);
+  assert.equal(interaction.prompt.allowSkip, false);
+  assert.equal(interaction.prompt.allowOther, false);
+  assert.deepEqual(interaction.source, {
+    toolCallId: 'call_1',
+    toolId: 'ask_user',
+    chatId,
+    appId: 'app1'
+  });
+  assert.equal(interaction.maxClarifications, undefined, 'UI-only cap is not on the wire');
 
-  assert.deepEqual(events[3].toolOutput, { clarificationRequested: true, clarificationNumber: 1 });
-  assert.equal(events[3].error, undefined);
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.callId, 'call_1');
+  assert.deepEqual(done.resultPreview, { clarificationRequested: true, clarificationNumber: 1 });
+  assert.equal(done.error, undefined);
 
-  assert.equal(events[4].finishReason, 'clarification');
-  assert.equal(events[4].clarificationData.toolCallId, 'call_1');
-  assert.equal(events[4].clarificationData.question, 'Which year?');
-  assert.equal(indexOf(events, 'answer.source'), -1, 'no badge on a paused turn');
+  assert.deepEqual(frame(frames, RUN_PAUSED).data, {
+    reason: 'interaction',
+    interactionId: interaction.id
+  });
 
   assert.equal(requests.length, 1, 'the model is not called again while waiting for the user');
   assert.equal(runTool.calls.length, 0, 'ask_user never executes as a tool');
   assert.equal(summary.status, 'paused');
   assert.equal(summary.finishReason, 'clarification');
-  assert.equal(summary.clarificationData.question, 'Which year?');
+  assert.equal(summary.pendingInteraction.id, interaction.id);
+  assert.equal(summary.pendingInteraction.prompt.message, 'Which year?');
+  assert.equal(summary.pendingInteraction.maxClarifications, 10, 'cap stays on the summary');
   const toolMsg = summary.messages.at(-1);
   assert.equal(toolMsg.role, 'tool');
   assert.equal(JSON.parse(toolMsg.content).status, 'awaiting_user_response');
 
+  assertLedger(runLog, summary, { status: 'paused', finishReason: 'clarification' });
   assert.equal(service.getClarificationCount(chatId), 1);
   assert.deepEqual(logTypes(logInteraction), ['clarification_request']);
   assert.equal(logInteraction.calls[0][1].clarificationNumber, 1);
@@ -509,7 +771,7 @@ test('clarification: ask_user pauses the turn with clarification + done{clarific
 
 test('clarification cap: the 11th ask_user on a chat is refused with CLARIFICATION_LIMIT_REACHED and the model continues', async t => {
   const chatId = newChatId('clarify-cap');
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service, requests, logInteraction } = makeService([
     toolTurn([{ name: 'ask_user', args: askArgs }]),
     textTurn('proceeding with 2025')
@@ -518,10 +780,14 @@ test('clarification cap: the 11th ask_user on a chat is refused with CLARIFICATI
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [askUserTool] }) });
 
-  assert.equal(indexOf(events, 'clarification'), -1);
-  const end = events.find(e => e.event === 'tool.call.end');
-  assert.equal(end.error, true);
-  assert.equal(end.toolOutput.code, 'CLARIFICATION_LIMIT_REACHED');
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.equal(has(frames, INTERACTION_RAISED), false);
+  assert.equal(has(frames, RUN_PAUSED), false);
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.error.code, 'CLARIFICATION_LIMIT_REACHED');
+  assert.equal(done.resultPreview.error, true);
+  assert.equal(done.resultPreview.code, 'CLARIFICATION_LIMIT_REACHED');
+  assert.match(done.resultPreview.message, /Maximum clarification limit \(10\) reached/);
 
   assert.equal(requests.length, 2);
   const toolMsg = requests[1].request.body.messages.at(-1);
@@ -531,8 +797,8 @@ test('clarification cap: the 11th ask_user on a chat is refused with CLARIFICATI
   assert.equal(payload.code, 'CLARIFICATION_LIMIT_REACHED');
   assert.match(payload.message, /Maximum clarification limit \(10\) reached/);
 
-  assert.equal(events.at(-1).event, 'done');
-  assert.equal(events.at(-1).finishReason, 'stop');
+  assert.equal(frames.at(-1).type, RUN_ENDED);
+  assert.equal(frames.at(-1).data.finishReason, 'stop');
   assert.equal(summary.status, 'completed');
   assert.equal(summary.content, 'proceeding with 2025');
   assert.equal(service.getClarificationCount(chatId), 10, 'a refused question is not counted');
@@ -560,7 +826,7 @@ test('clarification counter is bounded: evicts the oldest chatId at 5000 entries
 
 test('clarification with invalid params (no question) → INVALID_CLARIFICATION_PARAMS, not counted', async t => {
   const chatId = newChatId('clarify-invalid');
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service, requests } = makeService([
     toolTurn([{ name: 'ask_user', args: { input_type: 'text' } }]),
     textTurn('ok')
@@ -568,10 +834,12 @@ test('clarification with invalid params (no question) → INVALID_CLARIFICATION_
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [askUserTool] }) });
 
-  assert.equal(indexOf(events, 'clarification'), -1);
-  const end = events.find(e => e.event === 'tool.call.end');
-  assert.equal(end.error, true);
-  assert.equal(end.toolOutput.code, 'INVALID_CLARIFICATION_PARAMS');
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.equal(has(frames, INTERACTION_RAISED), false);
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.error.code, 'INVALID_CLARIFICATION_PARAMS');
+  assert.equal(done.resultPreview.code, 'INVALID_CLARIFICATION_PARAMS');
+  assert.match(done.resultPreview.message, /Question is required/);
   const payload = JSON.parse(requests[1].request.body.messages.at(-1).content);
   assert.equal(payload.code, 'INVALID_CLARIFICATION_PARAMS');
   assert.match(payload.message, /Question is required/);
@@ -580,10 +848,10 @@ test('clarification with invalid params (no question) → INVALID_CLARIFICATION_
   assert.equal(summary.content, 'ok');
 });
 
-test('non-streaming turn: ask_user is refused with NO_USER_AVAILABLE, the answer comes back in the summary, nothing terminal is emitted', async t => {
+test('non-streaming turn: ask_user is refused with NO_USER_AVAILABLE, the answer comes back in the summary, no frame is emitted at all', async t => {
   const chatId = newChatId('headless');
-  const events = captureEvents(t, chatId);
-  const { service, requests, logInteraction, telemetry } = makeService([
+  const frames = captureFrames(t, chatId);
+  const { service, requests, logInteraction, telemetry, runLog } = makeService([
     toolTurn([{ name: 'ask_user', args: askArgs }]),
     textTurn('Assumed 2025.')
   ]);
@@ -600,37 +868,30 @@ test('non-streaming turn: ask_user is refused with NO_USER_AVAILABLE, the answer
   assert.equal(payload.code, 'NO_USER_AVAILABLE');
   assert.equal(service.getClarificationCount(chatId), 0);
 
+  assert.match(summary.runId, RUN_ID_RE, 'headless turns are still runs');
   assert.equal(summary.status, 'completed');
   assert.equal(summary.finishReason, 'stop');
   assert.equal(summary.content, 'Assumed 2025.');
-  assert.equal(summary.clarificationData, undefined);
+  assert.equal(summary.pendingInteraction, undefined);
 
-  // Headless: no stream-only events (status line, chunks, badge, terminal events).
-  // The tool-call projection itself is not gated on `streaming` — tool.call.*
-  // still fire on the chat's channel even though nobody is subscribed to it.
-  const streamOnly = ['processing', 'action', 'chunk', 'clarification', 'answer.source', 'done'];
-  assert.deepEqual(
-    names(events).filter(n => streamOnly.includes(n)),
-    [],
-    'no stream-only events for a non-streaming turn'
-  );
-  assert.deepEqual(names(events), ['tool.call.start', 'tool.call.end']);
-  assert.equal(events[1].error, true);
-  assert.equal(events[1].toolOutput.code, 'NO_USER_AVAILABLE');
+  // Headless: nothing goes to the stream — not the run frames, not the tool
+  // frames the seams would otherwise project.
+  assert.deepEqual(frames, [], 'no frames for a non-streaming turn');
 
   assert.equal(activeRequests.has(chatId), false, 'headless turns are not tracked as in-flight');
+  assertLedger(runLog, summary);
   assert.deepEqual(logTypes(logInteraction), ['chat_response']);
   assert.equal(logInteraction.calls[0][1].streaming, false);
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
   assert.equal(telemetry.recordChatCallStart.calls[0][0].baseLog.streaming, false);
 });
 
-// ── 6. passthrough (workflow) tool ──────────────────────────────────────────
+// ── 7. passthrough (workflow) tool ──────────────────────────────────────────
 
-test('passthrough: the tool streams the answer as chunk{source:"tool"}, closes with tool-stream-complete and done{tool_passthrough_complete}; no model follow-up', async t => {
+test('passthrough: tool text streams as step/delta, closes with tool/completed{answer} and run/ended{tool_passthrough_complete}; no model follow-up', async t => {
   const chatId = newChatId('passthrough');
-  const events = captureEvents(t, chatId);
-  const { service, requests, runTool, logInteraction, telemetry } = makeService(
+  const frames = captureFrames(t, chatId);
+  const { service, requests, runTool, logInteraction, telemetry, runLog } = makeService(
     [toolTurn([{ name: 'workflow_x', args: { topic: 'q3' } }]), textTurn('never')],
     {
       runTool: () =>
@@ -647,37 +908,40 @@ test('passthrough: the tool streams the answer as chunk{source:"tool"}, closes w
 
   const summary = await runTurn(service, { chatId, prep });
 
-  assert.deepEqual(names(events), [
-    'action',
-    'tool.call.start',
-    'chunk',
-    'chunk',
-    'tool-stream-complete',
-    'tool.call.end',
-    'done'
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [
+    RUN_STARTED,
+    STEP_COMPLETED,
+    TOOL_STARTED,
+    STEP_DELTA,
+    STEP_DELTA,
+    TOOL_COMPLETED,
+    RUN_ENDED
   ]);
-  assert.equal(events[0].message, 'Using tool(s): workflow_x...');
-  assert.equal(events[1].toolName, 'workflow_x');
-  assert.deepEqual(events[1].toolInput, { topic: 'q3' });
+
+  const started = frame(frames, TOOL_STARTED).data;
+  assert.equal(started.toolId, 'workflow_x');
+  assert.equal(started.callId, 'call_1');
+  assert.equal(started.execution, 'passthrough');
+  assert.deepEqual(started.args, { topic: 'q3' });
   assert.deepEqual(
-    events
-      .filter(e => e.event === 'chunk')
-      .map(({ content, source, toolName }) => ({
-        content,
-        source,
-        toolName
-      })),
+    framesOf(frames, STEP_DELTA).map(f => f.data),
     [
-      { content: 'Hel', source: 'tool', toolName: 'workflow_x' },
-      { content: 'lo', source: 'tool', toolName: 'workflow_x' }
-    ]
+      { step: 1, kind: 'text', content: 'Hel' },
+      { step: 1, kind: 'text', content: 'lo' }
+    ],
+    'tool text is plain step/delta on the tool step'
   );
-  assert.equal(events[4].toolName, 'workflow_x');
-  assert.equal(events[4].content, 'Hello');
-  assert.deepEqual(events[5].toolOutput, { answer: 'Hello' });
-  assert.equal(events[6].finishReason, 'tool_passthrough_complete');
-  assert.equal(events[6].toolName, 'workflow_x');
-  assert.equal(indexOf(events, 'answer.source'), -1);
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(done.toolId, 'workflow_x');
+  assert.deepEqual(done.resultPreview, { answer: 'Hello' });
+  assert.equal(done.error, undefined);
+
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'completed');
+  assert.equal(ended.finishReason, 'tool_passthrough_complete');
+  assert.equal(ended.toolName, 'workflow_x');
+  assert.deepEqual(ended.knowledgeSources, []);
 
   assert.equal(requests.length, 1, 'the model gets no follow-up call');
   assert.equal(runTool.calls.length, 1);
@@ -698,6 +962,7 @@ test('passthrough: the tool streams the answer as chunk{source:"tool"}, closes w
   assert.equal(last.role, 'assistant');
   assert.equal(last.content, 'Hello');
   assert.equal(last.tool_source, 'workflow_x');
+  assertLedger(runLog, summary);
 
   assert.deepEqual(logTypes(logInteraction), ['tool_usage', 'chat_response']);
   assert.deepEqual(logInteraction.calls[0][1].toolOutput, { answer: 'Hello', streaming: true });
@@ -708,49 +973,61 @@ test('passthrough: the tool streams the answer as chunk{source:"tool"}, closes w
 
 test('passthrough without an upload: no _fileData is handed to the tool', async t => {
   const chatId = newChatId('passthrough-nofile');
-  captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service, runTool } = makeService([toolTurn([{ name: 'workflow_x', args: {} }])], {
     runTool: async () => 'plain answer'
   });
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [workflowTool] }) });
 
+  assertWellFormed(frames, { runId: summary.runId });
   assert.equal(Object.hasOwn(runTool.calls[0][1], '_fileData'), false);
+  assert.deepEqual(frame(frames, STEP_DELTA).data, {
+    step: 1,
+    kind: 'text',
+    content: 'plain answer'
+  });
+  assert.deepEqual(frame(frames, TOOL_COMPLETED).data.resultPreview, { answer: 'plain answer' });
   assert.equal(summary.content, 'plain answer');
   assert.equal(summary.finishReason, 'tool_passthrough_complete');
 });
 
-// ── 7. provider failure ─────────────────────────────────────────────────────
+// ── 8. provider failure ─────────────────────────────────────────────────────
 
-test('provider HTTP error: exactly one error event then done{error}; chat_error logged; telemetry outcome error', async t => {
+test('provider HTTP error: exactly one stream/error then run/ended{error}; chat_error logged; telemetry outcome error', async t => {
   const chatId = newChatId('http-500');
-  const events = captureEvents(t, chatId);
-  const { service, requests, logInteraction, telemetry } = makeService(
+  const frames = captureFrames(t, chatId);
+  const { service, requests, logInteraction, telemetry, runLog } = makeService(
     [() => textResponse('boom', { status: 500 })],
     { maxRetries: 0 }
   );
 
   const summary = await runTurn(service, { chatId, prep: makePrep() });
 
-  assert.deepEqual(names(events), ['processing', 'error', 'done']);
-  assert.equal(
-    events.filter(e => e.event === 'error').length,
-    1,
-    'never two errors for one failure'
-  );
-  assert.equal(typeof events[1].message, 'string');
-  assert.ok(events[1].message.length > 0);
-  assert.equal(events[1].code, LLM_ERROR_CODES.PROVIDER_ERROR);
-  assert.equal(events[1].isContextWindowError, false);
-  assert.equal(events[2].finishReason, 'error');
-  assert.equal(indexOf(events, 'answer.source'), -1);
-  assert.equal(indexOf(events, 'chunk'), -1);
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [RUN_STARTED, STREAM_ERROR, RUN_ENDED]);
+  assert.equal(framesOf(frames, STREAM_ERROR).length, 1, 'never two errors for one failure');
+
+  const error = frame(frames, STREAM_ERROR).data;
+  assert.equal(error.code, LLM_ERROR_CODES.PROVIDER_ERROR);
+  assert.equal(typeof error.message, 'string');
+  assert.ok(error.message.length > 0);
+  assert.equal(error.retryable, false);
+  assert.equal(error.isContextWindowError, false);
+
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'error');
+  assert.equal(ended.finishReason, 'error');
+  assert.deepEqual(ended.error, { code: LLM_ERROR_CODES.PROVIDER_ERROR, message: error.message });
+  assert.equal(ended.knowledgeSources, undefined, 'no badge on a failed turn');
+  assert.equal(has(frames, STEP_DELTA), false);
 
   assert.equal(requests.length, 1, 'a 500 with maxRetries 0 is not retried');
   assert.equal(summary.status, 'error');
   assert.equal(summary.finishReason, 'error');
   assert.equal(summary.error.status, 500);
   assert.equal(summary.errorInfo.code, LLM_ERROR_CODES.PROVIDER_ERROR);
+  assertLedger(runLog, summary, { errorCode: LLM_ERROR_CODES.PROVIDER_ERROR });
 
   assert.deepEqual(logTypes(logInteraction), ['chat_error']);
   const [, logData] = logInteraction.calls[0];
@@ -764,12 +1041,12 @@ test('provider HTTP error: exactly one error event then done{error}; chat_error 
   assert.equal(activeRequests.has(chatId), false);
 });
 
-// ── 8. abort ────────────────────────────────────────────────────────────────
+// ── 9. abort ────────────────────────────────────────────────────────────────
 
-test('abort mid-turn (stop button / disconnect): done{connection_closed}, no error event, nothing logged', async t => {
+test('abort mid-turn (stop button / disconnect): run/ended{aborted, connection_closed}, no stream/error, nothing logged', async t => {
   const chatId = newChatId('abort');
-  const events = captureEvents(t, chatId);
-  const { service, requests, logInteraction, telemetry } = makeService([
+  const frames = captureFrames(t, chatId);
+  const { service, requests, logInteraction, telemetry, runLog } = makeService([
     () => {
       // What the stop endpoint / SSE teardown does: abort the chat's in-flight controller.
       activeRequests.get(chatId).abort();
@@ -779,15 +1056,20 @@ test('abort mid-turn (stop button / disconnect): done{connection_closed}, no err
 
   const summary = await runTurn(service, { chatId, prep: makePrep() });
 
-  assert.deepEqual(names(events), ['processing', 'done']);
-  assert.equal(events[1].finishReason, 'connection_closed');
-  assert.equal(indexOf(events, 'error'), -1, 'a cancelled turn is not an error');
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [RUN_STARTED, RUN_ENDED]);
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'aborted');
+  assert.equal(ended.finishReason, 'connection_closed');
+  assert.equal(ended.error, undefined);
+  assert.equal(has(frames, STREAM_ERROR), false, 'a cancelled turn is not an error');
   assert.equal(requests.length, 1);
   assert.ok(requests[0].ctx.signal.aborted, 'the loop signal is the tracked controller');
 
   assert.equal(summary.status, 'aborted');
   assert.equal(summary.finishReason, 'connection_closed');
   assert.equal(summary.content, '');
+  assertLedger(runLog, summary, { status: 'aborted', finishReason: 'connection_closed' });
   assert.deepEqual(logTypes(logInteraction), []);
   assert.deepEqual(endOutcomes(telemetry), ['aborted']);
   assert.equal(activeRequests.has(chatId), false, 'controller released after the turn');
@@ -795,40 +1077,53 @@ test('abort mid-turn (stop button / disconnect): done{connection_closed}, no err
 
 test('a new turn on the same chatId supersedes the previous in-flight controller', async t => {
   const chatId = newChatId('supersede');
-  captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const stale = new AbortController();
   activeRequests.set(chatId, stale);
   const { service } = makeService([textTurn('fresh')]);
 
   const summary = await runTurn(service, { chatId, prep: makePrep() });
 
+  assertWellFormed(frames, { runId: summary.runId });
   assert.equal(stale.signal.aborted, true, 'previous turn aborted');
   assert.equal(summary.content, 'fresh');
   assert.equal(summary.finishReason, 'stop');
+  assert.equal(frame(frames, RUN_ENDED).data.status, 'completed');
   assert.equal(activeRequests.has(chatId), false);
 });
 
-// ── 9. degenerate completion ────────────────────────────────────────────────
+// ── 10. degenerate completion ───────────────────────────────────────────────
 
-test('failure finish reason with no output → error{MALFORMED_RESPONSE} + done{error}; with output it is a normal answer', async t => {
+test('failure finish reason with no output → stream/error{MALFORMED_RESPONSE} + run/ended{error}; with output it is a normal answer', async t => {
   const chatId = newChatId('malformed');
-  const events = captureEvents(t, chatId);
-  const { service, logInteraction, telemetry } = makeService([
+  const frames = captureFrames(t, chatId);
+  const { service, logInteraction, telemetry, runLog } = makeService([
     textTurn('', { finishReason: 'MALFORMED_FUNCTION_CALL' })
   ]);
 
   const summary = await runTurn(service, { chatId, prep: makePrep() });
 
-  assert.deepEqual(names(events), ['processing', 'error', 'done']);
-  assert.equal(events[1].code, 'MALFORMED_RESPONSE');
-  assert.equal(events[1].message, 'The model returned a malformed response. Please try again.');
-  assert.equal(events[2].finishReason, 'error');
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(types(frames), [RUN_STARTED, STEP_COMPLETED, STREAM_ERROR, RUN_ENDED]);
+  assert.equal(frame(frames, STEP_COMPLETED).data.finishReason, 'MALFORMED_FUNCTION_CALL');
+  assert.equal(frame(frames, STEP_COMPLETED).data.content, '');
+  const error = frame(frames, STREAM_ERROR).data;
+  assert.equal(error.code, 'MALFORMED_RESPONSE');
+  assert.equal(error.message, 'The model returned a malformed response. Please try again.');
+  assert.deepEqual(error.details, { finishReason: 'MALFORMED_FUNCTION_CALL' });
+  assert.equal(error.retryable, true, 'the user may simply try again');
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.status, 'error');
+  assert.equal(ended.finishReason, 'error');
+  assert.deepEqual(ended.error, { code: 'MALFORMED_RESPONSE', message: error.message });
+
   assert.equal(summary.status, 'error');
   assert.equal(summary.finishReason, 'error');
   assert.deepEqual(summary.errorInfo, {
     message: 'The model returned a malformed response. Please try again.',
     code: 'MALFORMED_RESPONSE'
   });
+  assertLedger(runLog, summary, { errorCode: 'MALFORMED_RESPONSE' });
   assert.deepEqual(logTypes(logInteraction), ['chat_error']);
   assert.equal(logInteraction.calls[0][1].error.code, 'MALFORMED_RESPONSE');
   assert.deepEqual(logInteraction.calls[0][1].error.details, {
@@ -838,7 +1133,7 @@ test('failure finish reason with no output → error{MALFORMED_RESPONSE} + done{
 
   // The localized message wins when the caller can translate it.
   const chatId2 = newChatId('malformed-i18n');
-  const events2 = captureEvents(t, chatId2);
+  const frames2 = captureFrames(t, chatId2);
   const { service: service2 } = makeService([
     textTurn('', { finishReason: 'MALFORMED_FUNCTION_CALL' })
   ]);
@@ -847,22 +1142,25 @@ test('failure finish reason with no output → error{MALFORMED_RESPONSE} + done{
     prep: makePrep(),
     getLocalizedError: async key => (key === 'malformedModelResponse' ? 'Kaputt.' : null)
   });
-  assert.equal(events2.find(e => e.event === 'error').message, 'Kaputt.');
+  assert.equal(frame(frames2, STREAM_ERROR).data.message, 'Kaputt.');
+  assert.equal(frame(frames2, RUN_ENDED).data.error.message, 'Kaputt.');
 
   // Same finish reason but the model did produce text → not an error.
   const chatId3 = newChatId('malformed-with-output');
-  const events3 = captureEvents(t, chatId3);
+  const frames3 = captureFrames(t, chatId3);
   const { service: service3 } = makeService([
     textTurn('Partial answer', { finishReason: 'MALFORMED_FUNCTION_CALL' })
   ]);
   const ok = await runTurn(service3, { chatId: chatId3, prep: makePrep() });
-  assert.deepEqual(names(events3), ['processing', 'chunk', 'done']);
-  assert.equal(events3[2].finishReason, 'MALFORMED_FUNCTION_CALL');
+  assertWellFormed(frames3, { runId: ok.runId });
+  assert.deepEqual(types(frames3), [RUN_STARTED, STEP_DELTA, STEP_COMPLETED, RUN_ENDED]);
+  assert.equal(frame(frames3, RUN_ENDED).data.status, 'completed');
+  assert.equal(frame(frames3, RUN_ENDED).data.finishReason, 'MALFORMED_FUNCTION_CALL');
   assert.equal(ok.status, 'completed');
   assert.equal(ok.content, 'Partial answer');
 });
 
-// ── 10. markInteractiveTools ────────────────────────────────────────────────
+// ── 11. markInteractiveTools ────────────────────────────────────────────────
 
 test('markInteractiveTools flags ask_user and requiresUserInput tools, leaves the rest untouched', () => {
   const plain = { id: 'webSearch', parameters: {} };
@@ -888,11 +1186,11 @@ test('markInteractiveTools flags ask_user and requiresUserInput tools, leaves th
   );
 });
 
-// ── 11. image lift ──────────────────────────────────────────────────────────
+// ── 12. image lift ──────────────────────────────────────────────────────────
 
-test('image lift: a tool result carrying imageData reaches the model as "Retrieved image: <name>"', async t => {
+test('image lift: a tool result carrying imageData reaches the model as "Retrieved image: <name>"; the client sees the raw result', async t => {
   const chatId = newChatId('image-lift');
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const imageResult = {
     imageData: { type: 'image', base64: 'AAAA', format: 'image/png', filename: 'a.png' }
   };
@@ -906,6 +1204,7 @@ test('image lift: a tool result carrying imageData reaches the model as "Retriev
 
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [fetchTool] }) });
 
+  assertWellFormed(frames, { runId: summary.runId });
   const toolMsg = requests[1].request.body.messages.at(-1);
   assert.equal(toolMsg.role, 'tool');
   assert.equal(toolMsg.content, 'Retrieved image: a.png');
@@ -915,18 +1214,19 @@ test('image lift: a tool result carrying imageData reaches the model as "Retriev
     base64: 'AAAA',
     filename: 'a.png'
   });
-  const end = events.find(e => e.event === 'tool.call.end');
-  assert.deepEqual(end.toolOutput, imageResult, 'the client sees the raw tool result');
-  assert.equal(indexOf(events, 'answer.source'), -1, 'a fetch tool is not a knowledge source');
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.deepEqual(done.resultPreview, imageResult, 'the client sees the raw tool result');
+  assert.equal(done.knowledgeSource, undefined, 'a fetch tool is not a knowledge source');
+  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, []);
   assert.equal(summary.content, 'A cat.');
   assert.deepEqual(summary.knowledgeSources, []);
 });
 
-// ── answer-source bookkeeping (finalizeAnswerSource / getKnowledgeSources) ──
+// ── 13. answer-source bookkeeping (resolveAnswerSources / getKnowledgeSources) ──
 
-test('finalizeAnswerSource emits one badge merging loop and prompt sources, then clears them', t => {
-  const chatId = newChatId('finalize');
-  const events = captureEvents(t, chatId);
+test('resolveAnswerSources merges loop and prompt sources, clears them and emits no frame of its own', t => {
+  const chatId = newChatId('resolve');
+  const frames = captureFrames(t, chatId);
   const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
   PromptService.trackPromptSources(chatId);
   t.after(() => PromptService.resetPromptSources(chatId));
@@ -936,53 +1236,60 @@ test('finalizeAnswerSource emits one badge merging loop and prompt sources, then
     'sources'
   ]);
 
-  service.finalizeAnswerSource(chatId, ['file', 'grounding']);
-  assert.deepEqual(names(events), ['answer.source']);
-  assert.deepEqual(events[0].sources.sort(), ['file', 'grounding', 'sources']);
-  assert.equal(events[0].type, 'mixed');
+  const resolved = service.resolveAnswerSources(chatId, ['file', 'grounding']);
+  assert.deepEqual([...resolved].sort(), ['file', 'grounding', 'sources']);
   assert.deepEqual(service.getKnowledgeSources(chatId), [], 'prompt sources cleared');
   assert.deepEqual(PromptService.getPromptSources(chatId), []);
 
-  service.finalizeAnswerSource(chatId);
-  assert.equal(events.length, 1, 'idempotent: no stale re-emit');
+  assert.deepEqual(service.resolveAnswerSources(chatId), [], 'idempotent: nothing stale');
+  assert.deepEqual(frames, [], 'pure bookkeeping — the badge rides on run/ended');
 });
 
-test('finalizeAnswerSource emits nothing without sources and keeps conversations isolated', t => {
+test('resolveAnswerSources returns nothing without sources and keeps conversations isolated', t => {
   const chatA = newChatId('iso-a');
   const chatB = newChatId('iso-b');
-  const eventsA = captureEvents(t, chatA);
-  const eventsB = captureEvents(t, chatB);
+  const framesA = captureFrames(t, chatA);
+  const framesB = captureFrames(t, chatB);
   const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
   PromptService.trackPromptSources(chatA);
   t.after(() => PromptService.resetPromptSources(chatA));
 
   assert.deepEqual(service.getKnowledgeSources(chatB), []);
-  service.finalizeAnswerSource(chatB, []);
-  assert.deepEqual(eventsB, []);
-
-  service.finalizeAnswerSource(chatA);
-  assert.deepEqual(
-    eventsA.map(e => e.sources),
-    [['sources']]
-  );
+  assert.deepEqual(service.resolveAnswerSources(chatB, []), []);
+  assert.deepEqual(service.resolveAnswerSources(chatA), ['sources']);
+  assert.deepEqual(PromptService.getPromptSources(chatA), []);
+  assert.deepEqual(framesA, []);
+  assert.deepEqual(framesB, []);
 });
 
-test('prompt sources tracked before a turn end up in the badge and never leak into the next turn', async t => {
+test('prompt sources tracked before a turn end up in run/ended.knowledgeSources and never leak into the next turn; seq keeps climbing across turns', async t => {
   const chatId = newChatId('prompt-sources');
-  const events = captureEvents(t, chatId);
+  const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('From the docs.'), textTurn('Plain.')]);
   PromptService.trackPromptSources(chatId);
   t.after(() => PromptService.resetPromptSources(chatId));
 
   const first = await runTurn(service, { chatId, prep: makePrep() });
+  assertWellFormed(frames, { runId: first.runId });
   assert.deepEqual(first.knowledgeSources, ['sources']);
-  const badge = events.find(e => e.event === 'answer.source');
-  assert.deepEqual(badge.sources, ['sources']);
-  assert.ok(indexOf(events, 'answer.source') < indexOf(events, 'done'));
+  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['sources']);
+  assert.deepEqual(
+    frame(frames, STEP_COMPLETED).data.sources,
+    [],
+    'prompt sources are chat bookkeeping, not loop sources'
+  );
   assert.deepEqual(PromptService.getPromptSources(chatId), [], 'reset after the turn');
+  const lastSeq = frames.at(-1).seq;
 
-  events.length = 0;
+  frames.length = 0;
   const second = await runTurn(service, { chatId, prep: makePrep() });
+  assertWellFormed(frames, { runId: second.runId });
+  assert.notEqual(second.runId, first.runId, 'every turn is its own run');
+  assert.ok(frames[0].seq > lastSeq, 'seq is per stream, not per run');
   assert.deepEqual(second.knowledgeSources, []);
-  assert.equal(indexOf(events, 'answer.source'), -1, 'no stale badge on the follow-up turn');
+  assert.deepEqual(
+    frame(frames, RUN_ENDED).data.knowledgeSources,
+    [],
+    'no stale badge on the follow-up turn'
+  );
 });

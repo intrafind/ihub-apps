@@ -3,7 +3,7 @@
  *
  *   GET    /api/runs                                  admin: list runs from the ledger index
  *   GET    /api/runs/:runId                           run metadata (owner, admin, or anonymous-run id possession)
- *   GET    /api/runs/:runId/events?after=&lt;seq&gt;        ledger events for SSE v2 re-sync
+ *   GET    /api/runs/:runId/events?after=&lt;seq&gt;        ledger events (`view=sse` → SSE v2 envelopes for re-sync)
  *   DELETE /api/runs/:runId                           erase a run with cascade (owner or admin)
  *   GET    /api/runs/:runId/interactions              pending interactions of a run
  *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint
@@ -26,6 +26,7 @@ import interactionService, { InteractionError } from '../services/loop/Interacti
 import { interactionAnswerRequestSchema } from '../services/loop/contracts/interaction.js';
 import { resolvePrincipal, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
+import { projectLedgerEvent } from '../services/loop/RunStream.js';
 
 function isAdminUser(user) {
   if (!user) return false;
@@ -115,7 +116,12 @@ export default function registerRunRoutes(app) {
       const after = Math.max(parseInt(req.query.after, 10) || 0, 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 5000);
       const events = await runLog.readEvents(runId, { afterSeq: after, limit });
-      res.json({ runId, after, events, lastSeq: await runLog.lastSeq(runId) });
+      const lastSeq = await runLog.lastSeq(runId);
+      if (req.query.view === 'sse') {
+        // Client re-sync: the same envelopes the live stream would have carried.
+        return res.json({ runId, after, events: events.flatMap(projectLedgerEvent), lastSeq });
+      }
+      res.json({ runId, after, events, lastSeq });
     } catch (error) {
       sendFailedOperationError(res, 'read run events', error);
     }

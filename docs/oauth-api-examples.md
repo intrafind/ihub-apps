@@ -280,10 +280,11 @@ Client                                 Server
   |--- POST /api/apps/{appId}/chat/{chatId} -->   (send message)
   |<--- 200 OK {"status":"streaming"} ---|
   |                                      |
-  |<--- event: session.start ------------|
-  |<--- event: chunk -------------------|        (text tokens arrive)
-  |<--- event: chunk -------------------|
-  |<--- event: done --------------------|        (response complete)
+  |<--- event: stream/connected ---------|
+  |<--- event: run/started --------------|
+  |<--- event: step/delta ---------------|        (text tokens arrive)
+  |<--- event: step/delta ---------------|
+  |<--- event: run/ended ----------------|        (response complete)
 ```
 
 1. **GET** opens a persistent SSE connection (must be opened first)
@@ -339,38 +340,42 @@ Response (the actual LLM output streams over SSE):
 
 ### 3e. Understanding SSE Events
 
-Events appear on the SSE connection in this wire format:
+Every frame is an SSE v2 envelope `{ v: 2, seq, runId, ts, type, data }`; the
+SSE `event:` field carries the same `type`. One chat turn is one run:
 
 ```
-event: session.start
-data: {"event":"session.start","chatId":"550e8400-...","timestamp":"2026-03-16T10:30:00Z"}
+event: stream/connected
+data: {"v":2,"seq":0,"runId":"550e8400-...","ts":"2026-03-16T10:30:00Z","type":"stream/connected","data":{"runId":"550e8400-...","lastSeq":0,"protocol":2}}
 
-event: chunk
-data: {"event":"chunk","chatId":"550e8400-...","content":"Cloud computing"}
+event: run/started
+data: {"v":2,"seq":1,"runId":"chat-7f3a…","ts":"…","type":"run/started","data":{"kind":"chat","model":"gpt-4o","refs":{"chatId":"550e8400-...","appId":"chat-assistant"}}}
 
-event: chunk
-data: {"event":"chunk","chatId":"550e8400-...","content":" offers several"}
+event: step/delta
+data: {"v":2,"seq":2,"runId":"chat-7f3a…","ts":"…","type":"step/delta","data":{"step":0,"kind":"text","content":"Cloud computing"}}
 
-event: chunk
-data: {"event":"chunk","chatId":"550e8400-...","content":" key benefits:"}
+event: step/delta
+data: {"v":2,"seq":3,"runId":"chat-7f3a…","ts":"…","type":"step/delta","data":{"step":0,"kind":"text","content":" offers several"}}
 
-event: done
-data: {"event":"done","chatId":"550e8400-...","finishReason":"stop"}
+event: step/completed
+data: {"v":2,"seq":4,"runId":"chat-7f3a…","ts":"…","type":"step/completed","data":{"step":0,"content":"Cloud computing offers several…","toolCalls":[],"finishReason":"stop"}}
+
+event: run/ended
+data: {"v":2,"seq":5,"runId":"chat-7f3a…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
 ```
 
-**Event types reference:**
+**Event types reference** (full tables in [SSE v2 Streaming](sse-v2.md)):
 
 | Event | Description |
 |---|---|
-| `session.start` | Chat session started |
-| `chunk` | Text token from the LLM (concatenate `content` fields for full response) |
-| `done` | Response complete; `finishReason` indicates why |
-| `error` | An error occurred; check `message` field |
-| `thinking` | Extended thinking content (supported models only) |
-| `tool.call.start` | Tool execution started |
-| `tool.call.end` | Tool execution completed |
-| `citation` | Source citation reference |
-| `conversation.title` | Auto-generated conversation title |
+| `stream/connected` | Stream open; `lastSeq` is the last sequence number the server has for this stream |
+| `run/started` | A run (one chat turn, or a workflow launched from the chat) began; `refs.messageId` links it to the message |
+| `step/delta` | Streamed content; `kind` is `text`, `thinking` or `image` (concatenate `content` of `text` deltas) |
+| `step/completed` | One model call finished (`content`, `toolCalls`, `usage`, `citations`) |
+| `tool/started` / `tool/progress` / `tool/completed` | Tool execution lifecycle; `tool/progress` also carries search status, citations and grounding |
+| `interaction/raised` | The model asks the user a question (`ask_user`); the run pauses (`run/paused`) |
+| `meta` | Conversation title / conversation ids |
+| `stream/error` | An error occurred; check `code` and `message` |
+| `run/ended` | Response complete; `status` and `finishReason` indicate why |
 
 ### 3f. Advanced Options
 

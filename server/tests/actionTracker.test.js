@@ -1,59 +1,64 @@
+#!/usr/bin/env node
 /**
- * Unit tests for ActionTracker's per-chat step isolation.
+ * actionTracker is the internal event bus for workflow/agent runtime events.
+ * It must fan events out to every registered listener without tripping Node's
+ * MaxListenersExceededWarning, because every SSE connection and every chat
+ * bridge registers its own request-scoped listener.
  *
- * trackAction used to increment a single process-wide `steps` counter shared
- * by every chat, so concurrent chats saw a contaminated, ever-growing step
- * number. It's now tracked per chatId and cleared when a chat's turn ends.
+ * Run directly: `node server/tests/actionTracker.test.js`.
  */
+import assert from 'node:assert/strict';
+import { actionTracker, ActionTracker } from '../actionTracker.js';
 
-import { ActionTracker } from '../actionTracker.js';
+let failures = 0;
+function check(label, fn) {
+  try {
+    fn();
+    console.log(`✅ ${label}`);
+  } catch (err) {
+    failures += 1;
+    console.log(`❌ ${label}\n   ${err.message}`);
+  }
+}
 
-describe('ActionTracker per-chat step counter', () => {
-  test('tracks independent, correctly incrementing steps per chatId', () => {
-    const tracker = new ActionTracker();
-    const events = [];
-    tracker.on('fire-sse', event => events.push(event));
-
-    tracker.trackAction('chat-a', {});
-    tracker.trackAction('chat-b', {});
-    tracker.trackAction('chat-a', {});
-
-    const stepsFor = chatId => events.filter(e => e.chatId === chatId).map(e => e.steps);
-    expect(stepsFor('chat-a')).toEqual([1, 2]);
-    expect(stepsFor('chat-b')).toEqual([1]);
-  });
-
-  test.each(['trackDone', 'trackError', 'trackDisconnected'])(
-    '%s clears the step counter so the next turn restarts at 1',
-    method => {
-      const tracker = new ActionTracker();
-      const events = [];
-      tracker.on('fire-sse', event => events.push(event));
-
-      tracker.trackAction('chat-a', {});
-      tracker.trackAction('chat-a', {});
-      tracker[method]('chat-a');
-      tracker.trackAction('chat-a', {});
-
-      const steps = events.filter(e => e.event === 'action').map(e => e.steps);
-      expect(steps).toEqual([1, 2, 1]);
-    }
-  );
-
-  test('does not warn about exceeding the default max listener count', () => {
-    const tracker = new ActionTracker();
-    const warnings = [];
-    const onWarning = warning => warnings.push(warning);
-    process.on('warning', onWarning);
-
-    try {
-      for (let i = 0; i < 15; i += 1) {
-        tracker.on('fire-sse', () => {});
-      }
-    } finally {
-      process.off('warning', onWarning);
-    }
-
-    expect(warnings.some(w => w.name === 'MaxListenersExceededWarning')).toBe(false);
-  });
+check('fire-sse events reach every listener with the payload intact', () => {
+  const bus = new ActionTracker();
+  const seen = [];
+  const a = e => seen.push(['a', e]);
+  const b = e => seen.push(['b', e]);
+  bus.on('fire-sse', a);
+  bus.on('fire-sse', b);
+  bus.emit('fire-sse', { event: 'workflow.node.start', chatId: 'exec-1', nodeId: 'n1' });
+  bus.off('fire-sse', a);
+  bus.off('fire-sse', b);
+  assert.equal(seen.length, 2);
+  assert.deepEqual(seen[0][1], { event: 'workflow.node.start', chatId: 'exec-1', nodeId: 'n1' });
+  assert.equal(seen[1][0], 'b');
 });
+
+check('no MaxListenersExceededWarning with many concurrent listeners', () => {
+  const warnings = [];
+  const onWarning = w => warnings.push(w);
+  process.on('warning', onWarning);
+  const handlers = Array.from({ length: 25 }, () => () => {});
+  handlers.forEach(h => actionTracker.on('fire-sse', h));
+  actionTracker.emit('fire-sse', { event: 'agent.task.created', chatId: 'exec-2' });
+  handlers.forEach(h => actionTracker.off('fire-sse', h));
+  process.off('warning', onWarning);
+  assert.equal(actionTracker.getMaxListeners(), 0);
+  assert.equal(
+    warnings.filter(w => w.name === 'MaxListenersExceededWarning').length,
+    0,
+    'unexpected MaxListenersExceededWarning'
+  );
+});
+
+check('the shared instance exposes only the bus (no wire-dialect helpers)', () => {
+  const helpers = Object.getOwnPropertyNames(ActionTracker.prototype).filter(n =>
+    n.startsWith('track')
+  );
+  assert.deepEqual(helpers, []);
+});
+
+console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
+process.exit(failures ? 1 : 0);

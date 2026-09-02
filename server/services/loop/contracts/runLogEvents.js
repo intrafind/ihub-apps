@@ -19,7 +19,7 @@ import {
   RUN_LOG_EVENTS,
   LEDGER_IDENTITY_MODES
 } from '../../../../shared/runEvents.js';
-import { interactionSchema, interactionAnswerSchema } from './interaction.js';
+import { interactionSchema, interactionAnswerSchema, humanEventSchema } from './interaction.js';
 
 export const runKindSchema = z.enum(RUN_KINDS);
 export const runStatusSchema = z.enum(RUN_STATUSES);
@@ -266,6 +266,9 @@ export const interactionAnsweredData = z.object({
   answer: interactionAnswerSchema
 });
 
+/** A human→agent event (steer / stop / feedback) recorded on the run. */
+export const humanEventData = humanEventSchema.omit({ runId: true });
+
 export const budgetLimitsSchema = z.object({
   maxTokensPerRun: z.number().int().nonnegative().optional(),
   maxToolRounds: z.number().int().nonnegative().optional(),
@@ -354,6 +357,7 @@ export const runLogEventSchema = z.discriminatedUnion('type', [
     type: z.literal(RUN_LOG_EVENTS.CONTEXT_COMPACTION),
     data: contextCompactionData
   }),
+  z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.HUMAN_EVENT), data: humanEventData }),
   z.object({ ...base, type: z.literal(RUN_LOG_EVENTS.ERROR), data: errorData })
 ]);
 
@@ -376,6 +380,7 @@ export const runLogEventDataSchemas = Object.freeze({
   [RUN_LOG_EVENTS.BUDGET_CHECKPOINT]: budgetCheckpointData,
   [RUN_LOG_EVENTS.BUDGET_EXHAUSTED]: budgetExhaustedData,
   [RUN_LOG_EVENTS.CONTEXT_COMPACTION]: contextCompactionData,
+  [RUN_LOG_EVENTS.HUMAN_EVENT]: humanEventData,
   [RUN_LOG_EVENTS.ERROR]: errorData
 });
 
