@@ -3,20 +3,25 @@
  */
 import { fetchAllLedgerEvents } from '../../../client/src/shared/run/ledgerPages';
 
-const ledger = n => Array.from({ length: n }, (_, i) => ({ v: 2, seq: i + 1, type: 'meta' }));
-
-function serve(events, { lastSeq = events.length } = {}) {
+/** A raw ledger of n records; only records for which `projects(seq)` is true produce an envelope. */
+function serve(n, { lastSeq = n, projects = () => true } = {}) {
   const calls = [];
   const fetchPage = async (after, limit) => {
     calls.push([after, limit]);
-    return { events: events.filter(e => e.seq > after).slice(0, limit), lastSeq };
+    const raw = [];
+    for (let seq = after + 1; seq <= n && raw.length < limit; seq++) raw.push(seq);
+    return {
+      events: raw.filter(projects).map(seq => ({ v: 2, seq, type: 'meta' })),
+      lastSeq,
+      nextAfter: raw.length ? raw[raw.length - 1] : after
+    };
   };
   return { fetchPage, calls };
 }
 
 describe('fetchAllLedgerEvents', () => {
-  test('walks every page until the ledger end and returns them as one projection', async () => {
-    const { fetchPage, calls } = serve(ledger(2500));
+  test('walks every page on the raw cursor until the ledger end', async () => {
+    const { fetchPage, calls } = serve(2500);
     const { events, lastSeq, complete } = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });
     expect(events).toHaveLength(2500);
     expect(events[2499].seq).toBe(2500);
@@ -29,16 +34,32 @@ describe('fetchAllLedgerEvents', () => {
     ]);
   });
 
+  test('a page that projects to no envelopes still advances (headers, budget events, compactions)', async () => {
+    // the first 1000 raw records produce nothing; later ones do
+    const { fetchPage, calls } = serve(3000, { projects: seq => seq > 1000 && seq % 2 === 0 });
+    const res = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });
+    expect(res.complete).toBe(true);
+    expect(res.events).toHaveLength(1000);
+    expect(res.events[0].seq).toBe(1002);
+    expect(res.events[999].seq).toBe(3000);
+    expect(calls).toEqual([
+      [0, 1000],
+      [1000, 1000],
+      [2000, 1000]
+    ]);
+  });
+
   test('an empty ledger is one request', async () => {
-    const { fetchPage, calls } = serve([], { lastSeq: 0 });
+    const { fetchPage, calls } = serve(0, { lastSeq: 0 });
     const res = await fetchAllLedgerEvents(fetchPage);
     expect(res.events).toEqual([]);
+    expect(res.complete).toBe(true);
     expect(calls).toHaveLength(1);
   });
 
-  test('stops when a page brings nothing new even if the server reports a higher lastSeq', async () => {
+  test('stops when a page makes no progress even if the server reports a higher lastSeq', async () => {
     // a live run: the in-memory sequence is ahead of what is on disk
-    const { fetchPage, calls } = serve(ledger(1200), { lastSeq: 1300 });
+    const { fetchPage, calls } = serve(1200, { lastSeq: 1300 });
     const res = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });
     expect(res.events).toHaveLength(1200);
     expect(res.complete).toBe(true);
@@ -49,8 +70,23 @@ describe('fetchAllLedgerEvents', () => {
     ]);
   });
 
+  test('falls back to the highest envelope seq when the server sends no cursor', async () => {
+    const calls = [];
+    const fetchPage = async (after, limit) => {
+      calls.push(after);
+      const events = [];
+      for (let seq = after + 1; seq <= Math.min(after + limit, 1500); seq++) {
+        events.push({ v: 2, seq, type: 'meta' });
+      }
+      return { events, lastSeq: 1500 };
+    };
+    const res = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });
+    expect(res.events).toHaveLength(1500);
+    expect(calls).toEqual([0, 1000]);
+  });
+
   test('honours the page bound and reports an incomplete projection', async () => {
-    const { fetchPage } = serve(ledger(5000));
+    const { fetchPage } = serve(5000);
     const res = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000, maxPages: 2 });
     expect(res.events).toHaveLength(2000);
     expect(res.complete).toBe(false);

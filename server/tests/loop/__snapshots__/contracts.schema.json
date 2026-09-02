@@ -449,6 +449,17 @@
                     "enum": ["server", "caller", "none"],
                     "default": "none"
                   },
+                  "configHash": {
+                    "type": "string"
+                  },
+                  "modelSnapshot": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "optionsSnapshot": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
                   "callConfig": {
                     "type": "object",
                     "properties": {

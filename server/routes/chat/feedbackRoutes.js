@@ -139,7 +139,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           try {
             const access = await authorizeRun(runId, req.user);
             const runChatId = access.meta?.refs?.chatId;
-            if (access.ok && (!runChatId || runChatId === chatId)) {
+            if (access.ok && access.meta?.kind === 'chat' && runChatId === chatId) {
               // The run may live on another worker: continue its persisted sequence.
               await runLog.appendRecovered(
                 runId,

@@ -165,6 +165,12 @@ export const requestHeaderData = z.object({
   toolSchemasHash: z.string().nullable(),
   toolSchemas: z.array(z.any()).optional(),
   toolExecution: z.enum(['server', 'caller', 'none']).default('none'),
+  /** Hash of { modelSnapshot, optionsSnapshot }; the snapshots themselves are recorded on change. */
+  configHash: z.string().optional(),
+  /** Request-shaping model fields (no secrets) the request was built from. */
+  modelSnapshot: z.record(z.any()).optional(),
+  /** Adapter options as the adapter saw them (tools / responseSchema recorded separately). */
+  optionsSnapshot: z.record(z.any()).optional(),
   callConfig: z
     .object({
       temperature: z.number().optional(),

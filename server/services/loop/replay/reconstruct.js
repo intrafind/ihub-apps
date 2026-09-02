@@ -65,6 +65,8 @@ export async function verifyRequestReconstruction(
   let lastMessages = null;
   let lastTools = null;
   let lastSchema = null;
+  let lastModelSnapshot = null;
+  let lastOptionsSnapshot = null;
 
   for (const event of events) {
     if (event.type !== RUN_LOG_EVENTS.REQUEST_HEADER) continue;
@@ -82,6 +84,12 @@ export async function verifyRequestReconstruction(
     }
     const callConfig = data.callConfig || {};
     if (callConfig.responseSchema) lastSchema = callConfig.responseSchema;
+    if (data.modelSnapshot) lastModelSnapshot = data.modelSnapshot;
+    if (data.optionsSnapshot) lastOptionsSnapshot = data.optionsSnapshot;
+    if (data.configHash && !lastModelSnapshot) {
+      skip('model / options snapshot not recorded before this request');
+      continue;
+    }
     let responseSchema;
     if (callConfig.responseSchemaHash) {
       if (!lastSchema || hashPayload(lastSchema) !== callConfig.responseSchemaHash) {
@@ -94,7 +102,10 @@ export async function verifyRequestReconstruction(
       skip('tool schemas changed without being recorded');
       continue;
     }
-    const model = findModel ? findModel(data.model) : null;
+    // The recorded snapshot is authoritative: the request is rebuilt from the
+    // model as it was, not from the current catalog. Older ledgers without a
+    // snapshot fall back to the catalog lookup.
+    const model = lastModelSnapshot || (findModel ? findModel(data.model) : null);
     if (!model) {
       skip(`model ${data.model} not in catalog`);
       continue;
@@ -103,10 +114,13 @@ export async function verifyRequestReconstruction(
     report.checked += 1;
     try {
       const apiKey = resolveApiKey ? await resolveApiKey(model) : REDACTED_KEY;
-      const options = optionsFromCallConfig(callConfig, {
-        tools: lastTools || undefined,
-        responseSchema
-      });
+      const options = lastOptionsSnapshot
+        ? {
+            ...lastOptionsSnapshot,
+            ...(lastTools ? { tools: lastTools } : {}),
+            ...(responseSchema ? { responseSchema } : {})
+          }
+        : optionsFromCallConfig(callConfig, { tools: lastTools || undefined, responseSchema });
       const rebuilt = await createRequest(model, lastMessages, apiKey, options);
       const actual = hashPayload(rebuilt?.body ?? {});
       if (actual === data.requestHash) {

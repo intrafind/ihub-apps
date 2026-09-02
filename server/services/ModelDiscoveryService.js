@@ -15,6 +15,31 @@
 import logger from '../utils/logger.js';
 import { throttledFetch } from '../requestThrottler.js';
 
+/**
+ * Wait for `promise`, but give up as soon as `signal` aborts (rejecting with
+ * an AbortError). The promise itself keeps running for its other waiters.
+ */
+function raceSignal(promise, signal) {
+  if (!signal) return promise;
+  const abortError = () =>
+    Object.assign(new Error('Model discovery abandoned: request aborted'), { name: 'AbortError' });
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      }
+    );
+  });
+}
+
 class ModelDiscoveryService {
   constructor() {
     /**
@@ -43,7 +68,7 @@ class ModelDiscoveryService {
    * @param {number} cacheTtlMs - Cache TTL in milliseconds (default: 5 minutes)
    * @returns {Promise<string|null>} - Discovered model ID or null if discovery fails
    */
-  async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS, { signal } = {}) {
+  async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS) {
     // Return cached result if still valid
     const cached = this.cache.get(model.id);
     if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
@@ -66,7 +91,7 @@ class ModelDiscoveryService {
     }
 
     // Create and track the discovery request
-    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs, { signal });
+    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs);
     this.pendingRequests.set(model.id, discoveryPromise);
 
     try {
@@ -82,7 +107,7 @@ class ModelDiscoveryService {
    * Internal method to perform the actual model discovery
    * @private
    */
-  async _performDiscovery(model, apiKey, cacheTtlMs, { signal } = {}) {
+  async _performDiscovery(model, apiKey, cacheTtlMs) {
     if (!model.url) {
       logger.warn('Cannot discover model: no URL configured', {
         component: 'ModelDiscoveryService',
@@ -114,11 +139,9 @@ class ModelDiscoveryService {
       const response = await throttledFetch(model.id, modelsUrl, {
         method: 'GET',
         headers,
-        // 10 second timeout for discovery, and the caller's deadline / abort
-        // when the discovery runs inside a model call.
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-          : AbortSignal.timeout(10000)
+        // 10 second timeout for discovery. Callers' own deadlines are applied
+        // per waiter (getEffectiveModelId), never to this shared request.
+        signal: AbortSignal.timeout(10000)
       });
 
       if (!response.ok) {
@@ -199,9 +222,10 @@ class ModelDiscoveryService {
       return model.modelId;
     }
 
-    const discoveredModelId = await this.discoverModel(model, apiKey, this.DEFAULT_CACHE_TTL_MS, {
-      signal
-    });
+    // The discovery request is shared by every concurrent caller and bounded
+    // by its own timeout; each caller waits only as long as its own signal
+    // allows, so one caller's abort or deadline never affects the others.
+    const discoveredModelId = await raceSignal(this.discoverModel(model, apiKey), signal);
 
     // Fall back to configured modelId if discovery fails
     if (!discoveredModelId) {

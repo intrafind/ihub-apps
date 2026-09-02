@@ -127,7 +127,7 @@ export default [
           patterns: [
             {
               group: ['**/adapters/index.js', '**/adapters/index'],
-              importNames: ['createCompletionRequest'],
+              importNames: ['createCompletionRequest', 'getAdapter'],
               message:
                 'Build LLM requests through server/services/loop/LLMClient.js (execute/complete), not the adapter registry.'
             },

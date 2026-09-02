@@ -357,6 +357,7 @@ export class LLMClient {
     this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe), LRU-bounded
     this._lastSchemaHash = new Map(); // runId -> responseSchema hash (recorded on change), LRU-bounded
     this._lastToolsHash = new Map(); // runId -> tool schemas hash (recorded on change), LRU-bounded
+    this._lastConfigHash = new Map(); // runId -> model/options snapshot hash (recorded on change), LRU-bounded
   }
 
   // ── Model catalog ──────────────────────────────────────────────────────
@@ -971,6 +972,18 @@ export class LLMClient {
     while (this._lastToolsHash.size > MAX_TRACKED_RUN_HASHES) {
       this._lastToolsHash.delete(this._lastToolsHash.keys().next().value);
     }
+    // The request-shaping model fields and adapter options are snapshotted
+    // (secrets stripped) so the request can be rebuilt from the ledger even
+    // after the model catalog changed; recorded in full when they change.
+    const modelSnapshot = snapshotModel(model);
+    const optionsSnapshot = snapshotOptions(adapterOptions);
+    const configHash = hashPayload({ modelSnapshot, optionsSnapshot });
+    const configChanged = configHash !== (this._lastConfigHash.get(runId) ?? null);
+    this._lastConfigHash.delete(runId);
+    this._lastConfigHash.set(runId, configHash);
+    while (this._lastConfigHash.size > MAX_TRACKED_RUN_HASHES) {
+      this._lastConfigHash.delete(this._lastConfigHash.keys().next().value);
+    }
     const callConfig = {
       temperature:
         typeof adapterOptions.temperature === 'number' ? adapterOptions.temperature : undefined,
@@ -1000,6 +1013,8 @@ export class LLMClient {
       ...(tools && (reason !== 'same' || toolsChanged) ? { toolSchemas: tools } : {}),
       toolExecution: telemetry.toolExecution || (tools ? 'caller' : 'none'),
       callConfig,
+      configHash,
+      ...(reason !== 'same' || configChanged ? { modelSnapshot, optionsSnapshot } : {}),
       language
     });
   }
@@ -1117,6 +1132,49 @@ function buildAdapterOptions(options, model, stream) {
     model.maxOutputTokens > 0
   ) {
     out.maxTokens = model.maxOutputTokens;
+  }
+  return out;
+}
+
+/**
+ * Keys that may carry a secret: API keys, passwords, credentials, bearer /
+ * access / refresh tokens, raw header maps. Deliberately not "anything with
+ * `token` in it" — `maxTokens`, `maxOutputTokens` and `tokenLimit` shape the
+ * request and must stay in the snapshot.
+ */
+const SECRET_KEY_PATTERN =
+  /(api[-_]?key|apikey|secret|password|passwd|credential|authorization|bearer|token$|^key$|^headers$)/i;
+
+function isPlainValue(value) {
+  return value !== undefined && typeof value !== 'function';
+}
+
+/**
+ * The request-shaping fields of a model config, without secrets or localized
+ * display blobs. Reconstruction rebuilds the request from this snapshot, not
+ * from the current (mutable) catalog.
+ */
+export function snapshotModel(model) {
+  const out = {};
+  for (const [key, value] of Object.entries(model || {})) {
+    if (!isPlainValue(value) || SECRET_KEY_PATTERN.test(key)) continue;
+    if (key === 'name' || key === 'description') continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * The adapter options as the adapter saw them, minus the parts recorded
+ * separately (tools, responseSchema) and anything secret-like.
+ */
+export function snapshotOptions(adapterOptions) {
+  const out = {};
+  for (const [key, value] of Object.entries(adapterOptions || {})) {
+    if (!isPlainValue(value) || SECRET_KEY_PATTERN.test(key)) continue;
+    if (key === 'tools' || key === 'responseSchema' || key === 'signal' || key === 'telemetry')
+      continue;
+    out[key] = value;
   }
   return out;
 }

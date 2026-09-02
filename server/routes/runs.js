@@ -151,11 +151,21 @@ export default function registerRunRoutes(app) {
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 5000);
       const events = await runLog.readEvents(runId, { afterSeq: after, limit });
       const lastSeq = await runLog.lastSeq(runId);
+      // The last raw ledger sequence this page read: the paging cursor. A
+      // projected page can be empty (headers, budget events, compactions
+      // produce no envelopes) while more of the ledger remains.
+      const nextAfter = events.length ? events[events.length - 1].seq : after;
       if (req.query.view === 'sse') {
         // Client re-sync: the same envelopes the live stream would have carried.
-        return res.json({ runId, after, events: events.flatMap(projectLedgerEvent), lastSeq });
+        return res.json({
+          runId,
+          after,
+          nextAfter,
+          events: events.flatMap(projectLedgerEvent),
+          lastSeq
+        });
       }
-      res.json({ runId, after, events, lastSeq });
+      res.json({ runId, after, nextAfter, events, lastSeq });
     } catch (error) {
       sendFailedOperationError(res, 'read run events', error);
     }

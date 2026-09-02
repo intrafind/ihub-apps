@@ -82,7 +82,7 @@ these fields and verifies the hash — the ledger is complete enough to replay.
 | --------------------------------------------------------- | ------------------------- | -------------------------------------------------------------- |
 | `GET /api/runs?from&to&kind&principalId&limit`            | admin                     | List runs from the daily index                                 |
 | `GET /api/runs/:runId`                                    | owner or admin            | Run metadata                                                   |
-| `GET /api/runs/:runId/events?after=<seq>&limit=<n>`       | owner or admin            | Read events (re-sync a live stream from a sequence number)     |
+| `GET /api/runs/:runId/events?after=<seq>&limit=<n>`       | owner or admin            | Read events (re-sync a live stream from a sequence number); the response carries `lastSeq` and `nextAfter`, the last raw sequence the page read, as the paging cursor |
 | `DELETE /api/runs/:runId`                                 | owner or admin            | Delete the run, its spill files and its interactions (cascade) |
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
 | `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, approver or admin  | Answer a question / approval / review                          |

@@ -162,3 +162,15 @@ test('loopRequest defaults policies and toolExecution', () => {
   assert.equal(req.policies.context.compactThresholdTokens, 16000);
   assert.equal(req.policies.interactions.maxQuestions, 10);
 });
+
+test('request bodies: an answer must say something; a steer must carry a message', () => {
+  const { interactionAnswerRequestSchema, humanEventRequestSchema } = contracts;
+  assert.equal(interactionAnswerRequestSchema.safeParse({}).success, false);
+  assert.equal(interactionAnswerRequestSchema.safeParse({ skipped: true }).success, true);
+  assert.equal(interactionAnswerRequestSchema.safeParse({ value: 'yes' }).success, true);
+  assert.equal(interactionAnswerRequestSchema.safeParse({ decision: 'approve' }).success, true);
+  assert.equal(humanEventRequestSchema.safeParse({ kind: 'steer' }).success, false);
+  assert.equal(humanEventRequestSchema.safeParse({ kind: 'steer', message: '   ' }).success, false);
+  assert.equal(humanEventRequestSchema.safeParse({ kind: 'steer', message: 'go' }).success, true);
+  assert.equal(humanEventRequestSchema.safeParse({ kind: 'stop' }).success, true);
+});

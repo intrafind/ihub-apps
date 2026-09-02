@@ -1579,8 +1579,16 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   _questionSeamOptions({ context, nodeId, runState }) {
     const executionId = context.executionId || runState?.executionId;
+    // The question counter lives on the workflow state: every question pauses
+    // the node and the resumed node builds a fresh loop, so an in-memory
+    // counter would restart at zero and the cap could never be reached.
+    const countOf = () => Number(runState?.data?._questionCount) || 0;
     return {
       validate: validateAskUserParams,
+      getCount: () => countOf(),
+      incrementCount: () => {
+        if (runState?.data) runState.data._questionCount = countOf() + 1;
+      },
       raise: async (info, ctx) => {
         const checkpointId = `ckpt-${uuidv4()}`;
         const runMeta = runLog.getRunMeta(executionId);
@@ -1639,6 +1647,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       pauseReason: 'question',
       stateUpdates: {
         pendingCheckpoint: checkpoint,
+        ...(Number.isInteger(context._workflowState?.data?._questionCount)
+          ? { _questionCount: context._workflowState.data._questionCount }
+          : {}),
         _pausedLoops: {
           [node.id]: pausedLoopState({
             checkpointId: checkpoint.id,

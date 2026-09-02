@@ -18,6 +18,7 @@ import memoryFile from '../../agents/memory/memoryFile.js';
 import { runTool } from '../../toolLoader.js';
 import { resolveModelId } from '../../utils.js';
 import llmClient from '../../services/loop/LLMClient.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 
 const PROFILES_DIR = 'contents/agents/profiles';
 
@@ -473,7 +474,9 @@ export default function registerAdminAgentsRoutes(app) {
           component: 'AdminAgents',
           error
         });
-        sendFailedOperationError(res, 'build memory from tool', error);
+        // Provider failures keep their canonical status (429 / 504 / 404 / 502);
+        // anything else falls back to a 500 like sendFailedOperationError.
+        sendLLMError(res, error, { context: 'build memory from tool' });
       }
     }
   );

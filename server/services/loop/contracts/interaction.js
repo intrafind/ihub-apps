@@ -143,21 +143,41 @@ export const interactionSchema = z.object({
 });
 
 /** Body of POST /api/runs/:runId/interactions/:id/answer */
-export const interactionAnswerRequestSchema = z.object({
-  value: z.any().optional(),
-  data: z.record(z.any()).optional(),
-  decision: z.enum(['approve', 'edit', 'reject', 'respond']).optional(),
-  reason: z.string().max(2000).optional(),
-  skipped: z.boolean().optional()
-});
+export const interactionAnswerRequestSchema = z
+  .object({
+    value: z.any().optional(),
+    data: z.record(z.any()).optional(),
+    decision: z.enum(['approve', 'edit', 'reject', 'respond']).optional(),
+    reason: z.string().max(2000).optional(),
+    skipped: z.boolean().optional()
+  })
+  .refine(
+    body =>
+      body.skipped === true ||
+      body.value !== undefined ||
+      body.data !== undefined ||
+      body.decision !== undefined ||
+      body.reason !== undefined,
+    { message: 'An answer needs a value, data, decision or reason — or skipped: true' }
+  );
 
 /** Body of POST /api/runs/:runId/human-events (`answer` goes through the answer endpoint). */
-export const humanEventRequestSchema = z.object({
-  kind: z.enum(['steer', 'stop', 'feedback']),
-  message: z.string().max(4000).optional(),
-  messageId: z.string().max(200).optional(),
-  rating: z.union([z.number(), z.string().max(50)]).optional()
-});
+export const humanEventRequestSchema = z
+  .object({
+    kind: z.enum(['steer', 'stop', 'feedback']),
+    message: z.string().max(4000).optional(),
+    messageId: z.string().max(200).optional(),
+    rating: z.union([z.number(), z.string().max(50)]).optional()
+  })
+  .superRefine((body, ctx) => {
+    if (body.kind === 'steer' && !(typeof body.message === 'string' && body.message.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message'],
+        message: 'A steer event needs a non-empty message'
+      });
+    }
+  });
 
 /** A human→agent event delivered into a run (steer / stop / feedback). */
 export const humanEventSchema = z.object({

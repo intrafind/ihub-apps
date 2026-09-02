@@ -97,7 +97,7 @@ test('a multi-step run reconstructs byte-for-byte through the real adapter', asy
   await runLog.stop();
 });
 
-test('tampered messages are detected; schema-constrained calls are verified; unknown models are skipped', async () => {
+test('tampered messages are detected; schema-constrained calls are verified; a catalog miss is rebuilt from the snapshot', async () => {
   const { runLog, events } = await captureRunLog();
   const client = realClient(runLog);
   const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
@@ -145,9 +145,27 @@ test('tampered messages are detected; schema-constrained calls are verified; unk
   assert.equal(partial.skipped.length, 1);
   assert.match(partial.skipped[0].reason, /schema/);
 
+  // A model missing from the catalog is still verified — from the recorded
+  // snapshot; only a ledger without snapshots (older records) has to skip.
   const unknown = await verifyRequestReconstruction(events, { findModel: () => null });
-  assert.equal(unknown.checked, 0);
-  assert.equal(unknown.skipped.length, 2);
+  assert.equal(unknown.checked, 2);
+  assert.deepEqual(unknown.skipped, []);
+  const legacy = events.map(e =>
+    e.type === 'request/header'
+      ? {
+          ...e,
+          data: {
+            ...e.data,
+            modelSnapshot: undefined,
+            optionsSnapshot: undefined,
+            configHash: undefined
+          }
+        }
+      : e
+  );
+  const noSnapshot = await verifyRequestReconstruction(legacy, { findModel: () => null });
+  assert.equal(noSnapshot.checked, 0);
+  assert.equal(noSnapshot.skipped.length, 2);
   await runLog.stop();
 });
 
@@ -185,5 +203,33 @@ test('a changed tool set with identical messages records the new schemas and sta
   assert.equal(report.checked, 3);
   assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
   assert.deepEqual(report.skipped, []);
+  await runLog.stop();
+});
+
+test('reconstruction rebuilds from the recorded model / options snapshot, not the current catalog', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  await client.complete({
+    model: { ...model, apiKey: 'sk-must-not-leak' },
+    messages: [{ role: 'user', content: 'a' }],
+    options: { temperature: 0.1 },
+    telemetry: { runId, step: 0 }
+  });
+  const header = events.find(e => e.type === 'request/header');
+  assert.ok(header.data.modelSnapshot, 'snapshot recorded on the first header');
+  assert.equal(header.data.modelSnapshot.apiKey, undefined, 'secrets never reach the ledger');
+  assert.equal(header.data.modelSnapshot.url, model.url);
+  assert.equal(header.data.optionsSnapshot.temperature, 0.1);
+  assert.equal(JSON.stringify(header).includes('sk-must-not-leak'), false);
+
+  // the model is gone from the catalog / was edited: the snapshot still verifies
+  const gone = await verifyRequestReconstruction(events, { findModel: () => null });
+  assert.equal(gone.checked, 1);
+  assert.equal(gone.matched, 1, JSON.stringify(gone.mismatched, null, 2));
+  const edited = await verifyRequestReconstruction(events, {
+    findModel: () => ({ ...model, url: 'https://moved.example/v1', modelId: 'other' })
+  });
+  assert.equal(edited.matched, 1);
   await runLog.stop();
 });
