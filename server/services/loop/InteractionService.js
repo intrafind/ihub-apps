@@ -33,7 +33,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
-import { compileSafeRegex } from '../../utils/safeRegex.js';
+import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
 import { resolveActorId } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -416,7 +416,10 @@ export class InteractionService extends EventEmitter {
    * Enforce `prompt.validation` on the answered value(s), by input type:
    * `pattern` on the text of every value; `min` / `max` as numeric bounds for
    * `number`, as the number of selections for `multi_select`, and as the text
-   * length for `text`. An unsafe or invalid pattern is ignored (never rejects).
+   * length for `text`. The pattern runs under a hard timeout on a
+   * length-bounded input (`testRegexSafely`): an over-long answer is rejected,
+   * while a pattern that is unsafe or times out cannot be enforced and is
+   * ignored (logged) rather than blocking every answer.
    * @private
    */
   _enforceValidationRules(prompt, value) {
@@ -426,10 +429,17 @@ export class InteractionService extends EventEmitter {
       throw new InteractionError(rules.message || fallback, 'VALIDATION_FAILED');
     };
     if (rules.pattern) {
-      const re = compileSafeRegex(rules.pattern);
-      if (re) {
-        for (const v of values) {
-          if (!re.test(String(v))) fail(`Answer does not match the required format`);
+      for (const v of values) {
+        const verdict = testRegexSafely(rules.pattern, String(v));
+        if (verdict.matched === false) fail('Answer does not match the required format');
+        if (verdict.matched === null) {
+          if (verdict.reason === 'input_too_long') {
+            fail(`Answer is too long (max ${MAX_TESTED_INPUT_LENGTH} characters)`);
+          }
+          logger.warn('InteractionService: answer pattern not enforced', {
+            component: 'InteractionService',
+            reason: verdict.reason
+          });
         }
       }
     }

@@ -602,9 +602,19 @@ test("prompt.validation is enforced server-side according to the prompt's input 
   );
   assert.equal((await svc.answer(multi.id, { value: ['a', 'b'] })).status, 'answered');
 
-  // an unsafe (ReDoS) pattern never rejects an answer
+  // an unsafe (ReDoS) pattern never rejects an answer, whether the denylist
+  // spots it or only the execution timeout does
   const unsafe = await raise({ message: 'x', validation: { pattern: '(a+)+$' } });
   assert.equal((await svc.answer(unsafe.id, { value: 'anything' })).status, 'answered');
+  const sneaky = await raise({ message: 'x', validation: { pattern: '(a|aa)+$' } });
+  const started = Date.now();
+  assert.equal((await svc.answer(sneaky.id, { value: `${'a'.repeat(34)}!` })).status, 'answered');
+  assert.ok(Date.now() - started < 1000, 'the pattern test is cut off by its timeout');
+  const long = await raise({ message: 'x', validation: { pattern: '^a+$' } });
+  await assert.rejects(
+    svc.answer(long.id, { value: 'a'.repeat(3000) }),
+    e => e.code === 'VALIDATION_FAILED' && /too long/.test(e.message)
+  );
 
   // skipping bypasses validation only when the prompt allows it
   const skippable = await raise({ message: 'y', allowSkip: true, validation: { min: 5 } });

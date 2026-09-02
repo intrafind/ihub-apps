@@ -45,6 +45,8 @@ import {
 
 const COMPONENT = 'AgentLoop';
 const PREVIEW_CHARS = 1024;
+/** Longest preview kept in the transcript for a tool result that was spilled. */
+const SPILL_PREVIEW_CHARS = 16 * 1024;
 
 /** Resolve a (partial) policies object against the contract defaults. */
 export function resolvePolicies(partial = {}) {
@@ -53,6 +55,52 @@ export function resolvePolicies(partial = {}) {
 
 function abortError(message = 'Agent loop aborted') {
   return new LLMError(message, { code: LLM_ERROR_CODES.ABORTED, providerCode: 'ABORTED' });
+}
+
+function wallClockError() {
+  return new LLMError('Agent loop wall-clock budget exceeded', {
+    code: LLM_ERROR_CODES.TIMEOUT,
+    providerCode: 'WALL_CLOCK'
+  });
+}
+
+/** One signal that aborts when any of the given ones does (absent ones ignored). */
+function combineSignals(...signals) {
+  const list = signals.filter(Boolean);
+  if (list.length === 0) return undefined;
+  if (list.length === 1) return list[0];
+  return AbortSignal.any(list);
+}
+
+/**
+ * Run `start()` and settle as soon as `signal` aborts, even when the work
+ * ignores the signal (a hanging tool must not outlive the invocation deadline).
+ */
+function raceAbort(start, signal) {
+  if (!signal) return Promise.resolve().then(start);
+  if (signal.aborted) {
+    return Promise.reject(abortError('Agent loop aborted (cancelled or timed out)'));
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortError('Agent loop aborted (cancelled or timed out)'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve()
+      .then(start)
+      .then(
+        value => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(value);
+        },
+        err => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        }
+      );
+  });
+}
+
+function looksLikeJson(text) {
+  return /^\s*[[{]/.test(text);
 }
 
 function previewValue(value) {
@@ -140,7 +188,6 @@ export class AgentLoop {
     const tools = Array.isArray(request.tools) ? request.tools : [];
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
-    const signal = request.signal;
     const runId = request.runId || null;
     // Ledger events need a well-formed run id; anything else is telemetry-only.
     const ledgerId = runId && isValidRunId(runId) ? runId : null;
@@ -161,9 +208,17 @@ export class AgentLoop {
 
     const maxRounds = policies.budgets.maxToolRounds;
     const maxTokensPerRun = policies.budgets.maxTokensPerRun || 0;
-    const deadline = policies.budgets.maxWallClockMs
-      ? startedAt + policies.budgets.maxWallClockMs
+    // The wall-clock budget is an abort signal, not just a timestamp checked
+    // between awaits: combined with the caller's signal it cuts an in-flight
+    // model call or tool short when the invocation deadline passes.
+    const wallClockMs = policies.budgets.maxWallClockMs || 0;
+    const deadline = wallClockMs ? new AbortController() : null;
+    // Not unref'd on purpose: while a tool or model call is in flight this
+    // timer is what guarantees the invocation ends; it is cleared in `finally`.
+    const deadlineTimer = deadline
+      ? setTimeout(() => deadline.abort(wallClockError()), wallClockMs)
       : null;
+    const signal = combineSignals(request.signal, deadline?.signal);
     const runBudget = request.state?.budget || { input: 0, output: 0, total: 0 };
     if (request.state) request.state.budget = runBudget;
 
@@ -218,13 +273,8 @@ export class AgentLoop {
     this._ledger(ledgerId, RUN_LOG_EVENTS.SEGMENT_START, { segment: segmentId, purpose });
 
     const assertNotAborted = () => {
+      if (deadline?.signal.aborted) throw wallClockError();
       if (signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
-      if (deadline && Date.now() > deadline) {
-        throw new LLMError('Agent loop wall-clock budget exceeded', {
-          code: LLM_ERROR_CODES.TIMEOUT,
-          providerCode: 'WALL_CLOCK'
-        });
-      }
     };
 
     const buildResult = (status, extra = {}) => ({
@@ -580,7 +630,10 @@ export class AgentLoop {
       const status =
         forceFinish && finishReason === 'budget_exhausted' ? 'budget_exhausted' : 'completed';
       return buildResult(status, { structured: structuredLifted ? undefined : undefined });
-    } catch (err) {
+    } catch (caught) {
+      // A model call or tool cut short by the wall-clock deadline surfaces as
+      // an abort; report it as the budget failure it is.
+      const err = deadline?.signal.aborted && isAbortError(caught) ? wallClockError() : caught;
       const llmErr = isLLMError(err) ? err : null;
       if (isAbortError(err)) {
         this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
@@ -600,7 +653,63 @@ export class AgentLoop {
         recoverable: false
       });
       return buildResult('error', { error: err, finishReason: 'error' });
+    } finally {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
     }
+  }
+
+  /**
+   * Keep the transcript bounded: a tool result above
+   * `policies.context.spillThresholdBytes` is stored in the run's spill store
+   * (when the ledger persists) and replaced by a preview plus reference, so a
+   * large tool response neither fills the heap nor the next model call.
+   * @private
+   * @returns {Promise<{message: Object, bytes: number, spillRef: Object|null}>}
+   */
+  async _boundToolMessage(ctx, message, { call, toolId, iteration }) {
+    const content = message?.content;
+    const bytes = typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : 0;
+    const threshold = ctx.policies.context.spillThresholdBytes;
+    if (typeof content !== 'string' || !threshold || bytes <= threshold) {
+      return { message, bytes, spillRef: null };
+    }
+    let spillRef = null;
+    if (ctx.ledgerId && typeof ctx.runLog?.spill === 'function') {
+      try {
+        spillRef = await ctx.runLog.spill(
+          ctx.ledgerId,
+          `tool-${iteration}-${call.id || call.index || 0}`,
+          content,
+          looksLikeJson(content) ? 'application/json' : 'text/plain'
+        );
+      } catch (err) {
+        this.logger.warn('Tool result spill failed; keeping the preview only', {
+          component: COMPONENT,
+          runId: ctx.runId,
+          tool: toolId,
+          error: err.message
+        });
+      }
+    }
+    const previewChars = Math.min(SPILL_PREVIEW_CHARS, threshold);
+    const bounded = {
+      truncated: true,
+      bytes,
+      preview: content.slice(0, previewChars),
+      ...(spillRef ? { spill: { path: spillRef.path, sha256: spillRef.sha256 } } : {}),
+      note:
+        `Tool result of ${bytes} bytes exceeded the transcript limit of ${threshold} bytes; ` +
+        `only the first ${previewChars} characters are included.`
+    };
+    this.logger.info('Tool result exceeded the transcript limit', {
+      component: COMPONENT,
+      runId: ctx.runId,
+      tool: toolId,
+      bytes,
+      threshold,
+      spilled: !!spillRef
+    });
+    return { message: { ...message, content: JSON.stringify(bounded) }, bytes, spillRef };
   }
 
   /**
@@ -679,7 +788,11 @@ export class AgentLoop {
             providerCode: 'NO_TOOL_EXECUTOR'
           });
         }
-        rawResult = await ctx.request.executeTool(call, { toolDef, toolId, args, ctx, info });
+        rawResult = await raceAbort(
+          () =>
+            ctx.request.executeTool(call, { toolDef, toolId, args, ctx, info, signal: ctx.signal }),
+          ctx.signal
+        );
         if (
           rawResult &&
           typeof rawResult === 'object' &&
@@ -707,22 +820,25 @@ export class AgentLoop {
       }
     }
 
-    const outcome = { rawResult, message, durationMs: Date.now() - started, error: failure };
+    const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
+    const outcome = {
+      rawResult,
+      message: bound.message,
+      durationMs: Date.now() - started,
+      error: failure
+    };
     await runHooks(seams, 'postTool', ctx, info, outcome);
     messages.push(outcome.message);
 
     const verdict = classifyToolResult(outcome.message);
-    const contentBytes =
-      typeof outcome.message.content === 'string'
-        ? Buffer.byteLength(outcome.message.content, 'utf8')
-        : 0;
     this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {
       step: iteration,
       callId: call.id || `${call.index}`,
       toolId,
       name,
       resultPreview: previewValue(outcome.message.content),
-      resultBytes: contentBytes,
+      resultBytes: bound.bytes,
+      ...(bound.spillRef ? { spillRef: bound.spillRef } : {}),
       error: verdict.failed
         ? { message: verdict.message, rateLimited: verdict.rateLimited }
         : undefined,

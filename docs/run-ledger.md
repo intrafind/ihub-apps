@@ -124,7 +124,9 @@ The answer body is `{ value?, data?, decision?, reason?, skipped? }`. It is
 validated server-side against the prompt: the options, the prompt's
 `validation` rules (`pattern`, and `min` / `max` as numeric bounds for a
 `number` question, selection count for `multi_select`, text length for
-`text`), the `inputSchema` of a form, and the skip permission. A rejected
+`text`), the `inputSchema` of a form, and the skip permission. A pattern runs
+under a hard timeout on a length-bounded answer, so a pathological pattern
+supplied by a model cannot stall the server. A rejected
 answer (invalid option or value, missing required form field, unauthorized
 approver, execution no longer paused on this checkpoint) returns 4xx with a
 `code` and leaves the interaction pending. A chat message that answers or

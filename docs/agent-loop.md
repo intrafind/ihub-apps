@@ -69,13 +69,14 @@ defaults.
 | --------------------------------- | ------- | ---------------------------------------------------------------------- |
 | `budgets.maxToolRounds`           | 10      | Round cap; the last round is spent on a forced final answer            |
 | `budgets.maxTokensPerRun`         | 0       | Run-level token cap across every segment sharing `state.budget` (0 = unlimited) |
-| `budgets.maxWallClockMs`          | —       | Wall-clock deadline for the invocation                                 |
+| `budgets.maxWallClockMs`          | —       | Wall-clock deadline for the invocation, enforced as an abort signal: it cuts the in-flight model call or tool short (a tool that ignores the signal is abandoned) |
 | `tools.maxRateLimitFailures`      | 2       | 429/503-style failures before a tool is withheld for the segment       |
 | `tools.maxConsecutiveFailures`    | 3       | Consecutive failures (any error) before a tool is withheld              |
 | `tools.parallel` / `maxParallel`  | true / 4 | Segment planner: read-only tools and non-overlapping calls run concurrently |
 | `context.compactThresholdTokens`  | 16000   | Proactive compaction threshold (old tool/assistant bodies collapse)    |
 | `context.compactKeepRecent`       | 6       | Trailing messages kept verbatim when compacting                        |
 | `context.maxReactiveAttempts`     | 2       | Retries after a provider "prompt too long" error, each after compaction |
+| `context.spillThresholdBytes`     | 65536   | Tool results above this are stored in the run's spill store (when the ledger persists) and replaced in the transcript by a bounded preview and reference |
 | `interactions.maxQuestions`       | 10      | Clarification cap for interactive tools (question seam)                |
 
 ### Result

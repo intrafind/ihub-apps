@@ -549,6 +549,116 @@ test('abort between iterations → aborted with partial content preserved', asyn
 
 // ── compaction ──────────────────────────────────────────────────────────────
 
+test('wall clock: the deadline aborts an in-flight tool and a hanging model call', async () => {
+  // A tool that never settles and ignores the signal is abandoned at the deadline.
+  const { loop, requests } = makeLoop([toolTurn([{ name: 'webSearch', args: { query: 'x' } }])]);
+  let started = Date.now();
+  const result = await loop.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { budgets: { maxWallClockMs: 60 } },
+    executeTool: () => new Promise(() => {})
+  });
+  assert.equal(result.status, 'error');
+  assert.equal(result.error.providerCode, 'WALL_CLOCK');
+  assert.equal(result.error.code, LLM_ERROR_CODES.TIMEOUT);
+  assert.ok(Date.now() - started < 2000, 'did not wait for the tool');
+  assert.equal(requests.length, 1, 'no follow-up model call after the deadline');
+
+  // A model call that only settles when its signal aborts is cut short too.
+  const { loop: hanging } = makeLoop([
+    (request, ctx) =>
+      new Promise((_, reject) =>
+        ctx.signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        )
+      )
+  ]);
+  started = Date.now();
+  const cut = await hanging.run({
+    model,
+    messages: baseMessages,
+    policies: { budgets: { maxWallClockMs: 60 } }
+  });
+  assert.equal(cut.status, 'error');
+  assert.equal(cut.error.providerCode, 'WALL_CLOCK');
+  assert.ok(Date.now() - started < 2000);
+
+  // The tool executor receives the combined signal so it can stop early itself.
+  const seen = [];
+  const { loop: cooperative } = makeLoop([
+    toolTurn([{ name: 'webSearch', args: { query: 'x' } }]),
+    textTurn('done')
+  ]);
+  const done = await cooperative.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { budgets: { maxWallClockMs: 5000 } },
+    executeTool: async (call, { signal }) => {
+      seen.push(signal instanceof AbortSignal && !signal.aborted);
+      return { ok: true };
+    }
+  });
+  assert.equal(done.status, 'completed');
+  assert.deepEqual(seen, [true]);
+});
+
+test('spill: a tool result above the threshold is spilled and previewed, never sent in full', async () => {
+  const { runLog } = await captureRunLog();
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const big = JSON.stringify({ rows: Array.from({ length: 4000 }, (_, i) => `row-${i}`) });
+  assert.ok(big.length > 20_000);
+  const { loop, requests } = makeLoop(
+    [toolTurn([{ name: 'webSearch', args: { query: 'x' } }]), textTurn('summarised')],
+    { runLog }
+  );
+  const result = await loop.run({
+    runId,
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    policies: { context: { spillThresholdBytes: 4096 } },
+    executeTool: async () => big
+  });
+  assert.equal(result.status, 'completed');
+
+  const toolMessage = result.messages.find(m => m.role === 'tool');
+  // the preview is 4096 raw characters; JSON-encoding escapes its quotes
+  assert.ok(toolMessage.content.length < 2 * 4096 + 1024, 'the transcript holds a bounded preview');
+  const bounded = JSON.parse(toolMessage.content);
+  assert.equal(bounded.truncated, true);
+  assert.equal(bounded.bytes, Buffer.byteLength(big, 'utf8'));
+  assert.equal(bounded.preview.length, 4096);
+  assert.equal(bounded.preview, big.slice(0, 4096));
+  assert.match(bounded.spill.path, /^spill\//);
+  // the second model call saw the preview, not the full result
+  const sent = requests[1].request.body.messages.find(m => m.role === 'tool');
+  assert.equal(sent.content, toolMessage.content);
+  // the full result is in the run's spill store and referenced from the ledger
+  assert.equal(await runLog.readSpill(runId, { path: bounded.spill.path }), big);
+  await runLog.flush();
+  const events = await runLog.readEvents(runId);
+  const toolResult = events.find(e => e.type === RUN_LOG_EVENTS.TOOL_RESULT);
+  assert.equal(toolResult.data.resultBytes, Buffer.byteLength(big, 'utf8'));
+  assert.equal(toolResult.data.spillRef.path, bounded.spill.path);
+
+  // below the threshold nothing changes
+  const { loop: small } = makeLoop([
+    toolTurn([{ name: 'webSearch', args: { query: 'x' } }]),
+    textTurn('ok')
+  ]);
+  const plain = await small.run({
+    model,
+    messages: baseMessages,
+    tools: [searchTool],
+    executeTool: async () => ({ ok: true })
+  });
+  assert.equal(plain.messages.find(m => m.role === 'tool').content, '{"ok":true}');
+  await runLog.stop();
+});
+
 test('proactive compaction bounds the prompt across tool rounds', async () => {
   const HUGE = 'y'.repeat(20000);
   let largestPrompt = 0;
