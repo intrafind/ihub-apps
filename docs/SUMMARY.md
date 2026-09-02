@@ -31,6 +31,7 @@
     - [OAuth Authorization Code Flow](oauth-authorization-code.md)
     - [OAuth Integration Guide](oauth-integration-guide.md)
     - [API Curl Examples](oauth-api-examples.md)
+    - [Personal API Keys](personal-api-keys.md)
     - [Using iHub as OIDC Identity Provider](ihub-as-oidc-idp.md)
     - [LDAP/NTLM Authentication](ldap-ntlm-authentication.md)
     - [LDAP Group Lookup Quick Start](LDAP-GROUP-LOOKUP-QUICKSTART.md)

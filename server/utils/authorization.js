@@ -435,10 +435,10 @@ export function intersectWithClientAllowList(userAllowed, clientAllowed) {
 /**
  * Apply an OAuth client's allow-list as a filter on top of the user's group permissions.
  *
- * Used for `oauth_authorization_code` (user-delegated) tokens: the token carries the
- * user's identity/groups, and the OAuth client (e.g. the Outlook add-in) may define
- * additional restrictions. If the client configures no restrictions, the user keeps
- * their full group-granted permissions.
+ * Used for user-delegated tokens (`oauth_authorization_code` and the personal API
+ * keys users mint for themselves): the token acts as a specific user, and the OAuth
+ * client (e.g. the Outlook add-in) may define additional restrictions. If the client
+ * configures no restrictions, the user keeps their full group-granted permissions.
  *
  * @param {Object} permissions - User permissions object with apps/models/prompts Sets.
  * @param {Object} user - User object carrying clientAllowedApps/clientAllowedModels/clientAllowedPrompts.
@@ -473,6 +473,37 @@ export function filterResourcesByPermissions(resources, allowedResources) {
     const resourceId = resource.id || resource.modelId || resource.name;
     return allowedResources.has(resourceId);
   });
+}
+
+/**
+ * Auth modes whose tokens never carry administrative rights, whatever groups
+ * the underlying user belongs to: machine tokens (client credentials, static
+ * API keys) and tokens that merely act on a user's behalf (authorization-code
+ * delegation, personal API keys).
+ */
+const NON_ADMIN_AUTH_MODES = [
+  'oauth_client_credentials',
+  'oauth_static_api_key',
+  'oauth_authorization_code',
+  'oauth_personal_key'
+];
+
+/**
+ * Whether a principal may hold admin rights at all.
+ *
+ * `enhanceUserWithPermissions` already forces `isAdmin` to false for delegated
+ * and machine principals, but the admin middlewares gate on raw group
+ * membership, so they need the same rule stated somewhere they can reach it.
+ * Without it, an administrator could mint a long-lived bearer token from the
+ * integrations page and use it to drive the admin API.
+ *
+ * @param {Object} user - Request user
+ * @returns {boolean} True when the principal is allowed to be an admin
+ */
+export function isAdminEligiblePrincipal(user) {
+  if (!user) return false;
+  if (user.isOAuthClient || user.isAgent === true) return false;
+  return !NON_ADMIN_AUTH_MODES.includes(user.authMode);
 }
 
 /**
@@ -604,7 +635,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     // permissions. An empty or undefined list means "no client-level restriction" so the
     // user keeps their full group-granted permissions. A list containing '*' has the same
     // effect. Any non-wildcard list narrows the user's permissions by intersection.
-    if (user.authMode === 'oauth_authorization_code') {
+    // Personal API keys are delegated in exactly the same sense: the token acts
+    // as its owner, bounded by that owner's group permissions.
+    if (user.authMode === 'oauth_authorization_code' || user.authMode === 'oauth_personal_key') {
       user.permissions = applyOAuthClientFilter(user.permissions, user);
       // OAuth-delegated tokens must never grant admin access regardless of the user's groups
       user.permissions.adminAccess = false;
@@ -615,7 +648,8 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   // are denied admin access regardless of the underlying user's groups.
   // Agent service-account principals also never get admin: they are
   // identified solely by `isAgent === true`.
-  const isOAuthDelegated = user.authMode === 'oauth_authorization_code';
+  const isOAuthDelegated =
+    user.authMode === 'oauth_authorization_code' || user.authMode === 'oauth_personal_key';
   user.isAdmin =
     user.isOAuthClient || isOAuthDelegated || user.isAgent === true
       ? false

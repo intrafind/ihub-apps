@@ -209,3 +209,17 @@ history; the OpenAI response format has no field for it, so iHub was dropping it
   degraded path.
 - In-product chats, workflows and agents were never affected; they already preserved signatures
   internally.
+
+## Admin APIs Reject Tokens That Only Act on a User's Behalf
+
+The admin and content-admin APIs decided access purely from the caller's group membership, so any
+token belonging to an administrator reached them — including OAuth service-account tokens and
+tokens issued to an external app through the authorization code flow. The rest of the codebase
+already treats those principals as never-admin, but the two middlewares never checked.
+
+- `adminAuth` and `contentAdminAuth` now refuse OAuth client credentials, static API keys,
+  authorization-code tokens, personal API keys and agent principals outright, whatever groups the
+  underlying user holds.
+- Browser sessions are unaffected: an administrator signed in to the web UI keeps full access.
+- Non-admin APIs are unaffected: a token still reaches chat, models and the MCP gateway with its
+  owner's normal permissions.

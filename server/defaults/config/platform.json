@@ -133,6 +133,15 @@
     "dcr": {
       "enabled": false,
       "maxClients": 100
+    },
+    "personalKeys": {
+      "enabled": false,
+      "allowedGroups": [],
+      "maxKeysPerUser": 5,
+      "defaultExpirationDays": 90,
+      "maxExpirationDays": 365,
+      "allowClientCredentials": true,
+      "scopes": []
     }
   },
   "mcpServer": {

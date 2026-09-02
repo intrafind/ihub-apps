@@ -1,5 +1,5 @@
 import configCache from '../configCache.js';
-import { loadGroupsConfiguration } from '../utils/authorization.js';
+import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -37,8 +37,10 @@ export function adminAuth(req, res, next) {
  * @returns {boolean} - Whether admin authentication is required
  */
 export function isAdminAuthRequired(req = null) {
-  // Check if authenticated user has admin privileges
-  if (req && req.user && req.user.id !== 'anonymous') {
+  // Check if authenticated user has admin privileges. Delegated and machine
+  // principals (personal API keys, OAuth clients, agents) are excluded up front
+  // regardless of the groups they carry.
+  if (req && req.user && req.user.id !== 'anonymous' && isAdminEligiblePrincipal(req.user)) {
     const userGroups = req.user.groups || [];
 
     try {
