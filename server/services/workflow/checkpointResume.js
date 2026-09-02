@@ -18,7 +18,7 @@
  * @module services/workflow/checkpointResume
  */
 import interactionService, { InteractionError } from '../loop/InteractionService.js';
-import defaultRunLog from '../loop/RunLog.js';
+import defaultRunLog, { isValidRunId } from '../loop/RunLog.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { getWorkflowEngine } from './WorkflowEngine.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
@@ -69,7 +69,6 @@ const ENGINE_ERROR_STATUS = Object.freeze({
  * @param {Object} [opts.engine] - WorkflowEngine (default: shared singleton)
  * @param {Object} [opts.registry] - ExecutionRegistry (default: shared singleton)
  * @param {Object} [opts.executor] - HumanNodeExecutor (default: new instance)
- * @param {Object} [opts.runLog] - ledger (default: shared RunLog)
  * @returns {Promise<Object>} the execution state after resume
  * @throws {CheckpointResumeError} when the execution is not paused on this checkpoint or rejects the answer
  */
@@ -78,12 +77,16 @@ export async function resumeWorkflowFromAnswer(interaction, opts = {}) {
     user = null,
     engine = getWorkflowEngine(),
     registry = getExecutionRegistry(),
-    executor = new HumanNodeExecutor(),
-    runLog = defaultRunLog
+    executor = new HumanNodeExecutor()
   } = opts;
   const executionId = interaction.source?.executionId || interaction.runId;
   const checkpointId = interaction.source?.checkpointId || interaction.id;
   const answer = interaction.answer || {};
+  // The execution id keys the persisted state files: only a well-formed run id
+  // may reach the engine.
+  if (!isValidRunId(executionId)) {
+    throw new CheckpointResumeError('Invalid execution id', 'INVALID_EXECUTION_ID', 400);
+  }
 
   let state;
   try {

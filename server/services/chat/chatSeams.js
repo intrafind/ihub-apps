@@ -424,7 +424,10 @@ export function chatPassthroughOptions({
   return {
     runTool: (toolId, params) => runTool(toolId, params),
     buildParams(info) {
-      const params = { ...info.args, chatId, user, passthrough: true, appConfig: app };
+      // The run id of a chat-launched workflow is minted by the chat route, never
+      // taken from the model's arguments.
+      const { runId: _modelRunId, ...args } = info.args || {};
+      const params = { ...args, chatId, user, passthrough: true, appConfig: app };
       // Workflow tools receive the upload so their inputFiles mechanism can
       // inject file content into agent node messages.
       if (String(info.toolId).startsWith('workflow_') && userFileData)

@@ -306,3 +306,36 @@ test('non-checkpoint interactions are ignored by the registered handler', async 
   await svc.stop();
   await runLog.stop();
 });
+
+test('an execution id that is not a safe run id is rejected before the engine is touched', async () => {
+  const { runLog, svc } = await setup();
+  const { engine, registry, executor, calls } = fakeEngine();
+  const it = checkpointToInteraction(fakeCheckpoint(), {
+    runId: EXECUTION_ID,
+    executionId: EXECUTION_ID
+  });
+  let getStateCalls = 0;
+  const spyingEngine = {
+    ...engine,
+    async getState(id) {
+      getStateCalls += 1;
+      return engine.getState(id);
+    }
+  };
+  await assert.rejects(
+    resumeWorkflowFromAnswer(
+      {
+        ...it,
+        status: 'answered',
+        source: { ...it.source, executionId: '../../etc' },
+        answer: { value: 'approve', by: 'alice', at: new Date().toISOString(), channel: 'api' }
+      },
+      { engine: spyingEngine, registry, executor, runLog }
+    ),
+    e => e instanceof CheckpointResumeError && e.code === 'INVALID_EXECUTION_ID' && e.status === 400
+  );
+  assert.equal(getStateCalls, 0);
+  assert.equal(calls.resume.length, 0);
+  await svc.stop();
+  await runLog.stop();
+});

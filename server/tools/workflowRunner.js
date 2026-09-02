@@ -12,6 +12,7 @@
  */
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
 import { actionTracker } from '../actionTracker.js';
@@ -371,7 +372,7 @@ export default async function workflowRunner(params = {}) {
     state = await engine.start(workflow, initialData, {
       user,
       checkpointOnNode: true,
-      ...(chatRunId ? { executionId: chatRunId } : {})
+      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {})
     });
   } catch (error) {
     logger.error('Failed to start workflow', {

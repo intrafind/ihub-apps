@@ -8,6 +8,7 @@ import { actionTracker } from '../../actionTracker.js';
 import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
 import runLog from '../loop/RunLog.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -279,6 +280,15 @@ export class WorkflowEngine {
    * });
    */
   async start(workflowDefinition, initialData = {}, options = {}) {
+    // A caller-supplied execution id becomes a state directory name and a
+    // ledger run id: accept only a safe id.
+    if (options.executionId !== undefined && !isValidId(options.executionId)) {
+      const error = new Error(
+        'Invalid executionId: only letters, digits, dots, underscores and hyphens are allowed'
+      );
+      error.code = 'INVALID_EXECUTION_ID';
+      throw error;
+    }
     const executionId = options.executionId || `wf-exec-${uuidv4()}`;
     const workflowId = workflowDefinition.id || 'unknown';
 
