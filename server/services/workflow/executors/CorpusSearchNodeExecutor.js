@@ -167,7 +167,7 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
     // and accumulates completed steps. Each step gets a unique `nodeName`
     // so they all stick instead of overwriting each other.
     //
-    // Mapping chatId: `actionTracker.trackWorkflowStep` expects the *chat*
+    // Mapping chatId: the progress frame goes to the *chat*
     // chatId. Inside workflow executors `context.chatId` is the executionId
     // — `workflowRunner` bridges executionId→chatId on its end. To reach
     // the chat directly we look up the original chat session via
