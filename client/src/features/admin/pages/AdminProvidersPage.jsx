@@ -123,9 +123,10 @@ function AdminProvidersPage() {
     }));
 
     // Use fetch directly to bypass the axios auth interceptor.
-    // The model test endpoint returns 401 when a model has no API key configured —
-    // a normal testable condition, not an auth failure. Using makeAdminApiCall here
-    // would cause the axios interceptor to clear tokens and redirect the admin.
+    // The model test endpoint maps upstream provider failures onto HTTP statuses
+    // (an invalid provider key becomes 401) — a normal testable condition, not an
+    // auth failure. Using makeAdminApiCall here would cause the axios interceptor
+    // to clear tokens and redirect the admin.
     const authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken');
     const fetchHeaders = { 'Content-Type': 'application/json' };
     if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
@@ -150,8 +151,9 @@ function AdminProvidersPage() {
           results.push({
             model,
             success: false,
-            message: data?.message || t('admin.providers.health.testFailed', 'Test failed'),
-            error: data?.error || `HTTP ${fetchResponse.status}`
+            // Server body: { error: headline, details: remediation text, code }
+            message: data?.error || t('admin.providers.health.testFailed', 'Test failed'),
+            error: data?.details || `HTTP ${fetchResponse.status}`
           });
         }
       } catch (err) {

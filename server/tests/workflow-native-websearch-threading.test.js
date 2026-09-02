@@ -30,19 +30,18 @@ function check(label, cond, details) {
   if (!cond && details) console.log(`   ${details}`);
 }
 
-// A minimal llmHelper stub: passes API-key verification and returns a
-// tool-less response so the loop breaks after a single iteration. It records
-// the options the executor forwarded so we can assert on nativeWebSearch.
+// A minimal llmClient stub: returns a tool-less response so the loop breaks
+// after a single iteration. It records the options the executor forwarded so
+// we can assert on nativeWebSearch.
 function makeExecutor() {
   const captured = { calls: [] };
-  const llmHelper = {
-    verifyApiKey: async () => ({ success: true, apiKey: 'test-key' }),
-    executeStreamingRequest: async ({ options }) => {
+  const llmClient = {
+    complete: async ({ options }) => {
       captured.calls.push(options);
       return { content: 'done', finishReason: 'stop' };
     }
   };
-  const executor = new PromptNodeExecutor({ llmHelper });
+  const executor = new PromptNodeExecutor({ llmClient });
   return { executor, captured };
 }
 

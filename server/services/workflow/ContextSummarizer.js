@@ -14,7 +14,7 @@
  * @module services/workflow/ContextSummarizer
  */
 
-import WorkflowLLMHelper from './WorkflowLLMHelper.js';
+import llmClient, { isLLMError } from '../loop/LLMClient.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -37,12 +37,13 @@ export class ContextSummarizer {
    * @param {Object} options - Configuration options
    * @param {number} [options.thresholdTokens=50000] - Token count threshold that triggers summarization
    * @param {number} [options.keepRecentCount=3] - Number of most recent node results to preserve unchanged
-   * @param {WorkflowLLMHelper} [options.llmHelper] - LLM helper instance (created automatically if omitted)
+   * @param {import('../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used for
+   *   the summarization call (defaults to the shared singleton)
    */
   constructor(options = {}) {
     this.thresholdTokens = options.thresholdTokens || 50000;
     this.keepRecentCount = options.keepRecentCount || 3;
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
   }
 
   /**
@@ -61,14 +62,17 @@ export class ContextSummarizer {
   /**
    * Detect whether an LLM error is a context-window-overflow / prompt-too-long
    * error (the trigger for reactive recovery — Claude Code's reactive-compact
-   * analog). Heuristic across providers: HTTP 413, or a 4xx whose message
-   * mentions context length / token limits.
+   * analog). An `LLMError` carries the classification directly
+   * (`isContextWindowError`); for anything else fall back to the
+   * cross-provider heuristic: HTTP 413, or a 4xx whose message mentions
+   * context length / token limits.
    *
-   * @param {Error|Object} err - Error thrown by the LLM helper
+   * @param {Error|Object} err - Error thrown by the LLM client (or a plain object)
    * @returns {boolean}
    */
   static isContextOverflowError(err) {
     if (!err) return false;
+    if (isLLMError(err) && err.isContextWindowError) return true;
     const status = err.status || err.httpStatus;
     if (status === 413) return true;
     const haystack = `${err.message || ''} ${err.details || ''} ${err.code || ''}`.toLowerCase();
@@ -246,15 +250,8 @@ export class ContextSummarizer {
         return state;
       }
 
-      const apiKeyResult = await this.llmHelper.verifyApiKey(model, context.language || 'en');
-      if (!apiKeyResult.success) {
-        logger.warn({
-          component: 'ContextSummarizer',
-          message: 'API key verification failed, returning original state'
-        });
-        return state;
-      }
-
+      // API-key resolution happens inside LLMClient.complete(); a missing key
+      // throws and is absorbed by the graceful-degradation catch below.
       const messages = [
         {
           role: 'system',
@@ -267,12 +264,18 @@ export class ContextSummarizer {
         }
       ];
 
-      const response = await this.llmHelper.executeStreamingRequest({
+      const response = await this.llmClient.complete({
         model,
         messages,
-        apiKey: apiKeyResult.apiKey,
         options: { temperature: 0.3 },
-        language: context.language || 'en'
+        language: context.language || 'en',
+        signal: context.abortSignal,
+        telemetry: {
+          runId: context.runId || context.executionId || state.executionId,
+          step: context.iteration ?? 0,
+          purpose: 'context-summarizer',
+          refs: { executionId: state.executionId, nodeId: context.nodeId }
+        }
       });
 
       const summary = response.content || '';

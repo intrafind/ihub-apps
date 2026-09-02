@@ -16,7 +16,8 @@ import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import memoryFile from '../../agents/memory/memoryFile.js';
 import { runTool } from '../../toolLoader.js';
-import { simpleCompletion, resolveModelId } from '../../utils.js';
+import { resolveModelId } from '../../utils.js';
+import llmClient from '../../services/loop/LLMClient.js';
 
 const PROFILES_DIR = 'contents/agents/profiles';
 
@@ -113,18 +114,30 @@ function fillToolResultPlaceholder(promptTemplate, toolResult) {
   return `${promptTemplate}\n\nTool result:\n${serialised}`;
 }
 
+/**
+ * Ask a model to condense a raw tool result into an agent-friendly memory
+ * section. Runs through `LLMClient` (ledger kind `utility`, purpose
+ * `memory-shaper`); provider failures surface as `LLMError`.
+ *
+ * @param {*} toolResult - Raw tool output (string or JSON-serialisable value)
+ * @param {Object} opts
+ * @param {string|null} [opts.promptTemplate] - Override for DEFAULT_SHAPER_PROMPT
+ * @param {string|null} [opts.modelId] - Preferred model; falls back to the platform default
+ * @returns {Promise<string>} Trimmed markdown body
+ */
 async function shapeToolResultWithLLM(toolResult, { promptTemplate, modelId }) {
   const userPrompt = fillToolResultPlaceholder(promptTemplate || DEFAULT_SHAPER_PROMPT, toolResult);
   const resolvedModel = resolveModelId(modelId || null, 'memoryShaper');
   if (!resolvedModel) {
     throw new Error('No model available to shape tool result for memory.');
   }
-  const { content } = await simpleCompletion([{ role: 'user', content: userPrompt }], {
+  const result = await llmClient.complete({
     modelId: resolvedModel,
-    temperature: 0.2,
-    maxTokens: 4096
+    messages: [{ role: 'user', content: userPrompt }],
+    options: { temperature: 0.2, maxTokens: 4096 },
+    telemetry: { kind: 'utility', purpose: 'memory-shaper' }
   });
-  return (content || '').trim();
+  return (result.content || '').trim();
 }
 
 function profilesDirPath() {

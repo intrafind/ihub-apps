@@ -5,9 +5,11 @@
  *
  * Root cause: the `openai` (and `iassistant-conversation`) adapters implement
  * `createCompletionRequest` as ASYNC — they await model auto-discovery. Call
- * sites that forgot to `await` it (WorkflowLLMHelper, openaiProxy, sessionRoutes,
- * ocrProcessor, utils.simpleCompletion, ToolExecutor follow-up) received a
- * Promise instead of the request object. `request.url` was therefore `undefined`,
+ * sites that forgot to `await` it (historically the workflow LLM helper and the
+ * one-shot completion util, plus openaiProxy, sessionRoutes, ocrProcessor and
+ * the ToolExecutor follow-up) received a Promise instead of the request object.
+ * `LLMClient` (server/services/loop/LLMClient.js) is now the single call path
+ * and always awaits it. `request.url` was therefore `undefined`,
  * and `throttledFetch(model.id, undefined)` fell back to using the throttle id
  * (the model id) as the URL — which `httpFetch` rejects with
  * "Unsupported URL scheme: <model-id>" (e.g. "ministral", "local-vllm").

@@ -21,7 +21,7 @@ import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient from '../../loop/LLMClient.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import { getLocalizedString } from '../../../utils/localize.js';
@@ -94,13 +94,19 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   /**
    * Create a new PromptNodeExecutor
    * @param {Object} options - Executor options
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for every model call in the tool loop (defaults to the shared singleton; tests inject a stub)
+   * @param {ContextSummarizer} [options.contextSummarizer] - Summarizer/compactor (defaults to
+   *   one sharing this executor's client)
+   * @param {number} [options.maxIterations=10] - Default tool-loop round cap
    */
   constructor(options = {}) {
     super(options);
     this.chatService = options.chatService || new ChatService();
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
     this.maxIterations = options.maxIterations || 10;
-    this.contextSummarizer = new ContextSummarizer();
+    this.contextSummarizer =
+      options.contextSummarizer || new ContextSummarizer({ llmClient: this.llmClient });
   }
 
   /**
@@ -1452,12 +1458,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const consecutiveFails = new Map();
     const disabledTools = new Set();
 
-    // Verify API key using centralized helper
-    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-    if (!apiKeyResult.success) {
-      throw new Error(apiKeyResult.error?.message || 'API key verification failed');
-    }
-    const apiKey = apiKeyResult.apiKey;
+    // API-key resolution happens inside LLMClient.complete(); a missing key
+    // throws an LLMError (AUTH_FAILED) out of the first iteration.
 
     while (iteration < maxIterations) {
       iteration++;
@@ -1494,15 +1496,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Offer only tools that haven't been circuit-broken this step.
       const availableTools = tools.filter(t => !disabledTools.has(t.id));
 
-      // Execute the request using the helper (filters invalid options like user, chatId).
-      // On a context-overflow error, microcompact the in-loop messages and
-      // retry the same iteration (reactive recovery) before giving up.
+      // Execute the request through the shared LLM client. On a
+      // context-overflow error, microcompact the in-loop messages and retry
+      // the same iteration (reactive recovery) before giving up.
       let response;
       try {
-        response = await this.llmHelper.executeStreamingRequest({
+        response = await this.llmClient.complete({
           model,
           messages: currentMessages,
-          apiKey,
           options: {
             temperature,
             maxTokens,
@@ -1518,7 +1519,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             // They are not valid adapter options and would corrupt provider request bodies
           },
           language,
-          signal: context.abortSignal
+          signal: context.abortSignal,
+          telemetry: {
+            runId: context.runId || context.executionId || context._workflowState?.executionId,
+            step: iteration,
+            purpose: 'agent-step',
+            toolExecution: 'server',
+            refs: { nodeId, executionId: context.executionId }
+          }
         });
       } catch (err) {
         if (
@@ -1592,13 +1600,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         }
       }
 
-      // Accumulate token usage from response (or estimate if not provided).
+      // Accumulate token usage from the response (canonical camelCase usage
+      // from LLMClient) or estimate it when the provider reported none.
       // Track the per-iteration delta so it can be added to the run budget.
       let deltaIn = 0;
       let deltaOut = 0;
       if (response.usage) {
-        deltaIn = response.usage.prompt_tokens || response.usage.input_tokens || 0;
-        deltaOut = response.usage.completion_tokens || response.usage.output_tokens || 0;
+        deltaIn = response.usage.promptTokens || 0;
+        deltaOut = response.usage.completionTokens || 0;
       } else {
         // Fallback: estimate tokens when usage data is not provided (streaming responses)
         // This matches the approach used in StreamingHandler for chat apps

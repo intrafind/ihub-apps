@@ -8,7 +8,7 @@
  * issuing LLM calls, running tools, and mutating shared state until it
  * finished naturally, even after the run was already CANCELLED/timed out.
  *
- * These drive `executeLLMWithTools` directly with a fake llmHelper /
+ * These drive `executeLLMWithTools` directly with a fake llmClient /
  * executeToolCall and assert the loop actually stops once the signal is
  * aborted — before the next LLM call, and before running the rest of a
  * batch of queued tool calls, rather than only between nodes.
@@ -31,14 +31,13 @@ async function run() {
   console.log('\n🧪 an already-aborted signal stops the loop before the first LLM call\n');
   {
     let llmCalls = 0;
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => {
+    const llmClient = {
+      complete: async () => {
         llmCalls += 1;
         return { content: 'should not happen', toolCalls: [], finishReason: 'stop' };
       }
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
     const controller = new AbortController();
     controller.abort();
     const context = {
@@ -73,20 +72,19 @@ async function run() {
   {
     const toolCallExecutions = [];
     const controller = new AbortController();
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({
+    const llmClient = {
+      complete: async () => ({
         content: '',
         toolCalls: [
           { id: 'c0', index: 0, function: { name: 'toolA', arguments: '{}' } },
           { id: 'c1', index: 1, function: { name: 'toolA', arguments: '{}' } },
           { id: 'c2', index: 2, function: { name: 'toolA', arguments: '{}' } }
         ],
-        usage: { input_tokens: 5, output_tokens: 5 },
+        usage: { promptTokens: 5, completionTokens: 5 },
         finishReason: 'tool_calls'
       })
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
     executor.executeToolCall = async toolCall => {
       toolCallExecutions.push(toolCall.id);
       // Simulate the run being cancelled while this batch is mid-flight —
@@ -129,21 +127,20 @@ async function run() {
   {
     let llmCalls = 0;
     const controller = new AbortController();
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => {
+    const llmClient = {
+      complete: async () => {
         llmCalls += 1;
         return {
           content: '',
           toolCalls: [
             { id: `c${llmCalls}`, index: 0, function: { name: 'toolA', arguments: '{}' } }
           ],
-          usage: { input_tokens: 5, output_tokens: 5 },
+          usage: { promptTokens: 5, completionTokens: 5 },
           finishReason: 'tool_calls'
         };
       }
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
     executor.executeToolCall = async toolCall => {
       // Cancel after the first round's tool call completes, simulating
       // engine.cancel() landing between iterations rather than mid-batch.
@@ -179,16 +176,15 @@ async function run() {
 
   console.log('\n🧪 no abort signal at all → loop runs normally to completion\n');
   {
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({
+    const llmClient = {
+      complete: async () => ({
         content: 'final answer',
         toolCalls: [],
-        usage: { input_tokens: 5, output_tokens: 5 },
+        usage: { promptTokens: 5, completionTokens: 5 },
         finishReason: 'stop'
       })
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
     const context = {
       language: 'en',
       _agentProfile: { budgets: {} },

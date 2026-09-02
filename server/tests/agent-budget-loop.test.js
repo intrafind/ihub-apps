@@ -27,9 +27,8 @@ const model = { id: 'test-model', provider: 'openai', maxOutputTokens: 4096 };
  */
 function makeExecutor(tokensPerCall) {
   const calls = { count: 0, withToolsOffered: 0 };
-  const llmHelper = {
-    verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-    executeStreamingRequest: async ({ options }) => {
+  const llmClient = {
+    complete: async ({ options }) => {
       calls.count += 1;
       const toolsOffered = Array.isArray(options.tools) && options.tools.length > 0;
       if (toolsOffered) {
@@ -39,7 +38,7 @@ function makeExecutor(tokensPerCall) {
           toolCalls: [
             { id: `c${calls.count}`, index: 0, function: { name: 'noop', arguments: '{}' } }
           ],
-          usage: { input_tokens: tokensPerCall, output_tokens: 0 },
+          usage: { promptTokens: tokensPerCall, completionTokens: 0 },
           finishReason: 'tool_calls'
         };
       }
@@ -47,12 +46,12 @@ function makeExecutor(tokensPerCall) {
       return {
         content: 'final answer',
         toolCalls: [],
-        usage: { input_tokens: 5, output_tokens: 5 },
+        usage: { promptTokens: 5, completionTokens: 5 },
         finishReason: 'stop'
       };
     }
   };
-  const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+  const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
   // Stub tool execution so we don't touch the real tool registry.
   executor.executeToolCall = async toolCall => ({
     role: 'tool',
@@ -112,16 +111,15 @@ async function run() {
     // tokensPerCall huge but budget unlimited (0); model calls a tool once then
     // (because tools are still offered) would loop — so cap the rounds low to
     // confirm unlimited budget never force-finishes.
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({
+    const llmClient = {
+      complete: async () => ({
         content: 'done',
         toolCalls: [],
-        usage: { input_tokens: 10, output_tokens: 10 },
+        usage: { promptTokens: 10, completionTokens: 10 },
         finishReason: 'stop'
       })
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
     const context = makeContext(0); // unlimited
     const res = await executor.executeLLMWithTools({
       model,

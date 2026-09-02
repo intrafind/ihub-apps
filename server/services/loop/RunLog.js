@@ -56,6 +56,18 @@ function sha256(value) {
     .digest('hex');
 }
 
+/**
+ * Validate an id and reduce it to a single path segment. `path.basename` is
+ * the sanitizer static analysis recognizes; `assertRunId` already rejects
+ * separators and dots, so for valid ids this is the identity.
+ * @param {string} id
+ * @returns {string}
+ */
+function safeSegment(id) {
+  assertRunId(id);
+  return path.basename(String(id));
+}
+
 export function newRunId(kind = 'run') {
   const prefix = String(kind || 'run').replace(/[^a-z]/gi, '') || 'run';
   return `${prefix}-${crypto.randomUUID()}`;
@@ -136,13 +148,25 @@ export class RunLog {
   }
 
   runFilePath(runId) {
-    assertRunId(runId);
-    return path.join(this._baseDir, 'runs', `${runId}.jsonl`);
+    return this._containedPath('runs', `${safeSegment(runId)}.jsonl`);
   }
 
   spillDir(runId) {
-    assertRunId(runId);
-    return path.join(this._baseDir, 'spill', runId);
+    return this._containedPath('spill', safeSegment(runId));
+  }
+
+  /**
+   * Join `segments` under the ledger base dir and refuse anything that would
+   * resolve outside it (defense in depth on top of `assertRunId`).
+   * @private
+   */
+  _containedPath(...segments) {
+    const root = path.resolve(this._baseDir);
+    const resolved = path.resolve(root, ...segments);
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+      throw new Error('RunLog path escapes the ledger directory');
+    }
+    return resolved;
   }
 
   // ── run lifecycle ──────────────────────────────────────────────────────
@@ -418,7 +442,7 @@ export class RunLog {
       .slice(0, 120);
     const body = typeof content === 'string' ? content : JSON.stringify(content);
     await fs.mkdir(dir, { recursive: true });
-    const file = path.join(dir, safeName);
+    const file = this._containedPath('spill', safeSegment(runId), path.basename(safeName));
     await fs.writeFile(file, body, 'utf8');
     return {
       path: path.relative(this._baseDir, file),
@@ -429,11 +453,13 @@ export class RunLog {
   }
 
   async readSpill(runId, ref) {
-    assertRunId(runId);
-    const abs = path.resolve(this._baseDir, ref.path);
-    if (!abs.startsWith(path.resolve(this.spillDir(runId)) + path.sep)) {
-      throw new Error('Spill reference outside run directory');
+    // Spill files are flat under the run's spill dir, so the reference reduces
+    // to its basename; anything else is a forged reference.
+    const name = path.basename(String(ref?.path || ''));
+    if (!name || name === '.' || name === '..') {
+      throw new Error('Invalid spill reference');
     }
+    const abs = this._containedPath('spill', safeSegment(runId), name);
     return fs.readFile(abs, 'utf8');
   }
 

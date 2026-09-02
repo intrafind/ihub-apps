@@ -18,6 +18,117 @@ import {
 } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+
+/** Prompt sent by the admin "test model" diagnostic. */
+const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successful" message?';
+
+/** Hard cap for one model test call (interactive admin request). */
+const MODEL_TEST_TIMEOUT_MS = 60000;
+
+/**
+ * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
+ * explanation in the admin UI. Checked before the generic code mapping.
+ */
+const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
+  UND_ERR_CONNECT_TIMEOUT: {
+    userMessage: 'Connection timeout',
+    errorMessage:
+      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
+  },
+  ECONNREFUSED: {
+    userMessage: 'Connection refused',
+    errorMessage:
+      'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
+  },
+  ENOTFOUND: {
+    userMessage: 'Service not found',
+    errorMessage:
+      'The model service hostname could not be resolved. Please check the URL configuration.'
+  }
+});
+
+/**
+ * Translate an `LLMError` raised by a model connectivity test into the two
+ * strings the admin UI shows: a short `userMessage` headline and a longer
+ * `errorMessage` with remediation hints.
+ *
+ * Keys off `err.code` (and the underlying socket error code for network
+ * failures) — never off message substrings, which differ per provider and
+ * language.
+ *
+ * @param {import('../../services/loop/contracts/errors.js').LLMError} err
+ * @returns {{ userMessage: string, errorMessage: string }}
+ */
+function describeModelTestFailure(err) {
+  // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
+  // LLMClient also surfaces that code as providerCode for network failures.
+  const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
+  if (MODEL_TEST_NETWORK_CAUSES[socketCode]) {
+    return MODEL_TEST_NETWORK_CAUSES[socketCode];
+  }
+
+  const fallback = {
+    userMessage: 'Model test failed',
+    errorMessage: err.message || 'Unknown error occurred'
+  };
+
+  switch (err.code) {
+    case LLM_ERROR_CODES.NETWORK: {
+      const detail =
+        typeof err.details === 'string' && err.details
+          ? err.details
+          : err.cause?.message || err.message;
+      return {
+        userMessage: 'Network error',
+        errorMessage: `Network connection failed: ${detail}`
+      };
+    }
+    case LLM_ERROR_CODES.TIMEOUT:
+      return {
+        userMessage: 'Request timeout',
+        errorMessage:
+          'The model service took too long to respond. Please try again or check the service status.'
+      };
+    case LLM_ERROR_CODES.AUTH_FAILED:
+      if (isMissingApiKeyError(err)) {
+        return { userMessage: 'API key not configured', errorMessage: err.message };
+      }
+      if (err.status === 403) {
+        return {
+          userMessage: 'Access denied',
+          errorMessage: 'Access denied by the model service. Please check your API key permissions.'
+        };
+      }
+      return {
+        userMessage: 'Authentication failed',
+        errorMessage:
+          'Invalid API key or authentication credentials. Please check your model configuration.'
+      };
+    case LLM_ERROR_CODES.MODEL_NOT_FOUND:
+      return {
+        userMessage: 'Model not found',
+        errorMessage:
+          'The specified model was not found on the service. Please check the model ID configuration.'
+      };
+    case LLM_ERROR_CODES.RATE_LIMITED:
+      return {
+        userMessage: 'Rate limit exceeded',
+        errorMessage: 'Too many requests to the model service. Please try again later.'
+      };
+    case LLM_ERROR_CODES.PROVIDER_ERROR:
+      if (typeof err.status === 'number' && err.status >= 500) {
+        return {
+          userMessage: 'Server error',
+          errorMessage: 'The model service encountered an internal error. Please try again later.'
+        };
+      }
+      return fallback;
+    default:
+      return fallback;
+  }
+}
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -456,6 +567,16 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
+  /**
+   * POST /api/admin/models/:modelId/test
+   *
+   * Connectivity / credential diagnostic for one configured model. Disabled
+   * models are included so an admin can verify a model before enabling it.
+   * The call goes through `LLMClient` and is recorded in the run ledger as a
+   * `diagnostic` run. Failures answer with a non-2xx status derived from the
+   * `LLMError` code and a body of `{ error, details, code }` — `error` is the
+   * short headline, `details` the remediation text shown by the admin UI.
+   */
   app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -470,71 +591,43 @@ export default function registerAdminModelsRoutes(app) {
       if (!model) {
         return sendNotFound(res, 'Model');
       }
-      const testMessage = 'Hello, can you respond with a simple "Test successful" message?';
-      const { simpleCompletion } = await import('../../utils.js');
-      const { verifyApiKey } = await import('../../serverHelpers.js');
-      const apiKey = await verifyApiKey(model, res);
-      if (!apiKey) {
-        return;
-      }
+
       try {
-        const result = await simpleCompletion(testMessage, {
-          modelId: model.id,
-          apiKey: apiKey
+        const result = await llmClient.complete({
+          model,
+          messages: [{ role: 'user', content: MODEL_TEST_MESSAGE }],
+          retries: 0,
+          timeoutMs: MODEL_TEST_TIMEOUT_MS,
+          telemetry: { kind: 'diagnostic', purpose: 'model-test', user: req.user }
         });
+        // Never echo stored credentials back to the browser (mirrors GET /admin/models).
+        const safeModel = { ...model };
+        delete safeModel.apiKey;
         res.json({
           success: true,
           message: 'Model test successful',
           response: result.content,
-          model: model
+          model: safeModel
         });
       } catch (testError) {
-        logger.error('Model test failed', { component: 'ModelsRoutes', error: testError });
-        let errorMessage = 'Unknown error occurred';
-        let userMessage = 'Model test failed';
-        if (testError.message.includes('fetch failed')) {
-          if (testError.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
-            userMessage = 'Connection timeout';
-            errorMessage =
-              'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.';
-          } else if (testError.cause?.code === 'ECONNREFUSED') {
-            userMessage = 'Connection refused';
-            errorMessage =
-              'Unable to connect to the model service. Please verify the URL and ensure the service is running.';
-          } else if (testError.cause?.code === 'ENOTFOUND') {
-            userMessage = 'Service not found';
-            errorMessage =
-              'The model service hostname could not be resolved. Please check the URL configuration.';
-          } else {
-            userMessage = 'Network error';
-            errorMessage = `Network connection failed: ${testError.cause?.message || testError.message}`;
-          }
-        } else if (testError.message.includes('timeout')) {
-          userMessage = 'Request timeout';
-          errorMessage =
-            'The model service took too long to respond. Please try again or check the service status.';
-        } else if (testError.message.includes('401')) {
-          userMessage = 'Authentication failed';
-          errorMessage =
-            'Invalid API key or authentication credentials. Please check your model configuration.';
-        } else if (testError.message.includes('403')) {
-          userMessage = 'Access denied';
-          errorMessage =
-            'Access denied by the model service. Please check your API key permissions.';
-        } else if (testError.message.includes('404')) {
-          userMessage = 'Model not found';
-          errorMessage =
-            'The specified model was not found on the service. Please check the model ID configuration.';
-        } else if (testError.message.includes('429')) {
-          userMessage = 'Rate limit exceeded';
-          errorMessage = 'Too many requests to the model service. Please try again later.';
-        } else if (testError.message.includes('500')) {
-          userMessage = 'Server error';
-          errorMessage = 'The model service encountered an internal error. Please try again later.';
-        } else {
-          errorMessage = testError.message;
+        if (!isLLMError(testError)) {
+          throw testError;
         }
-        sendInternalError(res, new Error(errorMessage), `test model: ${userMessage}`);
+        logger.error('Model test failed', {
+          component: 'ModelsRoutes',
+          modelId: model.id,
+          provider: model.provider,
+          code: testError.code,
+          providerCode: testError.providerCode,
+          upstreamStatus: testError.status,
+          error: testError.message
+        });
+        const { userMessage, errorMessage } = describeModelTestFailure(testError);
+        const mappedStatus = llmErrorToHttpStatus(testError);
+        const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
+        res
+          .status(httpStatus)
+          .json({ error: userMessage, details: errorMessage, code: testError.code });
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });

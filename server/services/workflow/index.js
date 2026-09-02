@@ -39,4 +39,3 @@ export {
   getExecutionRegistry,
   resetExecutionRegistry
 } from './ExecutionRegistry.js';
-export { WorkflowLLMHelper, default as workflowLLMHelper } from './WorkflowLLMHelper.js';

@@ -1,6 +1,11 @@
 import configCache from '../../configCache.js';
-import { createCompletionRequest } from '../../adapters/index.js';
-import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
+import { logInteraction, trackSession } from '../../utils.js';
+import llmClient, {
+  usageToOpenAI,
+  isLLMError,
+  LLM_ERROR_CODES
+} from '../../services/loop/LLMClient.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import {
   clients,
   abortChatRequest,
@@ -11,7 +16,6 @@ import {
 } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
-import { throttledFetch } from '../../requestThrottler.js';
 import {
   authRequired,
   chatAuthRequired,
@@ -33,10 +37,7 @@ import {
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 
-export default function registerSessionRoutes(
-  app,
-  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
-) {
+export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
   const chatService = new ChatService();
 
   /**
@@ -194,15 +195,30 @@ export default function registerSessionRoutes(
    *               properties:
    *                 success:
    *                   type: boolean
-   *                 response:
+   *                 model:
+   *                   type: string
+   *                   description: iHub model id that answered
+   *                 content:
    *                   type: string
    *                   description: Model's response to the test message
+   *                 finishReason:
+   *                   type: string
+   *                   nullable: true
+   *                 usage:
+   *                   type: object
+   *                   description: OpenAI-style token usage (prompt_tokens, completion_tokens, total_tokens)
    *       404:
    *         description: Model not found
    *       401:
-   *         description: Authentication or authorization required
+   *         description: Authentication or authorization required, or the provider rejected the server's credentials
+   *       429:
+   *         description: Provider rate limit (Retry-After set when known)
    *       500:
-   *         description: Internal server error
+   *         description: Internal server error or no API key configured for the model
+   *       502:
+   *         description: Upstream provider error
+   *       504:
+   *         description: Model request timed out
    */
   app.get(
     buildServerPath('/api/models/:modelId/chat/test'),
@@ -229,65 +245,38 @@ export default function registerSessionRoutes(
           return sendNotFound(res, 'Model');
         }
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const apiKey = await verifyApiKey(
-          model,
-          res,
-          null,
-          req.headers['accept-language']?.split(',')[0] || defaultLang
-        );
-        if (!apiKey) {
-          return sendInternalError(
-            res,
-            new Error(`API key not found for model: ${model.id} (${model.provider})`),
-            'test chat completion'
-          );
-        }
-        const request = await createCompletionRequest(model, messages, apiKey, {
-          stream: false,
-          tools: []
-        });
-        let timeoutId;
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(
-            () => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`)),
-            DEFAULT_TIMEOUT
-          );
-        });
+        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
         try {
-          const responsePromise = throttledFetch(model.id, request.url, {
-            method: 'POST',
-            headers: request.headers,
-            body: JSON.stringify(request.body)
+          // API key resolution, throttling and provider parsing live in LLMClient;
+          // `retries: 0` keeps this interactive diagnostic from stalling on Retry-After.
+          const result = await llmClient.complete({
+            model,
+            messages,
+            stream: false,
+            timeoutMs: DEFAULT_TIMEOUT,
+            retries: 0,
+            language,
+            telemetry: { kind: 'diagnostic', purpose: 'model-chat-test', user: req.user }
           });
-          const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
-          clearTimeout(timeoutId);
-          if (!llmResponse.ok) {
-            const errorBody = await llmResponse.text();
-            logger.error('LLM API Error', {
-              component: 'sessionRoutes',
-              status: llmResponse.status,
-              errorBody
-            });
-            return res.status(llmResponse.status).json({
-              error: `LLM API request failed with status ${llmResponse.status}`,
-              details: errorBody
-            });
+          return res.json({
+            success: true,
+            model: model.id,
+            content: result.content,
+            finishReason: result.finishReason,
+            usage: usageToOpenAI(result.usage)
+          });
+        } catch (llmError) {
+          if (!isLLMError(llmError)) {
+            throw llmError;
           }
-          const responseData = await llmResponse.json();
-          return res.json(responseData);
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          if (fetchError.message.includes('timed out')) {
+          if (llmError.code === LLM_ERROR_CODES.TIMEOUT) {
             return sendErrorResponse(
               res,
               504,
               `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
             );
           }
-          const errorDetails = getErrorDetails(fetchError, model);
-          return sendErrorResponse(res, 500, errorDetails.message, {
-            details: fetchError.message
-          });
+          return sendLLMError(res, llmError, { context: 'test chat completion' });
         }
       } catch (error) {
         logger.error('Error in test chat completion', { component: 'sessionRoutes', error });

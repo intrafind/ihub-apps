@@ -48,9 +48,8 @@ const model = { id: 'test-model', provider: 'openai', maxOutputTokens: 4096 };
 // ---- integration: a rate-limited tool gets disabled and the loop force-finishes ----
 function makeExecutor(toolError) {
   const calls = { count: 0, withToolsOffered: 0 };
-  const llmHelper = {
-    verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-    executeStreamingRequest: async ({ options }) => {
+  const llmClient = {
+    complete: async ({ options }) => {
       calls.count += 1;
       const offered = Array.isArray(options.tools) && options.tools.length > 0;
       if (offered) {
@@ -60,19 +59,19 @@ function makeExecutor(toolError) {
           toolCalls: [
             { id: `c${calls.count}`, index: 0, function: { name: 'braveSearch', arguments: '{}' } }
           ],
-          usage: { input_tokens: 50, output_tokens: 5 },
+          usage: { promptTokens: 50, completionTokens: 5 },
           finishReason: 'tool_calls'
         };
       }
       return {
         content: 'final answer',
         toolCalls: [],
-        usage: { input_tokens: 5, output_tokens: 5 },
+        usage: { promptTokens: 5, completionTokens: 5 },
         finishReason: 'stop'
       };
     }
   };
-  const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+  const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
   executor.executeToolCall = async toolCall => ({
     role: 'tool',
     tool_call_id: toolCall.id,

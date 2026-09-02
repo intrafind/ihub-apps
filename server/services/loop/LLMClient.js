@@ -349,6 +349,8 @@ export class LLMClient {
     this.runLog = opts.runLog || runLogSingleton;
     this.sleep = opts.sleep;
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
+    // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
+    this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> hash (request/header dedupe)
   }
 
@@ -523,7 +525,7 @@ export class LLMClient {
       language
     });
 
-    if (isDumpAllEnabled()) {
+    if (this.debugDumps && isDumpAllEnabled()) {
       await dumpRequest(request, model, 'request').catch(() => {});
     }
 
@@ -845,13 +847,15 @@ export class LLMClient {
     let requestShape = null;
     if (!transient && status >= 400 && status < 500) {
       requestShape = summarizeRequestShape(request?.body || {});
-      try {
-        dumpPath = await dumpRequest(request, model, 'failures', {
-          response: { status, body: info.details }
-        });
-      } catch (dumpErr) {
-        dumpPath = `dump-failed: ${dumpErr.message}`;
-      }
+      if (!this.debugDumps) dumpPath = 'disabled';
+      else
+        try {
+          dumpPath = await dumpRequest(request, model, 'failures', {
+            response: { status, body: info.details }
+          });
+        } catch (dumpErr) {
+          dumpPath = `dump-failed: ${dumpErr.message}`;
+        }
     }
     if (!transient) {
       logger.error('LLM request failed', {

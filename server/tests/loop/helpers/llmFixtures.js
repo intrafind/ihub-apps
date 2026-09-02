@@ -250,7 +250,8 @@ export function makeClient(opts = {}) {
     }),
     runLog: opts.runLog,
     sleep: opts.sleep || (async () => {}),
-    maxRetries: opts.maxRetries
+    maxRetries: opts.maxRetries,
+    debugDumps: false
   });
   return { client, calls };
 }

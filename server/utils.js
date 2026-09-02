@@ -1,10 +1,7 @@
 import config from './config.js';
-import { createCompletionRequest } from './adapters/index.js';
-import { convertResponseToGeneric } from './adapters/toolCalling/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
@@ -485,98 +482,6 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       stack: error.stack
     });
   }
-}
-
-/**
- * Performs a simple, non-streaming completion request to a language model.
- * @param {string} prompt - The prompt to send to the model.
- * @param {object} options - Configuration options.
- * @param {string} [options.modelId] - The ID of the model to use.
- * @param {string} [options.model] - Alias for modelId.
- * @param {number} [options.temperature=0.7] - The temperature for the completion.
- * @param {string} [options.responseFormat] - Desired output format ('json').
- * @param {object} [options.responseSchema] - Optional JSON schema for structured output.
- * @returns {Promise<string>} The content of the model's response.
- */
-export async function simpleCompletion(
-  messages,
-  {
-    modelId = null,
-    model = null,
-    temperature = 0.7,
-    maxTokens = 8192,
-    responseFormat = null,
-    responseSchema = null,
-    apiKey = null
-  } = {}
-) {
-  const resolvedModelId = modelId || model;
-
-  logger.debug('Starting simple completion...', {
-    component: 'Utils',
-    messageCount: messages.length,
-    modelId: resolvedModelId,
-    temperature
-  });
-  // Try to get models from cache first
-  let { data: models = [] } = configCache.getModels();
-  logger.debug('Available models:', { component: 'Utils', models: models.map(m => m.id) });
-
-  const modelConfig = models.find(m => m.id === resolvedModelId);
-  logger.debug('Using model:', {
-    component: 'Utils',
-    modelId: modelConfig?.id,
-    provider: modelConfig?.provider
-  });
-  if (!modelConfig) {
-    throw new Error(`Model ${resolvedModelId} not found`);
-  }
-
-  // Use provided API key if available, otherwise get from environment or stored config
-  let resolvedApiKey = apiKey;
-  if (!resolvedApiKey) {
-    // Try to get API key from model/provider configuration or environment
-    resolvedApiKey = await getApiKeyForModel(modelConfig.id);
-    if (!resolvedApiKey) {
-      throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
-    }
-  }
-
-  const msgArray = Array.isArray(messages) ? messages : [{ role: 'user', content: messages }];
-
-  const request = await createCompletionRequest(modelConfig, msgArray, resolvedApiKey, {
-    temperature,
-    maxTokens,
-    stream: false,
-    responseFormat,
-    responseSchema
-  });
-
-  const response = await throttledFetch(modelConfig.id, request.url, {
-    method: 'POST',
-    headers: request.headers,
-    body: JSON.stringify(request.body)
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`LLM API request failed with status ${response.status}: ${errorBody}`);
-  }
-
-  const responseData = await response.json();
-
-  // Use the adapter to parse the response
-  const parsed = await convertResponseToGeneric(JSON.stringify(responseData), modelConfig.provider);
-
-  // Return both content and usage data
-  return {
-    content: parsed.content.join(''),
-    usage: responseData.usage || {
-      prompt_tokens: 0,
-      completion_tokens: 0,
-      total_tokens: 0
-    }
-  };
 }
 
 /**

@@ -522,7 +522,7 @@ graph TB
 - **`DAGScheduler.js`**: Determines which nodes are ready to execute based on edge conditions and dependency resolution
 - **`StateManager.js`**: Tracks and persists workflow execution state across nodes
 - **`ExecutionRegistry.js`**: Tracks active executions by user for monitoring and cancellation
-- **`WorkflowLLMHelper.js`**: Provides LLM-based decision making for conditional routing
+- **`LLMClient.js`** (`server/services/loop/LLMClient.js`): The single LLM call path for every workflow/agent node (planner, prompt/agent tool loop, verifier, query-plan, quote-validator, context summarizer). It owns model and API-key resolution, transient retries, abort-signal threading, usage normalization and the per-call run-ledger events
 
 ### Node Types
 
