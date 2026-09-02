@@ -11,9 +11,10 @@ import {
   createStreamState,
   reduceRunEvent,
   getRun,
-  RUN_EVENTS
+  RUN_EVENTS,
+  getRuns
 } from '../../../shared/run/runReducer';
-import { projectRunToMessage } from '../runToMessage';
+import { projectMessageRuns } from '../runToMessage';
 
 /**
  * High level hook combining chat message management with streaming
@@ -152,7 +153,15 @@ function useAppChat({
         const refMessageId = envelope.data?.refs?.messageId;
         const known =
           typeof refMessageId === 'string' && messagesRef.current.some(m => m.id === refMessageId);
-        runMessageMapRef.current.set(runId, known ? refMessageId : lastMessageIdRef.current);
+        // A child run (workflow launched by a tool inside the turn) belongs to
+        // its parent's message.
+        const parentMessageId = envelope.data?.parentRunId
+          ? runMessageMapRef.current.get(envelope.data.parentRunId)
+          : null;
+        runMessageMapRef.current.set(
+          runId,
+          known ? refMessageId : parentMessageId || lastMessageIdRef.current
+        );
       }
       return runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
     },
@@ -217,11 +226,19 @@ function useAppChat({
         return;
       }
 
-      const { content, loading, extras } = projectRunToMessage(run, {
+      // A workflow launched by a tool inside the turn is its own run, a child
+      // of the chat run (`parentRunId`). The message shows the chat run's
+      // answer plus the workflow state of its children; a child's lifecycle
+      // frames only refresh the message — the chat run completes it.
+      const parentRun = run.parentRunId ? getRun(streamState, run.parentRunId) : null;
+      const rootRun = parentRun || run;
+      const isChildFrame = rootRun !== run;
+      const childRuns = getRuns(streamState).filter(r => r.parentRunId === rootRun.runId);
+      const { content, loading, extras } = projectMessageRuns(rootRun, childRuns, {
         fallbackErrorMessage: t('error.streamingError', 'An error occurred during streaming')
       });
 
-      switch (type) {
+      switch (isChildFrame ? 'child-frame' : type) {
         case RUN_EVENTS.INTERACTION_RAISED:
           if (extras.awaitingInput && extras.clarification) {
             debugLog('📝 Clarification raised:', extras.clarification);
@@ -244,12 +261,12 @@ function useAppChat({
           // Include stored metadata (customResponseRenderer, outputFormat) in the message.
           // Preserve workflow-set outputFormat — don't let the app default overwrite it.
           const metadata = {
-            finishReason: run.finishReason,
+            finishReason: rootRun.finishReason,
             ...(messageMetadataRef.current || {}),
             ...(extras.outputFormat && { outputFormat: extras.outputFormat })
           };
 
-          if (extras.awaitingInput || run.finishReason === 'clarification') {
+          if (extras.awaitingInput || rootRun.finishReason === 'clarification') {
             debugLog('📝 Run ended while a clarification is pending');
             // Keep the message in awaiting-input state, don't mark it complete
             updateAssistantMessage(messageId, content, false, {
@@ -265,7 +282,7 @@ function useAppChat({
 
           updateAssistantMessage(messageId, content, false, { ...extras, ...metadata });
 
-          if (run.status === 'error' || run.error) {
+          if (rootRun.status === 'error' || rootRun.error) {
             // Legacy error path: content already carries the stream/error message.
             setProcessing(false);
             break;

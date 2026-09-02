@@ -21,7 +21,8 @@ import {
   streamEmitter,
   bindStreamRun,
   unbindStreamRun,
-  checkpointToInteraction
+  checkpointToInteraction,
+  getStreamRun
 } from '../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
 import { hasChatClient } from '../sse.js';
@@ -407,14 +408,20 @@ export default async function workflowRunner(params = {}) {
     });
   }
 
-  // 5. Bridge workflow events to the chat's SSE v2 stream. Inside a chat
-  // turn (passthrough tool) the turn's run is bound to the chat stream; for a
-  // direct @mention launch the route minted the run and passed its id.
-  const stream = chatId
-    ? chatRunId
-      ? new RunStreamEmitter({ streamId: chatId, runId: chatRunId })
-      : streamEmitter(chatId)
-    : null;
+  // 5. Bridge workflow events to the chat's SSE v2 stream. The workflow is
+  // its own run (run id === execution id, matching its ledger and its
+  // interactions). For a direct @mention launch the route minted that id and
+  // announced the run; inside a chat turn (passthrough tool) the workflow is a
+  // child of the chat run: announce it here with the chat run as parent.
+  const stream = chatId ? new RunStreamEmitter({ streamId: chatId, runId: executionId }) : null;
+  if (stream && !chatRunId) {
+    const parent = getStreamRun(chatId);
+    stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
+      kind: 'workflow',
+      ...(parent?.runId ? { parentRunId: parent.runId } : {}),
+      refs: { chatId, executionId, workflowId }
+    });
+  }
   let bridgeStep = 0;
   const emitStep = ({ nodeId, nodeName, nodeType, status, chatVisible }) => {
     if (!stream) return;
@@ -442,11 +449,14 @@ export default async function workflowRunner(params = {}) {
       }
     });
   };
-  // Direct (@mention) launches own the chat run: they stream the answer and
-  // end the run themselves. Passthrough launches leave both to the chat turn.
+  // The workflow run ends here in both cases. A direct (@mention) launch also
+  // streams the answer on this run; a passthrough launch leaves the answer to
+  // the chat turn (the passthrough seam streams it on the chat run).
   const emitDirectAnswer = (text, { status, finishReason, error }) => {
-    if (!stream || passthrough) return;
-    if (text) stream.emit(SSE_V2_EVENTS.STEP_DELTA, { step: 0, kind: 'text', content: text });
+    if (!stream) return;
+    if (text && !passthrough) {
+      stream.emit(SSE_V2_EVENTS.STEP_DELTA, { step: 0, kind: 'text', content: text });
+    }
     stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
       status,
       finishReason,

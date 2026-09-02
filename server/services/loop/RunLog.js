@@ -222,6 +222,7 @@ export class RunLog {
       kind,
       anonymous,
       principalId: principal.id,
+      identityMode: principal.mode || this.identityMode(),
       startedAt,
       refs,
       trigger: trigger || null,
@@ -383,6 +384,8 @@ export class RunLog {
       startedAt: e.startedAt,
       refs: e.refs,
       trigger: e.trigger || null,
+      /** Identity mode the principal was recorded in (owner checks must resolve the caller the same way). */
+      identityMode: e.identityMode || null,
       seq: e.seq,
       ended: e.ended
     };

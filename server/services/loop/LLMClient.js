@@ -572,6 +572,7 @@ export class LLMClient {
           return res;
         },
         {
+          signal: callSignal,
           maxRetries: Number.isFinite(retries) ? retries : this.maxRetries,
           sleep: this.sleep,
           onRetry: ({ attempt, err, delayMs }) => {

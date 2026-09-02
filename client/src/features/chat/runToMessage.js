@@ -218,4 +218,33 @@ export function projectRunToMessage(run, options = {}) {
   return { content, loading, extras };
 }
 
+/**
+ * Project a message that spans a chat run and the workflow runs a tool launched
+ * inside it (child runs: `parentRunId === run.runId`). The answer text,
+ * lifecycle and completion metadata come from the chat run; the workflow state
+ * (steps, checkpoint, result, output format) comes from the children — a
+ * child's lifecycle never completes the message, the chat run does.
+ *
+ * @param {Object} run - the chat run (parent)
+ * @param {Object[]} [childRuns] - workflow runs whose `parentRunId` is `run.runId`
+ * @param {Object} [options] - see projectRunToMessage
+ * @returns {{ content: string, loading: boolean, extras: Object }}
+ */
+export function projectMessageRuns(run, childRuns = [], options = {}) {
+  const base = projectRunToMessage(run, options);
+  if (!childRuns || childRuns.length === 0) return base;
+  const extras = { ...base.extras };
+  let steps = extras.workflowSteps ? [...extras.workflowSteps] : [];
+  for (const child of childRuns) {
+    const c = projectRunToMessage(child, options).extras;
+    if (c.workflowSteps?.length) steps = [...steps, ...c.workflowSteps];
+    if (c.workflowStep !== undefined) extras.workflowStep = c.workflowStep;
+    if (c.workflowCheckpoint !== undefined) extras.workflowCheckpoint = c.workflowCheckpoint;
+    if (c.workflowResult) extras.workflowResult = c.workflowResult;
+    if (c.outputFormat && !extras.outputFormat) extras.outputFormat = c.outputFormat;
+  }
+  if (steps.length) extras.workflowSteps = steps;
+  return { ...base, extras };
+}
+
 export default projectRunToMessage;

@@ -65,12 +65,14 @@ export async function authorizeLedgerRun(runId, user) {
   let kind = mem?.kind ?? null;
   let startedAt = mem?.startedAt ?? null;
   let refs = mem?.refs ?? null;
+  let identityMode = mem?.identityMode ?? null;
   if (principalId === null) {
     const events = await runLog.readEvents(runId, { limit: 1 });
     const start = events.find(e => e.type === RUN_LOG_EVENTS.RUN_START);
     if (!start) return { ok: false, status: 404 };
     principalId = start.data.principal?.id ?? null;
     anonymous = start.data.principal?.anonymous === true;
+    identityMode = start.data.principal?.mode ?? null;
     kind = start.data.kind;
     startedAt = start.ts;
     refs = start.data.refs || {};
@@ -78,7 +80,10 @@ export async function authorizeLedgerRun(runId, user) {
   const meta = { runId, kind, anonymous, startedAt, principalId, refs: refs || {} };
   if (isAdminUser(user) || anonymous) return { ok: true, meta };
   if (isAnonymousUser(user)) return { ok: false, status: 403 };
-  const me = await resolvePrincipal(user, { mode: runLog.identityMode() });
+  // Resolve the caller in the mode the run's principal was recorded in — a run
+  // written under `pseudonymized` keeps matching its owner after an admin
+  // switches the global mode.
+  const me = await resolvePrincipal(user, { mode: identityMode || runLog.identityMode() });
   if (me.id === principalId) return { ok: true, meta };
   return { ok: false, status: 403 };
 }

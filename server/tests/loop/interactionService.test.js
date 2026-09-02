@@ -286,3 +286,63 @@ test('raise honours a caller-tracked ordinal', async () => {
   await svc.stop();
   await runLog.stop();
 });
+
+// ── cluster replication ──────────────────────────────────────────────────────
+
+/** In-memory stand-in for the cluster bus: publish fans out to every other subscriber. */
+function fakeBus() {
+  const handlers = new Map();
+  return {
+    publish(type, payload) {
+      for (const h of handlers.get(type) || []) h(JSON.parse(JSON.stringify(payload)));
+      return true;
+    },
+    subscribe(type, handler) {
+      if (!handlers.has(type)) handlers.set(type, new Set());
+      handlers.get(type).add(handler);
+      return () => handlers.get(type).delete(handler);
+    }
+  };
+}
+
+test('cluster: a mutation on one worker is visible on the others; waiters settle remotely', async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'interaction-cluster-'));
+  const runLog = new RunLog({ baseDir, forceEnabled: true, getPlatformConfig: () => ({}) });
+  const bus = fakeBus();
+  const workerA = new InteractionService({ runLog, bus, pid: 1, persist: false });
+  const workerB = new InteractionService({ runLog, bus, pid: 2, persist: false });
+  const { runId } = await runLog.startRun({ kind: 'workflow', user: { id: 'u1' } });
+
+  // raised on A → listed on B
+  const raised = await workerA.raise({
+    runId,
+    kind: 'approval',
+    origin: 'node',
+    prompt: { message: 'Approve?', options: [{ value: 'approve', label: 'Approve' }] },
+    source: { checkpointId: 'ckpt-1', executionId: runId }
+  });
+  assert.equal((await workerB.listPending({ runId })).length, 1);
+  assert.equal((await workerB.get(raised.id)).status, 'pending');
+
+  // a waiter on A is settled by an answer given on B
+  const waiting = workerA.waitForAnswer(raised.id);
+  const answeredEvents = [];
+  workerA.on('answered', () => answeredEvents.push('A'));
+  const answered = await workerB.answer(raised.id, { value: 'approve' }, { user: { id: 'alice' } });
+  const seenOnA = await waiting;
+  assert.equal(seenOnA.status, 'answered');
+  assert.equal(seenOnA.answer.by, 'alice');
+  assert.equal((await workerA.get(raised.id)).status, 'answered');
+  assert.deepEqual(await workerA.listPending({ runId }), []);
+  // listeners fire on the originating worker only
+  assert.deepEqual(answeredEvents, []);
+  assert.equal(answered.status, 'answered');
+
+  // a stale pending copy never regresses a settled interaction
+  bus.publish('interaction:mutation', { interaction: raised, pid: 3 });
+  assert.equal((await workerA.get(raised.id)).status, 'answered');
+
+  await workerA.stop();
+  await workerB.stop();
+  await runLog.stop();
+});

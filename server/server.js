@@ -562,9 +562,13 @@ if (cluster.isPrimary && workerCount > 1) {
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();
-  interactionService.startExpirySweep();
-  // Retention sweep once per process; in cluster mode only the first worker runs it.
-  if (!cluster.isWorker || cluster.worker?.id === 1) runLog.startCleanupScheduler();
+  // Process-wide singletons run once per cluster: on the worker in slot 0
+  // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never reused).
+  const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
+  if (ownsClusterSingletons) {
+    interactionService.startExpirySweep();
+    runLog.startCleanupScheduler();
+  }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
 

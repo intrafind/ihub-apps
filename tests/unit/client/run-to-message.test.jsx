@@ -10,7 +10,8 @@ import {
 import {
   projectRunToMessage,
   mergeCitationEntries,
-  buildWorkflowSteps
+  buildWorkflowSteps,
+  projectMessageRuns
 } from '../../../client/src/features/chat/runToMessage';
 
 const ts = seq => `2026-09-02T10:00:${String(seq).padStart(2, '0')}.000Z`;
@@ -407,5 +408,78 @@ describe('projectRunToMessage — tool side channels', () => {
         { resultItems: [3] }
       ])
     ).toEqual({ references: [2], resultItems: [3] });
+  });
+});
+
+describe('projectMessageRuns — chat run + tool-launched workflow child run', () => {
+  test('text and lifecycle come from the chat run, workflow state from the child', () => {
+    const state = reduceRunEvents(createStreamState('chat-1'), [
+      env(1, 'run/started', { kind: 'chat', refs: { chatId: 'chat-1', messageId: 'msg-1' } }),
+      env(2, 'tool/started', {
+        step: 0,
+        callId: 'c1',
+        toolId: 'workflow_review',
+        name: 'workflow_review',
+        args: {},
+        execution: 'passthrough'
+      }),
+      env(
+        3,
+        'run/started',
+        { kind: 'workflow', parentRunId: 'run-1', refs: { chatId: 'chat-1', executionId: 'wf-1' } },
+        'wf-1'
+      ),
+      env(
+        4,
+        'progress/node',
+        {
+          executionId: 'wf-1',
+          nodeId: 'plan',
+          nodeName: 'Plan',
+          nodeType: 'prompt',
+          status: 'running',
+          progress: { workflowName: 'Review', chatVisible: true }
+        },
+        'wf-1'
+      ),
+      env(
+        5,
+        'interaction/raised',
+        {
+          interaction: {
+            id: 'ckpt-1',
+            runId: 'wf-1',
+            step: 1,
+            kind: 'approval',
+            origin: 'node',
+            prompt: { message: 'Approve?', inputType: 'confirm' },
+            policy: {},
+            status: 'pending',
+            source: { nodeId: 'approval', executionId: 'wf-1', checkpointId: 'ckpt-1' },
+            createdAt: ts(5)
+          }
+        },
+        'wf-1'
+      ),
+      env(6, 'run/paused', { reason: 'interaction', interactionId: 'ckpt-1' }, 'wf-1'),
+      env(7, 'step/delta', { step: 0, kind: 'text', content: 'Working on it' })
+    ]);
+    const parent = getRun(state, 'run-1');
+    const child = getRun(state, 'wf-1');
+    expect(child.parentRunId).toBe('run-1');
+
+    const { content, loading, extras } = projectMessageRuns(parent, [child]);
+    expect(content).toBe('Working on it');
+    expect(loading).toBe(true); // the chat run is still running
+    expect(extras.workflowSteps).toEqual([
+      expect.objectContaining({ nodeName: 'Plan', status: 'running', workflowName: 'Review' })
+    ]);
+    expect(extras.workflowCheckpoint).toEqual({
+      checkpoint: expect.objectContaining({ id: 'ckpt-1', type: 'approval' }),
+      executionId: 'wf-1'
+    });
+
+    // without children the projection is the plain chat run projection
+    expect(projectMessageRuns(parent, [])).toEqual(projectRunToMessage(parent));
   });
 });

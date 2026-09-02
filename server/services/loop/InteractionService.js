@@ -13,6 +13,9 @@
  *    follows the RunLog flag; in-memory behavior is identical either way.
  *  - Cascade: deleting a run removes its interactions (registered as a RunLog
  *    delete hook).
+ *  - Cluster: every mutation is published on the cluster bus so all workers
+ *    share one view (a checkpoint raised on worker A is listed and answered on
+ *    worker B); each worker persists the converged snapshot.
  *
  * C0 ships the skeleton (store + lifecycle + one answer path). C5 moves the
  * chat clarification, workflow `human` node and agent approvals onto it.
@@ -23,10 +26,14 @@ import { EventEmitter } from 'events';
 import path from 'path';
 import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
+import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './contracts/interaction.js';
 import defaultRunLog from './RunLog.js';
+
+/** Cluster bus channel carrying every interaction mutation to the other workers. */
+export const INTERACTION_BUS_CHANNEL = 'interaction:mutation';
 
 export class InteractionError extends Error {
   constructor(message, code, status = 400) {
@@ -44,11 +51,14 @@ export class InteractionService extends EventEmitter {
    * @param {string} [opts.storePath] - override pending-store file (tests)
    * @param {boolean} [opts.persist] - override persistence (defaults to runLog.isEnabled())
    * @param {() => number} [opts.now]
+   * @param {{publish: Function, subscribe: Function}} [opts.bus] - cluster bus (default: clusterBus)
    */
   constructor(opts = {}) {
     super();
     this.setMaxListeners(0);
     this.runLog = opts.runLog || defaultRunLog;
+    this._bus = opts.bus || { publish: busPublish, subscribe: busSubscribe };
+    this._pid = opts.pid ?? process.pid;
     this._persistOverride = opts.persist ?? null;
     this._now = opts.now || (() => Date.now());
     this._storePath = opts.storePath || path.join(this.runLog.baseDir, 'interactions.json');
@@ -70,6 +80,12 @@ export class InteractionService extends EventEmitter {
     this._answerHandlers = new Set();
     this._loaded = false;
     this._unhookDelete = this.runLog.onDelete(runId => this._deleteForRun(runId));
+    // Every worker keeps the same in-memory view: mutations made here are
+    // published to the others, theirs are applied here (see _applyRemote).
+    this._unsubscribeBus =
+      typeof this._bus.subscribe === 'function'
+        ? this._bus.subscribe(INTERACTION_BUS_CHANNEL, msg => this._applyRemote(msg))
+        : null;
   }
 
   _persist() {
@@ -93,8 +109,18 @@ export class InteractionService extends EventEmitter {
     }
   }
 
-  async _save(interaction) {
+  async _save(interaction, { replicate = true } = {}) {
     this._byId.set(interaction.id, interaction);
+    if (replicate) {
+      try {
+        this._bus.publish(INTERACTION_BUS_CHANNEL, { interaction, pid: this._pid });
+      } catch (err) {
+        logger.warn('InteractionService: replication publish failed', {
+          component: 'InteractionService',
+          error: err.message
+        });
+      }
+    }
     if (!this._persist()) return;
     const data = await this._store.load();
     if (interaction.status === 'pending') {
@@ -105,6 +131,40 @@ export class InteractionService extends EventEmitter {
       delete data.interactions[interaction.id];
     }
     this._store.markDirty();
+  }
+
+  /**
+   * Apply a mutation another worker made: mirror it into this worker's view
+   * (and its copy of the store) and settle any local waiter. Ledger events and
+   * `raised` / `answered` listeners already ran on the originating worker, so
+   * nothing is re-emitted here.
+   * @private
+   */
+  async _applyRemote(msg) {
+    const interaction = msg?.interaction;
+    if (!interaction || typeof interaction.id !== 'string') return;
+    if (msg.pid !== undefined && msg.pid === this._pid) return;
+    try {
+      await this._ensureLoaded();
+      const local = this._byId.get(interaction.id);
+      // Never regress a settled interaction with a stale pending copy.
+      if (local && local.status !== 'pending' && interaction.status === 'pending') return;
+      await this._save(interaction, { replicate: false });
+      const w = this._waiters.get(interaction.id);
+      if (w && interaction.status !== 'pending') {
+        this._waiters.delete(interaction.id);
+        if (interaction.status === 'answered') w.resolve(interaction);
+        else if (interaction.status === 'expired') {
+          w.reject(new InteractionError('Interaction expired', 'EXPIRED', 410));
+        } else w.reject(new InteractionError('Interaction cancelled', 'CANCELLED', 409));
+      }
+    } catch (err) {
+      logger.warn('InteractionService: failed to apply replicated interaction', {
+        component: 'InteractionService',
+        interactionId: interaction.id,
+        error: err.message
+      });
+    }
   }
 
   async _deleteForRun(runId) {
@@ -496,6 +556,7 @@ export class InteractionService extends EventEmitter {
 
   async stop() {
     this.stopExpirySweep();
+    this._unsubscribeBus?.();
     this._unhookDelete?.();
     if (this._persist()) {
       await this._store.flush();

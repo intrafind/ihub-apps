@@ -254,3 +254,34 @@ test('extractJson — whole, fenced, embedded, brace slice, arrays, failure', ()
   assert.equal(looksTruncated('oops }', 'length'), true);
   assert.equal(looksTruncated('{"a":1}', 'stop'), false);
 });
+
+test('runWithRetries: an abort during the backoff ends the wait at once', async () => {
+  const ac = new AbortController();
+  const transient = Object.assign(new Error('rate limited'), { retryAfterMs: 5000 });
+  let calls = 0;
+  const started = Date.now();
+  const pending = runWithRetries(
+    async () => {
+      calls += 1;
+      throw transient;
+    },
+    { maxRetries: 3, isTransient: () => true, signal: ac.signal }
+  );
+  setTimeout(() => ac.abort(), 20);
+  await assert.rejects(pending, err => err.name === 'AbortError');
+  assert.equal(calls, 1, 'no further attempt after the abort');
+  assert.ok(Date.now() - started < 2000, 'did not wait out the Retry-After delay');
+
+  // an already-aborted signal skips the backoff entirely
+  const done = new AbortController();
+  done.abort();
+  await assert.rejects(
+    runWithRetries(
+      async () => {
+        throw transient;
+      },
+      { maxRetries: 1, isTransient: () => true, signal: done.signal }
+    ),
+    err => err.name === 'AbortError'
+  );
+});

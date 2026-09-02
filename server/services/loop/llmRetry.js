@@ -126,8 +126,9 @@ export function computeRetryDelayMs(
  * @param {Object} [opts]
  * @param {number} [opts.maxRetries=DEFAULT_TRANSIENT_RETRIES]
  * @param {(info: {attempt:number, err:Error, delayMs:number}) => void} [opts.onRetry]
- * @param {(ms: number) => Promise<void>} [opts.sleep]
+ * @param {(ms: number, signal?: AbortSignal) => Promise<void>} [opts.sleep]
  * @param {(err: Error) => boolean} [opts.isTransient]
+ * @param {AbortSignal} [opts.signal] - aborting it ends a pending backoff at once
  * @returns {Promise<any>}
  */
 export async function runWithRetries(
@@ -135,8 +136,9 @@ export async function runWithRetries(
   {
     maxRetries = DEFAULT_TRANSIENT_RETRIES,
     onRetry,
-    sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
-    isTransient = isTransientLlmError
+    sleep = abortableSleep,
+    isTransient = isTransientLlmError,
+    signal
   } = {}
 ) {
   const budget = Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 0;
@@ -145,11 +147,38 @@ export async function runWithRetries(
       return await fn(attempt);
     } catch (err) {
       if (attempt >= budget || !isTransient(err)) throw err;
+      if (signal?.aborted) throw abortError();
       const delayMs = computeRetryDelayMs(attempt, {
         retryAfterMs: typeof err?.retryAfterMs === 'number' ? err.retryAfterMs : null
       });
       if (onRetry) onRetry({ attempt, err, delayMs });
-      await sleep(delayMs);
+      await sleep(delayMs, signal);
     }
   }
+}
+
+function abortError() {
+  const err = new Error('The operation was aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
+/**
+ * Sleep that ends immediately when `signal` aborts (rejecting with an
+ * AbortError), so a stop or the whole-call timeout also covers a pending
+ * `Retry-After` wait.
+ */
+export function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError());
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
