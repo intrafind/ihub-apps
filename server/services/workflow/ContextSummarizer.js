@@ -14,7 +14,12 @@
  * @module services/workflow/ContextSummarizer
  */
 
-import llmClient, { isLLMError } from '../loop/LLMClient.js';
+import llmClient from '../loop/LLMClient.js';
+import {
+  microcompactMessages as microcompactShared,
+  compactIfOversized as compactIfOversizedShared,
+  isContextOverflowError as isContextOverflowShared
+} from '../loop/contextCompaction.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -71,28 +76,7 @@ export class ContextSummarizer {
    * @returns {boolean}
    */
   static isContextOverflowError(err) {
-    if (!err) return false;
-    if (isLLMError(err) && err.isContextWindowError) return true;
-    const status = err.status || err.httpStatus;
-    if (status === 413) return true;
-    const haystack = `${err.message || ''} ${err.details || ''} ${err.code || ''}`.toLowerCase();
-    const overflowSignals = [
-      'context length',
-      'context window',
-      'maximum context',
-      'too long',
-      'prompt is too long',
-      'context_length_exceeded',
-      'reduce the length',
-      'too many tokens',
-      'exceeds the maximum'
-    ];
-    const looksLikeOverflow = overflowSignals.some(s => haystack.includes(s));
-    // Only treat 4xx (client-side / request-shape) overflows as recoverable.
-    if (looksLikeOverflow && (status === undefined || (status >= 400 && status < 500))) {
-      return true;
-    }
-    return false;
+    return isContextOverflowShared(err);
   }
 
   /**
@@ -133,29 +117,7 @@ export class ContextSummarizer {
    * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number }}
    */
   microcompactMessages(messages, opts = {}) {
-    const keepRecent = opts.keepRecent ?? 4;
-    const maxChars = opts.maxChars ?? 2000;
-    if (!Array.isArray(messages) || messages.length <= keepRecent) {
-      return { messages, freedChars: 0, collapsed: 0 };
-    }
-    const cutoff = messages.length - keepRecent;
-    let freedChars = 0;
-    let collapsed = 0;
-    const out = messages.map((msg, i) => {
-      if (i >= cutoff) return msg; // keep recent verbatim
-      if (!msg || typeof msg.content !== 'string') return msg;
-      // Only compact bulky tool results / oversized assistant content.
-      const isCompactable = msg.role === 'tool' || msg.role === 'assistant';
-      if (!isCompactable || msg.content.length <= maxChars) return msg;
-      freedChars += msg.content.length;
-      collapsed += 1;
-      const head = msg.content.slice(0, 200).replace(/\s+/g, ' ');
-      return {
-        ...msg,
-        content: `[older ${msg.role} output elided to save context — ${msg.content.length} chars. Preview: ${head}…]`
-      };
-    });
-    return { messages: out, freedChars, collapsed };
+    return microcompactShared(messages, opts);
   }
 
   /**
@@ -178,20 +140,7 @@ export class ContextSummarizer {
    * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number, compacted: boolean }}
    */
   compactIfOversized(messages, opts = {}) {
-    const thresholdTokens = opts.thresholdTokens ?? 16000;
-    const keepRecent = opts.keepRecent ?? 6;
-    const maxChars = opts.maxChars ?? 2000;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return { messages, freedChars: 0, collapsed: 0, compacted: false };
-    }
-    const totalText = messages
-      .map(m => (typeof m?.content === 'string' ? m.content : ''))
-      .join(' ');
-    if (this.estimateTokens(totalText) <= thresholdTokens) {
-      return { messages, freedChars: 0, collapsed: 0, compacted: false };
-    }
-    const result = this.microcompactMessages(messages, { keepRecent, maxChars });
-    return { ...result, compacted: result.collapsed > 0 };
+    return compactIfOversizedShared(messages, opts);
   }
 
   /**

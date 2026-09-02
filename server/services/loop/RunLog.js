@@ -43,8 +43,13 @@ const DEFAULT_FLUSH_MS = 2000;
 const MAX_QUEUE = 20000;
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{3,127}$/;
 
+/** Whether `runId` is acceptable as a ledger run id (also a safe path segment). */
+export function isValidRunId(runId) {
+  return typeof runId === 'string' && RUN_ID_PATTERN.test(runId);
+}
+
 function assertRunId(runId) {
-  if (typeof runId !== 'string' || !RUN_ID_PATTERN.test(runId)) {
+  if (!isValidRunId(runId)) {
     throw new Error(`Invalid runId: ${String(runId).slice(0, 64)}`);
   }
 }
@@ -279,6 +284,11 @@ export class RunLog {
     assertRunId(runId);
     const parsed = parseRunLogEventData(type, data ?? {});
     let entry = this._runs.get(runId);
+    if (!entry && !this.isEnabled() && this._globalListeners.size === 0) {
+      // Ledger off and nobody listening: don't accumulate in-memory run entries
+      // for runs that were never started here (e.g. workflow executions).
+      return null;
+    }
     if (!entry) {
       // Unknown run (no startRun/resumeRun) — register lazily so we never lose
       // an event, but flag it: seq continuity after a restart requires resumeRun().

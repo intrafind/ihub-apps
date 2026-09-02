@@ -10,6 +10,7 @@
  */
 
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
+import { fakeLlmClient } from './helpers/fakeLlmClient.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -51,7 +52,7 @@ function makeExecutor(tokensPerCall) {
       };
     }
   };
-  const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+  const executor = new PromptNodeExecutor({ llmClient: fakeLlmClient(llmClient), chatService: {} });
   // Stub tool execution so we don't touch the real tool registry.
   executor.executeToolCall = async toolCall => ({
     role: 'tool',
@@ -119,7 +120,10 @@ async function run() {
         finishReason: 'stop'
       })
     };
-    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     const context = makeContext(0); // unlimited
     const res = await executor.executeLLMWithTools({
       model,

@@ -9,6 +9,7 @@
 //
 // Run directly: node server/tests/agent-tool-circuit-breaker.test.js
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
+import { fakeLlmClient } from './helpers/fakeLlmClient.js';
 
 let failures = 0;
 function check(label, cond, detail) {
@@ -71,7 +72,7 @@ function makeExecutor(toolError) {
       };
     }
   };
-  const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+  const executor = new PromptNodeExecutor({ llmClient: fakeLlmClient(llmClient), chatService: {} });
   executor.executeToolCall = async toolCall => ({
     role: 'tool',
     tool_call_id: toolCall.id,

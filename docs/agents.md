@@ -205,8 +205,11 @@ A `verifier` node supports two modes:
   reached, the agent's tool loop answers the current round's tool calls, then
   is nudged to produce a final tool-less answer rather than continuing to call
   tools (Claude Code TOKEN_BUDGET analog). `0` = unlimited.
-- `maxToolRoundsPerNode` — safety backstop on tool-calling rounds per node.
+- `maxToolRoundsPerNode` — safety backstop on tool-calling rounds per node
+  (a node's own `maxIterations` takes precedence).
 - Running spend is tracked on `state.data._budget`.
+- Both are enforced by the shared [Agent Loop](agent-loop.md) for every
+  prompt/agent node and tool-enabled verifier of the run.
 
 ### Durable scheduling (multi-instance safety)
 

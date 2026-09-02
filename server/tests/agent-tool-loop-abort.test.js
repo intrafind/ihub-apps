@@ -17,6 +17,7 @@
  */
 
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
+import { fakeLlmClient } from './helpers/fakeLlmClient.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -37,7 +38,10 @@ async function run() {
         return { content: 'should not happen', toolCalls: [], finishReason: 'stop' };
       }
     };
-    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     const controller = new AbortController();
     controller.abort();
     const context = {
@@ -84,7 +88,10 @@ async function run() {
         finishReason: 'tool_calls'
       })
     };
-    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     executor.executeToolCall = async toolCall => {
       toolCallExecutions.push(toolCall.id);
       // Simulate the run being cancelled while this batch is mid-flight —
@@ -140,7 +147,10 @@ async function run() {
         };
       }
     };
-    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     executor.executeToolCall = async toolCall => {
       // Cancel after the first round's tool call completes, simulating
       // engine.cancel() landing between iterations rather than mid-batch.
@@ -184,7 +194,10 @@ async function run() {
         finishReason: 'stop'
       })
     };
-    const executor = new PromptNodeExecutor({ llmClient, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     const context = {
       language: 'en',
       _agentProfile: { budgets: {} },

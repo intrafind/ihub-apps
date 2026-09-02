@@ -17,15 +17,16 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import ChatService from '../../chat/ChatService.js';
-import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForApp, runTool, resolveNativeWebSearchProvider } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import llmClient from '../../loop/LLMClient.js';
+import { AgentLoop } from '../../loop/AgentLoop.js';
+import { repairToolArguments, matchTool } from '../../loop/toolArgs.js';
+import { classifyToolResult } from '../../loop/toolClassify.js';
 import { ContextSummarizer } from '../ContextSummarizer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import { getLocalizedString } from '../../../utils/localize.js';
-import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
 import config from '../../../config.js';
@@ -56,7 +57,18 @@ const PROMPT_NODE_WORKER_TASK_BODY_CHARS = 2000;
  * @property {string} [modelId] - Specific model to use (overrides workflow default)
  * @property {number} [temperature] - Temperature for LLM responses
  * @property {number} [maxTokens] - Maximum tokens for response
- * @property {number} [maxIterations] - Maximum tool calling iterations (default: 10)
+ * @property {number} [maxIterations] - Maximum tool calling rounds (default: the agent
+ *   profile's `budgets.maxToolRoundsPerNode`, else 10)
+ * @property {boolean} [parallelToolCalls] - Let independent tool calls of one turn run
+ *   concurrently (default: false — workflow tools routinely mutate shared run state)
+ * @property {number} [maxRateLimitFailures] - Rate-limit failures before a tool is withheld
+ *   for the rest of the step (default: 2)
+ * @property {number} [maxConsecutiveToolFailures] - Consecutive failures before a tool is
+ *   withheld (default: 3)
+ * @property {number} [compactThresholdTokens] - Proactively collapse old tool bodies once the
+ *   transcript exceeds this size (default: 16000)
+ * @property {number} [compactKeepRecent] - Trailing messages kept verbatim when compacting
+ *   (default: 6)
  * @property {Object} [outputSchema] - JSON schema for structured output
  * @property {string} [outputVariable] - State variable to store the result
  * @property {boolean} [includeHistory] - Include previous messages in context
@@ -99,6 +111,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @param {ContextSummarizer} [options.contextSummarizer] - Summarizer/compactor (defaults to
    *   one sharing this executor's client)
    * @param {number} [options.maxIterations=10] - Default tool-loop round cap
+   * @param {import('../../loop/AgentLoop.js').AgentLoop} [options.agentLoop] - Loop to run
+   *   model turns through (defaults to one bound to this executor's `llmClient`)
    */
   constructor(options = {}) {
     super(options);
@@ -107,6 +121,23 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     this.maxIterations = options.maxIterations || 10;
     this.contextSummarizer =
       options.contextSummarizer || new ContextSummarizer({ llmClient: this.llmClient });
+    this._agentLoop = options.agentLoop || null;
+    this._defaultLoop = null;
+  }
+
+  /**
+   * The shared agent loop this executor runs model turns through. An injected
+   * loop (tests, custom seams) wins; otherwise a loop bound to this executor's
+   * current `llmClient` is created on demand, so swapping `executor.llmClient`
+   * is honoured.
+   * @type {import('../../loop/AgentLoop.js').AgentLoop}
+   */
+  get agentLoop() {
+    if (this._agentLoop) return this._agentLoop;
+    if (!this._defaultLoop || this._defaultLoop.llmClient !== this.llmClient) {
+      this._defaultLoop = new AgentLoop({ llmClient: this.llmClient, logger: this.logger });
+    }
+    return this._defaultLoop;
   }
 
   /**
@@ -460,6 +491,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         ...context,
         _workflowState: state,
         _taskId: effectiveTaskId,
+        // The resolved profile drives the loop's budgets (maxTokensPerRun,
+        // maxToolRoundsPerNode) and tags citations/telemetry with the profile.
+        _agentProfile: context._agentProfile || agentProfile || undefined,
         // Carry the resolved model id so app-as-tool invocations (and any
         // other tools that want to mirror the operator's model choice)
         // can propagate it instead of falling back to the app's own
@@ -1384,14 +1418,25 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
-   * Execute LLM call with tool loop.
+   * Run the node's model turn through the shared `AgentLoop`.
    *
-   * This method handles the iterative process of:
-   * 1. Calling the LLM
-   * 2. Checking for tool calls
-   * 3. Executing tools
-   * 4. Adding tool results to messages
-   * 5. Repeating until no more tool calls or max iterations reached
+   * This is a thin adapter around the one loop: it maps node config and the
+   * execution context onto a LoopRequest (policies, provider options,
+   * correlation refs, workflow seams, the tool executor), runs ONE segment and
+   * maps the LoopResult back onto the shape the rest of the executor (step
+   * log, auto-persist, verifier) consumes:
+   * `{ content, iterations, tokens, runTokens, budgetExhausted, finishReason,
+   *    disabledTools, maxTokens, messages, citations }`.
+   *
+   * Budgets come from the agent profile (`maxTokensPerRun`,
+   * `maxToolRoundsPerNode`); `config.maxIterations` takes precedence for the
+   * round cap. The run-level token spend lives on the workflow state
+   * (`state.data._budget`) so it spans every node and iteration of the run.
+   * Tool calls of one turn run sequentially unless the node opts into
+   * `parallelToolCalls` — workflow tools routinely mutate shared run state.
+   *
+   * Cancellation and provider failures are re-thrown so callers keep their
+   * existing handling (`err.code === 'ABORTED'` for a cancelled run).
    *
    * @param {Object} params - Execution parameters
    * @returns {Promise<Object>} Final response with content
@@ -1401,22 +1446,23 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     model,
     messages,
     tools,
-    config,
-    context,
+    config = {},
+    context = {},
     nodeId,
     nativeWebSearch = null
   }) {
-    // Budget-driven continuation (Claude Code TOKEN_BUDGET analog). The agent
-    // runs as long as the task and budget require, rather than a fixed count.
-    // `maxToolRoundsPerNode` is a safety backstop above the token budget; the
-    // token budget is what actually shapes when the agent wraps up.
     const budgets = context._agentProfile?.budgets || {};
-    const roundCap = config.maxIterations || budgets.maxToolRoundsPerNode || this.maxIterations;
-    const maxTokensPerRun = budgets.maxTokensPerRun || 0; // 0 = unlimited
-    const maxIterations = roundCap;
-    const temperature = config.temperature ?? 0.7;
+    const roundCap = Math.max(
+      1,
+      Math.floor(
+        Number(config.maxIterations || budgets.maxToolRoundsPerNode || this.maxIterations) ||
+          this.maxIterations
+      )
+    );
+    const maxTokensPerRun = Math.max(0, Math.floor(Number(budgets.maxTokensPerRun) || 0));
     const maxTokens = config.maxTokens || model.maxOutputTokens || 4096;
     const language = context.language || 'en';
+    const toolList = Array.isArray(tools) ? tools : [];
 
     // Run-level token spend lives on the workflow state so the budget spans
     // every node/iteration of the whole run, not just this node.
@@ -1424,171 +1470,106 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const runBudget = runState?.data?._budget || { input: 0, output: 0, total: 0 };
     if (runState?.data) runState.data._budget = runBudget;
 
-    let currentMessages = [...messages];
-    let iteration = 0;
-    let finalContent = '';
-    let finalFinishReason = null;
-    // When the run token budget is exhausted we stop offering tools and ask the
-    // model for a final answer instead of continuing to call tools.
-    let forceFinish = false;
-    // Reactive context recovery (Claude Code reactive-compact analog): bounded
-    // number of microcompact-and-retry attempts when a request overflows.
-    let reactiveAttempts = 0;
-    const MAX_REACTIVE_ATTEMPTS = 2;
-    // Accumulate token usage across iterations
-    const totalTokens = { input: 0, output: 0 };
+    const executionId = context.executionId || runState?.executionId;
+    const runId = context.runId || executionId || undefined;
 
-    // Tool circuit-breaker. A tool that keeps returning a rate-limit error
-    // (HTTP 429/503) won't recover within this step; left unchecked the model
-    // retries it every round and drags the loop to the iteration cap, re-sending
-    // the whole accumulating history each time (run wf-exec-f4f70e84: 151/151
-    // braveSearch calls 429'd, ~60K wasted input/task). After RATE_LIMIT_FAIL_LIMIT
-    // rate-limit failures we stop offering that tool; when no tools remain we
-    // force a final answer. Per-item errors (e.g. a 404 on one URL) are NOT
-    // counted — the tool itself still works.
-    const RATE_LIMIT_FAIL_LIMIT = config.maxRateLimitFailures ?? 2;
-    // A tool that fails this many times IN A ROW (any error — e.g. a search
-    // provider that's down, or webContentExtractor 404ing on URLs the model
-    // invented because search returned nothing) is futile; disable it too. A
-    // single success resets the streak, so occasional per-item misses are
-    // tolerated (run wf-exec-64d14c07: braveSearch was circuit-broken on 429s
-    // but the model pivoted to webContentExtractor and 404'd to the round cap).
-    const CONSECUTIVE_FAIL_LIMIT = config.maxConsecutiveToolFailures ?? 3;
-    const rateLimitFails = new Map();
-    const consecutiveFails = new Map();
-    const disabledTools = new Set();
-
-    // API-key resolution happens inside LLMClient.complete(); a missing key
-    // throws an LLMError (AUTH_FAILED) out of the first iteration.
-
-    while (iteration < maxIterations) {
-      iteration++;
-
-      // Cancellation / node-timeout check. context.abortSignal is the signal
-      // WorkflowEngine._executeWithTimeout races the node against (fired by
-      // engine.cancel() or the per-node timeout); without this the tool loop
-      // ignored it entirely and kept issuing LLM calls and mutating shared
-      // run state after the run was already considered CANCELLED/timed out.
-      if (context.abortSignal?.aborted) {
-        const abortError = new Error('Agent tool loop aborted (workflow cancelled or timed out)');
-        abortError.code = 'ABORTED';
-        throw abortError;
-      }
-
-      this.logger.debug('LLM iteration', {
-        component: 'PromptNodeExecutor',
+    const result = await this.agentLoop.run({
+      runId,
+      kind: context.user?.isAgent ? 'agent' : 'workflow',
+      model,
+      messages,
+      tools: toolList,
+      toolExecution: 'server',
+      policies: {
+        budgets: { maxToolRounds: roundCap, maxTokensPerRun },
+        tools: {
+          maxRateLimitFailures: config.maxRateLimitFailures ?? 2,
+          maxConsecutiveFailures: config.maxConsecutiveToolFailures ?? 3,
+          parallel: config.parallelToolCalls === true
+        },
+        context: {
+          compactThresholdTokens: config.compactThresholdTokens ?? 16000,
+          compactKeepRecent: config.compactKeepRecent ?? 6
+        }
+      },
+      options: {
+        temperature: config.temperature ?? 0.7,
+        maxTokens,
+        nativeWebSearch,
+        // `outputSchema` → native structured output where the provider supports
+        // it (Gemini response_schema, OpenAI json_schema, Anthropic `json` tool).
+        responseSchema: config.outputSchema || undefined,
+        // Per-node thinking override (no-op without a `thinking` block).
+        ...thinkingConfigToOptions(config.thinking)
+      },
+      language,
+      signal: context.abortSignal,
+      refs: {
+        executionId,
         nodeId,
-        iteration,
-        messageCount: currentMessages.length
-      });
+        chatId: context.chatId,
+        userId: context.user?.id,
+        taskId: context._taskId || null,
+        profileId: context._agentProfile?.id
+      },
+      state: { budget: runBudget },
+      meta: { stepLog: context._stepLog || null },
+      seams: [this._workflowSeam({ context, nodeId })],
+      executeTool: (call, { toolDef, args }) =>
+        this.executeToolCall(call, toolList, context, { toolDef, args })
+    });
 
-      // When the node declares `outputSchema`, forward it to the LLM as
-      // `responseSchema` so adapters that support native structured output
-      // (Google Gemini sets `generationConfig.response_schema`; OpenAI uses
-      // `response_format.json_schema`) force the model to emit conformant
-      // JSON instead of free-form prose. Without this we rely on
-      // post-response parsing in `parseStructuredOutput`, which fails when
-      // the LLM wraps the JSON in unexpected ways or adds explanatory
-      // prose — the source of "Could not parse structured output" warnings.
-      const responseSchema = config.outputSchema || undefined;
-      const responseFormat = responseSchema ? 'json' : undefined;
+    if (result.status === 'aborted' || result.status === 'error') {
+      throw result.error || new Error(`Agent loop ended with status ${result.status}`);
+    }
 
-      // Offer only tools that haven't been circuit-broken this step.
-      const availableTools = tools.filter(t => !disabledTools.has(t.id));
+    return {
+      content: result.content,
+      iterations: result.iterations,
+      tokens: {
+        input: result.usage?.promptTokens || 0,
+        output: result.usage?.completionTokens || 0
+      },
+      runTokens: runBudget.total,
+      budgetExhausted: result.budgetExhausted,
+      finishReason: result.finishReason,
+      disabledTools: result.disabledTools,
+      maxTokens,
+      messages: result.messages,
+      citations: result.citations,
+      status: result.status
+    };
+  }
 
-      // Execute the request through the shared LLM client. On a
-      // context-overflow error, microcompact the in-loop messages and retry
-      // the same iteration (reactive recovery) before giving up.
-      let response;
-      try {
-        response = await this.llmClient.complete({
-          model,
-          messages: currentMessages,
-          options: {
-            temperature,
-            maxTokens,
-            tools: availableTools.length > 0 && !forceFinish ? availableTools : undefined,
-            nativeWebSearch: !forceFinish ? nativeWebSearch : null,
-            responseSchema,
-            responseFormat,
-            // Per-node thinking override: lets a node disable or dial down the
-            // model's reasoning (e.g. a fast JSON decision node). No-op when the
-            // node declares no `thinking` block.
-            ...thinkingConfigToOptions(config.thinking)
-            // Note: user and chatId are intentionally NOT passed here
-            // They are not valid adapter options and would corrupt provider request bodies
-          },
-          language,
-          signal: context.abortSignal,
-          telemetry: {
-            runId: context.runId || context.executionId || context._workflowState?.executionId,
-            step: iteration,
-            purpose: 'agent-step',
-            toolExecution: 'server',
-            refs: { nodeId, executionId: context.executionId }
-          }
+  /**
+   * Seam that carries the workflow-specific bookkeeping into the shared loop:
+   * per-iteration debug logging, Gemini grounding → run citations, hallucinated
+   * tool attempts → `_toolErrors` / step log / SSE, circuit-broken tools →
+   * `_circuitBrokenTools` / SSE.
+   *
+   * @private
+   */
+  _workflowSeam({ context, nodeId }) {
+    return {
+      name: 'workflow-node',
+      preStep: ctx => {
+        this.logger.debug('LLM iteration', {
+          component: 'PromptNodeExecutor',
+          nodeId,
+          iteration: ctx.iteration,
+          messageCount: ctx.messages.length
         });
-      } catch (err) {
-        if (
-          ContextSummarizer.isContextOverflowError(err) &&
-          reactiveAttempts < MAX_REACTIVE_ATTEMPTS
-        ) {
-          const mc = this.contextSummarizer.microcompactMessages(currentMessages, {
-            keepRecent: 4
-          });
-          if (mc.freedChars > 0) {
-            reactiveAttempts++;
-            currentMessages = mc.messages;
-            this.logger.warn('Reactive context recovery: microcompacted messages, retrying', {
-              component: 'PromptNodeExecutor',
-              nodeId,
-              attempt: reactiveAttempts,
-              freedChars: mc.freedChars,
-              collapsed: mc.collapsed
-            });
-            iteration--; // don't charge the failed attempt against the round cap
-            continue;
-          }
-        }
-        throw err;
-      }
-
-      // Accumulate content
-      if (response.content) {
-        finalContent += response.content;
-      }
-
-      // Track the last iteration's finishReason — when the loop breaks
-      // (no more tool calls), this is the model's actual stop reason and
-      // signals whether the output was truncated by the token cap.
-      if (response.finishReason) {
-        finalFinishReason = response.finishReason;
-      }
-
-      // When responseSchema is set, the Anthropic adapter implements structured
-      // output by forcing a synthetic `json` tool call (since Anthropic has no
-      // native response_format JSON schema). The LLM's reply arrives as a
-      // tool_use block, not as content. Lift its arguments into finalContent so
-      // downstream parseStructuredOutput sees the JSON, and drop the synthetic
-      // call so the tool-execution loop below doesn't try to run a tool that
-      // doesn't exist.
-      if (responseSchema && response.toolCalls?.length > 0) {
-        const jsonCall = response.toolCalls.find(tc => tc.function?.name === 'json');
-        if (jsonCall?.function?.arguments) {
-          finalContent += jsonCall.function.arguments;
-          response.toolCalls = response.toolCalls.filter(tc => tc !== jsonCall);
-        }
-      }
-
-      // Capture Gemini native grounding metadata (googleSearch). Unlike
-      // function-calling tools, grounding doesn't appear in the tool-call
-      // loop — the URLs ride alongside the assistant message. Push each
-      // grounding chunk into the run's _citations ledger so the
-      // synthesizer can cite them just like any other web/source result.
-      if (response.groundingMetadata) {
+      },
+      stepEnd: async (ctx, step) => {
+        // Native grounding (Google Search) doesn't appear in the tool loop —
+        // the URLs ride alongside the assistant message. Push each grounding
+        // chunk into the run's _citations ledger so the synthesizer can cite
+        // them like any other web/source result.
+        const groundingMetadata = step?.result?.groundingMetadata;
+        if (!groundingMetadata) return;
         try {
           await this._captureCitationsFromGroundingMetadata({
-            groundingMetadata: response.groundingMetadata,
+            groundingMetadata,
             state: context._workflowState,
             taskId: context._taskId || null
           });
@@ -1598,226 +1579,80 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             error: gErr.message
           });
         }
-      }
-
-      // Accumulate token usage from the response (canonical camelCase usage
-      // from LLMClient) or estimate it when the provider reported none.
-      // Track the per-iteration delta so it can be added to the run budget.
-      let deltaIn = 0;
-      let deltaOut = 0;
-      if (response.usage) {
-        deltaIn = response.usage.promptTokens || 0;
-        deltaOut = response.usage.completionTokens || 0;
-      } else {
-        // Fallback: estimate tokens when usage data is not provided (streaming responses)
-        // This matches the approach used in StreamingHandler for chat apps
-        const inputText = currentMessages.map(m => m.content || '').join(' ');
-        deltaIn = estimateTokens(inputText);
-        if (response.content) {
-          deltaOut = estimateTokens(response.content);
-        }
-      }
-      totalTokens.input += deltaIn;
-      totalTokens.output += deltaOut;
-      runBudget.input += deltaIn;
-      runBudget.output += deltaOut;
-      runBudget.total = runBudget.input + runBudget.output;
-
-      // Check if there are tool calls to process
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        // No tool calls, we're done
-        break;
-      }
-
-      // If we already forced a finish but the model still tried to call tools,
-      // stop here rather than looping forever without tools available.
-      if (forceFinish) {
-        finalFinishReason = 'budget_exhausted';
-        break;
-      }
-
-      // Process tool calls
-      const assistantMessage = {
-        role: 'assistant',
-        content: response.content || null,
-        tool_calls: response.toolCalls
-      };
-      // Preserve thoughtSignatures for Gemini 3 thinking models (required for multi-turn tool calling)
-      if (response.thoughtSignatures?.length > 0) {
-        assistantMessage.thoughtSignatures = response.thoughtSignatures;
-      }
-      currentMessages.push(assistantMessage);
-
-      // Execute each tool call. Re-check the abort signal before EACH call (not
-      // just once per iteration) so a cancellation received while several tool
-      // calls are queued in the same turn stops after the in-flight call rather
-      // than running the rest of the batch first.
-      for (const toolCall of response.toolCalls) {
-        if (context.abortSignal?.aborted) {
-          const abortError = new Error('Agent tool loop aborted (workflow cancelled or timed out)');
-          abortError.code = 'ABORTED';
-          throw abortError;
-        }
-        const toolResult = await this.executeToolCall(toolCall, tools, context);
-        currentMessages.push(toolResult);
-
-        // Circuit-breaker: a tool that is rate-limited (fast trip) OR fails
-        // repeatedly in a row (any error — futile) is withheld for the rest of
-        // the step so the model can't retry a dead tool to the round cap.
-        const verdict = this._classifyToolResult(toolResult);
-        const matched = tools.find(
-          t => t.id === toolResult.name || normalizeToolName(t.id) === toolResult.name
-        );
-        const tid = matched?.id || toolResult.name;
-        if (verdict.failed) {
-          if (verdict.rateLimited) rateLimitFails.set(tid, (rateLimitFails.get(tid) || 0) + 1);
-          consecutiveFails.set(tid, (consecutiveFails.get(tid) || 0) + 1);
-        } else {
-          consecutiveFails.set(tid, 0); // a success resets the streak
-        }
-        const rl = rateLimitFails.get(tid) || 0;
-        const streak = consecutiveFails.get(tid) || 0;
-        const tripped =
-          (verdict.rateLimited && rl >= RATE_LIMIT_FAIL_LIMIT) || streak >= CONSECUTIVE_FAIL_LIMIT;
-        if (tripped && !disabledTools.has(tid)) {
-          disabledTools.add(tid);
-          const reason = rl >= RATE_LIMIT_FAIL_LIMIT ? 'rate_limited' : 'repeated_failures';
-          const count = reason === 'rate_limited' ? rl : streak;
-          this._signalToolCircuitBroken(context, {
-            tool: tid,
-            reason,
-            failures: count,
-            lastMessage: verdict.message,
-            nodeId
-          });
-          // Search tools failing means the model has no real URLs — explicitly
-          // forbid fabricating sources so it doesn't pivot to inventing URLs.
-          const isSearch = this._isCitationProducingTool(tid);
-          currentMessages.push({
-            role: 'user',
-            content:
-              `[system] The tool "${tid}" is unavailable for the rest of this step ` +
-              `(${reason === 'rate_limited' ? `rate-limited, failed ${count}×` : `failed ${count}× in a row`}: ${verdict.message || 'tool error'}). ` +
-              `Do NOT call it again. ` +
-              (isSearch
-                ? `Web search/fetch is unavailable — do NOT invent or guess URLs, sources, or quotes. `
-                : '') +
-              `Produce your best final answer now using only what you have already gathered, and ` +
-              `explicitly note anything you could not verify because the tool was unavailable.`
-          });
-        }
-      }
-
-      // Proactively compact the in-flight history once it grows large, so old
-      // (already-consumed) tool-result bodies are not re-billed on every
-      // subsequent iteration — the O(N²) prompt-token fix. Citations are
-      // already persisted to _citations and the audit preview to the step log,
-      // so eliding the raw bodies here loses nothing durable. Reactive
-      // overflow recovery (the catch above) remains as a backstop. Compaction
-      // only elides tool-result bodies, never the wrap-up nudges pushed below,
-      // so it is safe to run before the force-finish gates.
-      const compaction = this.contextSummarizer.compactIfOversized(currentMessages, {
-        thresholdTokens: config.compactThresholdTokens ?? 16000,
-        keepRecent: config.compactKeepRecent ?? 6
-      });
-      if (compaction.compacted) {
-        currentMessages = compaction.messages;
-        this.logger.info('Proactively compacted agent context', {
-          component: 'PromptNodeExecutor',
-          nodeId,
-          iteration,
-          collapsed: compaction.collapsed,
-          freedChars: compaction.freedChars
+      },
+      onHallucinated: (ctx, info) => {
+        this._recordHallucinatedTool(context, {
+          requestedName: info.name,
+          availableToolIds: info.availableTools,
+          message: info.message
+        });
+      },
+      onCircuitBroken: (ctx, info) => {
+        this._signalToolCircuitBroken(context, {
+          tool: info.tool,
+          reason: info.reason,
+          failures: info.failures,
+          lastMessage: info.lastMessage,
+          nodeId
         });
       }
-
-      // Force a final (tool-less) answer for exactly ONE reason per iteration,
-      // in precedence order: all tools dead > run budget spent > round cap.
-      // Each sets forceFinish and pushes a wrap-up nudge; the next iteration
-      // then breaks at the top (no tool calls, or the `if (forceFinish)` guard).
-      // The if/else-if chain makes the precedence explicit — a plain sequence of
-      // `if (… && !forceFinish)` gates has the same effect but reads as (and gets
-      // flagged as) redundant negations.
-      if (tools.length > 0 && tools.every(t => disabledTools.has(t.id))) {
-        // Every tool has been circuit-broken — nothing left to call.
-        forceFinish = true;
-        this.logger.info('All tools circuit-broken — forcing a final answer', {
-          component: 'PromptNodeExecutor',
-          nodeId,
-          disabledTools: [...disabledTools]
-        });
-        currentMessages.push({
-          role: 'user',
-          content:
-            '[system] All tools are currently unavailable (rate-limited or repeatedly failing). ' +
-            'Do NOT call any more tools and do NOT invent URLs, sources, or quotes. Produce your ' +
-            'COMPLETE final response now using everything you have gathered, and briefly note any ' +
-            'gaps you could not close because tools were unavailable.'
-        });
-      } else if (maxTokensPerRun > 0 && runBudget.total >= maxTokensPerRun) {
-        // Run token budget spent: answer this round's tool calls (done above)
-        // then nudge the model to wrap up on the next, tool-less turn.
-        forceFinish = true;
-        this.logger.info('Run token budget reached — nudging agent to wrap up', {
-          component: 'PromptNodeExecutor',
-          nodeId,
-          spent: runBudget.total,
-          maxTokensPerRun
-        });
-        currentMessages.push({
-          role: 'user',
-          content:
-            `[system] Token budget for this run is exhausted (${runBudget.total}/${maxTokensPerRun}). ` +
-            `Stop calling tools. Produce your best final answer now using what you already have. ` +
-            `Be concise and note any gaps you could not close.`
-        });
-      } else if (iteration >= maxIterations - 1) {
-        // Last allowed round: spend it producing the final output instead of one
-        // more tool call. Without this, a model that keeps calling tools until
-        // the cap exits the loop having only emitted interim narration ("I'll
-        // research… let me dig deeper") — never the actual deliverable (agent)
-        // or the verdict JSON (verifier, which runs through this same loop).
-        forceFinish = true;
-        this.logger.info('Tool-round cap reached — forcing a final answer', {
-          component: 'PromptNodeExecutor',
-          nodeId,
-          iteration,
-          maxIterations
-        });
-        currentMessages.push({
-          role: 'user',
-          content:
-            '[system] You have reached the tool-use round limit for this step. Do NOT call any ' +
-            'more tools. Using everything you have gathered so far, produce your COMPLETE final ' +
-            'response now, in full, exactly as instructed — not a summary of what you did. If ' +
-            'some details are missing, state them briefly but still deliver the best complete ' +
-            'answer you can.'
-        });
-      }
-
-      // Continue to next iteration
-    }
-
-    if (iteration >= maxIterations) {
-      this.logger.warn('Max tool rounds reached for node', {
-        component: 'PromptNodeExecutor',
-        nodeId,
-        maxIterations,
-        runTokens: runBudget.total
-      });
-      if (!finalFinishReason) finalFinishReason = 'max_iterations';
-    }
-
-    return {
-      content: finalContent,
-      iterations: iteration,
-      tokens: totalTokens,
-      runTokens: runBudget.total,
-      budgetExhausted: forceFinish,
-      finishReason: finalFinishReason,
-      disabledTools: [...disabledTools],
-      maxTokens
     };
+  }
+
+  /**
+   * Bookkeeping for a tool call the model invented: log it, record it on the
+   * workflow state (`_toolErrors`) and the step transcript, and notify the
+   * run-detail SSE stream. Shared by the agent-loop seam and direct callers of
+   * `executeToolCall`.
+   *
+   * @private
+   */
+  _recordHallucinatedTool(context, { requestedName, availableToolIds = [], message }) {
+    const shortName =
+      typeof requestedName === 'string' && requestedName.length > 200
+        ? `${requestedName.slice(0, 200)}…(${requestedName.length})`
+        : requestedName;
+    this.logger.error('Agent attempted to call an unregistered tool', {
+      component: 'PromptNodeExecutor',
+      requestedName: shortName,
+      availableTools: availableToolIds,
+      executionId: context?.executionId
+    });
+
+    // Record the attempt in workflow state for the UI to render.
+    const ws = context?._workflowState;
+    if (ws && ws.data) {
+      if (!Array.isArray(ws.data._toolErrors)) ws.data._toolErrors = [];
+      ws.data._toolErrors.push({
+        ts: new Date().toISOString(),
+        requestedName: shortName,
+        availableTools: availableToolIds,
+        reason: 'not_registered'
+      });
+    }
+
+    // Emit a workflow event so AgentRunDetailPage's SSE stream sees it.
+    try {
+      actionTracker.emit('fire-sse', {
+        event: 'agent.tool.hallucinated',
+        chatId: context?.chatId,
+        executionId: context?.executionId,
+        requestedName,
+        availableTools: availableToolIds
+      });
+    } catch {
+      // never fail a tool call because of telemetry
+    }
+
+    // Keep hallucinated attempts on the audit transcript — important for
+    // trust analysis.
+    if (context?._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+      context._stepLog.toolCalls.push({
+        name: typeof requestedName === 'string' ? requestedName : 'unknown',
+        error: 'hallucinated',
+        message
+      });
+    }
   }
 
   /**
@@ -1829,70 +1664,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    * @returns {Promise<Object>} Tool result message
    * @private
    */
-  async executeToolCall(toolCall, tools, context) {
+  async executeToolCall(toolCall, tools, context, resolved = {}) {
     const { user, chatId, appConfig } = context;
     const requestedName = toolCall.function?.name;
 
     // Strict allowlist: the LLM may emit a name that doesn't correspond to any
     // registered tool (chain-of-thought leakage, hallucinated tool ids, or a
     // provider quirk that slipped past the converter sanitizer). Do NOT fall
-    // back to the raw name and dispatch — instead, hand the model a clear
-    // error so it can self-correct. The run continues; the iteration cap
-    // bounds runaway behavior.
-    const matchedTool = tools.find(
-      t => t.id === requestedName || normalizeToolName(t.id) === requestedName
-    );
+    // back to the raw name and dispatch — hand the model a clear error so it
+    // can self-correct. The agent loop resolves the tool before calling this
+    // (`resolved.toolDef`); direct callers get the same treatment here.
+    const matchedTool = resolved.toolDef || matchTool(requestedName, tools);
 
     if (!matchedTool) {
       const availableToolIds = tools.map(t => t.id);
-      this.logger.error('Agent attempted to call an unregistered tool', {
-        component: 'PromptNodeExecutor',
-        requestedName:
-          typeof requestedName === 'string' && requestedName.length > 200
-            ? `${requestedName.slice(0, 200)}…(${requestedName.length})`
-            : requestedName,
-        availableTools: availableToolIds,
-        executionId: context.executionId
-      });
-
-      // Record the attempt in workflow state for the UI to render.
-      const ws = context._workflowState;
-      if (ws && ws.data) {
-        if (!Array.isArray(ws.data._toolErrors)) ws.data._toolErrors = [];
-        ws.data._toolErrors.push({
-          ts: new Date().toISOString(),
-          requestedName:
-            typeof requestedName === 'string' && requestedName.length > 200
-              ? `${requestedName.slice(0, 200)}…(${requestedName.length})`
-              : requestedName,
-          availableTools: availableToolIds,
-          reason: 'not_registered'
-        });
-      }
-
-      // Emit a workflow event so AgentRunDetailPage's SSE stream sees it.
-      try {
-        actionTracker.emit('fire-sse', {
-          event: 'agent.tool.hallucinated',
-          chatId,
-          executionId: context.executionId,
-          requestedName,
-          availableTools: availableToolIds
-        });
-      } catch (_err) {
-        // never fail a tool call because of telemetry
-      }
-
       const safeMessage = `Tool '${typeof requestedName === 'string' ? requestedName.slice(0, 80) : String(requestedName)}' is not registered for this agent. Available tools: ${availableToolIds.join(', ') || '(none)'}. Pick one of those or stop calling tools.`;
-      // Record hallucinated tool attempts so the audit shows what the
-      // model tried to do — important for trust analysis.
-      if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
-        context._stepLog.toolCalls.push({
-          name: typeof requestedName === 'string' ? requestedName : 'unknown',
-          error: 'hallucinated',
-          message: safeMessage
-        });
-      }
+      this._recordHallucinatedTool(context, {
+        requestedName,
+        availableToolIds,
+        message: safeMessage
+      });
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -1907,43 +1698,30 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     const toolId = matchedTool.id;
 
-    // Parse arguments. Gemini (and occasionally other providers) sometimes
-    // emits tool args with extra content after the closing brace — e.g.
-    // `{"message":"…"}{"message":"…"}` from streaming fragments that
-    // weren't merged cleanly. Strict JSON.parse rejects that, leaves args
-    // empty, and the app gets invoked with no input. Try strict parse first;
-    // on failure, walk the string to extract the first balanced JSON object.
+    // Arguments: the agent loop hands them over already repaired and with
+    // schema defaults applied (`resolved.args`); direct callers get the same
+    // repair here — glued objects (`{…}{…}`), missing braces, prose around
+    // the JSON — instead of a strict JSON.parse that leaves the tool with no
+    // input.
     let args = {};
-    if (toolCall.function.arguments) {
+    if (resolved.args && typeof resolved.args === 'object') {
+      args = resolved.args;
+    } else if (toolCall.function?.arguments) {
       const raw = toolCall.function.arguments;
-      try {
-        args = JSON.parse(raw);
-      } catch (strictErr) {
-        const prefix = this._extractFirstJsonObject(raw);
-        if (prefix !== null) {
-          try {
-            args = JSON.parse(prefix);
-            this.logger.warn('Recovered tool arguments from malformed JSON prefix', {
-              component: 'PromptNodeExecutor',
-              toolId,
-              originalLength: raw.length,
-              parsedLength: prefix.length
-            });
-          } catch (lenientErr) {
-            this.logger.warn('Failed to parse tool arguments (lenient also failed)', {
-              component: 'PromptNodeExecutor',
-              toolId,
-              strictError: strictErr.message,
-              lenientError: lenientErr.message
-            });
-          }
-        } else {
-          this.logger.warn('Failed to parse tool arguments', {
-            component: 'PromptNodeExecutor',
-            toolId,
-            error: strictErr
-          });
-        }
+      const repair = repairToolArguments(raw);
+      args = repair.args;
+      if (repair.failed) {
+        this.logger.warn('Failed to parse tool arguments', {
+          component: 'PromptNodeExecutor',
+          toolId,
+          length: String(raw).length
+        });
+      } else if (repair.repaired) {
+        this.logger.warn('Recovered tool arguments from malformed JSON', {
+          component: 'PromptNodeExecutor',
+          toolId,
+          originalLength: String(raw).length
+        });
       }
     }
 
@@ -2882,54 +2660,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *
    * @private
    */
-  /**
-   * Walk a string and return the substring covering the first balanced
-   * top-level JSON object (or array). Returns null if no balanced object
-   * can be found. Used to recover from providers that emit concatenated
-   * tool-args fragments like `{"a":1}{"b":2}` after streaming.
-   *
-   * Tracks brace depth, skips characters inside strings, and respects
-   * backslash escapes inside strings. No JSON-correctness validation — the
-   * caller still has to JSON.parse the returned prefix.
-   * @private
-   */
-  _extractFirstJsonObject(raw) {
-    if (typeof raw !== 'string') return null;
-    const trimmed = raw.trimStart();
-    const startOffset = raw.length - trimmed.length;
-    if (trimmed.length === 0) return null;
-    const opener = trimmed[0];
-    if (opener !== '{' && opener !== '[') return null;
-    const closer = opener === '{' ? '}' : ']';
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i];
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === '\\' && inString) {
-        escape = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === opener) depth++;
-      else if (ch === closer) {
-        depth--;
-        if (depth === 0) {
-          return raw.slice(startOffset, startOffset + i + 1);
-        }
-      }
-    }
-    return null;
-  }
-
   _previewToolValue(value) {
     const MAX_LEN = 1024;
     const MAX_FIELD_LEN = 320;
@@ -3479,10 +3209,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       message: typeof lastMessage === 'string' ? lastMessage.slice(0, 200) : '',
       ts: new Date().toISOString()
     };
-    this.logger.warn('Tool circuit-broken — withholding for this step', {
-      component: 'PromptNodeExecutor',
-      ...entry
-    });
     try {
       const ws = context?._workflowState;
       if (ws?.data) {
@@ -3505,19 +3231,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   _classifyToolResult(toolResult) {
-    const content = toolResult?.content;
-    if (typeof content !== 'string') return { failed: false, rateLimited: false, message: '' };
-    let message = '';
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed && parsed.error) message = String(parsed.message || 'tool error');
-    } catch {
-      // Non-JSON content is real tool output, not an error envelope.
-      return { failed: false, rateLimited: false, message: '' };
-    }
-    if (!message) return { failed: false, rateLimited: false, message: '' };
-    const rateLimited = /\b(429|503)\b|too many requests|rate[ -]?limit/i.test(message);
-    return { failed: true, rateLimited, message };
+    return classifyToolResult(toolResult);
   }
 
   _formatCitations(state) {

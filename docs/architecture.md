@@ -523,6 +523,7 @@ graph TB
 - **`StateManager.js`**: Tracks and persists workflow execution state across nodes
 - **`ExecutionRegistry.js`**: Tracks active executions by user for monitoring and cancellation
 - **`LLMClient.js`** (`server/services/loop/LLMClient.js`): The single LLM call path for every workflow/agent node (planner, prompt/agent tool loop, verifier, query-plan, quote-validator, context summarizer). It owns model and API-key resolution, transient retries, abort-signal threading, usage normalization and the per-call run-ledger events
+- **`AgentLoop.js`** (`server/services/loop/AgentLoop.js`): The single tool loop. Prompt/agent nodes and the tool-enabled verifier hand it the model, transcript, tools, policies (budgets, circuit breakers, compaction) and a tool executor; it returns the final content, usage and transcript. Workflow-specific bookkeeping (citations, hallucinated tools, withheld tools) is a seam the executor registers — see [Agent Loop](agent-loop.md)
 
 ### Node Types
 

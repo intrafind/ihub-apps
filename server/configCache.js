@@ -605,6 +605,9 @@ class ConfigCache {
     const refreshTimer = setTimeout(() => {
       this._reloadEntry(key);
     }, this.cacheTTL);
+    // A TTL refresh must never be the only thing keeping the process alive
+    // (test runners and CLI scripts that merely read config would hang).
+    if (typeof refreshTimer.unref === 'function') refreshTimer.unref();
 
     this.refreshTimers.set(key, refreshTimer);
   }

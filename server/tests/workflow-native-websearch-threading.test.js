@@ -22,6 +22,7 @@
  */
 
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
+import { fakeLlmClient } from './helpers/fakeLlmClient.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -41,7 +42,7 @@ function makeExecutor() {
       return { content: 'done', finishReason: 'stop' };
     }
   };
-  const executor = new PromptNodeExecutor({ llmClient });
+  const executor = new PromptNodeExecutor({ llmClient: fakeLlmClient(llmClient) });
   return { executor, captured };
 }
 
