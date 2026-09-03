@@ -18,6 +18,29 @@ const promptKnowledgeSources = new Map();
 /**
  * Service for handling prompt processing and template resolution
  */
+/**
+ * ISO-8601 calendar date (YYYY-MM-DD) for `now` in `timeZone`.
+ *
+ * `toISOString()` would give the UTC day, which is the wrong day for anyone
+ * east or west of UTC around midnight. `en-CA` renders exactly YYYY-MM-DD.
+ *
+ * @param {Date} now
+ * @param {string} timeZone - IANA zone
+ * @returns {string} e.g. "2026-09-03"
+ */
+function isoDateInTimeZone(now, timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+
 class PromptService {
   /**
    * Track that prompt-based sources were used for a chat
@@ -70,10 +93,20 @@ class PromptService {
     // Get timezone from user or default to UTC
     const timezone = user?.timezone || user?.settings?.timezone || 'UTC';
 
-    // Create timezone-aware date formatter
+    // Create timezone-aware date formatter.
+    // `dateStyle: 'full'` on purpose: the default numeric style renders
+    // 2026-09-03 as "9/3/2026" under `en`, which a model reading a German
+    // conversation takes for 9 March — six months off, and indistinguishable
+    // from a correct answer. The spelled-out form ("Thursday, September 3,
+    // 2026" / "Donnerstag, 3. September 2026") cannot be misread whichever
+    // locale it is rendered in, and `date_iso` below is the unambiguous
+    // machine form for prompts that want to compare dates.
     const tzOptions = { timeZone: timezone };
     const defaultLang = platformConfig.defaultLanguage || 'en';
-    const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, tzOptions);
+    const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, {
+      ...tzOptions,
+      dateStyle: 'full'
+    });
     const timeFormatter = new Intl.DateTimeFormat(language || defaultLang, {
       ...tzOptions,
       timeStyle: 'medium'
@@ -84,6 +117,8 @@ class PromptService {
       year: now.getFullYear().toString(),
       month: (now.getMonth() + 1).toString().padStart(2, '0'),
       date: dateFormatter.format(now),
+      /** ISO-8601 calendar date in the resolved timezone — never ambiguous. */
+      date_iso: isoDateInTimeZone(now, timezone),
       time: timeFormatter.format(now),
       day_of_week: now.toLocaleDateString(language || defaultLang, {
         ...tzOptions,

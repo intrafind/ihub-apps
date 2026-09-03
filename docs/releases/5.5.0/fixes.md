@@ -362,3 +362,32 @@ it for a moment before the view went blank.
   previously landed outside the visible area, which looked like an empty viewer.
 - Long chat sessions stay responsive: each re-render used to leave behind a keyboard listener and a
   pan/zoom instance that were never released.
+## Web Search Reads Pages Again Instead of Answering From Snippets
+
+A web search app answered from the short descriptions in the search result list
+rather than from the pages themselves, so questions about a person or company
+were answered out of stale directory entries and the **Extract page content**,
+**Max results** and **Content length** settings had no effect no matter what
+they were set to.
+
+The tool definition in `contents/tools/` keeps whatever parameters it was
+written with — initial setup only copies files that are missing — so an
+installation from an earlier release never gained the parameters those settings
+are applied to, and every assignment was silently dropped.
+
+- Tool definitions now regain any parameters their shipped counterpart has.
+  Your own descriptions, defaults and wording always win; only genuinely absent
+  parameters are added.
+- Web search extracts page content again (5 results, 3000 characters each by
+  default), so answers are built from the pages rather than the result list.
+
+## Dates in Prompts Are Spelled Out
+
+The current date reached the model as `9/3/2026`, which reads as 3 September in
+US format and as 9 March almost everywhere else — a model answering in German
+could be six months out while looking entirely confident.
+
+- `{{date}}` now renders the month by name and the weekday, localized:
+  "Thursday, September 3, 2026" / "Donnerstag, 3. September 2026".
+- A new `{{date_iso}}` variable gives the unambiguous calendar date
+  (`2026-09-03`) in the user's timezone for prompts that compare dates.

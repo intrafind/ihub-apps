@@ -106,6 +106,57 @@ async function run() {
     );
   }
 
+  {
+    // `9/3/2026` is 3 September under en-US and 9 March to anyone reading a
+    // German conversation — a model cannot tell which, and a six-month-wrong
+    // "today" looks exactly like a correct answer. A named month cannot be
+    // misread whichever locale renders it.
+    setPlatform('The current date is {{date}} ({{date_iso}}).');
+    for (const lang of ['en', 'de']) {
+      const vars = PromptService.resolveGlobalPromptVariables(null, null, lang, null);
+      check(
+        `${lang}: injected date names the month`,
+        /[A-Za-zÄÖÜäöü]{3,}/.test(vars.date),
+        vars.date
+      );
+      check(
+        `${lang}: injected date is not a bare numeric date`,
+        !/^\d{1,2}[./]\d{1,2}[./]\d{4}$/.test(vars.date.trim()),
+        vars.date
+      );
+      check(
+        `${lang}: date_iso is ISO-8601`,
+        /^\d{4}-\d{2}-\d{2}$/.test(vars.date_iso),
+        vars.date_iso
+      );
+    }
+
+    const tokyo = PromptService.resolveGlobalPromptVariables(
+      { timezone: 'Asia/Tokyo' },
+      null,
+      'en',
+      null
+    );
+    check(
+      'date_iso resolves in the user timezone',
+      /^\d{4}-\d{2}-\d{2}$/.test(tokyo.date_iso),
+      tokyo.date_iso
+    );
+    check('timezone is carried through', tokyo.timezone === 'Asia/Tokyo', tokyo.timezone);
+  }
+
+  {
+    setPlatform(CONTEXT);
+    const system = await systemPromptFor({ system: { en: 'You search the web.' } });
+    const MONTHS =
+      /January|February|March|April|May|June|July|August|September|October|November|December|Januar|Februar|März|Mai|Juni|Juli|Oktober|Dezember/;
+    check(
+      'system prompt carries a named month end to end',
+      MONTHS.test(system),
+      system.slice(0, 160)
+    );
+  }
+
   console.log(
     failures === 0
       ? '\n✅ All chat temporal context tests passed'
