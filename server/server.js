@@ -129,6 +129,52 @@ const workerCount = config.WORKERS;
 // peer address and collapses the cluster onto one worker.
 const stickyRouting = config.STICKY_SESSIONS === true;
 
+/**
+ * Seed contents/ from server/defaults and apply the versioned config
+ * migrations. Runs EXACTLY ONCE per server start, before anything reads
+ * config: in cluster mode the primary awaits this before forking, otherwise
+ * the single process does it itself.
+ *
+ * Both steps mutate the same files, so they must never run concurrently.
+ * Every worker used to call them independently, which raced: the losers of
+ * the .migration-lock race logged "Configuration migration failed" at error
+ * level, and performInitialSetup had several workers copying the same default
+ * files at once. Doing it before the fork also guarantees the ordering the
+ * workers actually need - migrations complete before any worker loads
+ * platform.json - which a "only slot 0 does it" gate could not provide.
+ */
+async function prepareContents() {
+  try {
+    await performInitialSetup();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Failed to perform initial setup',
+      error: error.message,
+      stack: error.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but may not function properly without configuration files'
+    });
+  }
+
+  try {
+    await runConfigMigrations();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Configuration migration failed',
+      error: error.message,
+      stack: error.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but configuration may be outdated'
+    });
+  }
+}
+
 if (cluster.isPrimary && workerCount > 1) {
   logger.info({
     component: 'Server',
@@ -142,6 +188,18 @@ if (cluster.isPrimary && workerCount > 1) {
   // them. Dead entries are replaced in the `exit` handler.
   const workers = [];
 
+  // Set once a shutdown signal arrives, so the `exit` handler below stops
+  // replacing workers. Without it the handler respawned the very workers the
+  // shutdown had just killed, the cluster resurrected itself and kept serving
+  // until the primary force-exited 5s later — so `docker stop` / a Kubernetes
+  // rollout sat out its whole grace period and in-flight requests were cut by
+  // the hard exit instead of being drained.
+  let shuttingDown = false;
+
+  // Seed contents/ and migrate BEFORE any worker exists, so the workers never
+  // race each other over the same config files (see prepareContents).
+  await prepareContents();
+
   // Start the repeater before forking so a worker's first presence
   // announcement — sent as soon as its module graph loads — is never dropped.
   initPrimaryBus({ getWorkers: () => workers });
@@ -152,6 +210,24 @@ if (cluster.isPrimary && workerCount > 1) {
 
   cluster.on('exit', (worker, code, signal) => {
     const slot = workers.findIndex(w => w === worker);
+    if (shuttingDown) {
+      logger.info({
+        component: 'Server',
+        message: `Worker ${worker.process.pid} exited during shutdown`,
+        workerPid: worker.process.pid,
+        code,
+        signal,
+        slot
+      });
+      if (workers.every(w => w.isDead())) {
+        logger.info({
+          component: 'Server',
+          message: 'All workers exited, primary shutting down'
+        });
+        process.exit(0);
+      }
+      return;
+    }
     logger.warn({
       component: 'Server',
       message: `Worker ${worker.process.pid} exited (${code || signal}), respawning`,
@@ -222,6 +298,9 @@ if (cluster.isPrimary && workerCount > 1) {
   }
 
   const handlePrimaryShutdown = signal => {
+    // A second signal while the first is in flight must not re-kill workers.
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info({
       component: 'Server',
       message: `Primary received ${signal}, shutting down workers`,
@@ -277,36 +356,10 @@ if (cluster.isPrimary && workerCount > 1) {
     contentsDir
   });
 
-  // Perform initial setup if contents directory is empty
-  try {
-    await performInitialSetup();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Failed to perform initial setup',
-      error: error.message,
-      stack: error.stack
-    });
-    logger.warn({
-      component: 'Server',
-      message: 'Server will continue, but may not function properly without configuration files'
-    });
-  }
-
-  // Run versioned configuration migrations
-  try {
-    await runConfigMigrations();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Configuration migration failed',
-      error: error.message,
-      stack: error.stack
-    });
-    logger.warn({
-      component: 'Server',
-      message: 'Server will continue, but configuration may be outdated'
-    });
+  // Seed contents/ and migrate. A cluster worker skips this: its primary
+  // already did it before forking, and running it here would race the siblings.
+  if (!cluster.isWorker) {
+    await prepareContents();
   }
 
   // Load platform configuration and initialize telemetry

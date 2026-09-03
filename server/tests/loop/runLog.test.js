@@ -278,6 +278,55 @@ function fakeCluster() {
   };
 }
 
+test('resumeRun re-reads the ledger, so the worker that lost the recovery race cannot reuse a seq', async () => {
+  // Deterministic version of the ordering the concurrent test above hits by
+  // chance: the worker that recovers FIRST (and so holds the lower seq) is the
+  // one that later resumes the run. It used to claim ownership with its stale
+  // in-memory seq and re-allocate a number the other worker had already
+  // written, putting two events on the same seq in an append-only ledger.
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-resume-'));
+  const cluster = fakeCluster();
+  const mk = id =>
+    new RunLog({
+      baseDir,
+      forceEnabled: true,
+      bus: cluster.worker(id),
+      getPlatformConfig: () => ({ runLog: { identityMode: 'default', flushIntervalMs: 50 } }),
+      getFeatures: () => ({ runLog: true })
+    });
+
+  const owner = mk(1);
+  const { runId } = await owner.startRun({ kind: 'chat', user: { id: 'u1' } });
+  owner.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, { step: 0, content: 'hi' }); // seq 2
+  await owner.stop(); // the owner goes away; both survivors must recover
+
+  const human = n => ({ kind: 'steer', message: `m${n}`, by: 'u1', at: new Date().toISOString() });
+  const loser = mk(2);
+  const winner = mk(3);
+
+  // Sequential on purpose: `loser` recovers first and ends up on the LOWER seq.
+  const first = await loser.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(1));
+  const second = await winner.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(2));
+  assert.equal(first.seq, 3);
+  assert.equal(second.seq, 4);
+  assert.equal(loser.currentSeq(runId), 3, 'the first recoverer is now behind the ledger');
+
+  // The behind-by-one worker resumes the run and appends.
+  await loser.resumeRun(runId);
+  assert.equal(loser.getRunMeta(runId).owned, true);
+  const appended = loser.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, human(3));
+  assert.equal(appended.seq, 5, 'continues after the ledger, not after its own stale seq');
+
+  await loser.stop();
+  const events = await winner.readEvents(runId);
+  assert.deepEqual(
+    events.map(e => e.seq),
+    [1, 2, 3, 4, 5],
+    'every seq appears exactly once'
+  );
+  await winner.stop();
+});
+
 test('appendRecovered: the owner allocates the sequence; without an owner recovery is serialized by a lock', async () => {
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-cluster-'));
   const cluster = fakeCluster();

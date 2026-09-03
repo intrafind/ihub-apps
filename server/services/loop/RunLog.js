@@ -305,6 +305,15 @@ export class RunLog {
     const existing = this._runs.get(runId);
     if (existing) {
       if (!existing.owned) {
+        // Taking ownership of a run this worker had only ever recovered into.
+        // Its in-memory seq is whatever THIS worker last allocated, and a
+        // sibling recovering the same run concurrently may have advanced the
+        // ledger past it (each `appendRecovered` takes the lock in turn, so
+        // the loser's entry is left behind). Re-read the persisted ledger
+        // before claiming ownership, or the resumed owner re-allocates a
+        // sequence another worker already wrote and the append-only ledger
+        // ends up with two events sharing a seq.
+        await this._syncSeqFromDisk(runId, existing);
         existing.owned = true;
         this._owned.set(runId, true);
       }
@@ -312,6 +321,28 @@ export class RunLog {
     }
     const seq = await this.lastSeq(runId);
     return this._register(runId, this._newEntry({ seq, kind, anonymous, owned: true }));
+  }
+
+  /**
+   * Advance `entry.seq` to the persisted ledger's last sequence, under the
+   * per-run lock so a concurrent `appendRecovered` cannot interleave, and
+   * after a flush so unwritten events of this worker are on disk first.
+   *
+   * @param {string} runId
+   * @param {{seq:number}} entry - in-memory run entry, mutated in place
+   * @private
+   */
+  async _syncSeqFromDisk(runId, entry) {
+    if (!this.isEnabled()) return;
+    await withFileLock(
+      this._lockPath(runId),
+      async () => {
+        await this.flush();
+        const persisted = await this._diskLastSeq(runId);
+        if (persisted > entry.seq) entry.seq = persisted;
+      },
+      { component: 'RunLog' }
+    );
   }
 
   /**
