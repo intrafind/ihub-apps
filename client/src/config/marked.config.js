@@ -4,12 +4,26 @@ import {
   escapeHtml,
   getLanguageDisplayName,
   isMermaidLanguage,
-  generateId,
+  hashString,
   detectDiagramType
 } from '../utils/markdownHelpers';
 
+// Occurrence counter for the parse currently in progress. Diagram IDs are
+// derived from the diagram source so that re-parsing the same markdown yields
+// the same IDs; the counter only disambiguates identical diagrams that appear
+// more than once in the same document. `marked.parse()` is synchronous, so a
+// single module-level scope is safe.
+let mermaidIdScope = new Map();
+
+const nextMermaidId = code => {
+  const base = hashString(code);
+  const occurrence = mermaidIdScope.get(base) || 0;
+  mermaidIdScope.set(base, occurrence + 1);
+  return occurrence === 0 ? `mermaid-${base}` : `mermaid-${base}-${occurrence}`;
+};
+
 const renderMermaidPlaceholder = (code, language) => {
-  const diagramId = `mermaid-${generateId()}`;
+  const diagramId = nextMermaidId(code);
   const detectedType = detectDiagramType(code);
 
   return `
@@ -213,6 +227,9 @@ export const renderMarkdown = (markdown, options = {}) => {
 
   try {
     const marked = getMarkedInstance(t);
+    // Reset the per-document occurrence counter so diagram IDs depend only on
+    // the document being parsed, never on how many parses happened before.
+    mermaidIdScope = new Map();
     const html = marked.parse(source);
     const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
     return DOMPurify.sanitize(transformedHtml, sanitizeOptions);

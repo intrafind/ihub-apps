@@ -223,3 +223,20 @@ already treats those principals as never-admin, but the two middlewares never ch
 - Browser sessions are unaffected: an administrator signed in to the web UI keeps full access.
 - Non-admin APIs are unaffected: a token still reaches chat, models and the MCP gateway with its
   owner's normal permissions.
+
+## Mermaid Diagrams Stop Re-Rendering on Every UI Change
+
+Diagrams in a chat answer flickered and rebuilt themselves whenever anything on the page changed —
+hovering a message, resizing, scrolling, or a new token arriving — and opening one fullscreen showed
+it for a moment before the view went blank.
+
+- Diagram containers now get an ID derived from the diagram source, so re-rendering a message
+  produces identical markup and the browser leaves the finished diagram in place.
+- Rendered diagrams are cached, so a diagram that does have to be re-attached (navigating back to a
+  conversation, for instance) reappears instantly instead of being drawn from scratch.
+- Diagrams inside a message that is still streaming are left until the answer is complete, rather
+  than being drawn and thrown away on every token.
+- The fullscreen view scales the diagram to fit the window before showing it. Large diagrams
+  previously landed outside the visible area, which looked like an empty viewer.
+- Long chat sessions stay responsive: each re-render used to leave behind a keyboard listener and a
+  pan/zoom instance that were never released.
