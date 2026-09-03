@@ -107,6 +107,20 @@ function extractBasicCredentials(req) {
   }
 }
 
+import rateLimit from 'express-rate-limit';
+
+// Mitigates brute-force / resource-exhaustion attacks: each request to the
+// token endpoint triggers an expensive bcrypt client-secret comparison, so an
+// unauthenticated flood can exhaust CPU. Limit per-IP independently of any
+// broader shared limiter.
+const oauthTokenLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many token requests from this IP, please try again later.' }
+});
+
 export default function registerOAuthRoutes(app) {
   /**
    * @swagger
@@ -169,7 +183,7 @@ export default function registerOAuthRoutes(app) {
    *       403:
    *         description: Client suspended
    */
-  app.post(buildServerPath('/api/oauth/token'), async (req, res) => {
+  app.post(buildServerPath('/api/oauth/token'), oauthTokenLimiter, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
