@@ -1,7 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import PromptService from '../services/PromptService.js';
-import configCache from '../configCache.js';
+
+// The FAQ source is read from `<CONTENTS_DIR>/sources/faq.md`. A checkout has
+// no populated contents/ (the server copies it from server/defaults on first
+// boot), so the test reads the shipped copy. Set before the modules load.
+process.env.CONTENTS_DIR = 'server/defaults';
+const { default: PromptService } = await import('../services/PromptService.js');
+const { default: configCache } = await import('../configCache.js');
 
 /**
  * PromptService resolves an app's source references through configCache, which
