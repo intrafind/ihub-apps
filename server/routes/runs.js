@@ -38,7 +38,7 @@ import {
   isAnonymousUser,
   isAdminUser
 } from '../services/loop/runIdentity.js';
-import { authorizeRun } from '../services/loop/runAccess.js';
+import { authorizeRun, authorizeInteraction } from '../services/loop/runAccess.js';
 import { steerRun } from '../services/loop/steering.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { projectLedgerEvent, getStreamRun } from '../services/loop/RunStream.js';
@@ -184,12 +184,18 @@ export default function registerRunRoutes(app) {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
       const auth = await authorizeRun(runId, req.user);
-      if (!auth.ok) {
+      const interactions = await interactionService.listPending({ runId });
+      // The run may be gone from memory (persistence off, restart) while its
+      // interactions are still on record: the principal recorded on them decides.
+      if (
+        !auth.ok &&
+        !(interactions.length && (await authorizeInteraction(interactions[0], req.user)))
+      ) {
         return auth.status === 404
           ? sendNotFound(res, 'Run')
           : sendInsufficientPermissions(res, 'access run');
       }
-      res.json({ runId, interactions: await interactionService.listPending({ runId }) });
+      res.json({ runId, interactions });
     } catch (error) {
       sendFailedOperationError(res, 'list run interactions', error);
     }
@@ -276,20 +282,15 @@ export default function registerRunRoutes(app) {
         }
         const interaction = await interactionService.get(interactionId);
         if (!interaction || interaction.runId !== runId) return sendNotFound(res, 'Interaction');
-        // Approver groups are enforced by the service; otherwise the run's owner (or
-        // anyone holding an anonymous run id) may answer.
+        // Approver groups are enforced by the service; otherwise the principal
+        // recorded on the interaction, the run's owner (or anyone holding an
+        // anonymous run id) may answer — the interaction outlives the run's
+        // in-memory record, so it is authorized from its own source first.
         const hasApproverPolicy =
           Array.isArray(interaction.policy?.approverGroups) &&
           interaction.policy.approverGroups.length > 0;
-        if (!hasApproverPolicy) {
-          const auth = await authorizeRun(runId, req.user, {
-            executionId: interaction.source?.executionId
-          });
-          if (!auth.ok) {
-            return auth.status === 404
-              ? sendNotFound(res, 'Run')
-              : sendInsufficientPermissions(res, 'answer interaction');
-          }
+        if (!hasApproverPolicy && !(await authorizeInteraction(interaction, req.user))) {
+          return sendInsufficientPermissions(res, 'answer interaction');
         }
         const channel = typeof req.body?.channel === 'string' ? req.body.channel : 'api';
         const answered = await interactionService.answer(interactionId, parsed.data, {

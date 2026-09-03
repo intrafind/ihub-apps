@@ -57,6 +57,12 @@ export function isValidId(id) {
     return false;
   }
 
+  // `.` is the directory itself, never an id: joined onto a data root it would
+  // address the root (and a delete would empty it)
+  if (id === '.') {
+    return false;
+  }
+
   return SAFE_ID_PATTERN.test(id);
 }
 

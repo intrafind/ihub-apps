@@ -58,6 +58,8 @@ const DEFAULT_FLUSH_MS = 2000;
 const MAX_QUEUE = 20000;
 /** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
+/** Cluster bus channel on which the owner of a run describes it to other workers. */
+export const RUNLOG_META_CHANNEL = 'runlog:meta';
 /** Presence kind announcing which worker owns (allocates the sequence of) a run. */
 export const RUN_PRESENCE_KIND = 'run';
 const REMOTE_APPEND_TIMEOUT_MS = 2000;
@@ -136,6 +138,9 @@ export class RunLog {
     this._owned = this._bus.createPresenceMap(RUN_PRESENCE_KIND);
     this._unrespond = this._bus.respond(RUNLOG_APPEND_CHANNEL, payload =>
       this._appendForRemote(payload)
+    );
+    this._unrespondMeta = this._bus.respond(RUNLOG_META_CHANNEL, payload =>
+      this._metaForRemote(payload)
     );
 
     const flushIntervalMs = Number(this._runLogConfig().flushIntervalMs) || DEFAULT_FLUSH_MS;
@@ -384,6 +389,48 @@ export class RunLog {
       return { event: this.append(runId, payload.type, payload.data) };
     } catch (err) {
       return { error: err.message };
+    }
+  }
+
+  /**
+   * Answer another worker's `resolveRunMeta` for a run this worker owns.
+   * Silent (`undefined`) for runs not owned here.
+   * @private
+   */
+  _metaForRemote(payload) {
+    const runId = payload?.runId;
+    if (typeof runId !== 'string' || !this._runs.get(runId)?.owned) return undefined;
+    return { meta: this.getRunMeta(runId) };
+  }
+
+  /**
+   * Run metadata from this worker's memory, or from the worker that owns the
+   * run when this one has never seen it — a chat run with persistence off
+   * lives only in the memory of the worker that started it, and the request
+   * that reads or acts on it may land anywhere in the cluster.
+   *
+   * @param {string} runId
+   * @returns {Promise<Object|null>} see `getRunMeta` (`owned: false` for a remote run)
+   */
+  async resolveRunMeta(runId) {
+    const local = this.getRunMeta(runId);
+    if (local) return local;
+    if (!isValidRunId(runId) || !this._bus.hasRemote(RUN_PRESENCE_KIND, runId)) return null;
+    try {
+      const reply = await this._bus.request(
+        RUNLOG_META_CHANNEL,
+        { runId },
+        { route: { kind: RUN_PRESENCE_KIND, key: runId }, timeoutMs: REMOTE_APPEND_TIMEOUT_MS }
+      );
+      const meta = reply && typeof reply === 'object' ? reply.meta : null;
+      return meta ? { ...meta, owned: false } : null;
+    } catch (err) {
+      logger.warn('RunLog: run owner did not describe the run', {
+        component: 'RunLog',
+        runId,
+        error: err.message
+      });
+      return null;
     }
   }
 
@@ -959,6 +1006,8 @@ export class RunLog {
     this._cleanupTimer = null;
     this._unrespond?.();
     this._unrespond = null;
+    this._unrespondMeta?.();
+    this._unrespondMeta = null;
     this._owned.clear();
     this._appender.stop();
     this._indexAppender.stop();

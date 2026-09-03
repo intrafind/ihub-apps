@@ -57,6 +57,7 @@ import {
 import { normalizeUsage, mergeUsage } from './llmUsage.js';
 import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
+import { raceAbort, abortError } from './abortRace.js';
 
 /** Upper bound on runs whose last request hash is kept for request/header dedupe. */
 const MAX_TRACKED_RUN_HASHES = 5000;
@@ -527,14 +528,14 @@ export class LLMClient {
 
     let request;
     try {
-      if (callSignal?.aborted) {
-        throw Object.assign(new Error('Aborted before the request was built'), {
-          name: 'AbortError'
-        });
-      }
-      request = await this.createRequest(model, messages, apiKey, adapterOptions, {
-        signal: callSignal
-      });
+      // A builder that talks to the network (model discovery, a lazily created
+      // conversation) gets the signal — and is raced against it, so a builder
+      // that ignores the signal still cannot outlive the deadline.
+      request = await raceAbort(
+        () => this.createRequest(model, messages, apiKey, adapterOptions, { signal: callSignal }),
+        callSignal,
+        () => abortError('Aborted while the request was built')
+      );
     } catch (err) {
       failEarly(toLLMError(err, errCtx()));
     }
@@ -993,7 +994,9 @@ export class LLMClient {
     // (secrets stripped) so the request can be rebuilt from the ledger even
     // after the model catalog changed; recorded in full when they change.
     const modelSnapshot = snapshotModel(model);
-    const optionsSnapshot = snapshotOptions(adapterOptions);
+    const optionsSnapshot = snapshotOptions(adapterOptions, {
+      principalId: this.runLog.getRunMeta(runId)?.principalId ?? null
+    });
     const configHash = hashPayload({ modelSnapshot, optionsSnapshot });
     const configChanged = configHash !== (this._lastConfigHash.get(runId) ?? null);
     this._lastConfigHash.delete(runId);
@@ -1167,6 +1170,31 @@ function isPlainValue(value) {
   return value !== undefined && typeof value !== 'function';
 }
 
+/** Recorded in place of the acting user when the run has no principal on record. */
+const REDACTED_USER_ID = '[redacted]';
+/** Bounds the recursive redaction; option objects are shallow, this only guards pathological input. */
+const SNAPSHOT_MAX_DEPTH = 8;
+
+/**
+ * Copy a value for the ledger with every secret-like key dropped at any depth
+ * (a nested header map, a credential inside an integration config).
+ */
+function redactDeep(value, depth = 0) {
+  if (Array.isArray(value)) {
+    return depth >= SNAPSHOT_MAX_DEPTH ? [] : value.map(v => redactDeep(v, depth + 1));
+  }
+  if (value && typeof value === 'object') {
+    if (depth >= SNAPSHOT_MAX_DEPTH) return {};
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (!isPlainValue(v) || SECRET_KEY_PATTERN.test(key)) continue;
+      out[key] = redactDeep(v, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
 /**
  * The request-shaping fields of a model config, without secrets or localized
  * display blobs. Reconstruction rebuilds the request from this snapshot, not
@@ -1177,7 +1205,7 @@ export function snapshotModel(model) {
   for (const [key, value] of Object.entries(model || {})) {
     if (!isPlainValue(value) || SECRET_KEY_PATTERN.test(key)) continue;
     if (key === 'name' || key === 'description') continue;
-    out[key] = value;
+    out[key] = redactDeep(value);
   }
   return out;
 }
@@ -1186,13 +1214,20 @@ export function snapshotModel(model) {
  * The adapter options as the adapter saw them, minus the parts recorded
  * separately (tools, responseSchema) and anything secret-like.
  */
-export function snapshotOptions(adapterOptions) {
+export function snapshotOptions(adapterOptions, { principalId = null } = {}) {
   const out = {};
   for (const [key, value] of Object.entries(adapterOptions || {})) {
     if (!isPlainValue(value) || SECRET_KEY_PATTERN.test(key)) continue;
     if (key === 'tools' || key === 'responseSchema' || key === 'signal' || key === 'telemetry')
       continue;
-    out[key] = value;
+    if (key === 'user') {
+      // The acting user reaches adapters for authentication only, never the
+      // request body: the ledger keeps the run's principal (in its identity
+      // mode) and nothing else about the person.
+      if (value) out.user = { id: principalId || REDACTED_USER_ID };
+      continue;
+    }
+    out[key] = redactDeep(value);
   }
   return out;
 }

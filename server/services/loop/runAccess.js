@@ -47,11 +47,14 @@ export function authorizeExecution(executionId, user) {
 }
 
 /**
- * Authorize against the ledger's start record (memory first, then disk).
+ * Authorize against the run's start record (memory — local or the owning
+ * worker's — first, then disk).
  * @returns {Promise<{ok:boolean, status?:number, meta?:Object}>}
  */
 export async function authorizeLedgerRun(runId, user) {
-  const mem = runLog.getRunMeta(runId);
+  // Memory first (this worker, then the owning worker over the bus), then the
+  // persisted start record.
+  const mem = await runLog.resolveRunMeta(runId);
   let principalId = mem?.principalId ?? null;
   let anonymous = mem?.anonymous ?? null;
   let kind = mem?.kind ?? null;
@@ -109,7 +112,9 @@ export async function authorizeRun(runId, user, { executionId } = {}) {
  * Decide whether `user` may act on an interaction (answer or cancel it):
  * admins may; the principal recorded on the interaction's `source` (resolved
  * in that source's identity mode, so this works without the ledger and across
- * workers) may; otherwise whoever may access the interaction's run.
+ * workers) may; an interaction of an anonymous run is settled by whoever holds
+ * its ids, like the run itself; otherwise whoever may access the interaction's
+ * run.
  *
  * @param {Object} interaction
  * @param {Object} user - req.user
@@ -119,6 +124,7 @@ export async function authorizeInteraction(interaction, user) {
   if (!interaction || typeof interaction.runId !== 'string') return false;
   if (isAdminUser(user)) return true;
   const source = interaction.source || {};
+  if (source.anonymous === true) return true;
   if (source.principalId && !isAnonymousUser(user)) {
     const me = await resolvePrincipal(user, {
       mode: source.identityMode || runLog.identityMode()

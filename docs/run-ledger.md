@@ -95,7 +95,13 @@ a mismatch.
 | `GET /api/interactions/pending`                           | authenticated             | Queue of interactions the caller may answer                    |
 
 Ownership is decided by the recorded principal in the current identity mode;
-an anonymous run is readable by whoever presents its random id. Workflow
+an anonymous run is readable by whoever presents its random id (its
+interactions carry an `anonymous` marker, so the same holds for answering them
+after a restart). A run that is
+known only to the worker that started it (persistence off) is described by
+that worker over the cluster bus, so the request may land on any worker; an
+interaction is authorized from the principal recorded on it, so it stays
+answerable after a restart even when its run is no longer in memory. Workflow
 executions and agent runs are runs too (run id = execution id): when the
 ledger does not know one (persistence off), the launching principal — or, for
 agent runs, the human who triggered the run — is authorized through the
@@ -168,7 +174,8 @@ file (`locks/`), so two recovering workers never allocate the same number.
   (`locks/`) are how workers agree. Workers on separate disks would each keep a
   partial ledger and could accept the same answer twice.
 - **Gap re-sync needs the ledger.** A client that reconnects to a live stream
-  fills the gap from `GET /api/runs/:runId/events`. With `features.runLog` off
+  fills the gap from `GET /api/runs/:runId/events`, retrying a failed read with
+  backoff (five attempts) before it gives up and keeps its live view. With `features.runLog` off
   there is nothing to read back; the client rebuilds its view from the events
   it receives from then on.
 - **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)

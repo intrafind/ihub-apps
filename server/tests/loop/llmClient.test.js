@@ -7,7 +7,13 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LLMClient, toLLMError, normalizeChunk } from '../../services/loop/LLMClient.js';
+import {
+  LLMClient,
+  toLLMError,
+  normalizeChunk,
+  snapshotOptions,
+  snapshotModel
+} from '../../services/loop/LLMClient.js';
 import { LLM_ERROR_CODES, isLLMError, isAbortError } from '../../services/loop/contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
@@ -187,6 +193,15 @@ test('execute — timeoutMs and the signal cover request construction (model dis
     code: LLM_ERROR_CODES.TIMEOUT
   });
   assert.ok(Date.now() - started < 2000);
+
+  // A builder that ignores the signal altogether (a lazily created upstream
+  // conversation with no signal of its own) is raced against the deadline.
+  client.createRequest = () => new Promise(() => {});
+  const ignoring = Date.now();
+  await assert.rejects(client.execute({ modelId: 'oa', messages, timeoutMs: 20, retries: 0 }), {
+    code: LLM_ERROR_CODES.TIMEOUT
+  });
+  assert.ok(Date.now() - ignoring < 2000);
 
   // and a caller abort during construction is ABORTED, not a hang
   const ac = new AbortController();
@@ -560,4 +575,29 @@ test('iassistant-conversation — stream forced on and null API key accepted', a
   assert.equal(calls[0].request.headers.Authorization, 'Bearer null');
   assert.equal(result.content, 'Hallo');
   assert.equal(result.finishReason, 'stop');
+});
+
+test('snapshots: secrets are dropped at any depth and the acting user is reduced to the run principal', () => {
+  const options = {
+    temperature: 0.2,
+    user: { id: 'u1', email: 'u1@example.com', groups: ['staff'], claims: { sub: 'x' } },
+    appConfig: {
+      id: 'app1',
+      headers: { Authorization: 'Bearer x' },
+      integration: { apiKey: 'k', endpoint: 'https://x', nested: [{ token: 't', keep: 1 }] }
+    }
+  };
+  assert.deepEqual(snapshotOptions(options, { principalId: 'usr_ab12' }), {
+    temperature: 0.2,
+    user: { id: 'usr_ab12' },
+    appConfig: { id: 'app1', integration: { endpoint: 'https://x', nested: [{ keep: 1 }] } }
+  });
+  assert.deepEqual(snapshotOptions({ user: { id: 'u1' } }).user, { id: '[redacted]' });
+  assert.deepEqual(
+    snapshotModel({ id: 'm', apiKey: 'k', auth: { password: 'p', mode: 'basic' } }),
+    {
+      id: 'm',
+      auth: { mode: 'basic' }
+    }
+  );
 });

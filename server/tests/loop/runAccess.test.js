@@ -45,3 +45,16 @@ test('authorizeInteraction: owner by recorded principal, admin, anonymous-run id
   runLog.endRun(runId);
   runLog.endRun(anon.runId);
 });
+
+test('authorizeInteraction: the anonymous marker honours id possession without the run', async () => {
+  const runId = `anon-${'f'.repeat(32)}`;
+  const marked = interactionFor(runId, { chatId: 'c1', anonymous: true });
+  assert.equal(await authorizeInteraction(marked, { id: 'anonymous' }), true);
+  assert.equal(await authorizeInteraction(marked, { id: 'someone', groups: [] }), true);
+  const unmarked = interactionFor(runId, { chatId: 'c1' });
+  assert.equal(
+    await authorizeInteraction(unmarked, { id: 'someone', groups: [] }),
+    false,
+    'without the marker an unknown run denies'
+  );
+});

@@ -120,7 +120,9 @@ export const interactionSourceSchema = z.object({
   checkpointId: z.string().optional(),
   /** Owner of the run (its ledger principal id) and the identity mode it was recorded in. */
   principalId: z.string().optional(),
-  identityMode: z.enum(LEDGER_IDENTITY_MODES).optional()
+  identityMode: z.enum(LEDGER_IDENTITY_MODES).optional(),
+  /** The run is anonymous: whoever holds the run and interaction ids may answer (as for the run itself). */
+  anonymous: z.boolean().optional()
 });
 
 export const interactionSchema = z.object({

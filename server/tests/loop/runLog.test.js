@@ -366,3 +366,31 @@ test('run/end is idempotent, hasEnded / lastSeq / readStart use the file head an
   await other.stop();
   await log.stop();
 });
+
+test("resolveRunMeta: a run that lives only in another worker's memory is described over the bus", async () => {
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-meta-'));
+  const cluster = fakeCluster();
+  const mk = id =>
+    new RunLog({
+      baseDir,
+      forceEnabled: false,
+      bus: cluster.worker(id),
+      getPlatformConfig: () => ({ runLog: { identityMode: 'default' } })
+    });
+  const a = mk('A');
+  const b = mk('B');
+  const { runId } = await a.startRun({ kind: 'chat', user: { id: 'u1' }, refs: { chatId: 'c1' } });
+  assert.equal(b.getRunMeta(runId), null, 'B never saw the run');
+
+  const remote = await b.resolveRunMeta(runId);
+  assert.equal(remote.principalId, 'u1');
+  assert.equal(remote.kind, 'chat');
+  assert.deepEqual(remote.refs, { chatId: 'c1' });
+  assert.equal(remote.owned, false);
+  assert.equal((await a.resolveRunMeta(runId)).owned, true, 'the owner answers from memory');
+  assert.equal(await b.resolveRunMeta('run-nobody-owns-this'), null);
+  assert.equal(await b.resolveRunMeta('../not-a-run-id'), null);
+
+  await a.stop();
+  await b.stop();
+});

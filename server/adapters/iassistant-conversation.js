@@ -71,7 +71,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
    * @param {Object} options - { user, chatId, appConfig, ... }
    * @returns {Promise<Object>} Request object { url, method, headers, body }
    */
-  async createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}, { signal } = {}) {
     const content = this.formatMessages(messages);
     const { user, chatId } = options;
 
@@ -109,7 +109,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         baseUrl: config.baseUrl,
         searchProfile: config.searchProfile,
         labels,
-        ephemeral: config.ephemeral
+        ephemeral: config.ephemeral,
+        signal
       };
 
       // Support document-scoped conversations

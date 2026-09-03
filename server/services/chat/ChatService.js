@@ -22,6 +22,7 @@ import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
+import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
@@ -45,6 +46,8 @@ const COMPONENT = 'ChatService';
 
 /** Tool rounds per chat turn (the loop forces a final answer on the last one). */
 export const CHAT_MAX_TOOL_ROUNDS = 10;
+/** Aggregate bound on the tool output an app invocation retains for its caller. */
+export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
 
 /**
  * Cap on tracked chatIds in the clarification counter. The service is a
@@ -101,6 +104,7 @@ class ChatService {
     this.requestBuilder = options.requestBuilder || new RequestBuilder();
     this.agentLoop = options.agentLoop || defaultAgentLoop;
     this.runLog = options.runLog || runLogSingleton;
+    this.interactionService = options.interactionService || interactionServiceSingleton;
     this.logInteraction = options.logInteraction || defaultLogInteraction;
     this.runTool = options.runTool || defaultRunTool;
     this.telemetry = options.telemetry || defaultTelemetry;
@@ -307,7 +311,8 @@ class ChatService {
           logInteraction: this.logInteraction,
           headless: !streaming,
           getCount: () => this.getClarificationCount(chatId),
-          incrementCount: () => this.incrementClarificationCount(chatId)
+          incrementCount: () => this.incrementClarificationCount(chatId),
+          interactionService: this.interactionService
         })
       ),
       passthroughSeam(
@@ -679,13 +684,24 @@ class ChatService {
         userFileData
       } = prepResult.data;
 
+      // What is retained is what the model saw — the loop's bounded (spilled)
+      // tool message, not the raw result — under an aggregate cap, so a chatty
+      // tool cannot grow this collector without bound.
+      let collectedBytes = 0;
       const collector = {
         name: 'app-invoke-collector',
         postTool(ctx, info, outcome) {
+          const content = outcome.message?.content ?? null;
+          const bytes = Buffer.byteLength(
+            typeof content === 'string' ? content : JSON.stringify(content),
+            'utf8'
+          );
+          const kept = collectedBytes + bytes <= APP_INVOKE_COLLECT_CAP_BYTES;
+          if (kept) collectedBytes += bytes;
           collected.toolCalls.push({
             toolName: info.toolId,
             toolInput: info.args,
-            toolOutput: outcome.rawResult
+            toolOutput: kept ? content : { truncated: true, bytes }
           });
         },
         onChunk(ctx, chunk) {

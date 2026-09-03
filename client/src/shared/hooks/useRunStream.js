@@ -14,6 +14,11 @@ import {
 import { buildApiUrl } from '../../utils/runtimeBasePath';
 import { fetchAllLedgerEvents } from '../run/ledgerPages';
 
+/** A gap re-sync retries this often, with exponential backoff, before it gives up. */
+const RESYNC_ATTEMPTS = 5;
+const RESYNC_BASE_DELAY_MS = 500;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Reducer actions layered over `reduceRunEvent` (the pure run reducer only
  * understands envelopes; the hook needs a few bookkeeping transitions).
@@ -191,21 +196,20 @@ function useRunStream({
    * endpoint pages by ledger sequence) and rebuild the run from it in one
    * step (the ledger is authoritative). The live stream's `seq` and the
    * ledger's `seq` are independent sequence spaces, so no cursor is carried
-   * over.
+   * over. A transient failure is retried with backoff; the gap stays pending
+   * until a complete rebuild lands, or recovery gives up.
    *
    * @param {string} [runId] - Defaults to the root run
+   * @param {Object} [opts]
+   * @param {number} [opts.attempts] - fetch attempts before giving up
    * @returns {Promise<{runId: string, events: Array, lastSeq: number|null}|null>}
    *   the collected projection or null on failure
    */
-  const resync = useCallback(async runId => {
+  const resync = useCallback(async (runId, { attempts = RESYNC_ATTEMPTS } = {}) => {
     const rid = runId || rootRunIdRef.current || streamIdRef.current;
     if (!rid) return null;
-    try {
-      const {
-        events: envelopes,
-        lastSeq,
-        complete
-      } = await fetchAllLedgerEvents(async (after, limit) => {
+    const fetchProjection = () =>
+      fetchAllLedgerEvents(async (after, limit) => {
         const res = await fetchWithAuthRetry(
           buildApiUrl(
             `runs/${encodeURIComponent(rid)}/events?after=${after}&limit=${limit}&view=sse`
@@ -215,22 +219,29 @@ function useRunStream({
         if (!res.ok) throw new Error(`Run re-sync failed (${res.status})`);
         return res.json();
       });
-      if (!complete) {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const { events: envelopes, lastSeq, complete } = await fetchProjection();
+        if (!mountedRef.current) return null;
+        if (complete) {
+          dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
+          return { runId: rid, events: envelopes, lastSeq };
+        }
         // The page bound was hit before the ledger's end: a truncated
-        // projection must not replace the live state as if it were complete.
-        // Clear the gap (an empty rebuild) and leave the run as it is.
+        // projection must not replace the live state as if it were complete,
+        // and another attempt would not complete it either.
         console.warn('Run re-sync incomplete: ledger larger than the page bound', rid);
-        if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes: [] });
-        return null;
+        break;
+      } catch (err) {
+        console.warn(`Run re-sync failed (attempt ${attempt}/${attempts}):`, err);
+        if (attempt < attempts) await sleep(RESYNC_BASE_DELAY_MS * 2 ** (attempt - 1));
+        if (!mountedRef.current) return null;
       }
-      if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
-      return { runId: rid, events: envelopes, lastSeq };
-    } catch (err) {
-      console.warn('Run re-sync failed:', err);
-      // Clear the gap so a failed re-sync does not block later detection.
-      if (mountedRef.current) dispatch({ type: ACTION.REBUILD, runId: rid, envelopes: [] });
-      return null;
     }
+    // Recovery gave up: the run keeps its live state and the gap is cleared (an
+    // empty rebuild) so the next gap on this run is detected and recovered again.
+    dispatch({ type: ACTION.REBUILD, runId: rid, envelopes: [] });
+    return null;
   }, []);
 
   // Sequence gap → rebuild the affected run once per gap.

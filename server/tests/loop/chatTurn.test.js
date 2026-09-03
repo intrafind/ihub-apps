@@ -197,7 +197,7 @@ function stubRunLog() {
  * A ChatService wired to a scripted loop. Never touches the real toolLoader,
  * usage tracker, interaction log or run ledger.
  */
-function makeService(turns, { runTool, maxRetries = 0 } = {}) {
+function makeService(turns, { runTool, maxRetries = 0, interactionService } = {}) {
   const { loop, requests } = makeLoop(turns, { maxRetries });
   const logInteraction = spy(async () => {});
   const telemetry = {
@@ -211,7 +211,8 @@ function makeService(turns, { runTool, maxRetries = 0 } = {}) {
     logInteraction,
     runTool: runToolSpy,
     telemetry,
-    runLog
+    runLog,
+    ...(interactionService ? { interactionService } : {})
   });
   return { service, requests, logInteraction, telemetry, runTool: runToolSpy, runLog };
 }
@@ -769,6 +770,30 @@ test('clarification: ask_user raises interaction/raised, closes the tool, pauses
   assert.equal(logInteraction.calls[0][1].clarificationNumber, 1);
   assert.equal(logInteraction.calls[0][1].maxClarifications, 10);
   assert.deepEqual(endOutcomes(telemetry), ['completed']);
+});
+
+test('clarification that cannot be persisted: the model gets a tool error, the run never pauses on a draft nobody could answer', async t => {
+  const chatId = newChatId('clarify-fail');
+  const frames = captureFrames(t, chatId);
+  const interactionService = {
+    async raise() {
+      throw new Error('store unavailable');
+    }
+  };
+  const { service, requests } = makeService(
+    [toolTurn([{ name: 'ask_user', args: askArgs }]), textTurn('Proceeding without the answer.')],
+    { interactionService }
+  );
+
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [askUserTool] }) });
+
+  assert.equal(has(frames, INTERACTION_RAISED), false, 'no interaction frame for a draft');
+  assert.equal(has(frames, RUN_PAUSED), false, 'the run is not paused');
+  assert.equal(requests.length, 2, 'the model is told and continues');
+  const toolResult = requests[1].request.body.messages.find(m => m.role === 'tool');
+  assert.match(toolResult.content, /Clarification could not be raised: store unavailable/);
+  assert.equal(summary.status, 'completed');
+  assert.equal(frame(frames, RUN_ENDED).data.status, 'completed');
 });
 
 test('clarification cap: the 11th ask_user on a chat is refused with CLARIFICATION_LIMIT_REACHED and the model continues', async t => {

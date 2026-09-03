@@ -21,6 +21,7 @@
 import crypto from 'node:crypto';
 import defaultLlmClient from './LLMClient.js';
 import runLogSingleton, { isValidRunId } from './RunLog.js';
+import { raceAbort } from './abortRace.js';
 import defaultLogger from '../../utils/logger.js';
 import { loopPoliciesSchema } from './contracts/loop.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError, isAbortError } from './contracts/errors.js';
@@ -71,33 +72,6 @@ function combineSignals(...signals) {
   if (list.length === 0) return undefined;
   if (list.length === 1) return list[0];
   return AbortSignal.any(list);
-}
-
-/**
- * Run `start()` and settle as soon as `signal` aborts, even when the work
- * ignores the signal (a hanging tool must not outlive the invocation deadline).
- */
-function raceAbort(start, signal) {
-  if (!signal) return Promise.resolve().then(start);
-  if (signal.aborted) {
-    return Promise.reject(abortError('Agent loop aborted (cancelled or timed out)'));
-  }
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(abortError('Agent loop aborted (cancelled or timed out)'));
-    signal.addEventListener('abort', onAbort, { once: true });
-    Promise.resolve()
-      .then(start)
-      .then(
-        value => {
-          signal.removeEventListener('abort', onAbort);
-          resolve(value);
-        },
-        err => {
-          signal.removeEventListener('abort', onAbort);
-          reject(err);
-        }
-      );
-  });
 }
 
 function looksLikeJson(text) {
@@ -799,7 +773,8 @@ export class AgentLoop {
         rawResult = await raceAbort(
           () =>
             ctx.request.executeTool(call, { toolDef, toolId, args, ctx, info, signal: ctx.signal }),
-          ctx.signal
+          ctx.signal,
+          () => abortError('Agent loop aborted (cancelled or timed out)')
         );
         if (
           rawResult &&

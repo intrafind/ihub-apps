@@ -1247,6 +1247,9 @@
                           "identityMode": {
                             "type": "string",
                             "enum": ["full", "default", "pseudonymized"]
+                          },
+                          "anonymous": {
+                            "type": "boolean"
                           }
                         },
                         "additionalProperties": false,
@@ -2040,6 +2043,9 @@
               "identityMode": {
                 "type": "string",
                 "enum": ["full", "default", "pseudonymized"]
+              },
+              "anonymous": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false,
@@ -2923,6 +2929,9 @@
                   "identityMode": {
                     "type": "string",
                     "enum": ["full", "default", "pseudonymized"]
+                  },
+                  "anonymous": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false,
@@ -4182,6 +4191,9 @@
                           "identityMode": {
                             "type": "string",
                             "enum": ["full", "default", "pseudonymized"]
+                          },
+                          "anonymous": {
+                            "type": "boolean"
                           }
                         },
                         "additionalProperties": false,

@@ -1610,7 +1610,8 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             ...(context.chatId && context.chatId !== executionId ? { chatId: context.chatId } : {}),
             ...(profileId ? { profileId: String(profileId) } : {}),
             ...(runMeta?.principalId ? { principalId: String(runMeta.principalId) } : {}),
-            ...(runMeta?.identityMode ? { identityMode: runMeta.identityMode } : {})
+            ...(runMeta?.identityMode ? { identityMode: runMeta.identityMode } : {}),
+            ...(runMeta?.anonymous ? { anonymous: true } : {})
           },
           ordinal: info.ordinal
         });

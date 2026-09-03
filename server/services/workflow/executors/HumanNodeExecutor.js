@@ -152,7 +152,8 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
           ...template.source,
           ...(profileId ? { profileId } : {}),
           ...(principalId ? { principalId: String(principalId) } : {}),
-          ...(identityMode ? { identityMode } : {})
+          ...(identityMode ? { identityMode } : {}),
+          ...(runMeta?.anonymous ? { anonymous: true } : {})
         }
       });
     } catch (raiseErr) {

@@ -331,7 +331,7 @@ export function chatQuestionOptions({
       // ledger) so the answer — the next chat message, or the answer endpoint —
       // resolves the same record.
       const { maxClarifications, ...wire } = draft;
-      let interaction = wire;
+      let interaction;
       try {
         const runMeta = runLog.getRunMeta(wire.runId);
         const principalId = runMeta?.principalId || null;
@@ -347,15 +347,23 @@ export function chatQuestionOptions({
           source: {
             ...wire.source,
             ...(principalId ? { principalId: String(principalId) } : {}),
-            ...(identityMode ? { identityMode } : {})
+            ...(identityMode ? { identityMode } : {}),
+            ...(runMeta?.anonymous ? { anonymous: true } : {})
           },
           ordinal: wire.ordinal
         });
       } catch (raiseErr) {
-        logger.warn('Clarification could not be persisted as an interaction', {
+        // Nothing could answer a question that is not on record (the answer
+        // endpoint and the next message look it up by id): fail the call
+        // instead of pausing the run on a draft.
+        logger.error('Clarification could not be persisted as an interaction', {
           component: COMPONENT,
           chatId,
           error: raiseErr.message
+        });
+        throw Object.assign(new Error(`Clarification could not be raised: ${raiseErr.message}`), {
+          code: 'INTERACTION_RAISE_FAILED',
+          cause: raiseErr
         });
       }
       emit(ctx, SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
