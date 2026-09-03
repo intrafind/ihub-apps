@@ -3,6 +3,7 @@
   - [Installation Guide](INSTALLATION.md)
   - [User Guide](user-guide.md)
   - [Admin UI Guide](admin-ui.md)
+  - [Core Concepts](concepts.md)
   - [Architecture Overview](architecture.md)
   - [Configuration]()
     - [Customizing iHub Apps](customization.md)
