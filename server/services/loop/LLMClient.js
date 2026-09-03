@@ -78,6 +78,21 @@ const PASSTHROUGH_FIELDS = [
 ];
 
 const TIMEOUT_REASON = Symbol('llm-timeout');
+const CONNECT_TIMEOUT_REASON = Symbol('llm-connect-timeout');
+
+/**
+ * Ceiling for the connect/headers phase of one provider attempt.
+ *
+ * The whole-call deadline (REQUEST_TIMEOUT, 5 minutes by default) is sized for
+ * long generations, so on its own it also governs a host that never answers at
+ * all. A VPN-only endpoint reached with the VPN down has its SYNs blackholed
+ * rather than refused, so the call sat for the full five minutes; each hung
+ * chat stream held one of the browser's ~6 connections per origin, and once
+ * they were gone every other model looked broken too. Bounding only the phase
+ * before the first byte separates "cannot reach the provider" from "the
+ * provider is generating slowly".
+ */
+const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
 // ── Chunk normalization ─────────────────────────────────────────────────────
 
@@ -341,6 +356,7 @@ export class LLMClient {
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
    * @param {(ms:number)=>Promise<void>} [opts.sleep] - retry sleep (tests stub it)
    * @param {(includeDisabled?:boolean)=>{data:Array}} [opts.getModels] - model catalog seam
+   * @param {number} [opts.connectTimeoutMs] - connect/headers ceiling per attempt; <=0 disables
    */
   constructor(opts = {}) {
     this.transport = opts.transport || defaultTransport;
@@ -353,6 +369,9 @@ export class LLMClient {
     this.runLog = opts.runLog || runLogSingleton;
     this.sleep = opts.sleep;
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
+    this.connectTimeoutMs = Number.isFinite(opts.connectTimeoutMs)
+      ? opts.connectTimeoutMs
+      : DEFAULT_CONNECT_TIMEOUT_MS;
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> { hash, count } of the last messages (request/header dedupe), LRU-bounded
@@ -594,7 +613,7 @@ export class LLMClient {
             abortErr.name = 'AbortError';
             throw abortErr;
           }
-          const res = await this.transport(request, { signal: callSignal, model });
+          const res = await this._connect(request, callSignal, model);
           if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
             throw await this._httpError(res, model, language, request);
           }
@@ -848,6 +867,58 @@ export class LLMClient {
   // ── Internals ──────────────────────────────────────────────────────────
 
   /** Build an LLMError for a non-2xx provider response (with diagnostics). */
+  /**
+   * One transport attempt with a bounded connect/headers phase.
+   *
+   * The transport promise settles when the response headers arrive, so timing
+   * it bounds exactly DNS + TCP + TLS + time-to-first-byte and leaves the
+   * streamed body to the whole-call deadline. On expiry the attempt's own
+   * signal is aborted so the socket is not left dangling, and the failure is
+   * reported as a timeout, which the retry budget treats as transient.
+   *
+   * @param {{url: string}} request - built provider request
+   * @param {AbortSignal|undefined} callSignal - whole-call signal
+   * @param {object} model - resolved model config
+   * @returns {Promise<Response>}
+   */
+  async _connect(request, callSignal, model) {
+    const ms = this.connectTimeoutMs;
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return this.transport(request, { signal: callSignal, model });
+    }
+
+    const attempt = new AbortController();
+    const signal = callSignal ? AbortSignal.any([callSignal, attempt.signal]) : attempt.signal;
+
+    let timer = null;
+    let expired = false;
+    try {
+      return await new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          expired = true;
+          attempt.abort(CONNECT_TIMEOUT_REASON);
+        }, ms);
+        this.transport(request, { signal, model }).then(resolve, reject);
+      });
+    } catch (err) {
+      if (expired && !callSignal?.aborted) {
+        throw new LLMError(
+          `Provider ${model.provider} sent no response headers within ${ms} ms — endpoint unreachable`,
+          {
+            code: LLM_ERROR_CODES.TIMEOUT,
+            providerCode: 'CONNECT_TIMEOUT',
+            provider: model.provider,
+            modelId: model.id,
+            cause: err
+          }
+        );
+      }
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async _httpError(response, model, language, request) {
     if (!response) {
       return new LLMError('No response from model provider', {

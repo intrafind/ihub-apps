@@ -251,6 +251,7 @@ export function makeClient(opts = {}) {
     runLog: opts.runLog,
     sleep: opts.sleep || (async () => {}),
     maxRetries: opts.maxRetries,
+    connectTimeoutMs: opts.connectTimeoutMs,
     debugDumps: false
   });
   return { client, calls };

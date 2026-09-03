@@ -46,6 +46,33 @@ const COMPONENT = 'ChatService';
 
 /** Tool rounds per chat turn (the loop forces a final answer on the last one). */
 export const CHAT_MAX_TOOL_ROUNDS = 10;
+
+/**
+ * Floor for the chat compaction threshold, and the share of a model's context
+ * window a chat turn may fill before old tool output is collapsed.
+ *
+ * The loop's flat 16k default is sized for workflow nodes. Chat turns carry
+ * websearch results and extracted pages, so on a 128k-1M window model that
+ * default collapsed still-relevant tool output into a 200-char preview and
+ * visibly shrank answers. Scaling with the window keeps the depth while still
+ * bounding the O(N^2) prompt growth compaction exists to prevent; half the
+ * window leaves ample room for the reply and the system prompt.
+ */
+export const CHAT_COMPACT_MIN_TOKENS = 16000;
+const CHAT_COMPACT_WINDOW_SHARE = 0.5;
+
+/**
+ * Compaction threshold for a chat turn on `model`.
+ * Falls back to the floor when the model declares no usable contextWindow.
+ *
+ * @param {{contextWindow?: number}} model - resolved model config
+ * @returns {number} threshold in estimated tokens
+ */
+export function chatCompactThresholdTokens(model) {
+  const window = Number(model?.contextWindow);
+  if (!Number.isFinite(window) || window <= 0) return CHAT_COMPACT_MIN_TOKENS;
+  return Math.max(CHAT_COMPACT_MIN_TOKENS, Math.floor(window * CHAT_COMPACT_WINDOW_SHARE));
+}
 /** Aggregate bound on the tool output an app invocation retains for its caller. */
 export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
 
@@ -344,7 +371,8 @@ class ChatService {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS },
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
-          tools: { parallel: false }
+          tools: { parallel: false },
+          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
         options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,
@@ -728,7 +756,8 @@ class ChatService {
         toolExecution: 'server',
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
-          tools: { parallel: false }
+          tools: { parallel: false },
+          context: { compactThresholdTokens: chatCompactThresholdTokens(model) }
         },
         options: { temperature, maxTokens, responseFormat, responseSchema, ...llmOptions },
         language,

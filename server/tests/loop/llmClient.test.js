@@ -127,9 +127,16 @@ test('execute — signal is threaded to the transport; pre-aborted signal → AB
   });
   const controller = new AbortController();
   const stream = await client.execute({ modelId: 'oa', messages, signal: controller.signal });
-  assert.equal(calls[0].ctx.signal, controller.signal);
+  // The transport gets a signal DERIVED from the caller's — the connect/headers
+  // deadline is folded in with AbortSignal.any — so assert propagation rather
+  // than object identity.
+  const threaded = calls[0].ctx.signal;
+  assert.ok(threaded, 'a signal is threaded to the transport');
+  assert.equal(threaded.aborted, false, 'and it is live while the call is in flight');
   const result = await client.collect(stream);
   assert.equal(result.content, 'hi');
+  controller.abort();
+  assert.equal(threaded.aborted, true, "aborting the caller aborts the transport's signal");
 
   const aborted = new AbortController();
   aborted.abort();

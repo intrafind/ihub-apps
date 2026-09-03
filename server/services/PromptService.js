@@ -262,6 +262,12 @@ class PromptService {
         typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
       if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
 
+      // Does the app place the temporal context itself? Checked on the RAW
+      // template, before substitution replaces the placeholders away.
+      const placesTemporalContext = /\{\{(platform_context|date|year|day_of_week)\}\}/.test(
+        systemPrompt
+      );
+
       // Combine user variables with global prompt variables for system prompt processing
       const allVariables = { ...globalPromptVariables, ...userVariables };
       if (Object.keys(allVariables).length > 0) {
@@ -271,6 +277,23 @@ class PromptService {
           const strValue = String(value || '');
           systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
         }
+      }
+
+      // Temporal grounding. An app that does not position the context itself
+      // gets it prepended, so every chat app knows the current date instead of
+      // falling back to training-era "today" - the same grounding workflow
+      // nodes get from BaseNodeExecutor.buildTemporalContextBlock. Mirrors the
+      // {{sources}} pattern below: honour an explicit placeholder, otherwise
+      // inject. Admins switch this off by clearing
+      // platform.globalPromptVariables.context.
+      const temporalContext =
+        typeof globalPromptVariables.platform_context === 'string'
+          ? globalPromptVariables.platform_context.trim()
+          : '';
+      if (!placesTemporalContext && temporalContext) {
+        systemPrompt = systemPrompt.trim()
+          ? `${temporalContext}\n\n${systemPrompt}`
+          : temporalContext;
       }
 
       // Process sources using unified source resolution system
