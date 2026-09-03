@@ -1,6 +1,28 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import PromptService from '../services/PromptService.js';
+import configCache from '../configCache.js';
+
+/**
+ * PromptService resolves an app's source references through configCache, which
+ * the server populates at boot but a plain `node` run leaves empty. Without
+ * this seed every reference resolves to nothing, no source content is ever
+ * appended, and all four cases below fail on the bare system prompt.
+ */
+const FAQ_SOURCE = {
+  id: 'faq',
+  name: { en: 'FAQ', de: 'FAQ' },
+  description: { en: 'Frequently asked questions' },
+  type: 'filesystem',
+  enabled: true,
+  exposeAs: 'prompt',
+  config: { path: 'sources/faq.md', encoding: 'utf-8' }
+};
+
+Object.assign(configCache, {
+  getPlatform: () => ({ defaultLanguage: 'en' }),
+  getSources: () => ({ data: [FAQ_SOURCE] })
+});
 
 describe('Automatic Source Addition', () => {
   it('should automatically append sources when no {{sources}} placeholder exists', async () => {
