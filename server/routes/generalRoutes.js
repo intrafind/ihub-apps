@@ -2,6 +2,7 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
+import { sanitizeAppForPublic, sanitizeAppsForPublic } from '../utils/publicApp.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -186,7 +187,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       }
 
       res.setHeader('ETag', userSpecificEtag);
-      res.json(apps);
+      res.json(sanitizeAppsForPublic(apps));
     } catch (error) {
       return sendInternalError(res, error, 'fetch apps');
     }
@@ -356,7 +357,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
           }
         }
 
-        res.json(appData);
+        res.json(sanitizeAppForPublic(appData));
       } catch (error) {
         return sendInternalError(res, error, 'fetch app details');
       }

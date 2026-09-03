@@ -26,7 +26,7 @@
  *     bounds how LONG one connection can pin an upstream session.
  *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
- *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
+ *   client -> server: JSON `{type:'start', modelId?, appId?, lang?}`, then binary PCM16
  *                     frames, then JSON `{type:'stop'}`
  *   server -> client: JSON `{type:'ready'}` once upstream is initialized,
  *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
@@ -47,7 +47,9 @@ import {
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
+import { isValidId } from '../utils/pathSecurity.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import { mergeVocabularies, buildHotwords } from '../../shared/speechVocabulary.js';
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -83,6 +85,12 @@ const KEEPALIVE_INTERVAL_MS = 25_000;
 const UPSTREAM_HIGH_WATER_BYTES = 4 * 1024 * 1024;
 const UPSTREAM_RESUME_BYTES = 1 * 1024 * 1024;
 const BACKPRESSURE_POLL_MS = 250;
+// How long the admin "Test connection" probe waits after sending session.update
+// for the endpoint to reject it. vLLM emits `session.created` on connect, before
+// it has read the update, so resolving on the first frame would report success
+// for a session the endpoint went on to refuse.
+const POST_UPDATE_ERROR_WINDOW_MS = 1_500;
+
 // Hard ceiling on a single bridge session's lifetime, so a (possibly scripted)
 // client streaming forever can't pin a GPU-backed upstream session
 // indefinitely. Overridable via platform.speech.realtime.maxSessionSeconds.
@@ -288,6 +296,48 @@ export function hasEnabledTranscriptionModel() {
 }
 
 /**
+ * The app-level custom vocabulary for `appId`, or null.
+ *
+ * The browser sends only an app *id*; the terms are read server-side from the
+ * app config, so a client cannot inject arbitrary biasing words upstream. An
+ * app the user may not use contributes nothing — and does so silently, since a
+ * mismatched vocabulary must degrade transcription quality, never break the
+ * session with an error.
+ *
+ * The id is browser-controlled, so it goes through the same `isValidId` gate as
+ * every other id that reaches a lookup — length, character set, traversal
+ * sequences and prototype-polluting keys — rather than a local typeof check.
+ *
+ * @param {string|undefined} appId
+ * @param {Object|undefined} user
+ * @returns {Object|null} The raw `transcription.vocabulary` block.
+ */
+export function resolveAppVocabulary(appId, user) {
+  if (!isValidId(appId)) return null;
+  const { data: apps = [] } = configCache.getApps(true);
+  const app = apps.find(a => a?.id === appId);
+  if (!app?.transcription?.vocabulary) return null;
+  const allowed = user?.permissions?.apps;
+  if (!allowed || !(allowed.has('*') || allowed.has(appId))) return null;
+  return app.transcription.vocabulary;
+}
+
+/**
+ * Merge the custom vocabulary layers that apply to one session and render them
+ * into vLLM's `hotwords` string.
+ *
+ * Least to most specific: platform-wide terms, then the transcription model's
+ * own, then the app's. Returns null when nothing is configured, so the bridge
+ * omits the field entirely and keeps sending the exact frames it always has.
+ *
+ * @param {{ platformVocabulary?: Object, modelVocabulary?: Object, appVocabulary?: Object }} layers
+ * @returns {string|null}
+ */
+export function resolveHotwords({ platformVocabulary, modelVocabulary, appVocabulary } = {}) {
+  return buildHotwords(mergeVocabularies(platformVocabulary, modelVocabulary, appVocabulary));
+}
+
+/**
  * Resolve the upstream connection for a transcription session.
  *
  * With a `modelId`, the model is looked up in the models cache, required to be
@@ -297,13 +347,18 @@ export function hasEnabledTranscriptionModel() {
  * dictation backend (unchanged behavior).
  *
  * A raw upstream URL is NEVER accepted from the client — only a server-resolved
- * model id — so the vLLM URL/API key never reach the browser.
+ * model id — so the vLLM URL/API key never reach the browser. The same holds
+ * for custom vocabulary: `appId` selects a server-side term list, it does not
+ * carry one.
  *
- * @param {{ modelId?: string, user?: Object }} params
- * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string } }
- *   | { ok: false, error: string }>}
+ * @param {{ modelId?: string, appId?: string, user?: Object }} params
+ * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string,
+ *   hotwords: string|null } } | { ok: false, error: string }>}
  */
-export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
+export async function resolveTranscriptionUpstream({ modelId, appId, user } = {}) {
+  const platformVocabulary = (configCache.getPlatform() || {}).speech?.realtime?.vocabulary;
+  const appVocabulary = resolveAppVocabulary(appId, user);
+
   // No model id → platform-wide dictation backend (unchanged).
   if (!modelId) {
     const cfg = getRealtimeConfig();
@@ -316,7 +371,12 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
     }
     return {
       ok: true,
-      upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model }
+      upstream: {
+        url: cfg.url,
+        apiKey: cfg.apiKey || '',
+        model: cfg.model,
+        hotwords: resolveHotwords({ platformVocabulary, appVocabulary })
+      }
     };
   }
 
@@ -369,7 +429,17 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
       error: `Transcription model "${modelId}" has no endpoint URL`
     };
   }
-  return { ok: true, upstream };
+  return {
+    ok: true,
+    upstream: {
+      ...upstream,
+      hotwords: resolveHotwords({
+        platformVocabulary,
+        modelVocabulary: upstream.vocabulary,
+        appVocabulary
+      })
+    }
+  };
 }
 
 // --- Upstream error diagnostics (pure, unit-tested) ---
@@ -618,13 +688,24 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clearTimeout(sessionInitTimer);
       sessionInitTimer = null;
     }
-    sendJson(upstream, { type: 'session.update', model: cfg.model });
+    // `hotwords` is added ONLY when a vocabulary is configured, so a deployment
+    // that configured nothing keeps sending the exact frame it sent before this
+    // feature existed. Note that vLLM's realtime handler currently reads only
+    // `model` off session.update and never builds SpeechToTextParams for a
+    // realtime session, so a stock build ignores this; it takes effect on an
+    // endpoint that forwards speech-to-text params into the realtime session.
+    const sessionUpdate = { type: 'session.update', model: cfg.model };
+    if (cfg.hotwords) sessionUpdate.hotwords = cfg.hotwords;
+    sendJson(upstream, sessionUpdate);
     sendJson(upstream, { type: 'input_audio_buffer.commit' });
     upstreamReady = true;
     logger.info('Realtime STT: upstream ready', {
       component: 'RealtimeSTT',
       userId: user.id,
       model: cfg.model,
+      // Log whether hotwords were sent, not the terms themselves: a vocabulary
+      // can carry customer or employee names, which do not belong in a log.
+      hotwordsSent: Boolean(cfg.hotwords),
       trigger
     });
     sendJson(clientWs, { type: 'ready' });
@@ -793,7 +874,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // waits for {type:'ready'} before streaming) and false for dictation, where
   // the upstream opens lazily on the first audio frame. Buffered audio forces an
   // open even in the lazy case so a fast dictation client isn't stranded.
-  const resolveAndPrepare = async (modelId, { openImmediately } = {}) => {
+  const resolveAndPrepare = async (modelId, { appId, openImmediately } = {}) => {
     if (cfg || resolvingCfg || upstream) {
       if (cfg && !upstream && (openImmediately || pending.length > 0)) openUpstream();
       return;
@@ -801,7 +882,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     resolvingCfg = true;
     let result;
     try {
-      result = await resolveTranscriptionUpstream({ modelId, user });
+      result = await resolveTranscriptionUpstream({ modelId, appId, user });
     } catch (err) {
       resolvingCfg = false;
       failBridge('resolve-failed', 'Failed to resolve transcription model', {
@@ -869,7 +950,12 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       // modelId falls back to the platform dictation backend (lazy open).
       // `msg.lang` is accepted but unused — Voxtral auto-detects the language;
       // the field is kept in the protocol for future language-pinned backends.
-      resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
+      // `msg.appId` selects the app whose custom vocabulary applies; the terms
+      // themselves are read server-side, never sent by the browser.
+      resolveAndPrepare(msg.modelId, {
+        appId: msg.appId,
+        openImmediately: msg.modelId != null
+      });
     } else if (msg.type === 'stop') {
       stopRequested = true;
       logger.info('Realtime STT: stop received, committing buffer', {
@@ -1101,7 +1187,12 @@ export function attachRealtimeTranscription(httpServer) {
  * endpoint is reachable and speaks the realtime protocol. Used by the admin
  * "Test connection" button.
  *
- * @param {{url?: string, model?: string, apiKey?: string}} cfg
+ * The handshake carries the same `hotwords` a real session would, and the probe
+ * does NOT stop at the upstream's `session.created` (vLLM emits that on connect,
+ * before it has seen session.update) — it waits a short window afterwards so an
+ * error the update provokes is actually observed rather than raced past.
+ *
+ * @param {{url?: string, model?: string, apiKey?: string, vocabulary?: Object}} cfg
  * @param {number} [timeoutMs=8000]
  * @returns {Promise<{ok: boolean, message: string}>}
  */
@@ -1115,12 +1206,15 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
 
     let settled = false;
     let opened = false;
+    let updateSent = false;
     let ws;
+    let errorWindowTimer = null;
 
     const finish = result => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (errorWindowTimer) clearTimeout(errorWindowTimer);
       if (ws && ws.readyState <= WebSocket.OPEN) {
         try {
           ws.close();
@@ -1150,7 +1244,18 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
 
     ws.on('open', () => {
       opened = true;
-      sendJson(ws, { type: 'session.update', model: cfg.model });
+      const sessionUpdate = { type: 'session.update', model: cfg.model };
+      const hotwords = buildHotwords(mergeVocabularies(cfg.vocabulary));
+      if (hotwords) sessionUpdate.hotwords = hotwords;
+      sendJson(ws, sessionUpdate);
+      updateSent = true;
+      // Give the endpoint a moment to reject session.update before calling the
+      // connection healthy. Without this the probe would resolve on the
+      // `session.created` frame vLLM sends immediately on connect and never see
+      // a model_not_found (or any other) error the update produces.
+      errorWindowTimer = setTimeout(() => {
+        finish({ ok: true, message: 'Connected — endpoint accepted the session' });
+      }, POST_UPDATE_ERROR_WINDOW_MS);
     });
 
     ws.on('message', data => {
@@ -1164,10 +1269,13 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
       }
       if (msg.type === 'error') {
         finish({ ok: false, message: `Endpoint error: ${msg.error || 'unknown'}` });
-      } else {
-        // session.created / transcription.* / any control frame = healthy.
-        finish({ ok: true, message: `Connected — received "${msg.type}"` });
+        return;
       }
+      // `session.created` arrives before the endpoint has read our
+      // session.update, so it proves reachability but not acceptance — keep
+      // waiting out the error window. Any later frame does prove acceptance.
+      if (msg.type === 'session.created' && updateSent) return;
+      finish({ ok: true, message: `Connected — received "${msg.type}"` });
     });
 
     ws.on('error', err => {

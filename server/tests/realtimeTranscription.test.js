@@ -321,6 +321,60 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     await jest.advanceTimersByTimeAsync(0);
   };
 
+  describe('custom vocabulary (hotwords)', () => {
+    const startAndInit = async () => {
+      const { client, upstream } = setup();
+      client.emit('message', JSON.stringify({ type: 'start' }), false);
+      client.emit('message', Buffer.from([1, 2]), true);
+      await jest.advanceTimersByTimeAsync(0);
+      await openUpstream(upstream);
+      upstream.emit('message', JSON.stringify({ type: 'session.created' }));
+      await jest.advanceTimersByTimeAsync(0);
+      return { client, upstream };
+    };
+
+    test('omits hotwords entirely when no vocabulary is configured', async () => {
+      const { upstream } = await startAndInit();
+      const sessionUpdate = upstream.framesOfType('session.update')[0];
+      expect(sessionUpdate.model).toBe('fake-model');
+      expect(sessionUpdate).not.toHaveProperty('hotwords');
+    });
+
+    test('sends the merged terms upstream when a vocabulary is configured', async () => {
+      configCache.setCacheEntry('config/platform.json', {
+        jwt: { algorithm: 'HS256' },
+        auth: { jwtSecret: 'realtime-stt-test-secret' },
+        speech: {
+          realtime: {
+            enabled: true,
+            url: 'ws://fake-upstream:9/v1/realtime',
+            model: 'fake-model',
+            vocabulary: { terms: ['Voxtral', 'IntraFind'] }
+          }
+        }
+      });
+      const { upstream } = await startAndInit();
+      expect(upstream.framesOfType('session.update')[0].hotwords).toBe('Voxtral, IntraFind');
+    });
+
+    test('a disabled vocabulary sends nothing', async () => {
+      configCache.setCacheEntry('config/platform.json', {
+        jwt: { algorithm: 'HS256' },
+        auth: { jwtSecret: 'realtime-stt-test-secret' },
+        speech: {
+          realtime: {
+            enabled: true,
+            url: 'ws://fake-upstream:9/v1/realtime',
+            model: 'fake-model',
+            vocabulary: { enabled: false, terms: ['Voxtral'] }
+          }
+        }
+      });
+      const { upstream } = await startAndInit();
+      expect(upstream.framesOfType('session.update')[0]).not.toHaveProperty('hotwords');
+    });
+  });
+
   test('golden path: audio → session.created → ready+flush → stop → segments → done, slot released once', async () => {
     const { client, upstream, limiter } = setup();
 

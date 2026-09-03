@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
+import { speechVocabularySchema } from './common.js';
 
 const jwtProviderSchema = z.object({
   name: z.string(),
@@ -247,7 +248,12 @@ export const platformConfigSchema = z
             // upstream socket). Optional; sane defaults applied in code.
             maxConnections: z.number().int().positive().optional(),
             maxConnectionsPerUser: z.number().int().positive().optional(),
-            maxFrameBytes: z.number().int().positive().optional()
+            maxFrameBytes: z.number().int().positive().optional(),
+            // Organization-wide custom vocabulary ("hotwords"). Applies to
+            // every transcription session — browser dictation on this backend
+            // AND sessions routed to a transcription model, whose own terms are
+            // merged on top (shared/speechVocabulary.js).
+            vocabulary: speechVocabularySchema.optional()
           })
           .passthrough()
           .default({}),

@@ -15,12 +15,15 @@ import { validateIdForPath } from '../utils/pathSecurity.js';
  * - `url` is removed for transcription models so a self-hosted vLLM endpoint
  *   never reaches the browser (the acceptance criterion for issue #1927). Chat
  *   models keep their `url` (the client shows/uses it as today).
+ * - `vocabulary` is removed too: the browser never sends biasing terms (the
+ *   server resolves them), and a term list can name customers or staff.
  */
 function sanitizeModelForPublic(model) {
   const clean = { ...model };
   delete clean.apiKey;
   if (clean.modelType === 'transcription') {
     delete clean.url;
+    delete clean.vocabulary;
   }
   return clean;
 }

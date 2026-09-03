@@ -28,6 +28,8 @@ import {
  * @param {AudioBuffer} audioBuffer - Decoded source audio (any rate/channels).
  * @param {Object} opts
  * @param {string} opts.modelId - Transcription model id to route to.
+ * @param {string} [opts.appId] - App whose custom vocabulary applies. Only the
+ *   id travels; the server reads the terms from the app config.
  * @param {(text: string) => void} [opts.onDelta] - Running transcript on each update.
  * @param {(text: string) => void} [opts.onFinal] - Final transcript when complete.
  * @param {(err: { code: string, message?: string }) => void} [opts.onError]
@@ -55,7 +57,7 @@ const overallTimeoutFor = durationSeconds =>
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
-  const { modelId, onDelta, onFinal, onError, signal } = opts;
+  const { modelId, appId, onDelta, onFinal, onError, signal } = opts;
 
   const float32 = await resampleTo16kMono(audioBuffer);
   if (!float32.length) {
@@ -161,7 +163,7 @@ export async function transcribeAudioBuffer(audioBuffer, opts = {}) {
 
     ws.onopen = () => {
       try {
-        ws.send(JSON.stringify({ type: 'start', modelId }));
+        ws.send(JSON.stringify({ type: 'start', modelId, appId }));
       } catch (err) {
         fail('connect', err.message);
         return;

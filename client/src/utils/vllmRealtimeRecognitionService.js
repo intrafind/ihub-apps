@@ -37,6 +37,9 @@ class VllmRealtimeRecognition {
     this.interimResults = true;
     this.lang = 'en-US';
     this.host = '';
+    // App whose custom vocabulary applies to this dictation session. Only the
+    // id is sent; the server resolves the terms from the app config.
+    this.appId = '';
     // Tell useVoiceRecognition to use the {text, isFinal} result branch.
     this.usesTextEventShape = true;
 
@@ -125,7 +128,7 @@ class VllmRealtimeRecognition {
 
       ws.onopen = () => {
         opened = true;
-        ws.send(JSON.stringify({ type: 'start', lang: this.lang }));
+        ws.send(JSON.stringify({ type: 'start', lang: this.lang, appId: this.appId }));
         resolve();
       };
 

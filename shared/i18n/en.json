@@ -427,7 +427,8 @@
         "apiKeyHint": "Stored encrypted at rest. Local vLLM usually needs no key. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.",
         "test": "Test connection",
         "testing": "Testing…",
-        "testHint": "Tests connectivity from the iHub server to the vLLM realtime endpoint using the values above (the saved key is used when the field shows ***REDACTED***)."
+        "testHint": "Tests connectivity from the iHub server to the vLLM realtime endpoint using the values above (the saved key is used when the field shows ***REDACTED***).",
+        "vocabularyScope": "These terms apply to every transcription session; per-model and per-app terms are added on top."
       },
       "azure": {
         "title": "Azure Speech",
@@ -645,7 +646,8 @@
       "modelType": {
         "chat": "Chat",
         "transcription": "Transcription"
-      }
+      },
+      "vocabularyScope": "They are added to the platform-wide terms and to the terms of whichever app uses this model."
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -1634,7 +1636,8 @@
         "searchApps": "Search apps to add...",
         "appsAsToolsNoResults": "No apps match your search",
         "appsAsToolsNoApps": "No apps available",
-        "removeAppTool": "Remove {{name}}"
+        "removeAppTool": "Remove {{name}}",
+        "transcriptionVocabularyScope": "They are added to the platform-wide and model-level terms, and also apply to dictation in this app."
       }
     },
     "features": {
@@ -1867,6 +1870,14 @@
         "noMatches": "No matching values",
         "noOptions": "No values"
       }
+    },
+    "speechVocabulary": {
+      "title": "Custom vocabulary",
+      "description": "Terms the transcription model should pay extra attention to — product names, domain jargon, people. They are sent to the speech endpoint as hotwords so they are spelled correctly instead of guessed phonetically.",
+      "enabled": "Apply these terms",
+      "terms": "Terms (one per line)",
+      "termsHint": "{{used}} of {{max}} terms. Multi-word phrases are allowed. Spelling and capitalization matter — list a term the way it should appear in the transcript.",
+      "upstreamSupportHint": "Requires a speech endpoint that applies hotwords to realtime sessions. A stock vLLM /v1/realtime build reads only the model from the session handshake and ignores this list."
     }
   },
   "cloudStorage": {

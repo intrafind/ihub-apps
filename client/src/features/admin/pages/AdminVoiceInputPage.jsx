@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import SpeechVocabularyEditor from '../components/SpeechVocabularyEditor';
 
 const DEFAULT_SPEECH = {
-  realtime: { enabled: false, url: 'ws://localhost:8080/v1/realtime', model: '', apiKey: '' },
+  realtime: {
+    enabled: false,
+    url: 'ws://localhost:8080/v1/realtime',
+    model: '',
+    apiKey: '',
+    vocabulary: undefined
+  },
   azure: { enabled: false, host: '', region: '', subscriptionKey: '' }
 };
 
@@ -89,7 +96,10 @@ function AdminVoiceInputPage() {
         body: {
           url: config.realtime.url,
           model: config.realtime.model,
-          apiKey: config.realtime.apiKey
+          apiKey: config.realtime.apiKey,
+          // Included so the handshake carries the same hotwords a real session
+          // would — an endpoint that rejects them fails here.
+          vocabulary: config.realtime.vocabulary
         }
       });
       setTestResult(response.data || { ok: false, message: 'No response' });
@@ -227,6 +237,19 @@ function AdminVoiceInputPage() {
                 'Stored encrypted at rest. Local vLLM usually needs no key. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.'
               )}
             </p>
+          </div>
+
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+            <SpeechVocabularyEditor
+              t={t}
+              idPrefix="platform-realtime"
+              value={config.realtime.vocabulary}
+              onChange={next => setRealtime('vocabulary', next)}
+              scopeHint={t(
+                'admin.voiceInput.realtime.vocabularyScope',
+                'These terms apply to every transcription session; per-model and per-app terms are added on top.'
+              )}
+            />
           </div>
 
           <div className="flex items-center gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">

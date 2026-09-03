@@ -654,7 +654,8 @@
         "apiKeyHint": "Verschlüsselt gespeichert. Lokales vLLM benötigt meist keinen Schlüssel. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten.",
         "test": "Verbindung testen",
         "testing": "Teste…",
-        "testHint": "Testet die Verbindung vom iHub-Server zum vLLM-Realtime-Endpunkt mit den obigen Werten (der gespeicherte Schlüssel wird verwendet, wenn das Feld ***REDACTED*** anzeigt)."
+        "testHint": "Testet die Verbindung vom iHub-Server zum vLLM-Realtime-Endpunkt mit den obigen Werten (der gespeicherte Schlüssel wird verwendet, wenn das Feld ***REDACTED*** anzeigt).",
+        "vocabularyScope": "Diese Begriffe gelten für jede Transkriptionssitzung; Begriffe aus Modell und App kommen hinzu."
       },
       "azure": {
         "title": "Azure Speech",
@@ -872,7 +873,8 @@
       "modelType": {
         "chat": "Chat",
         "transcription": "Transkription"
-      }
+      },
+      "vocabularyScope": "Sie kommen zu den plattformweiten Begriffen und zu den Begriffen der App hinzu, die dieses Modell verwendet."
     },
     "chat": {
       "title": "Chat",
@@ -1887,7 +1889,8 @@
         "searchApps": "Apps suchen und hinzufügen...",
         "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
         "appsAsToolsNoApps": "Keine Apps verfügbar",
-        "removeAppTool": "{{name}} entfernen"
+        "removeAppTool": "{{name}} entfernen",
+        "transcriptionVocabularyScope": "Sie kommen zu den plattformweiten und modellbezogenen Begriffen hinzu und gelten auch für das Diktat in dieser App."
       }
     },
     "features": {
@@ -2120,6 +2123,14 @@
         "noMatches": "Keine passenden Werte",
         "noOptions": "Keine Werte"
       }
+    },
+    "speechVocabulary": {
+      "title": "Eigenes Vokabular",
+      "description": "Begriffe, auf die das Transkriptionsmodell besonders achten soll — Produktnamen, Fachvokabular, Eigennamen. Sie werden dem Sprachdienst als Hotwords übergeben, damit sie korrekt geschrieben und nicht lautmalerisch geraten werden.",
+      "enabled": "Diese Begriffe anwenden",
+      "terms": "Begriffe (einer pro Zeile)",
+      "termsHint": "{{used}} von {{max}} Begriffen. Mehrwortbegriffe sind erlaubt. Schreibweise und Groß-/Kleinschreibung zählen — tragen Sie einen Begriff so ein, wie er im Transkript erscheinen soll.",
+      "upstreamSupportHint": "Erfordert einen Sprachdienst, der Hotwords auf Echtzeitsitzungen anwendet. Ein unveränderter vLLM-/v1/realtime-Build liest aus dem Session-Handshake nur das Modell und ignoriert diese Liste."
     }
   },
   "cloudStorage": {
