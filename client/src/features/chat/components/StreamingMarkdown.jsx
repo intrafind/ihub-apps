@@ -23,8 +23,7 @@ import './StreamingMarkdown.css';
 function StreamingMarkdown({ content, hasCitations, streaming = false }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
-  const [renderKey, setRenderKey] = useState(0);
-  const contentLengthRef = useRef(0);
+  const lastParsedContentRef = useRef(null);
   const citationsAppliedRef = useRef(false);
 
   const handleCitationClick = useCallback((type, num) => {
@@ -36,12 +35,13 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
   useLayoutEffect(() => {
     if (!content) {
       setHtmlContent('');
+      lastParsedContentRef.current = null;
       citationsAppliedRef.current = false;
       return;
     }
 
     // Re-parse when content changes or when citations become available but weren't applied yet
-    const contentChanged = content.length !== contentLengthRef.current;
+    const contentChanged = content !== lastParsedContentRef.current;
     const needsCitationTransform = hasCitations && !citationsAppliedRef.current;
 
     if (contentChanged || needsCitationTransform) {
@@ -53,11 +53,11 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
         if (transformHtml) {
           citationsAppliedRef.current = true;
         }
-        setHtmlContent(parsedContent);
-        contentLengthRef.current = content.length;
-
-        // Force a complete re-render by updating the key
-        setRenderKey(prevKey => prevKey + 1);
+        // Only push new HTML when it actually differs. Re-assigning identical
+        // markup would tear down and recreate every child node, which throws
+        // away already-rendered Mermaid diagrams.
+        setHtmlContent(prev => (prev === parsedContent ? prev : parsedContent));
+        lastParsedContentRef.current = content;
       } catch (error) {
         console.error('Error parsing markdown:', error);
       }
@@ -73,7 +73,6 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
 
   return (
     <div
-      key={renderKey}
       ref={containerRef}
       className={`markdown-content break-words whitespace-normal streaming-markdown${
         streaming ? ' is-streaming' : ''
