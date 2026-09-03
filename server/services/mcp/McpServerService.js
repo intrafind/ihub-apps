@@ -6,7 +6,6 @@ import {
 import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadConfiguredTools, runTool } from '../../toolLoader.js';
-import { actionTracker } from '../../actionTracker.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
 import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
@@ -462,11 +461,15 @@ export async function buildMcpServer({ user, platform }) {
   }
 
   // ---- Audit hook on every dispatch ---------------------------------------
+  // A structured log line per gateway request (the former SSE-tracker call had
+  // no stream to reach; the ledger records tool runs of the invoked apps).
   try {
     server.server.onRequest = async (request, extra) => {
-      actionTracker.trackToolCallStart?.(null, {
-        toolName: `mcp:${request.method}`,
-        toolInput: { user: user.id, scopes: tokenScopes }
+      logger.info('MCP gateway request', {
+        component: 'McpServer',
+        method: request?.method,
+        userId: user.id,
+        scopes: tokenScopes
       });
       return extra?.next?.();
     };

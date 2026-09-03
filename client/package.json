@@ -61,5 +61,8 @@
     "autoprefixer": "^10.5.2",
     "postcss": "^8.5.26",
     "vite": "^8.1.4"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
   }
 }

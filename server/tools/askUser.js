@@ -9,6 +9,7 @@
  */
 
 import logger from '../utils/logger.js';
+import { validateRegexPattern } from '../utils/safeRegex.js';
 
 /**
  * Maximum allowed length for the question text
@@ -39,59 +40,6 @@ export const MAX_CLARIFICATIONS_PER_CONVERSATION = 10;
  * @constant {string[]}
  */
 const SUPPORTED_INPUT_TYPES = ['text', 'select', 'multiselect', 'confirm', 'number', 'date'];
-
-/**
- * Regular expression patterns that are considered unsafe (ReDoS vulnerable)
- * These patterns can cause exponential backtracking
- * @constant {RegExp[]}
- */
-const UNSAFE_REGEX_PATTERNS = [
-  /\(\.\*\)\+/, // (.*)+
-  /\(\.\+\)\+/, // (.+)+
-  /\([^)]*\+[^)]*\)\+/, // nested quantifiers like (a+)+
-  /\([^)]*\*[^)]*\)\+/, // nested quantifiers like (a*)+
-  /\([^)]*\+[^)]*\)\*/, // nested quantifiers like (a+)*
-  /\([^)]*\*[^)]*\)\*/, // nested quantifiers like (a*)*
-  /\(\[.*?\]\+\)\+/, // ([...]+)+
-  /\(\[.*?\]\*\)\+/, // ([...]*)+
-  /\(\?:.*?\+.*?\)\+/, // (?:...+...)+
-  /\(\?:.*?\*.*?\)\+/ // (?:...*...)+
-];
-
-/**
- * Validate that a regex pattern is safe (not vulnerable to ReDoS)
- * @param {string} pattern - The regex pattern string to validate
- * @returns {{valid: boolean, error?: string}} Validation result
- */
-function validateRegexPattern(pattern) {
-  if (!pattern || typeof pattern !== 'string') {
-    return { valid: true }; // No pattern means no validation needed
-  }
-
-  // Check pattern length
-  if (pattern.length > 200) {
-    return { valid: false, error: 'Regex pattern too long (max 200 characters)' };
-  }
-
-  // Check for unsafe patterns that can cause ReDoS
-  for (const unsafePattern of UNSAFE_REGEX_PATTERNS) {
-    if (unsafePattern.test(pattern)) {
-      return {
-        valid: false,
-        error: 'Regex pattern contains potentially unsafe nested quantifiers (ReDoS risk)'
-      };
-    }
-  }
-
-  // Try to compile the regex to ensure it's valid
-  try {
-    new RegExp(pattern);
-  } catch (error) {
-    return { valid: false, error: `Invalid regex pattern: ${error.message}` };
-  }
-
-  return { valid: true };
-}
 
 /**
  * Validate the options array for select/multiselect inputs
@@ -302,7 +250,7 @@ export default async function askUser({
   });
 
   // Return the clarification request
-  // The ToolExecutor will detect this is an ask_user tool and emit the appropriate event
+  // The chat turn marks ask_user as interactive; the loop's question seam raises the clarification
   return {
     requiresUserInput: true,
     clarification: clarificationRequest

@@ -120,7 +120,7 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
     arguments: arguments_ || {},
     index,
     metadata,
-    // Add OpenAI-compatible format for ToolExecutor compatibility
+    // Add OpenAI-compatible format for tool-loop compatibility
     function: {
       name: normalizeToolName(name),
       arguments: functionArguments

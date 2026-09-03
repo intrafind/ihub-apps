@@ -14,7 +14,7 @@ process.stdout.write = function (chunk) {
 
 // Test logging a URL with API key in query parameter
 logger.error('HTTP error from LLM provider', {
-  component: 'StreamingHandler',
+  component: 'LLMClient',
   provider: 'google',
   httpStatus: 401,
   url: 'https://api.google.com/v1/models:generateContent?key=AIzaSyABC123xyz789'

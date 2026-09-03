@@ -18,23 +18,19 @@
  */
 
 import logger from '../../utils/logger.js';
-import configCache from '../../configCache.js';
-import WorkflowLLMHelper from '../../services/workflow/WorkflowLLMHelper.js';
+import llmClient from '../../services/loop/LLMClient.js';
 
+/**
+ * Pick the model for the title call: the caller's profile model (already
+ * verified to have API access for this run) → platform default → first
+ * text-capable model. Image-generation and transcription models are excluded.
+ *
+ * @param {string} [preferredModelId]
+ * @returns {Object|null} resolved model or null when none is usable
+ */
 function pickTitleModel(preferredModelId) {
   try {
-    const { data: models = [] } = configCache.getModels?.() || { data: [] };
-    const textCapable = models.filter(m => m.enabled !== false && !m.supportsImageGeneration);
-    if (textCapable.length === 0) return null;
-    // Prefer the caller's profile model — that's the one they've already
-    // verified has API access for this run. Falls back to the platform
-    // default, then to the first text-capable model.
-    if (preferredModelId) {
-      const fromProfile = textCapable.find(m => m.id === preferredModelId);
-      if (fromProfile) return fromProfile;
-    }
-    const def = textCapable.find(m => m.default);
-    return def || textCapable[0];
+    return llmClient.resolveModel({ modelId: preferredModelId, requireTextCapable: true });
   } catch {
     return null;
   }
@@ -90,19 +86,10 @@ export function generateRunTitleAsync({
       return;
     }
 
-    const helper = new WorkflowLLMHelper();
     let title;
     try {
-      const apiKeyResult = await helper.verifyApiKey(model, language);
-      if (!apiKeyResult.success) {
-        logger.warn('Title generation skipped: API key verification failed', {
-          component: 'TitleGenerator',
-          modelId: model.id,
-          executionId,
-          error: apiKeyResult.error?.message
-        });
-        return;
-      }
+      // API-key resolution happens inside LLMClient.complete(); a missing key
+      // throws (AUTH_FAILED) and is logged by the catch below like any failure.
       const messages = [
         {
           role: 'system',
@@ -127,12 +114,14 @@ export function generateRunTitleAsync({
         },
         { role: 'user', content: `Source:\n${source}\n\nTitle:` }
       ];
-      const response = await helper.executeStreamingRequest({
+      const response = await llmClient.complete({
         model,
         messages,
-        apiKey: apiKeyResult.apiKey,
         options: { temperature: 0.2, maxTokens: 24 },
-        language
+        language,
+        // The call is part of the execution's run: recorded on its ledger
+        // (segment `title`) instead of as a separate utility run.
+        telemetry: { runId: executionId, segment: 'title', purpose: 'run-title' }
       });
       title = (response?.content || '').replace(/^["'\s]+|["'\s.,!?:]+$/g, '').trim();
       // Hard guards: single line, max 60 chars (≈ 6 short words).

@@ -1,5 +1,4 @@
 import configCache from '../../configCache.js';
-import { createCompletionRequest } from '../../adapters/index.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
@@ -192,8 +191,6 @@ class RequestBuilder {
     requestedSkill,
     documentIds,
     processMessageTemplates,
-    res,
-    clientRes,
     user,
     chatId
   }) {
@@ -414,7 +411,10 @@ class RequestBuilder {
         contextWindow: model.contextWindow || null
       });
 
-      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
+      // Fail fast on a missing provider key so the route can answer with a
+      // clean HTTP error before any stream is opened. The verifier never
+      // writes to a response here — the caller owns the reply.
+      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, language);
       if (!apiKeyResult.success) {
         return { success: false, error: apiKeyResult.error };
       }
@@ -468,22 +468,21 @@ class RequestBuilder {
         }
       }
 
-      const request = await createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
-        temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-        maxTokens: finalTokens,
-        stream: !!clientRes,
-        tools,
+      const resolvedTemperature = parseFloat(temperature) || app.preferredTemperature || 0.7;
+
+      // Provider-facing options for every model call of this turn. The loop
+      // hands them to LLMClient unchanged, so follow-up calls after tool
+      // results keep native web search, thinking and image settings.
+      const llmOptions = {
         nativeWebSearch,
-        responseFormat: outputFormat,
-        responseSchema: app.outputSchema,
-        user,
-        chatId,
-        appConfig: documentIds ? { ...app, documentIds } : app,
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts,
-        imageConfig
-      });
+        imageConfig,
+        user,
+        chatId,
+        appConfig: documentIds ? { ...app, documentIds } : app
+      };
 
       return {
         success: true,
@@ -491,11 +490,13 @@ class RequestBuilder {
           app,
           model,
           llmMessages,
-          request,
           tools,
           apiKey: apiKeyResult.apiKey,
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+          temperature: resolvedTemperature,
           maxTokens: finalTokens,
+          responseFormat: outputFormat,
+          responseSchema: app.outputSchema,
+          llmOptions,
           userFileData
         }
       };

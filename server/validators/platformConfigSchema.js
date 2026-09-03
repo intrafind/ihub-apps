@@ -229,6 +229,19 @@ export const platformConfigSchema = z
       .passthrough()
       .default({}),
     usageTracking: usageTrackingRetentionSchema.default({}),
+    // Unified runtime ledger (RunLog): one append-only JSONL per run. The
+    // feature itself is gated by features.runLog; these are its settings.
+    runLog: z
+      .object({
+        enabled: z.boolean().default(true),
+        identityMode: z.enum(['full', 'default', 'pseudonymized']).default('default'),
+        retentionDays: z.number().default(90),
+        cleanupEnabled: z.boolean().default(true),
+        flushIntervalMs: z.number().int().positive().default(2000),
+        spillThresholdBytes: z.number().int().positive().default(65536)
+      })
+      .passthrough()
+      .default({}),
     // Realtime speech-to-text: the browser streams mic audio to iHub over a
     // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
     // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with

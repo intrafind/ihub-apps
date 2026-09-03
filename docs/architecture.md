@@ -173,31 +173,35 @@ graph TB
         Middleware[Middleware Stack]
         Validation[Request Validation]
     end
-    
+
     subgraph "Business Logic Layer"
         Services[Business Services]
         ChatService[Chat Service]
+        Loop[Agent Loop + LLM Client]
         SourceService[Source Resolution]
     end
-    
+
     subgraph "Integration Layer"
         Adapters[LLM Adapters]
         Sources[Source Handlers]
-        Tools[Tool Executors]
+        Tools[Tool Loader]
     end
-    
+
     subgraph "Data Access Layer"
         ConfigCache[Configuration Cache]
         FileSystem[File System Access]
         External[External APIs]
     end
-    
+
     Routes --> Services
+    Routes --> ChatService
     Middleware --> Routes
     Validation --> Routes
-    Services --> Adapters
+    ChatService --> Loop
+    Services --> Loop
+    Loop --> Adapters
+    Loop --> Tools
     Services --> Sources
-    Services --> Tools
     Adapters --> External
     Sources --> FileSystem
     Sources --> External
@@ -283,48 +287,61 @@ sequenceDiagram
 
 ### Chat Service Architecture
 
-The chat functionality uses a modular, service-oriented architecture:
+A chat turn is one invocation of the shared agent loop. `ChatService` prepares
+the request and projects the loop's output onto the chat SSE dialect; the model
+loop itself — rounds, tool execution, argument repair, compaction, budgets,
+abort handling — lives in `AgentLoop` and is shared with workflow nodes, the
+app-as-tool gateway and the MCP gateway. Every model call goes through
+`LLMClient`. See [Agent Loop](agent-loop.md) and [LLM Client](llm-client.md).
 
 ```mermaid
 graph TB
-    subgraph "Chat Service Components"
+    subgraph "Chat Service (server/services/chat)"
         CS[ChatService]
         RB[RequestBuilder]
-        NSH[NonStreamingHandler]
-        SH[StreamingHandler]
-        TE[ToolExecutor]
+        CC[chatChannel]
+        CSM[chatSeams]
+        CE[chatErrors]
+        CT[chatTelemetry]
     end
-    
-    subgraph "Support Services"
-        EH[ErrorHandler]
-        AKV[ApiKeyVerifier]
-        PMT[processMessageTemplates]
+
+    subgraph "Shared Loop (server/services/loop)"
+        AL[AgentLoop]
+        LC[LLMClient]
+        BS[Built-in seams]
     end
-    
-    subgraph "LLM Integration"
+
+    subgraph "Integration"
         Adapters[LLM Adapters]
-        Tools[Tool Registry]
+        TL[toolLoader.runTool]
+        AT[actionTracker / sse.js]
     end
-    
+
     CS --> RB
-    CS --> NSH
-    CS --> SH
-    CS --> TE
-    CS --> EH
-    RB --> AKV
-    RB --> PMT
-    TE --> Tools
-    NSH --> Adapters
-    SH --> Adapters
+    CS --> AL
+    CS --> CC
+    CS --> CSM
+    CS --> CE
+    CSM --> CT
+    AL --> LC
+    AL --> BS
+    AL --> TL
+    LC --> Adapters
+    CC --> AT
+    CSM --> AT
+    CS --> AT
 ```
 
 #### Component Responsibilities
 
-- **`ChatService.js`**: Main orchestration class that coordinates chat requests
-- **`RequestBuilder.js`**: Prepares and validates LLM requests with templates and variables
-- **`NonStreamingHandler.js`**: Processes complete LLM responses in single requests
-- **`StreamingHandler.js`**: Handles real-time streaming responses using Server-Sent Events
-- **`ToolExecutor.js`**: Manages LLM tool calling and execution workflows
+- **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn as one run on the chat's SSE v2 stream (`run/started` … `run/ended`, see [SSE v2 Streaming](sse-v2.md)) on `AgentLoop` with the chat seams and channel; `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
+- **`RequestBuilder.js`**: Resolves app, model, messages, tools and model options for the turn (templates, variables, uploads, skills, sources)
+- **`chatChannel.js`**: Projects the loop's streamed chunks onto SSE v2 frames — `step/delta` (text, thinking, image), `tool/progress` (grounding, citations, search status) and `meta` (conversation title / ids)
+- **`chatSeams.js`**: Everything the chat surface adds to the loop, as seams: `tool/started` / `tool/completed` frames and interaction logs, the `ask_user` clarification (`interaction/raised`), the passthrough (workflow tool) projection, upload/email knowledge sources and per-call usage telemetry
+- **`chatErrors.js`**: Maps a failed turn (`LLMError`, network fault, timeout) onto the localized `{ message, code, details, isContextWindowError }` payload the client renders
+- **`chatTelemetry.js`**: Usage tracking, user activity and per-app metrics per model call; the OpenTelemetry span itself is owned by `LLMClient`
+- **`AgentLoop.js`** (`server/services/loop/`): The shared tool loop — rounds, tool matching and argument repair, circuit breakers, compaction, budgets, abort handling, and the built-in `question` / `passthrough` / `imageLift` / `knowledgeSource` seams
+- **`LLMClient.js`** (`server/services/loop/`): The one way to call a model — API keys, throttling, retries, streaming normalization, `LLMError` taxonomy, telemetry span
 - **`ErrorHandler.js`** (`server/utils/`): Centralized error handling with custom error classes
 - **`ApiKeyVerifier.js`** (`server/utils/`): Validates API keys for different LLM providers
 
@@ -333,33 +350,63 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant Client
-    participant ChatService as ChatService
-    participant RequestBuilder as RequestBuilder
-    participant Handler as StreamingHandler
-    participant Adapter as LLM Adapter
-    participant ToolExecutor as ToolExecutor
-    
-    Client->>ChatService: Chat Request
-    ChatService->>RequestBuilder: Prepare Request
-    RequestBuilder->>RequestBuilder: Process Templates
-    RequestBuilder->>RequestBuilder: Validate Parameters
-    RequestBuilder->>ChatService: Built Request
-    ChatService->>Handler: Execute Request
-    Handler->>Adapter: LLM API Call
-    
-    loop Streaming Response
-        Adapter->>Handler: Stream Chunk
-        Handler->>Client: SSE Event
-        
-        alt Tool Call Required
-            Handler->>ToolExecutor: Execute Tool
-            ToolExecutor->>Handler: Tool Result
-            Handler->>Adapter: Continue Conversation
+    participant Routes as sessionRoutes
+    participant ChatService
+    participant RequestBuilder
+    participant Loop as AgentLoop
+    participant LLMClient
+    participant Tools as toolLoader.runTool
+    participant Proj as chatChannel / chatSeams
+    participant SSE as RunStream / sse.js
+
+    Client->>Routes: POST /api/apps/:appId/chat/:chatId
+    Routes->>ChatService: prepareChatRequest()
+    ChatService->>RequestBuilder: Resolve app, model, messages, tools
+    RequestBuilder->>ChatService: prep
+    ChatService->>Routes: prep
+    Routes->>ChatService: runTurn({ prep, streaming })
+    ChatService->>Loop: run({ kind: 'chat', seams, channel, executeTool })
+
+    loop Tool rounds (max 10, one tool at a time)
+        Loop->>LLMClient: execute() - one model call
+        LLMClient-->>Proj: streamed chunks
+        Proj->>SSE: step/delta, tool/progress, meta
+        alt Tool call
+            Proj->>SSE: tool/started
+            Loop->>Tools: runTool(toolId, args)
+            Tools->>Loop: result
+            Proj->>SSE: tool/completed
+        else ask_user (interactive)
+            Proj->>SSE: interaction/raised
+            Note over Loop: run pauses (run/paused)
+        else Passthrough tool (workflow)
+            Loop->>Tools: runTool(toolId, args + passthrough)
+            Tools-->>Proj: streamed answer
+            Proj->>SSE: step/delta, tool/completed
+            Note over Loop: turn ends (tool_passthrough_complete)
         end
     end
-    
-    Handler->>Client: Final Response
+
+    Loop->>ChatService: LoopResult
+    ChatService->>SSE: stream/error?, run/ended
+    SSE->>Client: SSE v2 envelopes
 ```
+
+Without an open SSE connection the route runs the same turn with
+`streaming: false`: nothing is emitted, interactive tools run headless
+(`ask_user` gets a `NO_USER_AVAILABLE` result instead of pausing), and the POST
+answers with `{ messageId, model, content, finishReason, usage }`.
+
+#### Headless App Invocation
+
+`ChatService.invokeAppInternal()` runs an app to completion without a client.
+The app-as-tool gateway (`server/services/chat/appToolsGateway.js`) and the
+MCP `tools/call` surface (`server/services/mcp/appInvoker.js`) use it. The
+request is prepared by `RequestBuilder` exactly as for the web UI, the turn
+runs on `AgentLoop` as a `subagent` segment with a wall-clock deadline, tools
+execute server-side, passthrough output becomes the answer and `ask_user` is
+refused with `NO_USER_AVAILABLE`. It returns
+`{ status, finalMessage, toolCalls, citations, usage, finishReason, model }`.
 
 ## Source Handlers System
 
@@ -522,7 +569,8 @@ graph TB
 - **`DAGScheduler.js`**: Determines which nodes are ready to execute based on edge conditions and dependency resolution
 - **`StateManager.js`**: Tracks and persists workflow execution state across nodes
 - **`ExecutionRegistry.js`**: Tracks active executions by user for monitoring and cancellation
-- **`WorkflowLLMHelper.js`**: Provides LLM-based decision making for conditional routing
+- **`LLMClient.js`** (`server/services/loop/LLMClient.js`): The single LLM call path for every workflow/agent node (planner, prompt/agent tool loop, verifier, query-plan, quote-validator, context summarizer). It owns model and API-key resolution, transient retries, abort-signal threading, usage normalization and the per-call run-ledger events
+- **`AgentLoop.js`** (`server/services/loop/AgentLoop.js`): The single tool loop, shared with chat (`ChatService`), the app-as-tool gateway and MCP. Prompt/agent nodes and the tool-enabled verifier hand it the model, transcript, tools, policies (budgets, circuit breakers, compaction) and a tool executor; it returns the final content, usage and transcript. Workflow-specific bookkeeping (citations, hallucinated tools, withheld tools) is a seam the executor registers — see [Agent Loop](agent-loop.md)
 
 ### Node Types
 
@@ -541,7 +589,7 @@ graph TB
 
 ### Human-in-the-Loop Flow
 
-When a `human` node is reached, the workflow pauses and emits a `workflow.human.required` Server-Sent Event to the client. The user responds via `POST /api/workflows/executions/:id/respond`, and the workflow resumes automatically.
+When a `human` node is reached, the workflow pauses and raises the checkpoint as an interaction of the execution's run: the stream carries `interaction/raised` followed by `run/paused` (see [SSE v2 Streaming](sse-v2.md)). The user answers it through the one answer endpoint, `POST /api/runs/:executionId/interactions/:checkpointId/answer` with `{ value, data? }`; the server validates the answer, routes the workflow on the chosen branch and resumes it (`interaction/answered`, `run/resumed`). Workflow executions and agent runs are runs on the [run ledger](run-ledger.md) (run id = execution id), so the same endpoint serves chat-launched workflows, the workflow execution page and agent runs.
 
 ### Client UI
 
@@ -911,24 +959,29 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant ChatService
-    participant SourceService
+    participant RequestBuilder
     participant ConfigCache
-    participant ToolExecutor
-    participant LLMAdapter
-    
-    ChatService->>ConfigCache: Load App Config
-    ConfigCache->>ChatService: App Configuration
-    ChatService->>SourceService: Resolve Source References
-    SourceService->>SourceService: Load Source Content
-    SourceService->>ChatService: Enriched Context
-    ChatService->>ToolExecutor: Prepare Tools
-    ToolExecutor->>ChatService: Tool Definitions
-    ChatService->>LLMAdapter: Execute Chat Request
-    LLMAdapter->>ToolExecutor: Tool Call Required
-    ToolExecutor->>SourceService: Execute Tool
-    SourceService->>ToolExecutor: Tool Result
-    ToolExecutor->>LLMAdapter: Continue Conversation
-    LLMAdapter->>ChatService: Final Response
+    participant SourceService
+    participant AgentLoop
+    participant LLMClient
+    participant ToolLoader as toolLoader.runTool
+
+    ChatService->>RequestBuilder: prepareChatRequest()
+    RequestBuilder->>ConfigCache: Load App / Model / Tool Config
+    ConfigCache->>RequestBuilder: Configuration
+    RequestBuilder->>SourceService: Resolve app sources (prompt templates)
+    SourceService->>RequestBuilder: Enriched Context
+    RequestBuilder->>ChatService: Prepared Request (messages, tools, options)
+    ChatService->>AgentLoop: run({ kind: 'chat', seams, channel, executeTool })
+    loop Each model round
+        AgentLoop->>LLMClient: execute()
+        LLMClient->>AgentLoop: Streamed chunks / tool calls
+        AgentLoop->>ToolLoader: runTool(toolId, args)
+        ToolLoader->>SourceService: source_* tools query sources
+        SourceService->>ToolLoader: Tool Result
+        ToolLoader->>AgentLoop: Tool Result
+    end
+    AgentLoop->>ChatService: LoopResult
 ```
 
 ## Security Architecture

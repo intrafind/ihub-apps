@@ -25,7 +25,7 @@ async function testModelWithProviderKey() {
 
   try {
     // 1. Import required modules
-    const { simpleCompletion } = await import('../../server/utils.js');
+    const { default: llmClient } = await import('../../server/services/loop/LLMClient.js');
     const { default: tokenStorageService } =
       await import('../../server/services/TokenStorageService.js');
 
@@ -43,12 +43,12 @@ async function testModelWithProviderKey() {
     }
     console.log('');
 
-    // 3. Test simpleCompletion with a Google model (if provider key exists)
+    // 3. Test llmClient.complete with a Google model (if provider key exists)
     const googleProvider = providersData.providers?.find(p => p.id === 'google');
 
     if (googleProvider && googleProvider.apiKey) {
       console.log('✅ Found Google provider with API key');
-      console.log('🔑 Testing simpleCompletion with provider-specific key...\n');
+      console.log('🔑 Testing llmClient.complete with provider-specific key...\n');
 
       // Decrypt the key for testing
       let decryptedKey;
@@ -60,12 +60,14 @@ async function testModelWithProviderKey() {
         console.log('   Using plaintext provider API key');
       }
 
-      // Test 1: simpleCompletion with explicit API key (existing behavior)
-      console.log('\n📝 Test 1: simpleCompletion with explicit API key');
+      // Test 1: llmClient.complete with an explicit API key
+      console.log('\n📝 Test 1: llmClient.complete with explicit API key');
       try {
-        const result1 = await simpleCompletion('Say "test1 successful"', {
+        const result1 = await llmClient.complete({
           modelId: 'gemini-2.5-flash',
-          apiKey: decryptedKey
+          apiKey: decryptedKey,
+          messages: [{ role: 'user', content: 'Say "test1 successful"' }],
+          telemetry: { kind: 'diagnostic', purpose: 'manual-provider-key-test' }
         });
         console.log('   ✅ Test 1 PASSED: Explicit API key works');
         console.log(`   Response: ${result1.content.substring(0, 100)}...`);
@@ -73,14 +75,17 @@ async function testModelWithProviderKey() {
         console.log(`   ❌ Test 1 FAILED: ${error.message}`);
       }
 
-      // Test 2: simpleCompletion without explicit API key (should use getApiKeyForModel)
+      // Test 2: llmClient.complete without an explicit API key — LLMClient resolves it
+      // (model key → provider key → environment variable) via ApiKeyVerifier
       console.log(
-        '\n📝 Test 2: simpleCompletion without explicit API key (fallback to getApiKeyForModel)'
+        '\n📝 Test 2: llmClient.complete without explicit API key (fallback to provider key)'
       );
       try {
-        const result2 = await simpleCompletion('Say "test2 successful"', {
-          modelId: 'gemini-2.5-flash'
-          // No apiKey provided - should fallback to getApiKeyForModel
+        const result2 = await llmClient.complete({
+          modelId: 'gemini-2.5-flash',
+          // No apiKey provided - LLMClient resolves it from model/provider config or env
+          messages: [{ role: 'user', content: 'Say "test2 successful"' }],
+          telemetry: { kind: 'diagnostic', purpose: 'manual-provider-key-test' }
         });
         console.log('   ✅ Test 2 PASSED: Fallback to provider key works');
         console.log(`   Response: ${result2.content.substring(0, 100)}...`);

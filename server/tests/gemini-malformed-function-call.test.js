@@ -11,12 +11,12 @@
  *      (complete, no content) for a degenerate MALFORMED_FUNCTION_CALL
  *      response, while leaving normal responses untouched. The converter
  *      itself does not flag `error` for a bare failure reason — it's
- *      StreamingHandler that turns a detectable failure reason into a
+ *      the chat turn (ChatService) that turns a detectable failure reason into a
  *      user-facing error via isFailureFinishReason (see test 4).
  *   3. A MALFORMED_FUNCTION_CALL that still carried usable text is kept as
  *      an answer, not treated as a failure.
  *   4. The streaming converter marking such a chunk complete with the raw
- *      failure reason so StreamingHandler can turn it into an error.
+ *      failure reason so the chat turn can turn it into an error.
  *   5. The RequestBuilder prevention notice that stops the model from being
  *      told to use a web search tool that isn't in the request.
  */

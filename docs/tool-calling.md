@@ -82,16 +82,24 @@ Tools are functions that AI models can call to:
 ```mermaid
 graph LR
     User[User] --> Chat[Chat Interface]
-    Chat --> Model[AI Model]
-    Model --> ToolRequest[Tool Request]
-    ToolRequest --> ToolExecutor[Tool Executor]
-    ToolExecutor --> ExternalService[External Service]
-    ExternalService --> ToolExecutor
-    ToolExecutor --> Model
-    Model --> Response[Final Response]
+    Chat --> Loop[AgentLoop]
+    Loop --> Model[AI Model via LLMClient]
+    Model --> ToolRequest[Tool Call]
+    ToolRequest --> Runner[toolLoader.runTool]
+    Runner --> ExternalService[External Service]
+    ExternalService --> Runner
+    Runner --> Loop
+    Loop --> Response[Final Response]
     Response --> Chat
     Chat --> User
 ```
+
+The round trip between model and tools is the shared [Agent Loop](agent-loop.md):
+chat, workflow nodes, app-as-tool and MCP all run tool calls through it (tool
+matching, argument repair, circuit breakers, round budgets), and the tool itself
+is executed by `toolLoader.runTool()`. In chat, one tool runs at a time and each
+call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frames
+(see [SSE v2 Streaming](sse-v2.md)).
 
 ### Tool Registration and Discovery
 

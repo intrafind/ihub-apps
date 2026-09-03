@@ -6,7 +6,17 @@ import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
 import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
+import runLog from '../loop/RunLog.js';
+import { resetStream } from '../loop/RunStream.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { isValidId } from '../../utils/pathSecurity.js';
+import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
+
+/** Presence kind announcing which worker holds a running execution's abort controller. */
+export const EXECUTION_PRESENCE_KIND = 'execution';
+/** Cluster bus channel relaying a cancellation to the worker running the execution. */
+export const EXECUTION_CANCEL_CHANNEL = 'execution:cancel';
 
 /**
  * Default timeout for node execution in milliseconds (5 minutes)
@@ -53,7 +63,7 @@ const MAX_EXECUTION_ITERATIONS = 10000;
  *
  * // Register executors for different node types
  * engine.registerExecutor('llm', new LLMExecutor());
- * engine.registerExecutor('tool', new ToolExecutor());
+ * engine.registerExecutor('tool', new ToolNodeExecutor());
  *
  * // Start workflow execution
  * const state = await engine.start(workflowDefinition, { userInput: 'Hello' });
@@ -109,6 +119,8 @@ export class WorkflowEngine {
    * @param {StateManager} [options.stateManager] - Custom state manager instance
    * @param {DAGScheduler} [options.scheduler] - Custom scheduler instance
    * @param {number} [options.defaultTimeout] - Default node execution timeout in ms
+   * @param {{createPresenceMap: Function, hasRemote: Function, publish: Function, subscribe: Function}} [options.bus]
+   *   cluster bus (default: clusterBus) — tests inject a fake to simulate workers
    */
   constructor(options = {}) {
     /**
@@ -141,7 +153,13 @@ export class WorkflowEngine {
      * @type {Map<string, AbortController>}
      * @private
      */
-    this.abortControllers = new Map();
+    this._bus = options.bus || { createPresenceMap, hasRemote, publish, subscribe };
+    // A presence map: every worker knows which one holds a running execution's
+    // abort controller, so a cancellation landing elsewhere can be relayed.
+    this.abortControllers = this._bus.createPresenceMap(EXECUTION_PRESENCE_KIND);
+    this._unsubscribeCancel = this._bus.subscribe(EXECUTION_CANCEL_CHANNEL, message =>
+      this._onRemoteCancel(message)
+    );
   }
 
   /**
@@ -277,6 +295,15 @@ export class WorkflowEngine {
    * });
    */
   async start(workflowDefinition, initialData = {}, options = {}) {
+    // A caller-supplied execution id becomes a state directory name and a
+    // ledger run id: accept only a safe id.
+    if (options.executionId !== undefined && !isValidId(options.executionId)) {
+      const error = new Error(
+        'Invalid executionId: only letters, digits, dots, underscores and hyphens are allowed'
+      );
+      error.code = 'INVALID_EXECUTION_ID';
+      throw error;
+    }
     const executionId = options.executionId || `wf-exec-${uuidv4()}`;
     const workflowId = workflowDefinition.id || 'unknown';
 
@@ -370,6 +397,11 @@ export class WorkflowEngine {
     // 5. Set up abort controller for cancellation
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
+
+    // 5b. The execution is a run on the ledger (runId === executionId): its
+    // interactions, pause/resume and end are recorded there and the run routes
+    // (`/api/runs/:runId/…`) authorize against it.
+    await this._startLedgerRun(executionId, workflowDefinition, initialData, options);
 
     // 6. Emit workflow start event
     this._emitEvent('workflow.start', {
@@ -468,6 +500,19 @@ export class WorkflowEngine {
 
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
+
+    // Re-register the run on the ledger so its sequence continues after a restart.
+    try {
+      await runLog.resumeRun(executionId, {
+        kind: state.data?._agent?.profileId ? 'agent' : 'workflow'
+      });
+    } catch (err) {
+      logger.debug('Ledger resumeRun failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
 
     logger.info('Resuming workflow execution from checkpoint', {
       component: 'WorkflowEngine',
@@ -1495,6 +1540,56 @@ export class WorkflowEngine {
    * @example
    * await engine.cancel('exec-123', 'User requested cancellation');
    */
+  /**
+   * Cancel an execution wherever it runs. The abort controller of a running
+   * execution lives in the worker executing it; a request landing on another
+   * worker relays the cancellation there instead of only flipping the
+   * persisted state while the node keeps running. Without a running owner
+   * (paused, or nobody holds it) the state is cancelled here.
+   *
+   * @param {string} executionId
+   * @param {string} [reason]
+   * @returns {Promise<Object>} the execution state; `cancelRelayed: true` when another worker performs it
+   */
+  async cancelAnywhere(executionId, reason = 'user_cancelled') {
+    if (
+      !this.abortControllers.has(executionId) &&
+      this._bus.hasRemote(EXECUTION_PRESENCE_KIND, executionId)
+    ) {
+      const state = await this.stateManager.get(executionId);
+      if (!state) {
+        const error = new Error(`Execution not found: ${executionId}`);
+        error.code = 'EXECUTION_NOT_FOUND';
+        throw error;
+      }
+      this._bus.publish(
+        EXECUTION_CANCEL_CHANNEL,
+        { executionId, reason },
+        { kind: EXECUTION_PRESENCE_KIND, key: executionId }
+      );
+      logger.info('Relayed cancellation to the worker running the execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        reason
+      });
+      return { ...state, cancelRelayed: true };
+    }
+    return this.cancel(executionId, reason);
+  }
+
+  /** A cancellation relayed by another worker for an execution running here. */
+  _onRemoteCancel(message) {
+    const executionId = message?.executionId;
+    if (typeof executionId !== 'string' || !this.abortControllers.has(executionId)) return;
+    this.cancel(executionId, message.reason || 'user_cancelled').catch(error => {
+      logger.warn('Relayed cancellation failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: error.message
+      });
+    });
+  }
+
   async cancel(executionId, reason = 'user_cancelled') {
     const state = await this.stateManager.get(executionId);
 
@@ -1734,11 +1829,112 @@ export class WorkflowEngine {
       ...data
     });
 
+    this._mirrorToLedger(eventType, data);
+
+    // The execution's own stream (workflow / agent run pages) is done once the
+    // run is terminal: the frames above were already sequenced and delivered.
+    if (
+      data?.executionId &&
+      (eventType === 'workflow.complete' ||
+        eventType === 'workflow.failed' ||
+        eventType === 'workflow.cancelled')
+    ) {
+      resetStream(data.executionId);
+    }
+
     logger.debug('Emitted workflow event', {
       component: 'WorkflowEngine',
       eventType,
       executionId: data.executionId
     });
+  }
+
+  /**
+   * Start the execution's run on the ledger. Never throws — the ledger must not
+   * break an execution.
+   * @private
+   */
+  async _startLedgerRun(executionId, workflowDefinition, initialData, options) {
+    const agent = initialData?._agent;
+    const triggerKind = agent?.triggeredBy?.kind;
+    const trigger =
+      triggerKind === 'schedule' || triggerKind === 'webhook'
+        ? { type: triggerKind }
+        : triggerKind === 'inbox' || triggerKind === 'system'
+          ? { type: 'system', source: triggerKind }
+          : initialData?._chatHistory !== undefined || initialData?._chatId
+            ? { type: 'tool', source: 'chat' }
+            : { type: 'user' };
+    try {
+      await runLog.startRun({
+        runId: executionId,
+        kind: agent?.profileId ? 'agent' : 'workflow',
+        user: options.user || null,
+        trigger,
+        refs: {
+          executionId,
+          ...(workflowDefinition.id ? { workflowId: String(workflowDefinition.id) } : {}),
+          ...(agent?.profileId ? { profileId: String(agent.profileId) } : {}),
+          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {})
+        },
+        ...(initialData?.language ? { language: String(initialData.language) } : {})
+      });
+    } catch (err) {
+      logger.warn('Ledger startRun failed for execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Mirror the lifecycle events onto the execution's ledger run
+   * (`run/paused`, `run/end`). Never throws.
+   * @private
+   */
+  _mirrorToLedger(eventType, data) {
+    const runId = data?.executionId;
+    if (!runId) return;
+    try {
+      switch (eventType) {
+        case 'workflow.paused':
+          runLog.append(runId, RUN_LOG_EVENTS.RUN_PAUSED, {
+            reason: 'interaction',
+            ...(data.checkpoint?.id ? { interactionId: String(data.checkpoint.id) } : {}),
+            pausedAt: new Date().toISOString()
+          });
+          break;
+        case 'workflow.complete':
+          runLog.endRun(runId, {
+            status: 'completed',
+            finishReason: data.status && data.status !== 'completed' ? String(data.status) : null
+          });
+          break;
+        case 'workflow.failed':
+          runLog.endRun(runId, {
+            status: 'error',
+            finishReason: 'error',
+            error: {
+              code: String(data.error?.code || 'WORKFLOW_FAILED'),
+              message: String(data.error?.message || data.error || 'Workflow failed')
+            }
+          });
+          break;
+        case 'workflow.cancelled':
+          runLog.endRun(runId, { status: 'aborted', finishReason: 'cancelled' });
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      logger.debug('Ledger mirror failed', {
+        component: 'WorkflowEngine',
+        executionId: runId,
+        eventType,
+        error: err.message
+      });
+    }
   }
 
   /**

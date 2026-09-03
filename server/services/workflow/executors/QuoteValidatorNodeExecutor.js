@@ -25,7 +25,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient from '../../loop/LLMClient.js';
 import configCache from '../../../configCache.js';
 import { actionTracker } from '../../../actionTracker.js';
 import {
@@ -35,9 +35,14 @@ import {
 } from '../../auditQuotes/validateQuotes.js';
 
 export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
+  /**
+   * @param {Object} options - Executor options
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for the verdict calls (defaults to the shared singleton; tests inject a stub)
+   */
   constructor(options = {}) {
     super(options);
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
   }
 
   async execute(node, state, context) {
@@ -65,9 +70,11 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     const coverage = cloneCoverage(this.resolveVariable(`$.data.${coverageVar}`, state));
 
     // Resolve which model to use for the LLM fallback only if we have evidence
-    // that any quotes need it — saves a config-cache lookup on clean runs.
-    let model = null;
-    let apiKey = null;
+    // that any quotes need it — saves a config-cache lookup on clean runs. The
+    // resolution outcome (success OR failure) is remembered for the whole run:
+    // the lack of a usable model is a run-level problem, so we must not re-run
+    // the lookup (and re-log the same failure) for every remaining quote.
+    let modelResolution = null;
     let llmCalls = 0;
 
     const updatedRecords = [];
@@ -121,47 +128,51 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
           continue;
         }
 
-        // Lazily resolve model + key on first LLM need.
-        if (!model) {
-          const resolved = await this.resolveModelAndKey({
+        // Lazily resolve the model on first LLM need (once per run).
+        if (!modelResolution) {
+          modelResolution = this.resolveValidationModel({
             config,
             context,
             state,
-            nodeId: node.id,
-            language
+            nodeId: node.id
           });
-          if (!resolved.ok) {
-            // Mark remaining quotes unvalidated and stop trying further LLM calls
-            // for this run — the lack of a valid model is a run-level problem.
-            updatedRecord.quotes[decision.index] = {
-              ...original,
-              validated: false,
-              confidence: 'low'
-            };
-            updatedRecord.failures.push({
-              code: 'QUOTE_LLM_UNAVAILABLE',
-              message: resolved.error
-            });
-            continue;
-          }
-          model = resolved.model;
-          apiKey = resolved.apiKey;
         }
+        if (!modelResolution.ok) {
+          // No usable model for this run — mark the quote unvalidated and move
+          // on without attempting an LLM call.
+          updatedRecord.quotes[decision.index] = {
+            ...original,
+            validated: false,
+            confidence: 'low'
+          };
+          updatedRecord.failures.push({
+            code: 'QUOTE_LLM_UNAVAILABLE',
+            message: modelResolution.error
+          });
+          continue;
+        }
+        const model = modelResolution.model;
 
         try {
           const { system, user } = buildLlmVerdictPrompt({
             quoteText: decision.text,
             sourceWindow: sourceText
           });
-          const response = await this.llmHelper.executeStreamingRequest({
+          const response = await this.llmClient.complete({
             model,
             messages: [
               { role: 'system', content: system },
               { role: 'user', content: user }
             ],
-            apiKey,
             options: { temperature: 0.1 },
-            language
+            language,
+            signal: context?.abortSignal,
+            telemetry: {
+              runId: context?.runId || context?.executionId || state?.executionId,
+              step: context?.iteration ?? 0,
+              purpose: 'quote-validator',
+              refs: { executionId: state?.executionId, nodeId: node.id }
+            }
           });
           llmCalls++;
           const verdict = parseLlmQuoteVerdict(response?.content || '');
@@ -229,7 +240,18 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     );
   }
 
-  async resolveModelAndKey({ config, context, state, nodeId, language }) {
+  /**
+   * Resolve the model used for LLM quote verdicts. API keys are resolved by
+   * `LLMClient.complete()` itself, so this only picks the model.
+   *
+   * @param {Object} args
+   * @param {Object} args.config - Node config (may carry `modelId`)
+   * @param {Object} args.context - Execution context
+   * @param {Object} args.state - Workflow state
+   * @param {string} args.nodeId - Node id (per-node durable model lookup)
+   * @returns {{ ok: true, model: Object } | { ok: false, error: string }}
+   */
+  resolveValidationModel({ config, context, state, nodeId }) {
     const { data: models } = configCache.getModels();
     // Shared prompt-node precedence (config.modelId → _modelOverride → workflow
     // defaultModelId → context → global default) so quote validation runs on the
@@ -238,14 +260,7 @@ export class QuoteValidatorNodeExecutor extends BaseNodeExecutor {
     if (!model) {
       return { ok: false, error: 'No model available for quote validation' };
     }
-    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-    if (!apiKeyResult.success) {
-      return {
-        ok: false,
-        error: apiKeyResult.error?.message || 'API key verification failed for quote validator'
-      };
-    }
-    return { ok: true, model, apiKey: apiKeyResult.apiKey };
+    return { ok: true, model };
   }
 }
 

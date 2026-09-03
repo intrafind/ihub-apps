@@ -114,20 +114,25 @@ function AdminModelsPage() {
   };
 
   const testModel = async modelId => {
+    setTestingModel(modelId);
+    // The test endpoint maps a provider rejecting the server's key onto 502 (not
+    // 401), so the shared admin client is safe here: a 401 really is an expired
+    // admin session and must go through the global re-authentication flow.
     try {
-      setTestingModel(modelId);
       const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
         method: 'POST'
       });
-      setTestResults(prev => ({ ...prev, [modelId]: response.data }));
+      setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
     } catch (err) {
-      const errorData = err.response?.data || {};
+      // Server body: { error: headline, details: remediation text, code }
+      const body = err?.response?.data || {};
       setTestResults(prev => ({
         ...prev,
         [modelId]: {
           success: false,
-          message: errorData.message || 'Test failed',
-          error: errorData.error || err.message
+          message: body.error || t('admin.models.test.failed', 'Test Failed'),
+          error:
+            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         }
       }));
     } finally {

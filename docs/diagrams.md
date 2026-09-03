@@ -238,79 +238,88 @@ graph TB
 
 ### Chat Service Architecture
 
-This detailed diagram shows the internal structure of the Chat Service, which is the core component for LLM interactions.
+This detailed diagram shows the internal structure of the Chat Service and the shared agent loop it runs on. `ChatService` prepares the request and projects the loop's output onto chat SSE events; `AgentLoop` owns the model rounds and tool execution, and `LLMClient` owns every provider call (see [Agent Loop](agent-loop.md) and [LLM Client](llm-client.md)).
 
 ```mermaid
 graph TB
-    subgraph "Chat Service Core"
+    subgraph "Chat Service (services/chat)"
         CS[ChatService]
         RB[RequestBuilder]
-        EH[ErrorHandler]
+        CC[chatChannel]
+        CSM[chatSeams]
+        CE[chatErrors]
+        CT[chatTelemetry]
     end
-    
-    subgraph "Request Handlers"
-        NSH[NonStreamingHandler]
-        SH[StreamingHandler]
-        direction LR
+
+    subgraph "Shared Agent Loop (services/loop)"
+        AL[AgentLoop]
+        LC[LLMClient]
+        QS[questionSeam]
+        PS[passthroughSeam]
+        IL[imageLiftSeam]
+        KS[knowledgeSourceSeam]
     end
-    
+
     subgraph "Tool System"
-        TE[ToolExecutor]
+        TL[toolLoader.runTool]
         TR[Tool Registry]
         TF[Tool Functions]
     end
-    
+
     subgraph "LLM Integration"
         OpenAI[OpenAI Adapter]
         Anthropic[Anthropic Adapter]
         Google[Google Adapter]
         Mistral[Mistral Adapter]
     end
-    
+
     subgraph "Support Services"
         AKV[API Key Verifier]
         PMT[Message Template Processor]
-        Response[Response Processor]
+        AT[actionTracker]
+        SSE[sse.js]
     end
-    
+
     CS --> RB
-    CS --> NSH
-    CS --> SH
-    CS --> TE
-    CS --> EH
-    
+    CS --> AL
+    CS --> CC
+    CS --> CSM
+    CS --> CE
+    CSM --> CT
+
     RB --> AKV
     RB --> PMT
-    
-    NSH --> OpenAI
-    NSH --> Anthropic
-    NSH --> Google
-    NSH --> Mistral
-    
-    SH --> OpenAI
-    SH --> Anthropic
-    SH --> Google
-    SH --> Mistral
-    
-    TE --> TR
+    LC --> AKV
+
+    AL --> LC
+    AL --> QS
+    AL --> PS
+    AL --> IL
+    AL --> KS
+    AL --> TL
+    TL --> TR
     TR --> TF
-    
-    OpenAI --> Response
-    Anthropic --> Response
-    Google --> Response
-    Mistral --> Response
-    
+
+    LC --> OpenAI
+    LC --> Anthropic
+    LC --> Google
+    LC --> Mistral
+
+    CC --> AT
+    CSM --> AT
+    AT --> SSE
+
     classDef core fill:#ffeb3b
-    classDef handlers fill:#4caf50
+    classDef loop fill:#4caf50
     classDef tools fill:#ff9800
     classDef adapters fill:#2196f3
     classDef support fill:#9c27b0
-    
-    class CS,RB,EH core
-    class NSH,SH handlers
-    class TE,TR,TF tools
+
+    class CS,RB,CC,CSM,CE,CT core
+    class AL,LC,QS,PS,IL,KS loop
+    class TL,TR,TF tools
     class OpenAI,Anthropic,Google,Mistral adapters
-    class AKV,PMT,Response support
+    class AKV,PMT,AT,SSE support
 ```
 
 ---
@@ -1446,7 +1455,7 @@ flowchart TD
 
 ### Chat Message Data Flow
 
-This diagram illustrates the complete data flow for chat messages from user input to LLM response.
+This diagram illustrates the complete data flow for chat messages from user input to LLM response. The model rounds run on the shared agent loop; `chatChannel` and `chatSeams` project its output onto SSE events.
 
 ```mermaid
 flowchart TD
@@ -1456,87 +1465,79 @@ flowchart TD
         APIClient[API Client]
         MessageDisplay[Message Display]
     end
-    
+
     subgraph "Server Processing"
         ExpressAPI[Express API Endpoint]
         AuthCheck[Authentication Check]
         RequestValidation[Request Validation]
         ChatService[Chat Service]
     end
-    
-    subgraph "Request Preparation"
+
+    subgraph "Request Preparation (RequestBuilder)"
         ConfigLoader[App Configuration Loader]
         TemplateProcessor[Message Template Processor]
         ContextBuilder[Context Builder]
         SourceResolver[Source Content Resolver]
     end
-    
-    subgraph "LLM Integration"
-        AdapterSelection[LLM Adapter Selection]
-        RequestBuilder[LLM Request Builder]
-        APICall[LLM API Call]
-        ResponseParser[Response Parser]
+
+    subgraph "Agent Loop"
+        AgentLoop[Agent Loop]
+        LLMClient[LLM Client]
+        Adapter[LLM Adapter]
+        ToolRunner[toolLoader.runTool]
+        Seams[Chat Seams]
     end
-    
-    subgraph "Streaming & Tools"
-        StreamHandler[Streaming Handler]
-        ToolDetector[Tool Call Detector]
-        ToolExecutor[Tool Executor]
-        SourceHandler[Source Handler]
-    end
-    
-    subgraph "Response Processing"
-        ResponseFormatter[Response Formatter]
-        ErrorHandler[Error Handler]
+
+    subgraph "Response Projection"
+        Channel[Chat Channel]
+        ErrorMapper[chatErrors]
         SSEStream[Server-Sent Events]
         MessageStorage[Message Storage]
     end
-    
+
     UserInput --> ChatUI
     ChatUI --> APIClient
     APIClient --> ExpressAPI
-    
+
     ExpressAPI --> AuthCheck
     AuthCheck --> RequestValidation
     RequestValidation --> ChatService
-    
+
     ChatService --> ConfigLoader
     ConfigLoader --> TemplateProcessor
     TemplateProcessor --> ContextBuilder
     ContextBuilder --> SourceResolver
-    
-    SourceResolver --> AdapterSelection
-    AdapterSelection --> RequestBuilder
-    RequestBuilder --> APICall
-    APICall --> ResponseParser
-    
-    ResponseParser --> StreamHandler
-    StreamHandler --> ToolDetector
-    ToolDetector --> ToolExecutor
-    ToolExecutor --> SourceHandler
-    
-    StreamHandler --> ResponseFormatter
-    ResponseFormatter --> SSEStream
+
+    SourceResolver --> AgentLoop
+    AgentLoop --> LLMClient
+    LLMClient --> Adapter
+    Adapter --> LLMClient
+    LLMClient --> AgentLoop
+    AgentLoop --> ToolRunner
+    ToolRunner --> AgentLoop
+    AgentLoop --> Seams
+
+    LLMClient --> Channel
+    Seams --> Channel
+    Channel --> SSEStream
     SSEStream --> MessageDisplay
-    
-    ResponseParser --> ErrorHandler
-    ErrorHandler --> ResponseFormatter
-    
-    ResponseFormatter --> MessageStorage
-    
+
+    AgentLoop --> ErrorMapper
+    ErrorMapper --> SSEStream
+
+    Channel --> MessageStorage
+
     classDef client fill:#e3f2fd
     classDef server fill:#f3e5f5
     classDef preparation fill:#e8f5e8
-    classDef llm fill:#fff3e0
-    classDef streaming fill:#fce4ec
+    classDef loop fill:#fff3e0
     classDef response fill:#e0f2f1
-    
+
     class UserInput,ChatUI,APIClient,MessageDisplay client
     class ExpressAPI,AuthCheck,RequestValidation,ChatService server
     class ConfigLoader,TemplateProcessor,ContextBuilder,SourceResolver preparation
-    class AdapterSelection,RequestBuilder,APICall,ResponseParser llm
-    class StreamHandler,ToolDetector,ToolExecutor,SourceHandler streaming
-    class ResponseFormatter,ErrorHandler,SSEStream,MessageStorage response
+    class AgentLoop,LLMClient,Adapter,ToolRunner,Seams loop
+    class Channel,ErrorMapper,SSEStream,MessageStorage response
 ```
 
 ### Source Content Data Flow

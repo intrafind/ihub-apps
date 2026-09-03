@@ -1,4 +1,4 @@
-import { actionTracker } from '../actionTracker.js';
+import { emitToolProgress } from './loop/RunStream.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
@@ -85,7 +85,11 @@ class BraveSearchProvider extends SearchProvider {
       config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
 
     if (chatId) {
-      actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
+      emitToolProgress(chatId, {
+        phase: 'search',
+        message: query,
+        data: { query, provider: 'brave' }
+      });
     }
 
     // Query cache. Across re-plan/verify rounds the same query recurs; serving
@@ -289,7 +293,7 @@ class WebSearchService {
         errorCause: error?.cause?.message || error?.cause
       });
       const wrapped = new Error(`Search failed with ${providerName}: ${error.message}`);
-      // Preserve original code/cause so admins (and the ToolExecutor error report)
+      // Preserve original code/cause so admins (and the chat tool error report)
       // can see proxy/network/TLS specifics instead of a generic "Search failed" line.
       if (error?.code) wrapped.code = error.code;
       wrapped.cause = error;

@@ -233,7 +233,7 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
     }
 
     // Extract usage from non-streaming full response
-    if (parsed.usage && !parsed.type) {
+    if (parsed.usage && (!parsed.type || parsed.type === 'message')) {
       result.metadata.usage = {
         promptTokens: parsed.usage.input_tokens || 0,
         completionTokens: parsed.usage.output_tokens || 0,

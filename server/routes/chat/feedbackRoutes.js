@@ -11,6 +11,10 @@ import logger from '../../utils/logger.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
+import runLog, { isValidRunId } from '../../services/loop/RunLog.js';
+import { resolveActorId } from '../../services/loop/runIdentity.js';
+import { authorizeRun } from '../../services/loop/runAccess.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   /**
@@ -117,13 +121,56 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           feedback,
           modelId,
           conversationId,
-          ifinderMessageId
+          ifinderMessageId,
+          runId
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
         if (!messageId || !rating || !appId || !chatId) {
           const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
           return sendBadRequest(res, errorMessage);
+        }
+
+        // Feedback is a human event on the run that produced the message — only
+        // on a run the caller may access (same check as /api/runs/:runId/*) and
+        // only when that run belongs to this chat. Anything else is ignored;
+        // the feedback itself is still stored below.
+        if (runId && isValidRunId(runId)) {
+          try {
+            const access = await authorizeRun(runId, req.user);
+            const runChatId = access.meta?.refs?.chatId;
+            if (access.ok && access.meta?.kind === 'chat' && runChatId === chatId) {
+              // The run may live on another worker: continue its persisted sequence.
+              await runLog.appendRecovered(
+                runId,
+                RUN_LOG_EVENTS.HUMAN_EVENT,
+                {
+                  kind: 'feedback',
+                  messageId,
+                  rating,
+                  ...(feedback ? { message: String(feedback) } : {}),
+                  by: await resolveActorId(req.user, {
+                    mode: access.meta?.identityMode || runLog.identityMode()
+                  }),
+                  at: new Date().toISOString()
+                },
+                { kind: access.meta?.kind || 'chat' }
+              );
+            } else {
+              logger.debug('Feedback human/event skipped: run not accessible for this chat', {
+                component: 'feedbackRoutes',
+                runId,
+                chatId,
+                status: access.status || null
+              });
+            }
+          } catch (ledgerErr) {
+            logger.debug('Feedback human/event not recorded', {
+              component: 'feedbackRoutes',
+              runId,
+              error: ledgerErr.message
+            });
+          }
         }
 
         // Check if this is an iAssistant message that should be routed to iFinder

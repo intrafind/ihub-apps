@@ -1,4 +1,4 @@
-import { actionTracker } from '../../actionTracker.js';
+import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
@@ -158,11 +158,10 @@ class IFinderService {
     });
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_search',
-      query: query,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_search',
+      message: query,
+      data: { query, searchProfile: profileId }
     });
 
     try {
@@ -410,11 +409,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_content',
-      documentId: documentId,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_content',
+      data: { documentId, searchProfile: profileId }
     });
 
     try {
@@ -793,12 +790,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_download',
-      documentId: documentId,
-      searchProfile: profileId,
-      downloadAction: action,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_download',
+      data: { documentId, searchProfile: profileId, downloadAction: action }
     });
 
     try {

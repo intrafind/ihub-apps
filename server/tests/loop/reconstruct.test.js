@@ -1,0 +1,318 @@
+/**
+ * T5 — a run recorded through LLMClient can be rebuilt from its ledger and the
+ * rebuilt provider request hashes to what was sent (report-only check).
+ */
+import test from 'node:test';
+import { RunLog } from '../../services/loop/RunLog.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { LLMClient } from '../../services/loop/LLMClient.js';
+import {
+  verifyRequestReconstruction,
+  verifyRunReconstruction,
+  optionsFromCallConfig
+} from '../../services/loop/replay/reconstruct.js';
+import { captureRunLog, sseResponse, openaiText, MODELS } from './helpers/llmFixtures.js';
+
+const model = MODELS.openai; // real OpenAI adapter, autoDiscovery:false keeps it offline
+
+function realClient(runLog) {
+  return new LLMClient({
+    runLog,
+    transport: async () => sseResponse(openaiText(['ok'])),
+    apiKeyVerifier: { verifyApiKey: async () => ({ success: true, apiKey: 'sk-live' }) },
+    getModels: () => ({ data: [model] })
+  });
+}
+
+test('optionsFromCallConfig — round-trips the recorded call configuration', () => {
+  const options = optionsFromCallConfig(
+    {
+      temperature: 0.3,
+      maxTokens: 512,
+      responseFormat: 'json',
+      thinking: { thinkingEnabled: false },
+      stream: true
+    },
+    { tools: [{ id: 't' }] }
+  );
+  assert.deepEqual(options, {
+    temperature: 0.3,
+    maxTokens: 512,
+    responseFormat: 'json',
+    thinkingEnabled: false,
+    stream: true,
+    tools: [{ id: 't' }]
+  });
+});
+
+test('a multi-step run reconstructs byte-for-byte through the real adapter', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const tools = [
+    {
+      id: 'get_weather',
+      name: 'get_weather',
+      description: 'w',
+      parameters: { type: 'object', properties: {} }
+    }
+  ];
+  const messages = [{ role: 'user', content: 'hello' }];
+  await client.complete({
+    model,
+    messages,
+    options: { temperature: 0.2, maxTokens: 300, tools },
+    telemetry: { runId, step: 0 }
+  });
+  // same messages, same tools → 'same' header without messages
+  await client.complete({
+    model,
+    messages,
+    options: { temperature: 0.2, maxTokens: 300, tools },
+    telemetry: { runId, step: 1 }
+  });
+  // changed messages, tools dropped
+  await client.complete({
+    model,
+    messages: [
+      ...messages,
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'more' }
+    ],
+    options: { temperature: 0.7 },
+    telemetry: { runId, step: 2 }
+  });
+  await runLog.flush();
+
+  const report = await verifyRequestReconstruction(events, {
+    findModel: id => (id === model.id ? model : null)
+  });
+  assert.equal(report.checked, 3, JSON.stringify(report, null, 2));
+  assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
+  assert.deepEqual(report.skipped, []);
+  assert.equal(report.ok, true);
+
+  // The same check from disk.
+  const fromDisk = await verifyRunReconstruction(runLog, runId, { findModel: () => model });
+  assert.equal(fromDisk.matched, 3);
+  await runLog.stop();
+});
+
+test('tampered messages are detected; schema-constrained calls are verified; a catalog miss is rebuilt from the snapshot', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  await client.complete({
+    model,
+    messages: [{ role: 'user', content: 'a' }],
+    telemetry: { runId, step: 0 }
+  });
+  await client.complete({
+    model,
+    messages: [{ role: 'user', content: 'b' }],
+    options: { responseFormat: 'json', responseSchema: { type: 'object' } },
+    telemetry: { runId, step: 1 }
+  });
+  const tampered = events.map(e =>
+    e.type === 'request/header' && e.data.step === 0
+      ? { ...e, data: { ...e.data, messages: [{ role: 'user', content: 'TAMPERED' }] } }
+      : e
+  );
+  const report = await verifyRequestReconstruction(tampered, { findModel: () => model });
+  assert.equal(report.checked, 2);
+  assert.equal(report.mismatched.length, 1);
+  assert.equal(
+    report.matched,
+    1,
+    'the schema-constrained request is rebuilt from the recorded schema'
+  );
+  assert.deepEqual(report.skipped, []);
+  assert.equal(report.ok, false);
+
+  // The schema is recorded once (on change) and referenced by hash afterwards;
+  // a header whose hash has no recorded schema is skipped, not guessed.
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.equal(headers[0].data.callConfig.responseSchema, undefined);
+  assert.deepEqual(headers[1].data.callConfig.responseSchema, { type: 'object' });
+  const withoutSchema = events.map(e =>
+    e.type === 'request/header' && e.data.step === 1
+      ? {
+          ...e,
+          data: { ...e.data, callConfig: { ...e.data.callConfig, responseSchema: undefined } }
+        }
+      : e
+  );
+  const partial = await verifyRequestReconstruction(withoutSchema, { findModel: () => model });
+  assert.equal(partial.skipped.length, 1);
+  assert.match(partial.skipped[0].reason, /schema/);
+
+  // A model missing from the catalog is still verified — from the recorded
+  // snapshot; only a ledger without snapshots (older records) has to skip.
+  const unknown = await verifyRequestReconstruction(events, { findModel: () => null });
+  assert.equal(unknown.checked, 2);
+  assert.deepEqual(unknown.skipped, []);
+  const legacy = events.map(e =>
+    e.type === 'request/header'
+      ? {
+          ...e,
+          data: {
+            ...e.data,
+            modelSnapshot: undefined,
+            optionsSnapshot: undefined,
+            configHash: undefined
+          }
+        }
+      : e
+  );
+  const noSnapshot = await verifyRequestReconstruction(legacy, { findModel: () => null });
+  assert.equal(noSnapshot.checked, 0);
+  assert.equal(noSnapshot.skipped.length, 2);
+  await runLog.stop();
+});
+
+test('a changed tool set with identical messages records the new schemas and stays reconstructable', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const sameMessages = [{ role: 'user', content: 'same prompt' }];
+  const toolA = { type: 'function', function: { name: 'a', parameters: { type: 'object' } } };
+  const toolB = { type: 'function', function: { name: 'b', parameters: { type: 'object' } } };
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolA] },
+    telemetry: { runId, step: 0 }
+  });
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolB] },
+    telemetry: { runId, step: 1 }
+  });
+  await client.complete({
+    model,
+    messages: sameMessages,
+    options: { tools: [toolB] },
+    telemetry: { runId, step: 2 }
+  });
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.equal(headers.length, 3);
+  assert.equal(headers[1].data.reason, 'same', 'messages did not change');
+  assert.deepEqual(headers[1].data.toolSchemas, [toolB], 'but the tool set did: schemas recorded');
+  assert.equal(headers[2].data.toolSchemas, undefined, 'unchanged tools are referenced by hash');
+  const report = await verifyRequestReconstruction(events, { findModel: () => model });
+  assert.equal(report.checked, 3);
+  assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
+  assert.deepEqual(report.skipped, []);
+  await runLog.stop();
+});
+
+test('reconstruction rebuilds from the recorded model / options snapshot, not the current catalog', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  await client.complete({
+    model: { ...model, apiKey: 'sk-must-not-leak' },
+    messages: [{ role: 'user', content: 'a' }],
+    options: { temperature: 0.1 },
+    telemetry: { runId, step: 0 }
+  });
+  const header = events.find(e => e.type === 'request/header');
+  assert.ok(header.data.modelSnapshot, 'snapshot recorded on the first header');
+  assert.equal(header.data.modelSnapshot.apiKey, undefined, 'secrets never reach the ledger');
+  assert.equal(header.data.modelSnapshot.url, model.url);
+  assert.equal(header.data.optionsSnapshot.temperature, 0.1);
+  assert.equal(JSON.stringify(header).includes('sk-must-not-leak'), false);
+
+  // the model is gone from the catalog / was edited: the snapshot still verifies
+  const gone = await verifyRequestReconstruction(events, { findModel: () => null });
+  assert.equal(gone.checked, 1);
+  assert.equal(gone.matched, 1, JSON.stringify(gone.mismatched, null, 2));
+  const edited = await verifyRequestReconstruction(events, {
+    findModel: () => ({ ...model, url: 'https://moved.example/v1', modelId: 'other' })
+  });
+  assert.equal(edited.matched, 1);
+  await runLog.stop();
+});
+
+test('a growing tool-loop context records only the appended messages and still reconstructs', async () => {
+  const { runLog, events } = await captureRunLog();
+  const client = realClient(runLog);
+  const { runId } = await runLog.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const base = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'go' }
+  ];
+  const grown = [
+    ...base,
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'c1', function: { name: 't', arguments: '{}' } }]
+    },
+    { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}' }
+  ];
+  await client.complete({ model, messages: base, telemetry: { runId, step: 0 } });
+  await client.complete({ model, messages: grown, telemetry: { runId, step: 1 } });
+  // compaction rewrote the history: a full record again
+  const rewritten = [base[0], { role: 'user', content: 'go (compacted)' }];
+  await client.complete({ model, messages: rewritten, telemetry: { runId, step: 2 } });
+  const headers = events.filter(e => e.type === 'request/header');
+  assert.deepEqual(
+    headers.map(h => h.data.reason),
+    ['initial', 'append', 'change']
+  );
+  assert.equal(headers[1].data.messages, undefined);
+  assert.deepEqual(headers[1].data.messagesDelta, grown.slice(2));
+  assert.deepEqual(headers[2].data.messages, rewritten);
+  const report = await verifyRequestReconstruction(events, { findModel: () => model });
+  assert.equal(report.checked, 3);
+  assert.equal(report.matched, 3, JSON.stringify(report.mismatched, null, 2));
+
+  // A tampered prefix is a mismatch on the tampered header and on every delta
+  // replayed onto it; the rewritten (fully recorded) header still verifies.
+  const tampered = events.map(e =>
+    e.type === 'request/header' && e.data.step === 0
+      ? { ...e, data: { ...e.data, messages: [{ role: 'user', content: 'TAMPERED' }] } }
+      : e
+  );
+  const detected = await verifyRequestReconstruction(tampered, { findModel: () => model });
+  assert.equal(detected.ok, false);
+  assert.equal(detected.checked, 3);
+  assert.equal(detected.matched, 1);
+  assert.deepEqual(
+    detected.mismatched.map(m => m.field),
+    ['messages', 'messages']
+  );
+  assert.deepEqual(detected.skipped, []);
+  await runLog.stop();
+});
+
+test('nothing is hashed or recorded when the ledger is off and nobody listens', async () => {
+  const off = new RunLog({
+    baseDir: await fs.mkdtemp(path.join(os.tmpdir(), 'runlog-off-')),
+    forceEnabled: false,
+    getPlatformConfig: () => ({}),
+    getFeatures: () => ({})
+  });
+  assert.equal(off.isRecording('run-anything'), false);
+  const client = realClient(off);
+  const { runId } = await off.startRun({ kind: 'agent', user: { id: 'u1' } });
+  const result = await client.complete({
+    model,
+    messages: [{ role: 'user', content: 'a' }],
+    telemetry: { runId, step: 0 }
+  });
+  assert.equal(result.content, 'ok');
+  assert.equal(
+    off.currentSeq(runId),
+    1,
+    'only run/start sits in memory; no request/header was built'
+  );
+  off.subscribe(runId, () => {});
+  assert.equal(off.isRecording(runId), true, 'a subscriber turns recording on');
+  await off.stop();
+});

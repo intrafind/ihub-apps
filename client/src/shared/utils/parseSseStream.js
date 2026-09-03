@@ -9,7 +9,8 @@
  * - Handles multi-line data fields (joined with \n)
  *
  * @param {ReadableStream} body - Response body stream
- * @param {Function} onEvent - Callback: (eventName: string, data: object|{raw: string}) => void
+ * @param {Function} onEvent - Callback: (eventName: string, data: object|{raw: string}) => void.
+ *   Frames without an `event:` field are dispatched with the spec default name `message`.
  * @param {AbortSignal} [signal] - Optional AbortSignal to cancel parsing
  */
 export async function parseSseStream(body, onEvent, signal) {
@@ -34,15 +35,14 @@ export async function parseSseStream(body, onEvent, signal) {
       // payload stays as raw string
     }
 
+    // Per the SSE spec a frame without an `event:` field is a "message" event.
     const name =
       currentEvent ||
       (payload && typeof payload === 'object' && typeof payload.event === 'string'
         ? payload.event
-        : '');
+        : 'message');
 
-    if (name) {
-      onEvent(name, typeof payload === 'object' && payload !== null ? payload : { raw });
-    }
+    onEvent(name, typeof payload === 'object' && payload !== null ? payload : { raw });
 
     currentEvent = '';
   };

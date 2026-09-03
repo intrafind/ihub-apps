@@ -9,13 +9,19 @@
  */
 
 import { promises as fs } from 'fs';
+import {
+  translateInternalEvent,
+  buildEnvelope,
+  currentSeq,
+  stampSeq
+} from '../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { join } from 'path';
 import { authRequired } from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
-import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
@@ -1281,7 +1287,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         if (!authorizeExecutionAccess(req, res, executionId)) return;
 
-        const state = await workflowEngine.cancel(executionId, reason);
+        // The execution may run on another worker: the engine relays the cancel.
+        const state = await workflowEngine.cancelAnywhere(executionId, reason);
 
         logger.info('Workflow execution cancelled', {
           component: 'WorkflowRoutes',
@@ -1603,11 +1610,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *           type: string
    *     responses:
    *       200:
-   *         description: SSE stream established
+   *         description: SSE stream established (SSE v2 envelopes, see docs/sse-v2.md)
    *         content:
    *           text/event-stream:
    *             schema:
    *               type: string
+   *               description: |
+   *                 `event: <type>` frames with a JSON envelope `{ v: 2, seq, runId, ts, type, data }`:
+   *                 `run/started`, `progress/node`, `interaction/raised`, `run/paused`,
+   *                 `run/resumed`, `tool/progress`, `meta`, `run/ended`.
    *       401:
    *         description: Authentication required
    *       500:
@@ -1631,7 +1642,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         onClose: () => actionTracker.off('fire-sse', handleWorkflowEvent)
       });
 
-      channel.send('connected', { executionId });
+      const connected = buildEnvelope({
+        streamId: executionId,
+        runId: executionId,
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        data: { runId: executionId, lastSeq: currentSeq(executionId) }
+      });
+      // This route writes to the channel directly (no `sse.js` delivery), so it
+      // stamps the stream sequence itself — on every frame it sends.
+      channel.send(connected.type, stampSeq(executionId, connected));
 
       logger.info('SSE connection established for workflow execution', {
         component: 'WorkflowRoutes',
@@ -1687,7 +1706,26 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           iteration: eventData.iteration
         });
 
-        const sent = channel.send(eventType, eventData);
+        // Project the internal event onto SSE v2 envelopes for this stream.
+        let sent = false;
+        for (const frame of translateInternalEvent(eventData)) {
+          try {
+            const envelope = buildEnvelope({
+              streamId: executionId,
+              runId: frame.runId || executionId,
+              type: frame.type,
+              data: frame.data
+            });
+            sent = channel.send(envelope.type, stampSeq(executionId, envelope)) || sent;
+          } catch (err) {
+            logger.warn('Dropped workflow event that does not fit the SSE v2 contract', {
+              component: 'WorkflowRoutes',
+              executionId,
+              eventType,
+              error: err.message
+            });
+          }
+        }
 
         // Log successful send for important events
         if (sent && (eventType === 'workflow.node.complete' || eventType === 'workflow.complete')) {
@@ -1702,230 +1740,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
       // Register event handler
       actionTracker.on('fire-sse', handleWorkflowEvent);
-    }
-  );
-
-  // ============================================================================
-  // Human Checkpoint Response Endpoint
-  // ============================================================================
-
-  /**
-   * @swagger
-   * /api/workflows/executions/{executionId}/respond:
-   *   post:
-   *     summary: Respond to human checkpoint
-   *     description: |
-   *       Provides a response to a human checkpoint (approval/input) node.
-   *       This will resume the paused workflow with the provided response.
-   *
-   *       **Response Object:**
-   *       - checkpointId: ID of the checkpoint being responded to (required)
-   *       - response: Selected option value (required)
-   *       - data: Optional additional form data if the checkpoint has an inputSchema
-   *     tags:
-   *       - Workflows
-   *       - Execution
-   *       - Human Checkpoint
-   *     security:
-   *       - bearerAuth: []
-   *       - cookieAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: executionId
-   *         required: true
-   *         schema:
-   *           type: string
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - checkpointId
-   *               - response
-   *             properties:
-   *               checkpointId:
-   *                 type: string
-   *                 description: ID of the checkpoint being responded to
-   *               response:
-   *                 type: string
-   *                 description: Selected option value
-   *               data:
-   *                 type: object
-   *                 description: Additional form data
-   *     responses:
-   *       200:
-   *         description: Response accepted, workflow resumed
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 success:
-   *                   type: boolean
-   *                 newStatus:
-   *                   type: string
-   *       400:
-   *         description: Invalid response or checkpoint not found
-   *       401:
-   *         description: Authentication required
-   *       404:
-   *         description: Execution not found
-   *       500:
-   *         description: Internal server error
-   */
-  app.post(
-    buildServerPath('/api/workflows/executions/:executionId/respond'),
-    checkWorkflowsFeature,
-    authRequired,
-    async (req, res) => {
-      try {
-        const { executionId } = req.params;
-        const { checkpointId, response, data } = req.body || {};
-
-        if (!validateIdForPath(executionId, 'executionId')) {
-          return sendBadRequest(res, 'Invalid executionId');
-        }
-
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
-
-        // Validate required fields
-        if (!checkpointId) {
-          return sendBadRequest(res, 'checkpointId is required');
-        }
-
-        if (!response) {
-          return sendBadRequest(res, 'response is required');
-        }
-
-        // Get current execution state
-        const state = await workflowEngine.getState(executionId);
-
-        if (!state) {
-          return sendNotFound(res, 'Execution');
-        }
-
-        // Verify execution is paused with a pending checkpoint
-        if (state.status !== 'paused') {
-          return sendBadRequest(res, `Cannot respond to execution with status: ${state.status}`);
-        }
-
-        // Check if there's a pending checkpoint
-        const pendingCheckpoint = state.data?.pendingCheckpoint;
-        if (!pendingCheckpoint) {
-          return sendBadRequest(res, 'No pending checkpoint for this execution');
-        }
-
-        // Verify checkpoint ID matches
-        if (pendingCheckpoint.id !== checkpointId) {
-          return sendBadRequest(res, 'Checkpoint ID does not match pending checkpoint');
-        }
-
-        // Get the workflow and node for resuming
-        const workflow = state.data?._workflowDefinition;
-        if (!workflow) {
-          return sendBadRequest(res, 'Workflow definition not available for resume');
-        }
-
-        const humanNode = workflow.nodes.find(n => n.id === pendingCheckpoint.nodeId);
-        if (!humanNode) {
-          return sendBadRequest(res, 'Human node not found in workflow');
-        }
-
-        // Use HumanNodeExecutor to process the response
-        const humanExecutor = new HumanNodeExecutor();
-        const resumeResult = await humanExecutor.resume(
-          humanNode,
-          state,
-          { checkpointId, response, data },
-          { executionId, user: req.user }
-        );
-
-        if (resumeResult.status === 'failed') {
-          return sendBadRequest(res, resumeResult.error || 'Failed to process response');
-        }
-
-        // Update execution registry
-        const registry = getExecutionRegistry();
-        registry.clearPendingCheckpoint(executionId);
-
-        // Get the scheduler to determine next nodes based on branch
-        const scheduler = workflowEngine.scheduler;
-        const branch = resumeResult.branch;
-
-        // Build a result object that the scheduler can use for routing
-        const humanResult = {
-          branch,
-          response,
-          ...resumeResult.output
-        };
-
-        // Get next nodes based on the human response branch
-        const nextNodes = scheduler.getNextNodes(humanNode.id, humanResult, workflow, state);
-
-        logger.info('Human checkpoint routing', {
-          component: 'WorkflowRoutes',
-          executionId,
-          humanNodeId: humanNode.id,
-          response,
-          branch,
-          nextNodes
-        });
-
-        // Resume the workflow with the human response and routing info
-        const resumeData = {
-          ...resumeResult.stateUpdates,
-          // Store the human response for edge condition evaluation
-          [`_humanResult_${humanNode.id}`]: humanResult
-        };
-
-        // Update state to mark human node as completed and set next nodes
-        await workflowEngine.stateManager.update(executionId, {
-          completedNodes: [...(state.completedNodes || []), humanNode.id],
-          currentNodes: nextNodes,
-          data: {
-            ...state.data,
-            ...resumeData,
-            nodeResults: {
-              ...(state.data?.nodeResults || {}),
-              [humanNode.id]: humanResult
-            }
-          }
-        });
-
-        const newState = await workflowEngine.resume(
-          executionId,
-          {},
-          {
-            user: req.user,
-            workflow
-          }
-        );
-
-        logger.info('Human checkpoint responded', {
-          component: 'WorkflowRoutes',
-          executionId,
-          checkpointId,
-          response,
-          userId: req.user?.id
-        });
-
-        res.json({
-          success: true,
-          newStatus: newState.status,
-          executionId: newState.executionId
-        });
-      } catch (error) {
-        if (error.code === 'EXECUTION_NOT_FOUND') {
-          return sendNotFound(res, 'Execution');
-        }
-        if (error.code === 'INVALID_STATE_FOR_RESUME') {
-          return sendBadRequest(res, error.message);
-        }
-
-        sendFailedOperationError(res, 'respond to checkpoint', error);
-      }
     }
   );
 

@@ -15,6 +15,31 @@
 import logger from '../utils/logger.js';
 import { throttledFetch } from '../requestThrottler.js';
 
+/**
+ * Wait for `promise`, but give up as soon as `signal` aborts (rejecting with
+ * an AbortError). The promise itself keeps running for its other waiters.
+ */
+function raceSignal(promise, signal) {
+  if (!signal) return promise;
+  const abortError = () =>
+    Object.assign(new Error('Model discovery abandoned: request aborted'), { name: 'AbortError' });
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      }
+    );
+  });
+}
+
 class ModelDiscoveryService {
   constructor() {
     /**
@@ -114,7 +139,9 @@ class ModelDiscoveryService {
       const response = await throttledFetch(model.id, modelsUrl, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(10000) // 10 second timeout for discovery
+        // 10 second timeout for discovery. Callers' own deadlines are applied
+        // per waiter (getEffectiveModelId), never to this shared request.
+        signal: AbortSignal.timeout(10000)
       });
 
       if (!response.ok) {
@@ -185,15 +212,20 @@ class ModelDiscoveryService {
    * Get the effective model ID, using discovery if enabled
    * @param {Object} model - Model configuration object
    * @param {string} apiKey - API key for authentication
+   * @param {Object} [opts]
+   * @param {AbortSignal} [opts.signal] - the calling request's abort / deadline signal
    * @returns {Promise<string>} - Model ID to use for the request
    */
-  async getEffectiveModelId(model, apiKey) {
+  async getEffectiveModelId(model, apiKey, { signal } = {}) {
     // Skip discovery if not enabled or not supported for this provider
     if (!model.autoDiscovery || !this._supportsDiscovery(model)) {
       return model.modelId;
     }
 
-    const discoveredModelId = await this.discoverModel(model, apiKey);
+    // The discovery request is shared by every concurrent caller and bounded
+    // by its own timeout; each caller waits only as long as its own signal
+    // allows, so one caller's abort or deadline never affects the others.
+    const discoveredModelId = await raceSignal(this.discoverModel(model, apiKey), signal);
 
     // Fall back to configured modelId if discovery fails
     if (!discoveredModelId) {

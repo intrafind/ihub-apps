@@ -7,6 +7,36 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Create `filePath` containing `contents`, exclusively AND atomically.
+ * Throws an EEXIST error - exactly like writeFile's `wx` flag - when the file
+ * already exists, so callers keep their existing race handling.
+ *
+ * `wx` alone elects a single winner but is not atomic: it creates the file
+ * first and flushes the contents after, leaving a window in which a sibling
+ * worker that lost the race opens the winner's file and reads it empty or
+ * half-written. For a key file that surfaced as "Concurrently created
+ * encryption key file is invalid", after which the loser ran with no
+ * persisted key at all. Writing to a private temp file and publishing it with
+ * link() closes the window: the name appears only once the bytes are all
+ * there, so a reader either does not see the file or sees the complete key.
+ *
+ * @param {string} filePath - final path to publish
+ * @param {string} contents - file contents
+ * @param {number} mode - permission bits for the created file
+ */
+async function createFileExclusively(filePath, contents, mode) {
+  const tmpPath = `${filePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, contents, { mode, flag: 'wx' });
+    // link() fails with EEXIST if another process already published, which is
+    // the same signal the callers below already handle.
+    await fs.link(tmpPath, filePath);
+  } finally {
+    await fs.unlink(tmpPath).catch(() => {});
+  }
+}
+
+/**
  * Centralized Token Storage Service
  * Provides secure encryption, decryption, storage, and retrieval of user tokens
  * for any integration service with user and service-specific security
@@ -97,10 +127,7 @@ class TokenStorageService {
       // each worker using its own while the file holds whichever wrote last.
       // Anything one worker encrypted would then be undecryptable everywhere
       // else. The loser of the race adopts the winner's key below.
-      await fs.writeFile(this.keyFilePath, this.encryptionKey, {
-        mode: 0o600, // Read/write for owner only
-        flag: 'wx'
-      });
+      await createFileExclusively(this.keyFilePath, this.encryptionKey, 0o600);
       logger.info('Encryption key persisted to disk', {
         component: 'TokenStorage',
         keyFilePath: this.keyFilePath
@@ -188,11 +215,32 @@ class TokenStorageService {
       await fs.mkdir(contentsDir, { recursive: true });
 
       const encryptedSecret = this.encryptString(this.jwtSecret);
-      await fs.writeFile(this.jwtSecretFilePath, encryptedSecret, {
-        mode: 0o600
-      });
+      // Exclusive create, like the encryption key and the RSA pair: on a cold
+      // start every cluster worker generates its own secret here, and a plain
+      // write left each one signing with the secret it generated while the file
+      // kept whichever wrote last. A token issued by one worker then failed
+      // verification on the others, which under round-robin routing logs a user
+      // out on a fraction of requests. The loser adopts the winner's secret.
+      await createFileExclusively(this.jwtSecretFilePath, encryptedSecret, 0o600);
       logger.info('JWT secret persisted to disk (encrypted)', { component: 'TokenStorage' });
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process persisted a secret first; adopt it so the whole
+        // cluster signs and verifies with the same one.
+        const winner = (await fs.readFile(this.jwtSecretFilePath, 'utf8')).trim();
+        if (winner && this.isEncrypted(winner)) {
+          this.jwtSecret = this.decryptString(winner);
+          logger.info('Adopted JWT secret created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+        logger.error('Concurrently created JWT secret file is invalid', {
+          component: 'TokenStorage',
+          jwtSecretFilePath: this.jwtSecretFilePath
+        });
+        return;
+      }
       logger.error('Failed to persist JWT secret', {
         component: 'TokenStorage',
         error
@@ -549,7 +597,7 @@ class TokenStorageService {
       await this.getUserTokens(userId, serviceName, providerId);
       const expired = await this.areTokensExpired(userId, serviceName, providerId);
       return !expired;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -780,7 +828,7 @@ class TokenStorageService {
       // others and an authenticated user gets 401s on a fraction of requests
       // — exactly the intermittency round-robin scheduling produces. The
       // public key follows only after the private write wins.
-      await fs.writeFile(this.rsaPrivateKeyPath, privateKey, { mode: 0o600, flag: 'wx' });
+      await createFileExclusively(this.rsaPrivateKeyPath, privateKey, 0o600);
       await fs.writeFile(this.rsaPublicKeyPath, publicKey, { mode: 0o644 });
 
       logger.info('RSA key pair persisted to disk', { component: 'TokenStorage' });

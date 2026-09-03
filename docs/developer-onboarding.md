@@ -453,24 +453,28 @@ graph LR
 
 ```mermaid
 graph TB
-    ChatService[Chat Service] --> RequestBuilder[Request Builder]
-    ChatService --> StreamingHandler[Streaming Handler]
-    ChatService --> ToolExecutor[Tool Executor]
-    
+    Routes[sessionRoutes] --> ChatService[Chat Service]
+    ChatService --> RequestBuilder[Request Builder]
+    ChatService --> AgentLoop[Agent Loop]
+    ChatService --> Projection[chatChannel + chatSeams]
+
     RequestBuilder --> Templates[Process Templates]
-    StreamingHandler --> SSE[Server-Sent Events]
-    ToolExecutor --> Tools[LLM Tools]
-    
-    Templates --> LLMAdapter[LLM Adapter]
-    SSE --> Client[Client Stream]
+    AgentLoop --> LLMClient[LLM Client]
+    AgentLoop --> Tools[toolLoader.runTool]
+    LLMClient --> LLMAdapter[LLM Adapter]
     Tools --> External[External APIs]
+
+    Projection --> SSE[Server-Sent Events]
+    SSE --> Client[Client Stream]
 ```
 
 **Key Components**:
-- `ChatService.js` - Main orchestration
-- `RequestBuilder.js` - Template processing  
-- `StreamingHandler.js` - Real-time responses
-- `ToolExecutor.js` - LLM tool calling
+- `ChatService.js` - One chat turn: `prepareChatRequest()`, `runTurn()`, headless `invokeAppInternal()`
+- `RequestBuilder.js` - Resolves app, model, messages, tools and options (template processing)
+- `chatChannel.js` / `chatSeams.js` - Project loop chunks and tool events onto chat SSE events
+- `chatErrors.js` / `chatTelemetry.js` - Localized error payloads, usage and metrics per model call
+- `server/services/loop/AgentLoop.js` - The shared tool loop (see [agent-loop.md](agent-loop.md))
+- `server/services/loop/LLMClient.js` - The one way to call a model (see [llm-client.md](llm-client.md))
 
 For detailed architecture information, see [docs/architecture.md](architecture.md).
 
