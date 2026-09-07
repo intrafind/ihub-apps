@@ -134,7 +134,7 @@ to `contents/data/audit-log/YYYY-MM-DD.jsonl` (`server/services/AuditLogService.
 }
 ```
 
-Inference, chat, sessions, magic-prompts, short-links, feedback, translations
+Inference, chat, sessions, magic-prompt, short-links, feedback, translations
 and page reads are explicitly **excluded** from the audit log
 (`server/middleware/auditLogger.js`). Email-shaped actor identifiers are
 masked by default (`audit.includeEmail: false`).
