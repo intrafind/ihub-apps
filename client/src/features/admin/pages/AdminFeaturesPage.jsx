@@ -82,7 +82,7 @@ function AdminFeaturesPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
             {t('admin.features.title', 'Features')}
@@ -109,7 +109,7 @@ function AdminFeaturesPage() {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {group.name}
                 </h2>
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
                   {group.features.map(feature => (
                     <div key={feature.id} className="flex items-center justify-between px-6 py-4">
                       <div className="flex-1 min-w-0 pr-4">
@@ -118,7 +118,7 @@ function AdminFeaturesPage() {
                             {getLocalizedContent(feature.name, lang)}
                           </span>
                           {feature.preview && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                               {t('admin.features.preview', 'Preview')}
                             </span>
                           )}
@@ -132,7 +132,7 @@ function AdminFeaturesPage() {
                         role="switch"
                         aria-checked={feature.enabled}
                         onClick={() => handleToggle(feature.id, feature.enabled)}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
                           feature.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
                         }`}
                       >

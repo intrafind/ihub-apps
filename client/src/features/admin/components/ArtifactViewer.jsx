@@ -86,7 +86,7 @@ function ArtifactViewer({ runId, name, onClose }) {
               href={artifactUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs px-2 py-0.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+              className="text-xs px-2 py-0.5 border border-gray-300 rounded-sm text-gray-700 hover:bg-gray-50"
               title="Open raw"
             >
               raw
@@ -104,7 +104,7 @@ function ArtifactViewer({ runId, name, onClose }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading && <div className="text-sm text-gray-500">Loading…</div>}
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-sm p-3">
               {error}
             </div>
           )}

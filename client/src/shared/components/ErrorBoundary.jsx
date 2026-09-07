@@ -102,7 +102,7 @@ function ErrorFallback({ error, resetErrorBoundary }) {
             <p className="text-gray-500 text-sm mb-1">
               {t('error.errorMessage', 'Error details:')}
             </p>
-            <div className="bg-gray-100 p-2 rounded overflow-auto max-h-32 text-xs font-mono text-gray-800">
+            <div className="bg-gray-100 p-2 rounded-sm overflow-auto max-h-32 text-xs font-mono text-gray-800">
               {error && error.toString()}
             </div>
           </>
@@ -113,14 +113,14 @@ function ErrorFallback({ error, resetErrorBoundary }) {
         {chunkError ? (
           <button
             onClick={() => window.location.reload()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-sm transition-colors"
           >
             {t('error.reloadPage', 'Reload Page')}
           </button>
         ) : (
           <button
             onClick={resetErrorBoundary}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-sm transition-colors"
           >
             {t('error.tryAgain', 'Try Again')}
           </button>
@@ -128,7 +128,7 @@ function ErrorFallback({ error, resetErrorBoundary }) {
 
         <button
           onClick={() => (window.location.href = buildPath('/'))}
-          className="border border-indigo-600 text-indigo-600 hover:bg-indigo-50 py-2 px-4 rounded transition-colors"
+          className="border border-indigo-600 text-indigo-600 hover:bg-indigo-50 py-2 px-4 rounded-sm transition-colors"
         >
           {t('error.backToHome', 'Back to Home')}
         </button>

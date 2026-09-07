@@ -181,10 +181,10 @@ function TeamsTab() {
   // Show loading state
   if (!isInitialized || isAuthenticating) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--teams-bg,#f5f5f5)]">
+      <div className="flex items-center justify-center h-screen bg-(--teams-bg,#f5f5f5)">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-[var(--teams-text,#323130)]">
+          <p className="mt-4 text-(--teams-text,#323130)">
             {isAuthenticating ? t('teams.status.authenticating') : t('teams.status.initializing')}
           </p>
         </div>
@@ -195,7 +195,7 @@ function TeamsTab() {
   // Show error state
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--teams-bg,#f5f5f5)]">
+      <div className="flex items-center justify-center h-screen bg-(--teams-bg,#f5f5f5)">
         <div className="text-center max-w-md p-6">
           <div className="text-red-600 mb-4">
             <svg
@@ -212,13 +212,13 @@ function TeamsTab() {
               />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold mb-2 text-[var(--teams-text,#323130)]">
+          <h2 className="text-xl font-semibold mb-2 text-(--teams-text,#323130)">
             {t('teams.errors.authenticationError')}
           </h2>
-          <p className="text-[var(--teams-text,#323130)] opacity-75 mb-4">{error}</p>
+          <p className="text-(--teams-text,#323130) opacity-75 mb-4">{error}</p>
           <button
             onClick={authenticateWithTeams}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700"
           >
             {t('common.retry')}
           </button>

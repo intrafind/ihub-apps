@@ -164,7 +164,7 @@ function DocumentPreviewModal({
               <button
                 onClick={() => controlRef.current?.previousMatch()}
                 disabled={totalMatches === 0}
-                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40"
+                className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40"
                 title={t('documentPreview.previousMatch', 'Previous highlight')}
                 aria-label={t('documentPreview.previousMatch', 'Previous highlight')}
               >
@@ -180,7 +180,7 @@ function DocumentPreviewModal({
               <button
                 onClick={() => controlRef.current?.nextMatch()}
                 disabled={totalMatches === 0}
-                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40"
+                className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40"
                 title={t('documentPreview.nextMatch', 'Next highlight')}
                 aria-label={t('documentPreview.nextMatch', 'Next highlight')}
               >
@@ -200,7 +200,7 @@ function DocumentPreviewModal({
           <div className="hidden sm:flex items-center gap-1">
             <button
               onClick={() => setScale(s => Math.max(MIN_SCALE, +(s - SCALE_STEP).toFixed(2)))}
-              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+              className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
               title={t('documentPreview.zoomOut', 'Zoom out')}
               aria-label={t('documentPreview.zoomOut', 'Zoom out')}
             >
@@ -213,7 +213,7 @@ function DocumentPreviewModal({
             </span>
             <button
               onClick={() => setScale(s => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)))}
-              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+              className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
               title={t('documentPreview.zoomIn', 'Zoom in')}
               aria-label={t('documentPreview.zoomIn', 'Zoom in')}
             >
@@ -232,7 +232,7 @@ function DocumentPreviewModal({
             href={downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
             title={t('citations.download', 'Download')}
             aria-label={t('citations.download', 'Download')}
           >
@@ -248,7 +248,7 @@ function DocumentPreviewModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
             title={t('common.close', 'Close')}
             aria-label={t('common.close', 'Close')}
           >
@@ -266,12 +266,12 @@ function DocumentPreviewModal({
         {/* Passage selector — only meaningful with more than one passage */}
         {passageCount > 1 && (
           <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-            <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
               {t('documentPreview.highlight', 'Highlight')}
             </span>
             <button
               onClick={() => setSelectedPassage(-1)}
-              className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+              className={`text-xs px-2 py-1 rounded shrink-0 ${
                 selectedPassage === -1
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
@@ -283,7 +283,7 @@ function DocumentPreviewModal({
               <button
                 key={i}
                 onClick={() => setSelectedPassage(i)}
-                className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                className={`text-xs px-2 py-1 rounded shrink-0 ${
                   selectedPassage === i
                     ? 'bg-indigo-600 text-white'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'

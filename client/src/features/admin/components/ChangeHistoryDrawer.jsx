@@ -74,7 +74,7 @@ function JsonDiff({ before, after }) {
           return (
             <div
               key={key}
-              className="rounded border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-2"
+              className="rounded-sm border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 p-2"
             >
               <span className="text-xs font-mono font-semibold text-green-700 dark:text-green-400">
                 + {key}
@@ -90,7 +90,7 @@ function JsonDiff({ before, after }) {
           return (
             <div
               key={key}
-              className="rounded border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-2"
+              className="rounded-sm border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-2"
             >
               <span className="text-xs font-mono font-semibold text-red-700 dark:text-red-400">
                 - {key}
@@ -106,7 +106,7 @@ function JsonDiff({ before, after }) {
         return (
           <div
             key={key}
-            className="rounded border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-2"
+            className="rounded-sm border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 p-2"
           >
             <span className="text-xs font-mono font-semibold text-yellow-700 dark:text-yellow-400">
               ~ {key}
@@ -116,7 +116,7 @@ function JsonDiff({ before, after }) {
                 <span className="text-[10px] uppercase tracking-wider text-red-500 dark:text-red-400 font-semibold">
                   {t('admin.changeHistory.before', 'Before')}
                 </span>
-                <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap mt-0.5 bg-red-50 dark:bg-red-900/20 rounded p-1">
+                <pre className="text-xs font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap mt-0.5 bg-red-50 dark:bg-red-900/20 rounded-sm p-1">
                   {truncate(beforeVal)}
                 </pre>
               </div>
@@ -124,7 +124,7 @@ function JsonDiff({ before, after }) {
                 <span className="text-[10px] uppercase tracking-wider text-green-500 dark:text-green-400 font-semibold">
                   {t('admin.changeHistory.after', 'After')}
                 </span>
-                <pre className="text-xs font-mono text-green-700 dark:text-green-300 whitespace-pre-wrap mt-0.5 bg-green-50 dark:bg-green-900/20 rounded p-1">
+                <pre className="text-xs font-mono text-green-700 dark:text-green-300 whitespace-pre-wrap mt-0.5 bg-green-50 dark:bg-green-900/20 rounded-sm p-1">
                   {truncate(afterVal)}
                 </pre>
               </div>
@@ -145,7 +145,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    <div className="fixed inset-0 z-60 flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
@@ -182,7 +182,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
           >
             {t('admin.changeHistory.cancel', 'Cancel')}
           </button>
@@ -190,7 +190,7 @@ function ConfirmRollbackModal({ isOpen, onConfirm, onCancel, loading, snapshot }
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 inline-flex items-center"
+            className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 inline-flex items-center"
           >
             {loading && (
               <svg
@@ -407,9 +407,9 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <ClockIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
+            <ClockIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400 shrink-0" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
               {t('admin.changeHistory.title', 'Change History')}
             </h2>
@@ -417,7 +417,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             aria-label={t('admin.changeHistory.close', 'Close')}
           >
             <XMarkIcon className="h-5 w-5" />
@@ -426,7 +426,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
 
         {/* Subtitle with resource info */}
         {resource && resourceId && (
-          <div className="px-5 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+          <div className="px-5 py-2 border-b border-gray-100 dark:border-gray-800 shrink-0">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               <span className="font-medium text-gray-700 dark:text-gray-300">{resource}</span>
               {' / '}
@@ -478,7 +478,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
                   <button
                     type="button"
                     onClick={() => handleSelectSnapshot(snapshot)}
-                    className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150 focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-800/50"
+                    className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150 focus:outline-hidden focus:bg-gray-50 dark:focus:bg-gray-800/50"
                   >
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">
@@ -492,7 +492,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
                         )}
                       </div>
                       <svg
-                        className="h-4 w-4 text-gray-400 flex-shrink-0"
+                        className="h-4 w-4 text-gray-400 shrink-0"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -551,7 +551,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId }) {
               <button
                 type="button"
                 onClick={() => setRollbackModalOpen(true)}
-                className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
+                className="mb-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors duration-150"
               >
                 <ArrowUturnLeftIcon className="h-4 w-4 mr-1.5" />
                 {t('admin.changeHistory.rollbackToThis', 'Rollback to this version')}

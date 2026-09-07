@@ -77,7 +77,7 @@ function DataTableHeader({ columns, sort, onSortChange, hasActions, stickyHeader
               <button
                 type="button"
                 onClick={() => handleSortClick(column)}
-                className="group/th inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-none focus:text-gray-900 dark:focus:text-gray-100"
+                className="group/th inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 focus:outline-hidden focus:text-gray-900 dark:focus:text-gray-100"
               >
                 <span>{column.header}</span>
                 <SortIndicator active={isSorted} direction={isSorted ? sort.direction : null} />

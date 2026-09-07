@@ -12,7 +12,7 @@ function TranscriptionSection({
     onChange('transcription', { ...app.transcription, ...updates });
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+    <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -32,7 +32,7 @@ function TranscriptionSection({
                 type="checkbox"
                 checked={app.transcription?.enabled || false}
                 onChange={e => handleTranscriptionChange({ enabled: e.target.checked })}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.enableTranscription', 'Enable transcription')}
@@ -46,7 +46,7 @@ function TranscriptionSection({
                     type="checkbox"
                     checked={app.transcription?.defaultEnabled !== false}
                     onChange={e => handleTranscriptionChange({ defaultEnabled: e.target.checked })}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                   />
                   <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                     {t(
@@ -62,7 +62,7 @@ function TranscriptionSection({
                   <select
                     value={app.transcription?.modelId || ''}
                     onChange={e => handleTranscriptionChange({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-700 dark:border-gray-600"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-700 dark:border-gray-600"
                   >
                     <option value="">
                       {t('admin.apps.edit.selectTranscriptionModel', 'Select a model…')}
@@ -102,7 +102,7 @@ function TranscriptionSection({
                               inputs: { ...app.transcription?.inputs, [key]: e.target.checked }
                             })
                           }
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                         />
                         <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                           {label}
@@ -123,7 +123,7 @@ function TranscriptionSection({
                     type="checkbox"
                     checked={app.transcription?.streaming !== false}
                     onChange={e => handleTranscriptionChange({ streaming: e.target.checked })}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                   />
                   <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                     {t(
@@ -147,7 +147,7 @@ function TranscriptionSection({
                         maxDurationSeconds: parseNumberOrUndefined(e.target.value, parseInt)
                       })
                     }
-                    className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs dark:bg-gray-700 dark:border-gray-600"
+                    className="mt-1 block w-24 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs dark:bg-gray-700 dark:border-gray-600"
                   />
                 </div>
               </div>

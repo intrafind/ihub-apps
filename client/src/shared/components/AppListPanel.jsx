@@ -82,7 +82,7 @@ function AppListPanel({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t('pages.appsList.searchPlaceholder', 'Search apps...')}
-              className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
             />
           )}
           {favoritesEnabled && hasFavorites && (

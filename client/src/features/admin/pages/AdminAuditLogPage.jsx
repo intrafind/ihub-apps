@@ -197,7 +197,7 @@ function SummaryCell({ entry, expanded, onToggle, t }) {
   if (!isLong) return <span>{summary}</span>;
   return expanded ? (
     <div>
-      <span className="block break-words whitespace-pre-wrap">{summary}</span>
+      <span className="block wrap-break-word whitespace-pre-wrap">{summary}</span>
       <button
         onClick={e => {
           e.stopPropagation();
@@ -538,7 +538,7 @@ function AdminAuditLogPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-4 mb-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {t('admin.auditLog.presets.label', 'Quick filters')}
@@ -610,7 +610,7 @@ function AdminAuditLogPage() {
               type="date"
               value={fromDate}
               onChange={e => applyFilter({ from: e.target.value })}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -625,7 +625,7 @@ function AdminAuditLogPage() {
               type="date"
               value={toDate}
               onChange={e => applyFilter({ to: e.target.value })}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
 

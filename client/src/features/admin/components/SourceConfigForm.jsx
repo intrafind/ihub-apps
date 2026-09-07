@@ -354,7 +354,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                   type="checkbox"
                   checked={formData.config?.followRedirects !== false}
                   onChange={e => handleConfigChange('followRedirects', e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
                 />
                 <span className="ml-2 text-sm text-gray-700">
                   {t('admin.sources.followRedirects', 'Follow redirects')}
@@ -366,7 +366,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                   type="checkbox"
                   checked={formData.config?.cleanContent !== false}
                   onChange={e => handleConfigChange('cleanContent', e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
                 />
                 <span className="ml-2 text-sm text-gray-700">
                   {t('admin.sources.cleanContent', 'Clean HTML content')}
@@ -382,7 +382,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
               <Icon
                 name="information-circle"
-                className="h-5 w-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0"
+                className="h-5 w-5 text-blue-600 mt-0.5 mr-2 shrink-0"
               />
               <p className="text-sm text-blue-700">
                 {t(
@@ -437,7 +437,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
 
               {docTest.error && (
                 <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
-                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 shrink-0" />
                   <p className="text-sm text-red-700">{docTest.error}</p>
                 </div>
               )}
@@ -475,7 +475,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                       .filter(([, value]) => value !== null && value !== undefined && value !== '')
                       .map(([label, value]) => (
                         <div key={label} className="flex min-w-0">
-                          <dt className="font-medium mr-1 flex-shrink-0">{label}:</dt>
+                          <dt className="font-medium mr-1 shrink-0">{label}:</dt>
                           <dd className="truncate">{String(value)}</dd>
                         </div>
                       ))}
@@ -545,7 +545,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
 
               {queryTest.error && (
                 <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
-                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+                  <Icon name="x-circle" className="h-5 w-5 text-red-500 mr-2 shrink-0" />
                   <p className="text-sm text-red-700">{queryTest.error}</p>
                 </div>
               )}
@@ -824,7 +824,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
                 type="checkbox"
                 checked={formData.enabled !== false}
                 onChange={e => handleChange('enabled', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
               />
               <span className="ml-2 text-sm text-gray-700">
                 {t('admin.sources.enabled', 'Enabled')}
@@ -848,7 +848,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
         <button
           type="button"
           onClick={() => window.history.back()}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           {t('common.cancel', 'Cancel')}
         </button>
@@ -856,7 +856,7 @@ function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
         >
           {saving && <Icon name="arrow-path" className="animate-spin h-4 w-4 mr-2" />}
           {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}

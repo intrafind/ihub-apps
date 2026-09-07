@@ -18,7 +18,7 @@ const UPLOAD_TYPE_CONFIGS = {
       field: 'resizeImages',
       label: ['admin.apps.edit.resizeImages', 'Resize Images'],
       checkboxClassName:
-        'h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded',
+        'h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm',
       labelClassName: 'ml-2 block text-xs text-gray-700'
     }
   },
@@ -62,7 +62,7 @@ const UPLOAD_TYPE_CONFIGS = {
         'Extract audio track (for transcription / audio models)'
       ],
       checkboxClassName:
-        'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded',
+        'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm',
       labelClassName: 'ml-2 block text-xs font-medium text-gray-700'
     }
   }
@@ -82,7 +82,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
           type="checkbox"
           checked={typeConfig.enabled || false}
           onChange={e => updateTypeConfig({ enabled: e.target.checked })}
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
         />
         <label className="ml-2 block text-sm font-medium text-gray-900">
           {t(...config.enableLabel)}
@@ -104,7 +104,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
                   maxFileSizeMB: parseNumberOrUndefined(e.target.value, parseInt)
                 })
               }
-              className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+              className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-xs"
             />
           </div>
           {config.extraToggle && (
@@ -149,7 +149,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
  */
 export default function UploadConfigSection({ app, onChange, t, parseNumberOrUndefined }) {
   return (
-    <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+    <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -166,7 +166,7 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                 type="checkbox"
                 checked={app.upload?.enabled || false}
                 onChange={e => onChange('upload', { ...app.upload, enabled: e.target.checked })}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.enableUpload', 'Enable Upload')}
@@ -182,7 +182,7 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                     onChange={e =>
                       onChange('upload', { ...app.upload, allowMultiple: e.target.checked })
                     }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                   />
                   <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
@@ -233,7 +233,7 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                           )
                         )
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm font-medium text-gray-900">
                       {t('admin.apps.edit.enableCloudStorageUpload', 'Enable Cloud Storage Upload')}

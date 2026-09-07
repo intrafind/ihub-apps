@@ -149,7 +149,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                 <span className="text-xs text-gray-400 dark:text-gray-500">v{item.version}</span>
               )}
               {isInstalled && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
                   &#x2713; {t('admin.marketplace.installed', 'Installed')}
                 </span>
               )}
@@ -228,13 +228,13 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
               <button
                 onClick={() => handleAction(confirmAction)}
                 disabled={!!actionLoading}
-                className="px-3 py-1.5 bg-red-600 text-white rounded text-sm disabled:opacity-50"
+                className="px-3 py-1.5 bg-red-600 text-white rounded-sm text-sm disabled:opacity-50"
               >
                 {actionLoading === confirmAction ? '...' : t('common.confirm', 'Confirm')}
               </button>
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded text-sm"
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-sm text-sm"
               >
                 {t('common.cancel', 'Cancel')}
               </button>

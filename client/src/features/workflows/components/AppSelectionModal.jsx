@@ -89,7 +89,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={onClose} />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
@@ -132,7 +132,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder={t('workflows.chatWithResults.searchApps', 'Search apps...')}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -182,7 +182,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
                       className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left w-full"
                     >
                       <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                         style={{ backgroundColor: app.color || '#4F46E5' }}
                       >
                         <Icon
@@ -198,7 +198,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
                           {favorite && (
                             <Icon
                               name="star-solid"
-                              className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0"
+                              className="w-3.5 h-3.5 text-yellow-400 shrink-0"
                             />
                           )}
                         </div>
@@ -208,7 +208,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
                           </div>
                         )}
                       </div>
-                      <Icon name="chevron-right" className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <Icon name="chevron-right" className="w-4 h-4 text-gray-400 shrink-0" />
                     </button>
                   );
                 })}

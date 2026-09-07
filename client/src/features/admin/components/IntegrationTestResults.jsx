@@ -56,7 +56,7 @@ function CopyButton({ value, label }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
     >
       <Icon name={copied ? 'check' : 'clipboard'} size="sm" className="mr-1" />
       {copied ? t('admin.iFinder.testResults.copied', 'Copied') : label}
@@ -83,7 +83,7 @@ function StepRow({ step }) {
           hasBody ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-default'
         }`}
       >
-        <Icon name={style.icon} size="md" className={`mt-0.5 flex-shrink-0 ${style.iconColor}`} />
+        <Icon name={style.icon} size="md" className={`mt-0.5 shrink-0 ${style.iconColor}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -94,7 +94,7 @@ function StepRow({ step }) {
             )}
           </div>
           {step.message && (
-            <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-300 break-words">
+            <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-300 wrap-break-word">
               {step.message}
             </p>
           )}
@@ -103,7 +103,7 @@ function StepRow({ step }) {
           <Icon
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size="sm"
-            className="mt-1 flex-shrink-0 text-gray-400"
+            className="mt-1 shrink-0 text-gray-400"
           />
         )}
       </button>
@@ -160,7 +160,7 @@ function StepRow({ step }) {
                   label={t('admin.iFinder.testResults.copyDetails', 'Copy')}
                 />
               </div>
-              <pre className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 overflow-x-auto text-gray-700 dark:text-gray-300">
+              <pre className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-sm p-2 overflow-x-auto text-gray-700 dark:text-gray-300">
                 {JSON.stringify(step.details, null, 2)}
               </pre>
             </div>
@@ -207,7 +207,9 @@ function IntegrationTestResults({ title, result }) {
             )}
           </div>
           {message && (
-            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 break-words">{message}</p>
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 wrap-break-word">
+              {message}
+            </p>
           )}
         </div>
       </div>

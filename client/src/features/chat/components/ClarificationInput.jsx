@@ -137,7 +137,7 @@ function ClarificationInput({
       className={`
         w-full px-4 py-3 text-sm border rounded-lg resize-none
         transition-colors min-h-[44px]
-        focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+        focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
         dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400
         ${
           disabled
@@ -166,7 +166,7 @@ function ClarificationInput({
         className={`
           w-full px-4 py-3 text-sm border rounded-lg
           transition-colors min-h-[44px]
-          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+          focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
           dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400
           ${
             disabled
@@ -213,7 +213,7 @@ function ClarificationInput({
           className={`
             w-full pl-10 pr-4 py-3 text-sm border rounded-lg
             transition-colors min-h-[44px]
-            focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+            focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
             dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
             ${
               disabled
@@ -257,7 +257,7 @@ function ClarificationInput({
               className={`
                 w-full pl-10 pr-4 py-3 text-sm border rounded-lg
                 transition-colors min-h-[44px]
-                focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+                focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
                 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
                 ${
                   disabled
@@ -298,7 +298,7 @@ function ClarificationInput({
               className={`
                 w-full pl-10 pr-4 py-3 text-sm border rounded-lg
                 transition-colors min-h-[44px]
-                focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+                focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-hidden
                 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
                 ${
                   disabled

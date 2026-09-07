@@ -149,7 +149,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
 
             {server.error ? (
               <div className="px-3 py-2 text-sm text-red-700 dark:text-red-400 flex items-center">
-                <Icon name="x-circle" size="sm" className="mr-1.5 flex-shrink-0" />
+                <Icon name="x-circle" size="sm" className="mr-1.5 shrink-0" />
                 {t('admin.apps.edit.mcpTools.serverError', 'Could not list tools: {{error}}', {
                   error: server.error
                 })}
@@ -165,7 +165,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
                     <label className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <input
                         type="checkbox"
-                        className="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                        className="mt-0.5 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         checked={selectedTools.includes(tool.name)}
                         onChange={() => toggleTool(tool.name)}
                       />

@@ -369,7 +369,7 @@ export default function IntegrationsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -408,10 +408,10 @@ export default function IntegrationsPage() {
                 </div>
                 <button
                   onClick={dismissMessage}
-                  className={`p-1 rounded-full hover:bg-opacity-20 ${
+                  className={`p-1 rounded-full ${
                     message.type === 'success'
-                      ? 'hover:bg-green-600 text-green-600'
-                      : 'hover:bg-red-600 text-red-600'
+                      ? 'hover:bg-green-600/20 text-green-600'
+                      : 'hover:bg-red-600/20 text-red-600'
                   }`}
                 >
                   <Icon name="x" className="w-4 h-4" />
@@ -477,7 +477,7 @@ export default function IntegrationsPage() {
                   <IntegrationCard
                     key={provider.id}
                     icon="cloud"
-                    iconBgClassName="bg-gradient-to-br from-purple-600 to-teal-500"
+                    iconBgClassName="bg-linear-to-br from-purple-600 to-teal-500"
                     connectButtonClassName="bg-purple-600 hover:bg-purple-700"
                     title={provider.displayName}
                     description={
@@ -528,7 +528,7 @@ export default function IntegrationsPage() {
                 {officeEnabled && (
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-start space-x-4">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
                           <Icon name="envelope" className="w-7 h-7 text-white" />
                         </div>
@@ -558,7 +558,7 @@ export default function IntegrationsPage() {
                               type="text"
                               readOnly
                               value={officeManifestUrl}
-                              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-none min-w-0"
+                              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-hidden min-w-0"
                               onClick={e => e.target.select()}
                             />
                             <button

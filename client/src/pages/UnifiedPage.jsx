@@ -87,7 +87,7 @@ export default function UnifiedPage() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+          className="bg-gray-600 text-white px-4 py-2 rounded-sm hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
           {t('common.back')}

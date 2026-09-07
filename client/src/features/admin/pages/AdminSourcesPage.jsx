@@ -199,7 +199,7 @@ function AdminSourcesPage() {
               setSelectedSources(new Set());
             }
           }}
-          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
         />
       ),
       width: 'w-10',
@@ -209,7 +209,7 @@ function AdminSourcesPage() {
           checked={selectedSources.has(source.id)}
           onChange={e => handleSourceSelection(source.id, e.target.checked)}
           onClick={e => e.stopPropagation()}
-          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
         />
       )
     },
@@ -324,7 +324,7 @@ function AdminSourcesPage() {
           </div>
         )}
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-4 mb-6">
           <div className="flex flex-wrap items-center gap-3">
             <SearchInput
               value={searchTerm}
@@ -380,7 +380,7 @@ function AdminSourcesPage() {
                 <button
                   onClick={() => handleBulkToggle(true)}
                   disabled={bulkOperating}
-                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-3 py-1 rounded text-sm font-medium"
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
                 >
                   {bulkOperating
                     ? t('common.processing', 'Processing...')
@@ -389,7 +389,7 @@ function AdminSourcesPage() {
                 <button
                   onClick={() => handleBulkToggle(false)}
                   disabled={bulkOperating}
-                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1 rounded text-sm font-medium"
+                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-sm font-medium"
                 >
                   {bulkOperating
                     ? t('common.processing', 'Processing...')
@@ -397,7 +397,7 @@ function AdminSourcesPage() {
                 </button>
                 <button
                   onClick={() => setSelectedSources(new Set())}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm font-medium"
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-sm text-sm font-medium"
                 >
                   {t('common.clearSelection', 'Clear')}
                 </button>

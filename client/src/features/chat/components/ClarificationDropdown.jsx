@@ -266,7 +266,7 @@ function ClarificationDropdown({
         className={`
           w-full flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-sm
           border transition-colors min-h-[44px]
-          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
+          focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
           ${
             disabled
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600'
@@ -280,7 +280,7 @@ function ClarificationDropdown({
         <Icon
           name={isOpen ? 'chevron-up' : 'chevron-down'}
           size="sm"
-          className="flex-shrink-0 text-gray-400"
+          className="shrink-0 text-gray-400"
         />
       </button>
 
@@ -348,7 +348,7 @@ function ClarificationDropdown({
                     {multiSelect && (
                       <div
                         className={`
-                          flex-shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center
+                          shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center
                           ${
                             selected
                               ? 'bg-indigo-600 border-indigo-600 dark:bg-indigo-500 dark:border-indigo-500'
@@ -386,7 +386,7 @@ function ClarificationDropdown({
                       <Icon
                         name="check"
                         size="sm"
-                        className="flex-shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5"
+                        className="shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5"
                       />
                     )}
                   </li>

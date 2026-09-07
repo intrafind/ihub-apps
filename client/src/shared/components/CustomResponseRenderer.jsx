@@ -117,7 +117,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
           <summary className="cursor-pointer text-sm text-red-600 hover:text-red-800">
             {t('common.details', 'Details')}
           </summary>
-          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded mt-2 overflow-auto">
+          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded-sm mt-2 overflow-auto">
             Renderer: {componentName}
             {'\n'}
             Error: {error}

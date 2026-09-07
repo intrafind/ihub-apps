@@ -289,7 +289,7 @@ function AdminOAuthClientEditPage() {
           />
         </div>
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center">
               <button
@@ -345,7 +345,7 @@ function AdminOAuthClientEditPage() {
 
           <form
             onSubmit={handleSubmit}
-            className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6"
+            className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 space-y-6"
           >
             {/* Basic Information */}
             <div>
@@ -367,7 +367,7 @@ function AdminOAuthClientEditPage() {
                     required
                     value={formData.name}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
 
@@ -384,7 +384,7 @@ function AdminOAuthClientEditPage() {
                     rows={3}
                     value={formData.description}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
 
@@ -403,7 +403,7 @@ function AdminOAuthClientEditPage() {
                     max="1440"
                     value={formData.tokenExpirationMinutes}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Default: 60 minutes, Maximum: 1440 minutes (24 hours)
@@ -417,7 +417,7 @@ function AdminOAuthClientEditPage() {
                     name="active"
                     checked={formData.active}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                   />
                   <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
                     {t('admin.auth.oauth.active', 'Active')}
@@ -429,7 +429,7 @@ function AdminOAuthClientEditPage() {
             {/* Permissions hint */}
             <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-4 text-sm text-blue-900 dark:text-blue-200">
               <div className="flex items-start">
-                <Icon name="info" size="sm" className="mr-2 mt-0.5 flex-shrink-0" />
+                <Icon name="info" size="sm" className="mr-2 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium mb-1">
                     {t('admin.auth.oauth.permissionsHintTitle', 'How Resource Restrictions Work')}
@@ -519,7 +519,7 @@ function AdminOAuthClientEditPage() {
                     name="clientType"
                     value={formData.clientType}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   >
                     <option value="confidential">
                       {t(
@@ -547,7 +547,7 @@ function AdminOAuthClientEditPage() {
                           type="checkbox"
                           checked={(formData.grantTypes || []).includes(grant)}
                           onChange={() => handleGrantTypeToggle(grant)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
                         <span className="ml-2 text-sm text-gray-700">
                           {grant === 'client_credentials' &&
@@ -580,7 +580,7 @@ function AdminOAuthClientEditPage() {
                       <div className="space-y-2">
                         {(formData.redirectUris || []).map((uri, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded text-sm">
+                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded-sm text-sm">
                               {uri}
                             </code>
                             <button
@@ -601,7 +601,7 @@ function AdminOAuthClientEditPage() {
                               'admin.auth.oauth.redirectUriPlaceholder',
                               'https://yourapp.com/callback'
                             )}
-                            className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="flex-1 border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -637,7 +637,7 @@ function AdminOAuthClientEditPage() {
                       <div className="space-y-2">
                         {(formData.postLogoutRedirectUris || []).map((uri, i) => (
                           <div key={i} className="flex items-center gap-2">
-                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded text-sm">
+                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded-sm text-sm">
                               {uri}
                             </code>
                             <button
@@ -658,7 +658,7 @@ function AdminOAuthClientEditPage() {
                               'admin.auth.oauth.postLogoutUriPlaceholder',
                               'https://yourapp.com/logged-out'
                             )}
-                            className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="flex-1 border border-gray-300 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -689,7 +689,7 @@ function AdminOAuthClientEditPage() {
                           name="consentRequired"
                           checked={formData.consentRequired}
                           onChange={handleInputChange}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
                         <label
                           htmlFor="consentRequired"
@@ -705,7 +705,7 @@ function AdminOAuthClientEditPage() {
                           name="trusted"
                           checked={formData.trusted}
                           onChange={handleInputChange}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
                         <label htmlFor="trusted" className="ml-2 block text-sm text-gray-900">
                           {t(
@@ -725,14 +725,14 @@ function AdminOAuthClientEditPage() {
               <button
                 type="button"
                 onClick={() => navigate('/admin/oauth/clients')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 {saving
                   ? t('common.saving', 'Saving...')
@@ -758,7 +758,7 @@ function AdminOAuthClientEditPage() {
 
       {/* Secret Modal */}
       {showSecretModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-gray-900 dark:bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-gray-600/50 dark:bg-gray-900/75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
           <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -788,7 +788,7 @@ function AdminOAuthClientEditPage() {
                     {t('admin.auth.oauth.clientId', 'Client ID')}
                   </label>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded text-sm break-all text-gray-900 dark:text-gray-100">
+                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
                       {newClientId}
                     </code>
                     <button
@@ -806,7 +806,7 @@ function AdminOAuthClientEditPage() {
                     {t('admin.auth.oauth.clientSecret', 'Client Secret')}
                   </label>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded text-sm break-all text-gray-900 dark:text-gray-100">
+                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
                       {newClientSecret}
                     </code>
                     <button
@@ -823,7 +823,7 @@ function AdminOAuthClientEditPage() {
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={handleModalClose}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {t('common.close', 'Close')}
                 </button>

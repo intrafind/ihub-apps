@@ -54,7 +54,7 @@ function AdminShortcutsModal({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" role="presentation">
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -93,7 +93,7 @@ function AdminShortcutsModal({ isOpen, onClose }) {
                         {keys.map((k, i) => (
                           <span key={i} className="flex items-center gap-1">
                             {i > 0 && <span className="text-xs text-gray-400">then</span>}
-                            <kbd className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+                            <kbd className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
                               {k}
                             </kbd>
                           </span>

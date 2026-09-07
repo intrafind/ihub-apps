@@ -183,7 +183,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span
-            className="w-5 h-5 rounded flex items-center justify-center text-white shrink-0"
+            className="w-5 h-5 rounded-sm flex items-center justify-center text-white shrink-0"
             style={{ backgroundColor: NODE_TYPE_COLORS[nodeType] || '#6B7280' }}
             aria-hidden="true"
           >
@@ -240,7 +240,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             placeholder={t('workflows.editor.name', 'Name')}
           />
         </div>
@@ -321,7 +321,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
                         : { ...config, chatVisible: false }
                     )
                   }
-                  className="rounded border-gray-300 dark:border-gray-600"
+                  className="rounded-sm border-gray-300 dark:border-gray-600"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">
                   {t('workflows.editor.chatVisible', 'Show progress in chat')}
@@ -338,7 +338,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
                 setParseError(null);
               }}
               rows={20}
-              className="w-full text-xs font-mono border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+              className="w-full text-xs font-mono border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             />
             {parseError && <p className="text-xs text-red-500 mt-1">{parseError}</p>}
           </div>
@@ -348,7 +348,7 @@ export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose
       <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <button
           onClick={handleApply}
-          className="w-full bg-blue-600 text-white text-sm py-2 rounded hover:bg-blue-700 transition-colors"
+          className="w-full bg-blue-600 text-white text-sm py-2 rounded-sm hover:bg-blue-700 transition-colors"
         >
           {t('workflows.editor.applyChanges', 'Apply Changes')}
         </button>

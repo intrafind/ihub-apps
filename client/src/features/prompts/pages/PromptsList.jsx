@@ -204,7 +204,7 @@ function PromptsList() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}
@@ -224,7 +224,7 @@ function PromptsList() {
 
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mb-8">
         <div className="flex flex-col sm:flex-row items-stretch gap-4">
-          <div className="relative flex-grow">
+          <div className="relative grow">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Icon name="search" className="h-5 w-5 text-gray-400" />
             </div>
@@ -253,7 +253,7 @@ function PromptsList() {
             )}
           </div>
           {sortConfig.enabled && (
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <select
                 className="h-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
@@ -305,7 +305,7 @@ function PromptsList() {
             {pagePrompts.map(p => (
               <div
                 key={p.id}
-                className="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
+                className="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
                 onClick={() => setSelectedPrompt(p)}
               >
                 <div className="p-4 h-full flex flex-col">
@@ -314,7 +314,7 @@ function PromptsList() {
                       e.stopPropagation();
                       handleToggleFavorite(e, p.id);
                     }}
-                    className="absolute top-3 right-3 z-10 p-1.5 bg-white dark:bg-gray-700 bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                    className="absolute top-3 right-3 z-10 p-1.5 bg-white/70 dark:bg-gray-700/70 rounded-full hover:bg-white dark:hover:bg-gray-700 transition-all"
                     title={
                       favoritePromptIds.includes(p.id)
                         ? t('pages.promptsList.unfavorite')
@@ -336,7 +336,7 @@ function PromptsList() {
                   </button>
 
                   <div className="flex items-start space-x-3 mb-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
+                    <div className="shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
                       <Icon
                         name={p.icon || 'clipboard'}
                         className="w-4 h-4 text-indigo-600 dark:text-indigo-400"
@@ -378,7 +378,7 @@ function PromptsList() {
                   </div>
 
                   <p
-                    className="text-xs text-gray-500 dark:text-gray-400 leading-4 flex-grow overflow-hidden mb-4"
+                    className="text-xs text-gray-500 dark:text-gray-400 leading-4 grow overflow-hidden mb-4"
                     style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 3,
@@ -439,7 +439,7 @@ function PromptsList() {
               <button
                 onClick={handlePrev}
                 disabled={page === 0}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
               >
                 {t('pages.promptsList.previous', 'Previous')}
               </button>
@@ -453,7 +453,7 @@ function PromptsList() {
               <button
                 onClick={handleNext}
                 disabled={page >= totalPages - 1}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
               >
                 {t('pages.promptsList.next', 'Next')}
               </button>

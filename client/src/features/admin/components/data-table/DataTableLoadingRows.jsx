@@ -9,7 +9,7 @@ function DataTableLoadingRows({ rows = 5, columnCount }) {
           {Array.from({ length: columnCount }).map((__, j) => (
             <td key={j} className="px-4 py-3">
               <div
-                className="h-3 bg-gray-200 dark:bg-gray-700 rounded"
+                className="h-3 bg-gray-200 dark:bg-gray-700 rounded-sm"
                 style={{ width: `${40 + ((i + j) % 4) * 15}%` }}
               />
             </td>

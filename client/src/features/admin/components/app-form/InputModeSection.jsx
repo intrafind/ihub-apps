@@ -6,7 +6,7 @@ function InputModeSection({ app, onChange, t }) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+    <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -27,7 +27,7 @@ function InputModeSection({ app, onChange, t }) {
                 onChange={e =>
                   handleInputChange('inputMode', { ...app.inputMode, type: e.target.value })
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
                 <option value="singleline">{t('admin.apps.edit.singleLine', 'Single Line')}</option>
                 <option value="multiline">{t('admin.apps.edit.multiLine', 'Multi Line')}</option>
@@ -50,7 +50,7 @@ function InputModeSection({ app, onChange, t }) {
                       rows: parseNumberOrUndefined(e.target.value, parseInt)
                     })
                   }
-                  className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-20 rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 />
               </div>
             )}
@@ -69,7 +69,7 @@ function InputModeSection({ app, onChange, t }) {
                       }
                     })
                   }
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                 />
                 <label className="ml-2 block text-sm font-medium text-gray-900">
                   {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
@@ -90,7 +90,7 @@ function InputModeSection({ app, onChange, t }) {
                           microphone: { ...app.inputMode?.microphone, mode: e.target.value }
                         })
                       }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
                       <option value="manual">
                         {t('admin.apps.edit.manualMode', 'Manual (Click to Record)')}
@@ -114,7 +114,7 @@ function InputModeSection({ app, onChange, t }) {
                           }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.showTranscript', 'Show Transcript')}
@@ -139,7 +139,7 @@ function InputModeSection({ app, onChange, t }) {
                     }
                   })
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               >
                 <option value="default">
                   {t('admin.apps.edit.defaultService', 'Default (Browser)')}
@@ -181,7 +181,7 @@ function InputModeSection({ app, onChange, t }) {
                     })
                   }
                   placeholder="https://your-speech-service.com"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 />
               </div>
             )}

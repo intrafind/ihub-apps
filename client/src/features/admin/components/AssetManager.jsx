@@ -180,7 +180,7 @@ function AssetManager({ t }) {
       {error && (
         <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -214,7 +214,7 @@ function AssetManager({ t }) {
       {successMessage && (
         <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -334,7 +334,7 @@ function AssetManager({ t }) {
                   )}
                 </p>
               </div>
-              <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded">
+              <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-sm">
                 <p className="font-mono text-xs">
                   {t(
                     'admin.ui.assets.usage.example',
@@ -365,7 +365,7 @@ function AssetManager({ t }) {
             {!showUpload && (
               <button
                 onClick={() => setShowUpload(true)}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
                 <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -406,7 +406,7 @@ function AssetManager({ t }) {
         ) : (
           <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black dark:ring-gray-700 ring-opacity-5 md:rounded-lg">
+              <div className="overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-gray-700/5 md:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
@@ -476,11 +476,11 @@ function AssetManager({ t }) {
                                 type="text"
                                 value={asset.publicUrl}
                                 readOnly
-                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
+                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
                               />
                               <button
                                 onClick={() => copyToClipboard(asset.publicUrl)}
-                                className="flex-shrink-0 inline-flex items-center px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="shrink-0 inline-flex items-center px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-sm hover:bg-blue-200 dark:hover:bg-blue-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                                 title={t('admin.ui.assets.copyUrl', 'Copy URL')}
                               >
                                 <svg
@@ -505,7 +505,7 @@ function AssetManager({ t }) {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onClick={() => handleDeleteAsset(asset.id)}
-                              className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 rounded p-1"
+                              className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded-sm p-1"
                               title={t('admin.ui.assets.delete', 'Delete asset')}
                             >
                               <svg

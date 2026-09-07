@@ -165,7 +165,7 @@ const QuillToolbar = ({
             {/* Text style dropdown */}
             <div className="relative">
               <select
-                className="modern-select bg-white border border-gray-300 rounded px-3 h-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="modern-select bg-white border border-gray-300 rounded-sm px-3 h-8 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 onChange={e => {
                   const headerValue = e.target.value;
                   if (headerValue === '') {
@@ -344,7 +344,7 @@ const QuillToolbar = ({
 
           {/* Right side - Word count and actions */}
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded border border-gray-200">
+            <div className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded-sm border border-gray-200">
               {characterCount} characters
             </div>
 

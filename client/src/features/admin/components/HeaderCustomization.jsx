@@ -85,7 +85,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
 
           <div className="flex items-center space-x-3">
             <div
-              className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm"
+              className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs"
               style={{ backgroundColor: config.defaultColor || 'rgb(0, 53, 87)' }}
             />
 
@@ -93,7 +93,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
               type="text"
               value={config.defaultColor || ''}
               onChange={e => handleColorChange(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               placeholder="rgb(0, 53, 87)"
             />
           </div>
@@ -118,7 +118,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
               <button
                 key={color}
                 onClick={() => handleColorChange(color)}
-                className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                className="w-6 h-6 rounded-sm border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                 style={{ backgroundColor: color }}
                 title={color}
               />
@@ -143,7 +143,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
             value={config.logo?.url || ''}
             onChange={e => handleLogoUrlChange(e.target.value)}
             placeholder="/header_company_logo.svg"
-            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
@@ -163,7 +163,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
             value={config.favicon || ''}
             onChange={e => handleFaviconChange(e.target.value)}
             placeholder="/favicon.ico"
-            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
@@ -255,7 +255,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
             </label>
             <button
               onClick={addNavigationLink}
-              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             >
               {t('admin.ui.header.addLink', 'Add Link')}
             </button>
@@ -307,7 +307,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                       value={link.href || ''}
                       onChange={e => updateNavigationLink(index, { href: e.target.value })}
                       placeholder="/page-url"
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                     <div className="mt-2 flex items-center space-x-4">
                       <label className="flex items-center">
@@ -315,7 +315,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                           type="checkbox"
                           checked={link.enabled !== false}
                           onChange={e => updateNavigationLink(index, { enabled: e.target.checked })}
-                          className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                          className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                           {t('admin.ui.header.linkEnabled', 'Enabled')}
@@ -324,7 +324,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                       <select
                         value={link.target || '_self'}
                         onChange={e => updateNavigationLink(index, { target: e.target.value })}
-                        className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       >
                         <option value="_self">{t('admin.ui.header.samePage', 'Same Page')}</option>
                         <option value="_blank">{t('admin.ui.header.newPage', 'New Page')}</option>

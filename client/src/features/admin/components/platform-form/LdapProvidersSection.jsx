@@ -64,7 +64,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -77,7 +77,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
         <button
           type="button"
           onClick={addLdapProvider}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium"
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium"
         >
           <Icon name="plus" className="h-4 w-4 inline-block mr-1" />
           Add LDAP Provider
@@ -119,7 +119,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.name || ''}
                 onChange={e => updateLdapProvider(index, 'name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="corporate-ldap"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -135,7 +135,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.displayName || ''}
                 onChange={e => updateLdapProvider(index, 'displayName', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="Corporate LDAP"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -151,7 +151,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.url || ''}
                 onChange={e => updateLdapProvider(index, 'url', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="ldap://ldap.example.com:389"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -167,7 +167,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.adminDn || ''}
                 onChange={e => updateLdapProvider(index, 'adminDn', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="cn=admin,dc=example,dc=org"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -196,7 +196,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.userSearchBase || ''}
                 onChange={e => updateLdapProvider(index, 'userSearchBase', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="ou=people,dc=example,dc=org"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -212,7 +212,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.usernameAttribute ?? 'uid'}
                 onChange={e => updateLdapProvider(index, 'usernameAttribute', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="uid"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -228,7 +228,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.userDn || ''}
                 onChange={e => updateLdapProvider(index, 'userDn', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="uid={{username}},ou=people,dc=example,dc=org"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -244,7 +244,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.groupSearchBase || ''}
                 onChange={e => updateLdapProvider(index, 'groupSearchBase', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="ou=groups,dc=example,dc=org"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -260,7 +260,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 type="text"
                 value={provider.groupClass ?? 'groupOfNames'}
                 onChange={e => updateLdapProvider(index, 'groupClass', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="groupOfNames"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -278,7 +278,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 onChange={e =>
                   updateLdapProvider(index, 'sessionTimeoutMinutes', parseInt(e.target.value))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="480"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -314,7 +314,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       e.target.checked ? { rejectUnauthorized: false } : undefined
                     )
                   }
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Allow self-signed / internal CA certificates (ldaps://)

@@ -346,7 +346,7 @@ function AppCreationWizard({ onClose, templateApp = null }) {
   const CurrentStepComponent = currentStepData.component;
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-8 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] flex flex-col">
         <div className="flex-1 flex flex-col">
           {/* Header */}
@@ -774,7 +774,7 @@ function AIGenerationStep({ appData, updateAppData }) {
         <select
           value={selectedLanguage}
           onChange={e => setSelectedLanguage(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
           <option value="de">Deutsch</option>
@@ -789,7 +789,7 @@ function AIGenerationStep({ appData, updateAppData }) {
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder={t(
             'admin.apps.wizard.ai.promptPlaceholder',
             'Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...'
@@ -817,7 +817,7 @@ function AIGenerationStep({ appData, updateAppData }) {
       <button
         onClick={handleGenerate}
         disabled={!prompt.trim() || generating || loadingPrompt || !appGeneratorPrompt}
-        className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {generating ? (
           <>
@@ -946,7 +946,7 @@ function BasicInfoStep({
 
   const getFieldClassName = field => {
     const baseClass =
-      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500';
+      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
     if (fieldErrors[field]) {
       return `${baseClass} border-red-300 focus:border-red-500`;
     }
@@ -963,7 +963,7 @@ function BasicInfoStep({
         <select
           value={selectedLanguage}
           onChange={e => setSelectedLanguage(e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
           <option value="de">Deutsch</option>
@@ -1100,7 +1100,7 @@ function BasicInfoStep({
             type="color"
             value={appData.color}
             onChange={e => updateField('color', e.target.value)}
-            className="mt-1 block w-full h-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="mt-1 block w-full h-10 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -1122,7 +1122,7 @@ function BasicInfoStep({
             type="text"
             value={appData.icon}
             onChange={e => updateField('icon', e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             placeholder={t('admin.apps.wizard.basic.iconPlaceholder', 'e.g., chat-bubbles')}
           />
         </div>
@@ -1225,7 +1225,7 @@ function SystemPromptStep({
 
   const getFieldClassName = field => {
     const baseClass =
-      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500';
+      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
     if (fieldErrors[field]) {
       return `${baseClass} border-red-300 focus:border-red-500`;
     }
@@ -1242,7 +1242,7 @@ function SystemPromptStep({
         <select
           value={selectedLanguage}
           onChange={e => setSelectedLanguage(e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
           <option value="de">Deutsch</option>
@@ -1308,7 +1308,7 @@ function SystemPromptStep({
           type="text"
           value={getMultilingualValue('messagePlaceholder')}
           onChange={e => updateMultilingualField('messagePlaceholder', e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder={t(
             'admin.apps.wizard.system.messagePlaceholderPlaceholder',
             'Enter your message here...'
@@ -1324,7 +1324,7 @@ function SystemPromptStep({
           <select
             value={appData.preferredModel || ''}
             onChange={e => updateAppData({ preferredModel: e.target.value || undefined })}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             disabled={loadingModels}
           >
             <option value="">
@@ -1357,7 +1357,7 @@ function SystemPromptStep({
             step="0.1"
             value={appData.preferredTemperature}
             onChange={e => updateAppData({ preferredTemperature: parseFloat(e.target.value) })}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
       </div>
@@ -1427,7 +1427,7 @@ function VariablesStep({ appData, updateAppData }) {
                   type="text"
                   value={variable.name}
                   onChange={e => updateVariable(index, 'name', e.target.value)}
-                  className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder={t(
                     'admin.apps.wizard.variables.namePlaceholder',
                     'e.g., targetLanguage'
@@ -1442,7 +1442,7 @@ function VariablesStep({ appData, updateAppData }) {
                 <select
                   value={variable.type}
                   onChange={e => updateVariable(index, 'type', e.target.value)}
-                  className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="string">String</option>
                   <option value="text">Text</option>
@@ -1462,7 +1462,7 @@ function VariablesStep({ appData, updateAppData }) {
                 onChange={e =>
                   updateVariable(index, 'label', { ...variable.label, en: e.target.value })
                 }
-                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder={t(
                   'admin.apps.wizard.variables.labelPlaceholder',
                   'e.g., Target Language'
@@ -1475,7 +1475,7 @@ function VariablesStep({ appData, updateAppData }) {
                 type="checkbox"
                 checked={variable.required}
                 onChange={e => updateVariable(index, 'required', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
               />
               <label className="ml-2 block text-sm text-gray-900">
                 {t('admin.apps.wizard.variables.required', 'Required')}
@@ -1575,7 +1575,7 @@ function ToolsStep({ appData, updateAppData }) {
               type="checkbox"
               checked={appData.tools?.includes(tool.id) || false}
               onChange={() => toggleTool(tool.id)}
-              className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
             />
             <div className="ml-3 flex-1">
               <div className="text-sm font-medium text-gray-900">{tool.name}</div>
@@ -1618,7 +1618,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
             type="checkbox"
             checked={appData.allowEmptyContent}
             onChange={e => updateAppData({ allowEmptyContent: e.target.checked })}
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
           />
           <label className="ml-2 block text-sm text-gray-900">
             {t('admin.apps.wizard.advanced.allowEmptyContent', 'Allow Empty Content')}
@@ -1630,7 +1630,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
             type="checkbox"
             checked={appData.sendChatHistory}
             onChange={e => updateAppData({ sendChatHistory: e.target.checked })}
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
           />
           <label className="ml-2 block text-sm text-gray-900">
             {t('admin.apps.wizard.advanced.sendChatHistory', 'Send Chat History')}
@@ -1646,7 +1646,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
                 imageUpload: { ...(appData.imageUpload || {}), enabled: e.target.checked }
               })
             }
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
           />
           <label className="ml-2 block text-sm text-gray-900">
             {t('admin.apps.wizard.advanced.imageUpload', 'Enable Image Upload')}
@@ -1660,7 +1660,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
           <select
             value={appData.category || ''}
             onChange={e => updateAppData({ category: e.target.value })}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">Select category...</option>
             <option value="productivity">Productivity</option>
@@ -1679,7 +1679,7 @@ function AdvancedSettingsStep({ appData, updateAppData }) {
             type="number"
             value={appData.order || 0}
             onChange={e => updateAppData({ order: parseInt(e.target.value) || 0 })}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
       </div>

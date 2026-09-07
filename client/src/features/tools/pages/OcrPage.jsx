@@ -139,7 +139,7 @@ function JobCard({ job, onCancel }) {
         {status === 'completed' && (
           <button
             onClick={handleDownload}
-            className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors font-medium"
           >
             Download
           </button>
@@ -147,7 +147,7 @@ function JobCard({ job, onCancel }) {
         {isProcessing && (
           <button
             onClick={() => onCancel(job.jobId)}
-            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
           >
             Cancel
           </button>
@@ -403,7 +403,7 @@ export default function OcrPage() {
                 checked={debugMode}
                 onChange={e => setDebugMode(e.target.checked)}
                 disabled={isProcessing}
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
               Debug mode — add visible text pages
             </label>

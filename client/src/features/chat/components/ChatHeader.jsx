@@ -120,7 +120,7 @@ function ChatHeader({
               </p>
             )}
             {isMobile && showDescription && (
-              <div className="absolute z-10 mt-2 p-2 bg-white border rounded shadow text-xs max-w-xs">
+              <div className="absolute z-10 mt-2 p-2 bg-white border rounded-sm shadow-sm text-xs max-w-xs">
                 {typeof description === 'object'
                   ? getLocalizedContent(description, currentLanguage)
                   : description}

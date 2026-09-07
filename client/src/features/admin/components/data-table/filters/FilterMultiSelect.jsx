@@ -174,7 +174,7 @@ function FilterMultiSelect({
           // alone describes it correctly.
           aria-expanded={open}
           aria-labelledby={`${baseId}-label ${baseId}-trigger`}
-          className={`w-full inline-flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${
+          className={`w-full inline-flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${
             filtered
               ? 'border-indigo-400 dark:border-indigo-500'
               : 'border-gray-300 dark:border-gray-600'
@@ -185,14 +185,14 @@ function FilterMultiSelect({
               ? (emptyLabel ?? t('admin.filters.multiSelect.noOptions', 'No values'))
               : triggerText}
           </span>
-          <Icon name="chevron-down" size="sm" className="flex-shrink-0 text-gray-400" />
+          <Icon name="chevron-down" size="sm" className="shrink-0 text-gray-400" />
         </button>
 
         {open && (
           <div
             role="group"
             aria-labelledby={`${baseId}-label`}
-            className="absolute z-20 mt-1 w-full min-w-[14rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg"
+            className="absolute z-20 mt-1 w-full min-w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg"
           >
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700">
               <button
@@ -224,7 +224,7 @@ function FilterMultiSelect({
                     searchPlaceholder ?? t('admin.filters.multiSelect.search', 'Filter…')
                   }
                   aria-label={searchPlaceholder ?? t('admin.filters.multiSelect.search', 'Filter…')}
-                  className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             )}
@@ -244,7 +244,7 @@ function FilterMultiSelect({
                       type="checkbox"
                       checked={selectedSet.has(option.value)}
                       onChange={() => toggleValue(option.value)}
-                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                      className="h-4 w-4 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                     />
                     <span className="flex-1 truncate">{option.label ?? option.value}</span>
                     {option.count !== undefined && (

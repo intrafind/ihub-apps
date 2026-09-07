@@ -44,21 +44,17 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-2 w-full text-left"
         >
-          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-blue-400 border-t-transparent flex-shrink-0" />
+          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-blue-400 border-t-transparent shrink-0" />
           <span className="font-medium text-blue-600 dark:text-blue-400 truncate flex-1">
             {latestStep?.nodeName || t('workflow.running', 'Running workflow...')}
           </span>
           {visibleSteps.length > 0 && (
-            <span className="text-gray-400 dark:text-gray-500 flex-shrink-0">
+            <span className="text-gray-400 dark:text-gray-500 shrink-0">
               {visibleSteps.length} {visibleSteps.length === 1 ? 'step' : 'steps'}
             </span>
           )}
           {visibleSteps.length > 0 && (
-            <Icon
-              name={expanded ? 'chevron-up' : 'chevron-down'}
-              size="xs"
-              className="flex-shrink-0"
-            />
+            <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size="xs" className="shrink-0" />
           )}
         </button>
         {expanded && visibleSteps.length > 0 && (
@@ -66,20 +62,16 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
             {visibleSteps.map((step, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 {step.status === 'completed' && (
-                  <Icon name="check" size="xs" className="text-green-500 flex-shrink-0" />
+                  <Icon name="check" size="xs" className="text-green-500 shrink-0" />
                 )}
                 {step.status === 'running' && (
-                  <div className="animate-spin rounded-full h-2.5 w-2.5 border-2 border-blue-400 border-t-transparent flex-shrink-0" />
+                  <div className="animate-spin rounded-full h-2.5 w-2.5 border-2 border-blue-400 border-t-transparent shrink-0" />
                 )}
                 {step.status === 'error' && (
-                  <Icon
-                    name="exclamation-circle"
-                    size="xs"
-                    className="text-red-500 flex-shrink-0"
-                  />
+                  <Icon name="exclamation-circle" size="xs" className="text-red-500 shrink-0" />
                 )}
                 {!['completed', 'running', 'error'].includes(step.status) && (
-                  <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" />
                 )}
                 <span
                   className={
@@ -122,7 +114,7 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1.5 w-full text-left"
         >
-          <Icon name={iconName} size="xs" className={`flex-shrink-0 ${iconColor}`} />
+          <Icon name={iconName} size="xs" className={`shrink-0 ${iconColor}`} />
           <span className="font-medium">
             {statusText}
             {' via '}
@@ -132,7 +124,7 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
             <Icon
               name={expanded ? 'chevron-up' : 'chevron-down'}
               size="xs"
-              className="ml-auto flex-shrink-0"
+              className="ml-auto shrink-0"
             />
           )}
         </button>
@@ -141,17 +133,13 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
             {visibleSteps.map((step, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 {step.status === 'completed' && (
-                  <Icon name="check" size="xs" className="text-green-500 flex-shrink-0" />
+                  <Icon name="check" size="xs" className="text-green-500 shrink-0" />
                 )}
                 {step.status === 'error' && (
-                  <Icon
-                    name="exclamation-circle"
-                    size="xs"
-                    className="text-red-500 flex-shrink-0"
-                  />
+                  <Icon name="exclamation-circle" size="xs" className="text-red-500 shrink-0" />
                 )}
                 {!['completed', 'error'].includes(step.status) && (
-                  <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" />
                 )}
                 <span>{step.nodeName || t('workflow.unknownStep', 'Step')}</span>
               </div>

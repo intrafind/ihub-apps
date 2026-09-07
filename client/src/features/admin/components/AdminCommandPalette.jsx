@@ -349,9 +349,9 @@ export default function AdminCommandPalette() {
               'admin.commandPalette.placeholder',
               'Search pages, actions, entities...'
             )}
-            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-hidden"
           />
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
             ESC
           </kbd>
         </div>
@@ -418,22 +418,22 @@ export default function AdminCommandPalette() {
         {/* Footer */}
         <div className="flex items-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-[11px] text-gray-400 dark:text-gray-500">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
               &uarr;
             </kbd>
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
               &darr;
             </kbd>
             {t('admin.commandPalette.navigate', 'navigate')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
               &crarr;
             </kbd>
             {t('admin.commandPalette.select', 'select')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+            <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600">
               esc
             </kbd>
             {t('admin.commandPalette.close', 'close')}

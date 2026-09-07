@@ -62,14 +62,14 @@ const renderValue = value => {
     // characters stay aligned (LLMs don't always wrap them in code fences).
     // overflow-x-auto so very wide rows scroll instead of wrapping.
     return (
-      <pre className="text-sm font-mono whitespace-pre bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-3 rounded overflow-x-auto">
+      <pre className="text-sm font-mono whitespace-pre bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-3 rounded-sm overflow-x-auto">
         {value}
       </pre>
     );
   }
   if (typeof value === 'object') {
     return (
-      <pre className="text-sm bg-gray-50 dark:bg-gray-900 p-3 rounded overflow-auto">
+      <pre className="text-sm bg-gray-50 dark:bg-gray-900 p-3 rounded-sm overflow-auto">
         {JSON.stringify(value, null, 2)}
       </pre>
     );
@@ -114,7 +114,7 @@ function InputValueRenderer({ value, t }) {
     return (
       <div
         key={key}
-        className="flex flex-col gap-1 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2"
+        className="flex flex-col gap-1 rounded-sm border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2"
       >
         <div className="flex items-center gap-2 text-sm">
           <Icon name="document" className="w-4 h-4 text-gray-500" />
@@ -137,7 +137,7 @@ function InputValueRenderer({ value, t }) {
           )}
         </div>
         {isExpanded && contentLen > 0 && (
-          <pre className="text-xs whitespace-pre-wrap break-all bg-white dark:bg-gray-800 p-2 rounded max-h-96 overflow-auto">
+          <pre className="text-xs whitespace-pre-wrap break-all bg-white dark:bg-gray-800 p-2 rounded-sm max-h-96 overflow-auto">
             {file.content}
           </pre>
         )}
@@ -153,7 +153,7 @@ function InputValueRenderer({ value, t }) {
       const isExpanded = !!expanded.__str;
       return (
         <div>
-          <pre className="whitespace-pre-wrap break-words text-sm">
+          <pre className="whitespace-pre-wrap wrap-break-word text-sm">
             {isExpanded ? value : value.slice(0, LONG_STRING_THRESHOLD) + '…'}
           </pre>
           <button
@@ -168,7 +168,7 @@ function InputValueRenderer({ value, t }) {
         </div>
       );
     }
-    return <span className="whitespace-pre-wrap break-words">{value}</span>;
+    return <span className="whitespace-pre-wrap wrap-break-word">{value}</span>;
   }
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-gray-400 italic">[]</span>;
@@ -195,7 +195,7 @@ function InputValueRenderer({ value, t }) {
             : t('common.expandArray', `Expand array ({{count}} items)`, { count: value.length })}
         </button>
         {isExpanded && (
-          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded max-h-96 overflow-auto">
+          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded-sm max-h-96 overflow-auto">
             {JSON.stringify(value, null, 2)}
           </pre>
         )}
@@ -218,7 +218,7 @@ function InputValueRenderer({ value, t }) {
             : t('common.expandObject', `Expand object ({{count}} fields)`, { count: keys.length })}
         </button>
         {isExpanded && (
-          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded max-h-96 overflow-auto">
+          <pre className="mt-1 text-xs whitespace-pre-wrap break-all bg-gray-50 dark:bg-gray-900 p-2 rounded-sm max-h-96 overflow-auto">
             {JSON.stringify(value, null, 2)}
           </pre>
         )}
@@ -538,7 +538,7 @@ function WorkflowExecutionPage() {
             e.stopPropagation();
             copyToClipboard(key, value);
           }}
-          className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+          className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
           title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
         >
           <Icon name={copiedFields.has(key) ? 'check' : 'copy'} className="w-3 h-3" />
@@ -553,7 +553,7 @@ function WorkflowExecutionPage() {
                 e.stopPropagation();
                 setViewerField({ key, name: fileBase, content: value });
               }}
-              className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+              className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
               title={t('workflows.output.viewFullscreen', 'View report in full-screen')}
             >
               <Icon name="eye" className="w-3 h-3" />
@@ -619,7 +619,7 @@ function WorkflowExecutionPage() {
           <div className="flex items-center gap-2">
             <Icon
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              className="w-4 h-4 text-gray-400 flex-shrink-0"
+              className="w-4 h-4 text-gray-400 shrink-0"
             />
             <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
               {key.replace(/_/g, ' ')}
@@ -726,7 +726,7 @@ function WorkflowExecutionPage() {
             {(state.status === 'completed' || state.status === 'approved') && (
               <button
                 onClick={() => setShowAppSelection(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 title={t(
                   'workflows.chatWithResults.title',
                   'Continue chatting with the workflow output in an app'
@@ -739,7 +739,7 @@ function WorkflowExecutionPage() {
             {isAdmin && state.workflowId && (
               <Link
                 to={`/admin/workflows/${state.workflowId}/edit`}
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 aria-label={t('workflows.editWorkflow', 'Edit Workflow')}
               >
                 <Icon name="pencil" className="w-4 h-4" aria-hidden="true" />
@@ -748,7 +748,7 @@ function WorkflowExecutionPage() {
             )}
             <button
               onClick={refetch}
-              className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               title={t('common.refresh', 'Refresh')}
               aria-label={t('common.refresh', 'Refresh')}
             >
@@ -757,7 +757,7 @@ function WorkflowExecutionPage() {
             {showTechnical && (
               <button
                 onClick={handleExportState}
-                className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 title={t('workflows.exportState', 'Export execution state for debugging')}
                 aria-label={t('workflows.export', 'Export')}
               >
@@ -767,7 +767,7 @@ function WorkflowExecutionPage() {
             {isActive && (
               <button
                 onClick={handleCancelClick}
-                className="px-4 py-2 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                className="px-4 py-2 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 aria-label={t('workflows.cancel', 'Cancel')}
               >
                 <Icon name="x-mark" className="w-4 h-4" aria-hidden="true" />

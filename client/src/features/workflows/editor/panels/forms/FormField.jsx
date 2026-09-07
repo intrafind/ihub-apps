@@ -15,7 +15,7 @@ function FormField({
   suggestions
 }) {
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
   const datalistId = useId();
 
@@ -26,7 +26,7 @@ function FormField({
           type="checkbox"
           checked={!!value}
           onChange={e => onChange(e.target.checked)}
-          className="rounded border-gray-300 dark:border-gray-600"
+          className="rounded-sm border-gray-300 dark:border-gray-600"
         />
         <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
       </label>
@@ -75,7 +75,7 @@ function FormField({
     return (
       <div>
         <label className={labelClass}>{label}</label>
-        <pre className="w-full text-xs font-mono border border-amber-300 dark:border-amber-700 rounded px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+        <pre className="w-full text-xs font-mono border border-amber-300 dark:border-amber-700 rounded-sm px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap wrap-break-word max-h-32 overflow-y-auto">
           {preview}
         </pre>
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">

@@ -61,7 +61,7 @@ function VariablesPanel({ variables }) {
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder={t('workflows.editor.filterVariables', 'Filter variables…')}
-        className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
       />
       <p className="text-xs text-gray-500 dark:text-gray-400">
         {t('workflows.editor.variablesHint', 'Click a name to copy it as a template reference.')}
@@ -78,7 +78,7 @@ function VariablesPanel({ variables }) {
                   <button
                     type="button"
                     onClick={() => copy(v.value)}
-                    className="w-full text-left text-xs font-mono px-1.5 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2"
+                    className="w-full text-left text-xs font-mono px-1.5 py-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 flex items-center justify-between gap-2"
                   >
                     <span className="truncate">{`{{${v.value}}}`}</span>
                     {copied === v.value && (

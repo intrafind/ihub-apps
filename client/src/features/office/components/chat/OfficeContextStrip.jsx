@@ -186,7 +186,7 @@ function OfficeContextStrip({
   const headerTitle = hasBody || hasAttachments ? subject : 'Email context';
 
   return (
-    <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs">
       <div className="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
@@ -196,7 +196,7 @@ function OfficeContextStrip({
           aria-label={expanded ? 'Collapse email context' : 'Expand email context'}
           title={expanded ? 'Collapse email context' : 'Expand email context'}
         >
-          <Icon name="mail" size="sm" className="flex-shrink-0 text-slate-500" />
+          <Icon name="mail" size="sm" className="shrink-0 text-slate-500" />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-slate-900 truncate" title={headerTitle}>
               {headerTitle}
@@ -208,14 +208,14 @@ function OfficeContextStrip({
           <Icon
             name={expanded ? 'chevronUp' : 'chevronDown'}
             size="sm"
-            className="flex-shrink-0 text-slate-400"
+            className="shrink-0 text-slate-400"
             aria-hidden
           />
         </button>
 
         {/* Show add-email button in the header when collapsed so it's always reachable */}
         {!expanded && hasPinControls && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <PinnedEmailsBar
               pinned={[]}
               onUnpin={() => {}}

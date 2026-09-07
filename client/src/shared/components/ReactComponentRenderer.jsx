@@ -23,12 +23,12 @@ function ErrorFallback({ error, resetErrorBoundary, t }) {
           {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
         </h3>
       </div>
-      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
+      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded-sm mb-4 overflow-auto">
         {error.message}
       </pre>
       <button
         onClick={resetErrorBoundary}
-        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+        className="px-4 py-2 bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors"
       >
         Try Again
       </button>
@@ -262,7 +262,7 @@ UserComponent;
             {t('errors.compilationError', 'Compilation Error')}
           </h3>
         </div>
-        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded overflow-auto">
+        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded-sm overflow-auto">
           {compileError}
         </pre>
       </div>

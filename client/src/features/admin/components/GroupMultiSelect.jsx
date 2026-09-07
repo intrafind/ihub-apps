@@ -211,7 +211,7 @@ function GroupMultiSelect({
       )}
 
       {/* Selected chips */}
-      <div className="min-h-[2rem]">
+      <div className="min-h-8">
         {selectedChips.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {selectedChips.map(chip => {
@@ -245,7 +245,7 @@ function GroupMultiSelect({
                     <button
                       type="button"
                       onClick={() => removeValue(chip.value)}
-                      className="ml-2 text-current hover:text-red-600 dark:hover:text-red-400 focus:outline-none"
+                      className="ml-2 text-current hover:text-red-600 dark:hover:text-red-400 focus:outline-hidden"
                       aria-label={t('admin.groupSelect.remove', 'Remove {{name}}', {
                         name: chip.label
                       })}
@@ -288,7 +288,7 @@ function GroupMultiSelect({
             onBlur={() => setShowDropdown(false)}
             onKeyDown={handleKeyDown}
             placeholder={resolvedPlaceholder}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500 disabled:bg-gray-100 dark:disabled:bg-gray-700"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500 disabled:bg-gray-100 dark:disabled:bg-gray-700"
           />
           <Icon
             name="search"
@@ -301,7 +301,7 @@ function GroupMultiSelect({
           <div
             id={listboxId}
             role="listbox"
-            className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 dark:ring-gray-700 overflow-auto focus:outline-none sm:text-sm"
+            className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm"
           >
             {navItems.length > 0 ? (
               navItems.map((item, index) => {
@@ -319,7 +319,7 @@ function GroupMultiSelect({
                       onMouseDown={e => e.preventDefault()}
                       onMouseEnter={() => setActiveIndex(index)}
                       onClick={() => handleSelectNavItem(item)}
-                      className={`w-full text-left px-4 py-2 focus:outline-none ${
+                      className={`w-full text-left px-4 py-2 focus:outline-hidden ${
                         active ? 'bg-gray-100 dark:bg-gray-700' : ''
                       }`}
                     >
@@ -327,7 +327,7 @@ function GroupMultiSelect({
                         <Icon
                           name="plus"
                           size="sm"
-                          className="mr-2 text-green-600 dark:text-green-400 flex-shrink-0"
+                          className="mr-2 text-green-600 dark:text-green-400 shrink-0"
                         />
                         <span className="text-gray-900 dark:text-gray-100">{option.name}</span>
                         {option.name.toLowerCase() !== option.id.toLowerCase() && (
@@ -354,7 +354,7 @@ function GroupMultiSelect({
                     onMouseDown={e => e.preventDefault()}
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => handleSelectNavItem(item)}
-                    className={`w-full text-left px-4 py-2 border-t border-gray-100 dark:border-gray-700 focus:outline-none ${
+                    className={`w-full text-left px-4 py-2 border-t border-gray-100 dark:border-gray-700 focus:outline-hidden ${
                       active ? 'bg-gray-100 dark:bg-gray-700' : ''
                     }`}
                   >
@@ -362,7 +362,7 @@ function GroupMultiSelect({
                       <Icon
                         name="plus"
                         size="sm"
-                        className="mr-2 text-amber-600 dark:text-amber-400 flex-shrink-0"
+                        className="mr-2 text-amber-600 dark:text-amber-400 shrink-0"
                       />
                       <span className="text-gray-900 dark:text-gray-100">
                         {t('admin.groupSelect.addCustom', 'Add "{{name}}"', {

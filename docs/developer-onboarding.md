@@ -552,6 +552,13 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
    - Use Tailwind CSS classes for styling
    - Follow existing component patterns
 
+3. **Change the Tailwind Theme** (colors, fonts, plugins, scanned paths):
+   - Edit `client/tailwind.css` — Tailwind v4 is configured in CSS (`@theme`,
+     `@plugin`, `@custom-variant`, `@source`), not in a `tailwind.config.js`
+   - The client has four CSS entry points (`src/App.css`, `office/office.css`,
+     `extension/extension.css`, `nextcloud/nextcloud.css`); each imports
+     `client/tailwind.css`, so theme changes only need to be made once
+
 ### Adding User Groups and Permissions
 
 1. **Configure Groups** (`contents/config/groups.json`):

@@ -103,7 +103,7 @@ function CookieSettingsConfig() {
       {/* Default Behavior Info */}
       <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-4">
         <div className="flex">
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <Icon name="info" className="h-5 w-5 text-blue-400" />
           </div>
           <div className="ml-3">
@@ -118,7 +118,7 @@ function CookieSettingsConfig() {
       {config.disableSecure && (
         <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Icon name="alert-triangle" className="h-5 w-5 text-yellow-400" />
             </div>
             <div className="ml-3">
@@ -143,7 +143,7 @@ function CookieSettingsConfig() {
               type="checkbox"
               checked={config.disableSecure}
               onChange={handleToggleDisableSecure}
-              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
+              className="h-4 w-4 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700"
             />
           </div>
           <div className="ml-3 text-sm">
@@ -175,7 +175,7 @@ function CookieSettingsConfig() {
         <button
           onClick={handleSaveConfig}
           disabled={saving}
-          className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
+          className="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
         >
           {saving ? (
             <>

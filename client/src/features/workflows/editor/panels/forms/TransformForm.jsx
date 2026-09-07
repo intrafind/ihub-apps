@@ -121,7 +121,7 @@ function SmartValueField({
   }, [value, isComplex]);
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
 
   const handleJsonChange = text => {
     setJsonText(text);
@@ -228,7 +228,7 @@ function TransformForm({ config, onChange }) {
   };
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   return (
@@ -245,7 +245,7 @@ function TransformForm({ config, onChange }) {
           return (
             <div
               key={index}
-              className="border border-gray-200 dark:border-gray-700 rounded p-2 space-y-1.5"
+              className="border border-gray-200 dark:border-gray-700 rounded-sm p-2 space-y-1.5"
             >
               <div className="flex items-center gap-1.5">
                 <select
