@@ -69,7 +69,10 @@ export default function StartPage() {
     // Anonymous visitors carry a synthetic "Anonymous" name — greet them without it.
     const isAnonymous = !user || user.id === 'anonymous';
     const name = isAnonymous ? '' : user.name || user.email?.split('@')[0] || '';
-    return name ? `${base}, ${name}` : base;
+    // Punctuation and name placement are locale-specific — keep them translatable.
+    return name
+      ? t('startPage.greetingWithName', '{{greeting}}, {{name}}!', { greeting: base, name })
+      : t('startPage.greetingNoName', '{{greeting}}!', { greeting: base });
   }, [t, user]);
 
   const subtitle =
@@ -215,7 +218,7 @@ export default function StartPage() {
             </div>
           )}
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-2">
-            {greeting}!
+            {greeting}
           </h1>
           <p className="text-base text-gray-500 dark:text-gray-400">{subtitle}</p>
         </div>
@@ -315,9 +318,9 @@ export default function StartPage() {
         {featuredApps.length > 0 && (
           <div className="mb-7">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
+              <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
                 {t('startPage.jumpIntoApp', 'Jump into an app')}
-              </span>
+              </h2>
               <button
                 onClick={() => navigate('/apps')}
                 className="text-sm text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
@@ -359,9 +362,9 @@ export default function StartPage() {
         {/* Pick up where you left off — feature flagged */}
         {chatHistoryEnabled && recentChats.length > 0 && (
           <div>
-            <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 block mb-3">
+            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 block mb-3">
               {t('startPage.pickUpWhereYouLeftOff', 'Pick up where you left off')}
-            </span>
+            </h2>
             <div className="flex flex-wrap gap-2">
               {recentChats.map(chat => (
                 <button

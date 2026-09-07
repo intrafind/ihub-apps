@@ -3,7 +3,8 @@
     "skipToContent": "Zum Hauptinhalt springen"
   },
   "footer": {
-    "navigation": "Fußzeilen-Navigation"
+    "navigation": "Fußzeilen-Navigation",
+    "copyright": "© {{year}} iHub Apps"
   },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
@@ -1975,7 +1976,14 @@
     },
     "sidebar": {
       "backToApp": "Zurück zu iHub",
-      "adminPanel": "Admin-Bereich"
+      "adminPanel": "Admin-Bereich",
+      "expand": "Seitenleiste ausklappen",
+      "collapse": "Seitenleiste einklappen",
+      "search": "Admin durchsuchen...",
+      "searchPlaceholder": "Admin durchsuchen... Cmd+K",
+      "navLabel": "Admin-Navigation",
+      "openMenu": "Menü öffnen",
+      "closeMenu": "Menü schließen"
     },
     "ui": {
       "tabs": {
@@ -1983,7 +1991,7 @@
       },
       "startPage": {
         "title": "Startseiten-Konfiguration",
-        "description": "Konfiguriere die personalisierte Startseite für Nutzer.",
+        "description": "Konfigurieren Sie die personalisierte Startseite für Nutzer.",
         "defaultApp": "Standard-Chat-App",
         "defaultAppHelp": "Die App, deren Chat-Eingabe auf der Startseite angezeigt wird. Ohne Auswahl wird die erste zugängliche App verwendet.",
         "firstAvailable": "Erste verfügbare App (automatisch)",
@@ -2624,7 +2632,9 @@
     "admin": "Admin",
     "settings": "Einstellungen",
     "workflows": "Workflows",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "apps": "Apps",
+    "chats": "Chats"
   },
   "darkMode": {
     "auto": "Auto (System)",
@@ -2766,7 +2776,8 @@
   },
   "apps": {
     "searchApps": "Apps durchsuchen",
-    "sortBy": "Sortieren nach"
+    "sortBy": "Sortieren nach",
+    "appsList": "App-Liste"
   },
   "search": {
     "dialogLabel": "Anwendungen suchen",
@@ -2835,7 +2846,9 @@
     "pickUpWhereYouLeftOff": "Machen Sie dort weiter, wo Sie aufgehört haben",
     "inputUnavailable": "Die Chat-Eingabe konnte nicht geladen werden. Öffnen Sie die App, um ein Gespräch zu beginnen.",
     "appsUnavailable": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
-    "noApps": "Für Ihr Konto sind noch keine Apps verfügbar."
+    "noApps": "Für Ihr Konto sind noch keine Apps verfügbar.",
+    "greetingWithName": "{{greeting}}, {{name}}!",
+    "greetingNoName": "{{greeting}}!"
   },
   "sidebar": {
     "navigation": "Navigation",
@@ -2856,17 +2869,27 @@
     "noAppsMatch": "Keine passenden Apps",
     "openMenu": "Navigation öffnen",
     "closeMenu": "Navigation schließen",
-    "noApps": "Keine Apps verfügbar"
+    "noApps": "Keine Apps verfügbar",
+    "label": "Seitenleiste",
+    "searchApps": "Apps durchsuchen"
   },
   "chatHistory": {
     "title": "Ihre Chats",
-    "subtitle": "{{count}} Unterhaltungen in Ihren Apps",
     "searchPlaceholder": "Chats durchsuchen…",
     "groupRecent": "Aktuell",
     "groupByApp": "Nach App",
     "groupByDate": "Nach Datum",
     "noResults": "Keine passenden Chats gefunden",
-    "previewNotice": "Vorschau: Diese Seite zeigt Beispiel-Unterhaltungen. Der Chat-Verlauf wird noch nicht gespeichert."
+    "previewNotice": "Vorschau: Diese Seite zeigt Beispiel-Unterhaltungen. Der Chat-Verlauf wird noch nicht gespeichert.",
+    "subtitle_one": "{{count}} Unterhaltung in Ihren Apps",
+    "subtitle_other": "{{count}} Unterhaltungen in Ihren Apps",
+    "groupBy": "Gruppieren nach",
+    "group": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "last7days": "Letzte 7 Tage",
+      "older": "Älter"
+    }
   },
   "transcription": {
     "record": "Audio zum Transkribieren aufnehmen",

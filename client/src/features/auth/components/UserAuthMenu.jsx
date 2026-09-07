@@ -156,6 +156,9 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
         }
         aria-expanded={showDropdown}
         aria-haspopup="true"
+        aria-label={
+          variant === 'sidebar' ? `${t('auth.userMenu', 'User menu')}: ${displayName}` : undefined
+        }
       >
         {isAuthenticated ? (
           <>

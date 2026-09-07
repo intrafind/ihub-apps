@@ -628,7 +628,7 @@ function AppsList() {
                       <Icon
                         name="star"
                         size="sm"
-                        className={isFav ? 'text-yellow-400' : 'text-gray-300'}
+                        className={isFav ? 'text-amber-500' : 'text-gray-500 dark:text-gray-400'}
                         solid={isFav}
                       />
                     </button>

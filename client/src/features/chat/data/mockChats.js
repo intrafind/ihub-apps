@@ -8,7 +8,7 @@ export const MOCK_CHATS = [
     appName: 'iAssistant',
     appColor: '#4f46e5',
     appIcon: 'sparkles',
-    group: 'Today',
+    group: 'today',
     snippet:
       'iFinder keeps only the personal data it needs to operate: usernames, email addresses, assigned rights and roles…'
   },
@@ -19,7 +19,7 @@ export const MOCK_CHATS = [
     appName: 'Chat',
     appColor: '#4f46e5',
     appIcon: 'chat-bubble',
-    group: 'Today',
+    group: 'today',
     snippet:
       "For a round trip of roughly 1,020 km at the German mileage rate of €0.30/km you'd claim about €306…"
   },
@@ -30,7 +30,7 @@ export const MOCK_CHATS = [
     appName: 'Email Composer',
     appColor: '#2563eb',
     appIcon: 'mail',
-    group: 'Today',
+    group: 'today',
     snippet: 'Subject: Following up on our iFinder demo — Thank you again for your time last week…'
   },
   {
@@ -40,7 +40,7 @@ export const MOCK_CHATS = [
     appName: 'Regulatory Compare',
     appColor: '#16a34a',
     appIcon: 'document-search',
-    group: 'Yesterday',
+    group: 'yesterday',
     snippet:
       'GDPR requires opt-in consent before processing personal data, while CCPA is largely opt-out…'
   },
@@ -51,7 +51,7 @@ export const MOCK_CHATS = [
     appName: 'IT Support',
     appColor: '#4f46e5',
     appIcon: 'cog',
-    group: 'Yesterday',
+    group: 'yesterday',
     snippet:
       "Let's start with the basics: Hold the power button for 15 seconds to force a full shutdown…"
   },
@@ -62,7 +62,7 @@ export const MOCK_CHATS = [
     appName: 'FAQ Generator',
     appColor: '#4f46e5',
     appIcon: 'document',
-    group: 'Yesterday',
+    group: 'yesterday',
     snippet:
       'Q: Can external contractors get VPN access? A: Yes, with a sponsored account and manager approval…'
   },
@@ -73,7 +73,7 @@ export const MOCK_CHATS = [
     appName: 'Translator',
     appColor: '#0891b2',
     appIcon: 'globe',
-    group: 'Last 7 days',
+    group: 'last7days',
     snippet: 'Gerne. Senden Sie mir den Text des Datenblatts, und ich übersetze ihn ins Deutsche…'
   },
   {
@@ -83,7 +83,7 @@ export const MOCK_CHATS = [
     appName: 'Conversations Coach',
     appColor: '#4f46e5',
     appIcon: 'users',
-    group: 'Last 7 days',
+    group: 'last7days',
     snippet:
       "Let's structure it. Open with a specific observation rather than a judgement, describe the impact…"
   },
@@ -94,7 +94,7 @@ export const MOCK_CHATS = [
     appName: 'iHub Support Bot',
     appColor: '#16a34a',
     appIcon: 'question-mark-circle',
-    group: 'Last 7 days',
+    group: 'last7days',
     snippet:
       'Open the app card and click the star in its top-right corner, or right-click the app in the sidebar…'
   },
@@ -105,10 +105,11 @@ export const MOCK_CHATS = [
     appName: 'Chat',
     appColor: '#4f46e5',
     appIcon: 'chat-bubble',
-    group: 'Last 7 days',
+    group: 'last7days',
     snippet:
       'Q2 highlights: revenue ahead of plan, two major public-sector wins, and the iFinder 6 GA milestone…'
   }
 ];
 
-export const CHAT_GROUPS = ['Today', 'Yesterday', 'Last 7 days', 'Older'];
+// Date buckets as stable ids; labels come from i18n (chatHistory.group.*).
+export const CHAT_GROUPS = ['today', 'yesterday', 'last7days', 'older'];

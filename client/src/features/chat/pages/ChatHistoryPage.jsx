@@ -33,6 +33,17 @@ export default function ChatHistoryPage() {
     );
   }, [query]);
 
+  const groupLabel = useCallback(
+    g =>
+      ({
+        today: t('chatHistory.group.today', 'Today'),
+        yesterday: t('chatHistory.group.yesterday', 'Yesterday'),
+        last7days: t('chatHistory.group.last7days', 'Last 7 days'),
+        older: t('chatHistory.group.older', 'Older')
+      })[g] || g,
+    [t]
+  );
+
   const histGroups = useMemo(() => {
     if (grouping === 'recent') {
       return [{ key: 'all', label: '', showLabel: false, items: filteredChats }];
@@ -51,11 +62,11 @@ export default function ChatHistoryPage() {
     });
     return CHAT_GROUPS.filter(g => map[g]).map(g => ({
       key: g,
-      label: g,
+      label: groupLabel(g),
       showLabel: true,
       items: map[g]
     }));
-  }, [filteredChats, grouping]);
+  }, [filteredChats, grouping, groupLabel]);
 
   const handleClearSearch = useCallback(() => setQuery(''), []);
 
@@ -75,8 +86,10 @@ export default function ChatHistoryPage() {
               {t('chatHistory.title', 'Your chats')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {t('chatHistory.subtitle', '{{count}} conversations across your apps', {
-                count: filteredChats.length
+              {t('chatHistory.subtitle', {
+                count: filteredChats.length,
+                defaultValue_one: '{{count}} conversation across your apps',
+                defaultValue_other: '{{count}} conversations across your apps'
               })}
             </p>
           </div>
@@ -113,12 +126,14 @@ export default function ChatHistoryPage() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder={t('chatHistory.searchPlaceholder', 'Search your chats…')}
+              aria-label={t('chatHistory.searchPlaceholder', 'Search your chats…')}
               className="w-full pl-11 pr-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100 dark:placeholder-gray-500"
             />
             {query && (
               <button
                 onClick={handleClearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={t('common.clearSearch', 'Clear search')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <Icon name="x" size="sm" />
               </button>
@@ -126,11 +141,16 @@ export default function ChatHistoryPage() {
           </div>
 
           {/* Segmented grouping control */}
-          <div className="flex bg-gray-200 dark:bg-gray-700 rounded-xl p-1 gap-0.5">
+          <div
+            role="group"
+            aria-label={t('chatHistory.groupBy', 'Group by')}
+            className="flex bg-gray-200 dark:bg-gray-700 rounded-xl p-1 gap-0.5"
+          >
             {GROUPINGS.map(g => (
               <button
                 key={g}
                 onClick={() => setGrouping(g)}
+                aria-pressed={grouping === g}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   grouping === g
                     ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
@@ -167,9 +187,9 @@ export default function ChatHistoryPage() {
           histGroups.map(group => (
             <div key={group.key} className="mb-2">
               {group.showLabel && (
-                <div className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mt-5 mb-2.5 px-1">
+                <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mt-5 mb-2.5 px-1">
                   {group.label}
-                </div>
+                </h2>
               )}
               <div className="flex flex-col gap-2.5">
                 {group.items.map(chat => (
@@ -204,7 +224,7 @@ export default function ChatHistoryPage() {
                       </span>
                     </span>
                     <span className="flex-none text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
-                      {chat.group}
+                      {groupLabel(chat.group)}
                     </span>
                   </button>
                 ))}

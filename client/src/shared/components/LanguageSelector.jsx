@@ -1,8 +1,9 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { i18nService } from '../../i18n/i18n';
 import Icon from './Icon';
+import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 
 function LanguageSelector({ variant = 'header' }) {
   const { i18n, t } = useTranslation();
@@ -10,6 +11,22 @@ function LanguageSelector({ variant = 'header' }) {
   const [isChanging, setIsChanging] = useState(false);
   const [open, setOpen] = useState(false);
   const compactRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Arrow keys / Home / End move between languages, Enter or Space picks one,
+  // Escape closes; focus returns to the trigger when the popover closes.
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+  useKeyboardNavigation(menuRef, {
+    isActive: open,
+    onSelect: index => {
+      menuRef.current?.querySelectorAll('[role="menuitemradio"]')?.[index]?.click();
+    },
+    onClose: closeMenu
+  });
 
   // Close the compact popover when clicking outside
   useEffect(() => {
@@ -87,6 +104,7 @@ function LanguageSelector({ variant = 'header' }) {
     return (
       <div className="relative flex-none" ref={compactRef}>
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(o => !o)}
           disabled={isChanging}
@@ -104,18 +122,20 @@ function LanguageSelector({ variant = 'header' }) {
         </button>
         {open && (
           <ul
+            ref={menuRef}
             role="menu"
+            aria-label={t('common.selectLanguage', 'Select language')}
             className="absolute bottom-full right-0 mb-2 min-w-[8rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
           >
             {availableLanguages.map(lang => (
-              <li key={lang.code}>
+              <li key={lang.code} role="none">
                 <button
                   type="button"
                   role="menuitemradio"
                   aria-checked={i18n.language === lang.code}
                   onClick={() => {
                     changeLanguage(lang.code);
-                    setOpen(false);
+                    closeMenu();
                   }}
                   className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
                     i18n.language === lang.code

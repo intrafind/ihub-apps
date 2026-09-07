@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import useFeatureFlags from '../hooks/useFeatureFlags';
@@ -20,17 +20,16 @@ import { buildAssetUrl } from '../../utils/runtimeBasePath';
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
 const FAVORITE_APPS_KEY = 'ihub_favorite_apps';
 
-function NavButton({ icon, label, onClick, active }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
-        active
-          ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-      }`}
-    >
+// Navigation entries are real links (open-in-new-tab, middle click, history)
+// like the header links they replace; external targets open in a new tab.
+function NavItem({ icon, label, to, external = false, onClick, active }) {
+  const className = `flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+    active
+      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+  }`;
+  const content = (
+    <>
       <Icon
         name={icon}
         size="sm"
@@ -39,7 +38,30 @@ function NavButton({ icon, label, onClick, active }) {
         }
       />
       {label}
-    </button>
+    </>
+  );
+  if (external) {
+    return (
+      <a
+        href={to}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClick}
+        className={className}
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={className}
+    >
+      {content}
+    </Link>
   );
 }
 
@@ -62,6 +84,13 @@ function SectionHeader({ label, open, onToggle }) {
   );
 }
 
+const railItemClass = active =>
+  `w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+    active
+      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+  }`;
+
 export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {} }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -69,7 +98,6 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const location = useLocation();
-  const navigate = useNavigate();
 
   const { apps, loading: appsLoading } = useApps();
   const { favorites: favoriteAppIds, isFavorite, toggleFavorite } = useFavorites(FAVORITE_APPS_KEY);
@@ -86,20 +114,20 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const [appsOpen, setAppsOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
   const drawerRef = useRef(null);
+  const expandButtonRef = useRef(null);
+  const collapseButtonRef = useRef(null);
+  const refocusAfterToggle = useRef(false);
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
   // Same gate as the /prompts route in App.jsx.
   const promptsEnabled =
     uiConfig?.promptsList?.enabled !== false && featureFlags.isEnabled('promptsLibrary', true);
-
-  // Navigate and close the mobile drawer (no-op on desktop).
-  const go = useCallback(
-    to => {
-      navigate(to);
-      onMobileClose();
-    },
-    [navigate, onMobileClose]
-  );
+  // Without chat history the search only covers apps — say so.
+  const searchLabel = chatHistoryEnabled
+    ? t('sidebar.searchChatsApps', 'Search chats & apps')
+    : t('sidebar.searchApps', 'Search apps');
+  const sidebarLabel = t('sidebar.label', 'Sidebar');
+  const navigationLabel = t('sidebar.navigation', 'Navigation');
 
   // Mobile drawer is a modal dialog: move focus into it, keep Tab inside,
   // close on Escape, lock page scroll, and hand focus back when it closes.
@@ -141,19 +169,31 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     };
   }, [mobileOpen, onMobileClose]);
 
+  const persistCollapsed = value => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(value));
+    } catch {
+      // ignore storage failures (private mode, etc.)
+    }
+  };
+
   const toggleCollapsed = useCallback(() => {
+    refocusAfterToggle.current = true;
     setCollapsed(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      } catch {
-        // ignore storage failures (private mode, etc.)
-      }
-      return next;
+      persistCollapsed(!prev);
+      return !prev;
     });
     setSearchOpen(false);
     setSearch('');
   }, []);
+
+  // Collapsing swaps the whole tree, which would drop keyboard focus to <body>;
+  // land it on the counterpart toggle instead.
+  useEffect(() => {
+    if (!refocusAfterToggle.current) return;
+    refocusAfterToggle.current = false;
+    (collapsed ? expandButtonRef : collapseButtonRef).current?.focus();
+  }, [collapsed]);
 
   const handleToggleFav = useCallback(
     (e, appId) => {
@@ -263,106 +303,102 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       <IHubLogo size={size} />
     );
 
+  const favLabel = fav =>
+    fav
+      ? t('pages.appsList.unfavorite', 'Remove from favorites')
+      : t('pages.appsList.favorite', 'Add to favorites');
+
   // ---- Collapsed rail (desktop only) ----
   const rail = (
     <aside
       className="hidden md:flex w-[72px] flex-none flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
-      aria-label={t('sidebar.navigation', 'Navigation')}
+      aria-label={sidebarLabel}
     >
-      <button
-        onClick={() => go('/')}
+      <Link
+        to="/"
         title={t('sidebar.home', 'Home')}
         aria-label={t('sidebar.home', 'Home')}
         className="mb-1 rounded-lg p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
       >
         {renderBrandMark(28)}
-      </button>
+      </Link>
 
       <button
+        ref={expandButtonRef}
         title={t('sidebar.expand', 'Expand sidebar')}
         aria-label={t('sidebar.expand', 'Expand sidebar')}
         onClick={toggleCollapsed}
-        className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        className={railItemClass(false)}
       >
         <Icon name="chevron-right" size="md" />
       </button>
 
-      <button
-        title={t('sidebar.newChat', 'New chat')}
-        aria-label={t('sidebar.newChat', 'New chat')}
-        onClick={() => go('/')}
-        className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-      >
-        <Icon name="plus" size="md" />
-      </button>
-
-      <button
-        title={t('sidebar.search', 'Search')}
-        aria-label={t('sidebar.search', 'Search')}
-        onClick={() => {
-          setCollapsed(false);
-          try {
-            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
-          } catch {
-            // ignore
-          }
-          setSearchOpen(true);
-        }}
-        className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-      >
-        <Icon name="search" size="md" />
-      </button>
-
-      <button
-        title={t('sidebar.browseApps', 'Browse all apps')}
-        aria-label={t('sidebar.browseApps', 'Browse all apps')}
-        aria-current={isOnApps ? 'page' : undefined}
-        onClick={() => go('/apps')}
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
-          isOnApps
-            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-        }`}
-      >
-        <Icon name="home" size="md" />
-      </button>
-
-      {promptsEnabled && (
-        <button
-          title={t('sidebar.prompts', 'Prompts')}
-          aria-label={t('sidebar.prompts', 'Prompts')}
-          aria-current={isOnPrompts ? 'page' : undefined}
-          onClick={() => go('/prompts')}
-          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
-            isOnPrompts
-              ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+      <nav aria-label={navigationLabel} className="flex flex-col items-center gap-1.5">
+        <Link
+          to="/"
+          title={t('sidebar.newChat', 'New chat')}
+          aria-label={t('sidebar.newChat', 'New chat')}
+          className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
         >
-          <Icon name="sparkles" size="md" />
+          <Icon name="plus" size="md" />
+        </Link>
+
+        <button
+          title={searchLabel}
+          aria-label={searchLabel}
+          onClick={() => {
+            setCollapsed(false);
+            persistCollapsed(false);
+            setSearchOpen(true);
+          }}
+          className={railItemClass(false)}
+        >
+          <Icon name="search" size="md" />
         </button>
-      )}
 
-      <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" />
+        <Link
+          to="/apps"
+          title={t('sidebar.browseApps', 'Browse all apps')}
+          aria-label={t('sidebar.browseApps', 'Browse all apps')}
+          aria-current={isOnApps ? 'page' : undefined}
+          className={railItemClass(isOnApps)}
+        >
+          <Icon name="home" size="md" />
+        </Link>
 
-      {apps
-        .filter(a => favoriteAppIds.includes(a.id))
-        .slice(0, 4)
-        .map(app => {
-          const name = getLocalizedContent(app.name, currentLanguage) || app.id;
-          return (
-            <button
-              key={app.id}
-              title={name}
-              aria-label={name}
-              onClick={() => go(`/apps/${app.id}`)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
-              style={{ backgroundColor: app.color || '#4f46e5' }}
-            >
-              <Icon name={app.icon} size="md" />
-            </button>
-          );
-        })}
+        {promptsEnabled && (
+          <Link
+            to="/prompts"
+            title={t('sidebar.prompts', 'Prompts')}
+            aria-label={t('sidebar.prompts', 'Prompts')}
+            aria-current={isOnPrompts ? 'page' : undefined}
+            className={railItemClass(isOnPrompts)}
+          >
+            <Icon name="sparkles" size="md" />
+          </Link>
+        )}
+
+        <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" aria-hidden="true" />
+
+        {apps
+          .filter(a => favoriteAppIds.includes(a.id))
+          .slice(0, 4)
+          .map(app => {
+            const name = getLocalizedContent(app.name, currentLanguage) || app.id;
+            return (
+              <Link
+                key={app.id}
+                to={`/apps/${app.id}`}
+                title={name}
+                aria-label={name}
+                className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
+                style={{ backgroundColor: app.color || '#4f46e5' }}
+              >
+                <Icon name={app.icon} size="md" />
+              </Link>
+            );
+          })}
+      </nav>
 
       <div className="flex-1" />
 
@@ -372,12 +408,17 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   );
 
   // ---- Expanded content (shared by desktop-expanded and mobile drawer) ----
+  const closeLabel = mobileOpen
+    ? t('sidebar.closeMenu', 'Close navigation')
+    : t('sidebar.collapse', 'Collapse sidebar');
+
   const expandedContent = (
     <>
       {/* Header */}
       <div className="px-4 pt-4 pb-0 flex items-center gap-2.5">
-        <button
-          onClick={() => go('/')}
+        <Link
+          to="/"
+          onClick={onMobileClose}
           title={t('sidebar.home', 'Home')}
           className="flex items-center gap-2.5 flex-1 min-w-0 rounded-lg -ml-1 pl-1 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
         >
@@ -392,11 +433,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               </span>
             )}
           </span>
-        </button>
+        </Link>
         {/* Collapse on desktop, close on mobile */}
         <button
-          title={t('sidebar.collapse', 'Collapse sidebar')}
-          aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+          ref={mobileOpen ? undefined : collapseButtonRef}
+          title={closeLabel}
+          aria-label={closeLabel}
           onClick={() => {
             if (mobileOpen) onMobileClose();
             else toggleCollapsed();
@@ -409,20 +451,21 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
       {/* New chat + search */}
       <div className="px-4 pt-3.5 pb-1 flex gap-2">
-        <button
-          onClick={() => go('/')}
+        <Link
+          to="/"
+          onClick={onMobileClose}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
         >
           <Icon name="plus" size="sm" />
           {t('sidebar.newChat', 'New chat')}
-        </button>
+        </Link>
         <button
           onClick={() => {
             setSearchOpen(s => !s);
             if (searchOpen) setSearch('');
           }}
-          title={t('sidebar.searchChatsApps', 'Search chats & apps')}
-          aria-label={t('sidebar.searchChatsApps', 'Search chats & apps')}
+          title={searchLabel}
+          aria-label={searchLabel}
           aria-expanded={searchOpen}
           className={`w-11 flex items-center justify-center rounded-xl border transition-colors ${
             searchOpen
@@ -443,8 +486,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={t('sidebar.searchPlaceholder', 'Search chats & apps')}
-              aria-label={t('sidebar.searchChatsApps', 'Search chats & apps')}
+              placeholder={searchLabel}
+              aria-label={searchLabel}
               autoFocus
               className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-gray-50 dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100"
             />
@@ -455,30 +498,26 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       {/* Scrollable middle */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
         {/* Nav items */}
-        <nav className="px-2 pt-2 pb-1" aria-label={t('sidebar.navigation', 'Navigation')}>
-          <NavButton
+        <nav className="px-2 pt-2 pb-1" aria-label={navigationLabel}>
+          <NavItem
             icon="home"
             label={t('sidebar.browseApps', 'Browse all apps')}
-            onClick={() => go('/apps')}
+            to="/apps"
+            onClick={onMobileClose}
             active={isOnApps}
           />
           {configuredLinks.map(link => {
             const label = getLocalizedContent(link.name, currentLanguage) || link.url;
             const isExternal = /^https?:\/\//.test(link.url) || link.url.startsWith('mailto:');
             return (
-              <NavButton
+              <NavItem
                 key={link.url}
                 icon={linkIconFor(link.url)}
                 label={label}
+                to={link.url}
+                external={isExternal}
+                onClick={onMobileClose}
                 active={!isExternal && isActivePath(location.pathname, link.url)}
-                onClick={() => {
-                  if (isExternal) {
-                    window.open(link.url, '_blank', 'noopener,noreferrer');
-                    onMobileClose();
-                  } else {
-                    go(link.url);
-                  }
-                }}
               />
             );
           })}
@@ -516,8 +555,9 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                       : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
-                  <button
-                    onClick={() => go(`/apps/${app.id}`)}
+                  <Link
+                    to={`/apps/${app.id}`}
+                    onClick={onMobileClose}
                     title={name}
                     aria-current={isActive ? 'page' : undefined}
                     className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 text-left min-w-0"
@@ -529,34 +569,27 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                       <Icon name={app.icon} size="sm" className="w-3.5 h-3.5" />
                     </span>
                     <span className="flex-1 truncate">{name}</span>
-                  </button>
+                  </Link>
                   <button
                     onClick={e => handleToggleFav(e, app.id)}
                     aria-pressed={fav}
-                    aria-label={
-                      fav
-                        ? t('pages.appsList.unfavorite', 'Remove from favorites')
-                        : t('pages.appsList.favorite', 'Add to favorites')
-                    }
-                    title={
-                      fav
-                        ? t('pages.appsList.unfavorite', 'Remove from favorites')
-                        : t('pages.appsList.favorite', 'Add to favorites')
-                    }
-                    className="w-8 h-8 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    aria-label={favLabel(fav)}
+                    title={favLabel(fav)}
+                    className="w-8 h-8 flex-none mr-1 rounded-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Icon
                       name="star"
                       size="sm"
-                      className={fav ? 'text-yellow-400' : 'text-gray-300'}
+                      className={fav ? 'text-amber-500' : 'text-gray-500 dark:text-gray-400'}
                       solid={fav}
                     />
                   </button>
                 </div>
               );
             })}
-            <button
-              onClick={() => go('/apps')}
+            <Link
+              to="/apps"
+              onClick={onMobileClose}
               className="flex items-center gap-2.5 w-full px-3 py-1.5 mt-1 rounded-lg text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               <span className="w-6 h-6 flex items-center justify-center flex-none">
@@ -566,7 +599,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                 {apps.length}
               </span>
-            </button>
+            </Link>
           </div>
         )}
 
@@ -581,9 +614,10 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             {recentsOpen && (
               <div className="px-2 pb-2">
                 {recentChats.map(chat => (
-                  <button
+                  <Link
                     key={chat.id}
-                    onClick={() => go('/chats')}
+                    to="/chats"
+                    onClick={onMobileClose}
                     title={chat.title}
                     className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
                   >
@@ -594,10 +628,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                       <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
                     </span>
                     <span className="flex-1 truncate text-[13px]">{chat.title}</span>
-                  </button>
+                  </Link>
                 ))}
-                <button
-                  onClick={() => go('/chats')}
+                <Link
+                  to="/chats"
+                  onClick={onMobileClose}
                   aria-current={isOnChats ? 'page' : undefined}
                   className="flex items-center gap-2.5 w-full px-3 py-1.5 mt-1 rounded-lg text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
@@ -608,7 +643,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                   <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                     {MOCK_CHATS.length}
                   </span>
-                </button>
+                </Link>
               </div>
             )}
           </>
@@ -636,7 +671,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       ) : (
         <aside
           className="hidden md:flex w-[284px] flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
-          aria-label={t('sidebar.navigation', 'Navigation')}
+          aria-label={sidebarLabel}
         >
           {expandedContent}
         </aside>
@@ -648,7 +683,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           className="md:hidden fixed inset-0 z-40"
           role="dialog"
           aria-modal="true"
-          aria-label={t('sidebar.navigation', 'Navigation')}
+          aria-label={navigationLabel}
         >
           <div
             className="absolute inset-0 bg-black/50"
@@ -658,7 +693,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           <aside
             ref={drawerRef}
             className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
-            aria-label={t('sidebar.navigation', 'Navigation')}
+            aria-label={sidebarLabel}
           >
             {expandedContent}
           </aside>

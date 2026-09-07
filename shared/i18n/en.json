@@ -3,7 +3,8 @@
     "skipToContent": "Skip to main content"
   },
   "footer": {
-    "navigation": "Footer navigation"
+    "navigation": "Footer navigation",
+    "copyright": "© {{year}} iHub Apps"
   },
   "attachedFiles": {
     "removeAll": "Remove All",
@@ -1722,7 +1723,14 @@
     },
     "sidebar": {
       "backToApp": "Back to iHub",
-      "adminPanel": "Admin Panel"
+      "adminPanel": "Admin Panel",
+      "expand": "Expand sidebar",
+      "collapse": "Collapse sidebar",
+      "search": "Search admin...",
+      "searchPlaceholder": "Search admin... Cmd+K",
+      "navLabel": "Admin navigation",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
     },
     "ui": {
       "tabs": {
@@ -2659,7 +2667,9 @@
     "admin": "Admin",
     "settings": "Settings",
     "workflows": "Workflows",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "apps": "Apps",
+    "chats": "Chats"
   },
   "darkMode": {
     "auto": "Auto (system)",
@@ -2801,7 +2811,8 @@
   },
   "apps": {
     "searchApps": "Search apps",
-    "sortBy": "Sort by"
+    "sortBy": "Sort by",
+    "appsList": "Apps list"
   },
   "search": {
     "dialogLabel": "Search applications",
@@ -2870,7 +2881,9 @@
     "pickUpWhereYouLeftOff": "Pick up where you left off",
     "inputUnavailable": "The chat input could not be loaded. Open the app to start a conversation.",
     "appsUnavailable": "Apps could not be loaded. Please try again later.",
-    "noApps": "No apps are available for your account yet."
+    "noApps": "No apps are available for your account yet.",
+    "greetingWithName": "{{greeting}}, {{name}}!",
+    "greetingNoName": "{{greeting}}!"
   },
   "sidebar": {
     "navigation": "Navigation",
@@ -2891,17 +2904,27 @@
     "noAppsMatch": "No apps match",
     "openMenu": "Open navigation",
     "closeMenu": "Close navigation",
-    "noApps": "No apps available"
+    "noApps": "No apps available",
+    "label": "Sidebar",
+    "searchApps": "Search apps"
   },
   "chatHistory": {
     "title": "Your chats",
-    "subtitle": "{{count}} conversations across your apps",
     "searchPlaceholder": "Search your chats…",
     "groupRecent": "Recent",
     "groupByApp": "By app",
     "groupByDate": "By date",
     "noResults": "No chats match your search",
-    "previewNotice": "Preview: this page shows sample conversations. Chat history is not stored yet."
+    "previewNotice": "Preview: this page shows sample conversations. Chat history is not stored yet.",
+    "subtitle_one": "{{count}} conversation across your apps",
+    "subtitle_other": "{{count}} conversations across your apps",
+    "groupBy": "Group by",
+    "group": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7days": "Last 7 days",
+      "older": "Older"
+    }
   },
   "transcription": {
     "record": "Record audio to transcribe",

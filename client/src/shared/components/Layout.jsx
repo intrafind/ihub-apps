@@ -161,7 +161,9 @@ function Layout() {
                   <span className="truncate">
                     {uiConfig?.footer?.text
                       ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                      : t('footer.copyright')}
+                      : t('footer.copyright', '© {{year}} iHub Apps', {
+                          year: new Date().getFullYear()
+                        })}
                   </span>
                   {uiConfig?.footer?.links && (
                     <nav
@@ -353,7 +355,9 @@ function Layout() {
                     <p>
                       {uiConfig?.footer?.text
                         ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                        : t('footer.copyright')}
+                        : t('footer.copyright', '© {{year}} iHub Apps', {
+                            year: new Date().getFullYear()
+                          })}
                     </p>
                   </div>
                   <nav

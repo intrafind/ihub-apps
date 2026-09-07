@@ -68,10 +68,16 @@ function StartPageCustomization({ config, onUpdate, t }) {
         {/* Toggle: show the default chat app input at all */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span
+              id="startPage-showDefaultApp-label"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.ui.startPage.showDefaultApp', 'Show default chat app')}
             </span>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p
+              id="startPage-showDefaultApp-help"
+              className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            >
               {t(
                 'admin.ui.startPage.showDefaultAppHelp',
                 'When off, the start page shows the greeting and apps but no chat input.'
@@ -82,6 +88,8 @@ function StartPageCustomization({ config, onUpdate, t }) {
             type="button"
             role="switch"
             aria-checked={showDefaultApp}
+            aria-labelledby="startPage-showDefaultApp-label"
+            aria-describedby="startPage-showDefaultApp-help"
             onClick={() => onUpdate({ showDefaultApp: !showDefaultApp })}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
               showDefaultApp ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
