@@ -281,7 +281,7 @@ function IFinderConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
@@ -290,9 +290,9 @@ function IFinderConfig() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0 mt-1">
+        <div className="shrink-0 mt-1">
           <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Icon name="search" size="lg" className="text-indigo-600 dark:text-indigo-400" />
           </div>
@@ -333,7 +333,7 @@ function IFinderConfig() {
               id="iFinderEnabled"
               checked={iFinderConfig.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
               htmlFor="iFinderEnabled"
@@ -361,7 +361,7 @@ function IFinderConfig() {
                     type="url"
                     value={iFinderConfig.baseUrl}
                     onChange={e => handleIFinderChange('baseUrl', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     placeholder="https://dama.dev.intrafind.io"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -377,7 +377,7 @@ function IFinderConfig() {
                       id="iFinderUseOidcKeyPair"
                       checked={iFinderConfig.useOidcKeyPair}
                       onChange={handleToggleOidcKeyPair}
-                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label
                       htmlFor="iFinderUseOidcKeyPair"
@@ -446,7 +446,7 @@ function IFinderConfig() {
                             : 'warning'
                         }
                         size="md"
-                        className={`mt-0.5 mr-3 flex-shrink-0 ${
+                        className={`mt-0.5 mr-3 shrink-0 ${
                           (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
                             ? 'text-green-500'
                             : 'text-amber-500'
@@ -461,7 +461,7 @@ function IFinderConfig() {
                             <p className="mt-1 text-green-700 dark:text-green-300">
                               {t('admin.iFinder.oidcKeyPairReadyHelp', 'Configure iFinder with:')}
                             </p>
-                            <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                            <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded-sm p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
                               {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
                             </pre>
                           </>
@@ -497,7 +497,7 @@ function IFinderConfig() {
                         value={iFinderConfig.privateKey}
                         onChange={e => handleIFinderChange('privateKey', e.target.value)}
                         rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
                         placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -516,7 +516,7 @@ function IFinderConfig() {
                         <select
                           value={iFinderConfig.algorithm}
                           onChange={e => handleIFinderChange('algorithm', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         >
                           {ALGORITHM_OPTIONS.map(alg => (
                             <option key={alg} value={alg}>
@@ -541,7 +541,7 @@ function IFinderConfig() {
                           }
                           min={60}
                           max={86400}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         />
                       </div>
                     </div>
@@ -555,7 +555,7 @@ function IFinderConfig() {
                           type="text"
                           value={iFinderConfig.issuer}
                           onChange={e => handleIFinderChange('issuer', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                           placeholder="ihub-apps"
                         />
                       </div>
@@ -568,7 +568,7 @@ function IFinderConfig() {
                           type="text"
                           value={iFinderConfig.audience}
                           onChange={e => handleIFinderChange('audience', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                           placeholder="ifinder-api"
                         />
                       </div>
@@ -587,7 +587,7 @@ function IFinderConfig() {
                         type="text"
                         value={iFinderConfig.audience}
                         onChange={e => handleIFinderChange('audience', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="ifinder-api"
                       />
                     </div>
@@ -606,7 +606,7 @@ function IFinderConfig() {
                         }
                         min={60}
                         max={86400}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                   </div>
@@ -620,7 +620,7 @@ function IFinderConfig() {
                     type="text"
                     value={iFinderConfig.defaultScope}
                     onChange={e => handleIFinderChange('defaultScope', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     placeholder="fa_index_read"
                   />
                 </div>
@@ -643,7 +643,7 @@ function IFinderConfig() {
                         handleIFinderChange('jwtSubjectField', value);
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   >
                     {JWT_SUBJECT_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>
@@ -668,7 +668,7 @@ function IFinderConfig() {
                       type="text"
                       value={iFinderConfig.jwtSubjectField}
                       onChange={e => handleIFinderChange('jwtSubjectField', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
                       placeholder="${domain}\${username}"
                     />
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -695,7 +695,7 @@ function IFinderConfig() {
                       type="text"
                       value={iAssistantConfig.defaultProfileId}
                       onChange={e => handleIAssistantChange('defaultProfileId', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       placeholder="c2VhcmNocHJvZmlsZS1zdGFuZGFyZA=="
                     />
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -718,7 +718,7 @@ function IFinderConfig() {
                       }
                       min={5000}
                       max={300000}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     />
                   </div>
                 </div>
@@ -764,7 +764,7 @@ function IFinderConfig() {
                           'admin.iFinder.diagnostics.currentAdmin',
                           'your admin account'
                         )}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     <div>
@@ -779,7 +779,7 @@ function IFinderConfig() {
                           'admin.iFinder.diagnostics.currentAdmin',
                           'your admin account'
                         )}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                     <div>
@@ -791,7 +791,7 @@ function IFinderConfig() {
                         value={testOptions.userDomain}
                         onChange={e => handleTestOptionChange('userDomain', e.target.value)}
                         placeholder="EXAMPLE"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       />
                     </div>
                   </div>
@@ -809,7 +809,7 @@ function IFinderConfig() {
                         id="iFinderTestIncludeToken"
                         checked={testOptions.includeToken}
                         onChange={e => handleTestOptionChange('includeToken', e.target.checked)}
-                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
                       />
                       <div className="ml-2">
                         <label
@@ -835,7 +835,7 @@ function IFinderConfig() {
                         onChange={e =>
                           handleTestOptionChange('conversationRoundTrip', e.target.checked)
                         }
-                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                        className="mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
                       />
                       <div className="ml-2">
                         <label
@@ -914,11 +914,11 @@ function IFinderConfig() {
               disabled={saving}
               className={`
                 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
-                rounded-md shadow-sm text-white
+                rounded-md shadow-xs text-white
                 ${
                   saving
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                 }
               `}
             >
@@ -961,11 +961,11 @@ function IFinderConfig() {
                 disabled={testing.iFinder}
                 className={`
                   inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
-                  text-sm font-medium rounded-md shadow-sm
+                  text-sm font-medium rounded-md shadow-xs
                   ${
                     testing.iFinder
                       ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                   }
                 `}
               >
@@ -1009,11 +1009,11 @@ function IFinderConfig() {
                 disabled={testing.iAssistant}
                 className={`
                   inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
-                  text-sm font-medium rounded-md shadow-sm
+                  text-sm font-medium rounded-md shadow-xs
                   ${
                     testing.iAssistant
                       ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                   }
                 `}
               >

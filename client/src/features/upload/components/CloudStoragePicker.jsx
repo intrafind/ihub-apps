@@ -51,10 +51,10 @@ const CloudStoragePicker = ({
   // No cloud storage enabled
   if (!cloudStorage.enabled || enabledProviders.length === 0) {
     return (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 p-6">
           <div className="flex items-start mb-4">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Icon name="warning" size="lg" className="text-yellow-500" />
             </div>
             <div className="ml-3">
@@ -80,7 +80,7 @@ const CloudStoragePicker = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full m-4 p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">

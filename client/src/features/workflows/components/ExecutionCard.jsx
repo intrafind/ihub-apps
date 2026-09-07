@@ -21,7 +21,7 @@ function InputPreview({ inputPreview, t }) {
     parts.push(t('workflows.executionCard.moreInputs', '+{{count}} more', { count: more }));
 
   return (
-    <div className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 break-words">
+    <div className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2 wrap-break-word">
       <span className="font-medium">{t('workflows.executionCard.inputLabel', 'Input')}:</span>{' '}
       {parts.join(' · ')}
     </div>
@@ -130,13 +130,13 @@ function ExecutionCard({ execution, onJoin, onDelete, onArchive, onDownload }) {
           </div>
 
           {/* Right side: Action icons + Join/View */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {onDownload && (
               <button
                 type="button"
                 onClick={() => canDownload && onDownload(execution)}
                 disabled={!canDownload}
-                className={`p-2 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                className={`p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500 ${
                   canDownload
                     ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
                     : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
@@ -156,7 +156,7 @@ function ExecutionCard({ execution, onJoin, onDelete, onArchive, onDownload }) {
                 type="button"
                 onClick={() => canDelete && onDelete(execution)}
                 disabled={!canDelete}
-                className={`p-2 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                className={`p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-red-500 ${
                   canDelete
                     ? 'text-gray-500 hover:text-red-600 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900/20'
                     : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
@@ -178,7 +178,7 @@ function ExecutionCard({ execution, onJoin, onDelete, onArchive, onDownload }) {
               <button
                 type="button"
                 onClick={() => onArchive(execution, !isArchived)}
-                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 title={
                   isArchived
                     ? t('workflows.executionCard.unarchive', 'Unarchive')

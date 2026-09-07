@@ -71,11 +71,7 @@ function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
       className={`flex items-start gap-3 p-3 rounded-lg border ${config.bgColor} ${config.borderColor} ${config.textColor} text-sm`}
       role="alert"
     >
-      <Icon
-        name={config.iconName}
-        size="md"
-        className={`flex-shrink-0 mt-0.5 ${config.iconColor}`}
-      />
+      <Icon name={config.iconName} size="md" className={`shrink-0 mt-0.5 ${config.iconColor}`} />
 
       <div className="flex-1 min-w-0">
         {level === 'alert' && (
@@ -83,14 +79,14 @@ function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
             {t('pages.appChat.modelSelector.hint.alertTitle', 'Important Notice')}
           </div>
         )}
-        <div className="whitespace-pre-wrap break-words">{message}</div>
+        <div className="whitespace-pre-wrap wrap-break-word">{message}</div>
       </div>
 
       {dismissible && (
         <button
           type="button"
           onClick={handleDismiss}
-          className={`flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors ${config.iconColor}`}
+          className={`shrink-0 p-1 rounded-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors ${config.iconColor}`}
           title={t('pages.appChat.modelSelector.hint.dismiss', 'Dismiss')}
         >
           <Icon name="xMark" size="sm" />
@@ -101,7 +97,7 @@ function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
         <button
           type="button"
           onClick={handleAcknowledge}
-          className="flex-shrink-0 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+          className="shrink-0 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-sm transition-colors"
         >
           {t('pages.appChat.modelSelector.hint.acknowledge', 'I Understand')}
         </button>

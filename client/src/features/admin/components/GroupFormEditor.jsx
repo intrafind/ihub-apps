@@ -131,7 +131,7 @@ function GroupFormEditor({
           title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
         />
         {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -159,7 +159,7 @@ function GroupFormEditor({
                     value={group.id || ''}
                     onChange={e => handleInputChange('id', e.target.value)}
                     disabled={isProtectedGroup(group.id)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
                       validationErrors.id ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter unique group ID"
@@ -188,7 +188,7 @@ function GroupFormEditor({
                     required={isFieldRequired('name', jsonSchema)}
                     value={group.name || ''}
                     onChange={e => handleInputChange('name', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                       validationErrors.name ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter group display name"
@@ -208,7 +208,7 @@ function GroupFormEditor({
                     value={group.description || ''}
                     onChange={e => handleInputChange('description', e.target.value)}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Enter group description"
                   />
                 </div>
@@ -219,7 +219,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.adminAccess || false}
                       onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.adminAccess', 'Admin Access')}
@@ -236,7 +236,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.contentAdmin || false}
                       onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Sources)')}
@@ -253,7 +253,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.enabled !== false}
                       onChange={e => handleInputChange('enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.enabled', 'Enabled')}
@@ -266,7 +266,7 @@ function GroupFormEditor({
         </div>
 
         {/* External Group Mappings */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -301,7 +301,7 @@ function GroupFormEditor({
         </div>
 
         {/* Permissions */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">

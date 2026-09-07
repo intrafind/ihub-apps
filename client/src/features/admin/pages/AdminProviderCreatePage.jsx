@@ -140,7 +140,7 @@ function AdminProviderCreatePage() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
           {/* Provider ID */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -249,7 +249,7 @@ function AdminProviderCreatePage() {
                 type="checkbox"
                 checked={formData.enabled}
                 onChange={e => handleChange('enabled', e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.providers.create.enabled', 'Provider Enabled')}

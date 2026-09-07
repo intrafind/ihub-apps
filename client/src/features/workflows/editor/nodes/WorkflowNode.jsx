@@ -96,7 +96,7 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
       }`}
       style={{ borderColor: color }}
     >
-      {!isStart && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
+      {!isStart && <Handle type="target" position={Position.Left} className="bg-gray-400!" />}
 
       <div
         className="px-3 py-1.5 text-xs font-semibold text-white rounded-t-md flex items-center gap-1.5"
@@ -137,14 +137,14 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
             id="true"
             position={Position.Right}
             style={{ top: '35%' }}
-            className="!bg-emerald-500"
+            className="bg-emerald-500!"
           />
           <Handle
             type="source"
             id="false"
             position={Position.Right}
             style={{ top: '72%' }}
-            className="!bg-rose-400"
+            className="bg-rose-400!"
           />
           <span className="absolute right-1.5 top-[35%] -translate-y-1/2 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 pointer-events-none">
             yes
@@ -154,7 +154,7 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
           </span>
         </>
       ) : (
-        !isEnd && <Handle type="source" position={Position.Right} className="!bg-gray-400" />
+        !isEnd && <Handle type="source" position={Position.Right} className="bg-gray-400!" />
       )}
     </div>
   );

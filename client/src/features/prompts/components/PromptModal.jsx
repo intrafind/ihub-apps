@@ -43,7 +43,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-lg w-full p-6 animate-fade-in mx-4 max-h-[60vh] flex flex-col">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-xl font-semibold flex items-center text-gray-900 dark:text-gray-100">
@@ -61,13 +61,13 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
         <p className="text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-line">
           {highlightVariables(prompt.description || prompt.prompt)}
         </p>
-        <pre className="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-3 rounded whitespace-pre-wrap break-words mb-4 overflow-y-auto flex-grow">
+        <pre className="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-3 rounded-sm whitespace-pre-wrap wrap-break-word mb-4 overflow-y-auto grow">
           {prompt.prompt}
         </pre>
         <div className="flex flex-wrap justify-end gap-2">
           <button
             onClick={handleCopy}
-            className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
+            className="px-3 py-1 text-sm bg-indigo-600 text-white rounded-sm hover:bg-indigo-700 flex items-center gap-1"
           >
             {copyStatus === 'success' ? (
               <Icon name="check-circle" className="text-green-600" solid />
@@ -81,7 +81,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
           {prompt.appId && (
             <Link
               to={`/apps/${prompt.appId}?prefill=${encodeURIComponent(prompt.prompt.replace('[content]', ''))}${prompt.variables && prompt.variables.length > 0 ? '&' + prompt.variables.map(v => `var_${v.name}=${encodeURIComponent(v.defaultValue || '')}`).join('&') : ''}`}
-              className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
+              className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
               onClick={onClose}
             >
               {t('pages.promptsList.useInApp', 'Try it')}
@@ -91,7 +91,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
             onClick={() => {
               onToggleFavorite(prompt.id);
             }}
-            className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
+            className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
           >
             <Icon
               name="star"
@@ -101,7 +101,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
           </button>
           <button
             onClick={handleShare}
-            className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
+            className="px-3 py-1 text-sm border border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 rounded-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/50 flex items-center"
             aria-label={t('pages.promptsList.sharePrompt', 'Share prompt')}
           >
             {shareStatus === 'success' ? (

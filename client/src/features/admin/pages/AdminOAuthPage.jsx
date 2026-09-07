@@ -11,7 +11,7 @@ function StatusRow({ icon, iconColor, title, description, enabled, count, onClic
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]"
+      className="w-full text-left bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]"
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-start gap-4 min-w-0">

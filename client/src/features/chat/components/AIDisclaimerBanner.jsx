@@ -41,7 +41,7 @@ function AIDisclaimerBanner() {
       className={`${baseClasses} ${clickableClasses} rounded-lg transition-colors`}
       title={t('disclaimer.title', 'Disclaimer')}
     >
-      <Icon name="informationCircle" size="sm" className="flex-shrink-0" />
+      <Icon name="informationCircle" size="sm" className="shrink-0" />
       <span>
         {disclaimerHint ||
           t(

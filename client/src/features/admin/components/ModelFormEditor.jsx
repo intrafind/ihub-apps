@@ -281,7 +281,7 @@ function ModelFormEditor({
           title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
         />
         {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -308,7 +308,7 @@ function ModelFormEditor({
                     value={data.id || ''}
                     onChange={handleInputChange}
                     disabled={!isNewModel}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                       validationErrors.id || errors.id
                         ? 'border-red-300 text-red-900 placeholder-red-300'
                         : ''
@@ -358,7 +358,7 @@ function ModelFormEditor({
                     name="modelType"
                     value={data.modelType || 'chat'}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
                     <option value="transcription">
@@ -385,7 +385,7 @@ function ModelFormEditor({
                     name="provider"
                     value={data.provider || ''}
                     onChange={handleInputChange}
-                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
                       errors.provider ? 'border-red-300 text-red-900' : ''
                     }`}
                     required
@@ -416,7 +416,7 @@ function ModelFormEditor({
                     value={data.modelId || ''}
                     onChange={handleInputChange}
                     placeholder={t('admin.models.placeholders.apiModelId')}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                     }`}
                   />
@@ -451,7 +451,7 @@ function ModelFormEditor({
                           ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
                           : t('admin.models.placeholders.apiUrl')
                       }
-                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                         errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                       }`}
                       required
@@ -487,7 +487,7 @@ function ModelFormEditor({
                       />
                     )}
                   </div>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="mt-1 relative rounded-md shadow-xs">
                     <input
                       type="password"
                       name="apiKey"
@@ -526,7 +526,7 @@ function ModelFormEditor({
         </div>
 
         {/* Configuration */}
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -560,7 +560,7 @@ function ModelFormEditor({
                         value={data.contextWindow || ''}
                         onChange={handleInputChange}
                         min="1"
-                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                           errors.contextWindow ? 'border-red-300 text-red-900' : ''
                         }`}
                         required={isFieldRequired('contextWindow', jsonSchema)}
@@ -588,7 +588,7 @@ function ModelFormEditor({
                         value={data.maxOutputTokens || ''}
                         onChange={handleInputChange}
                         min="1"
-                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                           errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
                         }`}
                         required={isFieldRequired('maxOutputTokens', jsonSchema)}
@@ -616,7 +616,7 @@ function ModelFormEditor({
                     value={data.concurrency || ''}
                     onChange={handleInputChange}
                     min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.concurrency ? 'border-red-300 text-red-900' : ''
                     }`}
                   />
@@ -641,7 +641,7 @@ function ModelFormEditor({
                     value={data.requestDelayMs || ''}
                     onChange={handleInputChange}
                     min="0"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
                     }`}
                   />
@@ -666,7 +666,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsTools || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -686,7 +686,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsVision || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -712,7 +712,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsAudio || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -738,7 +738,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.enabled !== false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -758,7 +758,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.default || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -778,7 +778,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsImageGeneration || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -808,7 +808,7 @@ function ModelFormEditor({
                             checked={data.autoDiscovery || false}
                             onChange={handleInputChange}
                             disabled={!(data.provider === 'openai' || data.provider === 'local')}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -858,7 +858,7 @@ function ModelFormEditor({
                                 aspectRatio: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
                             <option value="1:1">1:1 (Square)</option>
                             <option value="16:9">16:9 (Landscape)</option>
@@ -886,7 +886,7 @@ function ModelFormEditor({
                                 imageSize: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
                             <option value="1K">1K (1024px)</option>
                             <option value="2K">2K (2048px)</option>
@@ -913,7 +913,7 @@ function ModelFormEditor({
                             }
                             min="1"
                             max="14"
-                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                           />
                           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                             {t(
@@ -960,7 +960,7 @@ function ModelFormEditor({
                                   id={inputId}
                                   value={data.config?.[field.key]}
                                   onChange={parsed => handleConfigChange(field.key, parsed)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
                                 <input
@@ -969,7 +969,7 @@ function ModelFormEditor({
                                   type="text"
                                   value={value}
                                   onChange={e => handleConfigChange(field.key, e.target.value)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               ) : (
                                 <input
@@ -984,7 +984,7 @@ function ModelFormEditor({
                                         : e.target.value
                                     )
                                   }
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               )}
                               {Array.isArray(field.enumHint) && field.enumHint.length > 0 && (

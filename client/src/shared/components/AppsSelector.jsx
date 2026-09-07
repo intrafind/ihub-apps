@@ -119,7 +119,7 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
                 <button
                   type="button"
                   onClick={() => handleRemoveApp(id)}
-                  className="ml-1 flex-shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                  className="ml-1 shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                   aria-label={t('admin.apps.edit.removeAppTool', 'Remove {{name}}', {
                     name: displayName
                   })}
@@ -165,7 +165,7 @@ function AppsSelector({ selectedApps = [], onAppsChange, excludeAppId }) {
                     type="button"
                     key={app.id}
                     onClick={() => handleAddApp(app)}
-                    className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                   >
                     <div className="font-medium text-gray-900 dark:text-gray-100">{name}</div>
                     {description && (

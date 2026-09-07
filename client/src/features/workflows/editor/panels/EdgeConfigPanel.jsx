@@ -154,7 +154,7 @@ export function EdgeConfigPanel({ selectedEdge, variables, onUpdateEdge, onDelet
       <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={() => onDeleteEdge(selectedEdge.id)}
-          className="w-full border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          className="w-full border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm py-2 rounded-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
         >
           {t('workflows.editor.deleteEdge', 'Delete connection')}
         </button>

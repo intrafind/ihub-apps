@@ -71,7 +71,7 @@ function LanguageSelector() {
       <select
         value={i18n.language || 'en'}
         onChange={e => changeLanguage(e.target.value)}
-        className="bg-transparent text-white border border-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-white cursor-pointer"
+        className="bg-transparent text-white border border-white rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-1 focus:ring-white cursor-pointer"
         disabled={isChanging}
         aria-label={t('common.selectLanguage', 'Select language')}
       >

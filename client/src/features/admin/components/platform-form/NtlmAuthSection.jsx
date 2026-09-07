@@ -17,7 +17,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         NTLM Authentication Settings
       </h3>
@@ -33,7 +33,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             type="text"
             value={config.ntlmAuth?.domain || ''}
             onChange={e => updateNtlmAuth('domain', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="EXAMPLE"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -48,7 +48,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             type="text"
             value={config.ntlmAuth?.domainController || ''}
             onChange={e => updateNtlmAuth('domainController', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="ldap://dc.example.com:389"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -64,7 +64,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             type="text"
             value={config.ntlmAuth?.domainControllerUser || ''}
             onChange={e => updateNtlmAuth('domainControllerUser', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="admin@EXAMPLE.COM"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -90,7 +90,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
           <select
             value={config.ntlmAuth?.type || 'ntlm'}
             onChange={e => updateNtlmAuth('type', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
           >
             <option value="ntlm">NTLM</option>
             <option value="negotiate">Negotiate</option>
@@ -107,7 +107,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             type="number"
             value={config.ntlmAuth?.sessionTimeoutMinutes || 480}
             onChange={e => updateNtlmAuth('sessionTimeoutMinutes', parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="480"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">JWT token expiration time</p>
@@ -196,7 +196,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
                   e.target.checked ? { rejectUnauthorized: false } : undefined
                 )
               }
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Allow self-signed / internal CA certificates (ldaps://)
@@ -217,7 +217,7 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
         <select
           value={config.ntlmAuth?.ldapGroupLookupProvider || ''}
           onChange={e => updateNtlmAuth('ldapGroupLookupProvider', e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
         >
           <option value="">None (use NTLM built-in groups)</option>
           {(config.ldapAuth?.providers || []).map(p => (

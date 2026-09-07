@@ -56,7 +56,7 @@ const hasProxyAccess = item => !!getDocumentAccess(item);
  */
 function DocIcon({ item }) {
   const app = getApplication(item);
-  const base = 'w-5 h-5 flex-shrink-0';
+  const base = 'w-5 h-5 shrink-0';
 
   const iconPath =
     'M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z';
@@ -88,7 +88,7 @@ function PassageText({ content, index, onJumpToPassage, t }) {
   return (
     <div className="flex gap-2 text-sm text-gray-600 dark:text-gray-400">
       {index != null && (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-medium flex-shrink-0 mt-0.5">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-medium shrink-0 mt-0.5">
           {index}
         </span>
       )}
@@ -107,7 +107,7 @@ function PassageText({ content, index, onJumpToPassage, t }) {
       {onJumpToPassage && (
         <button
           onClick={onJumpToPassage}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex-shrink-0 self-start"
+          className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 shrink-0 self-start"
           title={t('citations.showInDocument', 'Show this passage in the document')}
           aria-label={t('citations.showInDocument', 'Show this passage in the document')}
         >
@@ -152,7 +152,7 @@ function OverflowMenu({ item, onAction, onOpenInApp, t }) {
           e.stopPropagation();
           setOpen(o => !o);
         }}
-        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+        className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
         title={t('common.menu', 'Menu')}
         aria-label={t('common.menu', 'Menu')}
       >
@@ -333,7 +333,7 @@ function DocumentDetailsModal({ item, onClose, t }) {
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+            className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
@@ -626,11 +626,11 @@ function CitationPanel({ citations, onDocumentAction }) {
                   {/* Badge row: referenced / mentioned + passage count */}
                   <div className="flex items-center gap-2 mt-1.5">
                     {hasPassages ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
                         {t('citations.referenced', 'Referenced')}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                         {t('citations.mentioned', 'Mentioned')}
                       </span>
                     )}
@@ -664,11 +664,11 @@ function CitationPanel({ citations, onDocumentAction }) {
                   </div>
                 </div>
                 {/* Action buttons */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   {deepLink && (
                     <button
                       onClick={() => handleDocAction('openExternal', doc)}
-                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                      className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
                       title={t('citations.openExternal', 'Open in browser')}
                     >
                       <svg

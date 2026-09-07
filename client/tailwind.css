@@ -1,0 +1,105 @@
+/*
+ * Shared Tailwind CSS v4 configuration.
+ *
+ * Tailwind v4 is configured in CSS rather than in a `tailwind.config.js`, but
+ * this client has four separate CSS entry points (the main app, the Office
+ * task pane, the browser extension and the Nextcloud embed) that all render
+ * components from `src/`. They therefore all need the same theme, plugins,
+ * dark-mode variant and template scan paths — so those live here and each
+ * entry point imports this file right after `tailwindcss` itself.
+ *
+ * Import it as:
+ *
+ *   @import 'tailwindcss' source(none);
+ *   @import '../tailwind.css';
+ *
+ * `source(none)` disables Tailwind's automatic source detection (which would
+ * otherwise be scoped to the directory of each individual entry stylesheet and
+ * miss `src/`) in favour of the explicit `@source` globs below.
+ */
+
+/* Template scan paths — the v3 `content` globs, relative to this file. */
+@source './index.html';
+@source './src/**/*.{js,ts,jsx,tsx}';
+@source './office/**/*.{js,jsx,html}';
+@source './extension/**/*.{js,jsx,html}';
+@source './nextcloud/**/*.{js,jsx,html}';
+
+@plugin '@tailwindcss/typography';
+
+/* The app toggles dark mode by setting `data-theme="dark"` on <html>. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  --color-admin-50: #f8f9ff;
+  --color-admin-100: #f0f2ff;
+  --color-admin-accent: #4f46e5;
+  --color-admin-accent-hover: #4338ca;
+  --color-admin-surface: #ffffff;
+  --color-admin-surface-dark: #1f2937;
+  --color-admin-border: #e5e7eb;
+  --color-admin-border-dark: #374151;
+  --color-admin-muted: #6b7280;
+  --color-admin-muted-dark: #9ca3af;
+
+  /* Keep the Tailwind v3 (sRGB) indigo ramp — v4 ships a more saturated
+     oklch palette, which would shift every accent colour in the UI. */
+  --color-indigo-50: #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}
+
+/*
+ * Tailwind v3 compatibility styles.
+ *
+ * v4 changed a handful of Preflight defaults. Restoring the v3 values keeps
+ * this upgrade visually neutral; each block can be dropped later once the
+ * affected elements carry explicit utilities.
+ */
+@layer base {
+  /* Default border/divide colour: `currentcolor` in v4, `gray-200` in v3. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  /* Placeholder colour: 50% of the current text colour in v4, `gray-400` in v3. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  /* Buttons: `cursor: default` in v4, `cursor: pointer` in v3. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Ring defaults: v4's bare `ring` is a 1px `currentcolor` ring, v3's was a 3px
+ * blue-500 ring. The codebase uses explicit `ring-<width>`/`ring-<color>`
+ * utilities in most places, but these keep the bare `ring` utility and any
+ * unscoped ring colour matching v3.
+ */
+@theme {
+  --default-ring-width: 3px;
+  --default-ring-color: var(--color-blue-500);
+}

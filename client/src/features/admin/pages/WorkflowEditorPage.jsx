@@ -259,7 +259,7 @@ function WorkflowEditorPage() {
                 }}
                 autoFocus
                 placeholder="my-workflow"
-                className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(
@@ -270,13 +270,13 @@ function WorkflowEditorPage() {
               <div className="flex justify-end gap-2 mt-4">
                 <button
                   onClick={() => setIdDialog(null)}
-                  className="text-sm px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="text-sm px-3 py-1.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   onClick={handleIdConfirm}
-                  className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  className="text-sm px-3 py-1.5 rounded-sm bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {t('workflows.editor.save', 'Save')}
                 </button>

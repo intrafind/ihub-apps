@@ -563,7 +563,7 @@ export default function AppCanvas() {
           <p>{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-sm"
           >
             {t('common.retry', 'Retry')}
           </button>
@@ -630,7 +630,7 @@ export default function AppCanvas() {
 
         {/* Resize Handle */}
         <div
-          className="canvas-resize-handle w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize flex-shrink-0 rounded-full"
+          className="canvas-resize-handle w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize shrink-0 rounded-full"
           onMouseDown={handleMouseDown}
         />
 

@@ -244,9 +244,9 @@ function AdminUpdatesPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-start space-x-4">
-            <div className="flex-shrink-0 mt-1">
+            <div className="shrink-0 mt-1">
               <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
                 <Icon
                   name="information-circle"
@@ -270,7 +270,7 @@ function AdminUpdatesPage() {
               {updateInfo && updateInfo.updateAvailable && !updateInfo.error && (
                 <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
                   <div className="flex items-start">
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
                     </div>
                     <div className="ml-3 flex-1">
@@ -313,7 +313,7 @@ function AdminUpdatesPage() {
                           <button
                             onClick={handleUpdateNow}
                             disabled={updateActionLoading}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {updateActionLoading ? (
                               <svg
@@ -345,7 +345,7 @@ function AdminUpdatesPage() {
                           href={updateInfo.releaseUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-700/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                         >
                           <Icon name="external-link" size="sm" className="mr-1.5" />
                           {t('admin.system.viewRelease', 'View Release on GitHub')}
@@ -367,7 +367,7 @@ function AdminUpdatesPage() {
               {updateStatus?.hasBackup && !updateStatus?.isContainer && !updateActionLoading && (
                 <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
                   <div className="flex items-start">
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       <Icon name="warning" size="md" className="text-yellow-500 mt-0.5" />
                     </div>
                     <div className="ml-3 flex-1">
@@ -386,7 +386,7 @@ function AdminUpdatesPage() {
                       <div className="mt-2">
                         <button
                           onClick={handleRollback}
-                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                         >
                           <Icon name="refresh" size="sm" className="mr-1.5" />
                           {t('admin.system.rollbackButton', 'Rollback to {{version}}', {

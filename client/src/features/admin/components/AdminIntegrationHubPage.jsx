@@ -37,7 +37,7 @@ function StatusPill({ status }) {
 function IntegrationCard({ integration }) {
   const { title, description, icon, color, href, status, badge } = integration;
   const inner = (
-    <div className="group relative h-full bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]">
+    <div className="group relative h-full bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]">
       <div className="flex items-start justify-between mb-3">
         <div
           className={`p-2 rounded-lg ${color ?? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'}`}
@@ -159,7 +159,7 @@ function AdminIntegrationHubPage({
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={searchPlaceholder}
-          className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+          className="block w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 rounded-md shadow-xs focus:ring-indigo-500 focus:border-indigo-500 text-sm"
           aria-label="Search integrations"
         />
       </div>

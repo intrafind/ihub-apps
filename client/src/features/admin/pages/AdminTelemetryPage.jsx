@@ -145,7 +145,7 @@ function AdminTelemetryPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
           </div>
         </div>
@@ -157,9 +157,9 @@ function AdminTelemetryPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-start mb-2">
-            <Icon name="chart-bar" className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0" />
+            <Icon name="chart-bar" className="w-8 h-8 mr-3 text-blue-500 shrink-0" />
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('admin.telemetry.title', 'Telemetry & Observability')}
@@ -185,7 +185,7 @@ function AdminTelemetryPage() {
             <div className="flex items-start">
               <Icon
                 name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
-                className="w-5 h-5 mr-2 flex-shrink-0"
+                className="w-5 h-5 mr-2 shrink-0"
               />
               <p className="text-sm">{message.text}</p>
             </div>
@@ -193,7 +193,7 @@ function AdminTelemetryPage() {
         )}
 
         {/* Master switch */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="cog" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.telemetry.general', 'General')}
@@ -203,7 +203,7 @@ function AdminTelemetryPage() {
               type="checkbox"
               checked={config.enabled || false}
               onChange={e => updateField('enabled', e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('admin.telemetry.enable', 'Enable telemetry (requires restart)')}
@@ -261,7 +261,7 @@ function AdminTelemetryPage() {
 
         {/* Provider-specific config */}
         {config.provider === 'otlp' && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
               {t('admin.telemetry.otlpSettings', 'OTLP Settings')}
             </h2>
@@ -289,7 +289,7 @@ function AdminTelemetryPage() {
         )}
 
         {config.provider === 'prometheus' && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
               {t('admin.telemetry.prometheusSettings', 'Prometheus Settings')}
             </h2>
@@ -329,7 +329,7 @@ function AdminTelemetryPage() {
         )}
 
         {/* Spans / Events / Metrics */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.telemetry.signals', 'Signals')}
           </h2>
@@ -339,7 +339,7 @@ function AdminTelemetryPage() {
                 type="checkbox"
                 checked={config.spans?.enabled !== false}
                 onChange={e => updateField('spans.enabled', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.telemetry.spans', 'Emit spans (gen_ai.* attributes)')}
@@ -350,7 +350,7 @@ function AdminTelemetryPage() {
                 type="checkbox"
                 checked={config.metrics?.enabled !== false}
                 onChange={e => updateField('metrics.enabled', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t(
@@ -364,7 +364,7 @@ function AdminTelemetryPage() {
                 type="checkbox"
                 checked={config.events?.enabled !== false}
                 onChange={e => updateField('events.enabled', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t(
@@ -378,7 +378,7 @@ function AdminTelemetryPage() {
                 type="checkbox"
                 checked={config.autoInstrumentation === true}
                 onChange={e => updateField('autoInstrumentation', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t(
@@ -405,7 +405,7 @@ function AdminTelemetryPage() {
                   type="checkbox"
                   checked={config.events?.includePrompts || false}
                   onChange={e => updateField('events.includePrompts', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {t('admin.telemetry.includePrompts', 'Include prompt content in events')}
@@ -416,7 +416,7 @@ function AdminTelemetryPage() {
                   type="checkbox"
                   checked={config.events?.includeCompletions || false}
                   onChange={e => updateField('events.includeCompletions', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   {t('admin.telemetry.includeCompletions', 'Include completion content in events')}
@@ -453,7 +453,7 @@ function AdminTelemetryPage() {
         </div>
 
         {/* Activity summary */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="users" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.telemetry.activitySummary', 'Activity Summary')}
@@ -469,7 +469,7 @@ function AdminTelemetryPage() {
               type="checkbox"
               checked={config.activitySummary?.enabled || false}
               onChange={e => updateField('activitySummary.enabled', e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               {t('admin.telemetry.activitySummaryEnable', 'Enable periodic activity summary log')}
@@ -508,7 +508,7 @@ function AdminTelemetryPage() {
         </div>
 
         {/* Save */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -539,7 +539,7 @@ function AdminTelemetryPage() {
           <div className="flex items-start">
             <Icon
               name="InformationCircleIcon"
-              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
             />
             <div className="text-sm text-blue-800 dark:text-blue-300">
               <p className="font-medium mb-1">

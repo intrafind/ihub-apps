@@ -221,7 +221,7 @@ const MonacoJsonEditor = ({
             type="button"
             onClick={formatJson}
             disabled={readOnly}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             title={t('admin.editor.formatJson', 'Format JSON')}
           >
             <Icon name="sparkles" className="h-3 w-3 mr-1" />
@@ -231,7 +231,7 @@ const MonacoJsonEditor = ({
           <button
             type="button"
             onClick={validateJson}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             title={t('admin.editor.validateJson', 'Validate JSON')}
           >
             <Icon name="check-circle" className="h-3 w-3 mr-1" />

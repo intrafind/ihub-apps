@@ -114,7 +114,7 @@ function AdminFormErrorSummary({
                         <button
                           type="button"
                           onClick={() => focusField(e.fieldId)}
-                          className="underline hover:text-red-900 dark:hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+                          className="underline hover:text-red-900 dark:hover:text-red-100 focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded-sm"
                         >
                           {label}
                         </button>

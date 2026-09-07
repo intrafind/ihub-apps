@@ -90,7 +90,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
   return (
     <div className="platform-form-editor space-y-8">
       {/* Primary Authentication Mode Selection */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Primary Authentication Mode
         </h3>
@@ -159,7 +159,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
       </div>
 
       {/* Multiple Authentication Methods */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.auth.methods', 'Authentication Methods')}
         </h3>
@@ -175,7 +175,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.proxyAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('proxyAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -194,7 +194,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.localAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('localAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -211,7 +211,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.oidcAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('oidcAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -228,7 +228,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.ldapAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('ldapAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -245,7 +245,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.ntlmAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('ntlmAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -262,7 +262,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="checkbox"
                   checked={config.anonymousAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('anonymousAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                 />
               </div>
               <div className="flex-1">
@@ -279,7 +279,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
       </div>
 
       {/* General Authentication Settings */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.auth.defaultGroups', 'Default Groups')}
         </h3>
@@ -327,7 +327,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
 
       {/* Proxy Auth Configuration */}
       {config.proxyAuth?.enabled && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Proxy/JWT Authentication Settings
           </h3>
@@ -345,7 +345,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="text"
                   value={config.proxyAuth?.userHeader || ''}
                   onChange={e => updateNestedConfig('proxyAuth', 'userHeader', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="X-Forwarded-User"
                 />
               </div>
@@ -357,7 +357,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
                   type="text"
                   value={config.proxyAuth?.groupsHeader || ''}
                   onChange={e => updateNestedConfig('proxyAuth', 'groupsHeader', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="X-Forwarded-Groups"
                 />
               </div>
@@ -422,7 +422,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
         <div className="flex items-start">
           <Icon
             name="information-circle"
-            className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+            className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
           />
           <div className="text-sm text-blue-800 dark:text-blue-300">
             <p className="font-medium">

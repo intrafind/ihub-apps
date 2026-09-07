@@ -35,7 +35,7 @@ function NextcloudSelectionBanner() {
       role="status"
       className="mb-6 flex items-start gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-100"
     >
-      <Icon name="info" className="mt-0.5 h-5 w-5 flex-shrink-0" />
+      <Icon name="info" className="mt-0.5 h-5 w-5 shrink-0" />
       <div>
         <p className="font-medium">{t('pages.appsList.nextcloudSelection.title', { count })}</p>
         <p className="mt-0.5 opacity-80">{t('pages.appsList.nextcloudSelection.description')}</p>

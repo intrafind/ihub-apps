@@ -87,7 +87,7 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
   return (
     <div
       ref={containerRef}
-      className={`markdown-content break-words whitespace-normal streaming-markdown${
+      className={`markdown-content wrap-break-word whitespace-normal streaming-markdown${
         streaming ? ' is-streaming' : ''
       }`}
       dangerouslySetInnerHTML={innerHtml} // sanitized with DOMPurify before setState

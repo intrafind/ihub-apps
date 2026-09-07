@@ -234,23 +234,23 @@ export const useMermaidRenderer = ({ t }) => {
 
           // Create the diagram HTML with toolbar and pan-zoom controls
           container.innerHTML = `
-            <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+            <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-xs">
               <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
                 <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
                   ${svg}
                 </div>
                 <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <button class="mermaid-zoom-in p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
+                  <button class="mermaid-zoom-in p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-out p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
+                  <button class="mermaid-zoom-out p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-reset p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
+                  <button class="mermaid-zoom-reset p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
@@ -262,35 +262,35 @@ export const useMermaidRenderer = ({ t }) => {
                   <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
                 </div>
                 <div class="flex flex-row items-center gap-2">
-                  <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
                     <span class="hidden sm:inline">${t ? t('common.copy', 'Code') : 'Code'}</span>
                   </button>
-                  <button class="mermaid-download-svg p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-svg p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadSVG', 'Download SVG') : 'Download SVG'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">SVG</span>
                   </button>
-                  <button class="mermaid-download-png p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-png p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPNG', 'Download PNG') : 'Download PNG'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PNG</span>
                   </button>
-                  <button class="mermaid-download-pdf p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-pdf p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPDF', 'Download PDF') : 'Download PDF'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h8.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PDF</span>
                   </button>
-                  <button class="mermaid-fullscreen p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-fullscreen p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" type="button" title="${t ? t('common.viewFullscreen', 'View Fullscreen') : 'View Fullscreen'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
@@ -370,7 +370,7 @@ export const useMermaidRenderer = ({ t }) => {
 
           // Display a user-friendly error state
           container.innerHTML = `
-            <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-sm">
+            <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-xs">
               <div class="bg-red-900 text-red-100 rounded-t-lg p-4 overflow-x-auto">
                 <div class="text-sm text-red-200 mb-2">Mermaid Syntax Error:</div>
                 <div class="text-red-100 text-sm mb-3">${err.message}</div>
@@ -381,7 +381,7 @@ export const useMermaidRenderer = ({ t }) => {
                   <span class="text-xs font-medium text-red-600">Mermaid (Error)</span>
                 </div>
                 <div class="flex flex-row items-center gap-2">
-                  <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors duration-200 flex items-center gap-1" 
                           data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="Copy code">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -876,7 +876,7 @@ export const useMermaidRenderer = ({ t }) => {
 
         const modal = document.createElement('div');
         modal.className =
-          'mermaid-fullscreen-modal fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4';
+          'mermaid-fullscreen-modal fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4';
         modal.style.zIndex = '9999';
 
         modal.innerHTML = `

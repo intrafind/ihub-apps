@@ -154,7 +154,7 @@ function UserFormEditor({
           title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
         />
         {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -182,7 +182,7 @@ function UserFormEditor({
                     value={user.username || ''}
                     onChange={e => handleInputChange('username', e.target.value)}
                     disabled={!isNewUser}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
                       validationErrors.username ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter username"
@@ -214,7 +214,7 @@ function UserFormEditor({
                     required={isFieldRequired('email', jsonSchema)}
                     value={user.email || ''}
                     onChange={e => handleInputChange('email', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                       validationErrors.email ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter email address"
@@ -234,7 +234,7 @@ function UserFormEditor({
                     type="text"
                     value={user.fullName || ''}
                     onChange={e => handleInputChange('fullName', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Enter full name"
                   />
                 </div>
@@ -248,7 +248,7 @@ function UserFormEditor({
                         handleInputChange('enabled', e.target.checked);
                         handleInputChange('active', e.target.checked);
                       }}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.users.enabled', 'Enabled')}
@@ -269,7 +269,7 @@ function UserFormEditor({
                       <select
                         value={user.authMethods?.[0] || 'local'}
                         onChange={e => handleInputChange('authMethods', [e.target.value])}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       >
                         <option value="local">
                           {t('admin.users.authMethod.local', 'Local (Username/Password)')}
@@ -324,7 +324,7 @@ function UserFormEditor({
 
         {/* Password Settings - only show for local auth users or new users */}
         {(isLocalAuthUser || isNewUser) && (
-          <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
                 <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -360,7 +360,7 @@ function UserFormEditor({
                       required={isNewUser && isLocalAuthUser && !hasExternalAuth}
                       value={user.password || ''}
                       onChange={e => handleInputChange('password', e.target.value)}
-                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                         validationErrors.password ? 'border-red-300' : ''
                       }`}
                       placeholder={
@@ -388,7 +388,7 @@ function UserFormEditor({
                       required={!!user.password}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
-                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                      className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                         validationErrors.confirmPassword ? 'border-red-300' : ''
                       }`}
                       placeholder="Confirm password"
@@ -413,7 +413,7 @@ function UserFormEditor({
         )}
 
         {/* Group Membership */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">

@@ -84,7 +84,7 @@ function IframeApp({ app }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
               style={{ backgroundColor: app.color || '#4F46E5' }}
             >
               <Icon name={app.icon || 'window'} className="text-white" />
@@ -133,7 +133,7 @@ function IframeApp({ app }) {
 
       {/* Loading Overlay */}
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/75 dark:bg-gray-900/75 z-10">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-300">{t('pages.iframeApp.loading')}</p>

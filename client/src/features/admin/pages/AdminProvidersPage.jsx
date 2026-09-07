@@ -331,7 +331,7 @@ function AdminProvidersPage() {
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 px-2">
                     {categoryLabels[category]}
                   </h2>
-                  <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
@@ -528,7 +528,7 @@ function AdminProvidersPage() {
                                             name={
                                               result.success ? 'CheckCircleIcon' : 'XCircleIcon'
                                             }
-                                            className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                                            className={`w-4 h-4 mt-0.5 shrink-0 ${
                                               result.success
                                                 ? 'text-green-600 dark:text-green-400'
                                                 : 'text-red-600 dark:text-red-400'
@@ -619,7 +619,7 @@ function AdminProvidersPage() {
           <div className="flex items-start">
             <Icon
               name="InformationCircleIcon"
-              className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 flex-shrink-0"
+              className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 shrink-0"
             />
             <div className="text-sm text-blue-700 dark:text-blue-300">
               <p className="font-medium mb-1">

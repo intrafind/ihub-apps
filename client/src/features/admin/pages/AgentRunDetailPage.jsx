@@ -847,14 +847,14 @@ export default function AgentRunDetailPage() {
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => navigate(-1)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-sm text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Back
               </button>
               {status === 'running' && (
                 <button
                   onClick={() => setConfirmCancelOpen(true)}
-                  className="px-3 py-2 bg-red-600 text-white rounded text-sm"
+                  className="px-3 py-2 bg-red-600 text-white rounded-sm text-sm"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
@@ -862,7 +862,7 @@ export default function AgentRunDetailPage() {
               {(status === 'failed' || status === 'cancelled' || status === 'timed_out') && (
                 <button
                   onClick={handleResume}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 transition-colors"
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-sm text-sm hover:bg-indigo-700 transition-colors"
                   title={t(
                     'admin.agents.runs.resumeHint',
                     'Restart from the last checkpoint. Completed tasks are preserved.'
@@ -875,17 +875,17 @@ export default function AgentRunDetailPage() {
           </div>
 
           {error && (
-            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
               {error}
             </div>
           )}
           {actionError && (
-            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
               {actionError}
             </div>
           )}
           {artifactsError && (
-            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
               {t('admin.agents.runs.artifactsErrorPrefix', 'Artifacts: {{message}}', {
                 message: artifactsError
               })}
@@ -893,7 +893,7 @@ export default function AgentRunDetailPage() {
           )}
 
           {run?.data?._inboxEmpty === true && (
-            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-700 dark:text-gray-300">
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm text-sm text-gray-700 dark:text-gray-300">
               <span className="font-medium">No work to do.</span> The inbox was empty when this run
               started, so the planner and synthesizer were skipped. The next trigger will pick up
               new items.
@@ -901,7 +901,7 @@ export default function AgentRunDetailPage() {
           )}
 
           {run?.data?._verificationOutcome === 'not_passed' && (
-            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded text-sm text-amber-900 dark:text-amber-200">
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-sm text-sm text-amber-900 dark:text-amber-200">
               <span className="font-medium">Review not passed.</span> The adversarial verifier still
               found gaps after every revision, so this run did not pass review. The deliverable
               below is preserved for inspection and the inbox item was left open.
@@ -914,7 +914,7 @@ export default function AgentRunDetailPage() {
           )}
 
           {isFailed && runErrors.length > 0 && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-sm">
               <h2 className="font-semibold text-red-900 dark:text-red-300 mb-2">
                 Run failed ({runErrors.length} error{runErrors.length === 1 ? '' : 's'})
               </h2>
@@ -965,7 +965,7 @@ export default function AgentRunDetailPage() {
           )}
 
           {isPaused && pendingCheckpoint && !isQuestionCheckpoint(pendingCheckpoint) && (
-            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
+            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-sm">
               <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
                 ⏸ Awaiting approval
               </h2>
@@ -1079,7 +1079,7 @@ export default function AgentRunDetailPage() {
                   <h2 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-gray-100">
                     Inbox item
                     {currentInboxItem._markedDone && (
-                      <span className="text-xs font-normal px-2 py-0.5 bg-green-100 text-green-800 rounded">
+                      <span className="text-xs font-normal px-2 py-0.5 bg-green-100 text-green-800 rounded-sm">
                         marked done
                       </span>
                     )}

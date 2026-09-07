@@ -11,7 +11,7 @@ const PROTECTED_GROUP_IDS = ['admin', 'user', 'anonymous', 'authenticated'];
 function GroupCell({ group }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-10 w-10">
+      <div className="shrink-0 h-10 w-10">
         <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
           <Icon name="users" size="md" className="text-gray-600 dark:text-gray-300" />
         </div>
@@ -181,7 +181,7 @@ function AdminGroupsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
@@ -197,7 +197,7 @@ function AdminGroupsPage() {
             </div>
             <button
               onClick={() => navigate('/admin/groups/new')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Icon name="plus" size="md" className="mr-2" />
               Add Group

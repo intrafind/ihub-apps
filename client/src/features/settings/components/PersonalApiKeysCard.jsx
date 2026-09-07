@@ -38,7 +38,7 @@ function CopyField({ label, value, mono = true, secret = false }) {
           value={value}
           className={`flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs ${
             mono ? 'font-mono' : ''
-          } text-gray-700 dark:text-gray-200 focus:outline-none`}
+          } text-gray-700 dark:text-gray-200 focus:outline-hidden`}
           onClick={e => e.target.select()}
         />
         {secret && (
@@ -125,7 +125,7 @@ export default function PersonalApiKeysCard({
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center">
             <Icon name="key" className="w-7 h-7 text-white" />
           </div>

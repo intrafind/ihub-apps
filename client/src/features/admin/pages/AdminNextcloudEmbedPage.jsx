@@ -216,7 +216,7 @@ function AdminNextcloudEmbedPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link
             to="/admin/integrations"
@@ -256,7 +256,7 @@ function AdminNextcloudEmbedPage() {
         ) : (
           <>
             {/* Enable / Disable */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -297,7 +297,7 @@ function AdminNextcloudEmbedPage() {
                   <span className="font-medium text-gray-700 dark:text-gray-300">
                     OAuth Client ID:
                   </span>{' '}
-                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-sm">
                     {status.oauthClientId}
                   </code>
                   {' — '}
@@ -313,7 +313,7 @@ function AdminNextcloudEmbedPage() {
 
             {/* Embed URL */}
             {status?.enabled && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   {t('admin.nextcloudEmbed.embedUrlTitle', 'Embed URL')}
                 </h2>
@@ -328,7 +328,7 @@ function AdminNextcloudEmbedPage() {
                     type="text"
                     readOnly
                     value={embedUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-none"
+                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -343,7 +343,7 @@ function AdminNextcloudEmbedPage() {
             )}
 
             {/* Allowed Host Origins */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.nextcloudEmbed.originsTitle', 'Allowed Nextcloud Origins')}
               </h2>
@@ -395,7 +395,7 @@ function AdminNextcloudEmbedPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveOrigin(origin)}
-                        className="shrink-0 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        className="shrink-0 rounded-sm px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                       >
                         {t('admin.nextcloudEmbed.remove', 'Remove')}
                       </button>
@@ -406,7 +406,7 @@ function AdminNextcloudEmbedPage() {
             </div>
 
             {/* Display Settings */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.nextcloudEmbed.displayTitle', 'Display Settings')}
               </h2>
@@ -427,7 +427,7 @@ function AdminNextcloudEmbedPage() {
             </div>
 
             {/* Starter Prompts */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -474,7 +474,7 @@ function AdminNextcloudEmbedPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, -1)}
                             disabled={index === 0}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.nextcloudEmbed.moveUp', 'Move up')}
                           >
                             ↑
@@ -483,7 +483,7 @@ function AdminNextcloudEmbedPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, 1)}
                             disabled={index === starterPrompts.length - 1}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.nextcloudEmbed.moveDown', 'Move down')}
                           >
                             ↓
@@ -491,7 +491,7 @@ function AdminNextcloudEmbedPage() {
                           <button
                             type="button"
                             onClick={() => handleRemovePrompt(index)}
-                            className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            className="rounded-sm px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             {t('admin.nextcloudEmbed.remove', 'Remove')}
                           </button>

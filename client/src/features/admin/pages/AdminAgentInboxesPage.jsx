@@ -61,11 +61,11 @@ export default function AdminAgentInboxesPage() {
           {t('admin.agents.inboxes.title', 'Agent Inboxes')}
         </h1>
         {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
             {error}
           </div>
         )}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm p-4 mb-6">
           <h2 className="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">
             {t('admin.agents.inboxes.createHeading', 'Create inbox')}
           </h2>
@@ -78,11 +78,11 @@ export default function AdminAgentInboxesPage() {
                 setNewId(e.target.value);
                 if (localError) setLocalError(null);
               }}
-              className="flex-1 border-gray-300 dark:border-gray-600 rounded shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="flex-1 border-gray-300 dark:border-gray-600 rounded-sm shadow-xs text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
             <button
               onClick={handleCreate}
-              className="px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded"
+              className="px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm"
             >
               {t('common.create', 'Create')}
             </button>
@@ -94,7 +94,7 @@ export default function AdminAgentInboxesPage() {
         {loading ? (
           <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>

@@ -149,7 +149,7 @@ function AdminUICustomization() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center sm:justify-between">
             <div>
@@ -166,16 +166,16 @@ function AdminUICustomization() {
             <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
               <button
                 onClick={handleBackup}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('admin.ui.backup', 'Backup Config')}
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white ${
                   saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                } focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
               >
                 {saving ? t('admin.ui.saving', 'Saving...') : t('admin.ui.save', 'Save Changes')}
               </button>
@@ -188,7 +188,7 @@ function AdminUICustomization() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mx-4 mt-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -222,7 +222,7 @@ function AdminUICustomization() {
       {successMessage && (
         <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -276,7 +276,7 @@ function AdminUICustomization() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
           {activeTab === 'header' && (
             <HeaderCustomization
               config={config.header || {}}

@@ -48,11 +48,11 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
         isVisible={selected}
         minWidth={320}
         minHeight={200}
-        lineClassName="!border-orange-400"
-        handleClassName="!bg-orange-400 !border-orange-500"
+        lineClassName="border-orange-400!"
+        handleClassName="bg-orange-400! border-orange-500!"
       />
 
-      <Handle type="target" position={Position.Left} className="!bg-gray-400" />
+      <Handle type="target" position={Position.Left} className="bg-gray-400!" />
 
       <div
         className="absolute -top-9 left-0 flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-xs font-semibold text-white max-w-full"
@@ -63,7 +63,7 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
         <span className="truncate">{data.nodeName || meta.label}</span>
         {summary && <span className="font-normal opacity-90 truncate">· {summary}</span>}
         {parallel && (
-          <span className="font-normal bg-white/20 rounded px-1 shrink-0">
+          <span className="font-normal bg-white/20 rounded-sm px-1 shrink-0">
             parallel ×{cfg.concurrency}
           </span>
         )}
@@ -96,7 +96,7 @@ export const LoopContainerNode = memo(function LoopContainerNode({ data, selecte
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} className="!bg-gray-400" />
+      <Handle type="source" position={Position.Right} className="bg-gray-400!" />
     </div>
   );
 });

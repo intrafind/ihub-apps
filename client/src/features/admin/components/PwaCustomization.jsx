@@ -67,7 +67,7 @@ function PwaCustomization({ config, onUpdate, t }) {
           role="switch"
           aria-checked={!!pwa.enabled}
           onClick={() => handleChange('enabled', !pwa.enabled)}
-          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
             pwa.enabled ? 'bg-indigo-600' : 'bg-gray-200'
           }`}
         >
@@ -158,7 +158,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 type="color"
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
-                className="h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
                 type="text"
@@ -183,7 +183,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 type="color"
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
-                className="h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
                 type="text"
@@ -250,7 +250,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {label}
               {required && (
-                <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
+                <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-sm">
                   {t('admin.ui.pwa.required', 'required')}
                 </span>
               )}
@@ -267,7 +267,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 <img
                   src={pwa.icons[key]}
                   alt={`${label} preview`}
-                  className="h-10 w-10 rounded border border-gray-200 dark:border-gray-600 object-contain bg-gray-50 dark:bg-gray-800 flex-shrink-0"
+                  className="h-10 w-10 rounded-sm border border-gray-200 dark:border-gray-600 object-contain bg-gray-50 dark:bg-gray-800 shrink-0"
                   onError={e => {
                     e.target.style.display = 'none';
                   }}

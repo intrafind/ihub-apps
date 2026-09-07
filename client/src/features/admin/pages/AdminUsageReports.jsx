@@ -12,7 +12,7 @@ import UsageTimeline from '../components/UsageTimeline';
 
 function StatCard({ title, value, icon, color, change, changeType }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
@@ -44,7 +44,7 @@ function TopUsersCard({ title, data, color, showRating = false }) {
     .slice(0, 5);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{title}</h3>
       <div className="space-y-3">
         {sortedData.map(([key, value], index) => {
@@ -111,7 +111,7 @@ function AppUsageCard({ data }) {
   );
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         {t('admin.usage.appUsageDistribution', 'App Usage Distribution')}
       </h3>
@@ -133,7 +133,7 @@ function AppUsageCard({ data }) {
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
+                  className="bg-linear-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 ></div>
               </div>
@@ -174,7 +174,7 @@ function FeedbackCard({ data }) {
   const averageRating = totalStarRatings > 0 ? weightedSum / totalStarRatings : 0;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         {t('admin.dashboard.feedbackOverview', 'Feedback Overview')}
       </h3>
@@ -298,7 +298,7 @@ function FeedbackEntriesCard() {
 
   if (loading && !feedbackData) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <LoadingSpinner />
       </div>
     );
@@ -308,7 +308,7 @@ function FeedbackEntriesCard() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {t('admin.usage.feedbackEntries', 'User Feedback Entries')}
@@ -349,7 +349,7 @@ function FeedbackEntriesCard() {
                   </div>
                 </div>
                 {entry.comment && entry.comment.trim() && (
-                  <div className="mt-3 p-3 bg-white dark:bg-gray-600 rounded border border-gray-200 dark:border-gray-500">
+                  <div className="mt-3 p-3 bg-white dark:bg-gray-600 rounded-sm border border-gray-200 dark:border-gray-500">
                     <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
                       {t('admin.usage.feedbackComment', 'Comment')}:
                     </div>
@@ -368,7 +368,7 @@ function FeedbackEntriesCard() {
               <button
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="px-3 py-1 rounded-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 {t('admin.usage.previous', 'Previous')}
               </button>
@@ -378,7 +378,7 @@ function FeedbackEntriesCard() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="px-3 py-1 rounded-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 {t('admin.usage.next', 'Next')}
               </button>
@@ -544,7 +544,7 @@ function AdminUsageReports() {
       {/* Data Quality & Tracking Mode */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {usage.tokenSources && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-4">
             <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
               {t('admin.usage.dataQuality', 'Data Quality')}
             </h4>
@@ -579,7 +579,7 @@ function AdminUsageReports() {
           </div>
         )}
         {trackingMeta?.trackingMode && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-4">
             <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
               {t('admin.usage.trackingMode', 'Tracking Mode')}
             </h4>
@@ -634,7 +634,7 @@ function AdminUsageReports() {
 
       {/* Token Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.tokenDistribution', 'Token Distribution')}
           </h3>
@@ -704,7 +704,7 @@ function AdminUsageReports() {
   const renderApps = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <AppUsageCard data={messages.perApp} />
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.appTokenUsage', 'App Token Usage')}
         </h3>
@@ -759,7 +759,7 @@ function AdminUsageReports() {
           color="bg-purple-500"
         />
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.appUsage', 'App Usage')}
           </h3>
@@ -782,7 +782,7 @@ function AdminUsageReports() {
       </div>
 
       {/* Token Efficiency */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.sections.tokenEfficiency', 'Token Efficiency')}
         </h3>
@@ -859,7 +859,7 @@ function AdminUsageReports() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FeedbackCard data={feedback} />
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.userFeedbackActivity', 'User Feedback Activity')}
           </h3>
@@ -910,7 +910,7 @@ function AdminUsageReports() {
 
       {/* App Feedback Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.feedbackByApplication', 'Feedback by Application')}
           </h3>
@@ -958,7 +958,7 @@ function AdminUsageReports() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.feedbackByModel', 'Feedback by Model')}
           </h3>
@@ -1012,7 +1012,7 @@ function AdminUsageReports() {
 
   const renderDetails = () => (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Model Usage Details
         </h3>
@@ -1107,7 +1107,7 @@ function AdminUsageReports() {
       </div>
 
       {/* System Overview */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.overview.systemOverview', 'System Overview')}
         </h3>
@@ -1152,7 +1152,7 @@ function AdminUsageReports() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
@@ -1166,13 +1166,13 @@ function AdminUsageReports() {
             <div className="flex space-x-3">
               <button
                 onClick={downloadCsv}
-                className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('admin.usage.downloadCsv', 'Download CSV')}
               </button>
               <button
                 onClick={downloadJson}
-                className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-xs text-sm font-medium text-white hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('admin.usage.downloadJson', 'Download JSON')}
               </button>

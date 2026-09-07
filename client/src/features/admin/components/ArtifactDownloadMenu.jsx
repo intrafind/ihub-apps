@@ -44,8 +44,8 @@ function ArtifactDownloadMenu({ runId, name, size = 'sm', onError }) {
 
   const triggerClass =
     size === 'md'
-      ? 'text-xs px-2 py-0.5 border border-indigo-300 rounded text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
-      : 'text-xs px-1.5 py-0.5 border border-indigo-300 rounded text-indigo-700 hover:bg-indigo-50 disabled:opacity-50';
+      ? 'text-xs px-2 py-0.5 border border-indigo-300 rounded-sm text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
+      : 'text-xs px-1.5 py-0.5 border border-indigo-300 rounded-sm text-indigo-700 hover:bg-indigo-50 disabled:opacity-50';
 
   return (
     <div className="relative inline-block" ref={ref}>
@@ -59,7 +59,7 @@ function ArtifactDownloadMenu({ runId, name, size = 'sm', onError }) {
         {busy ? '…' : '⬇ download ▾'}
       </button>
       {open && (
-        <div className="absolute left-0 mt-1 w-48 bg-white border rounded shadow-lg z-20">
+        <div className="absolute left-0 mt-1 w-48 bg-white border rounded-sm shadow-lg z-20">
           <button
             type="button"
             onClick={() => run(() => downloadAsMarkdown(runId, name))}

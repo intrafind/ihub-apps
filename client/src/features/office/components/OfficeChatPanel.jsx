@@ -578,7 +578,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                     </>
                   ) : (
                     <div
-                      className="office-greeting-badge flex items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 text-white font-bold shadow-lg"
+                      className="office-greeting-badge flex items-center justify-center rounded-xl bg-linear-to-br from-violet-500 via-fuchsia-500 to-cyan-400 text-white font-bold shadow-lg"
                       aria-hidden
                     >
                       AI
@@ -654,7 +654,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
             />
 
             {/* Input */}
-            <div className="border-t border-gray-200 bg-white flex-shrink-0">
+            <div className="border-t border-gray-200 bg-white shrink-0">
               <ChatInput
                 app={selectedApp}
                 value={inputValue}

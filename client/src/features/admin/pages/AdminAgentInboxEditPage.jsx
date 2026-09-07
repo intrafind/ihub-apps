@@ -203,7 +203,7 @@ export default function AdminAgentInboxEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setView(view === 'form' ? 'raw' : 'form')}
-              className="px-3 py-2 text-sm border bg-white rounded hover:bg-gray-50"
+              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
             >
               {view === 'form'
                 ? t('admin.common.viewRaw', 'Raw')
@@ -212,13 +212,13 @@ export default function AdminAgentInboxEditPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate('/admin/agents/inboxes')}
-              className="px-3 py-2 text-sm border bg-white rounded hover:bg-gray-50"
+              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
             >
               {t('common.back', 'Back')}
             </button>
@@ -226,7 +226,7 @@ export default function AdminAgentInboxEditPage() {
         </div>
 
         {error && (
-          <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-sm">
             {error}
           </div>
         )}
@@ -240,7 +240,7 @@ export default function AdminAgentInboxEditPage() {
               )}
             </p>
             <textarea
-              className="w-full h-[480px] font-mono text-sm p-3 border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+              className="w-full h-[480px] font-mono text-sm p-3 border rounded-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
               value={rawBody}
               onChange={e => {
                 setRawBody(e.target.value);
@@ -251,7 +251,7 @@ export default function AdminAgentInboxEditPage() {
         ) : (
           <>
             {/* Add new item */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 mb-4">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4 mb-4">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.agents.inbox.addItem', 'Add item')}
               </h2>
@@ -260,7 +260,7 @@ export default function AdminAgentInboxEditPage() {
                   value={newPriority}
                   onChange={e => setNewPriority(e.target.value)}
                   aria-label={t('admin.agents.inbox.itemPriority', 'Item priority')}
-                  className="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 >
                   <option value="">{t('admin.agents.inbox.noPriority', 'No priority')}</option>
                   <option value="p1">P1</option>
@@ -279,11 +279,11 @@ export default function AdminAgentInboxEditPage() {
                     'admin.agents.inbox.itemPlaceholder',
                     'Describe a task the agent should do'
                   )}
-                  className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="flex-1 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 />
                 <button
                   onClick={addItem}
-                  className="px-3 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-sm hover:bg-indigo-700"
                 >
                   {t('common.add', 'Add')}
                 </button>
@@ -297,7 +297,7 @@ export default function AdminAgentInboxEditPage() {
             </div>
 
             {/* Items */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('admin.agents.inbox.items', 'Items')} ({parsed.items.length})
               </h2>
@@ -310,7 +310,7 @@ export default function AdminAgentInboxEditPage() {
                   {parsed.items.map((item, idx) => (
                     <li
                       key={idx}
-                      className="flex items-start gap-2 p-2 border border-gray-200 dark:border-gray-700 rounded"
+                      className="flex items-start gap-2 p-2 border border-gray-200 dark:border-gray-700 rounded-sm"
                     >
                       <input
                         type="checkbox"
@@ -318,12 +318,12 @@ export default function AdminAgentInboxEditPage() {
                         onChange={e =>
                           updateItem(idx, { status: e.target.checked ? 'done' : 'open' })
                         }
-                        className="h-4 w-4 mt-1 text-indigo-600 border-gray-300 rounded"
+                        className="h-4 w-4 mt-1 text-indigo-600 border-gray-300 rounded-sm"
                       />
                       <select
                         value={item.priority}
                         onChange={e => updateItem(idx, { priority: e.target.value })}
-                        className="rounded border-gray-300 shadow-sm text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        className="rounded-sm border-gray-300 shadow-xs text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                       >
                         <option value="">—</option>
                         <option value="p1">P1</option>
@@ -334,7 +334,7 @@ export default function AdminAgentInboxEditPage() {
                         type="text"
                         value={item.text}
                         onChange={e => updateItem(idx, { text: e.target.value })}
-                        className={`flex-1 rounded border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
+                        className={`flex-1 rounded border-gray-300 shadow-xs text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
                           item.status === 'done' ? 'line-through text-gray-400' : ''
                         }`}
                       />

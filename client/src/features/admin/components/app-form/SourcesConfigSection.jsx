@@ -17,7 +17,7 @@ function SourcesConfigSection({ app, onChange, t }) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+    <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -52,7 +52,7 @@ function SourcesConfigSection({ app, onChange, t }) {
             {app.sources && app.sources.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                 <div className="flex">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
                   </div>
                   <div className="ml-3">
@@ -72,7 +72,7 @@ function SourcesConfigSection({ app, onChange, t }) {
                       <ul className="list-disc list-inside mt-1 space-y-1">
                         {app.sources.map((sourceId, index) => (
                           <li key={`source-${index}`}>
-                            <span className="font-mono text-xs bg-blue-100 px-1 rounded">
+                            <span className="font-mono text-xs bg-blue-100 px-1 rounded-sm">
                               {sourceId}
                             </span>
                           </li>
