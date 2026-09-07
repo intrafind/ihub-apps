@@ -5,6 +5,12 @@
 # on every pull request. Kept as its own job/workflow, separate from
 # unit-tests.yml's test:quick, so this suite growing slower or occasionally
 # flaky doesn't block the fast unit signal.
+#
+# The boot-smoke job is the guard for "the server does not start at all".
+# Every other suite imports modules directly, so a failure in the boot
+# sequence itself - a broken import, a migration that throws, a crash before
+# listen() - ships green through all of them. boot-smoke starts the real
+# server/server.js entrypoint and requires it to serve GET /api/health.
 
 name: Integration Tests
 
@@ -43,3 +49,29 @@ jobs:
 
       - name: Run integration test suite
         run: npm run test:integration:ci
+
+  boot-smoke:
+    name: Server boots
+    runs-on: ubuntu-latest
+
+    env:
+      CI: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      # No seeding step: each scenario boots against its own throwaway
+      # CONTENTS_DIR, which also exercises the fresh-install path (defaults
+      # copied from server/defaults, every migration applied from scratch).
+      - name: Boot the server and check /api/health
+        run: npm run test:boot

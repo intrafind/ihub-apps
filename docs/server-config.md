@@ -55,6 +55,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `HOST`                     | Host interface to bind to. Use `0.0.0.0` to listen on all interfaces (recommended), then access via `localhost` or `127.0.0.1` in your browser. **Never access via `http://0.0.0.0:*` as browsers will reject cookies.** | `0.0.0.0`                                        |
 | `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
 | `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
+| `LLM_TRANSIENT_RETRIES`    | How often a transient provider failure (429, 5xx, network) is retried with backoff before an LLM call fails. `WORKFLOW_LLM_TRANSIENT_RETRIES` is still honoured. | `3`                                              |
+| `LLM_DEBUG_DUMP_ALL`       | Set to `1` to write every outbound LLM request body to `contents/data/debug/llm-request/` (auth headers and URL keys redacted). Diagnostics only. | –                                                |
 | `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. See [Scaling with Multiple Workers](scaling.md). | `4`                                              |
 | `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `4`                                              |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |

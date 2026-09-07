@@ -51,7 +51,8 @@ class ConversationApiService {
     labels,
     retrievalScope,
     ephemeral,
-    responseGeneration
+    responseGeneration,
+    signal
   }) {
     const url = this.buildUrl(baseUrl, '/conversations');
     const headers = this.buildHeaders(user);
@@ -78,7 +79,8 @@ class ConversationApiService {
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {})
     });
 
     if (!response.ok) {

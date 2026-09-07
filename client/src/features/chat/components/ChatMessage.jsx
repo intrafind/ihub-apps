@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
-import { sendMessageFeedback } from '../../../api';
+import { sendMessageFeedback, answerInteraction } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
@@ -19,15 +19,15 @@ import CitationPanel from './CitationPanel';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
-import { apiClient } from '../../../api/client';
 
 /**
- * Renders a workflow checkpoint inline in a chat bubble. Tracks which
- * checkpoint id the user already responded to so the card disappears after
- * submit (preventing double-submit 400s) while still rendering the next
- * checkpoint when a new one arrives. Keys the inner component by checkpoint
- * id so internal state (selectedOption, submitting, etc.) resets between
- * sequential checkpoints in the same workflow.
+ * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
+ * interaction of the workflow's run (run id === execution id), answered
+ * through the one answer endpoint. Tracks which checkpoint id the user already
+ * responded to so the card disappears after submit (preventing double-submit
+ * 400s) while still rendering the next checkpoint when a new one arrives. Keys
+ * the inner component by checkpoint id so internal state (selectedOption,
+ * submitting, etc.) resets between sequential checkpoints in the same workflow.
  */
 function ChatCheckpoint({ executionId, checkpoint }) {
   const [respondedId, setRespondedId] = useState(null);
@@ -38,12 +38,13 @@ function ChatCheckpoint({ executionId, checkpoint }) {
         key={checkpoint.id}
         checkpoint={checkpoint}
         displayData={checkpoint.displayData}
-        onRespond={async ({ checkpointId, response, data }) => {
-          await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+        onRespond={async ({ checkpointId, response, data, skipped = false }) => {
+          await answerInteraction(
+            executionId,
             checkpointId,
-            response,
-            data
-          });
+            skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+            { channel: 'chat' }
+          );
           setRespondedId(checkpointId);
         }}
       />
@@ -425,7 +426,8 @@ function ChatMessage({
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300), // Send a snippet for context
         conversationId, // Include for iAssistant messages
-        ifinderMessageId // Include iFinder message ID for routing to iFinder API
+        ifinderMessageId, // Include iFinder message ID for routing to iFinder API
+        ...(message.runId ? { runId: message.runId } : {}) // Recorded as a human/event on the run
       });
 
       // Keep the feedback button activated only after successful submission

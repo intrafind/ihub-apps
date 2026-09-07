@@ -267,7 +267,7 @@ describe('Gemini ThoughtSignature Handling', () => {
 
       const parsedResult = await convertGoogleResponseToGeneric(initialResponse, 'default');
 
-      // Step 2: Create assistant message with the tool call (simulating ToolExecutor)
+      // Step 2: Create assistant message with the tool call (simulating the agent loop)
       const assistantMessage = {
         role: 'assistant',
         content: null,

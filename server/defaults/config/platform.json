@@ -107,11 +107,21 @@
       "redactPasswords": true,
       "includeRawData": false,
       "providers": {
-        "oidc": { "enabled": true },
-        "local": { "enabled": true },
-        "proxy": { "enabled": true },
-        "ldap": { "enabled": true },
-        "ntlm": { "enabled": true }
+        "oidc": {
+          "enabled": true
+        },
+        "local": {
+          "enabled": true
+        },
+        "proxy": {
+          "enabled": true
+        },
+        "ldap": {
+          "enabled": true
+        },
+        "ntlm": {
+          "enabled": true
+        }
       }
     }
   },
@@ -149,10 +159,17 @@
     "requireConsent": true,
     "publicUrl": "",
     "transports": {
-      "streamableHttp": { "enabled": true, "stateless": false },
-      "sse": { "enabled": true }
+      "streamableHttp": {
+        "enabled": true,
+        "stateless": false
+      },
+      "sse": {
+        "enabled": true
+      }
     },
-    "a2a": { "enabled": false },
+    "a2a": {
+      "enabled": false
+    },
     "expose": {
       "tools": true,
       "apps": true,
@@ -282,15 +299,24 @@
   "officeIntegration": {
     "enabled": false,
     "oauthClientId": "",
-    "displayName": { "en": "iHub Apps", "de": "iHub Apps" },
+    "displayName": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
     "description": {
       "en": "AI-powered assistant for Outlook",
       "de": "KI-gestützter Assistent für Outlook"
     },
     "starterPrompts": [
       {
-        "title": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" },
-        "message": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" }
+        "title": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        },
+        "message": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        }
       },
       {
         "title": {
@@ -346,5 +372,13 @@
       }
     ],
     "useLocalOfficejs": false
+  },
+  "runLog": {
+    "enabled": true,
+    "identityMode": "default",
+    "retentionDays": 90,
+    "cleanupEnabled": true,
+    "flushIntervalMs": 2000,
+    "spillThresholdBytes": 65536
   }
 }

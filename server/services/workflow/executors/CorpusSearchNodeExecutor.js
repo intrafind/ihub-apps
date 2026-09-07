@@ -22,7 +22,8 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import iFinderService from '../../integrations/iFinderService.js';
-import { actionTracker } from '../../../actionTracker.js';
+import { streamEmitter } from '../../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../../shared/runEvents.js';
 import { activeWorkflowExecutions } from '../../../tools/workflowRunner.js';
 
 export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
@@ -166,7 +167,7 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
     // and accumulates completed steps. Each step gets a unique `nodeName`
     // so they all stick instead of overwriting each other.
     //
-    // Mapping chatId: `actionTracker.trackWorkflowStep` expects the *chat*
+    // Mapping chatId: the progress frame goes to the *chat*
     // chatId. Inside workflow executors `context.chatId` is the executionId
     // — `workflowRunner` bridges executionId→chatId on its end. To reach
     // the chat directly we look up the original chat session via
@@ -178,14 +179,20 @@ export class CorpusSearchNodeExecutor extends BaseNodeExecutor {
       }
       return null;
     })();
+    let progressStep = 0;
     const emitStep = (nodeName, status = 'completed') => {
       if (!chatSessionId || !nodeName) return;
       try {
-        actionTracker.trackWorkflowStep(chatSessionId, {
-          nodeName,
+        progressStep += 1;
+        // Attributed to the workflow execution (its own run on the chat
+        // stream), not to the chat run the stream is currently bound to.
+        streamEmitter(chatSessionId, chatId).emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+          executionId: chatId,
+          nodeId: `${chatId}:corpus-search:${progressStep}`,
+          nodeName: String(nodeName),
           nodeType: 'corpus-search',
           status,
-          chatVisible: true
+          progress: { chatVisible: true }
         });
       } catch {
         /* best-effort */

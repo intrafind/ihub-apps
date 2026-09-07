@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
-import { actionTracker } from '../actionTracker.js';
+import { emitToolProgress } from '../services/loop/RunStream.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
@@ -65,15 +65,14 @@ export default async function webContentExtractor({
   ignoreSSL = null,
   chatId
 }) {
-  actionTracker.trackToolCallStart(chatId, {
-    toolName: 'webContentExtractor',
-    toolInput: { url: url || uri || link }
-  });
-  actionTracker.trackToolCallProgress(chatId, {
-    toolName: 'webContentExtractor',
-    status: 'loading',
-    message: 'Fetching content'
-  });
+  const progress = (status, extra = {}) =>
+    emitToolProgress(chatId, {
+      phase: `fetch.${status}`,
+      toolId: 'webContentExtractor',
+      message: status === 'loading' ? 'Fetching content' : undefined,
+      data: { url: url || uri || link, status, ...extra }
+    });
+  progress('loading');
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
 
@@ -168,10 +167,7 @@ export default async function webContentExtractor({
       break;
     }
 
-    actionTracker.trackToolCallProgress(chatId, {
-      toolName: 'webContentExtractor',
-      status: 'parsing'
-    });
+    progress('parsing');
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -192,11 +188,7 @@ export default async function webContentExtractor({
     // Handle PDF content
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/pdf')) {
-      actionTracker.trackToolCallProgress(chatId, {
-        toolName: 'webContentExtractor',
-        status: 'extracting',
-        type: 'pdf'
-      });
+      progress('extracting', { type: 'pdf' });
 
       try {
         const arrayBuffer = await response.arrayBuffer();
@@ -233,10 +225,6 @@ export default async function webContentExtractor({
           wordCount: textContent.trim().split(/\s+/).length,
           extractedAt: new Date().toISOString()
         };
-        actionTracker.trackToolCallEnd(chatId, {
-          toolName: 'webContentExtractor',
-          toolOutput: { type: 'pdf' }
-        });
         return output;
       } catch (pdfError) {
         throw createError(`Failed to parse PDF: ${pdfError.message}`, 'PDF_PARSE_ERROR');
@@ -244,11 +232,7 @@ export default async function webContentExtractor({
     }
 
     let html = await response.text();
-    actionTracker.trackToolCallProgress(chatId, {
-      toolName: 'webContentExtractor',
-      status: 'extracting',
-      type: 'html'
-    });
+    progress('extracting', { type: 'html' });
     // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
     // Loop to handle nested/overlapping patterns that a single pass would miss
     let prevHtml;
@@ -399,10 +383,6 @@ export default async function webContentExtractor({
       wordCount: textContent.split(/\s+/).length,
       extractedAt: new Date().toISOString()
     };
-    actionTracker.trackToolCallEnd(chatId, {
-      toolName: 'webContentExtractor',
-      toolOutput: { type: 'html' }
-    });
     return output;
   } catch (error) {
     if (error.name === 'AbortError') {

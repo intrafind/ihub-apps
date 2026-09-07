@@ -2,6 +2,7 @@ import configCache from './configCache.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
+import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
@@ -539,9 +540,10 @@ export async function runTool(toolId, params = {}) {
     // Emit skill activation SSE event for UI indicators
     const chatId = params.chatId;
     if (chatId) {
-      actionTracker.trackSkillActivation(chatId, {
-        skillName,
-        description: content.description || ''
+      emitToolProgress(chatId, {
+        phase: 'skill.activation',
+        message: skillName,
+        data: { skillName, description: content.description || '' }
       });
     }
 

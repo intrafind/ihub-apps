@@ -197,7 +197,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
 
       // For streaming chunks with empty names, create minimal objects to avoid overwriting
-      // the tool name during merging in ToolExecutor
+      // the tool name during merging in the tool-call accumulator
       if (!toolName && args.__raw_arguments !== undefined) {
         // This is a streaming chunk with arguments but no name
         // Create a minimal object that won't overwrite the existing tool name
@@ -213,7 +213,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
             rawArguments: argString
           },
           function: {
-            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            name: '', // Keep empty so the accumulator won't overwrite existing name
             arguments: argString
           }
         };

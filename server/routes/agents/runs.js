@@ -4,11 +4,20 @@
  *   GET  /api/agents/runs                     — list agent runs
  *   GET  /api/agents/runs/:runId              — single run state
  *   POST /api/agents/runs/:runId/cancel       — cancel a running run
- *   POST /api/agents/runs/:runId/approve      — HITL approval
- *   GET  /api/agents/approvals                — cross-profile pending queue
+ *
+ * HITL: a paused run's checkpoint is an interaction — answer it through
+ * `POST /api/runs/:runId/interactions/:id/answer`; the queue is
+ * `GET /api/interactions/pending?kind=approval` (routes/runs.js).
  */
 
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
+import {
+  translateInternalEvent,
+  buildEnvelope,
+  currentSeq,
+  stampSeq
+} from '../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   sendBadRequest,
   sendNotFound,
@@ -22,7 +31,6 @@ import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
-import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import logger from '../../utils/logger.js';
@@ -33,14 +41,9 @@ function getEngine() {
   return getWorkflowEngine();
 }
 
-// 30-minute node timeout for agent runs: the phased planner node blocks while
-// its entire sub-workflow runs (up to 6 tasks × several minutes each), so the
-// engine's 5-minute default would kill it mid-run. 30 min matches
-// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout
-// allows. Passed per-call (not via the engine constructor) since the engine
-// instance is now shared with non-agent workflow entry points that should
-// keep the shorter default.
-const AGENT_NODE_TIMEOUT_MS = 30 * 60 * 1000;
+// Passed per-call (not via the engine constructor) since the engine instance
+// is shared with non-agent workflow entry points that keep the shorter default.
+import { AGENT_NODE_TIMEOUT_MS } from '../../services/workflow/checkpointResume.js';
 
 function lookupProfile(profileId) {
   const { data: profiles = [] } = configCache.getAgentProfiles(true);
@@ -535,7 +538,15 @@ export default function registerAgentRunRoutes(app) {
         onClose: () => actionTracker.off('fire-sse', handleEvent)
       });
 
-      channel.send('connected', { runId });
+      const connected = buildEnvelope({
+        streamId: runId,
+        runId,
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        data: { runId, lastSeq: currentSeq(runId) }
+      });
+      // Direct channel writes bypass `sse.js` delivery, so this route stamps
+      // the stream sequence on every frame it sends.
+      channel.send(connected.type, stampSeq(runId, connected));
 
       logger.info('SSE connection established for agent run', {
         component: 'AgentRuns',
@@ -593,9 +604,26 @@ export default function registerAgentRunRoutes(app) {
           (eventData.executionId && trackedIds.has(eventData.executionId));
         if (!matchesRun) return;
 
-        // Always tag the event with the parent runId so the client can route
-        // it consistently regardless of which (sub)workflow emitted it.
-        channel.send(eventType, { ...eventData, _parentRunId: runId });
+        // Child sub-workflow events keep their own executionId as the envelope
+        // runId; the client reducer merges every run on this stream.
+        for (const frame of translateInternalEvent(eventData)) {
+          try {
+            const envelope = buildEnvelope({
+              streamId: runId,
+              runId: frame.runId || runId,
+              type: frame.type,
+              data: frame.data
+            });
+            channel.send(envelope.type, stampSeq(runId, envelope));
+          } catch (err) {
+            logger.warn('Dropped agent run event that does not fit the SSE v2 contract', {
+              component: 'AgentRuns',
+              runId,
+              eventType,
+              error: err.message
+            });
+          }
+        }
       };
 
       actionTracker.on('fire-sse', handleEvent);
@@ -612,8 +640,13 @@ export default function registerAgentRunRoutes(app) {
         const { runId } = req.params;
         if (!validateIdForPath(runId, 'run', res)) return;
         if (!(await authorizeRunAccess(req, res, runId))) return;
-        const state = await getEngine().cancel(runId, req.body?.reason || 'user_cancelled');
-        res.json({ ok: true, status: state.status });
+        // The run may execute on another worker: the engine relays the cancel.
+        const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
+        res.json({
+          ok: true,
+          status: state.status,
+          ...(state.cancelRelayed ? { relayed: true } : {})
+        });
       } catch (error) {
         sendFailedOperationError(res, 'cancel agent run', error);
       }
@@ -722,114 +755,6 @@ export default function registerAgentRunRoutes(app) {
           return sendBadRequest(res, error.message);
         }
         sendFailedOperationError(res, 'resume agent run', error);
-      }
-    }
-  );
-
-  // ── HITL approval ─────────────────────────────────────────────────────────
-  app.post(
-    buildServerPath('/api/agents/runs/:runId/approve'),
-    authRequired,
-    authenticatedOnly,
-    async (req, res) => {
-      try {
-        const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeRunAccess(req, res, runId))) return;
-        const { checkpointId, response, data, note } = req.body || {};
-        if (!checkpointId || !response) {
-          return sendBadRequest(res, 'checkpointId and response are required');
-        }
-
-        const state = await getEngine().getState(runId);
-        if (!state) return sendNotFound(res, `Run ${runId} not found`);
-        if (state.status !== 'paused') {
-          return sendBadRequest(res, `Run is not paused (status=${state.status})`);
-        }
-
-        const checkpoint = state.data?.pendingCheckpoint;
-        if (!checkpoint || checkpoint.id !== checkpointId) {
-          return sendBadRequest(res, 'pendingCheckpoint mismatch');
-        }
-
-        const workflow = state.data?._workflowDefinition;
-        if (!workflow) return sendBadRequest(res, 'Workflow definition not available');
-        const humanNode = workflow.nodes.find(n => n.id === checkpoint.nodeId);
-        if (!humanNode) return sendBadRequest(res, 'Human node not found');
-
-        // HumanNodeExecutor.resume enforces approver-group validation when the
-        // workflow is an agent run.
-        const executor = new HumanNodeExecutor();
-        const resumeResult = await executor.resume(
-          humanNode,
-          state,
-          { checkpointId, response, data, note },
-          { executionId: runId, user: req.user }
-        );
-
-        if (resumeResult.status === 'failed') {
-          return res.status(403).json({ error: 'NOT_AUTHORIZED', message: resumeResult.error });
-        }
-
-        const scheduler = getEngine().scheduler;
-        const branch = resumeResult.branch;
-        const humanResult = { branch, response, ...resumeResult.output };
-        const nextNodes = scheduler.getNextNodes(humanNode.id, humanResult, workflow, state);
-
-        await getEngine().stateManager.update(runId, {
-          completedNodes: [...(state.completedNodes || []), humanNode.id],
-          currentNodes: nextNodes,
-          data: {
-            ...state.data,
-            ...(resumeResult.stateUpdates || {}),
-            [`_humanResult_${humanNode.id}`]: humanResult,
-            nodeResults: {
-              ...(state.data?.nodeResults || {}),
-              [humanNode.id]: humanResult
-            }
-          }
-        });
-
-        const newState = await getEngine().resume(
-          runId,
-          {},
-          {
-            user: req.user,
-            workflow,
-            timeout: AGENT_NODE_TIMEOUT_MS
-          }
-        );
-        res.json({ ok: true, status: newState.status });
-      } catch (error) {
-        if (error.code === 'EXECUTION_NOT_FOUND') return sendNotFound(res, 'Run');
-        sendFailedOperationError(res, 'approve agent run', error);
-      }
-    }
-  );
-
-  // ── Cross-profile pending approvals queue ────────────────────────────────
-  app.get(
-    buildServerPath('/api/agents/approvals'),
-    authRequired,
-    authenticatedOnly,
-    async (req, res) => {
-      try {
-        const registry = getExecutionRegistry();
-        const all = registry.getAll ? registry.getAll() : [];
-        const pending = [];
-        for (const r of all) {
-          if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) continue;
-          if (r.status !== 'paused' || !r.pendingCheckpoint) continue;
-          pending.push({
-            runId: r.executionId,
-            profileId: r.userId.slice('agent:'.length),
-            checkpoint: r.pendingCheckpoint,
-            pausedAt: r.pausedAt || null
-          });
-        }
-        res.json(pending);
-      } catch (error) {
-        sendFailedOperationError(res, 'list pending approvals', error);
       }
     }
   );

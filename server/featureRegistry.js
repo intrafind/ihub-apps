@@ -155,6 +155,17 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'runLog',
+    name: { en: 'Run Ledger (RunLog)', de: 'Run-Ledger (RunLog)' },
+    description: {
+      en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
+      de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 

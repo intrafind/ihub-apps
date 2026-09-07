@@ -126,15 +126,18 @@ class OpenAIAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for OpenAI
    */
-  async createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}, { signal } = {}) {
     const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
-    // Use model discovery to get the effective model ID if enabled
-    const effectiveModelId = await modelDiscoveryService.getEffectiveModelId(model, apiKey);
+    // Use model discovery to get the effective model ID if enabled (under the
+    // caller's deadline / abort signal, so a hung discovery cannot outlive it).
+    const effectiveModelId = await modelDiscoveryService.getEffectiveModelId(model, apiKey, {
+      signal
+    });
 
     const body = {
       model: effectiveModelId,

@@ -1,195 +1,150 @@
 /**
- * Chat SSE sink.
+ * Chat SSE sink — SSE v2 delivery.
  *
- * `clients` maps chatId → the open SSE response; `activeRequests` maps chatId →
- * the AbortController for the LLM call feeding it. Both are process-local, so
- * in cluster mode the worker handling a chat POST is frequently not the worker
- * holding that chat's SSE stream. Both maps are therefore presence maps
- * (`server/clusterBus.js`): membership is mirrored across workers, letting this
- * module relay events to whichever worker owns the stream instead of requiring
- * the connections to have landed together.
+ * `clients` maps streamId (the chatId a browser subscribed with) → the open
+ * SSE response; `activeRequests` maps chatId → the AbortController of the
+ * model turn feeding it. Both are process-local, so in cluster mode the worker
+ * handling a chat POST is frequently not the worker holding that chat's SSE
+ * stream. Both maps are therefore presence maps (`server/clusterBus.js`):
+ * membership is mirrored across workers, letting this module relay envelopes
+ * to whichever worker owns the stream.
+ *
+ * Every frame written here is an SSE v2 envelope (`services/loop/RunStream.js`
+ * builds them): `event: <type>` and `data: { v: 2, seq, runId, ts, type, data }`.
  */
 
-import { actionTracker } from './actionTracker.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
+import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
 
-/** chatId → { response, lastActivity, appId? } for locally held SSE streams. */
+/** streamId → { response, lastActivity, appId? } for locally held SSE streams. */
 export const clients = createPresenceMap('sse');
 
-/** chatId → AbortController for LLM calls running in this worker. */
+/** chatId → AbortController for model turns running in this worker. */
 export const activeRequests = createPresenceMap('request');
 
 /** Bus channels. */
 const EVENT_CHANNEL = 'sse:event';
-const RAW_CHANNEL = 'sse:raw';
 const ABORT_CHANNEL = 'chat:abort';
 const CLOSE_CHANNEL = 'chat:close';
 
+/** Write one SSE frame. `data` is serialized as JSON unless it already is a string. */
 export function sendSSE(res, event, data) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
 /**
- * Write an action-tracker step to this worker's SSE client for the chat.
+ * Write one envelope to this worker's SSE client for the stream.
  *
- * @param {object} step - `fire-sse` payload; must carry `chatId` and `event`.
+ * @param {string} streamId
+ * @param {object} envelope - SSE v2 envelope
  * @returns {boolean} True if it reached a live local client. False means either
  *   no local registration or a dead socket — in both cases the caller should
  *   consider relaying, because another worker may hold the real stream.
  */
-export function deliverSSEEvent(step) {
-  const { chatId, event } = step;
-  if (!chatId) return false;
-  if (!clients.has(chatId)) return false;
+export function deliverEnvelope(streamId, envelope) {
+  if (!streamId || !envelope) return false;
+  if (!clients.has(streamId)) return false;
 
-  const clientEntry = clients.get(chatId);
+  const clientEntry = clients.get(streamId);
   clientEntry.lastActivity = new Date(); // Keep connection marked as active
   try {
-    sendSSE(clientEntry.response, event, step);
+    // This worker owns the stream, so it owns the stream's sequence: frames
+    // produced here and frames relayed from other workers get one counter.
+    const stamped = stampSeq(streamId, envelope);
+    sendSSE(clientEntry.response, stamped.type, stamped);
     return true;
   } catch (error) {
     // The socket is most likely dead (peer closed, write-after-end, etc.).
-    // Without this cleanup, every subsequent fire-sse event would re-throw
-    // and the Map entry would linger until cleanupInactiveClients evicts it
-    // 5 minutes later — meanwhile the LLM keeps streaming into a void and
-    // the activeRequests controller leaks.
-    logger.error('Error sending SSE action event; tearing down dead client', {
+    // Without this cleanup, every subsequent frame would re-throw and the Map
+    // entry would linger until the inactivity sweep evicts it — meanwhile the
+    // model keeps streaming into a void and the activeRequests controller leaks.
+    logger.error('Error writing SSE envelope; tearing down dead client', {
       component: 'SSE',
-      chatId,
+      streamId,
+      type: envelope.type,
       error: error?.message || String(error)
     });
     try {
-      const controller = activeRequests.get(chatId);
+      const controller = activeRequests.get(streamId);
       if (controller) {
         controller.abort();
-        activeRequests.delete(chatId);
+        activeRequests.delete(streamId);
       }
     } catch (abortErr) {
       logger.error('Error aborting activeRequest after SSE write failure', {
         component: 'SSE',
-        chatId,
+        streamId,
         error: abortErr?.message || String(abortErr)
       });
     }
     // Only delete the entry if it's still the one we just wrote to — avoids
-    // wiping out a freshly-reconnected entry on the same chatId.
-    if (clients.get(chatId) === clientEntry) {
-      clients.delete(chatId);
+    // wiping out a freshly-reconnected entry on the same streamId.
+    if (clients.get(streamId) === clientEntry) {
+      clients.delete(streamId);
+      resetStream(streamId);
     }
     return false;
   }
 }
 
-actionTracker.on('fire-sse', step => {
-  const { chatId } = step;
-  if (!chatId) return;
-  if (deliverSSEEvent(step)) return;
-  // Not ours. If another worker registered this chat's stream, hand the event
+/**
+ * Deliver locally or relay to the worker holding the stream. Installed as the
+ * RunStream delivery function, so every producer in the process goes through
+ * here without knowing about the cluster.
+ */
+export function routeEnvelope(streamId, envelope) {
+  if (deliverEnvelope(streamId, envelope)) return true;
+  // Not ours. If another worker registered this stream, hand the envelope
   // over; otherwise nobody is listening anywhere and dropping it is correct.
-  if (hasRemote('sse', chatId)) {
-    logger.debug('Relaying SSE event to the worker holding this chat', {
-      component: 'SSE',
-      chatId,
-      event: step.event,
-      pid: process.pid
-    });
-    publish(EVENT_CHANNEL, step, { kind: 'sse', key: chatId });
+  if (hasRemote('sse', streamId)) {
+    publish(EVENT_CHANNEL, { streamId, envelope }, { kind: 'sse', key: streamId });
+    return true;
   }
-});
+  return false;
+}
 
-// Events relayed from another worker are written straight to the local client.
-// They must not go back through actionTracker, which would re-enter the
-// fire-sse handler above and bounce the event around the cluster.
-subscribe(EVENT_CHANNEL, step => {
-  const delivered = deliverSSEEvent(step);
-  logger.debug('Received relayed SSE event', {
+setEnvelopeDelivery(routeEnvelope);
+
+// Envelopes relayed from another worker are written straight to the local
+// client. They must not go back through routeEnvelope, which would bounce the
+// frame around the cluster.
+subscribe(EVENT_CHANNEL, ({ streamId, envelope }) => {
+  const delivered = deliverEnvelope(streamId, envelope);
+  logger.debug('Received relayed SSE envelope', {
     component: 'SSE',
-    chatId: step.chatId,
-    event: step.event,
+    streamId,
+    type: envelope?.type,
     delivered,
     pid: process.pid
   });
 });
 
 /**
- * A minimal stand-in for the SSE `response` of a chat held by another worker.
- *
- * Most streaming output reaches the browser through `actionTracker`, which the
- * relay above already handles. A few callers still take the raw response object
- * — `RequestBuilder` uses its presence to decide `stream: true`, and
- * `ApiKeyVerifier` writes an error frame straight to it. Handing those a null
- * would silently downgrade a cross-worker chat to non-streaming, so they get
- * this shim instead: same `write`/`end` surface, forwarded over the bus.
- *
- * @param {string} chatId
- * @returns {{ write: (chunk: string) => boolean, end: () => void, remote: true }}
- */
-export function createRemoteChatResponse(chatId) {
-  return {
-    remote: true,
-    write(chunk) {
-      publish(RAW_CHANNEL, { chatId, chunk: String(chunk) }, { kind: 'sse', key: chatId });
-      return true;
-    },
-    end() {
-      publish(CLOSE_CHANNEL, { chatId }, { kind: 'sse', key: chatId });
-    }
-  };
-}
-
-subscribe(RAW_CHANNEL, ({ chatId, chunk }) => {
-  const client = clients.get(chatId);
-  if (!client) return;
-  client.lastActivity = new Date();
-  try {
-    client.response.write(chunk);
-  } catch (error) {
-    logger.warn('Error writing relayed raw SSE chunk', {
-      component: 'SSE',
-      chatId,
-      error: error?.message || String(error)
-    });
-  }
-});
-
-/**
- * Resolve the SSE response to stream this chat into, local or remote.
- *
- * @param {string} chatId
- * @returns {object|null} A writable response-like object, or null when no SSE
- *   stream for this chat exists anywhere in the cluster.
- */
-export function getChatResponseSink(chatId) {
-  const local = clients.get(chatId);
-  if (local) {
-    local.lastActivity = new Date();
-    return local.response;
-  }
-  if (hasRemote('sse', chatId)) return createRemoteChatResponse(chatId);
-  return null;
-}
-
-/**
  * Whether an SSE stream for this chat is open anywhere in the cluster.
  *
  * The request path uses this to choose between streaming and the synchronous
- * fallback, so it has to account for streams held by other workers — a local
+ * answer, so it has to account for streams held by other workers — a local
  * `clients.has()` would send every cross-worker chat down the non-streaming
  * path.
  */
 export function hasChatClient(chatId) {
-  return clients.has(chatId) || hasRemote('sse', chatId);
+  if (clients.has(chatId)) {
+    // Refresh the activity marker so a busy chat is never swept as idle.
+    clients.get(chatId).lastActivity = new Date();
+    return true;
+  }
+  return hasRemote('sse', chatId);
 }
 
-/** Whether an LLM call for this chat is in flight anywhere in the cluster. */
+/** Whether a model turn for this chat is in flight anywhere in the cluster. */
 export function hasActiveChatRequest(chatId) {
   return activeRequests.has(chatId) || hasRemote('request', chatId);
 }
 
 /**
- * Abort the in-flight LLM call for a chat, wherever it is running.
+ * Abort the in-flight model turn for a chat, wherever it is running.
  *
  * @returns {boolean} True if the abort was applied locally or relayed.
  */
@@ -235,6 +190,7 @@ export function closeChatClient(chatId) {
       });
     }
     clients.delete(chatId);
+    resetStream(chatId);
     return true;
   }
   if (hasRemote('sse', chatId)) {
@@ -272,4 +228,5 @@ subscribe(CLOSE_CHANNEL, ({ chatId }) => {
     });
   }
   clients.delete(chatId);
+  resetStream(chatId);
 });

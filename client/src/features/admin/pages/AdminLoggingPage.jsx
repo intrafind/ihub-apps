@@ -97,10 +97,32 @@ function AdminLoggingPage() {
         'Verification of provider API keys (OpenAI, Anthropic, Google, Mistral) at startup'
     },
     {
-      id: 'ToolExecutor',
-      name: 'Tool Executor',
+      id: 'AgentLoop',
+      name: 'Agent Loop',
       description:
-        'Execution of tools called by LLMs (web search, code execution, file operations, browser automation)'
+        'The one agentic loop behind chats, workflow nodes, agents and app invocations: model steps, tool execution, budgets, compaction'
+    },
+    {
+      id: 'LLMClient',
+      name: 'LLM Client',
+      description: 'Every provider request and response: model resolution, API keys, retries, usage'
+    },
+    {
+      id: 'RunLog',
+      name: 'Run Ledger',
+      description:
+        'Append-only run ledger: persistence, retention sweep, spill files, deletion cascade'
+    },
+    {
+      id: 'RunStream',
+      name: 'Run Stream',
+      description: 'Live run events (SSE v2) delivered to chat, workflow and run detail views'
+    },
+    {
+      id: 'InteractionService',
+      name: 'Interactions',
+      description:
+        'Human touchpoints raised by runs (questions, approvals, reviews): pending store, answers, expiry'
     },
     {
       id: 'DataRoutes',

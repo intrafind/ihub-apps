@@ -167,7 +167,7 @@ export class BaseAdapter {
    *
    * @param {Response} response
    * @param {{ model: object, chatId?: string, request?: object }} ctx
-   * @yields {object} Normalized result chunks consumed by StreamingHandler
+   * @yields {object} Normalized result chunks consumed by LLMClient
    */
   async *parseResponseStream(response, ctx) {
     yield* this.parseSseStream(response, ctx.model.provider, ctx.chatId);

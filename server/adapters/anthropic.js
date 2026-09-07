@@ -30,7 +30,7 @@ class AnthropicAdapterClass extends BaseAdapter {
           toolContent.push({
             type: 'tool_result',
             tool_use_id: msg.tool_call_id,
-            content: msg.content, // Already simplified in ToolExecutor
+            content: msg.content, // Already simplified by the tool loop
             is_error: msg.is_error || false
           });
 

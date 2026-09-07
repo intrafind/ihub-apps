@@ -267,15 +267,17 @@ callers with the matching scope.
 - **iHub tool** → MCP tool with `id` unchanged, `inputSchema` = the
   tool's existing JSON schema parameters.
 - **iHub app** → MCP tool with id `app__<appId>` and `inputSchema`
-  derived from the app's `variables` array. App invocation runs in
-  non-streaming mode: the LLM request fires through `RequestBuilder`
-  (so prompt templating, system prompt, variables, model selection,
-  API-key resolution, and token budgeting match the web UI exactly),
-  the response is fetched synchronously via `throttledFetch`, and the
-  assistant text is returned as a single content block. Tool calling
-  inside an app, structured-output post-processing, and multi-modal
-  generation still need the streaming pipeline — those are not yet
-  surfaced over `/mcp`.
+  derived from the app's `variables` array. App invocation runs
+  headlessly through `ChatService.invokeAppInternal()`
+  (`server/services/mcp/appInvoker.js`): `RequestBuilder` prepares the
+  request exactly as for the web UI (prompt templating, system prompt,
+  variables, model selection), the turn runs on the shared
+  [agent loop](agent-loop.md) with every model call through `LLMClient`
+  (API-key resolution, throttling, retries), and the assistant text is
+  returned as a single content block. Tools configured on the app
+  execute server-side and structured output applies; interactive tools
+  (`ask_user`) are refused with a `NO_USER_AVAILABLE` result because no
+  user can answer over `tools/call`.
 - **iHub workflow** → MCP tool with id `workflow__<workflowId>` and
   `inputSchema` derived from the start node's `inputVariables`. Dispatch
   goes through the existing `runTool('workflow_<id>', args)` path.

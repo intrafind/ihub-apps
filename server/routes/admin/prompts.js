@@ -8,6 +8,8 @@ import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import {
   validateIdForPath,
   validateIdsForPath,
@@ -1338,36 +1340,37 @@ export default function registerAdminPromptsRoutes(app) {
       if (!modelConfig) {
         return sendBadRequest(res, `Model not found: ${modelId}`);
       }
-      const { verifyApiKey } = await import('../../serverHelpers.js');
-      const apiKey = await verifyApiKey(modelConfig, res);
-      if (!apiKey) {
-        return;
-      }
-      const { simpleCompletion } = await import('../../utils.js');
-      const result = await simpleCompletion(messages, {
-        modelId: modelId,
-        temperature: temperature,
-        responseFormat: responseFormat,
-        responseSchema: responseSchema,
-        maxTokens: maxTokens,
-        apiKey: apiKey
+      // API key resolution lives in LLMClient; `retries: 0` keeps this
+      // interactive admin request from stalling on a provider's Retry-After.
+      const result = await llmClient.complete({
+        modelId,
+        messages,
+        options: { temperature, maxTokens, responseFormat, responseSchema },
+        retries: 0,
+        telemetry: { kind: 'utility', purpose: 'admin-completions', user: req.user }
       });
-      logger.info('Completion result', {
+      logger.debug('Completion result', {
         component: 'AdminPrompts',
-        result: JSON.stringify(result, null, 2)
+        modelId,
+        contentLength: result.content?.length ?? 0,
+        finishReason: result.finishReason,
+        usage: result.usage
       });
       res.json({
         choices: [
           {
             message: { role: 'assistant', content: result.content },
-            finish_reason: 'stop',
+            finish_reason: result.finishReason || 'stop',
             index: 0
           }
         ],
         model: modelId,
-        usage: result.usage
+        usage: usageToOpenAI(result.usage)
       });
     } catch (error) {
+      if (isLLMError(error)) {
+        return sendLLMError(res, error, { context: 'completions' });
+      }
       logger.error('Error in completions endpoint', { component: 'AdminPrompts', error });
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';

@@ -105,7 +105,7 @@ subscribe(DRAIN_CHANNEL, ({ chatId }) => {
  * Build a sequence of replay events from persisted state so the chat catches
  * up on steps it missed for a still-running workflow.
  *
- * Returns events the caller can feed to `actionTracker.trackWorkflowStep(...)`
+ * Returns step events the caller projects onto `progress/node` frames
  * — already shaped as the same fields the live runner uses.
  *
  * @param {Object} state - The workflow state object from StateManager.get()
