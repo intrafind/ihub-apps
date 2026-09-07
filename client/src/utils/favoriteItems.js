@@ -74,3 +74,21 @@ export const createFavoriteItemHelpers = storageKey => {
     toggleFavorite
   };
 };
+
+/**
+ * Stable sort: favorites first, then `tieBreaker` (if given), else input order.
+ * Shared by the start page, the sidebar and the apps browser so "favorites
+ * first" means the same thing everywhere.
+ * @param {Array<{id: string}>} items
+ * @param {string[]} favoriteIds
+ * @param {(a: object, b: object) => number} [tieBreaker]
+ */
+export const sortFavoritesFirst = (items, favoriteIds, tieBreaker = null) => {
+  const favorites = new Set(favoriteIds || []);
+  return [...items].sort((a, b) => {
+    const aFav = favorites.has(a.id);
+    const bFav = favorites.has(b.id);
+    if (aFav !== bFav) return aFav ? -1 : 1;
+    return tieBreaker ? tieBreaker(a, b) : 0;
+  });
+};

@@ -2,67 +2,83 @@ import { useState, useEffect } from 'react';
 import { fetchApps } from '../../api';
 import { useAuth } from '../contexts/AuthContext';
 
-// The sidebar and the start page mount together and both need the apps list.
-// Share one in-flight request (and its result for a short while) per user so a
-// navigation to "/" does not hit /api/apps once per component.
+// The sidebar, the start page and the apps browser all need the apps list.
+// One module-level store shares a single in-flight request per user, keeps
+// the result for a short while, and tells every mounted consumer when fresh
+// data arrives — so the sidebar (mounted once in Layout) picks up a refetch
+// triggered by a page that mounted later.
 const CACHE_TTL_MS = 30_000;
 let cache = null; // { key, promise, apps, at }
+const listeners = new Set();
 
-function freshHit(key) {
-  return cache && cache.key === key && cache.apps && Date.now() - cache.at < CACHE_TTL_MS;
-}
+const freshHit = key =>
+  !!(cache && cache.key === key && cache.apps && Date.now() - cache.at < CACHE_TTL_MS);
+const notify = () => listeners.forEach(listener => listener());
 
 function loadApps(key) {
   if (freshHit(key)) return Promise.resolve(cache.apps);
   if (cache && cache.key === key && cache.promise) return cache.promise;
+  const previous = cache && cache.key === key ? cache : null;
   const promise = fetchApps()
     .then(data => {
       const apps = Array.isArray(data) ? data : [];
       cache = { key, apps, at: Date.now(), promise: null };
+      notify();
       return apps;
     })
     .catch(error => {
-      if (cache && cache.promise === promise) cache = null;
+      if (cache && cache.promise === promise) cache = previous;
       throw error;
     });
-  cache = { key, promise, apps: null, at: 0 };
+  cache = { key, promise, apps: previous?.apps ?? null, at: previous?.at ?? 0 };
   return promise;
 }
 
-/** Drop the shared apps cache (e.g. after an admin changes apps). */
+/** Drop the shared apps cache and make every mounted consumer refetch. */
 export function invalidateAppsCache() {
   cache = null;
+  notify();
 }
 
 /**
- * Load the apps the current user can access. Refetches when the authenticated
- * user changes (login/logout) so the list is never stale after auth changes.
+ * Load the apps the current user can access. Waits until authentication has
+ * resolved (one request instead of anonymous-then-authenticated), refetches
+ * when the user changes, and stays in sync with other consumers.
  *
  * @returns {{ apps: object[], loading: boolean, error: Error|null }}
  */
 export default function useApps() {
-  const { user, isAuthenticated } = useAuth();
-  const key = `${isAuthenticated ? 'auth' : 'anon'}:${user?.id ?? ''}`;
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const key = authLoading ? null : `${isAuthenticated ? 'auth' : 'anon'}:${user?.id ?? ''}`;
   const [state, setState] = useState(() => ({
-    apps: freshHit(key) ? cache.apps : [],
-    loading: !freshHit(key),
+    apps: key && freshHit(key) ? cache.apps : [],
+    loading: true,
     error: null
   }));
 
   useEffect(() => {
+    if (!key) return undefined; // auth still resolving
     let mounted = true;
-    if (!freshHit(key)) {
+    const load = () => {
       setState(prev => (prev.loading ? prev : { ...prev, loading: true }));
-    }
-    loadApps(key)
-      .then(apps => {
-        if (mounted) setState({ apps, loading: false, error: null });
-      })
-      .catch(error => {
-        if (mounted) setState(prev => ({ apps: prev.apps, loading: false, error }));
-      });
+      loadApps(key)
+        .then(apps => {
+          if (mounted) setState({ apps, loading: false, error: null });
+        })
+        .catch(error => {
+          if (mounted) setState(prev => ({ apps: prev.apps, loading: false, error }));
+        });
+    };
+    const sync = () => {
+      if (!mounted) return;
+      if (freshHit(key)) setState({ apps: cache.apps, loading: false, error: null });
+      else load();
+    };
+    listeners.add(sync);
+    sync();
     return () => {
       mounted = false;
+      listeners.delete(sync);
     };
   }, [key]);
 

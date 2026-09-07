@@ -104,7 +104,7 @@ export const featureRegistry = [
     default: false
   },
   {
-    id: 'chatHistory',
+    id: 'chatHistoryPreview',
     name: { en: 'Chat History', de: 'Chat-Verlauf' },
     description: {
       en: 'Show recent chats in the sidebar and a dedicated chat history page (currently uses sample data)',

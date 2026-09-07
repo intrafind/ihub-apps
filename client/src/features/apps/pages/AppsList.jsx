@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchApps } from '../../../api';
+import useApps from '../../../shared/hooks/useApps';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 import NextcloudSelectionBanner from '../../nextcloud-embed/components/NextcloudSelectionBanner';
 
@@ -17,7 +16,6 @@ function AppsList() {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { resetHeaderColor, uiConfig } = useUIConfig();
-  const { user, isAuthenticated } = useAuth();
 
   // Favorite apps (kept in sync across components + tabs by the hook)
   const {
@@ -57,10 +55,12 @@ function AppsList() {
     return uiConfig?.appsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
-  // State declarations must come before any useMemo/useEffect that references them
-  const [apps, setApps] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Apps come from the shared store (one request for sidebar, start page and
+  // this list; refreshed together when any of them refetches).
+  const { apps, loading, error: appsError } = useApps();
+  const error = appsError
+    ? t('error.loadingFailed', 'Failed to load applications. Please try again later.')
+    : null;
   const [searchTerm, setSearchTerm] = useState('');
   const [displayCount, setDisplayCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -148,69 +148,10 @@ function AppsList() {
     };
   }, [calculateVisibleAppCount]);
 
-  // Load apps only once on mount and when language changes
+  // Size the grid once the apps are in.
   useEffect(() => {
-    // Store mounted state to prevent state updates after unmount
-    let isMounted = true;
-
-    const loadApps = async () => {
-      try {
-        setLoading(true);
-
-        // Add a small delay to allow i18n to fully initialize
-        // This helps prevent the rapid re-renders
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Only proceed if still mounted
-        if (!isMounted) return;
-
-        console.log('Fetching apps data...');
-        const appsData = await fetchApps();
-
-        // Bail out if component unmounted during fetch
-        if (!isMounted) return;
-
-        // Safety check for empty or invalid data
-        if (!appsData || !Array.isArray(appsData)) {
-          console.error('Invalid apps data received:', appsData);
-          setError(
-            t('error.invalidDataFormat', 'Failed to load applications: Invalid data format')
-          );
-          setApps([]);
-          return;
-        }
-
-        // Batch our state updates to prevent multiple renders
-        if (isMounted) {
-          setApps(appsData);
-          setError(null);
-
-          // Calculate visible app count after data is loaded
-          const visibleCount = calculateVisibleAppCount();
-          setDisplayCount(visibleCount);
-        }
-      } catch (err) {
-        console.error('Error loading apps:', err);
-        if (isMounted) {
-          setError(
-            t('error.loadingFailed', 'Failed to load applications. Please try again later.')
-          );
-          setApps([]); // Ensure apps is initialized as empty array on error
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadApps();
-
-    // Cleanup function to handle component unmount
-    return () => {
-      isMounted = false;
-    };
-  }, [currentLanguage, user?.id, isAuthenticated, t]); // eslint-disable-line @eslint-react/exhaustive-deps
+    if (!loading) setDisplayCount(calculateVisibleAppCount());
+  }, [loading, apps, calculateVisibleAppCount]);
 
   // Reset display count when search changes
   useEffect(() => {
@@ -471,6 +412,13 @@ function AppsList() {
       <div className="max-w-6xl mx-auto">
         {/* Page header */}
         <div className="flex flex-col items-center text-center mb-8">
+          {uiConfig?.icons?.appsListLogo && (
+            <Icon
+              name={uiConfig.icons.appsListLogo}
+              className="w-10 h-10 text-indigo-600 dark:text-indigo-400 mb-3"
+              aria-hidden="true"
+            />
+          )}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">
             {uiConfig?.appsList?.title
               ? getLocalizedContent(uiConfig.appsList.title, currentLanguage)
@@ -486,7 +434,7 @@ function AppsList() {
         {/* Search + sort */}
         {searchConfig.enabled && apps.length > 3 && (
           <div className="flex flex-col sm:flex-row items-stretch gap-3 mb-5 justify-center">
-            <div className="relative" style={{ minWidth: 0, flex: '0 1 440px' }}>
+            <div className={`relative min-w-0 ${searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'}`}>
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                 <Icon name="search" className="h-5 w-5" />
               </span>
@@ -542,7 +490,8 @@ function AppsList() {
                     : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
                 style={{
-                  backgroundColor: selectedCategory === category.id ? '#3a3f47' : undefined
+                  backgroundColor:
+                    selectedCategory === category.id ? category.color || '#3a3f47' : undefined
                 }}
               >
                 {getLocalizedContent(category.name, currentLanguage)}
@@ -605,8 +554,19 @@ function AppsList() {
                       <Icon name={app.icon} size="md" />
                     </span>
                     <span className="flex-1 min-w-0 pointer-events-none">
-                      <span className="block font-bold text-[15px] text-gray-900 dark:text-gray-100 truncate">
-                        {name}
+                      <span className="flex items-center gap-1.5 font-bold text-[15px] text-gray-900 dark:text-gray-100">
+                        <span className="truncate">{name}</span>
+                        {recentAppIds.includes(app.id) && (
+                          <span
+                            className="flex-none text-gray-400"
+                            title={t('pages.appsList.recent', 'Recently used')}
+                          >
+                            <Icon name="clock" size="xs" aria-hidden="true" />
+                            <span className="sr-only">
+                              {t('pages.appsList.recent', 'Recently used')}
+                            </span>
+                          </span>
+                        )}
                       </span>
                       <span className="block text-[13px] text-gray-500 dark:text-gray-400 truncate leading-snug">
                         {desc}

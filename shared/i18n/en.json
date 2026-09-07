@@ -1745,7 +1745,11 @@
         "showDefaultApp": "Show default chat app",
         "showDefaultAppHelp": "When off, the start page shows the greeting and apps but no chat input.",
         "subtitle": "Subtitle",
-        "subtitleHelp": "Shown under the greeting. Leave empty to use the built-in text."
+        "subtitleHelp": "Shown under the greeting. Leave empty to use the built-in text.",
+        "unknownApp": "not found"
+      },
+      "header": {
+        "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it."
       }
     },
     "groupSelect": {
@@ -2906,7 +2910,9 @@
     "closeMenu": "Close navigation",
     "noApps": "No apps available",
     "label": "Sidebar",
-    "searchApps": "Search apps"
+    "searchApps": "Search apps",
+    "appsUnavailable": "Apps could not be loaded",
+    "sampleBadge": "Sample"
   },
   "chatHistory": {
     "title": "Your chats",

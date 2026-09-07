@@ -50,7 +50,7 @@ function NavItem({ item, isCollapsed }) {
         </Link>
         {/* Flyout tooltip */}
         <div
-          className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
+          className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           role="tooltip"
         >
           {item.label}
@@ -92,7 +92,7 @@ function SectionHeader({ section, isCollapsed, isExpanded, onToggle, hasActiveCh
           <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
         </div>
         <div
-          className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
+          className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           role="tooltip"
         >
           {section.label}
@@ -328,7 +328,7 @@ export default function AdminSidebar({ onMobileToggle }) {
               <ArrowLeftIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
             </Link>
             <div
-              className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
+              className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-sm bg-gray-900 dark:bg-gray-700 text-white text-xs whitespace-nowrap z-50 opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
               role="tooltip"
             >
               {t('admin.sidebar.backToApp', 'Back to iHub')}

@@ -1998,7 +1998,11 @@
         "showDefaultApp": "Standard-Chat-App anzeigen",
         "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe.",
         "subtitle": "Untertitel",
-        "subtitleHelp": "Wird unter der Begrüßung angezeigt. Leer lassen, um den Standardtext zu verwenden."
+        "subtitleHelp": "Wird unter der Begrüßung angezeigt. Leer lassen, um den Standardtext zu verwenden.",
+        "unknownApp": "nicht gefunden"
+      },
+      "header": {
+        "colorHint": "Verwenden Sie Hex-Farben (#4f46e5) oder RGB-Werte (rgb(79, 70, 229)). Die Farbe gilt für die klassische Kopfzeile (Teams-, Office- und Nextcloud-Einbettungen, ?sidebar=false); das Seitenleisten-Layout verwendet sie nicht."
       }
     },
     "groupSelect": {
@@ -2871,7 +2875,9 @@
     "closeMenu": "Navigation schließen",
     "noApps": "Keine Apps verfügbar",
     "label": "Seitenleiste",
-    "searchApps": "Apps durchsuchen"
+    "searchApps": "Apps durchsuchen",
+    "appsUnavailable": "Die Apps konnten nicht geladen werden",
+    "sampleBadge": "Beispiel"
   },
   "chatHistory": {
     "title": "Ihre Chats",

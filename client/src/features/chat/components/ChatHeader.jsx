@@ -66,7 +66,7 @@ function ChatHeader({
   }, [isMobile, showDescription]);
 
   const handleBack = () => {
-    navigate('/');
+    navigate('/apps');
   };
 
   return (

@@ -9,6 +9,7 @@ import useApps from '../../../shared/hooks/useApps';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { sortFavoritesFirst } from '../../../utils/favoriteItems';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../chat/data/mockChats';
@@ -46,7 +47,7 @@ export default function StartPage() {
   const formRef = useRef(null);
   const fileUploadHandler = useFileUploadHandler();
 
-  const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
+  const chatHistoryEnabled = featureFlags.isEnabled('chatHistoryPreview', false);
 
   // Leaving an app for "/" must not keep that app's colour on the classic header.
   useEffect(() => {
@@ -79,15 +80,28 @@ export default function StartPage() {
     getLocalizedContent(uiConfig?.startPage?.subtitle, currentLanguage) ||
     t('startPage.subtitle', 'How can I help you today?');
 
-  // Default app: admin-configured via uiConfig.startPage.defaultAppId, else first app
+  // Favorites first, then the admin-defined `order` — the same ranking for
+  // the featured grid and for the default-app fallback below.
+  const rankedApps = useMemo(
+    () =>
+      sortFavoritesFirst(
+        apps,
+        favoriteAppIds,
+        (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)
+      ),
+    [apps, favoriteAppIds]
+  );
+
+  // Default app: admin-configured via uiConfig.startPage.defaultAppId; when it
+  // is unset or not accessible to this user, the top-ranked app.
   const defaultApp = useMemo(() => {
     const defaultId = uiConfig?.startPage?.defaultAppId;
     if (defaultId) {
       const found = apps.find(a => a.id === defaultId);
       if (found) return found;
     }
-    return apps[0] || null;
-  }, [apps, uiConfig]);
+    return rankedApps[0] || null;
+  }, [apps, rankedApps, uiConfig]);
 
   // Load the full default-app config so the chat input renders exactly what the
   // app is configured for (uploads, input mode, placeholder, etc.).
@@ -151,19 +165,8 @@ export default function StartPage() {
     (defaultAppDetails?.inputMode?.microphone?.enabled ??
       defaultAppDetails?.microphone?.enabled) !== false;
 
-  // Featured apps: favorites first, then by order, max 4
-  const featuredApps = useMemo(() => {
-    const sorted = [...apps].sort((a, b) => {
-      const aFav = favoriteAppIds.includes(a.id);
-      const bFav = favoriteAppIds.includes(b.id);
-      if (aFav && !bFav) return -1;
-      if (!aFav && bFav) return 1;
-      const aOrder = a.order ?? Infinity;
-      const bOrder = b.order ?? Infinity;
-      return aOrder - bOrder;
-    });
-    return sorted.slice(0, 4);
-  }, [apps, favoriteAppIds]);
+  // Featured apps: the top four of the shared ranking
+  const featuredApps = useMemo(() => rankedApps.slice(0, 4), [rankedApps]);
 
   const recentChats = chatHistoryEnabled ? MOCK_CHATS.slice(0, 3) : [];
 
@@ -362,8 +365,12 @@ export default function StartPage() {
         {/* Pick up where you left off — feature flagged */}
         {chatHistoryEnabled && recentChats.length > 0 && (
           <div>
-            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 block mb-3">
+            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
               {t('startPage.pickUpWhereYouLeftOff', 'Pick up where you left off')}
+              {/* Preview flag renders fixtures until chat persistence exists. */}
+              <span className="text-[10px] font-semibold normal-case tracking-normal text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded px-1.5">
+                {t('sidebar.sampleBadge', 'Sample')}
+              </span>
             </h2>
             <div className="flex flex-wrap gap-2">
               {recentChats.map(chat => (

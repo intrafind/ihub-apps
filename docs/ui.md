@@ -493,7 +493,7 @@ The main user-facing routes are:
 | `/apps/{appId}` | Chat with an app                                                                            |
 | `/prompts`      | Prompts library (`promptsList`, feature flag `promptsLibrary`)                              |
 | `/pages/{id}`   | Static pages                                                                                |
-| `/chats`        | Chat history — preview behind the `chatHistory` feature flag (off by default, sample data only) |
+| `/chats`        | Chat history — preview behind the `chatHistoryPreview` feature flag (off by default, sample data only) |
 
 ### Theme Configuration
 

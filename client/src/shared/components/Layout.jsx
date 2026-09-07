@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link, useLocation, Outlet, useSearchParams } from 'react-router-dom';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import LanguageSelector from './LanguageSelector';
@@ -12,12 +12,15 @@ import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import useFeatureFlags from '../hooks/useFeatureFlags';
-import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
+import { pathnameStartsWith, pathnameEquals, isActivePath } from '../../utils/pathUtils';
+import { isTeamsEnvironment } from '../../utils/teamsEnvironment';
+import { useEmbeddedHostKind } from '../../features/office/contexts/EmbeddedHostContext';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
 import { canAccessLink as canAccessLinkShared, FEATURE_ROUTES } from '../../utils/pageAccess';
 import AppSidebar from './AppSidebar';
 import IHubLogo from './IHubLogo';
+import BrandTitle from './BrandTitle';
 
 function Layout() {
   const { t, i18n } = useTranslation();
@@ -26,6 +29,8 @@ function Layout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  // Stable callback: AppSidebar's drawer effect depends on it.
+  const closeMobileSidebar = useCallback(() => setSidebarMobileOpen(false), []);
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const featureFlags = useFeatureFlags();
@@ -52,25 +57,42 @@ function Layout() {
     }
   }, [language, i18n]);
 
-  // Check if we're viewing an app page to hide footer links
-  const isAppPage = useMemo(() => {
-    return pathnameStartsWith(location.pathname, '/apps/');
-  }, [location.pathname]);
+  // An app page is /apps/:appId (and below) — not the apps browser reached as /apps/.
+  const isAppPage = useMemo(
+    () =>
+      pathnameStartsWith(location.pathname, '/apps/') &&
+      !pathnameEquals(location.pathname, '/apps/'),
+    [location.pathname]
+  );
+  // Pages that paint their own full-bleed background and padding; everything
+  // else (prompts, CMS pages, workflows, settings) keeps the classic centered
+  // container it had under the old header.
+  const isFullBleedPage = useMemo(
+    () =>
+      isAppPage ||
+      pathnameEquals(location.pathname, '/') ||
+      pathnameEquals(location.pathname, '/apps') ||
+      pathnameEquals(location.pathname, '/apps/') ||
+      pathnameStartsWith(location.pathname, '/chats'),
+    [isAppPage, location.pathname]
+  );
 
-  // Show the sidebar on all non-admin, non-special pages
+  // Show the sidebar on all non-admin, non-special pages. Embedded hosts are
+  // detected by environment, not by path: Teams keeps its tab URL only on the
+  // first screen, and the Nextcloud/Office embeds never use those paths.
+  const embeddedHostKind = useEmbeddedHostKind();
+  const inTeams = isTeamsEnvironment();
   const isAdminRoute = pathnameStartsWith(location.pathname, '/admin');
   const isSetupRoute = pathnameStartsWith(location.pathname, '/setup');
-  const isLoginRoute = location.pathname === '/login';
+  const isLoginRoute = pathnameEquals(location.pathname, '/login');
   const isTeamsRoute = pathnameStartsWith(location.pathname, '/teams');
-  const isOfficeRoute = pathnameStartsWith(location.pathname, '/office');
-  const isNextcloudRoute = pathnameStartsWith(location.pathname, '/nextcloud');
   const showSidebar =
     !isAdminRoute &&
     !isSetupRoute &&
     !isLoginRoute &&
     !isTeamsRoute &&
-    !isOfficeRoute &&
-    !isNextcloudRoute &&
+    !inTeams &&
+    !embeddedHostKind &&
     showHeader && // respect showHeader=false for embedded contexts
     sidebarSetting !== false; // respect sidebar=false to disable the left bar
 
@@ -117,10 +139,7 @@ function Layout() {
       {/* Sidebar layout (non-admin, non-embedded pages) */}
       {showSidebar ? (
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <AppSidebar
-            mobileOpen={sidebarMobileOpen}
-            onMobileClose={() => setSidebarMobileOpen(false)}
-          />
+          <AppSidebar mobileOpen={sidebarMobileOpen} onMobileClose={closeMobileSidebar} />
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
             {/* Mobile top bar — the only way to reach navigation on small screens */}
             <div className="md:hidden flex items-center gap-2 h-12 px-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-none">
@@ -142,15 +161,21 @@ function Layout() {
                 ) : (
                   <IHubLogo size={24} />
                 )}
-                <span className="text-sm font-semibold truncate">
-                  {uiConfig?.header?.title
-                    ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                    : 'iHub Apps'}
-                </span>
+                <BrandTitle
+                  uiConfig={uiConfig}
+                  currentLanguage={currentLanguage}
+                  className="text-sm truncate"
+                />
               </Link>
             </div>
             <main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto">
-              <Outlet />
+              {isFullBleedPage ? (
+                <Outlet />
+              ) : (
+                <div className="container mx-auto px-4 py-6">
+                  <Outlet />
+                </div>
+              )}
             </main>
             {/* Slim footer — links shown at the bottom of content pages (not on
                 the app chat, which needs the full height). Disable with

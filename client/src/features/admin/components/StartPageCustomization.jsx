@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchApps } from '../../../api';
+import { fetchAdminApps } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -16,9 +16,11 @@ function StartPageCustomization({ config, onUpdate, t }) {
 
   useEffect(() => {
     let mounted = true;
-    fetchApps()
+    // Admin endpoint: every configured app, not just the ones this admin may use.
+    fetchAdminApps()
       .then(data => {
-        if (mounted && Array.isArray(data)) setApps(data);
+        const list = Array.isArray(data) ? data : Array.isArray(data?.apps) ? data.apps : [];
+        if (mounted) setApps(list);
       })
       .catch(() => {})
       .finally(() => {
@@ -125,8 +127,15 @@ function StartPageCustomization({ config, onUpdate, t }) {
             {apps.map(app => (
               <option key={app.id} value={app.id}>
                 {getLocalizedContent(app.name, currentLanguage) || app.id}
+                {app.enabled === false ? ' (disabled)' : ''}
               </option>
             ))}
+            {/* Keep a stored id visible even if the app no longer exists. */}
+            {!loading && defaultAppId && !apps.some(app => app.id === defaultAppId) && (
+              <option value={defaultAppId}>
+                {defaultAppId} ({t('admin.ui.startPage.unknownApp', 'not found')})
+              </option>
+            )}
           </select>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
             {t(

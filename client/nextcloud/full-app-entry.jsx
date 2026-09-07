@@ -238,10 +238,12 @@ function EmbedRoot({ initialError }) {
   // pathname is `/nextcloud/full-embed.html`, which matches no route and
   // would render the SPA's 404 page. Replacing it with the app root (under
   // the same base path, so deep-link deployments keep working) lets the
-  // router resolve to the home / app-list route instead. The selection
+  // router resolve to the apps browser. That is deliberately `/apps`, not
+  // `/`: the start page has no Nextcloud selection banner and auto-sends a
+  // typed message before the selected files are attached. The selection
   // bridge already captured the hash above, so dropping it from the URL is
   // safe; we preserve it anyway in case downstream code re-reads it.
-  const homePath = (basePath || '') + '/';
+  const homePath = (basePath || '') + '/apps';
   if (window.location.pathname !== homePath) {
     const preservedHash = window.location.hash || '';
     window.history.replaceState({}, '', homePath + preservedHash);

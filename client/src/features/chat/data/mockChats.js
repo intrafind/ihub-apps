@@ -1,4 +1,4 @@
-// Mock chat history data — shown when the `chatHistory` feature flag is enabled.
+// Mock chat history data — shown when the `chatHistoryPreview` feature flag is enabled.
 // Replace with real API data once chat persistence is implemented.
 export const MOCK_CHATS = [
   {

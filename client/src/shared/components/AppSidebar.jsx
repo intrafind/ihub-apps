@@ -8,6 +8,9 @@ import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { sortFavoritesFirst } from '../../utils/favoriteItems';
+import useMediaQuery from '../hooks/useMediaQuery';
+import BrandTitle from './BrandTitle';
 import { isActivePath } from '../../utils/pathUtils';
 import { canAccessLink, FEATURE_ROUTES } from '../../utils/pageAccess';
 import { useTranslation } from 'react-i18next';
@@ -65,7 +68,7 @@ function NavItem({ icon, label, to, external = false, onClick, active }) {
   );
 }
 
-function SectionHeader({ label, open, onToggle }) {
+function SectionHeader({ label, badge = null, open, onToggle }) {
   return (
     <button
       onClick={onToggle}
@@ -80,6 +83,11 @@ function SectionHeader({ label, open, onToggle }) {
       <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
         {label}
       </span>
+      {badge && (
+        <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded px-1.5">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
@@ -99,7 +107,9 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const featureFlags = useFeatureFlags();
   const location = useLocation();
 
-  const { apps, loading: appsLoading } = useApps();
+  const { apps, loading: appsLoading, error: appsError } = useApps();
+  // Render exactly one sidebar variant instead of mounting both and hiding one with CSS.
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const { favorites: favoriteAppIds, isFavorite, toggleFavorite } = useFavorites(FAVORITE_APPS_KEY);
 
   const [collapsed, setCollapsed] = useState(() => {
@@ -118,7 +128,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const collapseButtonRef = useRef(null);
   const refocusAfterToggle = useRef(false);
 
-  const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
+  const chatHistoryEnabled = featureFlags.isEnabled('chatHistoryPreview', false);
   // Same gate as the /prompts route in App.jsx.
   const promptsEnabled =
     uiConfig?.promptsList?.enabled !== false && featureFlags.isEnabled('promptsLibrary', true);
@@ -128,6 +138,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     : t('sidebar.searchApps', 'Search apps');
   const sidebarLabel = t('sidebar.label', 'Sidebar');
   const navigationLabel = t('sidebar.navigation', 'Navigation');
+
+  // A drawer left open while the viewport grows to desktop would keep the
+  // page scroll locked with nothing visible — close it.
+  useEffect(() => {
+    if (isDesktop && mobileOpen) onMobileClose();
+  }, [isDesktop, mobileOpen, onMobileClose]);
 
   // Mobile drawer is a modal dialog: move focus into it, keep Tab inside,
   // close on Escape, lock page scroll, and hand focus back when it closes.
@@ -206,12 +222,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
   const sidebarApps = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = apps.map(a => ({ ...a, isFav: favoriteAppIds.includes(a.id) }));
-    list.sort((a, b) => {
-      if (a.isFav && !b.isFav) return -1;
-      if (!a.isFav && b.isFav) return 1;
-      return 0;
-    });
+    let list = sortFavoritesFirst(apps, favoriteAppIds);
     if (q) {
       list = list.filter(a => {
         const name = getLocalizedContent(a.name, currentLanguage) || '';
@@ -261,27 +272,6 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       return canAccessLink(link, { uiConfig, isAuthenticated, user });
     });
   }, [uiConfig, featureFlags, isAuthenticated, user, promptsEnabled]);
-
-  const headerTitle = useMemo(() => {
-    if (uiConfig?.header?.titleLight || uiConfig?.header?.titleBold) {
-      return (
-        <>
-          <span className="font-light">
-            {getLocalizedContent(uiConfig.header.titleLight, currentLanguage)}
-          </span>
-          <span className="font-extrabold">
-            {getLocalizedContent(uiConfig.header.titleBold, currentLanguage)}
-          </span>
-        </>
-      );
-    }
-    return (
-      <>
-        <span className="font-light">iHub </span>
-        <span className="font-extrabold">Apps</span>
-      </>
-    );
-  }, [uiConfig, currentLanguage]);
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
   const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
@@ -391,7 +381,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                 to={`/apps/${app.id}`}
                 title={name}
                 aria-label={name}
-                className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
+                className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition hover:brightness-110"
                 style={{ backgroundColor: app.color || '#4f46e5' }}
               >
                 <Icon name={app.icon} size="md" />
@@ -424,9 +414,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         >
           <span className="flex-none">{renderBrandMark(30)}</span>
           <span className="flex-1 min-w-0 leading-tight">
-            <span className="block text-base text-gray-900 dark:text-gray-100 truncate">
-              {headerTitle}
-            </span>
+            <BrandTitle
+              uiConfig={uiConfig}
+              currentLanguage={currentLanguage}
+              className="block text-base text-gray-900 dark:text-gray-100 truncate"
+            />
             {tagline && (
               <span className="block text-[10px] text-gray-500 dark:text-gray-400 tracking-wide truncate">
                 {tagline}
@@ -469,7 +461,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           aria-expanded={searchOpen}
           className={`w-11 flex items-center justify-center rounded-xl border transition-colors ${
             searchOpen
-              ? 'border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600'
+              ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
               : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
           }`}
         >
@@ -535,9 +527,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">
                 {appsLoading
                   ? t('sidebar.loadingApps', 'Loading…')
-                  : apps.length === 0
-                    ? t('sidebar.noApps', 'No apps available')
-                    : t('sidebar.noAppsMatch', 'No apps match')}
+                  : appsError && apps.length === 0
+                    ? t('sidebar.appsUnavailable', 'Apps could not be loaded')
+                    : apps.length === 0
+                      ? t('sidebar.noApps', 'No apps available')
+                      : t('sidebar.noAppsMatch', 'No apps match')}
               </p>
             )}
             {sidebarApps.map(app => {
@@ -608,6 +602,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           <>
             <SectionHeader
               label={t('sidebar.recents', 'Recents')}
+              badge={t('sidebar.sampleBadge', 'Sample')}
               open={recentsOpen}
               onToggle={() => setRecentsOpen(o => !o)}
             />
@@ -666,19 +661,20 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   return (
     <>
       {/* Desktop sidebar */}
-      {collapsed ? (
-        rail
-      ) : (
-        <aside
-          className="hidden md:flex w-[284px] flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
-          aria-label={sidebarLabel}
-        >
-          {expandedContent}
-        </aside>
-      )}
+      {isDesktop &&
+        (collapsed ? (
+          rail
+        ) : (
+          <aside
+            className="hidden md:flex w-[284px] flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
+            aria-label={sidebarLabel}
+          >
+            {expandedContent}
+          </aside>
+        ))}
 
       {/* Mobile drawer */}
-      {mobileOpen && (
+      {!isDesktop && mobileOpen && (
         <div
           className="md:hidden fixed inset-0 z-40"
           role="dialog"

@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
+import { isTeamsEnvironment } from './utils/teamsEnvironment';
 import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
@@ -178,19 +179,10 @@ const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
-// Detect Teams environment without loading the Teams SDK (~484KB)
+// Detect Teams environment without loading the Teams SDK (~484KB). The
+// detection is shared with Layout, which keeps the classic header in Teams.
 function useIsTeamsEnvironment() {
-  const [isTeams] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (
-      params.has('loginHint') ||
-      params.has('userObjectId') ||
-      params.has('theme') ||
-      params.has('isTeams') ||
-      window.name === 'embedded' ||
-      window.location.hostname === 'teams.microsoft.com'
-    );
-  });
+  const [isTeams] = useState(isTeamsEnvironment);
   return isTeams;
 }
 
@@ -363,7 +355,7 @@ function App() {
           {/* Apps browser — full list with search/filter */}
           <Route path="apps" element={<SafeAppsList />} />
           {/* Chat history page — feature-flagged, uses mock data */}
-          {featureFlags.isEnabled('chatHistory', false) && (
+          {featureFlags.isEnabled('chatHistoryPreview', false) && (
             <Route
               path="chats"
               element={
