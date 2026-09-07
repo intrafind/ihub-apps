@@ -300,7 +300,7 @@ export default function AdminSidebar({ onMobileToggle }) {
               <div className="text-base text-gray-900 dark:text-gray-100 truncate">
                 {brandTitle}
               </div>
-              <div className="text-[10px] text-gray-400 tracking-wide uppercase">
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 tracking-wide uppercase">
                 {t('admin.sidebar.adminPanel', 'Admin Panel')}
               </div>
             </div>

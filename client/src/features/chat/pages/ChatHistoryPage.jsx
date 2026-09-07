@@ -167,7 +167,7 @@ export default function ChatHistoryPage() {
           histGroups.map(group => (
             <div key={group.key} className="mb-2">
               {group.showLabel && (
-                <div className="text-[11px] font-bold tracking-widest uppercase text-gray-400 mt-5 mb-2.5 px-1">
+                <div className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mt-5 mb-2.5 px-1">
                   {group.label}
                 </div>
               )}
@@ -203,7 +203,7 @@ export default function ChatHistoryPage() {
                         {chat.snippet}
                       </span>
                     </span>
-                    <span className="flex-none text-xs text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
+                    <span className="flex-none text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
                       {chat.group}
                     </span>
                   </button>

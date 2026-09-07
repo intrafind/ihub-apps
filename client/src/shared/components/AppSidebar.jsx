@@ -55,7 +55,9 @@ function SectionHeader({ label, open, onToggle }) {
         size="sm"
         className={`text-gray-400 transition-transform duration-150 ${open ? '' : '-rotate-90'}`}
       />
-      <span className="text-[11px] font-bold tracking-widest uppercase text-gray-400">{label}</span>
+      <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
+        {label}
+      </span>
     </button>
   );
 }
@@ -385,7 +387,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               {headerTitle}
             </span>
             {tagline && (
-              <span className="block text-[10px] text-gray-400 tracking-wide truncate">
+              <span className="block text-[10px] text-gray-500 dark:text-gray-400 tracking-wide truncate">
                 {tagline}
               </span>
             )}
@@ -491,7 +493,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         {appsOpen && (
           <div className="px-2 pb-2">
             {sidebarApps.length === 0 && (
-              <p className="text-xs text-gray-400 px-3 py-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">
                 {appsLoading
                   ? t('sidebar.loadingApps', 'Loading…')
                   : apps.length === 0
@@ -561,7 +563,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                 <Icon name="home" size="sm" />
               </span>
               <span className="flex-1">{t('sidebar.allApps', 'All apps')}</span>
-              <span className="text-[11px] font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
+              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                 {apps.length}
               </span>
             </button>
@@ -603,7 +605,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                     <Icon name="clock" size="sm" />
                   </span>
                   <span className="flex-1">{t('sidebar.allChats', 'All chats')}</span>
-                  <span className="text-[11px] font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
+                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
                     {MOCK_CHATS.length}
                   </span>
                 </button>

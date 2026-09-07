@@ -315,7 +315,7 @@ export default function StartPage() {
         {featuredApps.length > 0 && (
           <div className="mb-7">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold tracking-widest uppercase text-gray-400">
+              <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400">
                 {t('startPage.jumpIntoApp', 'Jump into an app')}
               </span>
               <button
@@ -359,7 +359,7 @@ export default function StartPage() {
         {/* Pick up where you left off — feature flagged */}
         {chatHistoryEnabled && recentChats.length > 0 && (
           <div>
-            <span className="text-[11px] font-bold tracking-widest uppercase text-gray-400 block mb-3">
+            <span className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 block mb-3">
               {t('startPage.pickUpWhereYouLeftOff', 'Pick up where you left off')}
             </span>
             <div className="flex flex-wrap gap-2">

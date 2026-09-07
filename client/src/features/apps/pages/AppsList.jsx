@@ -646,7 +646,7 @@ function AppsList() {
                 >
                   {t('pages.appsList.loadMore', 'Load More')}
                 </button>
-                <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-2">
                   {t('pages.appsList.showingCountOfTotal', {
                     defaultValue: 'Showing {{displayed}} of {{total}} apps',
                     displayed: displayedApps.length,
