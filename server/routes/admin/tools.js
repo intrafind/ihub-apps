@@ -10,6 +10,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import {
   sendInternalError,
   sendNotFound,
@@ -399,6 +400,14 @@ export default function registerAdminToolsRoutes(app) {
       // Refresh cache
       await configCache.refreshToolsCache();
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `Updated tool ${toolId}`
+      });
+
       try {
         await saveSnapshot({
           resource: 'tool',
@@ -516,6 +525,14 @@ export default function registerAdminToolsRoutes(app) {
 
       // Refresh cache
       await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'tool',
+        resourceId: newTool.id,
+        summary: `Created tool ${newTool.id}`
+      });
 
       try {
         await saveSnapshot({
@@ -635,6 +652,14 @@ export default function registerAdminToolsRoutes(app) {
       // Refresh cache
       await configCache.refreshToolsCache();
 
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `Deleted tool ${toolId}`
+      });
+
       try {
         await saveSnapshot({
           resource: 'tool',
@@ -739,6 +764,14 @@ export default function registerAdminToolsRoutes(app) {
 
       // Refresh cache
       await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'toggle',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `${tool.enabled ? 'Enabled' : 'Disabled'} tool ${toolId}`
+      });
 
       res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
     } catch (error) {
@@ -943,6 +976,14 @@ export default function registerAdminToolsRoutes(app) {
 
       // Write the new content
       await fs.writeFile(scriptPath, content, 'utf-8');
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'toolScript',
+        resourceId: toolId,
+        summary: `Updated script for tool ${toolId}`
+      });
 
       res.json({ message: 'Script updated successfully' });
     } catch (error) {

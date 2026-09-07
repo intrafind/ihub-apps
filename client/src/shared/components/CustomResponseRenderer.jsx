@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } fr
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ReactComponentRenderer from './ReactComponentRenderer';
+import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 /**
  * CustomResponseRenderer - Renders custom response components for structured app outputs
@@ -32,7 +33,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
         setError(null);
 
         // Fetch renderer code from API
-        const response = await fetch(`/api/renderers/${componentName}`);
+        const response = await fetch(buildApiUrl(`renderers/${componentName}`));
 
         if (!response.ok) {
           if (response.status === 404) {

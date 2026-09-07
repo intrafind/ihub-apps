@@ -1,17 +1,26 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../shared/components/Icon';
+import { useUIConfig } from '../../shared/contexts/UIConfigContext';
+import { getLocalizedContent } from '../../utils/localizeContent';
 
 export default function Forbidden() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { uiConfig } = useUIConfig();
+  const cfg = uiConfig?.errorPages?.forbidden;
+  const lang = i18n.language;
+
   return (
     <div className="flex flex-col items-center justify-center py-12">
       <div className="text-indigo-600 mb-4">
         <Icon name="ban" size="2xl" className="w-24 h-24" />
       </div>
-      <h1 className="text-4xl font-bold mb-2">{t('errors.forbidden.title', 'Forbidden')}</h1>
+      <h1 className="text-4xl font-bold mb-2">
+        {getLocalizedContent(cfg?.title, lang) || t('errors.forbidden.title', 'Forbidden')}
+      </h1>
       <p className="text-xl mb-6 text-center">
-        {t('errors.forbidden.message', 'Access to this resource is forbidden.')}
+        {getLocalizedContent(cfg?.message, lang) ||
+          t('errors.forbidden.message', 'Access to this resource is forbidden.')}
       </p>
       <Link
         to="/"

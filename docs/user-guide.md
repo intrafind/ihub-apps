@@ -40,6 +40,8 @@ Use the **Model** dropdown in the settings panel to choose among the models conf
 
 Toggle **Keep Chat History** to preserve conversations in your browser. When disabled, the chat resets whenever you reload or close the page.
 
+Keeping chat history applies to the current conversation only — iHub does not carry a persistent memory from one conversation into the next. If a new chat needs earlier context, provide it again in the input or use an app with the relevant sources attached.
+
 ## Using the Prompt Database
 
 Click the book icon above the input field to open the prompts library. You can search by name or description and sort the results. Selecting **Insert** copies the prompt text into your current message so you can edit or send it immediately.

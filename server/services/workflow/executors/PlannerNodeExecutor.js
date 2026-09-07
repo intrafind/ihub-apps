@@ -17,7 +17,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient, { usageToBudget, extractJson } from '../../loop/LLMClient.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
@@ -28,11 +28,12 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
   /**
    * Create a new PlannerNodeExecutor
    * @param {Object} options - Executor options
-   * @param {WorkflowLLMHelper} [options.llmHelper] - LLM helper instance for API calls
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for the planning call (defaults to the shared singleton; tests inject a stub)
    */
   constructor(options = {}) {
     super(options);
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
   }
 
   /**
@@ -643,11 +644,9 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       throw new Error('No model available for planning');
     }
 
-    // Verify API key before making the request
-    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-    if (!apiKeyResult.success) {
-      throw new Error(apiKeyResult.error?.message || 'API key verification failed');
-    }
+    // API-key resolution happens inside LLMClient.complete(); a missing key
+    // surfaces as an LLMError (code AUTH_FAILED) that the caller's try/catch
+    // turns into "Planner failed: …" exactly like every other request error.
 
     const baseSystem =
       config.system ||
@@ -1014,10 +1013,9 @@ Output rules:
     // gemini-flash-latest), with 8192 only as a last-resort floor. Mirrors
     // PromptNodeExecutor's `config.maxTokens || model.maxOutputTokens || …`.
     const maxTokens = config.maxTokens || model.maxOutputTokens || 8192;
-    const response = await this.llmHelper.executeStreamingRequest({
+    const response = await this.llmClient.complete({
       model,
       messages,
-      apiKey: apiKeyResult.apiKey,
       options: {
         temperature: 0.7,
         responseFormat: 'json',
@@ -1026,41 +1024,33 @@ Output rules:
         // Per-node thinking override (no-op when the node sets no `thinking`).
         ...thinkingConfigToOptions(config.thinking)
       },
-      language
+      language,
+      // Workflow cancellation / node timeout aborts the in-flight provider call.
+      signal: context.abortSignal,
+      telemetry: {
+        runId: context.runId || context.executionId || state.executionId,
+        step: context.iteration ?? 0,
+        purpose: 'planner',
+        refs: { executionId: state.executionId, nodeId, workflowId: context.workflow?.id }
+      }
     });
 
     if (stepLog) {
-      stepLog.tokens = response.usage || null;
+      // Real provider usage in the step-log `{ input, output, total }` shape
+      // (null when the provider reported none — tokenStats treats it as a
+      // non-LLM step).
+      stepLog.tokens = usageToBudget(response.usage);
       stepLog.responseLength = typeof response.content === 'string' ? response.content.length : 0;
     }
 
-    // Extract and parse JSON from the LLM response. Strategy: try the whole
-    // trimmed content first (works when responseFormat=json was honored),
-    // then strip a markdown code fence, then fall back to the first-`{` /
-    // last-`}` slice. On every failure path we log the raw tail so future
-    // parse errors are diagnosable from the server log without needing the
-    // step log persisted (which doesn't happen if the planner throws).
+    // Extract and parse JSON from the LLM response via the shared extractor
+    // (whole trimmed content → fenced ```json block → first-`{` / last-`}`
+    // slice). On the failure path we log the raw tail so future parse errors
+    // are diagnosable from the server log without needing the step log
+    // persisted (which doesn't happen if the planner throws).
     const content = response.content || '';
-    const tryParse = candidate => {
-      try {
-        return JSON.parse(candidate);
-      } catch {
-        return null;
-      }
-    };
     const trimmed = content.trim();
-    let parsed = tryParse(trimmed);
-    if (!parsed) {
-      const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
-      if (fenceMatch) parsed = tryParse(fenceMatch[1].trim());
-    }
-    if (!parsed) {
-      const firstBrace = trimmed.indexOf('{');
-      const lastBrace = trimmed.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        parsed = tryParse(trimmed.slice(firstBrace, lastBrace + 1));
-      }
-    }
+    const parsed = extractJson(content);
     if (!parsed) {
       const tail = trimmed.length > 600 ? `…${trimmed.slice(-600)}` : trimmed;
       const truncatedByLength = response.finishReason === 'length';

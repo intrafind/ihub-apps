@@ -14,9 +14,10 @@ const OP_TYPES = [
 const OP_TYPE_KEYS = OP_TYPES.map(t => t.value);
 
 /**
- * Server format uses the operation type as a key, e.g.:
- *   { copy: "source.path", to: "target.path" }
- *   { set: "state.result", value: "hello" }
+ * Server format uses the operation type as a key, with plain state-variable
+ * paths (no "state." / "$.data." prefix), e.g.:
+ *   { copy: "thinking.nextFocus", to: "researchState.currentFocus" }
+ *   { set: "_docIndex", value: 0 }
  * Detect which key is the operation type.
  */
 function detectOpType(op) {
@@ -33,50 +34,52 @@ function detectOpType(op) {
  */
 const OP_FIELDS = {
   set: {
-    primaryLabel: 'Path',
-    primaryPlaceholder: 'e.g. state.result',
-    fields: [{ key: 'value', label: 'Value', placeholder: 'Value or expression' }]
+    primaryLabel: 'Variable',
+    primaryPlaceholder: 'e.g. _docIndex',
+    fields: [
+      { key: 'value', label: 'Value', placeholder: 'Literal value or {{variable}} template' }
+    ]
   },
   copy: {
     primaryLabel: 'From',
-    primaryPlaceholder: 'e.g. state.input',
-    fields: [{ key: 'to', label: 'To', placeholder: 'e.g. state.output' }]
+    primaryPlaceholder: 'e.g. thinking.nextFocus',
+    fields: [{ key: 'to', label: 'To', placeholder: 'e.g. researchState.currentFocus' }]
   },
   push: {
-    primaryLabel: 'Item',
-    primaryPlaceholder: 'Value to push',
-    fields: [{ key: 'to', label: 'Array Path', placeholder: 'e.g. state.items' }]
+    primaryLabel: 'Item Path',
+    primaryPlaceholder: 'e.g. currentResearch',
+    fields: [{ key: 'to', label: 'Array Path', placeholder: 'e.g. findings' }]
   },
   increment: {
-    primaryLabel: 'Path',
-    primaryPlaceholder: 'e.g. state.counter',
+    primaryLabel: 'Variable',
+    primaryPlaceholder: 'e.g. _docIndex',
     fields: [{ key: 'by', label: 'By', placeholder: '1', type: 'number' }]
   },
   merge: {
     primaryLabel: 'Source',
-    primaryPlaceholder: 'e.g. state.data',
-    fields: [{ key: 'into', label: 'Into', placeholder: 'e.g. state.merged' }]
+    primaryPlaceholder: 'e.g. thinking',
+    fields: [{ key: 'into', label: 'Into', placeholder: 'e.g. researchState' }]
   },
   arrayGet: {
     primaryLabel: 'Array Path',
-    primaryPlaceholder: 'e.g. state.items',
+    primaryPlaceholder: 'e.g. _corpus',
     fields: [
-      { key: 'index', label: 'Index', placeholder: '0', type: 'number' },
-      { key: 'to', label: 'To', placeholder: 'e.g. state.item' }
+      { key: 'index', label: 'Index', placeholder: 'e.g. _docIndex or 0', coerceNumeric: true },
+      { key: 'to', label: 'To', placeholder: 'e.g. _currentDoc' }
     ]
   },
   lengthOf: {
     primaryLabel: 'Array Path',
-    primaryPlaceholder: 'e.g. state.items',
-    fields: [{ key: 'to', label: 'To', placeholder: 'e.g. state.count' }]
+    primaryPlaceholder: 'e.g. _corpus',
+    fields: [{ key: 'to', label: 'To', placeholder: 'e.g. _docsTotal' }]
   },
   condition: {
     primaryLabel: 'Condition',
-    primaryPlaceholder: 'Condition expression',
+    primaryPlaceholder: 'e.g. _docIndex >= _docsTotal',
     fields: [
       { key: 'then', label: 'Then', placeholder: 'Value if true' },
       { key: 'else', label: 'Else', placeholder: 'Value if false' },
-      { key: 'to', label: 'To', placeholder: 'e.g. state.result' }
+      { key: 'to', label: 'To', placeholder: 'e.g. isComplete' }
     ]
   }
 };
@@ -87,7 +90,14 @@ const OP_FIELDS = {
  * silently get corrupted on edit. When the current value is complex, we render
  * a JSON textarea (parse-on-blur); otherwise a plain input.
  */
-function SmartValueField({ label, value, onChange, placeholder, scalarType = 'text' }) {
+function SmartValueField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  scalarType = 'text',
+  coerceNumeric = false
+}) {
   const isComplex = value !== null && typeof value === 'object';
   const [jsonText, setJsonText] = useState(() => {
     if (!isComplex) return '';
@@ -164,9 +174,19 @@ function SmartValueField({ label, value, onChange, placeholder, scalarType = 'te
         <input
           type={scalarType}
           value={value ?? ''}
-          onChange={e =>
-            onChange(scalarType === 'number' ? Number(e.target.value) : e.target.value)
-          }
+          onChange={e => {
+            const raw = e.target.value;
+            if (scalarType === 'number') {
+              onChange(Number(raw));
+            } else if (coerceNumeric && /^-?\d+$/.test(raw.trim())) {
+              // Fields like arrayGet's index accept a number OR a state
+              // variable path; store plain integers as real numbers so the
+              // executor doesn't mistake "0" for a variable path.
+              onChange(Number(raw));
+            } else {
+              onChange(raw);
+            }
+          }}
           placeholder={placeholder}
           className={inputClass}
         />
@@ -214,6 +234,10 @@ function TransformForm({ config, onChange }) {
   return (
     <div className="space-y-3">
       <label className={labelClass}>Operations</label>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Paths are plain state variable names like <code>_docIndex</code> or{' '}
+        <code>researchState.iteration</code> — no "state." or "$.data." prefix.
+      </p>
       <div className="space-y-2">
         {operations.map((op, index) => {
           const opType = detectOpType(op);
@@ -266,6 +290,7 @@ function TransformForm({ config, onChange }) {
                   onChange={val => updateOp(index, f.key, val)}
                   placeholder={f.placeholder}
                   scalarType={f.type || 'text'}
+                  coerceNumeric={f.coerceNumeric || false}
                 />
               ))}
             </div>

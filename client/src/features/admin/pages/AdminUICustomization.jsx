@@ -6,6 +6,7 @@ import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
 import ContentEditor from '../components/ContentEditor';
 import PwaCustomization from '../components/PwaCustomization';
+import ErrorPagesCustomization from '../components/ErrorPagesCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -116,6 +117,7 @@ function AdminUICustomization() {
     { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
     { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
     { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' },
+    { id: 'errorPages', label: t('admin.ui.tabs.errorPages', 'Error Pages'), icon: '⚠️' },
     { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' }
   ];
 
@@ -292,6 +294,13 @@ function AdminUICustomization() {
           {activeTab === 'assets' && <AssetManager t={t} />}
           {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
           {activeTab === 'content' && <ContentEditor config={config} onUpdate={setConfig} t={t} />}
+          {activeTab === 'errorPages' && (
+            <ErrorPagesCustomization
+              config={config.errorPages || {}}
+              onUpdate={updates => updateConfig('errorPages', updates)}
+              t={t}
+            />
+          )}
           {activeTab === 'pwa' && (
             <PwaCustomization
               config={config.pwa || {}}

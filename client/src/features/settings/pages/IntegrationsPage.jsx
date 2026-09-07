@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import IntegrationCard from '../components/IntegrationCard';
+import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
@@ -18,6 +20,12 @@ export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  // Personal API keys are offered only when an admin enabled them, so the
+  // overview stays null until the server confirms the feature is available.
+  const [apiKeyOverview, setApiKeyOverview] = useState(null);
+  const [apiKeySecrets, setApiKeySecrets] = useState(null);
+  const [apiKeyBusy, setApiKeyBusy] = useState(false);
+  const [keyPendingRevoke, setKeyPendingRevoke] = useState(null);
 
   // Derive cloud storage providers from platform config
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -105,6 +113,19 @@ export default function IntegrationsPage() {
             ...prev,
             jira: jiraData
           }));
+        }
+
+        // Personal API keys. A 404 means the admin has not enabled them, which
+        // is the normal case — the card simply stays hidden.
+        try {
+          const apiKeyResponse = await fetch(buildApiUrl('integrations/api-keys'), {
+            credentials: 'include'
+          });
+          if (apiKeyResponse.ok) {
+            setApiKeyOverview(await apiKeyResponse.json());
+          }
+        } catch (err) {
+          console.error('Error loading API keys:', err);
         }
 
         // Check cloud storage provider status dynamically
@@ -244,6 +265,89 @@ export default function IntegrationsPage() {
 
   const dismissMessage = () => {
     setMessage(null);
+  };
+
+  // Personal API keys. Create and rotate return the credentials once; everything
+  // afterwards works from the key list, which never carries a secret.
+  const refreshApiKeys = async () => {
+    const response = await fetch(buildApiUrl('integrations/api-keys'), {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      setApiKeyOverview(await response.json());
+    }
+  };
+
+  const callApiKeyEndpoint = async (path, options, errorKey) => {
+    setApiKeyBusy(true);
+    try {
+      const response = await fetch(buildApiUrl(`integrations/api-keys${path}`), {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage({
+          type: 'error',
+          text: t(errorKey, { message: data.error || response.statusText })
+        });
+        return null;
+      }
+
+      // The key already exists on the server and `data` may carry secrets shown
+      // exactly once, so a failed list refresh must not turn a success into an
+      // error and discard them.
+      await refreshApiKeys().catch(() => {});
+
+      return data;
+    } catch (error) {
+      setMessage({ type: 'error', text: t(errorKey, { message: error.message }) });
+      return null;
+    } finally {
+      setApiKeyBusy(false);
+    }
+  };
+
+  const handleCreateApiKey = async ({ name, expirationDays }) => {
+    const data = await callApiKeyEndpoint(
+      '',
+      { method: 'POST', body: JSON.stringify({ name, expirationDays }) },
+      'integrations.page.apiKeys.createFailed'
+    );
+
+    if (data?.secrets) {
+      setApiKeySecrets(data.secrets);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.created') });
+    }
+  };
+
+  const handleRotateApiKey = async key => {
+    const data = await callApiKeyEndpoint(
+      `/${encodeURIComponent(key.id)}/rotate`,
+      { method: 'POST', body: JSON.stringify({}) },
+      'integrations.page.apiKeys.rotateFailed'
+    );
+
+    if (data?.secrets) {
+      setApiKeySecrets(data.secrets);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.rotated') });
+    }
+  };
+
+  const handleRevokeApiKey = async key => {
+    setKeyPendingRevoke(null);
+    const data = await callApiKeyEndpoint(
+      `/${encodeURIComponent(key.id)}`,
+      { method: 'DELETE' },
+      'integrations.page.apiKeys.revokeFailed'
+    );
+
+    if (data?.success) {
+      setApiKeySecrets(null);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.revoked') });
+    }
   };
 
   if (!user) {
@@ -478,21 +582,42 @@ export default function IntegrationsPage() {
                   </div>
                 )}
 
-                {/* Empty state when no integrations are configured */}
-                {!jiraEnabled && cloudProviders.length === 0 && !officeEnabled && (
-                  <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                    <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      {t('integrations.page.empty.title')}
-                    </h3>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">
-                      {t('integrations.page.empty.body')}
-                    </p>
-                  </div>
+                {/* Personal API keys — shown when enabled by admin */}
+                {apiKeyOverview?.enabled && (
+                  <PersonalApiKeysCard
+                    limits={apiKeyOverview.limits}
+                    endpoints={apiKeyOverview.endpoints}
+                    keys={apiKeyOverview.keys}
+                    busy={apiKeyBusy}
+                    secrets={apiKeySecrets}
+                    onDismissSecrets={() => setApiKeySecrets(null)}
+                    onCreate={handleCreateApiKey}
+                    onRotate={handleRotateApiKey}
+                    onRevoke={setKeyPendingRevoke}
+                  />
                 )}
 
+                {/* Empty state when no integrations are configured */}
+                {!jiraEnabled &&
+                  cloudProviders.length === 0 &&
+                  !officeEnabled &&
+                  !apiKeyOverview?.enabled && (
+                    <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                      <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        {t('integrations.page.empty.title')}
+                      </h3>
+                      <p className="text-gray-400 dark:text-gray-500 text-sm">
+                        {t('integrations.page.empty.body')}
+                      </p>
+                    </div>
+                  )}
+
                 {/* Placeholder for future integrations */}
-                {(jiraEnabled || cloudProviders.length > 0 || officeEnabled) && (
+                {(jiraEnabled ||
+                  cloudProviders.length > 0 ||
+                  officeEnabled ||
+                  apiKeyOverview?.enabled) && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -508,6 +633,18 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!keyPendingRevoke}
+        title={t('integrations.page.apiKeys.revokeTitle', 'Revoke API key')}
+        message={t('integrations.page.apiKeys.revokeConfirm', {
+          name: keyPendingRevoke?.name || ''
+        })}
+        confirmLabel={t('integrations.page.apiKeys.revoke', 'Revoke')}
+        danger
+        onConfirm={() => handleRevokeApiKey(keyPendingRevoke)}
+        onDeny={() => setKeyPendingRevoke(null)}
+      />
     </div>
   );
 }

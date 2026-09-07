@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { getLocalizedString } from '../utils/localize.js';
 
 /**
  * Source Resolution Service
@@ -143,8 +144,8 @@ class SourceResolutionService {
 
     // Convert localized fields to simple strings for app usage
     const description =
-      this.getLocalizedValue(adminSource.description, language) ||
-      this.getLocalizedValue(adminSource.name, language) ||
+      getLocalizedString(adminSource.description, language) ||
+      getLocalizedString(adminSource.name, language) ||
       adminSource.id;
 
     return {
@@ -160,23 +161,6 @@ class SourceResolutionService {
         strategy: 'static' // Admin sources are typically static
       }
     };
-  }
-
-  /**
-   * Get localized value from localized object or return string directly
-   *
-   * @param {string|object} value - Localized object or string
-   * @param {string} language - Preferred language
-   * @returns {string|null} Localized string or null
-   */
-  getLocalizedValue(value, language = 'en') {
-    if (typeof value === 'string') {
-      return value;
-    }
-    if (typeof value === 'object' && value !== null) {
-      return value[language] || value['en'] || Object.values(value)[0] || null;
-    }
-    return null;
   }
 }
 

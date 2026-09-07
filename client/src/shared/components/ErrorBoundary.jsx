@@ -4,6 +4,8 @@ import { Navigate } from 'react-router-dom';
 import Icon from './Icon';
 import { buildPath } from '../../utils/runtimeBasePath';
 import { isChunkLoadError } from '../../utils/lazyWithRetry';
+import { getLocalizedContent } from '../../utils/localizeContent';
+import { readCachedErrorPagesConfig } from '../../utils/errorPagesCache';
 
 // Error boundary wrapper component
 class ErrorBoundaryComponent extends Component {
@@ -52,7 +54,7 @@ class ErrorBoundaryComponent extends Component {
 
 // Error fallback display component with reset capability and translation
 function ErrorFallback({ error, resetErrorBoundary }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const chunkError = isChunkLoadError(error);
 
   if (error?.status === 401) {
@@ -65,16 +67,23 @@ function ErrorFallback({ error, resetErrorBoundary }) {
     return <Navigate to="/server-error" replace />;
   }
 
+  // Admin-configurable messages for the generic error screen. This boundary is
+  // mounted above UIConfigProvider, so we read a cached snapshot from
+  // localStorage rather than context; any unset value falls back to i18n.
+  const generic = readCachedErrorPagesConfig().generic || {};
+  const lang = i18n.language;
+
   const title = chunkError
     ? t('error.chunkLoadTitle', 'Page failed to load')
-    : t('error.title', 'Something went wrong');
+    : getLocalizedContent(generic.title, lang) || t('error.title', 'Something went wrong');
 
   const description = chunkError
     ? t(
         'error.chunkLoadDescription',
         'A required resource could not be loaded. This may be due to a network issue or an application update.'
       )
-    : t(
+    : getLocalizedContent(generic.description, lang) ||
+      t(
         'error.description',
         'An unexpected error occurred in the application. The development team has been notified.'
       );

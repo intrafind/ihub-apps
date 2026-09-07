@@ -7,7 +7,12 @@ import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
 import AppCreationWizard from '../../apps/components/AppCreationWizard';
 import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleApps
+} from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -72,7 +77,7 @@ function AdminAppsPage() {
       const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -86,7 +91,7 @@ function AdminAppsPage() {
         prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
       );
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -95,7 +100,7 @@ function AdminAppsPage() {
       await toggleApps('*', true);
       setApps(prev => prev.map(app => ({ ...app, enabled: true })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -104,7 +109,7 @@ function AdminAppsPage() {
       await toggleApps('*', false);
       setApps(prev => prev.map(app => ({ ...app, enabled: false })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -119,7 +124,7 @@ function AdminAppsPage() {
           await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
           setApps(prev => prev.filter(app => app.id !== appId));
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         }
       }
     });
@@ -180,7 +185,7 @@ function AdminAppsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download app config: ${err.message}`);
+      setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -203,12 +208,12 @@ function AdminAppsPage() {
       await loadApps();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload app config: ${err.message}`);
+        setError(`Failed to upload app config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);

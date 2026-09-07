@@ -183,6 +183,27 @@ export const nodeConfigSchema = z.object({
   position: positionSchema,
 
   /**
+   * Container membership: the ID of a `loop` node this node belongs to.
+   * Nodes with a parentId form the loop's body — they are rendered inside
+   * the container on the canvas and executed once per iteration by the
+   * LoopNodeExecutor instead of being scheduled as top-level nodes.
+   * For container children, `position` is relative to the container's
+   * top-left corner (React Flow parent/child convention).
+   */
+  parentId: z.string().min(1).optional(),
+
+  /**
+   * Rendered size on the visual editor canvas. Persisted for container
+   * nodes (loop) so the body area survives round-trips through the editor.
+   */
+  size: z
+    .object({
+      width: z.number().positive(),
+      height: z.number().positive()
+    })
+    .optional(),
+
+  /**
    * Type-specific configuration object
    * Structure varies based on node type. Uses passthrough to allow
    * flexible configuration without strict type-specific validation.
@@ -209,6 +230,27 @@ export const nodeConfigSchema = z.object({
     .object({
       /** Whether this node's progress is visible in the chat step indicator. Defaults to true. */
       chatVisible: z.boolean().optional(),
+      /**
+       * Optional progress note shown while this node runs — the friendly
+       * alternative to a separate `progress` node in a loop body.
+       * `when` is a boolean expression over workflow state; the note is
+       * skipped when it evaluates false.
+       * Standalone `progress` nodes keep using a plain string here as a
+       * legacy alias for their own message, so only objects are treated
+       * as a node-level note.
+       */
+      progress: z
+        .union([
+          z.string(),
+          localizedStringSchema,
+          z.object({
+            /** Plain text, or a localized object resolved against the run's language. */
+            message: z.union([z.string(), localizedStringSchema]),
+            when: z.string().optional(),
+            status: z.enum(['running', 'completed']).optional()
+          })
+        ])
+        .optional(),
       /**
        * Optional per-node thinking override for LLM-backed nodes (prompt,
        * planner, verifier, query-plan). Overrides the model's thinking config
@@ -611,21 +653,68 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
   )
   .refine(
     data => {
-      // Check for orphan nodes - every node except start must have an incoming edge
-      const nodeIds = new Set(data.nodes.map(node => node.id));
+      // Check for orphan nodes - every node except start must have an incoming edge.
+      // Container children (nodes with a parentId) are exempt: a loop body's
+      // entry node deliberately has no incoming edge — execution enters the
+      // body through the container, not through an edge.
       const nodesWithIncomingEdges = new Set(data.edges.map(edge => edge.target));
       const startNodes = data.nodes.filter(node => node.type === 'start').map(node => node.id);
 
-      // All non-start nodes must have at least one incoming edge
-      for (const nodeId of nodeIds) {
-        if (!startNodes.includes(nodeId) && !nodesWithIncomingEdges.has(nodeId)) {
+      for (const node of data.nodes) {
+        if (node.parentId) continue;
+        if (!startNodes.includes(node.id) && !nodesWithIncomingEdges.has(node.id)) {
           return false;
         }
       }
       return true;
     },
     {
-      message: 'All nodes except the start node must have at least one incoming edge',
+      message:
+        'All nodes except the start node and loop-body nodes must have at least one incoming edge',
       path: ['nodes']
+    }
+  )
+  .refine(
+    data => {
+      // parentId must reference an existing loop node, never the node itself,
+      // and parent chains must not cycle (a→b→a).
+      const byId = new Map(data.nodes.map(node => [node.id, node]));
+      for (const node of data.nodes) {
+        if (!node.parentId) continue;
+        const parent = byId.get(node.parentId);
+        if (!parent || parent.type !== 'loop' || node.parentId === node.id) {
+          return false;
+        }
+        // Walk the parent chain with a visited set to reject cycles.
+        const visited = new Set([node.id]);
+        let current = parent;
+        while (current) {
+          if (visited.has(current.id)) return false;
+          visited.add(current.id);
+          current = current.parentId ? byId.get(current.parentId) : null;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Node parentId must reference an existing loop node without creating a cycle',
+      path: ['nodes']
+    }
+  )
+  .refine(
+    data => {
+      // Edges must not cross a container boundary: source and target must
+      // belong to the same parent (both top-level, or both children of the
+      // same loop node). The loop container itself connects to the outer
+      // graph; its body is entered implicitly, not via edges.
+      const parentOf = new Map(data.nodes.map(node => [node.id, node.parentId || null]));
+      return data.edges.every(
+        edge => (parentOf.get(edge.source) ?? null) === (parentOf.get(edge.target) ?? null)
+      );
+    },
+    {
+      message:
+        'Edges must not cross a loop container boundary — connect body nodes to each other and the container to outside nodes',
+      path: ['edges']
     }
   );

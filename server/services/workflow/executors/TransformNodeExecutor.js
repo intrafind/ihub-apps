@@ -18,10 +18,9 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { deepMerge } from '../../../utils/deepMerge.js';
 import memoryFile from '../../../agents/memory/memoryFile.js';
+import { sliceMemorySection } from '../memorySection.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../../validators/agentProfileSchema.js';
 import { evaluateBooleanExpression } from '../expressionEvaluator.js';
-
-const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/;
 
 /**
  * Compact debug-friendly representation of a value for log lines.
@@ -46,29 +45,6 @@ function debugValue(value, maxLen = 300) {
   } catch {
     return Array.isArray(value) ? `[${value.length} items]` : '[unserialisable]';
   }
-}
-
-function sliceMemorySection(body, section) {
-  if (!body) return '';
-  const target = section.trim();
-  const lines = body.split('\n');
-  let start = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(SECTION_HEADING_RE);
-    if (m && m[1].trim() === target) {
-      start = i + 1;
-      break;
-    }
-  }
-  if (start === -1) return '';
-  let end = lines.length;
-  for (let i = start; i < lines.length; i++) {
-    if (SECTION_HEADING_RE.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start, end).join('\n').trim();
 }
 
 /**

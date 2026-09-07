@@ -7,6 +7,7 @@ This book contains configuration details and user instructions for the iHub Apps
 - [Getting Started Guide](GETTING_STARTED.md) - Quick setup and first steps
 - [Installation Guide](INSTALLATION.md) - Detailed installation instructions
 - [User Guide](user-guide.md) - End-user documentation
+- [Core Concepts](concepts.md) - Providers, models, apps, skills, sources, and tools — and when to use which
 - [Architecture Overview](architecture.md) - System architecture and components
 
 ## Configuration

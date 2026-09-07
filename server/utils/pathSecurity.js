@@ -57,6 +57,12 @@ export function isValidId(id) {
     return false;
   }
 
+  // `.` is the directory itself, never an id: joined onto a data root it would
+  // address the root (and a delete would empty it)
+  if (id === '.') {
+    return false;
+  }
+
   return SAFE_ID_PATTERN.test(id);
 }
 
@@ -206,20 +212,22 @@ export async function resolveAndValidatePath(filePath, baseDir) {
 
   try {
     const resolvedBase = path.resolve(baseDir);
-    const resolvedFull = path.resolve(resolvedBase, filePath);
 
-    // Quick lexical boundary check before realpath work
-    const baseWithSep = resolvedBase.endsWith(path.sep) ? resolvedBase : resolvedBase + path.sep;
-    if (resolvedFull !== resolvedBase && !resolvedFull.startsWith(baseWithSep)) {
+    // Lexical boundary check before any filesystem work. The relative-path
+    // guard (no '..' escape, not absolute) is the sanitizer shape that both
+    // humans and static analysis (CodeQL js/path-injection) can verify.
+    const relative = path.relative(resolvedBase, path.resolve(resolvedBase, filePath));
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       return null;
     }
+    const resolvedFull = path.join(resolvedBase, relative);
 
     const canonicalBase = await fs.realpath(resolvedBase);
 
     // Canonicalize via the nearest existing parent so we can validate paths
-    // that may not exist yet.
+    // that may not exist yet. The walk never probes above the validated base.
     let existingPath = resolvedFull;
-    while (existingPath !== path.dirname(existingPath)) {
+    while (existingPath !== resolvedBase && existingPath !== path.dirname(existingPath)) {
       try {
         await fs.access(existingPath);
         break;
@@ -273,7 +281,15 @@ export async function resolveAndValidateRealPath(filePath, baseDir) {
   }
 
   const resolvedBase = path.resolve(baseDir);
-  const resolvedFull = path.resolve(resolvedBase, filePath);
+
+  // Lexical boundary check before touching the filesystem, so realpath() is
+  // never invoked on a path that already escapes the base lexically. Uses the
+  // relative-path sanitizer shape recognized by CodeQL (js/path-injection).
+  const relative = path.relative(resolvedBase, path.resolve(resolvedBase, filePath));
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return null;
+  }
+  const resolvedFull = path.join(resolvedBase, relative);
 
   let realBase;
   let realFull;

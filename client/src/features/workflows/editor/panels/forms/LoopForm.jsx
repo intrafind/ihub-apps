@@ -1,61 +1,183 @@
+import { useState } from 'react';
 import FormField from './FormField';
 
-function LoopForm({ config, onChange }) {
-  const mode = config.mode || 'for';
+const MODE_OPTIONS = [
+  { value: 'forEach', label: 'For each item in a list' },
+  { value: 'for', label: 'A fixed number of times' },
+  { value: 'while', label: 'While a condition is true (advanced)' },
+  { value: 'drain', label: 'Work through the task queue (advanced)' }
+];
+
+/**
+ * Configuration form for the loop container node.
+ * The loop's steps are the nodes placed INSIDE the container on the canvas;
+ * this form only configures what to repeat over and how results are collected.
+ */
+function LoopForm({ config, onChange, variables }) {
+  const mode = config.mode || 'forEach';
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // The engine defaults an absent `mode` to 'for' while this form presents
+  // 'forEach'. Carry the displayed mode on every edit, so a loop configured
+  // here never runs as a mode other than the one shown. Merely opening the
+  // panel changes nothing.
+  const update = patch => onChange({ ...config, mode, ...patch });
+
+  const arraySuggestions = (variables || []).filter(
+    v => !v.value.startsWith('_loop') || v.value === '_loopItem'
+  );
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Place the steps to repeat <strong>inside this box on the canvas</strong>. Inside the loop,{' '}
+        <code className="font-mono">{'{{_loopItem}}'}</code> is the current item and{' '}
+        <code className="font-mono">{'{{_loopHuman}}'}</code>/
+        <code className="font-mono">{'{{_loopTotal}}'}</code> the progress counter.
+      </p>
+
       <FormField
-        label="Mode"
+        label="Repeat"
         type="select"
         value={mode}
-        onChange={v => onChange({ ...config, mode: v })}
-        options={[
-          { value: 'for', label: 'for' },
-          { value: 'forEach', label: 'forEach' },
-          { value: 'while', label: 'while' }
-        ]}
+        onChange={v => update({ mode: v })}
+        options={MODE_OPTIONS}
       />
+
+      {mode === 'forEach' && (
+        <>
+          <FormField
+            label="List to repeat over"
+            value={config.array}
+            onChange={v => update({ array: v })}
+            suggestions={arraySuggestions}
+            placeholder="e.g. searchResults"
+            helpText="Name of a list variable produced by an earlier step."
+          />
+          <FormField
+            label="Run items in parallel"
+            type="select"
+            value={String(config.concurrency || 1)}
+            onChange={v => {
+              const parsed = Number(v);
+              update({ concurrency: parsed > 1 ? parsed : undefined });
+            }}
+            options={[
+              { value: '1', label: 'Off — one after another' },
+              { value: '2', label: '2 at a time' },
+              { value: '3', label: '3 at a time' },
+              { value: '5', label: '5 at a time' },
+              { value: '10', label: '10 at a time' }
+            ]}
+            helpText="Parallel items cannot pass data to each other — only the collected results are kept."
+          />
+          <FormField
+            label="Name the current item"
+            value={config.itemVariable}
+            onChange={v => update({ itemVariable: v || undefined })}
+            placeholder="e.g. document"
+            helpText={`Optional. Steps inside can then use {{${config.itemVariable || 'document'}}} instead of {{_loopItem}}, which reads better in prompts and progress notes.`}
+          />
+        </>
+      )}
+
       {mode === 'for' && (
         <FormField
-          label="Count"
+          label="How many times"
           type="number"
           value={config.count}
-          onChange={v => onChange({ ...config, count: v })}
+          onChange={v => update({ count: v })}
           min={1}
         />
       )}
-      {mode === 'forEach' && (
-        <FormField
-          label="Array"
-          value={config.array}
-          onChange={v => onChange({ ...config, array: v })}
-          placeholder="e.g. ${items}"
-        />
-      )}
+
       {mode === 'while' && (
         <FormField
-          label="Condition"
+          label="Keep repeating while"
           type="textarea"
           rows={3}
           value={config.condition}
-          onChange={v => onChange({ ...config, condition: v })}
-          placeholder="Loop condition..."
+          onChange={v => update({ condition: v })}
+          placeholder="data.retryCount < 3"
+          helpText="JavaScript condition over the workflow state, e.g. data.needsMoreWork === true"
         />
       )}
+
+      {mode === 'drain' && (
+        <FormField
+          label="Task queue variable"
+          value={config.queueKey}
+          onChange={v => update({ queueKey: v })}
+          placeholder="_taskQueue"
+          helpText="State key holding the task queue. Steps inside may add more tasks."
+        />
+      )}
+
       <FormField
-        label="Max Iterations"
-        type="number"
-        value={config.maxIterations}
-        onChange={v => onChange({ ...config, maxIterations: v })}
-        min={1}
-      />
-      <FormField
-        label="Output Variable"
+        label="Collect results into"
         value={config.outputVariable}
-        onChange={v => onChange({ ...config, outputVariable: v })}
-        placeholder="e.g. loopResults"
+        onChange={v => update({ outputVariable: v })}
+        placeholder="e.g. analyses"
+        helpText="After the loop, this variable holds one result per iteration."
       />
+
+      <FormField
+        label="Count completed rounds into"
+        value={config.countInto}
+        onChange={v => update({ countInto: v || undefined })}
+        placeholder="e.g. coverage.processed"
+        helpText="Optional. The loop increases this number by one after every finished round, so you do not need a counting step inside."
+      />
+
+      <FormField
+        label="If a round fails"
+        type="select"
+        value={config.onItemError || 'stop'}
+        onChange={v => update({ onItemError: v === 'stop' ? undefined : v })}
+        options={[
+          { value: 'stop', label: 'Stop the loop' },
+          { value: 'skip', label: 'Skip that item and carry on' }
+        ]}
+        helpText="Skipping suits a pass over documents: one file that cannot be read should not cost you the rest."
+      />
+
+      {config.onItemError === 'skip' && (
+        <FormField
+          label="Record skipped rounds in"
+          value={config.recordFailuresInto}
+          onChange={v => update({ recordFailuresInto: v || undefined })}
+          placeholder="e.g. coverage.failed"
+          helpText="Optional. Collects one entry per skipped round so a report can say what was left out."
+        />
+      )}
+
+      <FormField
+        label="Max iterations (safety limit)"
+        type="range"
+        value={config.maxIterations ?? 50}
+        onChange={v => update({ maxIterations: v })}
+        min={1}
+        max={500}
+        helpText="The loop always stops after this many rounds."
+      />
+
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(s => !s)}
+        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+      >
+        {showAdvanced ? 'Hide advanced options' : 'Advanced options…'}
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Legacy workflows may define the loop body as inline JSON (<code>body</code>) instead of
+            container steps — edit that via the JSON tab. Container steps are used whenever{' '}
+            <code>body</code> is empty.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

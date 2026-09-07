@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchInboxes, createInbox } from '../../../api/agentsAdminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 export default function AdminAgentInboxesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export default function AdminAgentInboxesPage() {
       const res = await fetchInboxes();
       setInboxes(res?.data || []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

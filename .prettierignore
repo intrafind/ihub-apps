@@ -26,3 +26,9 @@ concepts/
 
 # Other
 *.min.js
+
+# Git-ignored generated output and local tool scratch. `prettier --check .`
+# walks everything not listed here, so build artifacts made these fail the
+# `format` script even though nothing in the repo tracks them.
+.superpowers/
+nextcloud-app/js/

@@ -6,12 +6,10 @@ import { dirname, join } from 'path';
 import { PNG } from 'pngjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
-import { createCompletionRequest } from '../../../adapters/index.js';
 import { getApiKeyForModel } from '../../../utils.js';
-import { throttledFetch } from '../../../requestThrottler.js';
+import llmClient from '../../../services/loop/LLMClient.js';
 import logger from '../../../utils/logger.js';
 import { notifyClients } from '../jobStore.js';
-import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCallingConverter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -257,7 +255,20 @@ async function pMap(items, fn, concurrency) {
 // ─── LLM interaction ─────────────────────────────────────────────────────────
 
 /**
- * Call the LLM with a page image and extract text via vision.
+ * Call the vision model with one rendered page image and return the extracted
+ * markdown text.
+ *
+ * Goes through `LLMClient.complete()` (non-streaming) so throttling, transient
+ * retries, response parsing for every provider and the run-ledger envelope are
+ * shared with the rest of the server. Provider failures surface as `LLMError`
+ * (`err.code`, `err.status`); the job loop treats upstream 4xx as fatal.
+ *
+ * @param {string} base64Image - Page image (PNG or JPEG) as base64
+ * @param {Object} model - Resolved vision-capable model config
+ * @param {string|null} apiKey - API key resolved once per job
+ * @param {number} pageNum - 1-based page number (logging only)
+ * @param {string} prompt - OCR instruction prompt
+ * @returns {Promise<string>} Extracted text ('' when the model returned none)
  */
 async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, prompt) {
   const messages = [
@@ -273,45 +284,24 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
     }
   ];
 
-  const request = await createCompletionRequest(model, messages, apiKey, {
-    temperature: 0.1,
-    maxTokens: 8192,
-    stream: false
+  const result = await llmClient.complete({
+    model,
+    apiKey,
+    messages,
+    options: { temperature: 0.1, maxTokens: 8192 },
+    stream: false,
+    telemetry: { kind: 'utility', purpose: 'ocr', refs: {} }
   });
 
-  const fetchOptions = {
-    method: request.method || 'POST',
-    headers: request.headers
-  };
-
-  if (fetchOptions.method === 'POST' && request.body) {
-    fetchOptions.body = JSON.stringify(request.body);
-  }
-
-  const response = await throttledFetch(model.id, request.url, fetchOptions);
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    const err = new Error(`LLM API error (${response.status}) for page ${pageNum}: ${errorText}`);
-    err.statusCode = response.status;
-    throw err;
-  }
-
-  const data = await response.json();
-
-  // Use the adapter converter to extract text — handles provider-specific
-  // formats and filters out thinking/reasoning content automatically
-  const genericResponse = await convertResponseToGeneric(JSON.stringify(data), model.provider);
-
-  if (genericResponse.content && genericResponse.content.length > 0) {
-    return genericResponse.content.join('');
+  if (result.content) {
+    return result.content;
   }
 
   logger.warn('Could not extract text from LLM response', {
     component: 'OcrProcessor',
     pageNum,
     provider: model.provider,
-    responseKeys: Object.keys(data)
+    finishReason: result.finishReason
   });
   return '';
 }
@@ -656,12 +646,14 @@ export async function processOcrJob(job) {
             });
 
             // Non-retryable model error (4xx) — abort immediately
-            if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+            // LLMError exposes the upstream HTTP status as `err.status`.
+            const status = err.status ?? err.statusCode;
+            if (status && status >= 400 && status < 500) {
               job.status = 'error';
               job.error =
-                err.statusCode === 404
+                status === 404
                   ? 'Model not found. Please select a different model.'
-                  : `Model error (${err.statusCode}): The selected model rejected the request.`;
+                  : `Model error (${status}): The selected model rejected the request.`;
               notifyClients(job);
               return;
             }
@@ -746,12 +738,14 @@ export async function processOcrJob(job) {
               error: err.message
             });
 
-            if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+            // LLMError exposes the upstream HTTP status as `err.status`.
+            const status = err.status ?? err.statusCode;
+            if (status && status >= 400 && status < 500) {
               job.status = 'error';
               job.error =
-                err.statusCode === 404
+                status === 404
                   ? 'Model not found. Please select a different model.'
-                  : `Model error (${err.statusCode}): The selected model rejected the request.`;
+                  : `Model error (${status}): The selected model rejected the request.`;
               notifyClients(job);
               return;
             }

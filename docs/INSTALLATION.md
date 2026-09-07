@@ -646,6 +646,29 @@ For detailed configuration documentation, see the main README.md Configuration s
 - Only available for binary installations (not Docker or npm)
 - Disabled automatically when running in a container (Docker, Podman, Kubernetes)
 
+**Behaviour when GitHub is unreachable:**
+
+The version check is bounded and never blocks the Admin UI. Where outbound
+traffic to `api.github.com` is dropped rather than refused, the request would
+otherwise hang until the operating system's TCP timeout and leave the admin
+start page on its loading placeholders (issue #2150).
+
+- The request aborts after 1 second. Override with `VERSION_CHECK_TIMEOUT_MS`
+  (or `IHUB_VERSION_CHECK_TIMEOUT_MS`), in milliseconds, for slow links or
+  strict proxies. Values are clamped to 500 ms – 60 s.
+- Results and failures are both cached for 5 minutes, so opening the Admin UI
+  does not trigger a fresh request to GitHub every time.
+- `GET /api/admin/version/check-update` answers from that cache and refreshes in
+  the background, so it never waits on the network. A cold cache responds with
+  `checking: true` and no result yet; the Admin UI re-requests shortly after to
+  pick up the outcome. A failed check is reported in the response's `error`
+  field, and the rest of the page renders as usual.
+
+```bash
+# Allow 15 seconds for the release lookup (default: 1000)
+export VERSION_CHECK_TIMEOUT_MS=15000
+```
+
 **Disabling the version check entirely:**
 
 Set `NO_VERSION_CHECK=true` (or `IHUB_NO_VERSION_CHECK=true`) to prevent the

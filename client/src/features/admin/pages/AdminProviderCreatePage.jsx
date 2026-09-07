@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
 
 function AdminProviderCreatePage() {
@@ -83,7 +83,7 @@ function AdminProviderCreatePage() {
         navigate('/admin/providers');
       }, 1500);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }

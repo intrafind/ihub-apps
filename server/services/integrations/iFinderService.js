@@ -1,7 +1,8 @@
-import { actionTracker } from '../../actionTracker.js';
+import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
 import fs from 'fs';
@@ -157,11 +158,10 @@ class IFinderService {
     });
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_search',
-      query: query,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_search',
+      message: query,
+      data: { query, searchProfile: profileId }
     });
 
     try {
@@ -409,11 +409,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_content',
-      documentId: documentId,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_content',
+      data: { documentId, searchProfile: profileId }
     });
 
     try {
@@ -493,7 +491,14 @@ class IFinderService {
         rawApiMetadata: apiMetadata
       };
 
-      // Validate and truncate content if necessary
+      // Apply the caller's length cap and report the outcome explicitly.
+      // `truncated` is always a boolean and `maxLength` is echoed back, so a
+      // caller can branch on the result alone without re-deriving the limit
+      // or comparing lengths itself.
+      result.maxLength = maxLength;
+      result.originalContentLength = content.length;
+      result.truncated = false;
+
       if (result.content.length === 0) {
         logger.warn('No content extracted for document', {
           component: 'IFinderService',
@@ -504,6 +509,7 @@ class IFinderService {
         result.content = result.content.substring(0, maxLength) + '... [Content truncated]';
         result.truncated = true;
       }
+      result.returnedContentLength = result.content.length;
 
       logger.info('Successfully fetched document content', {
         component: 'IFinderService',
@@ -545,6 +551,13 @@ class IFinderService {
   }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
+    }
+
+    // The ID is embedded in a quoted _id:"…" query below. Document IDs can
+    // arrive from model/tool parameters, so validate against the central safe
+    // ID allowlist to prevent query injection.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
     }
 
     // Use the search method with _id:documentId query
@@ -777,12 +790,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_download',
-      documentId: documentId,
-      searchProfile: profileId,
-      downloadAction: action,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_download',
+      data: { documentId, searchProfile: profileId, downloadAction: action }
     });
 
     try {
@@ -987,9 +997,10 @@ class IFinderService {
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
     const authHeader = getIFinderAuthorizationHeader(user);
 
-    // Validate documentId to prevent query injection: allow only alphanumeric, hyphens, underscores, dots
-    if (!/^[\w.\-]+$/.test(documentId)) {
-      throw new Error(`Invalid document ID format: ${documentId}`);
+    // Validate documentId against the central safe ID allowlist to prevent
+    // query injection into the sSearchTerm below.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
     }
 
     const searchUrl =

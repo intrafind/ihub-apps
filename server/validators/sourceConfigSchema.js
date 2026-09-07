@@ -61,15 +61,21 @@ const urlConfigSchema = z
 /**
  * iFinder source configuration schema
  * Complete schema to match IFinderHandler expectations and client form
+ *
+ * Connection settings (base URL, JWT authentication) come from the central
+ * iFinder integration in platform.json — a source only selects which
+ * documents to load: either one pinned document ID or a search query that
+ * loads the top `maxResults` matching documents.
  */
+const emptyStringAsUndefined = value =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const ifinderConfigSchema = z
   .object({
-    baseUrl: z.string().url('Valid base URL is required'),
-    apiKey: z.string().min(1, 'API key is required'),
-    searchProfile: z.string().default('default'),
+    documentId: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    query: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    searchProfile: z.preprocess(emptyStringAsUndefined, z.string().optional()),
     maxResults: z.number().min(1).max(100).default(10),
-    queryTemplate: z.string().default(''),
-    filters: z.record(z.any()).default({}),
     maxLength: z.number().positive().default(10000)
   })
   .strict();
@@ -151,7 +157,7 @@ export function validateSourceConfig(source) {
     }
 
     if (validated.type === 'ifinder') {
-      validateIFinderConfig(validated.config);
+      validateIFinderConfig(validated);
     }
 
     if (validated.type === 'page') {
@@ -206,22 +212,25 @@ function validateFilesystemPath(path) {
     throw new Error('Invalid file path: Path traversal not allowed');
   }
 
-  // Prevent absolute paths that could access system files
-  if (path.startsWith('/') && !path.startsWith('/app/') && !path.startsWith('/workspace/')) {
-    throw new Error('Invalid file path: Absolute paths to system directories not allowed');
-  }
-
   // Ensure path doesn't start with ./ (should be relative)
   if (path.startsWith('./')) {
     throw new Error('Invalid file path: Use relative paths without ./ prefix');
   }
 
-  // Check for dangerous paths
-  const dangerousPaths = ['/etc', '/var', '/usr', '/sys', '/proc', '/root'];
-  for (const dangerousPath of dangerousPaths) {
-    if (path.startsWith(dangerousPath)) {
-      throw new Error(`Invalid file path: Access to ${dangerousPath} not allowed`);
-    }
+  // Filesystem sources are only ever read/written under contents/sources —
+  // reject anything else so a source config can't be saved with a path
+  // pointing at config/ or other files outside that directory. This check
+  // applies unconditionally, so it also rules out absolute paths (there is
+  // no carve-out for e.g. "/app/..." or "/workspace/..." — the runtime
+  // handler in FileSystemHandler never accepted those either, since it
+  // requires the path to literally start with "sources/").
+  if (path !== 'sources' && !path.startsWith('sources/')) {
+    throw new Error('Invalid file path: Filesystem sources must be under the "sources/" directory');
+  }
+
+  // Reject dotfiles/dot-directories anywhere in the path (e.g. "sources/.env").
+  if (path.split('/').some(segment => segment.startsWith('.'))) {
+    throw new Error('Invalid file path: Dotfiles and dot-directories are not allowed');
   }
 }
 
@@ -243,18 +252,18 @@ function validateUrlConfig(config) {
 
 /**
  * Validate iFinder configuration
- * @param {Object} config - iFinder configuration to validate
+ * @param {Object} source - Full validated source (needed to inspect exposeAs)
  */
-function validateIFinderConfig(config) {
-  const { baseUrl } = config;
+function validateIFinderConfig(source) {
+  const { config, exposeAs } = source;
 
-  // Validate base URL protocol
-  const urlObj = new URL(baseUrl);
-  if (!['http:', 'https:'].includes(urlObj.protocol)) {
-    throw new Error('Invalid iFinder base URL: Only HTTP and HTTPS protocols are allowed');
+  // Tool-exposed sources receive documentId/query from the model at call time;
+  // prompt sources must know up front which documents to load.
+  if (exposeAs !== 'tool' && !config.documentId && !config.query) {
+    throw new Error(
+      'iFinder sources exposed as prompt context require either a document ID or a search query'
+    );
   }
-
-  // Additional validation is handled by the Zod schema
 }
 
 /**
@@ -321,12 +330,10 @@ export function getDefaultSourceConfig(type) {
       return {
         ...baseConfig,
         config: {
-          baseUrl: '',
-          apiKey: '',
-          searchProfile: 'default',
+          documentId: '',
+          query: '',
+          searchProfile: '',
           maxResults: 10,
-          queryTemplate: '',
-          filters: {},
           maxLength: 10000
         }
       };

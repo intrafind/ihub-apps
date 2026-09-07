@@ -10,10 +10,11 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminTools,
   createTool,
-  updateTool,
+  fetchAdminTools,
   fetchToolScript,
+  getAdminApiErrorMessage,
+  updateTool,
   updateToolScript
 } from '../../../api/adminApi';
 import { clearApiCache } from '../../../api';
@@ -117,7 +118,7 @@ function AdminToolEditPage() {
       }
     } catch (err) {
       console.error('Error loading tool:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

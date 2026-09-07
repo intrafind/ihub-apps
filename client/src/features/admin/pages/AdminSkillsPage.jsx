@@ -4,13 +4,13 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
-  fetchAdminSkills,
-  toggleSkill,
   deleteSkill,
   exportSkill,
-  importSkill
+  fetchAdminSkills,
+  getAdminApiErrorMessage,
+  importSkill,
+  toggleSkill
 } from '../../../api/adminApi';
-
 /**
  * AdminSkillsPage - List page for managing installed skills.
  *
@@ -52,7 +52,7 @@ function AdminSkillsPage() {
       }
     } catch (err) {
       console.error('Error loading skills:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setSkills([]);
     } finally {
       setLoading(false);
@@ -68,7 +68,7 @@ function AdminSkillsPage() {
       await toggleSkill(skillName);
       await loadSkills();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -124,10 +124,12 @@ function AdminSkillsPage() {
       await loadSkills();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(t('admin.skills.importAlreadyExists', 'A skill with this name already exists'));
       } else {
-        setError(`${t('admin.skills.importFailed', 'Failed to import skill')}: ${err.message}`);
+        setError(
+          `${t('admin.skills.importFailed', 'Failed to import skill')}: ${getAdminApiErrorMessage(err)}`
+        );
       }
     } finally {
       setUploading(false);

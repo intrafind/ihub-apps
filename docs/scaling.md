@@ -1,19 +1,25 @@
 # Scaling with Multiple Workers
 
-iHub Apps ships with a sticky-session Node.js cluster so a single host can use
-multiple CPU cores without breaking the streaming chat experience. The default
-is **4 workers**; this page explains how it works, how to tune it, and what
-the trade-offs are.
+iHub Apps runs a Node.js cluster so a single host can use multiple CPU cores
+without breaking the streaming chat experience. The default is **4 workers**;
+this page explains how it works, how to tune it, and what the trade-offs are.
 
 ## TL;DR
 
-- **Default:** `WORKERS=4` in production.
+- **Default:** `WORKERS=4` in production, connections balanced round-robin.
+- **No stickiness required between workers.** Chat state that lands on the
+  "wrong" worker is relayed to the right one over the cluster bus, so a single
+  iHub instance is safe behind any load balancer — including a Kubernetes
+  ingress with no session affinity.
+- **Stickiness is still required between instances.** The bus rides
+  `node:cluster` IPC and stops at the process tree, so running more than one
+  replica or host needs cookie affinity at the load balancer — see
+  [Kubernetes](#kubernetes) and
+  [multi-server deployment](multi-server-deployment.md).
 - **Dev scripts (`npm run dev`, `npm run server`):** pinned to `WORKERS=1` for
   fast reloads and straightforward debugging.
 - **Override:** set the `WORKERS` (or `NUM_WORKERS`) environment variable
   before starting the server.
-- **Do not** put the worker count behind a reverse proxy load balancer without
-  stickiness — see the [Limitations](#limitations) section.
 
 ```bash
 # Start with 8 workers on port 8080
@@ -22,6 +28,12 @@ PORT=8080 WORKERS=8 npm run start:prod
 # Disable clustering entirely
 WORKERS=1 npm run start:prod
 ```
+
+> **Changed in this release.** Earlier versions pinned each client to one
+> worker by hashing its TCP peer address. Behind a reverse proxy that address is
+> the same for everyone, so one worker served all traffic while the rest idled.
+> Routing is now round-robin by default and the old behaviour is opt-in via
+> `STICKY_SESSIONS=true` — see [Connection routing](#connection-routing).
 
 ## Why clustering
 
@@ -32,10 +44,9 @@ process. On a multi-core host this leaves CPUs idle while latency climbs.
 Cluster mode runs `N` worker processes behind one listening socket, so each
 core can make progress independently.
 
-## Why sticky sessions
+## The cross-worker problem
 
-The standard `node:cluster` scheduler distributes connections round-robin.
-That breaks iHub's chat flow because streaming state is in-memory per worker:
+Chat streaming state is in-memory per worker:
 
 - `server/sse.js` holds two `Map`s (`clients`, `activeRequests`) keyed by
   `chatId`.
@@ -43,33 +54,107 @@ That breaks iHub's chat flow because streaming state is in-memory per worker:
   reach listeners in the same process.
 
 A browser opens an SSE stream on `GET /api/apps/:appId/chat/:chatId` and then
-POSTs prompts to the same URL. If the GET lands on worker A but the POST
-lands on worker B, worker B has no `clients` entry for that chat, so tokens
-never reach the browser and cancellations silently drop.
+POSTs prompts to the same URL. Those are two separate connections, so with any
+balanced scheduler they routinely land on different workers. If the GET is on
+worker A and the POST on worker B, worker B has no `clients` entry for that
+chat — tokens never reach the browser and cancellations silently drop.
 
-To keep chats consistent, every connection from a given client must route to
-the same worker. iHub does this by running a small sticky router in the
-primary process:
+There are two ways to fix that: guarantee the connections land together, or
+stop requiring it. iHub used to do the first and now does the second.
 
-1. The primary owns the real TCP listening socket (`net.createServer` with
-   `pauseOnConnect: true`).
-2. On each incoming connection it hashes the client's remote address
-   (`sha256(remoteAddress) % workerCount`) to pick a worker.
-3. The paused socket handle is forwarded to the chosen worker via IPC.
-4. The worker re-emits the connection on its HTTP server and resumes it.
+### The cluster bus
 
-All in-memory per-chat state therefore stays in one process, without any
-cross-worker coordination or external broker.
+[`server/clusterBus.js`](../server/clusterBus.js) gives workers two primitives,
+both no-ops outside cluster mode:
 
-Relevant code: [`server/clusterSticky.js`](../server/clusterSticky.js) and
-the primary/worker branches in [`server/server.js`](../server/server.js).
+- **Pub/sub.** A worker publishes a message and the primary forwards it. The
+  primary never interprets payloads; it is a repeater.
+- **Presence.** `clients`, `activeRequests` and `activeWorkflowExecutions` are
+  `Map`s that announce their membership. The primary mirrors the resulting
+  `chatId → worker` table into every worker, so any worker can answer "who holds
+  this chat?" synchronously, without a round trip.
+
+With that in place, `sse.js` delivers an event locally when it owns the stream
+and relays it to the owning worker when it does not. The primary knows the
+owner, so relayed events are addressed to that single worker rather than
+broadcast. The same mechanism carries the three control paths that used to
+assume co-location: aborting the LLM call when the browser disconnects or hits
+stop, cancelling a chat-triggered workflow, and replaying workflow progress on
+reconnect.
+
+Affinity therefore becomes a performance detail rather than a correctness
+precondition.
+
+### Configuration changes
+
+`configCache` is per-process memory, and an admin save is one HTTP request — so
+it writes the file under `contents/` and refreshes exactly one worker's cache.
+Under round-robin the next read goes to a different worker, which makes a saved
+change look like it reverted on the following page load, and a deleted app stay
+visible on every worker that did not handle the delete. It converged only when
+the 5-minute TTL timer happened to fire, which is what made the symptom look
+random.
+
+[`server/configSync.js`](../server/configSync.js) closes that gap on the same
+bus. Every explicit refresh — the calls admin routes make after writing a file —
+announces the affected cache keys, and the other workers re-read those files
+themselves:
+
+- **Keys travel, not contents.** A worker receiving `config/apps.json` reloads it
+  from disk. Shipping the loaded data would serialise every app definition
+  through the primary on each save and would let a worker's memory diverge from
+  the file that is the source of truth.
+- **TTL refreshes stay silent.** Only explicit refreshes announce. Every worker
+  runs its own timer, so announcing there would turn a quiet re-read into `N²`
+  bus messages and disk reads.
+- **Inbound announcements are coalesced** over a 25 ms window, because one save
+  frequently touches several entries (platform + groups, a bulk app import).
+- **Wholesale reloads** — backup import, the admin cache flush — announce a
+  single "reload everything" instead of enumerating keys, since each worker may
+  hold a different key set.
+
+Some subsystems keep live state derived from config that a cache reload does not
+touch: the logger's transports, telemetry exporters, MCP client connections, the
+usage tracker's cached mode. The route that wrote the file fixes those up in its
+own process only, so [`server/configReloadHooks.js`](../server/configReloadHooks.js)
+re-applies them on the workers that received the announcement. Each hook compares
+the config slice it depends on against what it last applied, so a log-level tweak
+does not rebuild telemetry exporters across the cluster.
+
+`GET /api/admin/cache/stats` returns a `sync` block with this worker's
+announce/receive/reload counters — hit it a few times in a cluster and you will
+see one worker's `announced` matched by another's `received`.
+
+Adding a new config write path? Call `configCache.refreshCacheEntry(key)` (or one
+of the `refresh*Cache()` helpers) rather than `setCacheEntry` directly; the
+announcement is attached to those. If you must write the cache directly, call
+`announceConfigChange(key)` yourself.
+
+### Connection routing
+
+Because the bus removes the affinity requirement, connections are distributed
+by Node's own round-robin cluster scheduler: workers share the listening socket
+and each new connection goes to the next worker. The primary holds only the
+bus.
+
+`STICKY_SESSIONS=true` restores the previous router, in which the primary owns
+the TCP socket and hands each connection to `sha256(remoteAddress) %
+workerCount`. That is only meaningful when clients reach iHub directly — see
+[Limitations](#limitations) — and chat no longer needs it. Reach for it only if
+something outside the chat path in your deployment depends on connection
+affinity.
+
+Relevant code: [`server/clusterBus.js`](../server/clusterBus.js),
+[`server/clusterSticky.js`](../server/clusterSticky.js) and the primary/worker
+branches in [`server/server.js`](../server/server.js).
 
 ## Configuration
 
-| Variable      | Default | Description                                           |
-| ------------- | ------- | ----------------------------------------------------- |
-| `WORKERS`     | `4`     | Number of worker processes. `1` = no cluster.         |
-| `NUM_WORKERS` | `4`     | Alias of `WORKERS` (accepted for backwards-compat).   |
+| Variable          | Default | Description                                                            |
+| ----------------- | ------- | ---------------------------------------------------------------------- |
+| `WORKERS`         | `4`     | Number of worker processes. `1` = no cluster.                          |
+| `NUM_WORKERS`     | `4`     | Alias of `WORKERS` (accepted for backwards-compat).                    |
+| `STICKY_SESSIONS` | `false` | Pin each client to one worker by hashing its TCP peer address.         |
 
 `WORKERS` is read **once at process start** by `server/config.js`. Changing
 it at runtime has no effect — see [Why it is not in the Admin UI](#why-it-is-not-in-the-admin-ui).
@@ -87,32 +172,66 @@ it at runtime has no effect — see [Why it is not in the Admin UI](#why-it-is-n
 
 ## Startup behaviour
 
-With `WORKERS > 1` the primary logs:
+With `WORKERS > 1` the primary logs its routing mode, and each worker logs once
+when it has bound the shared socket:
 
 ```
-Primary process 1234 starting 4 workers
+Primary process 1234 starting 4 workers { workerCount: 4, routing: 'round-robin' }
+Cluster using round-robin connection scheduling; workers bind the port directly
+Server is listening on all interfaces { port: 3000 }   x4, one per worker
+```
+
+With `STICKY_SESSIONS=true` the primary owns the socket instead, and you see the
+old pair of messages plus the peer-address caveat:
+
+```
 Sticky cluster primary listening { host: '0.0.0.0', port: 3000, workerCount: 4 }
-```
-
-Each worker logs exactly once when it is ready to receive forwarded
-connections:
-
-```
 Worker ready for sticky connections { pid: 1245, workerIndex: '0' }
-Worker ready for sticky connections { pid: 1246, workerIndex: '1' }
-...
 ```
 
 With `WORKERS=1` the server runs as a plain single process; it binds the port
-itself and you see the usual `Server is listening on all interfaces` log.
+itself, the cluster bus stays inactive, and you see the usual
+`Server is listening on all interfaces` log.
+
+### Cold start and generated keys
+
+On the very first start of an installation, `contents/.jwt-private-key.pem`,
+`contents/.jwt-public-key.pem` and `contents/.encryption-key` do not exist yet, so
+every worker reaches the "generate and persist" branch of
+`TokenStorageService` at the same time. Those writes now use exclusive create
+(`flag: 'wx'`): the first worker to land wins and the others adopt the key from
+disk, logging
+
+```
+Adopted RSA key pair created concurrently by another process
+Adopted encryption key created concurrently by another process
+```
+
+Without that arbitration each worker kept the pair it generated itself, so a
+token signed by one worker failed verification on the others — a logged-in user
+got 401s on roughly `(N-1)/N` of requests — and a secret encrypted by one worker
+could not be decrypted by any other. Seeing more than one
+`Generating new RSA key pair` line per start, or intermittent
+`Authentication required` right after a fresh install, is that failure.
+
+Setting `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` and `TOKEN_ENCRYPTION_KEY` explicitly
+skips generation altogether, and is required anyway once you run more than one
+replica — see [Cross-pod, not cross-worker](#cross-pod-not-cross-worker).
 
 ### Crash recovery
 
 If a worker exits (crash, OOM, signal), the primary logs a warning with the
 exit code, forks a replacement into the same slot, and resumes routing to it.
-Clients whose chat was pinned to the dead worker lose their SSE connection
-and need to reconnect — the browser's reconnect logic handles this, but any
-mid-stream tokens are dropped.
+It also retracts every presence entry the dead worker held, so the survivors
+stop relaying events into a process that no longer exists. The replacement
+pulls a snapshot of the current presence table on startup rather than beginning
+blind.
+
+Clients whose SSE stream was held by the dead worker lose the connection and
+need to reconnect — the browser's reconnect logic handles this, but any
+mid-stream tokens are dropped. Note that the reconnect can now land on any
+worker; the pending-workflow backfill is mirrored cluster-wide so a finished
+workflow still fills in the chat bubble wherever the browser comes back.
 
 ### Shutdown
 
@@ -122,41 +241,129 @@ then exits after a 5-second grace period. Use a process supervisor
 
 ## Limitations
 
-### Uneven load behind NAT / proxies
+### Uneven load with STICKY_SESSIONS behind NAT / proxies
 
-Routing is hashed on source IP. If many users share one source IP (corporate
-NAT, shared VPN egress, a fronting reverse proxy that does not preserve
-client IPs), they all pile onto the same worker.
+This is the failure the default routing exists to avoid. It applies only when
+you set `STICKY_SESSIONS=true`.
 
-**Mitigations:**
+Sticky routing hashes the **TCP peer address** — the only client identity
+available before any HTTP byte is parsed. Everyone arriving through the same hop
+therefore lands on the same worker:
 
-- Put a stickiness-aware reverse proxy (nginx `hash $cookie_chatid consistent;`,
-  HAProxy `balance uri` / cookie-based stickiness) in front of **multiple
-  separate iHub instances**, each with its own port — then iHub's own
-  cluster scales per-instance.
-- Ensure upstream proxies forward `X-Forwarded-For` and that iHub sees the
-  real client address. (Current build routes on `connection.remoteAddress`
-  only, not on the `X-Forwarded-For` header — that would require parsing the
-  HTTP request in the primary, which is a larger change.)
+- **Behind a reverse proxy or ingress — i.e. most production deployments — that
+  is all traffic.** One worker serves every request while the other `WORKERS - 1`
+  processes stay idle, so the effective capacity is a single process no matter
+  what `WORKERS` says. A saturated worker then looks like a dead server: requests
+  queue, and health probes queue with them.
+- Behind corporate NAT or a shared VPN egress it is every user on that egress IP.
+
+`X-Forwarded-For` does not help: the sticky router runs at the TCP layer, in the
+primary process, before any HTTP parsing. Neither would a JWT or a cookie — the
+router has no HTTP bytes to read them from, HTTP keep-alive means one upstream
+connection can carry requests from several different users, and anonymous
+traffic carries no identity at all.
+
+The primary logs the caveat once at startup whenever sticky routing is on with
+`WORKERS > 1`. **The fix is to unset `STICKY_SESSIONS`**: chat no longer needs
+affinity, and round-robin uses every worker regardless of what the peer address
+looks like.
+
+### Cross-worker relay cost
+
+Relayed events cross the process boundary twice (producer → primary → owner) and
+are JSON-serialised each way. Chat chunks are small, delivery is addressed
+rather than broadcast, and in round-robin mode the primary has no other work —
+but token traffic for cross-worker chats does pass through a single process.
+With `WORKERS=N`, roughly `(N-1)/N` of chats are cross-worker.
+
+If that becomes the bottleneck, the answer is more replicas rather than more
+workers per replica: each replica's bus is independent.
 
 ### Worker-local state
 
-Any new feature that needs cross-worker visibility (shared rate-limit
-counters, in-memory caches that must be coherent, cross-session pub/sub)
-will not work out of the box. Options:
+The bus covers the chat path (SSE delivery, abort, workflow cancel and replay,
+pending-finish backfill) and configuration invalidation (see
+[Configuration changes](#configuration-changes)). Other worker-local state is
+unchanged, and round-robin routing means requests from one user now spread across
+workers rather than landing on one:
 
-- Persist to disk or a database that every worker already reads.
-- Introduce Redis pub/sub and have every worker subscribe.
-- Keep the feature strictly per-chat (preferred — most existing code does
-  this already).
+- **Rate-limit counters are per worker.** With `WORKERS=N` the effective limit
+  for a given key is up to `N ×` the configured value. Size limits accordingly,
+  or enforce them at the ingress. See [rate limiting](rate-limiting.md).
+- **Voice connection caps are per worker** — see
+  [below](#realtime-voice-websocket-and-workers).
+- **Workflow engine state** is file-persisted with an in-process cache, so a
+  read from a worker that is not running the execution can be stale. The chat
+  paths route around this by asking the owning worker to act; direct admin reads
+  of a running execution can lag.
+
+Any new feature needing cross-worker visibility should either use the bus
+(`publish`/`subscribe` plus a presence map), persist to the shared `contents/`
+directory, or stay strictly per-request.
 
 ### Session failover
 
-A chat is pinned to a single worker for its lifetime. If that worker
+A chat's SSE stream lives on one worker for its lifetime. If that worker
 crashes, the stream drops and the browser must reconnect (and the assistant
-response in progress is lost). For strict failover you would need to
-externalise the SSE fan-out to Redis; the trade-off is latency + operational
-complexity, and it is not planned.
+response in progress is lost). The reconnect can land on any worker and will
+pick up correctly, but the in-flight response is gone. For true mid-response
+failover you would need to externalise the SSE fan-out and the generation
+itself; that is not planned.
+
+### Cross-pod, not cross-worker
+
+Everything on this page is scoped to workers **inside one process tree**. The
+bus rides `node:cluster` IPC, so it does not span Kubernetes pods or hosts. Two
+replicas still need session affinity at the ingress, or the SSE GET and the chat
+POST can land on different pods with nothing to relay between them. See
+[Kubernetes](#kubernetes) below and
+[multi-server deployment](multi-server-deployment.md).
+
+Making the bus cross-pod is a matter of backing `publish`/`subscribe` with Redis
+instead of `process.send`; the interface was kept narrow for that reason. It is
+not implemented.
+
+## Kubernetes
+
+Two working configurations, depending on whether you scale up or out.
+
+**Single replica, several workers.** Nothing special: set `WORKERS` to the pod's
+CPU limit and leave routing alone. This is the case that used to collapse onto
+one worker behind the ingress and no longer does.
+
+```yaml
+env:
+  - name: WORKERS
+    value: '4' # match the CPU limit, not the node's core count
+resources:
+  limits:
+    cpu: '4'
+```
+
+**Several replicas.** The bus does not span pods, so the ingress has to keep a
+chat on one pod. Cookie affinity at L7 is the mechanism — `sessionAffinity:
+ClientIP` on the Service is **not** a substitute, since it keys on the ingress
+controller's address and sends everything to one pod, reproducing the original
+bug one layer up.
+
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: 'cookie'
+    nginx.ingress.kubernetes.io/session-cookie-name: 'ihub-affinity'
+    nginx.ingress.kubernetes.io/affinity-mode: 'persistent'
+    # SSE needs an unbuffered, long-lived upstream connection
+    nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+```
+
+Multiple replicas also require a shared `contents/` volume and identical
+secrets across pods — read
+[multi-server deployment](multi-server-deployment.md) before enabling it.
+
+Set `trustProxy` to the real hop count so `req.ip` is the client rather than the
+ingress; this fixes rate-limit and audit-log attribution — see
+[rate limiting](rate-limiting.md#proxy-hops-and-the-rate-limit-key).
 
 ## Why it is not in the Admin UI
 
@@ -181,9 +388,11 @@ the Node version.
 
 | Option                                        | Status       | Notes                                                                                    |
 | --------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
-| Default round-robin cluster                   | Rejected     | Breaks SSE streaming (per-worker in-memory state).                                       |
-| **Sticky session cluster (this page)**        | **Shipping** | Simple; IP-hashed routing; no new deps; handles the common case.                         |
-| Redis pub/sub fan-out                         | Deferred     | Enables true cross-worker delivery and clean failover. Adds Redis + ~a week of refactor. |
+| **Round-robin + cluster IPC bus (this page)** | **Shipping** | Even load behind any proxy; no new deps; relays per-chat events between workers.         |
+| Plain round-robin, no bus                     | Rejected     | Breaks SSE streaming (per-worker in-memory state).                                       |
+| Sticky IP-hash router                         | Opt-in       | `STICKY_SESSIONS=true`. Collapses onto one worker behind a proxy.                        |
+| Sticky routing on a JWT or cookie             | Rejected     | The router sees no HTTP bytes; keep-alive multiplexes users onto one upstream connection; anonymous traffic has no token. |
+| Redis pub/sub fan-out                         | Deferred     | Would extend the same bus interface across pods, plus clean failover. Adds Redis.        |
 | PM2 cluster mode                              | Rejected     | PM2's built-in LB is round-robin — same SSE problem.                                     |
 | Multi-instance + nginx cookie stickiness      | Compatible   | Works; recommended when fronting multiple boxes. Orthogonal to this feature.             |
 
@@ -191,8 +400,10 @@ the Node version.
 
 The realtime voice endpoint (`/api/voice/realtime`, used by dictation and
 transcription — see [Realtime Voice & Transcription](voice-transcription.md))
-attaches per worker and rides the same sticky TCP connections, so no extra
-configuration is needed. One thing to remember when tuning:
+attaches per worker. A WebSocket rides a single TCP connection for its whole
+lifetime, so whichever worker accepts the upgrade handles the entire session —
+no routing coordination is needed under either scheduling mode. Two things to
+remember when tuning:
 
 - The voice connection caps (`platform.speech.realtime.maxConnections`,
   default 50, and `maxConnectionsPerUser`, default 3) are enforced **per

@@ -5,7 +5,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import IFinderConfig from '../components/IFinderConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
 
@@ -91,7 +91,7 @@ function AdminProvidersPage() {
       }
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setProviders([]);
       setModels([]);
     } finally {
@@ -121,45 +121,32 @@ function AdminProvidersPage() {
       [providerId]: { status: 'testing', results: [], expanded: true }
     }));
 
-    // Use fetch directly to bypass the axios auth interceptor.
-    // The model test endpoint returns 401 when a model has no API key configured —
-    // a normal testable condition, not an auth failure. Using makeAdminApiCall here
-    // would cause the axios interceptor to clear tokens and redirect the admin.
-    const API_URL = import.meta.env.VITE_API_URL || '/api';
-    const authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken');
-    const fetchHeaders = { 'Content-Type': 'application/json' };
-    if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
-
+    // The model test endpoint maps a provider rejecting the server's key onto
+    // 502 (not 401), so the shared admin client is safe here: a 401 really is
+    // an expired admin session and must go through the global
+    // re-authentication flow.
     const results = [];
     for (const model of providerModels) {
       try {
-        const fetchResponse = await fetch(`${API_URL}/admin/models/${model.id}/test`, {
-          method: 'POST',
-          headers: fetchHeaders,
-          credentials: 'include'
+        const response = await makeAdminApiCall(`/admin/models/${model.id}/test`, {
+          method: 'POST'
         });
-        const data = await fetchResponse.json().catch(() => ({}));
-        if (fetchResponse.ok) {
-          results.push({
-            model,
-            success: true,
-            message: data?.message || t('admin.providers.health.testSuccessful', 'Test successful'),
-            response: data?.response
-          });
-        } else {
-          results.push({
-            model,
-            success: false,
-            message: data?.message || t('admin.providers.health.testFailed', 'Test failed'),
-            error: data?.error || `HTTP ${fetchResponse.status}`
-          });
-        }
+        const data = response?.data || {};
+        results.push({
+          model,
+          success: true,
+          message: data?.message || t('admin.providers.health.testSuccessful', 'Test successful'),
+          response: data?.response
+        });
       } catch (err) {
+        // Server body: { error: headline, details: remediation text, code }
+        const body = err?.response?.data || {};
         results.push({
           model,
           success: false,
-          message: t('admin.providers.health.testFailed', 'Test failed'),
-          error: err.message
+          message: body.error || t('admin.providers.health.testFailed', 'Test failed'),
+          error:
+            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         });
       }
       // Update incrementally so user sees progress
@@ -226,7 +213,7 @@ function AdminProvidersPage() {
       await loadData();
     } catch (err) {
       console.error('Error deleting provider:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 

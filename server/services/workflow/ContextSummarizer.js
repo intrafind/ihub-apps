@@ -14,7 +14,12 @@
  * @module services/workflow/ContextSummarizer
  */
 
-import WorkflowLLMHelper from './WorkflowLLMHelper.js';
+import llmClient from '../loop/LLMClient.js';
+import {
+  microcompactMessages as microcompactShared,
+  compactIfOversized as compactIfOversizedShared,
+  isContextOverflowError as isContextOverflowShared
+} from '../loop/contextCompaction.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -37,12 +42,13 @@ export class ContextSummarizer {
    * @param {Object} options - Configuration options
    * @param {number} [options.thresholdTokens=50000] - Token count threshold that triggers summarization
    * @param {number} [options.keepRecentCount=3] - Number of most recent node results to preserve unchanged
-   * @param {WorkflowLLMHelper} [options.llmHelper] - LLM helper instance (created automatically if omitted)
+   * @param {import('../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used for
+   *   the summarization call (defaults to the shared singleton)
    */
   constructor(options = {}) {
     this.thresholdTokens = options.thresholdTokens || 50000;
     this.keepRecentCount = options.keepRecentCount || 3;
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
   }
 
   /**
@@ -61,34 +67,16 @@ export class ContextSummarizer {
   /**
    * Detect whether an LLM error is a context-window-overflow / prompt-too-long
    * error (the trigger for reactive recovery — Claude Code's reactive-compact
-   * analog). Heuristic across providers: HTTP 413, or a 4xx whose message
-   * mentions context length / token limits.
+   * analog). An `LLMError` carries the classification directly
+   * (`isContextWindowError`); for anything else fall back to the
+   * cross-provider heuristic: HTTP 413, or a 4xx whose message mentions
+   * context length / token limits.
    *
-   * @param {Error|Object} err - Error thrown by the LLM helper
+   * @param {Error|Object} err - Error thrown by the LLM client (or a plain object)
    * @returns {boolean}
    */
   static isContextOverflowError(err) {
-    if (!err) return false;
-    const status = err.status || err.httpStatus;
-    if (status === 413) return true;
-    const haystack = `${err.message || ''} ${err.details || ''} ${err.code || ''}`.toLowerCase();
-    const overflowSignals = [
-      'context length',
-      'context window',
-      'maximum context',
-      'too long',
-      'prompt is too long',
-      'context_length_exceeded',
-      'reduce the length',
-      'too many tokens',
-      'exceeds the maximum'
-    ];
-    const looksLikeOverflow = overflowSignals.some(s => haystack.includes(s));
-    // Only treat 4xx (client-side / request-shape) overflows as recoverable.
-    if (looksLikeOverflow && (status === undefined || (status >= 400 && status < 500))) {
-      return true;
-    }
-    return false;
+    return isContextOverflowShared(err);
   }
 
   /**
@@ -129,29 +117,7 @@ export class ContextSummarizer {
    * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number }}
    */
   microcompactMessages(messages, opts = {}) {
-    const keepRecent = opts.keepRecent ?? 4;
-    const maxChars = opts.maxChars ?? 2000;
-    if (!Array.isArray(messages) || messages.length <= keepRecent) {
-      return { messages, freedChars: 0, collapsed: 0 };
-    }
-    const cutoff = messages.length - keepRecent;
-    let freedChars = 0;
-    let collapsed = 0;
-    const out = messages.map((msg, i) => {
-      if (i >= cutoff) return msg; // keep recent verbatim
-      if (!msg || typeof msg.content !== 'string') return msg;
-      // Only compact bulky tool results / oversized assistant content.
-      const isCompactable = msg.role === 'tool' || msg.role === 'assistant';
-      if (!isCompactable || msg.content.length <= maxChars) return msg;
-      freedChars += msg.content.length;
-      collapsed += 1;
-      const head = msg.content.slice(0, 200).replace(/\s+/g, ' ');
-      return {
-        ...msg,
-        content: `[older ${msg.role} output elided to save context — ${msg.content.length} chars. Preview: ${head}…]`
-      };
-    });
-    return { messages: out, freedChars, collapsed };
+    return microcompactShared(messages, opts);
   }
 
   /**
@@ -174,20 +140,7 @@ export class ContextSummarizer {
    * @returns {{ messages: Array<Object>, freedChars: number, collapsed: number, compacted: boolean }}
    */
   compactIfOversized(messages, opts = {}) {
-    const thresholdTokens = opts.thresholdTokens ?? 16000;
-    const keepRecent = opts.keepRecent ?? 6;
-    const maxChars = opts.maxChars ?? 2000;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return { messages, freedChars: 0, collapsed: 0, compacted: false };
-    }
-    const totalText = messages
-      .map(m => (typeof m?.content === 'string' ? m.content : ''))
-      .join(' ');
-    if (this.estimateTokens(totalText) <= thresholdTokens) {
-      return { messages, freedChars: 0, collapsed: 0, compacted: false };
-    }
-    const result = this.microcompactMessages(messages, { keepRecent, maxChars });
-    return { ...result, compacted: result.collapsed > 0 };
+    return compactIfOversizedShared(messages, opts);
   }
 
   /**
@@ -246,15 +199,8 @@ export class ContextSummarizer {
         return state;
       }
 
-      const apiKeyResult = await this.llmHelper.verifyApiKey(model, context.language || 'en');
-      if (!apiKeyResult.success) {
-        logger.warn({
-          component: 'ContextSummarizer',
-          message: 'API key verification failed, returning original state'
-        });
-        return state;
-      }
-
+      // API-key resolution happens inside LLMClient.complete(); a missing key
+      // throws and is absorbed by the graceful-degradation catch below.
       const messages = [
         {
           role: 'system',
@@ -267,12 +213,18 @@ export class ContextSummarizer {
         }
       ];
 
-      const response = await this.llmHelper.executeStreamingRequest({
+      const response = await this.llmClient.complete({
         model,
         messages,
-        apiKey: apiKeyResult.apiKey,
         options: { temperature: 0.3 },
-        language: context.language || 'en'
+        language: context.language || 'en',
+        signal: context.abortSignal,
+        telemetry: {
+          runId: context.runId || context.executionId || state.executionId,
+          step: context.iteration ?? 0,
+          purpose: 'context-summarizer',
+          refs: { executionId: state.executionId, nodeId: context.nodeId }
+        }
       });
 
       const summary = response.content || '';

@@ -19,6 +19,7 @@ import {
   ArrowUpCircleIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
+import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
@@ -521,6 +522,12 @@ export default function AdminOverview() {
     contentAdminOnly: isContentAdminOnly
   });
 
+  // Runs alongside the dashboard data rather than as part of it: this one
+  // reaches api.github.com, and the page must render before it answers — or not
+  // at all, in deployments without outbound internet access (issue #2150).
+  // Content admins aren't permitted on the endpoint and have no version card.
+  const { updateInfo } = useUpdateCheck({ enabled: !isContentAdminOnly });
+
   const currentLanguage = i18n.language;
   const { titleLight, titleBold, title } = uiConfig?.header ?? {};
   const instanceName =
@@ -581,7 +588,9 @@ export default function AdminOverview() {
         label: t('admin.overview.stats.version', 'Version'),
         icon: TagIcon,
         iconColor: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
-        ...stats.version
+        ...stats.version,
+        updateAvailable: updateInfo?.updateAvailable ?? false,
+        latestVersion: updateInfo?.latestVersion
       }
     ];
   }

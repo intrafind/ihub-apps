@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -159,7 +159,7 @@ function AdminModelEditPage() {
       console.log('Form data set with name:', ensureLocalizedObject(model.name));
       console.log('Form data set with description:', ensureLocalizedObject(model.description));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -266,7 +266,7 @@ function AdminModelEditPage() {
         navigate('/admin/models');
       }, 1500);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       throw err; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);

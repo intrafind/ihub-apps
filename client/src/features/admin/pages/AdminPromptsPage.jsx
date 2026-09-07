@@ -5,7 +5,12 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEditor';
-import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
+import {
+  fetchAdminPrompts,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  togglePrompts
+} from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useFilterState } from '../hooks/useFilterState';
@@ -88,7 +93,7 @@ function AdminPromptsPage() {
       const data = await fetchAdminPrompts();
       setPrompts(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setPrompts([]);
     } finally {
       setLoading(false);
@@ -100,7 +105,7 @@ function AdminPromptsPage() {
       await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, { method: 'POST' });
       await loadPrompts();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -109,7 +114,7 @@ function AdminPromptsPage() {
       await togglePrompts('*', true);
       await loadPrompts();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -118,7 +123,7 @@ function AdminPromptsPage() {
       await togglePrompts('*', false);
       await loadPrompts();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -155,7 +160,7 @@ function AdminPromptsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download prompt config: ${err.message}`);
+      setError(`Failed to download prompt config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -178,12 +183,12 @@ function AdminPromptsPage() {
       await loadPrompts();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Prompt with ID "${promptConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload prompt config: ${err.message}`);
+        setError(`Failed to upload prompt config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);
@@ -579,7 +584,7 @@ function VariablesTabContent() {
       );
     } catch (err) {
       console.error('Error loading platform config:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -603,7 +608,7 @@ function VariablesTabContent() {
       setHasChanges(false);
     } catch (err) {
       console.error('Error saving platform config:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       alert(err.message || 'Failed to save global prompt variables');
     } finally {
       setSaving(false);

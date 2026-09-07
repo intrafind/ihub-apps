@@ -607,8 +607,12 @@ export class DAGScheduler {
     // Find all nodes that are targets of edges
     const targetNodes = new Set(edges.map(e => e.target));
 
-    // Start nodes are those not targeted by any edge
-    const startNodes = nodes.filter(node => !targetNodes.has(node.id)).map(node => node.id);
+    // Start nodes are those not targeted by any edge. Loop-body nodes
+    // (parentId set) are excluded: a body's entry node has no incoming edge
+    // by design and is executed by its loop container, never at top level.
+    const startNodes = nodes
+      .filter(node => !targetNodes.has(node.id) && !node.parentId)
+      .map(node => node.id);
 
     if (startNodes.length === 0 && nodes.length > 0) {
       // If no clear start node, use the first node (for simple linear workflows)
@@ -640,8 +644,12 @@ export class DAGScheduler {
     // Find all nodes that are sources of edges
     const sourceNodes = new Set(edges.map(e => e.source));
 
-    // End nodes are those not the source of any edge
-    const endNodes = nodes.filter(node => !sourceNodes.has(node.id)).map(node => node.id);
+    // End nodes are those not the source of any edge. Loop-body nodes are
+    // excluded for the same reason as in findStartNodes: the body's last
+    // node has no outgoing edge but is not a workflow exit.
+    const endNodes = nodes
+      .filter(node => !sourceNodes.has(node.id) && !node.parentId)
+      .map(node => node.id);
 
     if (endNodes.length === 0 && nodes.length > 0) {
       // If no clear end node, use the last node

@@ -266,7 +266,15 @@ export default function registerAdminAuthRoutes(app) {
         });
       }
 
-      res.json(usersData);
+      const sanitizedUsers = Object.fromEntries(
+        Object.entries(usersData.users || {}).map(([id, user]) => {
+          // eslint-disable-next-line no-unused-vars
+          const { passwordHash, ...userWithoutPasswordHash } = user;
+          return [id, userWithoutPasswordHash];
+        })
+      );
+
+      res.json({ ...usersData, users: sanitizedUsers });
     } catch (error) {
       return sendInternalError(res, error, 'get users');
     }

@@ -3,14 +3,16 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
 function AdminUpdatesPage() {
   const { t } = useTranslation();
   const [versionInfo, setVersionInfo] = useState(null);
   const [versionLoading, setVersionLoading] = useState(true);
   const [versionError, setVersionError] = useState('');
-  const [updateInfo, setUpdateInfo] = useState(null);
-  const [updateCheckLoading, setUpdateCheckLoading] = useState(true);
+  // Independent of the version cards below, which must render even when the
+  // GitHub check never answers (issue #2150).
+  const { updateInfo, setUpdateInfo } = useUpdateCheck();
   const [updateStatus, setUpdateStatus] = useState(null);
   const [updateActionLoading, setUpdateActionLoading] = useState(false);
   const [updateActionMessage, setUpdateActionMessage] = useState('');
@@ -34,20 +36,6 @@ function AdminUpdatesPage() {
       }
     };
     fetchVersionInfo();
-  }, []);
-
-  useEffect(() => {
-    const checkForUpdates = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/version/check-update', { method: 'GET' });
-        setUpdateInfo(response.data);
-      } catch (error) {
-        setUpdateInfo({ updateAvailable: false, error: error.message });
-      } finally {
-        setUpdateCheckLoading(false);
-      }
-    };
-    checkForUpdates();
   }, []);
 
   useEffect(() => {
@@ -279,106 +267,101 @@ function AdminUpdatesPage() {
               </p>
 
               {/* Update Available Banner */}
-              {!updateCheckLoading &&
-                updateInfo &&
-                updateInfo.updateAvailable &&
-                !updateInfo.error && (
-                  <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
-                          {t('admin.system.updateCheckTitle', 'Update Available')}
-                        </h4>
-                        <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                          <p>
-                            {t(
-                              'admin.system.updateAvailable',
-                              'A new version of iHub Apps is available!'
-                            )}
-                          </p>
-                          <div className="mt-2 flex items-center space-x-4">
-                            <span>
-                              <strong>
-                                {t('admin.system.currentVersion', 'Current Version')}:
-                              </strong>{' '}
-                              {updateInfo.currentVersion}
-                            </span>
-                            <span>
-                              <strong>{t('admin.system.latestVersion', 'Latest Version')}:</strong>{' '}
-                              {updateInfo.latestVersion}
-                            </span>
-                          </div>
-                        </div>
-                        {updateStatus?.isContainer && (
-                          <div className="mt-3 text-sm text-green-700 dark:text-green-300">
-                            <Icon
-                              name="information-circle"
-                              size="sm"
-                              className="inline-block mr-1 -mt-0.5"
-                            />
-                            {t(
-                              'admin.system.updateContainerNotice',
-                              'In-place updates are disabled when running in a container. Pull a new container image and restart the container to update.'
-                            )}
-                          </div>
-                        )}
-                        <div className="mt-3 flex items-center space-x-3">
-                          {updateStatus?.isBinary && !updateStatus?.isContainer && (
-                            <button
-                              onClick={handleUpdateNow}
-                              disabled={updateActionLoading}
-                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {updateActionLoading ? (
-                                <svg
-                                  className="animate-spin -ml-0.5 mr-1.5 h-3 w-3"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                  />
-                                  <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                  />
-                                </svg>
-                              ) : (
-                                <Icon name="download" size="sm" className="mr-1.5" />
-                              )}
-                              {t('admin.system.updateNow', 'Update Now')}
-                            </button>
+              {updateInfo && updateInfo.updateAvailable && !updateInfo.error && (
+                <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
+                        {t('admin.system.updateCheckTitle', 'Update Available')}
+                      </h4>
+                      <div className="mt-2 text-sm text-green-700 dark:text-green-300">
+                        <p>
+                          {t(
+                            'admin.system.updateAvailable',
+                            'A new version of iHub Apps is available!'
                           )}
-                          <a
-                            href={updateInfo.releaseUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                          >
-                            <Icon name="external-link" size="sm" className="mr-1.5" />
-                            {t('admin.system.viewRelease', 'View Release on GitHub')}
-                          </a>
+                        </p>
+                        <div className="mt-2 flex items-center space-x-4">
+                          <span>
+                            <strong>{t('admin.system.currentVersion', 'Current Version')}:</strong>{' '}
+                            {updateInfo.currentVersion}
+                          </span>
+                          <span>
+                            <strong>{t('admin.system.latestVersion', 'Latest Version')}:</strong>{' '}
+                            {updateInfo.latestVersion}
+                          </span>
                         </div>
-                        {updateActionMessage && (
-                          <div
-                            className={`mt-2 text-sm ${updateActionMessageType === 'error' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}
-                          >
-                            {updateActionMessage}
-                          </div>
-                        )}
                       </div>
+                      {updateStatus?.isContainer && (
+                        <div className="mt-3 text-sm text-green-700 dark:text-green-300">
+                          <Icon
+                            name="information-circle"
+                            size="sm"
+                            className="inline-block mr-1 -mt-0.5"
+                          />
+                          {t(
+                            'admin.system.updateContainerNotice',
+                            'In-place updates are disabled when running in a container. Pull a new container image and restart the container to update.'
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center space-x-3">
+                        {updateStatus?.isBinary && !updateStatus?.isContainer && (
+                          <button
+                            onClick={handleUpdateNow}
+                            disabled={updateActionLoading}
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {updateActionLoading ? (
+                              <svg
+                                className="animate-spin -ml-0.5 mr-1.5 h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                              </svg>
+                            ) : (
+                              <Icon name="download" size="sm" className="mr-1.5" />
+                            )}
+                            {t('admin.system.updateNow', 'Update Now')}
+                          </button>
+                        )}
+                        <a
+                          href={updateInfo.releaseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        >
+                          <Icon name="external-link" size="sm" className="mr-1.5" />
+                          {t('admin.system.viewRelease', 'View Release on GitHub')}
+                        </a>
+                      </div>
+                      {updateActionMessage && (
+                        <div
+                          className={`mt-2 text-sm ${updateActionMessageType === 'error' ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}
+                        >
+                          {updateActionMessage}
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
               {/* Rollback Banner */}
               {updateStatus?.hasBackup && !updateStatus?.isContainer && !updateActionLoading && (

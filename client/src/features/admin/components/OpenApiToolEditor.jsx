@@ -4,8 +4,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import { listCredentials, parseOpenApiSpec } from '../../../api/adminApi';
-
+import { getAdminApiErrorMessage, listCredentials, parseOpenApiSpec } from '../../../api/adminApi';
 /**
  * Shared input styling. The project does not use @tailwindcss/forms, so a bare
  * border class would render no border width. These classes set an explicit
@@ -46,7 +45,7 @@ export function CredentialRefSelect({ value, onChange, types, label, help, requi
       const list = await listCredentials();
       setCredentials(list);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

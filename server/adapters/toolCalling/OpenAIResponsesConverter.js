@@ -209,28 +209,55 @@ function processAnnotations(contentItem, annotations) {
  */
 export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []) {
   return responsesToolCalls
-    .map((toolCall, index) => {
-      let args = {};
+    .map((toolCall, position) => {
+      const index = Number.isInteger(toolCall.index) ? toolCall.index : position;
+      const name = toolCall.function?.name || '';
+      const rawArgs = toolCall.function?.arguments;
+      const isComplete = toolCall.complete === true;
 
-      // Try to parse arguments if they're a string
-      if (typeof toolCall.function?.arguments === 'string') {
-        try {
-          args = JSON.parse(toolCall.function.arguments);
-        } catch {
-          // If parsing fails, keep as raw string in __raw_arguments for streaming
-          args = { __raw_arguments: toolCall.function.arguments };
-        }
-      } else if (toolCall.function?.arguments) {
-        args = toolCall.function.arguments;
+      // Streaming fragments (`function_call_arguments.delta`) carry no name and a
+      // partial argument string. They must reach the consumer's merge rule
+      // untouched: no name normalization (which would invent `unnamed_tool` and
+      // clobber the real name), no re-serialization of the fragment.
+      if (!name) {
+        const fragment = typeof rawArgs === 'string' ? rawArgs : '';
+        return {
+          id: toolCall.id || null,
+          name: '',
+          arguments: { __raw_arguments: fragment },
+          index,
+          metadata: { originalFormat: 'openai-responses', streaming_chunk: true },
+          function: { name: '', arguments: fragment },
+          ...(isComplete ? { complete: true } : {})
+        };
       }
 
-      return createGenericToolCall(
-        toolCall.id || `call_${index}`,
-        toolCall.function?.name || 'unknown_function',
-        args,
-        index,
-        { originalFormat: 'openai-responses' }
-      );
+      let args = {};
+      if (typeof rawArgs === 'string') {
+        if (rawArgs.trim() === '') {
+          args = {};
+        } else {
+          try {
+            args = JSON.parse(rawArgs);
+          } catch {
+            // If parsing fails, keep as raw string in __raw_arguments for streaming
+            args = { __raw_arguments: rawArgs };
+          }
+        }
+      } else if (rawArgs && typeof rawArgs === 'object') {
+        args = rawArgs;
+      }
+
+      const generic = createGenericToolCall(toolCall.id || `call_${index}`, name, args, index, {
+        originalFormat: 'openai-responses'
+      });
+      if (!generic) return null;
+      if (typeof rawArgs === 'string' && rawArgs.trim() === '') {
+        // An item announced with empty arguments is a placeholder, not `{}`.
+        generic.function.arguments = '';
+      }
+      if (isComplete) generic.complete = true;
+      return generic;
     })
     .filter(tc => tc !== null);
 }
@@ -441,13 +468,16 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
           }
         }
         // Handle function calls
-        else if (item.type === 'function_call' && item.function) {
+        else if (item.type === 'function_call') {
+          // Real Responses API items are flat ({ call_id, name, arguments });
+          // keep accepting the legacy nested `function` shape as well.
           toolCalls.push({
-            id: item.id,
+            id: item.call_id || item.id,
             type: 'function',
+            complete: true,
             function: {
-              name: item.function.name,
-              arguments: item.function.arguments
+              name: item.name ?? item.function?.name ?? '',
+              arguments: item.arguments ?? item.function?.arguments ?? ''
             }
           });
         }

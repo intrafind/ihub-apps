@@ -586,6 +586,7 @@ Ensure the OAuth client is created in iHub and `active: true`. Clients can be ma
 - [OAuth Authorization Code Flow](oauth-authorization-code.md) — full developer reference for the Authorization Code Flow
 - [JWT Well-Known Endpoints](jwt-well-known-endpoints.md) — JWKS and discovery endpoint details, key management
 - [OAuth Integration Guide (Client Credentials)](oauth-integration-guide.md) — machine-to-machine API access
+- [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md) — a concrete consumer: iFinder validates iHub tokens via this JWKS endpoint
 - [External Authentication](external-authentication.md) — iHub authentication modes overview
 
 ---

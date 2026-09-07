@@ -1,4 +1,4 @@
-import { loadGroupsConfiguration } from '../utils/authorization.js';
+import { isAdminEligiblePrincipal, loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -12,6 +12,15 @@ export function contentAdminAuth(req, res, next) {
       return res.status(401).json({
         error: 'Authentication required',
         message: 'You must be logged in to access this resource.'
+      });
+    }
+
+    // Delegated and machine principals (personal API keys, OAuth clients,
+    // agents) never edit content, regardless of the groups they carry.
+    if (!isAdminEligiblePrincipal(req.user)) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Content admin access required.'
       });
     }
 
@@ -62,6 +71,10 @@ export function contentAdminAuth(req, res, next) {
  */
 export function isContentAdminAuthRequired(req) {
   if (!req || !req.user || req.user.id === 'anonymous') {
+    return true;
+  }
+
+  if (!isAdminEligiblePrincipal(req.user)) {
     return true;
   }
 

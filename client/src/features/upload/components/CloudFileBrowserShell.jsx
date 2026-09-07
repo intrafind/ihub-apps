@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessing';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Shared rendering shell for the cloud-storage file pickers
@@ -132,7 +133,9 @@ const CloudFileBrowserShell = ({
 
   const handleConnect = () => {
     const returnUrl = window.location.pathname + window.location.search;
-    const authUrl = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    const authUrl = buildApiUrl(
+      `integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`
+    );
     window.location.href = authUrl;
   };
 

@@ -8,12 +8,10 @@ import StepDetails from '../components/StepDetails';
 import { aggregateTokenUsage, formatTokenCount } from '../utils/tokenStats';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
-import {
-  approveAgentRun,
-  cancelAgentRun,
-  fetchRunArtifacts,
-  resumeAgentRun
-} from '../../../api/agentsAdminApi';
+import { cancelAgentRun, fetchRunArtifacts, resumeAgentRun } from '../../../api/agentsAdminApi';
+import { answerInteraction } from '../../../api';
+import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
+import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -40,7 +38,7 @@ export default function AgentRunDetailPage() {
   // Controls the cancel-run confirmation dialog.
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   // Live-updating clock for the run progress indicator (only ticks while running).
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   // ArtifactViewer modal target: null when closed, artifact name when open.
   const [viewingArtifact, setViewingArtifact] = useState(null);
   // Long ledgers — start collapsed past N entries.
@@ -104,15 +102,18 @@ export default function AgentRunDetailPage() {
     }
   }
 
+  // The checkpoint is the run's pending interaction (checkpoint id ===
+  // interaction id); answering it resumes the run. Approver groups from the
+  // profile are enforced by the server.
   async function handleApprove(response) {
     const checkpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
     if (!checkpoint) return;
     setActionError(null);
     try {
-      await approveAgentRun(runId, { checkpointId: checkpoint.id, response });
+      await answerInteraction(runId, checkpoint.id, { value: response }, { channel: 'run_page' });
       refetch();
     } catch (err) {
-      setActionError(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.error || err?.response?.data?.message || err.message);
     }
   }
 
@@ -943,7 +944,27 @@ export default function AgentRunDetailPage() {
             </div>
           )}
 
-          {isPaused && pendingCheckpoint && (
+          {isPaused && pendingCheckpoint && isQuestionCheckpoint(pendingCheckpoint) && (
+            <div className="mb-6">
+              <HumanCheckpoint
+                key={pendingCheckpoint.id}
+                checkpoint={pendingCheckpoint}
+                displayData={pendingCheckpoint.displayData}
+                onRespond={async ({ checkpointId, response, data, skipped = false }) => {
+                  setActionError(null);
+                  await answerInteraction(
+                    runId,
+                    checkpointId,
+                    skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+                    { channel: 'run_page' }
+                  );
+                  refetch();
+                }}
+              />
+            </div>
+          )}
+
+          {isPaused && pendingCheckpoint && !isQuestionCheckpoint(pendingCheckpoint) && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
               <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
                 ⏸ Awaiting approval

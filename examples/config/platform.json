@@ -80,14 +80,13 @@
     "mode": "oidc",
     "authenticatedGroup": "authenticated",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
-  },
-  "authDebug": {
-    "enabled": true,
-    "consoleLogging": true,
-    "includeRawData": true,
-    "maskTokens": false,
-    "redactPasswords": false
+    "jwtSecret": "${JWT_SECRET}",
+    "debug": {
+      "enabled": true,
+      "includeRawData": true,
+      "maskTokens": false,
+      "redactPasswords": false
+    }
   },
   "anonymousAuth": {
     "enabled": true,

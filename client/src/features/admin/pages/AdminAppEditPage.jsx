@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import AppFormEditor from '../components/AppFormEditor';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
@@ -21,6 +21,7 @@ function AdminAppEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
@@ -224,7 +225,7 @@ function AdminAppEditPage() {
       setApp(appWithDefaults);
       setInitialData(appWithDefaults);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -304,19 +305,20 @@ function AdminAppEditPage() {
 
     // Check validation state
     if (!validationState.isValid) {
-      setError(
+      setSaveError(
         t('admin.apps.edit.validationErrorsExist', 'Please fix validation errors before saving')
       );
       return;
     }
 
     if (!app.id) {
-      setError('App ID is required');
+      setSaveError('App ID is required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = appId === 'new' ? 'POST' : 'PUT';
       const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
 
@@ -331,7 +333,7 @@ function AdminAppEditPage() {
       markSaved();
       navigate('/admin/apps');
     } catch (err) {
-      setError(err.message);
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -458,6 +460,22 @@ function AdminAppEditPage() {
           </div>
         </div>
       </div>
+
+      {saveError && (
+        <div className="mt-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <Icon name="x-circle" className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.apps.errorTitle', 'Error')}
+              </h3>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="mt-8">
         {/* Dual Mode Editor */}

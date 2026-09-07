@@ -68,7 +68,73 @@ export async function scanMigrationFiles(migrationsDir) {
   }
 
   migrations.sort((a, b) => a.version.localeCompare(b.version));
+
+  const fileByVersion = new Map();
+  for (const migration of migrations) {
+    const existing = fileByVersion.get(migration.version);
+    if (existing) {
+      throw new Error(
+        `Duplicate migration version V${migration.version}: ${existing} and ${migration.file} both declare the same version. Each migration must have a unique version number.`
+      );
+    }
+    fileByVersion.set(migration.version, migration.file);
+  }
+
   return migrations;
+}
+
+/**
+ * Historical migration renumberings, keyed by the version/filename a file
+ * used to ship under before it was renumbered to resolve a version collision.
+ * Existing installs may have a history entry recorded under the old
+ * version/file; reconcile it to the new version so it isn't re-applied and
+ * doesn't trigger a spurious checksum mismatch against the file that kept
+ * the original number.
+ */
+const RENAMED_MIGRATIONS = [
+  {
+    oldVersion: '018',
+    oldFile: 'V018__add_setup_configured_flag.js',
+    newVersion: '075',
+    newFile: 'V075__add_setup_configured_flag.js'
+  },
+  {
+    oldVersion: '043',
+    oldFile: 'V043__fix_ifinder_jwt_subject_template.js',
+    newVersion: '076',
+    newFile: 'V076__fix_ifinder_jwt_subject_template.js'
+  },
+  {
+    oldVersion: '073',
+    oldFile: 'V073__seed_voxtral_transcription_model.js',
+    newVersion: '077',
+    newFile: 'V077__seed_voxtral_transcription_model.js'
+  }
+];
+
+/**
+ * Rewrite history entries for migrations that were renumbered to resolve a
+ * duplicate-version collision. Matches on the recorded `file` name (not just
+ * version) so it only touches the entry that actually corresponds to the
+ * renamed file, leaving the sibling that kept its original number untouched.
+ * @param {object} history
+ * @returns {boolean} whether any entry was changed
+ */
+export function reconcileRenamedMigrations(history) {
+  let changed = false;
+  for (const { oldVersion, oldFile, newVersion, newFile } of RENAMED_MIGRATIONS) {
+    const entry = history.migrations.find(m => m.version === oldVersion && m.file === oldFile);
+    if (entry) {
+      entry.version = newVersion;
+      entry.file = newFile;
+      changed = true;
+      logger.info(
+        `Reconciled migration history entry: ${oldFile} (V${oldVersion}) -> ${newFile} (V${newVersion})`,
+        { component: 'Migration' }
+      );
+    }
+  }
+  return changed;
 }
 
 /**
@@ -340,6 +406,14 @@ export async function runConfigMigrations() {
           component: 'Migration'
         });
       }
+    }
+
+    // Reconcile history entries for migrations renumbered to resolve a
+    // duplicate-version collision (see RENAMED_MIGRATIONS), before validating
+    // checksums so a renamed file's old history entry doesn't show up as
+    // "removed from disk" or collide with its sibling's checksum.
+    if (reconcileRenamedMigrations(history)) {
+      await saveHistory(contentsDir, history);
     }
 
     // Validate previously applied migrations

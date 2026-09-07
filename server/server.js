@@ -8,7 +8,9 @@ import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 import logger from './utils/logger.js';
-import { startStickyPrimary, attachStickyWorker } from './clusterSticky.js';
+import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
+import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+import { registerConfigReloadHooks } from './configReloadHooks.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -27,11 +29,17 @@ import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
+import registerOAuthRegisterRoutes from './routes/oauthRegister.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerMcpServerRoutes from './routes/mcpServer.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
+import registerRunRoutes from './routes/runs.js';
+import runLog from './services/loop/RunLog.js';
+import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
+import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
+import interactionService from './services/loop/InteractionService.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -48,6 +56,7 @@ import nextcloudRoutes from './routes/integrations/nextcloud.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
+import personalApiKeyRoutes from './routes/integrations/personalApiKeys.js';
 import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
 import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
@@ -57,7 +66,6 @@ import { setupMiddleware } from './middleware/setup.js';
 import {
   getLocalizedError,
   validateApiKeys,
-  verifyApiKey,
   processMessageTemplates,
   cleanupInactiveClients
 } from './serverHelpers.js';
@@ -77,26 +85,149 @@ dotenv.config();
 
 import config from './config.js';
 
+// Process-level safety net. Without these, a rejected promise with no local
+// `.catch` (or an exception thrown outside Express's synchronous error
+// handling) tears the process down with nothing written to the application log,
+// leaving no trace of what actually failed.
+process.on('unhandledRejection', reason => {
+  logger.error({
+    component: 'Server',
+    message: 'Unhandled promise rejection',
+    error: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+    pid: process.pid
+  });
+});
+
+process.on('uncaughtException', error => {
+  logger.error({
+    component: 'Server',
+    message: 'Uncaught exception, exiting',
+    error: error?.message ?? String(error),
+    stack: error?.stack,
+    pid: process.pid
+  });
+  // The process is in an undefined state now; exit rather than keep serving
+  // requests from a possibly corrupted worker. Under clustering the primary's
+  // `exit` handler respawns it (see the `cluster.on('exit', ...)` below).
+  //
+  // The short delay gives winston's file transport a chance to flush; whether a
+  // same-tick exit truncates the entry depends on the write stream's state, and
+  // losing the one line that explains the crash is the worst possible outcome.
+  setTimeout(() => process.exit(1), 100);
+});
+
 // ----- Cluster setup -----
 const workerCount = config.WORKERS;
+
+// Connection routing. By default the workers share the listening socket and
+// Node's round-robin scheduler spreads connections evenly; per-chat state that
+// ends up on the "wrong" worker is relayed over the cluster bus
+// (`server/clusterBus.js`). STICKY_SESSIONS=true restores the old router, which
+// pins each client to one worker by hashing its TCP peer address — correct only
+// when clients reach iHub directly, since a proxy gives every request the same
+// peer address and collapses the cluster onto one worker.
+const stickyRouting = config.STICKY_SESSIONS === true;
+
+/**
+ * Seed contents/ from server/defaults and apply the versioned config
+ * migrations. Runs EXACTLY ONCE per server start, before anything reads
+ * config: in cluster mode the primary awaits this before forking, otherwise
+ * the single process does it itself.
+ *
+ * Both steps mutate the same files, so they must never run concurrently.
+ * Every worker used to call them independently, which raced: the losers of
+ * the .migration-lock race logged "Configuration migration failed" at error
+ * level, and performInitialSetup had several workers copying the same default
+ * files at once. Doing it before the fork also guarantees the ordering the
+ * workers actually need - migrations complete before any worker loads
+ * platform.json - which a "only slot 0 does it" gate could not provide.
+ */
+async function prepareContents() {
+  try {
+    await performInitialSetup();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Failed to perform initial setup',
+      error: error.message,
+      stack: error.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but may not function properly without configuration files'
+    });
+  }
+
+  try {
+    await runConfigMigrations();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Configuration migration failed',
+      error: error.message,
+      stack: error.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but configuration may be outdated'
+    });
+  }
+}
 
 if (cluster.isPrimary && workerCount > 1) {
   logger.info({
     component: 'Server',
     message: `Primary process ${process.pid} starting ${workerCount} workers`,
     pid: process.pid,
-    workerCount
+    workerCount,
+    routing: stickyRouting ? 'sticky-ip-hash' : 'round-robin'
   });
 
-  // Track live workers so the sticky router can pick a healthy one on each
-  // incoming connection. Dead entries are replaced in the `exit` handler.
+  // Track live workers so the bus (and, in sticky mode, the router) can reach
+  // them. Dead entries are replaced in the `exit` handler.
   const workers = [];
+
+  // Set once a shutdown signal arrives, so the `exit` handler below stops
+  // replacing workers. Without it the handler respawned the very workers the
+  // shutdown had just killed, the cluster resurrected itself and kept serving
+  // until the primary force-exited 5s later — so `docker stop` / a Kubernetes
+  // rollout sat out its whole grace period and in-flight requests were cut by
+  // the hard exit instead of being drained.
+  let shuttingDown = false;
+
+  // Seed contents/ and migrate BEFORE any worker exists, so the workers never
+  // race each other over the same config files (see prepareContents).
+  await prepareContents();
+
+  // Start the repeater before forking so a worker's first presence
+  // announcement — sent as soon as its module graph loads — is never dropped.
+  initPrimaryBus({ getWorkers: () => workers });
+
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
     workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
   }
 
   cluster.on('exit', (worker, code, signal) => {
     const slot = workers.findIndex(w => w === worker);
+    if (shuttingDown) {
+      logger.info({
+        component: 'Server',
+        message: `Worker ${worker.process.pid} exited during shutdown`,
+        workerPid: worker.process.pid,
+        code,
+        signal,
+        slot
+      });
+      if (workers.every(w => w.isDead())) {
+        logger.info({
+          component: 'Server',
+          message: 'All workers exited, primary shutting down'
+        });
+        process.exit(0);
+      }
+      return;
+    }
     logger.warn({
       component: 'Server',
       message: `Worker ${worker.process.pid} exited (${code || signal}), respawning`,
@@ -113,42 +244,63 @@ if (cluster.isPrimary && workerCount > 1) {
     }
   });
 
-  // Primary owns the public listening socket and hands each connection to a
-  // worker by hashing the client's remote address. This keeps every chat
-  // session pinned to one worker so in-memory SSE state stays consistent.
-  startStickyPrimary({
-    getWorkers: () => workers,
-    port: config.PORT,
-    host: config.HOST,
-    onListening: () => {
+  const logAccessUrls = () => {
+    if (config.HOST === '0.0.0.0' || config.HOST === '::') {
       logger.info({
         component: 'Server',
-        message: 'Sticky cluster primary listening',
-        host: config.HOST,
-        port: config.PORT,
-        workerCount
+        message: 'Access the application at one of these URLs:',
+        urls: [
+          `http://localhost:${config.PORT}`,
+          `http://127.0.0.1:${config.PORT}`,
+          "(or use your machine's hostname/IP address)"
+        ]
       });
-      if (config.HOST === '0.0.0.0' || config.HOST === '::') {
-        logger.info({
-          component: 'Server',
-          message: 'Access the application at one of these URLs:',
-          urls: [
-            `http://localhost:${config.PORT}`,
-            `http://127.0.0.1:${config.PORT}`,
-            "(or use your machine's hostname/IP address)"
-          ]
-        });
-      } else {
-        logger.info({
-          component: 'Server',
-          message: 'Access the application at',
-          url: `http://${config.HOST}:${config.PORT}`
-        });
-      }
+    } else {
+      logger.info({
+        component: 'Server',
+        message: 'Access the application at',
+        url: `http://${config.HOST}:${config.PORT}`
+      });
     }
-  });
+  };
+
+  if (stickyRouting) {
+    // Primary owns the public listening socket and hands each connection to a
+    // worker by hashing the client's remote address.
+    startStickyPrimary({
+      getWorkers: () => workers,
+      port: config.PORT,
+      host: config.HOST,
+      onListening: () => {
+        logger.info({
+          component: 'Server',
+          message: 'Sticky cluster primary listening',
+          host: config.HOST,
+          port: config.PORT,
+          workerCount
+        });
+        logStickyRoutingCaveat(workerCount);
+        logAccessUrls();
+      }
+    });
+  } else {
+    // Workers bind the shared socket themselves and Node's round-robin
+    // scheduler hands each new connection to the next one. The primary keeps
+    // only the bus, so it stays idle enough to relay cross-worker chat traffic.
+    logger.info({
+      component: 'Server',
+      message: 'Cluster using round-robin connection scheduling; workers bind the port directly',
+      host: config.HOST,
+      port: config.PORT,
+      workerCount
+    });
+    logAccessUrls();
+  }
 
   const handlePrimaryShutdown = signal => {
+    // A second signal while the first is in flight must not re-kill workers.
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info({
       component: 'Server',
       message: `Primary received ${signal}, shutting down workers`,
@@ -167,6 +319,11 @@ if (cluster.isPrimary && workerCount > 1) {
   process.on('SIGTERM', () => handlePrimaryShutdown('SIGTERM'));
   process.on('SIGINT', () => handlePrimaryShutdown('SIGINT'));
 } else {
+  // Join the cross-worker bus before anything can register per-chat state, so
+  // no SSE stream is ever invisible to the rest of the cluster. No-op when this
+  // process is not a cluster worker.
+  initWorkerBus();
+
   // Determine if we're running from a packaged binary
   // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
   const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
@@ -199,36 +356,10 @@ if (cluster.isPrimary && workerCount > 1) {
     contentsDir
   });
 
-  // Perform initial setup if contents directory is empty
-  try {
-    await performInitialSetup();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Failed to perform initial setup',
-      error: error.message,
-      stack: error.stack
-    });
-    logger.warn({
-      component: 'Server',
-      message: 'Server will continue, but may not function properly without configuration files'
-    });
-  }
-
-  // Run versioned configuration migrations
-  try {
-    await runConfigMigrations();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Configuration migration failed',
-      error: error.message,
-      stack: error.stack
-    });
-    logger.warn({
-      component: 'Server',
-      message: 'Server will continue, but configuration may be outdated'
-    });
+  // Seed contents/ and migrate. A cluster worker skips this: its primary
+  // already did it before forking, and running it here would race the siblings.
+  if (!cluster.isWorker) {
+    await prepareContents();
   }
 
   // Load platform configuration and initialize telemetry
@@ -321,6 +452,11 @@ if (cluster.isPrimary && workerCount > 1) {
       message: 'Server will continue with file-based configuration loading'
     });
   }
+
+  // Follow config changes announced by other workers into the subsystems that
+  // keep their own derived state (logger, telemetry, MCP clients). Registered
+  // after the cache is loaded so each watcher's baseline is the current config.
+  registerConfigReloadHooks();
 
   // Log proxy configuration if configured
   try {
@@ -451,6 +587,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerAuthRoutes(app);
   registerOAuthRoutes(app);
   registerOAuthAuthorizeRoutes(app);
+  registerOAuthRegisterRoutes(app);
   registerWellKnownRoutes(app);
   registerMcpServerRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
@@ -462,7 +599,6 @@ if (cluster.isPrimary && workerCount > 1) {
   registerAppSessionStartRoute(app);
   registerMagicPromptRoutes(app);
   registerChatRoutes(app, {
-    verifyApiKey,
     processMessageTemplates,
     getLocalizedError,
     DEFAULT_TIMEOUT
@@ -474,6 +610,20 @@ if (cluster.isPrimary && workerCount > 1) {
   registerWorkflowRoutes(app, { getLocalizedError });
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
+  registerRunRoutes(app);
+  // An answered workflow checkpoint resumes its execution (one answer endpoint);
+  // overdue interactions expire on a sweep (an expired checkpoint fails its run).
+  registerCheckpointResume();
+  // A chat clarification that is settled (answered, superseded or expired)
+  // ends the run its question paused.
+  registerChatClarificationLifecycle();
+  // Process-wide singletons run once per cluster: on the worker in slot 0
+  // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never reused).
+  const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
+  if (ownsClusterSingletons) {
+    interactionService.startExpirySweep();
+    runLog.startCleanupScheduler();
+  }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
 
@@ -486,6 +636,7 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
   app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
   app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes);
+  app.use(buildApiPath('/integrations/api-keys'), personalApiKeyRoutes);
   app.use(buildApiPath('/integrations/nextcloud-embed'), nextcloudEmbedRoutes);
 
   // --- Session Management handled in sessionRoutes ---
@@ -565,7 +716,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // needed.
   attachRealtimeTranscription(server);
 
-  if (cluster.isWorker) {
+  if (cluster.isWorker && stickyRouting) {
     // Inside a sticky cluster the primary owns the public port; this worker
     // only receives already-accepted connections via IPC.
     attachStickyWorker(server);
@@ -576,7 +727,10 @@ if (cluster.isPrimary && workerCount > 1) {
       workerIndex: process.env.WORKER_INDEX ?? 'unknown'
     });
   } else {
-    // Single-process mode (WORKERS=1): bind the port directly.
+    // Single-process mode (WORKERS=1), or a round-robin cluster worker: bind
+    // the port directly. In the cluster case `listen` goes through the cluster
+    // module, which shares the primary's socket rather than opening a second
+    // one, so all workers can use the same port.
     server.listen(PORT, HOST, () => {
       const protocol = server instanceof https.Server ? 'https' : 'http';
 

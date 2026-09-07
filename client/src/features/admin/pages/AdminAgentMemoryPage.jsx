@@ -7,7 +7,7 @@ import {
   fetchMemoryShaperPrompt,
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
-import { fetchAdminTools } from '../../../api/adminApi';
+import { fetchAdminTools, getAdminApiErrorMessage } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentMemoryPage() {
@@ -43,7 +43,7 @@ export default function AdminAgentMemoryPage() {
         setVersion(data.version || 0);
         setUpdatedAt(data.updatedAt || null);
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -178,7 +178,7 @@ export default function AdminAgentMemoryPage() {
           )
         );
       } else {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       }
     } finally {
       setSaving(false);

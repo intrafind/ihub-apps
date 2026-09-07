@@ -1,5 +1,13 @@
 # iFinder JWT Key Generation Guide
 
+> **Prefer the keyless approach.** You only need this guide if you are running
+> the legacy **manual key-exchange** setup. The recommended way to connect iHub
+> to iFinder is to reuse iHub's OIDC signing key and let iFinder fetch the public
+> key from iHub's JWKS endpoint — no key generation and no key exchange. See
+> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). Continue
+> below only if you specifically need to sign iFinder tokens with a dedicated,
+> manually managed RSA key pair.
+
 This guide provides step-by-step instructions for generating RSA public-private key pairs using OpenSSL for JWT authentication with iFinder integration.
 
 ## Overview

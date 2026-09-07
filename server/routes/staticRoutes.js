@@ -111,10 +111,12 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
 
     // Catch-all for SPA routing (but exclude API and docs paths)
     // Register under basePath if configured, otherwise at root
+    // Express 5 (path-to-regexp v8) requires named wildcards; {*splat} also
+    // matches the bare prefix/root path like the old '*' did.
     if (basePath) {
-      app.get(`${basePath}/*`, spaHandler);
+      app.get(`${basePath}/{*splat}`, spaHandler);
     } else {
-      app.get('*', spaHandler);
+      app.get('/{*splat}', spaHandler);
     }
   } else {
     logger.info('Development mode: SPA routing handled by Vite on port 5173', {

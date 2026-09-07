@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useSyncExternalStore, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
@@ -13,7 +13,7 @@ const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = lazyWithRetry(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
-// Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
+// Lazy load canvas (pulls in react-quill-new/ajv — vendor-forms chunk, ~370KB)
 const AppCanvas = lazyWithRetry(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -223,13 +223,19 @@ function LazyAdminRoute({ component: Component }) {
  * as a fast-path so navigation back to '/' doesn't re-trigger the redirect before the
  * refreshed platform config arrives.
  */
+// sessionStorage emits no change events, so subscribing is a no-op; each render
+// re-reads the current value — same semantics as a direct read, but pure.
+const subscribeToNothing = () => () => {};
+const useSessionFlag = key =>
+  useSyncExternalStore(subscribeToNothing, () => !!sessionStorage.getItem(key));
+
 function SetupCheck({ children }) {
   const navigate = useNavigate();
   const { platformConfig, isLoading: platformLoading } = usePlatformConfig();
   // User deliberately chose "Skip" this session — don't redirect again until next session
-  const sessionSkipped = !!sessionStorage.getItem('setup_skipped');
+  const sessionSkipped = useSessionFlag('setup_skipped');
   // Fast-path: wizard just completed in this session
-  const sessionConfigured = !!sessionStorage.getItem('setup_configured');
+  const sessionConfigured = useSessionFlag('setup_configured');
 
   // Derive setup state: null = still loading, true/false = known
   const setupConfigured =

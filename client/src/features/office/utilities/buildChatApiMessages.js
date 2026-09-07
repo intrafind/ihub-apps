@@ -1,4 +1,4 @@
-import { processDocumentFile } from '../../upload/utils/fileProcessing';
+import { processDocumentFile, resizeImageCanvas } from '../../upload/utils/fileProcessing';
 import { sanitizeContentType, hasBase64Content } from './attachmentFormat';
 import { parseEmlAttachment, parseIcsAttachment } from './emailAttachmentParsers';
 
@@ -9,11 +9,11 @@ export function createUserMessageId() {
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
-// Match ImageUploader: cap at 1024px and re-encode as JPEG at 80% quality.
-// Phone-camera JPGs embedded in emails can be 4–5 MB which exceeds the
-// per-image limits on some vision models (e.g. Anthropic 5 MB). Without
-// this normalization those messages silently fail on the provider side
-// — see issue #1467.
+// Cap at 1024px and re-encode as JPEG at 80% quality via the shared
+// resizeImageCanvas primitive. Phone-camera JPGs embedded in emails can be
+// 4–5 MB which exceeds the per-image limits on some vision models (e.g.
+// Anthropic 5 MB). Without this normalization those messages silently fail
+// on the provider side — see issue #1467.
 const IMAGE_MAX_DIMENSION = 1024;
 const IMAGE_REENCODE_QUALITY = 0.8;
 
@@ -65,23 +65,7 @@ async function resizeImageBase64(base64Content, contentType, maxDimension) {
       return { base64: base64Content, contentType };
     }
 
-    let width;
-    let height;
-    if (w0 >= h0) {
-      width = maxDimension;
-      height = Math.round((h0 * maxDimension) / w0);
-    } else {
-      height = maxDimension;
-      width = Math.round((w0 * maxDimension) / h0);
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return { base64: base64Content, contentType };
-    ctx.drawImage(img, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', IMAGE_REENCODE_QUALITY);
+    const { dataUrl } = resizeImageCanvas(img, maxDimension, IMAGE_REENCODE_QUALITY);
     const newBase64 = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
     return { base64: newBase64, contentType: 'image/jpeg' };
   } catch {
