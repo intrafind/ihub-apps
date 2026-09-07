@@ -618,7 +618,12 @@ function AppsList() {
                       aria-pressed={isFav}
                       aria-label={favLabel}
                       title={favLabel}
-                      className="relative z-10 w-8 h-8 flex-none flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
+                      className={`relative z-10 w-8 h-8 flex-none flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all ${
+                        // Keep the star discoverable on touch devices, where hover never fires.
+                        isFav
+                          ? 'opacity-100'
+                          : 'opacity-50 group-hover:opacity-100 focus:opacity-100'
+                      }`}
                     >
                       <Icon
                         name="star"

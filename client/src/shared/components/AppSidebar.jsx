@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
@@ -83,8 +83,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const [search, setSearch] = useState('');
   const [appsOpen, setAppsOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
+  const drawerRef = useRef(null);
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
+  // Same gate as the /prompts route in App.jsx.
+  const promptsEnabled =
+    uiConfig?.promptsList?.enabled !== false && featureFlags.isEnabled('promptsLibrary', true);
 
   // Navigate and close the mobile drawer (no-op on desktop).
   const go = useCallback(
@@ -95,14 +99,44 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     [navigate, onMobileClose]
   );
 
-  // Close the mobile drawer on Escape.
+  // Mobile drawer is a modal dialog: move focus into it, keep Tab inside,
+  // close on Escape, lock page scroll, and hand focus back when it closes.
   useEffect(() => {
     if (!mobileOpen) return;
+    const opener = document.activeElement;
+    const focusables = () =>
+      Array.from(
+        drawerRef.current?.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      ).filter(el => el.offsetParent !== null);
+    focusables()[0]?.focus();
     const onKey = e => {
-      if (e.key === 'Escape') onMobileClose();
+      if (e.key === 'Escape') {
+        onMobileClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    };
   }, [mobileOpen, onMobileClose]);
 
   const toggleCollapsed = useCallback(() => {
@@ -179,11 +213,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     return links.filter(link => {
       if (!link?.url) return false;
       if (link.url === '/' || link.url === '/apps') return false;
+      if (link.url.startsWith('/prompts') && !promptsEnabled) return false;
       const featureId = FEATURE_ROUTES[link.url];
       if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
       return canAccessLink(link, { uiConfig, isAuthenticated, user });
     });
-  }, [uiConfig, featureFlags, isAuthenticated, user]);
+  }, [uiConfig, featureFlags, isAuthenticated, user, promptsEnabled]);
 
   const headerTitle = useMemo(() => {
     if (uiConfig?.header?.titleLight || uiConfig?.header?.titleBold) {
@@ -290,7 +325,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         <Icon name="home" size="md" />
       </button>
 
-      {featureFlags.isEnabled('promptsLibrary', true) && (
+      {promptsEnabled && (
         <button
           title={t('sidebar.prompts', 'Prompts')}
           aria-label={t('sidebar.prompts', 'Prompts')}
@@ -607,13 +642,19 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40" role="dialog" aria-modal="true">
+        <div
+          className="md:hidden fixed inset-0 z-40"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('sidebar.navigation', 'Navigation')}
+        >
           <div
             className="absolute inset-0 bg-black/50"
             onClick={onMobileClose}
             aria-hidden="true"
           />
           <aside
+            ref={drawerRef}
             className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
             aria-label={t('sidebar.navigation', 'Navigation')}
           >

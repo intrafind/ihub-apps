@@ -30,7 +30,7 @@ export default function StartPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { user } = useAuth();
-  const { uiConfig } = useUIConfig();
+  const { uiConfig, resetHeaderColor } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
@@ -47,6 +47,11 @@ export default function StartPage() {
   const fileUploadHandler = useFileUploadHandler();
 
   const chatHistoryEnabled = featureFlags.isEnabled('chatHistory', false);
+
+  // Leaving an app for "/" must not keep that app's colour on the classic header.
+  useEffect(() => {
+    resetHeaderColor();
+  }, [resetHeaderColor]);
 
   // Admins can hide the start-page chat input entirely.
   const showDefaultApp = uiConfig?.startPage?.showDefaultApp !== false;
