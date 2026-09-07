@@ -495,18 +495,20 @@ export function AuthProvider({ children }) {
 
   // Logout with comprehensive cleanup
   const logout = async () => {
+    let oidcLogoutRequired = false;
     try {
       console.log('🔒 LOGOUT: Redirecting to logout page to prevent auto-redirect');
 
       // Call logout API if authenticated
       if (state.isAuthenticated) {
-        await apiClient.post(
+        const response = await apiClient.post(
           '/auth/logout',
           {},
           {
             headers: getAuthHeaders()
           }
         );
+        oidcLogoutRequired = response?.data?.oidcLogoutRequired === true;
       }
     } catch (error) {
       console.error('Logout API error:', error);
@@ -515,9 +517,15 @@ export function AuthProvider({ children }) {
       await performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
 
+      // If authenticated via OIDC, first end the session at the provider too
+      // (RP-Initiated Logout) before landing back home - otherwise the IdP's
+      // SSO session stays active and the next login silently re-authenticates
+      // without a login prompt. See GET /api/auth/oidc-logout.
       // Redirect to apps home page with logout parameter to prevent auto redirect
       // This ensures users don't remain on admin or other protected pages after logout
-      window.location.href = buildPath('/?logout=true');
+      window.location.href = oidcLogoutRequired
+        ? buildApiUrl('auth/oidc-logout')
+        : buildPath('/?logout=true');
     }
   };
 

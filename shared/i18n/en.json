@@ -692,6 +692,11 @@
       "callbackURLOptional": "(Optional - Auto-generated if empty)",
       "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
       "callbackURLHelp": "Leave empty to auto-generate. Override for custom domains or subpath deployments.",
+      "endSessionURL": "End Session URL",
+      "endSessionURLOptional": "(Optional - enables full logout at the provider)",
+      "endSessionURLPlaceholder": "https://auth.example.com/oidc/logout",
+      "endSessionURLHelp": "Also ends the session at the provider on logout, so the next login can't silently reuse it. Leave empty for local logout only.",
+      "endSessionURLRegisterHint": "Register {{url}} at the provider as a valid post-logout redirect URI, or logout will fail there.",
       "oauth": {
         "title": "OAuth Clients",
         "subtitle": "Manage OAuth 2.0 clients for external API access",

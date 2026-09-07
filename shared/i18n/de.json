@@ -949,6 +949,11 @@
       "callbackURLOptional": "(Optional - Wird automatisch generiert, wenn leer)",
       "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
       "callbackURLHelp": "Leer lassen für automatische Generierung. Überschreiben für benutzerdefinierte Domains oder Subpfad-Deployments.",
+      "endSessionURL": "End-Session-URL",
+      "endSessionURLOptional": "(Optional - aktiviert vollständiges Logout beim Anbieter)",
+      "endSessionURLPlaceholder": "https://auth.example.com/oidc/logout",
+      "endSessionURLHelp": "Beendet beim Logout zusätzlich die Sitzung beim Anbieter, damit die nächste Anmeldung sie nicht still weiterverwendet. Leer lassen für rein lokales Logout.",
+      "endSessionURLRegisterHint": "Tragen Sie {{url}} beim Anbieter als gültige Post-Logout-Redirect-URI ein, sonst schlägt das Logout dort fehl.",
       "oauth": {
         "title": "OAuth-Clients",
         "subtitle": "OAuth 2.0-Clients für externen API-Zugriff verwalten",
