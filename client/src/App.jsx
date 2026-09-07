@@ -186,6 +186,23 @@ function useIsTeamsEnvironment() {
   return isTeams;
 }
 
+// Chat-history preview page. Feature-flag gating has to happen INSIDE the
+// providers: App() renders above <AppProviders>, so hooks called there only
+// ever see the default (empty, still-loading) platform config and a route
+// conditionally rendered from App() could never turn on. Deciding in the
+// element also avoids flashing the 404 page while the config is loading.
+function ChatHistoryRoute() {
+  const { isLoading } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
+  if (isLoading) return <AdminLoading />;
+  if (!featureFlags.isEnabled('chatHistoryPreview', false)) return <NotFound />;
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <ChatHistoryPage />
+    </Suspense>
+  );
+}
+
 // Loading component for lazy-loaded admin components
 function AdminLoading() {
   return (
@@ -355,16 +372,9 @@ function App() {
           {/* Apps browser — full list with search/filter */}
           <Route path="apps" element={<SafeAppsList />} />
           {/* Chat history page — feature-flagged, uses mock data */}
-          {featureFlags.isEnabled('chatHistoryPreview', false) && (
-            <Route
-              path="chats"
-              element={
-                <Suspense fallback={<AdminLoading />}>
-                  <ChatHistoryPage />
-                </Suspense>
-              }
-            />
-          )}
+          {/* Chat history preview — the element gates on the feature flag (see
+              ChatHistoryRoute); the route itself is always registered. */}
+          <Route path="chats" element={<ChatHistoryRoute />} />
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />

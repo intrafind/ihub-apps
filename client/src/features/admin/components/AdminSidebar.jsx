@@ -371,7 +371,7 @@ export default function AdminSidebar({ onMobileToggle }) {
       {/* Desktop sidebar */}
       <aside
         className={`hidden md:flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 transition-all duration-200 shrink-0 ${
-          isCollapsed ? 'w-[72px]' : 'w-[284px]'
+          isCollapsed ? 'w-18' : 'w-71'
         }`}
       >
         <nav

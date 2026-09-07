@@ -125,7 +125,7 @@ function LanguageSelector({ variant = 'header' }) {
             ref={menuRef}
             role="menu"
             aria-label={t('common.selectLanguage', 'Select language')}
-            className="absolute bottom-full right-0 mb-2 min-w-[8rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
+            className="absolute bottom-full right-0 mb-2 min-w-32 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
           >
             {availableLanguages.map(lang => (
               <li key={lang.code} role="none">

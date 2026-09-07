@@ -118,7 +118,7 @@ export default function ChatHistoryPage() {
 
         {/* Search + grouping */}
         <div className="flex gap-3 mb-6 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-50">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
               <Icon name="search" size="sm" />
             </span>

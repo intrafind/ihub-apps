@@ -301,7 +301,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // ---- Collapsed rail (desktop only) ----
   const rail = (
     <aside
-      className="hidden md:flex w-[72px] flex-none flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
+      className="hidden md:flex w-18 flex-none flex-col items-center gap-1.5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
       aria-label={sidebarLabel}
     >
       <Link
@@ -368,6 +368,36 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           </Link>
         )}
 
+        {configuredLinks.map(link => {
+          const label = getLocalizedContent(link.name, currentLanguage) || link.url;
+          const isExternal = /^https?:\/\//.test(link.url) || link.url.startsWith('mailto:');
+          const active = !isExternal && isActivePath(location.pathname, link.url);
+          return isExternal ? (
+            <a
+              key={link.url}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={label}
+              aria-label={label}
+              className={railItemClass(false)}
+            >
+              <Icon name={linkIconFor(link.url)} size="md" />
+            </a>
+          ) : (
+            <Link
+              key={link.url}
+              to={link.url}
+              title={label}
+              aria-label={label}
+              aria-current={active ? 'page' : undefined}
+              className={railItemClass(active)}
+            >
+              <Icon name={linkIconFor(link.url)} size="md" />
+            </Link>
+          );
+        })}
+
         <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" aria-hidden="true" />
 
         {apps
@@ -392,6 +422,9 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
       <div className="flex-1" />
 
+      {uiConfig?.header?.languageSelector?.enabled !== false && (
+        <LanguageSelector variant="sidebar" />
+      )}
       <DarkModeToggle variant="sidebar" className="mb-1" />
       <UserAuthMenu variant="sidebar" collapsed className="flex justify-center" />
     </aside>
@@ -530,7 +563,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                   : appsError && apps.length === 0
                     ? t('sidebar.appsUnavailable', 'Apps could not be loaded')
                     : apps.length === 0
-                      ? t('sidebar.noApps', 'No apps available')
+                      ? getLocalizedContent(uiConfig?.errorPages?.noApps?.title, currentLanguage) ||
+                        t('sidebar.noApps', 'No apps available')
                       : t('sidebar.noAppsMatch', 'No apps match')}
               </p>
             )}
@@ -666,7 +700,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           rail
         ) : (
           <aside
-            className="hidden md:flex w-[284px] flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
+            className="hidden md:flex w-71 flex-none flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
             aria-label={sidebarLabel}
           >
             {expandedContent}
@@ -688,7 +722,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           />
           <aside
             ref={drawerRef}
-            className="absolute inset-y-0 left-0 w-[284px] max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
+            className="absolute inset-y-0 left-0 w-71 max-w-[85vw] flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-xl"
             aria-label={sidebarLabel}
           >
             {expandedContent}

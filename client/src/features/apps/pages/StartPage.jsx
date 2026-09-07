@@ -93,14 +93,16 @@ export default function StartPage() {
   );
 
   // Default app: admin-configured via uiConfig.startPage.defaultAppId; when it
-  // is unset or not accessible to this user, the top-ranked app.
+  // is unset or not accessible to this user, the top-ranked app. Only chat
+  // apps qualify — an iframe/redirect app has no chat to send the message to.
+  const isChatApp = app => (app?.type || 'chat') === 'chat';
   const defaultApp = useMemo(() => {
     const defaultId = uiConfig?.startPage?.defaultAppId;
     if (defaultId) {
       const found = apps.find(a => a.id === defaultId);
-      if (found) return found;
+      if (found && isChatApp(found)) return found;
     }
-    return rankedApps[0] || null;
+    return rankedApps.find(isChatApp) || null;
   }, [apps, rankedApps, uiConfig]);
 
   // Load the full default-app config so the chat input renders exactly what the
@@ -313,7 +315,9 @@ export default function StartPage() {
           <p role="status" className="text-center text-sm text-gray-500 dark:text-gray-400 mb-8">
             {appsError
               ? t('startPage.appsUnavailable', 'Apps could not be loaded. Please try again later.')
-              : t('startPage.noApps', 'No apps are available for your account yet.')}
+              : // Admins customise this text under UI Customization → Error Pages.
+                getLocalizedContent(uiConfig?.errorPages?.noApps?.message, currentLanguage) ||
+                t('startPage.noApps', 'No apps are available for your account yet.')}
           </p>
         )}
 

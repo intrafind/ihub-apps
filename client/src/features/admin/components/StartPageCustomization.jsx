@@ -20,7 +20,8 @@ function StartPageCustomization({ config, onUpdate, t }) {
     fetchAdminApps()
       .then(data => {
         const list = Array.isArray(data) ? data : Array.isArray(data?.apps) ? data.apps : [];
-        if (mounted) setApps(list);
+        // The start page needs a chat to send the message to — skip iframe/redirect apps.
+        if (mounted) setApps(list.filter(app => (app.type || 'chat') === 'chat'));
       })
       .catch(() => {})
       .finally(() => {
