@@ -419,6 +419,64 @@ GET /api/auth/status
 
 Returns current authentication configuration and user status.
 
+### Logout
+
+```http
+POST /api/auth/logout
+GET  /api/auth/oidc-logout
+```
+
+`POST /api/auth/logout` always clears iHub's own auth cookie. If the
+provider that authenticated the current session has `endSessionURL`
+configured (see [Logout / RP-Initiated Logout](#logout--rp-initiated-logout)
+below), the response includes `"oidcLogoutRequired": true` and the client
+follows up with a top-level navigation to `GET /api/auth/oidc-logout`, which
+redirects the browser to the provider's own logout endpoint before landing
+back on iHub.
+
+## Logout / RP-Initiated Logout
+
+By default, logging out of iHub only ends iHub's own session - if the OIDC
+provider keeps a browser SSO session active (which is the normal case for
+Keycloak, Entra ID, Auth0, ADFS, etc.), the next login can silently
+re-authenticate the same browser without showing a login form. This matters
+in particular on shared/kiosk devices, where a different person could end up
+signed in as the previous user.
+
+To also end the session at the provider on logout
+([OIDC RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)),
+set the **End Session URL** field on the provider in Admin → Authentication
+(right below Callback URL). It's optional and off by default - not every
+OIDC/OAuth2 provider exposes a standard logout endpoint (Google, for
+example, does not), so this is opt-in per provider rather than assumed.
+Once set, the admin page shows the exact URL to register at the provider
+(see the required step below).
+
+Equivalent `oidcAuth.providers[]` entry (same field, editable directly via
+Admin → Authentication → JSON mode, or in `contents/config/platform.json`):
+
+```json
+{
+  "name": "keycloak",
+  "endSessionURL": "https://your-keycloak-server/realms/your-realm/protocol/openid-connect/logout"
+}
+```
+
+Provider-specific endpoints:
+
+- **Keycloak**: `{issuer}/protocol/openid-connect/logout`
+- **Microsoft Entra ID**: `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/logout`
+- **Auth0**: `https://{domain}/oidc/logout` (the OIDC-compliant endpoint - not
+  the legacy `/v2/logout`)
+- **ADFS**: `https://{adfs-server}/adfs/oauth2/logout`
+- **Google**: not supported - Google has no `end_session_endpoint`
+
+**Required IdP-side step**: the provider must allow-list iHub's redirect
+target. In Keycloak, add your iHub URL (e.g. `https://your-ihub-domain.com/*`)
+to the client's **Valid post logout redirect URIs**. Without this, the
+provider will refuse the redirect back to iHub after logout (iHub's own
+session is still cleared either way - only the redirect back fails).
+
 ## Client Integration
 
 ### Login Form

@@ -17,6 +17,10 @@ const oidcProviderSchema = z.object({
   authorizationURL: z.string().url(),
   tokenURL: z.string().url(),
   userInfoURL: z.string().url(),
+  // RP-Initiated Logout (https://openid.net/specs/openid-connect-rpinitiated-1_0.html).
+  // Optional: when set, /api/auth/logout also ends the session at the provider
+  // instead of only clearing iHub's own auth cookie.
+  endSessionURL: z.string().url().optional(),
   scope: z.array(z.string()).default(['openid', 'profile', 'email']),
   callbackURL: z.string().url().optional(),
   groupsAttribute: z.string().default('groups'),

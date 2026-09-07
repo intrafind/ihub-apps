@@ -346,6 +346,24 @@ under the same sequence number in an append-only log.
 - A worker taking over a run now re-reads the stored log first, so entry numbering always continues
   after the last recorded event.
 
+## Logging Out Now Also Ends the Session at the OIDC Provider
+
+Logging out of iHub only cleared iHub's own cookie. If the OIDC provider (Keycloak, for example)
+kept its own SSO session active in the browser, the next login silently re-authenticated the same
+browser without showing a login prompt. On a shared or kiosk device, the next person to click
+"Log in" could end up signed in as whoever logged out before them.
+
+- Set the new **End Session URL** field on a provider in Admin → Authentication to enable it
+  (RP-Initiated Logout, per the OIDC spec). It's optional and off by default — not every provider
+  exposes a logout endpoint (Google, for example, does not), so nothing changes unless an admin
+  opts in.
+- For Keycloak: `{issuer}/protocol/openid-connect/logout`. See the OIDC Authentication guide for
+  Entra ID, Auth0 and ADFS endpoints.
+- The admin page shows exactly which URL to register at the provider once the field is set.
+- The provider's client must allow-list iHub's URL as a "post logout redirect URI" — in Keycloak,
+  under the client's **Valid post logout redirect URIs** — otherwise the browser isn't sent back
+  to iHub after logging out. iHub's own session is still cleared either way.
+
 ## Mermaid Diagrams Stop Re-Rendering on Every UI Change
 
 Diagrams in a chat answer flickered and rebuilt themselves whenever anything on the page changed —
