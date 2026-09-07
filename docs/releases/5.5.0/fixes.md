@@ -362,6 +362,10 @@ it for a moment before the view went blank.
   previously landed outside the visible area, which looked like an empty viewer.
 - Long chat sessions stay responsive: each re-render used to leave behind a keyboard listener and a
   pan/zoom instance that were never released.
+- Moving the mouse onto a finished answer, or off it again, no longer redraws its diagrams. The
+  rendered answer is now left alone when a message re-renders for an unrelated reason — such as its
+  action row fading in on hover — instead of being rebuilt from the markdown each time.
+
 ## Web Search Reads Pages Again Instead of Answering From Snippets
 
 A web search app answered from the short descriptions in the search result list
