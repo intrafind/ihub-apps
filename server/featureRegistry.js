@@ -160,8 +160,19 @@ export const featureRegistry = [
     id: 'appAsTool',
     name: { en: 'App-as-Tool', de: 'App-als-Tool' },
     description: {
-      en: 'Allow agents to invoke iHub apps as synthetic tools (app__<id>). Requires Agent Factory.',
-      de: 'Agenten erlauben, iHub-Apps als synthetische Tools (app__<id>) aufzurufen. Erfordert Agent Factory.'
+      en: 'Allow apps and agents to invoke other iHub apps as synthetic tools (app__<id>) — e.g. a concierge app delegating to specialist apps.',
+      de: 'Apps und Agenten erlauben, andere iHub-Apps als synthetische Tools (app__<id>) aufzurufen — z. B. eine Concierge-App, die an Spezial-Apps delegiert.'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
+    id: 'runLog',
+    name: { en: 'Run Ledger (RunLog)', de: 'Run-Ledger (RunLog)' },
+    description: {
+      en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
+      de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
     },
     category: 'preview',
     default: false,

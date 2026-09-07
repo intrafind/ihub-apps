@@ -257,6 +257,11 @@ surface reasoning the same way in the UI (a separate "thinking" stream):
 
 - **Google (Gemini):** `thinkingConfig` (Gemini 3 `thinkingLevel`, or Gemini 2.5
   `thinkingBudget`/`includeThoughts`). Reasoning returned in dedicated `thought` parts.
+  Function calls additionally carry a **thought signature** that Gemini 3 requires back in
+  the conversation history; iHub preserves it automatically for in-product chats, workflows
+  and agents. External callers of the
+  [Inference API](openai-compatible-api.md#tool-calling-with-gemini--thought-signatures) must
+  echo it back with the tool call.
 - **OpenAI (`openai`) and OpenAI Responses (`openai-responses`):** map thinking to
   `reasoning_effort` (`minimal`/`low`/`medium`/`high`). True OpenAI reasoning models hide
   their reasoning text, but OpenAI-compatible endpoints (vLLM, DeepSeek, OpenRouter) reached

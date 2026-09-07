@@ -23,9 +23,13 @@ import logger from './logger.js';
  * checking whether this connection is still the current one for `id`.
  */
 export function createSseChannel({ req, res, id, map, component, heartbeatMs = 30000, onClose }) {
+  // No `Connection: keep-alive` here on purpose: it is a hop-by-hop header that
+  // HTTP/1.1 already implies, and RFC 9113 §8.2.2 forbids it in HTTP/2. Proxies
+  // that translate this response to HTTP/2 without stripping it make the stream
+  // malformed, and strict clients (curl/nghttp2, Chromium) kill it with
+  // PROTOCOL_ERROR instead of streaming.
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
   const myEntry = { response: res, lastActivity: new Date() };

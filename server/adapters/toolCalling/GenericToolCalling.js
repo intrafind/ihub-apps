@@ -6,6 +6,8 @@
  * conversion between provider-specific formats and a normalized generic format.
  */
 
+import { getLocalizedString } from '../../utils/localize.js';
+
 /**
  * Generic tool definition format
  * This is our normalized internal format that can represent tools for any provider
@@ -118,7 +120,7 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
     arguments: arguments_ || {},
     index,
     metadata,
-    // Add OpenAI-compatible format for ToolExecutor compatibility
+    // Add OpenAI-compatible format for tool-loop compatibility
     function: {
       name: normalizeToolName(name),
       arguments: functionArguments
@@ -302,7 +304,7 @@ export function sanitizeSchemaForProvider(schema, provider) {
         }
         // Ensure description is a plain string (not a multilingual object)
         if (obj.description && typeof obj.description === 'object') {
-          obj.description = obj.description.en || Object.values(obj.description)[0] || '';
+          obj.description = getLocalizedString(obj.description, 'en');
         }
         delete obj.exclusiveMaximum;
         delete obj.exclusiveMinimum;

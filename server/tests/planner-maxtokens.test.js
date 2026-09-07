@@ -35,11 +35,10 @@ const testModel = {
 };
 configCache.getModels = () => ({ data: [testModel] });
 
-// Fake LLM helper: capture the request options, return a valid minimal plan.
-function makeHelper(capture) {
+// Fake LLM client: capture the request options, return a valid minimal plan.
+function makeClient(capture) {
   return {
-    verifyApiKey: async () => ({ success: true, apiKey: 'test-key' }),
-    executeStreamingRequest: async ({ options }) => {
+    complete: async ({ options }) => {
       capture.options = options;
       return {
         content: JSON.stringify({
@@ -62,7 +61,7 @@ const baseState = () => ({
 console.log('🧪 planner output cap — derives from model.maxOutputTokens, not hardcoded 8192\n');
 {
   const capture = {};
-  const executor = new PlannerNodeExecutor({ llmHelper: makeHelper(capture) });
+  const executor = new PlannerNodeExecutor({ llmClient: makeClient(capture) });
   await executor._generatePlan('Test goal', {}, baseState(), { language: 'en' }, {}, 'planner');
   check(
     'maxTokens passed to LLM equals model.maxOutputTokens (32768)',
@@ -74,7 +73,7 @@ console.log('🧪 planner output cap — derives from model.maxOutputTokens, not
 console.log('\n🧪 planner output cap — explicit config.maxTokens wins over model default\n');
 {
   const capture = {};
-  const executor = new PlannerNodeExecutor({ llmHelper: makeHelper(capture) });
+  const executor = new PlannerNodeExecutor({ llmClient: makeClient(capture) });
   await executor._generatePlan(
     'Test goal',
     { maxTokens: 16000 },
@@ -96,7 +95,7 @@ console.log('\n🧪 planner output cap — falls back to a floor when model has 
   configCache.getModels = () => ({
     data: [{ id: 'gemini-flash-latest', provider: 'google', default: true }]
   });
-  const executor = new PlannerNodeExecutor({ llmHelper: makeHelper(capture) });
+  const executor = new PlannerNodeExecutor({ llmClient: makeClient(capture) });
   await executor._generatePlan('Test goal', {}, baseState(), { language: 'en' }, {}, 'planner');
   check(
     'maxTokens falls back to 8192 floor when model omits maxOutputTokens',

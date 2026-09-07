@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { sendMessageFeedback } from '../../../api';
+import DOMPurify from 'dompurify';
+import { sendMessageFeedback, answerInteraction } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
@@ -18,15 +19,15 @@ import CitationPanel from './CitationPanel';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
-import { apiClient } from '../../../api/client';
 
 /**
- * Renders a workflow checkpoint inline in a chat bubble. Tracks which
- * checkpoint id the user already responded to so the card disappears after
- * submit (preventing double-submit 400s) while still rendering the next
- * checkpoint when a new one arrives. Keys the inner component by checkpoint
- * id so internal state (selectedOption, submitting, etc.) resets between
- * sequential checkpoints in the same workflow.
+ * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
+ * interaction of the workflow's run (run id === execution id), answered
+ * through the one answer endpoint. Tracks which checkpoint id the user already
+ * responded to so the card disappears after submit (preventing double-submit
+ * 400s) while still rendering the next checkpoint when a new one arrives. Keys
+ * the inner component by checkpoint id so internal state (selectedOption,
+ * submitting, etc.) resets between sequential checkpoints in the same workflow.
  */
 function ChatCheckpoint({ executionId, checkpoint }) {
   const [respondedId, setRespondedId] = useState(null);
@@ -37,12 +38,13 @@ function ChatCheckpoint({ executionId, checkpoint }) {
         key={checkpoint.id}
         checkpoint={checkpoint}
         displayData={checkpoint.displayData}
-        onRespond={async ({ checkpointId, response, data }) => {
-          await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+        onRespond={async ({ checkpointId, response, data, skipped = false }) => {
+          await answerInteraction(
+            executionId,
             checkpointId,
-            response,
-            data
-          });
+            skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+            { channel: 'chat' }
+          );
           setRespondedId(checkpointId);
         }}
       />
@@ -424,7 +426,8 @@ function ChatMessage({
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300), // Send a snippet for context
         conversationId, // Include for iAssistant messages
-        ifinderMessageId // Include iFinder message ID for routing to iFinder API
+        ifinderMessageId, // Include iFinder message ID for routing to iFinder API
+        ...(message.runId ? { runId: message.runId } : {}) // Recorded as a human/event on the run
       });
 
       // Keep the feedback button activated only after successful submission
@@ -495,7 +498,7 @@ function ChatMessage({
             value={editedContent}
             onChange={e => setEditedContent(e.target.value)}
             onKeyDown={handleEditKeyDown}
-            className="w-full px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            className="w-full px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
             style={{ minHeight: compact ? '80px' : '96px' }}
             aria-label={t('chatMessage.editMessage', 'Edit message')}
           />
@@ -598,7 +601,7 @@ function ChatMessage({
     if (isError) {
       return (
         <div className="flex items-center">
-          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
+          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 shrink-0" />
           <span className="break-all">{contentToRender}</span>
         </div>
       );
@@ -608,8 +611,8 @@ function ChatMessage({
     if (hasHTMLContent && isUser) {
       return (
         <div
-          className="break-words whitespace-normal"
-          dangerouslySetInnerHTML={{ __html: contentToRender }}
+          className="wrap-break-word whitespace-normal"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentToRender) }}
         />
       );
     }
@@ -673,7 +676,7 @@ function ChatMessage({
 
     return (
       <div
-        className="break-words whitespace-normal"
+        className="wrap-break-word whitespace-normal"
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
         {contentToRender}
@@ -747,7 +750,7 @@ function ChatMessage({
             <Icon
               name="question-mark-circle"
               size="sm"
-              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
+              className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0"
             />
             <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
           </div>
@@ -788,7 +791,7 @@ function ChatMessage({
                     <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <Icon
                         name="information-circle"
-                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                        className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
                         size="sm"
                       />
                       <p className="text-xs text-blue-800 dark:text-blue-200">
@@ -810,7 +813,7 @@ function ChatMessage({
                     <div className="flex items-start space-x-2">
                       <Icon
                         name="exclamation-circle"
-                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
+                        className="text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5"
                       />
                       <div className="text-sm text-yellow-800 dark:text-yellow-200">
                         <p className="font-medium">
@@ -944,7 +947,7 @@ function ChatMessage({
               <button
                 type="button"
                 onClick={() => onInsert(message.content)}
-                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
+                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
               >
                 <Icon name="arrow-right" size="sm" className="text-white" />
                 <span>
@@ -963,7 +966,7 @@ function ChatMessage({
                   <button
                     type="button"
                     onClick={() => setInsertDropdownOpen(prev => !prev)}
-                    className="inline-flex items-center px-2 py-2 rounded-r-md text-sm font-semibold bg-indigo-700 text-white shadow-sm hover:bg-indigo-800 border-l border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+                    className="inline-flex items-center px-2 py-2 rounded-r-md text-sm font-semibold bg-indigo-700 text-white shadow-xs hover:bg-indigo-800 border-l border-indigo-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
                     aria-haspopup="menu"
                     aria-expanded={insertDropdownOpen}
                     title={t('office.insertOptions', 'More options')}
@@ -978,7 +981,7 @@ function ChatMessage({
                   {insertDropdownOpen && (
                     <div
                       role="menu"
-                      className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                      className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-hidden"
                     >
                       <div className="py-1">
                         <button
@@ -1052,7 +1055,7 @@ function ChatMessage({
               <Icon name="chevron-down" size="sm" />
             </button>
             {showCopyMenu && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded shadow z-10 text-gray-700">
+              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-sm z-10 text-gray-700">
                 <button
                   onClick={() => handleCopy('text')}
                   className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
@@ -1152,7 +1155,7 @@ function ChatMessage({
                   allowHalfStars={true}
                   size="w-4 h-4"
                   showTooltip={true}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 />
               </div>
             </>
@@ -1162,7 +1165,7 @@ function ChatMessage({
 
       {/* Feedback form modal */}
       {showFeedbackForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
             <h3 className="text-lg font-medium mb-4">
               {t('feedback.ratingHeading', 'Rate this response')}

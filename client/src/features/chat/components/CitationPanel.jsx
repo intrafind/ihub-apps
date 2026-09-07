@@ -1,8 +1,19 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { scrollToElement } from '../../../utils/citationTransformer';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import AppSelectionModal from '../../workflows/components/AppSelectionModal';
+import {
+  hasPassageText,
+  selectPreviewPassages
+} from '../../documentPreview/utils/passageSelection';
+
+// Loaded on demand: the preview pulls in pdf.js, which is a deliberately
+// on-demand bundle chunk. Importing it statically here would put pdf.js in
+// every chat page load, whether or not anyone opens a document.
+const DocumentPreviewModal = lazy(
+  () => import('../../documentPreview/components/DocumentPreviewModal')
+);
 
 const PASSAGE_TRUNCATE_LENGTH = 150;
 
@@ -45,7 +56,7 @@ const hasProxyAccess = item => !!getDocumentAccess(item);
  */
 function DocIcon({ item }) {
   const app = getApplication(item);
-  const base = 'w-5 h-5 flex-shrink-0';
+  const base = 'w-5 h-5 shrink-0';
 
   const iconPath =
     'M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z';
@@ -64,9 +75,10 @@ function DocIcon({ item }) {
 }
 
 /**
- * A single passage with truncate/expand behavior.
+ * A single passage with truncate/expand behavior and, when the document can be
+ * previewed, a button that opens it at this passage.
  */
-function PassageText({ content, index, t }) {
+function PassageText({ content, index, onJumpToPassage, t }) {
   const [expanded, setExpanded] = useState(false);
   const needsTruncation = content && content.length > PASSAGE_TRUNCATE_LENGTH;
 
@@ -76,11 +88,11 @@ function PassageText({ content, index, t }) {
   return (
     <div className="flex gap-2 text-sm text-gray-600 dark:text-gray-400">
       {index != null && (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-medium flex-shrink-0 mt-0.5">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-medium shrink-0 mt-0.5">
           {index}
         </span>
       )}
-      <p className="whitespace-pre-wrap text-xs leading-relaxed">
+      <p className="whitespace-pre-wrap text-xs leading-relaxed flex-1">
         {displayText}
         {needsTruncation && !expanded && '\u2026 '}
         {needsTruncation && (
@@ -92,6 +104,23 @@ function PassageText({ content, index, t }) {
           </button>
         )}
       </p>
+      {onJumpToPassage && (
+        <button
+          onClick={onJumpToPassage}
+          className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 shrink-0 self-start"
+          title={t('citations.showInDocument', 'Show this passage in the document')}
+          aria-label={t('citations.showInDocument', 'Show this passage in the document')}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -123,7 +152,7 @@ function OverflowMenu({ item, onAction, onOpenInApp, t }) {
           e.stopPropagation();
           setOpen(o => !o);
         }}
-        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+        className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
         title={t('common.menu', 'Menu')}
         aria-label={t('common.menu', 'Menu')}
       >
@@ -304,7 +333,7 @@ function DocumentDetailsModal({ item, onClose, t }) {
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+            className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
@@ -426,6 +455,8 @@ function CitationPanel({ citations, onDocumentAction }) {
   const [expandedDoc, setExpandedDoc] = useState(null);
   const [appPickerDoc, setAppPickerDoc] = useState(null);
   const [detailsDoc, setDetailsDoc] = useState(null);
+  // { item, passages: string[], initialPassageIndex: number }
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const handleDocAction = useCallback(
     (action, item, appId) => {
@@ -448,19 +479,6 @@ function CitationPanel({ citations, onDocumentAction }) {
         if (deepLink) {
           window.open(deepLink, '_blank', 'noopener,noreferrer');
         }
-      } else if (action === 'preview') {
-        if (access) {
-          const params = new URLSearchParams({
-            documentId: access.documentId,
-            ...(access.searchProfile ? { searchProfile: access.searchProfile } : {}),
-            convertToPdf: 'true'
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
       } else if (action === 'download') {
         if (access) {
           const params = new URLSearchParams({
@@ -477,6 +495,26 @@ function CitationPanel({ citations, onDocumentAction }) {
     },
     [onDocumentAction]
   );
+
+  /**
+   * Opens the in-app PDF preview with this document's passages highlighted.
+   * Handled here rather than through `onDocumentAction` because the passage
+   * texts only exist in this component.
+   *
+   * Passages with no usable text are dropped, and the passage to focus is
+   * located *after* that filtering. Passing the passage itself rather than its
+   * display index is what keeps the two in step — an index into the unfiltered
+   * list would point at the wrong passage as soon as one is dropped.
+   *
+   * @param {Object} item the citation document.
+   * @param {Array<{content: string}>} passageList the document's passages, in
+   *   the order they are displayed.
+   * @param {{content: string}} [focusPassage] passage to focus; when omitted,
+   *   all passages are highlighted and none is singled out.
+   */
+  const openPreview = useCallback((item, passageList, focusPassage = null) => {
+    setPreviewDoc({ item, ...selectPreviewPassages(passageList, focusPassage) });
+  }, []);
 
   // Merge references and resultItems into unified document list
   // Each entry tracks: doc, passages[], resultIndex (1-based position in original resultItems)
@@ -561,6 +599,9 @@ function CitationPanel({ citations, onDocumentAction }) {
           const deepLink = getDeepLink(doc);
           const hasPassages = passages.length > 0;
           const isExpanded = expandedDoc === docId;
+          const canPreview = hasProxyAccess(doc);
+          // Stable display order, also used for the preview's passage indices.
+          const orderedPassages = [...passages].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
           // Build subtitle from available metadata
           const subtitleParts = [sourceType, fileName].filter(Boolean);
@@ -585,11 +626,11 @@ function CitationPanel({ citations, onDocumentAction }) {
                   {/* Badge row: referenced / mentioned + passage count */}
                   <div className="flex items-center gap-2 mt-1.5">
                     {hasPassages ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
                         {t('citations.referenced', 'Referenced')}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                         {t('citations.mentioned', 'Mentioned')}
                       </span>
                     )}
@@ -623,11 +664,11 @@ function CitationPanel({ citations, onDocumentAction }) {
                   </div>
                 </div>
                 {/* Action buttons */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   {deepLink && (
                     <button
                       onClick={() => handleDocAction('openExternal', doc)}
-                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
+                      className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
                       title={t('citations.openExternal', 'Open in browser')}
                     >
                       <svg
@@ -647,7 +688,11 @@ function CitationPanel({ citations, onDocumentAction }) {
                   )}
                   <OverflowMenu
                     item={doc}
-                    onAction={handleDocAction}
+                    onAction={(action, actionItem) =>
+                      action === 'preview'
+                        ? openPreview(actionItem, orderedPassages)
+                        : handleDocAction(action, actionItem)
+                    }
                     onOpenInApp={setAppPickerDoc}
                     t={t}
                   />
@@ -657,16 +702,23 @@ function CitationPanel({ citations, onDocumentAction }) {
               {/* Expandable passages */}
               {hasPassages && isExpanded && (
                 <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-2 space-y-1.5">
-                  {passages
-                    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
-                    .map((passage, pIdx) => (
-                      <div
-                        key={pIdx}
-                        id={passage.index != null ? `citation-s-${passage.index}` : undefined}
-                      >
-                        <PassageText content={passage.content} index={passage.index} t={t} />
-                      </div>
-                    ))}
+                  {orderedPassages.map((passage, pIdx) => (
+                    <div
+                      key={pIdx}
+                      id={passage.index != null ? `citation-s-${passage.index}` : undefined}
+                    >
+                      <PassageText
+                        content={passage.content}
+                        index={passage.index}
+                        onJumpToPassage={
+                          canPreview && hasPassageText(passage)
+                            ? () => openPreview(doc, orderedPassages, passage)
+                            : null
+                        }
+                        t={t}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -685,6 +737,19 @@ function CitationPanel({ citations, onDocumentAction }) {
 
       {detailsDoc && (
         <DocumentDetailsModal item={detailsDoc} onClose={() => setDetailsDoc(null)} t={t} />
+      )}
+
+      {previewDoc && (
+        <Suspense fallback={null}>
+          <DocumentPreviewModal
+            documentId={getDocumentAccess(previewDoc.item)?.documentId}
+            searchProfile={getDocumentAccess(previewDoc.item)?.searchProfile}
+            title={previewDoc.item.title || getMeta(previewDoc.item, 'title')}
+            passages={previewDoc.passages}
+            initialPassageIndex={previewDoc.initialPassageIndex}
+            onClose={() => setPreviewDoc(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

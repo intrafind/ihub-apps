@@ -433,7 +433,7 @@ function AppsList() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}
@@ -444,16 +444,19 @@ function AppsList() {
 
   // Always show debugging info when no apps are available
   if (apps.length === 0) {
+    const noAppsConfig = uiConfig?.errorPages?.noApps;
     return (
       <div className="text-center py-12">
         <div className="text-yellow-500 mb-4">
-          {t('error.noAppsAvailable', 'No apps available from server')}
+          {getLocalizedContent(noAppsConfig?.title, currentLanguage) ||
+            t('error.noAppsAvailable', 'No apps available from server')}
         </div>
         <p className="mb-4">
-          {t('error.checkServer', 'Check if the server is running and returning data correctly.')}
+          {getLocalizedContent(noAppsConfig?.message, currentLanguage) ||
+            t('error.checkServer', 'Check if the server is running and returning data correctly.')}
         </p>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}
@@ -513,7 +516,7 @@ function AppsList() {
             </div>
             {sortConfig.enabled && (
               <select
-                className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-xl py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer outline-none bg-white"
+                className="border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-xl py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300 cursor-pointer outline-hidden bg-white"
                 value={sortMethod}
                 onChange={e => setSortMethod(e.target.value)}
                 aria-label={t('apps.sortBy', 'Sort by')}
@@ -593,7 +596,7 @@ function AppsList() {
                       type="button"
                       onClick={() => navigate(`/apps/${app.id}`)}
                       aria-label={name}
-                      className="absolute inset-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="absolute inset-0 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />
                     <span
                       className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white pointer-events-none"
@@ -634,7 +637,7 @@ function AppsList() {
               <div className="text-center mt-8">
                 <button
                   onClick={handleLoadMore}
-                  className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2.5 px-6 border border-indigo-500 rounded-xl shadow-sm transition-colors text-sm"
+                  className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2.5 px-6 border border-indigo-500 rounded-xl shadow-xs transition-colors text-sm"
                 >
                   {t('pages.appsList.loadMore', 'Load More')}
                 </button>

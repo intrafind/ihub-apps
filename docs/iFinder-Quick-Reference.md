@@ -1,6 +1,31 @@
 # iFinder Integration - Quick Reference
 
-## Quick Setup Checklist
+## Recommended: Keyless (OIDC/OAuth) Setup
+
+No key generation, no key exchange. iHub signs with its OIDC key; iFinder
+verifies via iHub's JWKS endpoint. Full guide:
+[iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
+
+**iHub** (`platform.json` or Admin → iFinder Integration):
+
+```json
+{
+  "oauth": { "issuer": "https://your-ihub.com" },
+  "iFinder": { "enabled": true, "baseUrl": "https://your-ifinder.com", "useOidcKeyPair": true }
+}
+```
+
+`oauth.issuer` must be your iHub public URL (used as the token `iss`; not auto-detected at signing time).
+
+**iFinder** (Spring Boot):
+
+```yaml
+intrafind.security.auth.enable-oauth2-resource-server: true
+spring.security.oauth2.resourceserver.jwt.issuer-uri: https://your-ihub.com
+spring.security.oauth2.resourceserver.jwt.principal-claim-name: email
+```
+
+## Legacy Setup Checklist (manual key exchange)
 
 ### 1. Environment Variables
 
@@ -91,6 +116,7 @@ console.log(jwt.generateIFinderJWT({id: 'test', email: 'test@example.com'}));
 
 ## See Also
 
+- [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md)
 - [Full iFinder Integration Documentation](iFinder-Integration.md)
 - [Tools Documentation](tools.md)
 - [Authentication Configuration](jwt-authentication.md)

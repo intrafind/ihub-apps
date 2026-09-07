@@ -7,7 +7,12 @@ import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
 import AppCreationWizard from '../../apps/components/AppCreationWizard';
 import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleApps
+} from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -15,7 +20,7 @@ import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 function AppNameCell({ app, currentLanguage }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-10 w-10">
+      <div className="shrink-0 h-10 w-10">
         <div
           className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold"
           style={{ backgroundColor: app.color || '#6B7280' }}
@@ -72,7 +77,7 @@ function AdminAppsPage() {
       const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -86,7 +91,7 @@ function AdminAppsPage() {
         prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
       );
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -95,7 +100,7 @@ function AdminAppsPage() {
       await toggleApps('*', true);
       setApps(prev => prev.map(app => ({ ...app, enabled: true })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -104,7 +109,7 @@ function AdminAppsPage() {
       await toggleApps('*', false);
       setApps(prev => prev.map(app => ({ ...app, enabled: false })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -119,7 +124,7 @@ function AdminAppsPage() {
           await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
           setApps(prev => prev.filter(app => app.id !== appId));
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         }
       }
     });
@@ -180,7 +185,7 @@ function AdminAppsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download app config: ${err.message}`);
+      setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -203,12 +208,12 @@ function AdminAppsPage() {
       await loadApps();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload app config: ${err.message}`);
+        setError(`Failed to upload app config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);
@@ -332,7 +337,7 @@ function AdminAppsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               onClick={handleCreateApp}
             >
               <Icon name="plus" className="h-4 w-4 mr-2" />
@@ -348,7 +353,7 @@ function AdminAppsPage() {
               />
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={uploading}
                 title={t('admin.apps.uploadConfig', 'Upload App Config')}
               >
@@ -363,14 +368,14 @@ function AdminAppsPage() {
             </div>
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
               onClick={enableAllApps}
             >
               {t('admin.common.enableAll', 'Enable All')}
             </button>
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
               onClick={disableAllApps}
             >
               {t('admin.common.disableAll', 'Disable All')}
@@ -421,7 +426,7 @@ function AdminAppsPage() {
               onClick={() => setSelectedCategory(category.id)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === category.id
-                  ? 'text-white shadow'
+                  ? 'text-white shadow-sm'
                   : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
               style={{
@@ -455,7 +460,7 @@ function AdminAppsPage() {
             action: (
               <button
                 onClick={handleCreateApp}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.apps.createApp', 'Create App')}

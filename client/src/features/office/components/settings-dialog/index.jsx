@@ -54,7 +54,7 @@ export default function SettingsDialog({ user, isOpen, onClose }) {
               {t('office.settingsDialog.account', 'Account')}
             </p>
             <div className="flex items-center gap-2 sm:gap-3 px-2 py-2 sm:px-3 sm:py-2.5 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs sm:text-sm font-semibold">
+              <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800 flex items-center justify-center text-white text-xs sm:text-sm font-semibold">
                 {initials}
               </div>
               <div className="min-w-0">
@@ -71,7 +71,7 @@ export default function SettingsDialog({ user, isOpen, onClose }) {
             <select
               value={selectedLanguage}
               onChange={e => setSelectedLanguage(e.target.value)}
-              className="w-full rounded-md border border-slate-300 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="w-full rounded-md border border-slate-300 bg-white px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
             >
               {SUPPORTED_LANGUAGES.map(({ key, label }) => (
                 <option key={key} value={key}>

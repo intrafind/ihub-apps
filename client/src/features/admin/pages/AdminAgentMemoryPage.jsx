@@ -7,7 +7,7 @@ import {
   fetchMemoryShaperPrompt,
   writeAgentMemory
 } from '../../../api/agentsAdminApi';
-import { fetchAdminTools } from '../../../api/adminApi';
+import { fetchAdminTools, getAdminApiErrorMessage } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
 export default function AdminAgentMemoryPage() {
@@ -43,7 +43,7 @@ export default function AdminAgentMemoryPage() {
         setVersion(data.version || 0);
         setUpdatedAt(data.updatedAt || null);
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -178,7 +178,7 @@ export default function AdminAgentMemoryPage() {
           )
         );
       } else {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       }
     } finally {
       setSaving(false);
@@ -210,13 +210,13 @@ export default function AdminAgentMemoryPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate(`/admin/agents/${profileId}`)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-sm"
             >
               {t('admin.agents.memory.backToProfile', 'Back to profile')}
             </button>
@@ -229,12 +229,12 @@ export default function AdminAgentMemoryPage() {
           })}
         </div>
         {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
             {error}
           </div>
         )}
 
-        <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800">
+        <div className="mb-4 border border-gray-200 dark:border-gray-700 rounded-sm bg-white dark:bg-gray-800">
           <button
             type="button"
             onClick={() => setShowBuilder(s => !s)}
@@ -259,7 +259,7 @@ export default function AdminAgentMemoryPage() {
                     {t('admin.agents.memory.builder.toolLabel', 'Tool')}
                   </label>
                   <select
-                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     value={builderToolId}
                     onChange={e => setBuilderToolId(e.target.value)}
                   >
@@ -279,7 +279,7 @@ export default function AdminAgentMemoryPage() {
                   </label>
                   <input
                     type="text"
-                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     value={builderSection}
                     onChange={e => setBuilderSection(e.target.value)}
                     placeholder="iFinder corpus map"
@@ -290,7 +290,7 @@ export default function AdminAgentMemoryPage() {
                     {t('admin.agents.memory.builder.modeLabel', 'Mode')}
                   </label>
                   <select
-                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                     value={builderMode}
                     onChange={e => setBuilderMode(e.target.value)}
                   >
@@ -308,7 +308,7 @@ export default function AdminAgentMemoryPage() {
                   {t('admin.agents.memory.builder.paramsLabel', 'Tool params (JSON)')}
                 </label>
                 <textarea
-                  className="w-full h-32 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  className="w-full h-32 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   value={builderParams}
                   onChange={e => setBuilderParams(e.target.value)}
                 />
@@ -347,7 +347,7 @@ export default function AdminAgentMemoryPage() {
                     </button>
                     {showShapePrompt && (
                       <textarea
-                        className="mt-2 w-full h-48 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="mt-2 w-full h-48 font-mono text-xs p-2 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         value={shapePrompt}
                         onChange={e => setShapePrompt(e.target.value)}
                         placeholder={t(
@@ -376,7 +376,7 @@ export default function AdminAgentMemoryPage() {
                   type="button"
                   onClick={handleBuild}
                   disabled={building}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded disabled:opacity-50 text-sm"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm disabled:opacity-50 text-sm"
                 >
                   {building
                     ? t('admin.agents.memory.builder.running', 'Running…')
@@ -388,7 +388,7 @@ export default function AdminAgentMemoryPage() {
         </div>
 
         <textarea
-          className="w-full h-[500px] font-mono text-sm p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          className="w-full h-[500px] font-mono text-sm p-3 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           value={body}
           onChange={e => setBody(e.target.value)}
         />

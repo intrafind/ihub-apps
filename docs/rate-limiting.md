@@ -31,9 +31,36 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/admin/*` (all admin routes)
 
 ### 3. Auth API Rate Limiter
-- **Default Limit**: 50 requests per 15 minutes per IP address (most restrictive)
-- **Applied to**: Authentication endpoints:
-  - `/auth/*` (all authentication routes)
+- **Limit**: 30 requests per 15 minutes per IP address in the shipped
+  `platform.json` (`rateLimit.authApi.limit`). The code-level fallback, used only
+  when no `rateLimit.authApi` section is present at all, is 50 per 15 minutes.
+  Either way it is the most restrictive limiter.
+- **Applied to**: Endpoints under `/api/auth` that verify credentials:
+  - `POST /api/auth/local/login`
+  - `POST /api/auth/ldap/login`
+  - `GET|POST /api/auth/ntlm/login`
+  - `POST /api/auth/teams/exchange`
+  - `POST /api/auth/teams/config`
+- **Not applied to** read-only endpoints in the same namespace. These are covered
+  by the public API limiter instead:
+  - `GET /api/auth/status` — fetched on every SPA boot and every 401 recovery,
+    and commonly used as the container liveness/readiness probe
+  - `GET /api/auth/user`
+  - `GET /api/auth/oidc/providers`, `GET /api/auth/ldap/providers`,
+    `GET /api/auth/ntlm/status`, `GET /api/auth/teams/client-config`
+  - `GET /api/auth/oidc/:provider` and `GET /api/auth/oidc/:provider/callback` —
+    the SSO redirect targets
+  - `POST /api/auth/logout`
+
+  The brute-force limiter is deliberately tight, so covering the whole namespace
+  with it took the platform down instead of protecting it: a probe polling
+  `/api/auth/status` exhausts a 30-per-15-minute window on its own, and from
+  then on every caller — the probe included — gets `429` until the window
+  resets. Only credential-verifying endpoints belong behind it.
+
+  See also [`trustProxy`](#proxy-hops-and-the-rate-limit-key): if the hop count
+  is too low, all callers share one counter and one busy client can exhaust the
+  window for the whole deployment.
 
 ### 4. Inference API Rate Limiter
 - **Default Limit**: 500 requests per 1 minute per IP address (moderate)
@@ -105,6 +132,35 @@ Each rate limiter supports the following configuration options:
 - `skipSuccessfulRequests`: Don't count successful requests (default: false)
 - `skipFailedRequests`: Don't count failed requests (default: varies by type)
 - `message`: Custom error message when limit exceeded
+
+### Proxy hops and the rate-limit key
+
+Every limiter counts per `req.ip`, and `req.ip` is derived from Express's
+`trust proxy` setting — configured with `trustProxy` in `platform.json`:
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+The value is the number of proxy hops between the client and iHub. It also
+accepts `true` / `false` or a comma-separated list of trusted addresses and
+subnets (e.g. `"loopback, 10.0.0.0/8"`).
+
+**Set this to the real hop count.** With the default `1` and two hops — an
+ingress plus an internal load balancer, the usual Kubernetes layout —
+`X-Forwarded-For` reads `client, ingress` and `req.ip` resolves to the *ingress*
+address for every request. All users then share a single rate-limit counter, so
+one busy client (or one OAuth/MCP handshake) can exhaust the auth or OAuth window
+for the entire deployment.
+
+Verify the resolved address with any endpoint that logs `ip` (see
+[logging](logging.md)): if every request shows the same address while real
+clients differ, the hop count is too low.
+
+The same setting drives HTTPS detection via `X-Forwarded-Proto` — see
+[SSL/HTTPS setup](ssl-https-setup.md).
 
 ### Inheritance
 

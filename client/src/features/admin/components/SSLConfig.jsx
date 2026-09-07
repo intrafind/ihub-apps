@@ -104,7 +104,7 @@ function SSLConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.ssl.title')}
         </h2>
@@ -114,9 +114,9 @@ function SSLConfig() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
       <div className="flex items-start mb-4">
-        <Icon name="ShieldCheckIcon" className="w-6 h-6 mr-2 text-blue-500 flex-shrink-0" />
+        <Icon name="ShieldCheckIcon" className="w-6 h-6 mr-2 text-blue-500 shrink-0" />
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.system.ssl.title')}
@@ -132,7 +132,7 @@ function SSLConfig() {
         <div className="flex">
           <Icon
             name="ExclamationTriangleIcon"
-            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 flex-shrink-0"
+            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-3 shrink-0"
           />
           <div>
             <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
@@ -199,7 +199,7 @@ function SSLConfig() {
                 onChange={handleToggleIgnoreCerts}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
         </div>
@@ -221,7 +221,7 @@ function SSLConfig() {
               <div className="flex">
                 <Icon
                   name="InformationCircleIcon"
-                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0"
+                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-3 shrink-0"
                 />
                 <p className="text-sm text-blue-700 dark:text-blue-300">
                   {t('admin.system.ssl.globalWarning')}
@@ -238,12 +238,12 @@ function SSLConfig() {
               onChange={e => setNewDomain(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={t('admin.system.ssl.domainWhitelistPlaceholder')}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
             />
             <button
               onClick={handleAddDomain}
               disabled={!newDomain.trim()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
               {t('admin.system.ssl.addDomain')}
@@ -296,11 +296,11 @@ function SSLConfig() {
           disabled={saving}
           className={`
             inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
-            rounded-md shadow-sm text-white 
+            rounded-md shadow-xs text-white 
             ${
               saving
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
             }
           `}
         >

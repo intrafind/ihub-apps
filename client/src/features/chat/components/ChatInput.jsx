@@ -451,7 +451,7 @@ function ChatInput({
 
       {fileTokenWarning && (
         <div className="mx-2 mb-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-          <span className="mt-0.5 flex-shrink-0">⚠️</span>
+          <span className="mt-0.5 shrink-0">⚠️</span>
           <div className="flex flex-col gap-1">
             <span>
               {(fileTokenWarning.files?.length || 0) > 1
@@ -540,7 +540,7 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
-          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 mb-1 ${
+          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-xs focus-within:ring-2 mb-1 ${
             ephemeral
               ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
               : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
@@ -557,7 +557,7 @@ function ChatInput({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing}
-              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100 rounded-t-2xl"
+              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl"
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
@@ -705,7 +705,7 @@ function ChatInput({
                 <span
                   className={`inline-block bg-red-600 dark:bg-red-500 ${
                     isRecordingTranscription
-                      ? 'w-3 h-3 rounded-sm animate-pulse'
+                      ? 'w-3 h-3 rounded-xs animate-pulse'
                       : 'w-3.5 h-3.5 rounded-full'
                   }`}
                   aria-hidden="true"

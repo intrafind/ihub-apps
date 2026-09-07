@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -15,6 +15,7 @@ function AdminAuthPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -55,36 +56,15 @@ function AdminAuthPage() {
       defaultGroups: [],
       sessionTimeoutMinutes: 480,
       generateJwtToken: true
-    },
-    authDebug: {
-      enabled: false,
-      maskTokens: true,
-      redactPasswords: true,
-      consoleLogging: false,
-      includeRawData: false,
-      providers: {
-        oidc: {
-          enabled: true
-        },
-        local: {
-          enabled: true
-        },
-        proxy: {
-          enabled: true
-        },
-        ldap: {
-          enabled: true
-        },
-        ntlm: {
-          enabled: true
-        }
-      }
     }
+    // Authentication debug logging is configured on the Logging page
+    // (Platform → Logging) under the canonical `auth.debug` key.
   });
 
   useEffect(() => {
     loadConfiguration();
     loadSchema();
+    loadGroups();
   }, []);
 
   const loadSchema = async () => {
@@ -93,6 +73,16 @@ function AdminAuthPage() {
       setJsonSchema(schema);
     } catch (error) {
       console.error('Failed to load platform schema:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -108,7 +98,7 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to load configuration: ${error.message}`
+        text: `Failed to load configuration: ${getAdminApiErrorMessage(error)}`
       });
     } finally {
       setLoading(false);
@@ -140,9 +130,8 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to save configuration: ${error.message}`
+        text: `Failed to save configuration: ${getAdminApiErrorMessage(error)}`
       });
-      throw error; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
     }
@@ -163,7 +152,7 @@ function AdminAuthPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
@@ -187,7 +176,7 @@ function AdminAuthPage() {
                 linkElement.setAttribute('download', exportFileDefaultName);
                 linkElement.click();
               }}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="download" className="h-4 w-4 mr-2" />
               {t('common.download')}
@@ -231,6 +220,7 @@ function AdminAuthPage() {
           value={config}
           onChange={handleDataChange}
           formComponent={PlatformFormEditor}
+          formProps={{ availableGroups }}
           jsonSchema={jsonSchema}
           title={t('admin.auth.configuration', 'Authentication Configuration')}
         />
@@ -241,7 +231,7 @@ function AdminAuthPage() {
             type="button"
             onClick={() => handleSave()}
             disabled={saving}
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
             {saving ? (
               <>

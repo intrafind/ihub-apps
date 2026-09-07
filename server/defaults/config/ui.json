@@ -105,6 +105,72 @@
       "de": "iHub nutzt KI und kann Fehler machen. Bitte überprüfe die Ergebnisse sorgfältig."
     }
   },
+  "errorPages": {
+    "generic": {
+      "title": {
+        "en": "Something went wrong",
+        "de": "Etwas ist schiefgelaufen"
+      },
+      "description": {
+        "en": "An unexpected error occurred in the application. The development team has been notified.",
+        "de": "Ein unerwarteter Fehler ist in der Anwendung aufgetreten. Das Entwicklungsteam wurde benachrichtigt."
+      }
+    },
+    "notFound": {
+      "title": {
+        "en": "Page Not Found",
+        "de": "Seite nicht gefunden"
+      },
+      "message": {
+        "en": "We couldn't find the page you're looking for.",
+        "de": "Die gesuchte Seite konnte nicht gefunden werden."
+      }
+    },
+    "serverError": {
+      "title": {
+        "en": "Server Error",
+        "de": "Serverfehler"
+      },
+      "message": {
+        "en": "Something went wrong on our end.",
+        "de": "Auf unserer Seite ist etwas schiefgelaufen."
+      },
+      "subtitle": {
+        "en": "Please try again later.",
+        "de": "Bitte versuchen Sie es später erneut."
+      }
+    },
+    "forbidden": {
+      "title": {
+        "en": "Forbidden",
+        "de": "Zugriff verweigert"
+      },
+      "message": {
+        "en": "Access to this resource is forbidden.",
+        "de": "Der Zugriff auf diese Ressource ist nicht erlaubt."
+      }
+    },
+    "unauthorized": {
+      "title": {
+        "en": "Unauthorized",
+        "de": "Nicht autorisiert"
+      },
+      "message": {
+        "en": "You don't have permission to access this page.",
+        "de": "Sie haben keine Berechtigung, auf diese Seite zuzugreifen."
+      }
+    },
+    "noApps": {
+      "title": {
+        "en": "No apps available from server",
+        "de": "Keine Apps vom Server verfügbar"
+      },
+      "message": {
+        "en": "Check if the server is running and returning data correctly.",
+        "de": "Prüfen Sie, ob der Server läuft und Daten korrekt zurückgibt."
+      }
+    }
+  },
   "appsList": {
     "title": {
       "en": "iHub Apps",

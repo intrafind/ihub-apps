@@ -40,7 +40,6 @@ function AdminLoggingPage() {
     enabled: false,
     maskTokens: true,
     redactPasswords: true,
-    consoleLogging: false,
     includeRawData: false,
     providers: {
       oidc: { enabled: true },
@@ -98,10 +97,32 @@ function AdminLoggingPage() {
         'Verification of provider API keys (OpenAI, Anthropic, Google, Mistral) at startup'
     },
     {
-      id: 'ToolExecutor',
-      name: 'Tool Executor',
+      id: 'AgentLoop',
+      name: 'Agent Loop',
       description:
-        'Execution of tools called by LLMs (web search, code execution, file operations, browser automation)'
+        'The one agentic loop behind chats, workflow nodes, agents and app invocations: model steps, tool execution, budgets, compaction'
+    },
+    {
+      id: 'LLMClient',
+      name: 'LLM Client',
+      description: 'Every provider request and response: model resolution, API keys, retries, usage'
+    },
+    {
+      id: 'RunLog',
+      name: 'Run Ledger',
+      description:
+        'Append-only run ledger: persistence, retention sweep, spill files, deletion cascade'
+    },
+    {
+      id: 'RunStream',
+      name: 'Run Stream',
+      description: 'Live run events (SSE v2) delivered to chat, workflow and run detail views'
+    },
+    {
+      id: 'InteractionService',
+      name: 'Interactions',
+      description:
+        'Human touchpoints raised by runs (questions, approvals, reviews): pending store, answers, expiry'
     },
     {
       id: 'DataRoutes',
@@ -238,12 +259,14 @@ function AdminLoggingPage() {
         }
       });
 
-      // Load platform config for authDebug
+      // Load platform config for auth debug settings. The canonical location is
+      // `auth.debug` (what the server reads); merge over defaults so any fields
+      // an older config omits keep sensible values.
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
         method: 'GET'
       });
-      if (platformResponse.data?.authDebug) {
-        setAuthDebugConfig(platformResponse.data.authDebug);
+      if (platformResponse.data?.auth?.debug) {
+        setAuthDebugConfig(prev => ({ ...prev, ...platformResponse.data.auth.debug }));
       }
 
       // Load audit-log settings (anonymizeIp lives under `audit.*`, the
@@ -303,8 +326,10 @@ function AdminLoggingPage() {
       });
       const platformConfig = platformResponse.data;
 
-      // Update authDebug section
-      platformConfig.authDebug = authDebugConfig;
+      // Persist under the canonical `auth.debug` key that the server reads.
+      // The platform save route merges the whole `auth` object, so keep the
+      // rest of the auth config intact.
+      platformConfig.auth = { ...platformConfig.auth, debug: authDebugConfig };
 
       // Save back
       await makeAdminApiCall('/admin/configs/platform', {
@@ -416,7 +441,7 @@ function AdminLoggingPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
           </div>
         </div>
@@ -428,11 +453,11 @@ function AdminLoggingPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-start mb-2">
             <Icon
               name="AdjustmentsHorizontalIcon"
-              className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0"
+              className="w-8 h-8 mr-3 text-blue-500 shrink-0"
             />
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -460,7 +485,7 @@ function AdminLoggingPage() {
             <div className="flex items-start">
               <Icon
                 name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
-                className="w-5 h-5 mr-2 flex-shrink-0"
+                className="w-5 h-5 mr-2 shrink-0"
               />
               <p className="text-sm">{message.text}</p>
             </div>
@@ -468,7 +493,7 @@ function AdminLoggingPage() {
         )}
 
         {/* Log Level Configuration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="AdjustmentsVerticalIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.levelSection', 'Log Level')}
@@ -515,7 +540,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Log Format Configuration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="DocumentTextIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.formatSection', 'Log Format')}
@@ -556,7 +581,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Component Filtering */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="FunnelIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.componentSection', 'Component Filtering')}
@@ -573,7 +598,7 @@ function AdminLoggingPage() {
                     components: { ...prev.components, enabled: e.target.checked }
                   }))
                 }
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableComponentFilter', 'Enable component filtering')}
@@ -615,7 +640,7 @@ function AdminLoggingPage() {
                     type="checkbox"
                     checked={loggingConfig.components?.filter?.includes(component.id) || false}
                     onChange={() => handleComponentToggle(component.id)}
-                    className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="mt-1 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <div className="ml-3 flex-1">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -632,7 +657,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* PII & Privacy */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
             <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.privacySection', 'PII & Privacy')}
@@ -726,7 +751,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* File Logging */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="DocumentIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.fileSection', 'File Logging')}
@@ -743,7 +768,7 @@ function AdminLoggingPage() {
                     file: { ...prev.file, enabled: e.target.checked }
                   }))
                 }
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableFileLogging', 'Enable file logging')}
@@ -810,11 +835,17 @@ function AdminLoggingPage() {
         </div>
 
         {/* Authentication Debug Logging */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
             <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.authDebugSection', 'Authentication Debug Logging')}
           </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.authDebugDescription',
+              'The single place to trace authentication flows — OIDC redirects, token exchange, group mapping, NTLM handshakes. Traces are written at the "info" level, so they appear at the default log level without any further changes and take effect immediately (no restart needed).'
+            )}
+          </p>
 
           <div className="space-y-4">
             <label className="flex items-center">
@@ -822,7 +853,7 @@ function AdminLoggingPage() {
                 type="checkbox"
                 checked={authDebugConfig.enabled || false}
                 onChange={e => setAuthDebugConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableAuthDebug', 'Enable authentication debug logging')}
@@ -838,7 +869,7 @@ function AdminLoggingPage() {
                     onChange={e =>
                       setAuthDebugConfig(prev => ({ ...prev, maskTokens: e.target.checked }))
                     }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.logging.maskTokens', 'Mask tokens in logs')}
@@ -855,46 +886,37 @@ function AdminLoggingPage() {
                         redactPasswords: e.target.checked
                       }))
                     }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.logging.redactPasswords', 'Redact passwords in logs')}
                   </span>
                 </label>
 
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={authDebugConfig.consoleLogging || false}
-                    onChange={e =>
-                      setAuthDebugConfig(prev => ({
-                        ...prev,
-                        consoleLogging: e.target.checked
-                      }))
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.logging.consoleLogging', 'Enable console logging')}
-                  </span>
-                </label>
-
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={authDebugConfig.includeRawData || false}
-                    onChange={e =>
-                      setAuthDebugConfig(prev => ({
-                        ...prev,
-                        includeRawData: e.target.checked
-                      }))
-                    }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.logging.includeRawData', 'Include raw authentication data')}
-                  </span>
-                </label>
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={authDebugConfig.includeRawData || false}
+                      onChange={e =>
+                        setAuthDebugConfig(prev => ({
+                          ...prev,
+                          includeRawData: e.target.checked
+                        }))
+                      }
+                      className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      {t('admin.logging.includeRawData', 'Include raw authentication data')}
+                    </span>
+                  </label>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">
+                    {t(
+                      'admin.logging.includeRawDataWarning',
+                      'Security risk: logs the full user-info payload and access tokens. Leave off unless actively debugging; disable again afterwards.'
+                    )}
+                  </p>
+                </div>
 
                 {/* Provider-specific debug settings */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -916,7 +938,7 @@ function AdminLoggingPage() {
                               }
                             }))
                           }
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">
                           {provider}
@@ -943,7 +965,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Save Button */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -973,7 +995,7 @@ function AdminLoggingPage() {
           <div className="flex items-start">
             <Icon
               name="InformationCircleIcon"
-              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
             />
             <div className="text-sm text-blue-800 dark:text-blue-300">
               <p className="font-medium mb-1">{t('common.note', 'Note')}:</p>
@@ -1005,7 +1027,7 @@ function AdminLoggingPage() {
                 <li>
                   {t(
                     'admin.logging.note5',
-                    'Authentication debug logging is separate and requires restart'
+                    'Authentication debug logging applies immediately (no restart) and its traces are emitted at the "info" level, so they show at the default log level'
                   )}
                 </li>
               </ul>

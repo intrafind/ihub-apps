@@ -23,12 +23,12 @@ function ErrorFallback({ error, resetErrorBoundary, t }) {
           {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
         </h3>
       </div>
-      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
+      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded-sm mb-4 overflow-auto">
         {error.message}
       </pre>
       <button
         onClick={resetErrorBoundary}
-        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+        className="px-4 py-2 bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors"
       >
         Try Again
       </button>
@@ -46,6 +46,14 @@ function LoadingComponent({ t }) {
       </span>
     </div>
   );
+}
+
+// Cached across renders/mounts so the bundled @babel/standalone chunk is only
+// ever fetched once, rather than on every JSX compile.
+let babelModulePromise;
+function loadBabel() {
+  babelModulePromise ??= import('@babel/standalone');
+  return babelModulePromise;
 }
 
 function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }) {
@@ -76,68 +84,9 @@ function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }
         setIsLoading(true);
         setCompileError(null);
 
-        // Wait for Babel to be available
-        if (!window.Babel || (!window.Babel.transform && !window.Babel.transformSync)) {
-          // Try to load Babel if not already loaded
-          await new Promise((resolve, reject) => {
-            const existingScript = document.querySelector('script[src*="babel"]');
-
-            if (
-              existingScript &&
-              window.Babel &&
-              (window.Babel.transform || window.Babel.transformSync)
-            ) {
-              resolve();
-              return;
-            }
-
-            // Remove any existing incomplete Babel script
-            if (existingScript) {
-              existingScript.remove();
-            }
-
-            const babelUrls = [
-              'https://unpkg.com/@babel/standalone/babel.min.js',
-              'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js'
-            ];
-
-            let urlIndex = 0;
-
-            const tryLoadBabel = () => {
-              if (urlIndex >= babelUrls.length) {
-                reject(new Error('Failed to load Babel from all CDN sources'));
-                return;
-              }
-
-              const script = document.createElement('script');
-              script.src = babelUrls[urlIndex];
-              script.onload = () => {
-                // Wait a bit for Babel to fully initialize
-                setTimeout(() => {
-                  if (window.Babel && (window.Babel.transform || window.Babel.transformSync)) {
-                    console.log('✅ Babel loaded successfully:', {
-                      hasTransform: !!window.Babel.transform,
-                      hasTransformSync: !!window.Babel.transformSync,
-                      availableMethods: Object.keys(window.Babel)
-                    });
-                    resolve();
-                  } else {
-                    console.error('❌ Babel object:', window.Babel);
-                    reject(new Error('Babel failed to initialize properly'));
-                  }
-                }, 150);
-              };
-              script.onerror = () => {
-                script.remove();
-                urlIndex++;
-                tryLoadBabel();
-              };
-              document.head.appendChild(script);
-            };
-
-            tryLoadBabel();
-          });
-        }
+        // Load the bundled @babel/standalone chunk (lazy, cached across compiles).
+        const BabelModule = await loadBabel();
+        const Babel = BabelModule.default ?? BabelModule;
 
         // Prepare the JSX code with imports and proper component structure
         let fullCode = jsxCode.trim();
@@ -169,7 +118,7 @@ UserComponent;
         let transformed;
         try {
           // Use transformSync if available, otherwise fallback to transform
-          const transformMethod = window.Babel.transformSync || window.Babel.transform;
+          const transformMethod = Babel.transformSync || Babel.transform;
           if (!transformMethod) {
             throw new Error('No Babel transform method available');
           }
@@ -313,7 +262,7 @@ UserComponent;
             {t('errors.compilationError', 'Compilation Error')}
           </h3>
         </div>
-        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded overflow-auto">
+        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded-sm overflow-auto">
           {compileError}
         </pre>
       </div>

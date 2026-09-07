@@ -11,6 +11,70 @@ const debounce = (func, delay) => {
   };
 };
 
+// Markdown containers that are still receiving streamed tokens. Diagrams
+// inside them are intentionally left unrendered: their source is incomplete
+// and would be thrown away by the next token anyway.
+const STREAMING_CLASS = 'is-streaming';
+const STREAMING_MARKDOWN_CLASS = 'streaming-markdown';
+const STREAMING_SELECTOR = `.${STREAMING_CLASS}`;
+
+// Rendered SVG cache keyed by the processed diagram source. Re-mounting a
+// message (navigation, re-parse, layout change) then reuses the existing SVG
+// instead of paying for a full Mermaid render, which is what made diagrams
+// visibly flicker on every UI change.
+const MAX_CACHED_DIAGRAMS = 100;
+const svgCache = new Map();
+
+const getCachedRender = key => {
+  if (!svgCache.has(key)) return null;
+  // Refresh recency so the LRU eviction below keeps hot diagrams.
+  const entry = svgCache.get(key);
+  svgCache.delete(key);
+  svgCache.set(key, entry);
+  return entry;
+};
+
+const setCachedRender = (key, entry) => {
+  svgCache.set(key, entry);
+  while (svgCache.size > MAX_CACHED_DIAGRAMS) {
+    svgCache.delete(svgCache.keys().next().value);
+  }
+};
+
+// Mermaid link tokens, used to estimate a diagram's edge count before
+// rendering it. An arrow (`-->`) needs no alternative of its own: nothing else
+// here can match at its leading dash, so the scan simply moves on one
+// character and matches `->` at the same end position, giving the same count.
+// Spelling it out would also make the pattern look like an HTML comment
+// filter to static analysers, which this is not.
+const MERMAID_EDGE_PATTERN = /->|---|-\.-|==>|==|\.\./g;
+
+// Mermaid injects a temporary element keyed by the ID passed to render().
+// Container IDs are content-derived and can legitimately repeat across
+// messages, so renders always get their own throwaway ID.
+let renderSequence = 0;
+const nextRenderId = () => `mermaid-render-${++renderSequence}`;
+
+// Mermaid derives every ID inside the generated markup (the root element, the
+// scoped `<style>` selectors and the arrow markers) from the ID passed to
+// render(). Re-pointing them at the owning container keeps IDs unique when the
+// same cached SVG is reused for several identical diagrams on one page.
+const rescopeSvgIds = (svg, renderId, containerId) =>
+  renderId && containerId ? svg.split(renderId).join(`${containerId}-svg`) : svg;
+
+// Releases the pan-zoom instance attached to a container, if any.
+const destroyPanZoom = (container, registry) => {
+  const instance = container?.panZoomInstance;
+  if (!instance) return;
+  registry?.delete(instance);
+  try {
+    instance.destroy();
+  } catch (e) {
+    console.warn('Error destroying pan-zoom instance:', e);
+  }
+  container.panZoomInstance = null;
+};
+
 // Helper to provide button feedback for Mermaid interactions
 const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
   const originalHTML = btn.innerHTML;
@@ -42,6 +106,12 @@ export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
     let mermaidReady = false;
+
+    // Every live diagram's pan-zoom instance. A single delegated keydown
+    // listener drives them all; previously each diagram registered its own
+    // document listener that was never removed when its container was
+    // replaced, so re-renders leaked handlers indefinitely.
+    const panZoomInstances = new Set();
 
     // Pre-load Mermaid immediately when hook initializes
     const loadMermaid = async () => {
@@ -93,6 +163,12 @@ export const useMermaidRenderer = ({ t }) => {
       }
 
       for (const container of containers) {
+        // Leave diagrams inside a still-streaming message alone; they are
+        // re-parsed on every token and will be picked up once streaming ends.
+        if (container.closest(STREAMING_SELECTOR)) {
+          continue;
+        }
+
         container.dataset.processed = 'true'; // Mark as processed immediately
         const code = decodeURIComponent(container.dataset.code);
         const language = container.dataset.language || 'mermaid';
@@ -104,58 +180,77 @@ export const useMermaidRenderer = ({ t }) => {
         }
 
         const processedCode = processMermaidCode(code);
+        const cached = getCachedRender(processedCode);
 
         try {
-          // Validate diagram complexity
-          const codeLength = code.length;
-          const nodeCount = (code.match(/\[.*?\]|{.*?}|\(.*?\)/g) || []).length;
-          const edgeCount = (code.match(/-->|->|---|-\.-|==>|==|\.\./g) || []).length;
+          let svg = cached?.svg;
+          let renderId = cached?.renderId;
 
-          const LIMITS = { maxNodes: 100, maxEdges: 200, maxTextLength: 10000 };
+          if (!svg) {
+            // Validate diagram complexity
+            const codeLength = code.length;
+            const nodeCount = (code.match(/\[.*?\]|{.*?}|\(.*?\)/g) || []).length;
+            const edgeCount = (code.match(MERMAID_EDGE_PATTERN) || []).length;
 
-          if (
-            codeLength > LIMITS.maxTextLength ||
-            nodeCount > LIMITS.maxNodes ||
-            edgeCount > LIMITS.maxEdges
-          ) {
-            throw new Error(
-              `Diagram too complex (${codeLength} chars, ${nodeCount} nodes, ${edgeCount} edges)`
-            );
+            const LIMITS = { maxNodes: 100, maxEdges: 200, maxTextLength: 10000 };
+
+            if (
+              codeLength > LIMITS.maxTextLength ||
+              nodeCount > LIMITS.maxNodes ||
+              edgeCount > LIMITS.maxEdges
+            ) {
+              throw new Error(
+                `Diagram too complex (${codeLength} chars, ${nodeCount} nodes, ${edgeCount} edges)`
+              );
+            }
+
+            // Render the diagram
+            const tempId = nextRenderId();
+
+            try {
+              const result = await mermaid.render(tempId, processedCode);
+              svg = result.svg;
+              renderId = tempId;
+            } catch (renderError) {
+              // Clean up any elements Mermaid may have created
+              const tempElement = document.getElementById(tempId);
+              if (tempElement) tempElement.remove();
+              throw renderError;
+            }
+
+            setCachedRender(processedCode, { svg, renderId });
           }
 
-          // Render the diagram
-          const tempId = `${container.id}-svg`;
-          let svg;
+          svg = rescopeSvgIds(svg, renderId, container.id);
 
-          try {
-            const result = await mermaid.render(tempId, processedCode);
-            svg = result.svg;
-          } catch (renderError) {
-            // Clean up any elements Mermaid may have created
-            const tempElement = document.getElementById(tempId);
-            if (tempElement) tempElement.remove();
-            throw renderError;
+          // The container may have been swapped out of the DOM while the
+          // asynchronous render was in flight.
+          if (!container.isConnected) {
+            continue;
           }
+
+          // Drop any pan-zoom instance from a previous render of this container.
+          destroyPanZoom(container, panZoomInstances);
 
           // Create the diagram HTML with toolbar and pan-zoom controls
           container.innerHTML = `
-            <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+            <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-xs">
               <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
                 <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
                   ${svg}
                 </div>
                 <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <button class="mermaid-zoom-in p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
+                  <button class="mermaid-zoom-in p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-out p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
+                  <button class="mermaid-zoom-out p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
                     </svg>
                   </button>
-                  <button class="mermaid-zoom-reset p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
+                  <button class="mermaid-zoom-reset p-1.5 rounded-sm bg-white/90 backdrop-blur-xs text-gray-700 hover:bg-white hover:text-gray-900 shadow-xs transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
@@ -167,35 +262,35 @@ export const useMermaidRenderer = ({ t }) => {
                   <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
                 </div>
                 <div class="flex flex-row items-center gap-2">
-                  <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
                     <span class="hidden sm:inline">${t ? t('common.copy', 'Code') : 'Code'}</span>
                   </button>
-                  <button class="mermaid-download-svg p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-svg p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadSVG', 'Download SVG') : 'Download SVG'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">SVG</span>
                   </button>
-                  <button class="mermaid-download-png p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-png p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPNG', 'Download PNG') : 'Download PNG'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PNG</span>
                   </button>
-                  <button class="mermaid-download-pdf p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-download-pdf p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPDF', 'Download PDF') : 'Download PDF'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h8.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                     <span class="hidden md:inline">PDF</span>
                   </button>
-                  <button class="mermaid-fullscreen p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-fullscreen p-1.5 rounded-sm text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" type="button" title="${t ? t('common.viewFullscreen', 'View Fullscreen') : 'View Fullscreen'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
@@ -239,6 +334,7 @@ export const useMermaidRenderer = ({ t }) => {
 
               // Store instance for cleanup
               container.panZoomInstance = panZoomInstance;
+              panZoomInstances.add(panZoomInstance);
 
               // Wire up zoom control buttons
               const zoomInBtn = container.querySelector('.mermaid-zoom-in');
@@ -264,29 +360,6 @@ export const useMermaidRenderer = ({ t }) => {
                   panZoomInstance.center();
                 });
               }
-
-              // Add keyboard shortcuts (+ / - / 0)
-              const handleKeyPress = e => {
-                // Only handle if the diagram is in view and not in an input field
-                if (!document.activeElement || document.activeElement.tagName === 'BODY') {
-                  if (e.key === '+' || e.key === '=') {
-                    e.preventDefault();
-                    panZoomInstance.zoomIn();
-                  } else if (e.key === '-' || e.key === '_') {
-                    e.preventDefault();
-                    panZoomInstance.zoomOut();
-                  } else if (e.key === '0') {
-                    e.preventDefault();
-                    panZoomInstance.reset();
-                    panZoomInstance.fit();
-                    panZoomInstance.center();
-                  }
-                }
-              };
-
-              // Store handler reference for cleanup
-              container.keyPressHandler = handleKeyPress;
-              document.addEventListener('keydown', handleKeyPress);
             } catch (panZoomError) {
               console.warn('Could not initialize pan-zoom:', panZoomError);
               // Gracefully degrade - diagram still works without pan-zoom
@@ -297,7 +370,7 @@ export const useMermaidRenderer = ({ t }) => {
 
           // Display a user-friendly error state
           container.innerHTML = `
-            <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-sm">
+            <div class="code-block-container relative group border border-red-200 rounded-lg overflow-hidden bg-red-50 shadow-xs">
               <div class="bg-red-900 text-red-100 rounded-t-lg p-4 overflow-x-auto">
                 <div class="text-sm text-red-200 mb-2">Mermaid Syntax Error:</div>
                 <div class="text-red-100 text-sm mb-3">${err.message}</div>
@@ -308,7 +381,7 @@ export const useMermaidRenderer = ({ t }) => {
                   <span class="text-xs font-medium text-red-600">Mermaid (Error)</span>
                 </div>
                 <div class="flex flex-row items-center gap-2">
-                  <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors duration-200 flex items-center gap-1" 
+                  <button class="mermaid-copy-code p-1.5 rounded-sm text-xs bg-transparent text-red-600 hover:bg-red-200 hover:text-red-800 transition-colors duration-200 flex items-center gap-1" 
                           data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="Copy code">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -324,46 +397,50 @@ export const useMermaidRenderer = ({ t }) => {
     };
 
     // Debounced observer callback for efficiency
-    const debouncedInit = debounce(initializeMermaidDiagrams, 300);
+    const debouncedInit = debounce(initializeMermaidDiagrams, 150);
+
+    const containsDiagram = node =>
+      node.nodeType === Node.ELEMENT_NODE &&
+      (node.classList?.contains('mermaid-diagram-container') ||
+        node.querySelector?.('.mermaid-diagram-container'));
+
+    // Release pan-zoom instances for containers React has detached, otherwise
+    // each re-render of a message leaves a live instance behind.
+    const releaseRemovedDiagrams = node => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (node.classList?.contains('mermaid-diagram-container')) {
+        destroyPanZoom(node, panZoomInstances);
+      }
+      node
+        .querySelectorAll?.('.mermaid-diagram-container')
+        .forEach(child => destroyPanZoom(child, panZoomInstances));
+    };
 
     const observer = new MutationObserver(mutations => {
       let shouldProcess = false;
-      let hasStreamingIndicator = false;
 
       mutations.forEach(mutation => {
-        if (mutation.addedNodes.length > 0) {
-          mutation.addedNodes.forEach(node => {
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              (node.classList?.contains('mermaid-diagram-container') ||
-                node.querySelector?.('.mermaid-diagram-container'))
-            ) {
-              shouldProcess = true;
-            }
-            // Check for streaming indicators (cursor, typing indicators, etc.)
-            if (
-              node.nodeType === Node.ELEMENT_NODE &&
-              (node.classList?.contains('streaming-cursor') ||
-                node.querySelector?.('.streaming-cursor') ||
-                node.classList?.contains('typing-indicator') ||
-                node.querySelector?.('.typing-indicator'))
-            ) {
-              hasStreamingIndicator = true;
-            }
-          });
+        if (mutation.type === 'attributes') {
+          // A message that just finished streaming in place now holds
+          // renderable diagrams that were skipped while it was streaming.
+          const classList = mutation.target.classList;
+          if (
+            classList?.contains(STREAMING_MARKDOWN_CLASS) &&
+            !classList.contains(STREAMING_CLASS)
+          ) {
+            shouldProcess = true;
+          }
+          return;
         }
+
+        mutation.addedNodes.forEach(node => {
+          if (containsDiagram(node)) shouldProcess = true;
+        });
+        mutation.removedNodes.forEach(releaseRemovedDiagrams);
       });
 
       if (shouldProcess) {
-        // Delay processing if streaming is active
-        const delay = hasStreamingIndicator ? 2000 : 100;
-        setTimeout(() => {
-          // Double-check if streaming is still active
-          const isStreaming = document.querySelector('.streaming-cursor, .typing-indicator');
-          if (!isStreaming) {
-            debouncedInit();
-          }
-        }, delay);
+        debouncedInit();
       }
     });
 
@@ -396,7 +473,42 @@ export const useMermaidRenderer = ({ t }) => {
     initialRun();
 
     // Set up observer for future DOM changes
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    // Single delegated keyboard shortcut handler (+ / - / 0) for every diagram.
+    const handleKeyPress = e => {
+      if (panZoomInstances.size === 0) return;
+      // Only handle if the user isn't typing into a field
+      if (document.activeElement && document.activeElement.tagName !== 'BODY') return;
+
+      let action;
+      if (e.key === '+' || e.key === '=') action = 'in';
+      else if (e.key === '-' || e.key === '_') action = 'out';
+      else if (e.key === '0') action = 'reset';
+      else return;
+
+      e.preventDefault();
+      panZoomInstances.forEach(instance => {
+        try {
+          if (action === 'in') instance.zoomIn();
+          else if (action === 'out') instance.zoomOut();
+          else {
+            instance.reset();
+            instance.fit();
+            instance.center();
+          }
+        } catch (err) {
+          console.warn('Pan-zoom keyboard shortcut failed:', err);
+        }
+      });
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
 
     // Mermaid interaction handler
     const handleMermaidInteraction = e => {
@@ -764,7 +876,7 @@ export const useMermaidRenderer = ({ t }) => {
 
         const modal = document.createElement('div');
         modal.className =
-          'mermaid-fullscreen-modal fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4';
+          'mermaid-fullscreen-modal fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4';
         modal.style.zIndex = '9999';
 
         modal.innerHTML = `
@@ -792,12 +904,16 @@ export const useMermaidRenderer = ({ t }) => {
               </button>
             </div>
             <div class="diagram-viewer flex-1 overflow-hidden p-8 relative" style="cursor: grab;">
-              <div class="diagram-content transition-transform duration-200" style="transform-origin: 0 0; width: fit-content; position: absolute; top: 0; left: 0;">
+              <div class="diagram-content" style="transform-origin: 0 0; width: fit-content; position: absolute; top: 0; left: 0; opacity: 0;">
                 ${svg}
               </div>
             </div>
           </div>
         `;
+
+        const PADDING = 32; // matches the p-8 padding on .diagram-viewer
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 5;
 
         let currentZoom = 1;
         let isDragging = false;
@@ -808,40 +924,55 @@ export const useMermaidRenderer = ({ t }) => {
         const diagramViewer = modal.querySelector('.diagram-viewer');
         const diagramContent = modal.querySelector('.diagram-content');
 
-        // Center the diagram initially
-        const centerDiagram = () => {
-          const viewerRect = diagramViewer.getBoundingClientRect();
-          const svgElement = diagramContent.querySelector('svg');
-          if (!svgElement) return;
-
-          // Get the natural size of the SVG (without any transforms)
-          const tempTransform = diagramContent.style.transform;
-          diagramContent.style.transform = 'none';
-          const svgRect = svgElement.getBoundingClientRect();
-          diagramContent.style.transform = tempTransform;
-
-          const svgWidth = svgRect.width;
-          const svgHeight = svgRect.height;
-
-          // Calculate center position accounting for padding
-          const availableWidth = viewerRect.width - 64; // 32px padding on each side
-          const availableHeight = viewerRect.height - 64;
-
-          translateX = (availableWidth - svgWidth * currentZoom) / 2 + 32; // Add back padding offset
-          translateY = (availableHeight - svgHeight * currentZoom) / 2 + 32;
-
-          updateTransform();
-        };
-
         // Update transform with zoom and translation
         const updateTransform = () => {
           diagramContent.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`;
         };
 
+        // Measure the untransformed size of the diagram.
+        const measureDiagram = () => {
+          const svgElement = diagramContent.querySelector('svg');
+          if (!svgElement) return null;
+
+          const previousTransform = diagramContent.style.transform;
+          diagramContent.style.transform = 'none';
+          const svgRect = svgElement.getBoundingClientRect();
+          diagramContent.style.transform = previousTransform;
+
+          if (!svgRect.width || !svgRect.height) return null;
+          return { width: svgRect.width, height: svgRect.height };
+        };
+
+        // Scale the diagram down so it fits the viewer, then centre it.
+        // Centring alone is not enough: a diagram larger than the viewer ends up
+        // with a negative offset and is pushed outside the clipped viewport,
+        // which made the fullscreen view appear blank.
+        const fitDiagram = () => {
+          const size = measureDiagram();
+          if (!size) return false;
+
+          const viewerRect = diagramViewer.getBoundingClientRect();
+          const availableWidth = viewerRect.width - PADDING * 2;
+          const availableHeight = viewerRect.height - PADDING * 2;
+          if (availableWidth <= 0 || availableHeight <= 0) return false;
+
+          // Never scale up beyond 1:1; only shrink oversized diagrams.
+          currentZoom = Math.max(
+            MIN_ZOOM,
+            Math.min(1, availableWidth / size.width, availableHeight / size.height)
+          );
+
+          translateX = PADDING + (availableWidth - size.width * currentZoom) / 2;
+          translateY = PADDING + (availableHeight - size.height * currentZoom) / 2;
+
+          updateTransform();
+          return true;
+        };
+
         // Zoom functionality
         const updateZoom = (newZoom, zoomCenterX = null, zoomCenterY = null) => {
           const oldZoom = currentZoom;
-          currentZoom = Math.max(0.1, Math.min(5, newZoom));
+          currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
           const zoomRatio = currentZoom / oldZoom;
 
           if (zoomCenterX === null || zoomCenterY === null) {
@@ -864,31 +995,35 @@ export const useMermaidRenderer = ({ t }) => {
         modal
           .querySelector('.zoom-out')
           .addEventListener('click', () => updateZoom(currentZoom / 1.2));
-        modal.querySelector('.reset-zoom').addEventListener('click', () => {
-          currentZoom = 1;
-          centerDiagram();
-        });
+        modal.querySelector('.reset-zoom').addEventListener('click', fitDiagram);
 
-        // Initialize diagram position with multiple attempts
+        // Fit the diagram before it becomes visible, retrying while the browser
+        // is still laying the SVG out. The content stays hidden until the first
+        // successful fit so the diagram never flashes at the wrong position.
         const initializePosition = () => {
           let attempts = 0;
           const maxAttempts = 10;
 
-          const tryCenter = () => {
-            const svgElement = diagramContent.querySelector('svg');
-            if (svgElement && svgElement.getBoundingClientRect().width > 0) {
-              centerDiagram();
+          const tryFit = () => {
+            if (!document.body.contains(modal)) return;
+            if (fitDiagram()) {
+              diagramContent.style.opacity = '1';
+              diagramContent.classList.add('transition-transform', 'duration-200');
             } else if (attempts < maxAttempts) {
               attempts++;
-              setTimeout(tryCenter, 100);
+              setTimeout(tryFit, 50);
+            } else {
+              // Give up on measuring and at least show the diagram.
+              diagramContent.style.opacity = '1';
             }
           };
 
-          tryCenter();
+          tryFit();
         };
 
-        // Start positioning after a short delay
-        setTimeout(initializePosition, 50);
+        // Re-fit when the window (and therefore the viewer) is resized.
+        const handleResize = debounce(fitDiagram, 150);
+        window.addEventListener('resize', handleResize);
 
         // Drag functionality
         diagramViewer.addEventListener('mousedown', e => {
@@ -948,6 +1083,7 @@ export const useMermaidRenderer = ({ t }) => {
             document.removeEventListener('mousemove', mouseMoveHandler);
             document.removeEventListener('mouseup', mouseUpHandler);
             document.removeEventListener('keydown', escapeHandler);
+            window.removeEventListener('resize', handleResize);
             document.body.removeChild(modal);
           }
         };
@@ -959,6 +1095,9 @@ export const useMermaidRenderer = ({ t }) => {
         modal.querySelector('.close-fullscreen').addEventListener('click', closeModal);
 
         document.body.appendChild(modal);
+
+        // Position only once the modal is in the document and measurable.
+        requestAnimationFrame(initializePosition);
       }
     };
 
@@ -966,23 +1105,22 @@ export const useMermaidRenderer = ({ t }) => {
 
     return () => {
       // Clean up pan-zoom instances
-      const containers = document.querySelectorAll('.mermaid-diagram-container');
-      containers.forEach(container => {
-        if (container.panZoomInstance) {
-          try {
-            container.panZoomInstance.destroy();
-          } catch (e) {
-            console.warn('Error destroying pan-zoom instance:', e);
-          }
-        }
-        if (container.keyPressHandler) {
-          document.removeEventListener('keydown', container.keyPressHandler);
+      document
+        .querySelectorAll('.mermaid-diagram-container')
+        .forEach(container => destroyPanZoom(container, panZoomInstances));
+      panZoomInstances.forEach(instance => {
+        try {
+          instance.destroy();
+        } catch (e) {
+          console.warn('Error destroying pan-zoom instance:', e);
         }
       });
+      panZoomInstances.clear();
 
       // Clear any pending timeouts
       timeouts.forEach(clearTimeout);
       observer.disconnect();
+      document.removeEventListener('keydown', handleKeyPress);
       document.removeEventListener('click', handleMermaidInteraction);
     };
   }, [t]);

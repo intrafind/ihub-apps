@@ -131,8 +131,8 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
         onClick={() => setShowDropdown(!showDropdown)}
         className={
           variant === 'header'
-            ? 'flex items-center space-x-2 text-white hover:text-white/80 focus:outline-none'
-            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors w-full min-w-0'
+            ? 'flex items-center space-x-2 text-white hover:text-white/80 focus:outline-hidden'
+            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-colors w-full min-w-0'
         }
         aria-expanded={showDropdown}
         aria-haspopup="true"

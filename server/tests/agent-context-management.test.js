@@ -13,6 +13,7 @@
 
 import { ContextSummarizer } from '../services/workflow/ContextSummarizer.js';
 import { PromptNodeExecutor } from '../services/workflow/executors/PromptNodeExecutor.js';
+import { fakeLlmClient } from './helpers/fakeLlmClient.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -128,19 +129,21 @@ async function run() {
   {
     const big = 'y'.repeat(4000);
     let calls = 0;
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => {
+    const llmClient = {
+      complete: async () => {
         calls += 1;
         if (calls === 1) {
           const err = new Error('maximum context length exceeded');
           err.status = 400;
           throw err;
         }
-        return { content: 'recovered answer', toolCalls: [], usage: {}, finishReason: 'stop' };
+        return { content: 'recovered answer', toolCalls: [], usage: null, finishReason: 'stop' };
       }
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     const context = {
       language: 'en',
       _agentProfile: { budgets: {} },
@@ -169,16 +172,18 @@ async function run() {
   console.log('\n🧪 reactive recovery gives up when nothing can be freed\n');
   {
     let calls = 0;
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => {
+    const llmClient = {
+      complete: async () => {
         calls += 1;
         const err = new Error('context length exceeded');
         err.status = 400;
         throw err;
       }
     };
-    const executor = new PromptNodeExecutor({ llmHelper, chatService: {} });
+    const executor = new PromptNodeExecutor({
+      llmClient: fakeLlmClient(llmClient),
+      chatService: {}
+    });
     const context = {
       language: 'en',
       _agentProfile: { budgets: {} },

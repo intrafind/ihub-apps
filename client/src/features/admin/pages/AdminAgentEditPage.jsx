@@ -10,7 +10,7 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SkillsSelector from '../../../shared/components/SkillsSelector';
 import SourcePicker from '../components/SourcePicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { fetchAdminModels, fetchAdminApps } from '../../../api/adminApi';
+import { fetchAdminApps, fetchAdminModels, getAdminApiErrorMessage } from '../../../api/adminApi';
 import {
   fetchAgentProfile,
   createAgentProfile,
@@ -148,7 +148,7 @@ export default function AdminAgentEditPage() {
         setProfile(mergedProfile);
         setInitialData(structuredClone(mergedProfile));
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -341,7 +341,7 @@ export default function AdminAgentEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode(mode === 'form' ? 'json' : 'form')}
-              className="px-3 py-2 text-sm border bg-white rounded hover:bg-gray-50"
+              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
             >
               {mode === 'form'
                 ? t('admin.common.viewJson', 'JSON')
@@ -350,13 +350,13 @@ export default function AdminAgentEditPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
             >
               {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate('/admin/agents')}
-              className="px-3 py-2 text-sm border bg-white rounded hover:bg-gray-50"
+              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
             >
               {t('common.cancel', 'Cancel')}
             </button>
@@ -364,14 +364,14 @@ export default function AdminAgentEditPage() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded-sm">
             {error}
           </div>
         )}
 
         {mode === 'json' ? (
           <textarea
-            className="w-full h-[600px] font-mono text-xs p-3 border rounded"
+            className="w-full h-[600px] font-mono text-xs p-3 border rounded-sm"
             value={JSON.stringify(profile, null, 2)}
             onChange={e => {
               try {
@@ -401,7 +401,7 @@ export default function AdminAgentEditPage() {
                       type="checkbox"
                       checked={profile.enabled !== false}
                       onChange={e => handleField('enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm"
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                       {t('admin.agents.edit.enabled', 'Enabled')}
@@ -448,14 +448,14 @@ export default function AdminAgentEditPage() {
                       type="color"
                       value={profile.color || '#6366F1'}
                       onChange={e => handleField('color', e.target.value)}
-                      className="h-9 w-12 rounded border border-gray-300 cursor-pointer"
+                      className="h-9 w-12 rounded-sm border border-gray-300 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={profile.color || ''}
                       onChange={e => handleField('color', e.target.value)}
                       placeholder="#6366F1"
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
                 </div>
@@ -510,7 +510,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.preferredModel || ''}
                     onChange={e => handleField('preferredModel', e.target.value)}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.selectModel', 'Pick a text model…')}
@@ -543,7 +543,7 @@ export default function AdminAgentEditPage() {
                     step="0.1"
                     value={profile.preferredTemperature ?? 0.7}
                     onChange={e => handleField('preferredTemperature', parseFloat(e.target.value))}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -556,7 +556,7 @@ export default function AdminAgentEditPage() {
                     max="50"
                     value={profile.maxIterations ?? 10}
                     onChange={e => handleField('maxIterations', parseInt(e.target.value) || 10)}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -599,7 +599,7 @@ export default function AdminAgentEditPage() {
                     t={t}
                   />
                   {incompatibleAppGroundingCombo && (
-                    <div className="mt-2 text-xs bg-amber-50 border border-amber-300 rounded p-2 text-amber-900">
+                    <div className="mt-2 text-xs bg-amber-50 border border-amber-300 rounded-sm p-2 text-amber-900">
                       <span className="font-medium">⚠ App tools won’t run on this profile.</span>{' '}
                       {incompatibleAppGroundingCombo} (Google) uses native grounding when{' '}
                       <span className="font-mono">webSearch</span> is configured, and Google models
@@ -647,13 +647,13 @@ export default function AdminAgentEditPage() {
               )}
             >
               <div className="space-y-4">
-                <div className="rounded border border-gray-200 dark:border-gray-700 p-3">
+                <div className="rounded-sm border border-gray-200 dark:border-gray-700 p-3">
                   <label className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={!!profile.planner?.enabled}
                       onChange={e => handlePlanner({ enabled: e.target.checked })}
-                      className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                      className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded-sm"
                     />
                     <span>
                       <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
@@ -679,7 +679,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.maxTasks ?? 10}
                         onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
-                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                       />
                     </div>
                     <div>
@@ -696,7 +696,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.modelId || ''}
                         onChange={e => handlePlanner({ modelId: e.target.value })}
-                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                       >
                         <option value="">
                           {t('admin.agents.edit.plannerModelInherit', '(inherit Preferred model)')}
@@ -747,13 +747,13 @@ export default function AdminAgentEditPage() {
                   </div>
                 </div>
 
-                <div className="rounded border border-gray-200 dark:border-gray-700 p-3">
+                <div className="rounded-sm border border-gray-200 dark:border-gray-700 p-3">
                   <label className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={!!profile.dynamicTasks?.enabled}
                       onChange={e => handleDynamicTasks({ enabled: e.target.checked })}
-                      className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                      className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded-sm"
                     />
                     <span>
                       <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
@@ -781,7 +781,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.maxDepth ?? 3}
                       onChange={e => handleDynamicTasks({ maxDepth: Number(e.target.value) })}
-                      className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                     />
                   </div>
                   <div>
@@ -795,7 +795,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.modelId || ''}
                       onChange={e => handleDynamicTasks({ modelId: e.target.value || undefined })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -834,7 +834,7 @@ export default function AdminAgentEditPage() {
                     type="checkbox"
                     checked={profile.synthesizer?.enabled !== false}
                     onChange={e => handleSynthesizer({ enabled: e.target.checked })}
-                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded-sm"
                   />
                   <span>
                     <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
@@ -855,7 +855,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.synthesizer?.modelId || ''}
                     onChange={e => handleSynthesizer({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.synthesizerModelInherit', '(inherit Preferred model)')}
@@ -886,7 +886,7 @@ export default function AdminAgentEditPage() {
                     step="1000"
                     value={profile.synthesizer?.maxTokens ?? 8000}
                     onChange={e => handleSynthesizer({ maxTokens: Number(e.target.value) || 8000 })}
-                    className="mt-1 block w-40 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-40 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
                 <DynamicLanguageEditor
@@ -942,7 +942,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.review?.strictness || 'balanced'}
                     onChange={e => handleReview({ strictness: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   >
                     <option value="lenient">
                       {t('admin.agents.edit.reviewLenient', 'Lenient')}
@@ -960,7 +960,7 @@ export default function AdminAgentEditPage() {
                     checked={!!profile.review?.enabled}
                     onChange={e => handleReview({ enabled: e.target.checked })}
                     disabled={!profile.planner?.enabled}
-                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                    className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded-sm"
                   />
                   <span>
                     <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
@@ -1004,7 +1004,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                   />
                 </div>
 
@@ -1029,7 +1029,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -1049,7 +1049,7 @@ export default function AdminAgentEditPage() {
                     rows={3}
                     value={profile.review?.criteria || ''}
                     onChange={e => handleReview({ criteria: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
 
@@ -1067,7 +1067,7 @@ export default function AdminAgentEditPage() {
                     disabled={!profile.review?.enabled}
                     value={profile.review?.modelId || ''}
                     onChange={e => handleReview({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                   >
                     <option value="">
                       {t('admin.agents.edit.reviewModelInherit', '(inherit Preferred model)')}
@@ -1115,7 +1115,7 @@ export default function AdminAgentEditPage() {
                 placeholder="*/15 * * * *"
                 value={cron}
                 onChange={e => handleCronSchedule(e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               />
             </Section>
 
@@ -1132,7 +1132,7 @@ export default function AdminAgentEditPage() {
                 placeholder="engineering-todos"
                 value={profile.inboxId || ''}
                 onChange={e => handleField('inboxId', e.target.value)}
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               />
             </Section>
 
@@ -1144,7 +1144,7 @@ export default function AdminAgentEditPage() {
                     type="checkbox"
                     checked={profile.memory?.enabled !== false}
                     onChange={e => handleMemory({ enabled: e.target.checked })}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm"
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.agents.edit.memoryEnabled', 'Enabled')}
@@ -1155,7 +1155,7 @@ export default function AdminAgentEditPage() {
                     type="checkbox"
                     checked={profile.memory?.autoInclude !== false}
                     onChange={e => handleMemory({ autoInclude: e.target.checked })}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm"
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.agents.edit.autoInclude', 'Auto-include in prompt')}
@@ -1171,7 +1171,7 @@ export default function AdminAgentEditPage() {
                     max="1000000"
                     value={profile.memory?.maxBytes ?? 8192}
                     onChange={e => handleMemory({ maxBytes: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1207,7 +1207,7 @@ export default function AdminAgentEditPage() {
                       disabled={profile.memory?.enabled === false}
                       value={profile.memory?.modelId || ''}
                       onChange={e => handleMemory({ modelId: e.target.value })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -1245,7 +1245,7 @@ export default function AdminAgentEditPage() {
                             : 0.2
                         })
                       }
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -1293,7 +1293,7 @@ export default function AdminAgentEditPage() {
                     max="86400"
                     value={profile.budgets?.maxWallTimeSec ?? 600}
                     onChange={e => handleBudgets({ maxWallTimeSec: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -1312,7 +1312,7 @@ export default function AdminAgentEditPage() {
                     max="10"
                     value={profile.concurrency?.maxConcurrent ?? 1}
                     onChange={e => handleConcurrency({ maxConcurrent: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1338,7 +1338,7 @@ export default function AdminAgentEditPage() {
                       .filter(Boolean)
                   })
                 }
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               />
             </Section>
 
@@ -1362,7 +1362,7 @@ export default function AdminAgentEditPage() {
                       .filter(Boolean)
                   })
                 }
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
               />
             </Section>
           </div>
@@ -1385,7 +1385,7 @@ export default function AdminAgentEditPage() {
 
 function Section({ title, hint, children }) {
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
       {hint && <p className="mt-1 mb-3 text-sm text-gray-500 dark:text-gray-400">{hint}</p>}
       {!hint && <div className="mt-3" />}
@@ -1408,7 +1408,7 @@ function FieldText({ span, label, required, value, onChange, placeholder, disabl
         value={value || ''}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
       />
     </div>
   );
@@ -1440,7 +1440,7 @@ function AppMultiSelect({ value, apps, onChange, currentLanguage, t }) {
                   type="checkbox"
                   checked={valueSet.has(a.id)}
                   onChange={() => toggle(a.id)}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm"
                 />
                 <span className="text-sm text-gray-800 dark:text-gray-200">
                   {getLocalizedContent(a.name, currentLanguage) || a.id}

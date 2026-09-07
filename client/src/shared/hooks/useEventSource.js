@@ -1,21 +1,33 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { checkAppChatStatus, stopAppChatStream } from '../../api';
-import { parseSseStream } from '../utils/parseSseStream';
-import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/office/api/officeAuth';
+import {
+  openSseStream,
+  toRunEnvelope,
+  syntheticStreamError,
+  TRANSPORT_ERROR_CODES
+} from '../utils/openSseStream';
+import { RUN_EVENTS } from '../run/runReducer';
 
 /**
- * Hook for handling Server Sent Events via fetch + ReadableStream.
+ * Chat stream transport (SSE v2) on top of the shared fetch-based
+ * `openSseStream` transport (Bearer header + 401 refresh for the Office
+ * add-in, no native EventSource).
  *
- * Uses fetch instead of native EventSource so that custom Authorization headers
- * can be injected (required for Office add-in Bearer token auth and any other
- * token-based auth flows). Includes connection timeout, heartbeat, and cleanup
- * matching the robustness of native EventSource usage.
+ * Delivers every frame as `onEvent({ type, envelope })` where `envelope` is
+ * the SSE v2 envelope `{ v: 2, seq, runId, ts, type, data }`. Transport
+ * failures (timeout, network, non-OK response) are delivered as synthetic
+ * `stream/error` envelopes so consumers only ever see one dialect.
+ *
+ * Terminal frames: `run/ended` of the turn's run and `stream/error` close the
+ * fetch (release the HTTP/1.1 connection slot) and flip processing to false.
+ * Also includes connection timeout, the chat heartbeat (`checkAppChatStatus`)
+ * and `stopAppChatStream` on cleanup.
  *
  * @param {Object} options
  * @param {string} options.appId - App ID (used for heartbeat + cleanup)
- * @param {string} options.chatId - Chat session ID (used for heartbeat + cleanup)
+ * @param {string} options.chatId - Chat session ID (stream id; heartbeat + cleanup)
  * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
- * @param {Function} options.onEvent - Called for each SSE event: ({ type, data, fullContent })
+ * @param {Function} options.onEvent - Called for each SSE v2 frame: ({ type, envelope })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
  */
 function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
@@ -26,7 +38,6 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
 
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
-  const fullContentRef = useRef('');
 
   // Synchronously release the connection slot: abort the fetch and clear timers.
   // Kept separate from cleanupEventSource so callers (and initEventSource) can
@@ -92,20 +103,9 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
   }, [appId, chatId, cleanupEventSource, onProcessingChange]);
 
   /**
-   * Build auth headers for the SSE fetch request.
-   * Mirrors the behavior of apiClient's request interceptor:
-   * - Reads `authToken` from localStorage (main app session)
-   * - Falls back to `office_ihubtoken` (Office add-in PKCE token)
-   */
-  const getAuthHeaders = useCallback(() => {
-    const token =
-      localStorage.getItem('office_ihubtoken') || localStorage.getItem('authToken') || null;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }, []);
-
-  /**
    * Open the SSE stream to the given URL.
-   * Caller does not need to await — errors are reported via onEvent.
+   * Caller does not need to await — errors are reported via onEvent as
+   * synthetic `stream/error` envelopes.
    *
    * @param {string} url - SSE endpoint URL (absolute or relative)
    */
@@ -124,124 +124,103 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
         );
       }
 
-      fullContentRef.current = '';
       if (onProcessingChange) onProcessingChange(true);
 
       const ac = new AbortController();
       abortControllerRef.current = ac;
 
       let connectionEstablished = false;
+      // The run of this turn: first top-level `run/started` on this connection.
+      // Only ITS `run/ended` closes the stream (a chat-launched child run
+      // ending must not end the turn).
+      let turnRunId = null;
+
+      const emit = envelope => {
+        if (onEvent) onEvent({ type: envelope.type, envelope });
+      };
+
+      const releaseSlot = () => {
+        abortControllerRef.current = null;
+        if (onProcessingChange) onProcessingChange(false);
+        // Release the browser's HTTP/1.1 connection slot. Without this the
+        // fetch sits in the pool until TCP keep-alive times out; opening 2
+        // streams per round in compare mode hits the 6-connection limit by
+        // the third message and the whole UI appears to hang.
+        try {
+          ac.abort();
+        } catch {
+          // already aborted — nothing to do
+        }
+      };
 
       connectionTimeoutRef.current = setTimeout(() => {
         if (!connectionEstablished) {
           console.error('SSE connection timeout');
           cleanupEventSource();
-          if (onEvent) {
-            onEvent({
-              type: 'error',
-              data: { message: 'Connection timeout. Please try again.' },
-              fullContent: fullContentRef.current
-            });
-          }
+          emit(
+            syntheticStreamError(
+              chatId,
+              'Connection timeout. Please try again.',
+              TRANSPORT_ERROR_CODES.TIMEOUT
+            )
+          );
           if (onProcessingChange) onProcessingChange(false);
         }
       }, timeoutDuration);
 
       try {
-        let res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            Accept: 'text/event-stream',
-            ...getAuthHeaders()
-          },
-          credentials: 'include',
-          signal: ac.signal
-        });
-
-        // For the Office add-in: attempt a silent token refresh on 401 and retry once.
-        // Keyed off getRefreshToken() so the refresh is attempted even when the
-        // access token is already gone (expired and removed) but a refresh token exists.
-        // refreshTokenOrExpireSession() invokes the session-expired callback and throws
-        // if the refresh itself fails, letting the outer catch report the error.
-        if (res.status === 401 && getRefreshToken()) {
-          await refreshTokenOrExpireSession();
-          res = await fetch(url, {
-            method: 'GET',
-            headers: {
-              Accept: 'text/event-stream',
-              ...getAuthHeaders()
-            },
-            credentials: 'include',
-            signal: ac.signal
-          });
-        }
-
-        if (!res.ok) {
-          let body = null;
-          try {
-            body = await res.json();
-          } catch {
-            // ignore parse error
-          }
-          throw Object.assign(
-            new Error((body && body.message) || `SSE connection failed (${res.status})`),
-            { status: res.status, body }
-          );
-        }
-
-        if (!res.body) {
-          throw new Error('SSE response has no readable body');
-        }
-
-        connectionEstablished = true;
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-        startHeartbeat();
-
-        const handleSseEvent = (name, data) => {
-          if (name === 'connected') {
+        await openSseStream(url, {
+          signal: ac.signal,
+          onOpen: () => {
             connectionEstablished = true;
-          }
-          if (name === 'chunk' && data && data.content) {
-            fullContentRef.current += data.content;
-          }
-          if (onEvent) {
-            onEvent({ type: name, data, fullContent: fullContentRef.current });
-          }
-          if (name === 'done' || name === 'error') {
-            abortControllerRef.current = null;
-            if (onProcessingChange) onProcessingChange(false);
-            // Release the browser's HTTP/1.1 connection slot. Without this the
-            // fetch sits in the pool until TCP keep-alive times out; opening 2
-            // streams per round in compare mode hits the 6-connection limit by
-            // the third message and the whole UI appears to hang.
-            try {
-              ac.abort();
-            } catch {
-              // already aborted — nothing to do
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+            startHeartbeat();
+          },
+          onEvent: (name, data) => {
+            const envelope = toRunEnvelope(name, data, chatId);
+            if (!envelope) return;
+
+            if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) {
+              connectionEstablished = true;
+            }
+            if (
+              envelope.type === RUN_EVENTS.RUN_STARTED &&
+              !turnRunId &&
+              !envelope.data?.parentRunId
+            ) {
+              turnRunId = envelope.runId;
+            }
+
+            emit(envelope);
+
+            const isTurnEnd =
+              envelope.type === RUN_EVENTS.RUN_ENDED &&
+              (!turnRunId || envelope.runId === turnRunId);
+            if (isTurnEnd || envelope.type === RUN_EVENTS.STREAM_ERROR) {
+              releaseSlot();
             }
           }
-        };
-
-        await parseSseStream(res.body, handleSseEvent, ac.signal);
+        });
       } catch (err) {
         // AbortError means we cancelled intentionally — not an error to report
         if (err.name === 'AbortError') return;
 
         console.error('SSE stream error:', err);
-        if (onEvent) {
-          onEvent({
-            type: 'error',
-            data: { message: err.message || 'Streaming connection failed. Please try again.' },
-            fullContent: fullContentRef.current
-          });
-        }
+        emit(
+          syntheticStreamError(
+            chatId,
+            err.message || 'Streaming connection failed. Please try again.',
+            err.status ? TRANSPORT_ERROR_CODES.HTTP : TRANSPORT_ERROR_CODES.CONNECTION,
+            err.status ? { status: err.status, body: err.body ?? null } : undefined
+          )
+        );
         if (onProcessingChange) onProcessingChange(false);
       } finally {
         // Always abort the controller — release the HTTP/1.1 connection slot.
-        // The handleSseEvent 'done'/'error' path already aborts on the happy
-        // path; this finally covers the failure paths (mid-stream network
-        // error, malformed event, exception thrown by the consumer's onEvent
+        // The terminal-frame path already aborts on the happy path; this
+        // finally covers the failure paths (mid-stream network error,
+        // malformed event, exception thrown by the consumer's onEvent
         // callback) that would otherwise leave the fetch hanging in the
         // browser's connection pool until TCP keep-alive expires.
         try {
@@ -271,8 +250,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       onProcessingChange,
       onEvent,
       startHeartbeat,
-      timeoutDuration,
-      getAuthHeaders
+      timeoutDuration
     ]
   );
 

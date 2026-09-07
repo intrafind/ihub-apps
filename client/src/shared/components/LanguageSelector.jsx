@@ -93,7 +93,7 @@ function LanguageSelector({ variant = 'header' }) {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={t('common.selectLanguage', 'Select language')}
-          className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
         >
           {current.toUpperCase()}
           <Icon
@@ -135,7 +135,7 @@ function LanguageSelector({ variant = 'header' }) {
   }
 
   const selectClassName =
-    'bg-transparent text-white border border-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-white cursor-pointer';
+    'bg-transparent text-white border border-white rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-1 focus:ring-white cursor-pointer';
 
   return (
     <div className="language-selector">

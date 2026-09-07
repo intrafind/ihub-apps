@@ -1,10 +1,20 @@
 import request from 'supertest';
-import { TestHelper, TestValidators } from '../utils/helpers.js';
-import { testUsers, testApps, testModels } from '../utils/fixtures.js';
+import { TestHelper, TestValidators } from '../../utils/helpers.js';
+import { testUsers, testApps, testModels } from '../../utils/fixtures.js';
 
 /**
  * Integration Tests for Chat API
  * These tests validate the chat API endpoints with real HTTP requests
+ *
+ * NOT run in CI (see package.json's test:integration:ci) and not collectible
+ * under Jest at all today: server/server.js uses top-level await at module
+ * scope (a real Node ESM feature), which Babel's CommonJS transform cannot
+ * represent - `require()` is synchronous, so a transpiled top-level await
+ * is a syntax error under this Jest config. Booting the real server for
+ * these tests needs a true ESM-mode Jest project (`--experimental-vm-modules`,
+ * as server/jest.config.js already uses for server/tests/), not the
+ * jsdom/babel-CJS config this file currently lives under. Tracked in
+ * https://github.com/intrafind/ihub-apps/issues/1705.
  */
 
 describe('Chat API Integration Tests', () => {
@@ -16,7 +26,7 @@ describe('Chat API Integration Tests', () => {
     await TestHelper.setupTestEnvironment();
 
     // Import and start the server (adjust import path as needed)
-    const { default: serverApp } = await import('../../server/server.js');
+    const { default: serverApp } = await import('../../../server/server.js');
     app = serverApp;
   });
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { openSseStream } from '../../../shared/utils/openSseStream';
 import { apiClient } from '../../../api/client';
 import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
 import StatusBadge from '../../../shared/components/StatusBadge';
@@ -34,39 +35,72 @@ function isAcceptedFile(file) {
   return ACCEPTED_EXTENSIONS.includes(ext);
 }
 
+const TERMINAL_JOB_STATUSES = ['completed', 'error', 'cancelled'];
+/** Reconnect attempts for the progress stream (1s, 2s, 4s, 8s, 16s). */
+const MAX_PROGRESS_RECONNECTS = 5;
+const reconnectDelayMs = attempt => Math.min(16000, 1000 * 2 ** attempt);
+
 function JobCard({ job, onCancel }) {
-  const eventSourceRef = useRef(null);
+  const abortRef = useRef(null);
   const [progress, setProgress] = useState(job.progress || { current: 0, total: 0 });
   const [status, setStatus] = useState(job.status || 'queued');
   const [error, setError] = useState(job.error || null);
 
   useEffect(() => {
-    if (status === 'completed' || status === 'error' || status === 'cancelled') return;
+    if (TERMINAL_JOB_STATUSES.includes(status)) return;
 
+    // Progress frames are default (`message`) SSE events carrying
+    // `{ progress?, status?, error? }`. Shared fetch-based transport so the
+    // Bearer header / 401 refresh apply here too (no native EventSource).
     const progressUrl = buildApiUrl(`/tools-service/jobs/${job.jobId}/progress`);
-    const es = new EventSource(progressUrl, { withCredentials: true });
-    eventSourceRef.current = es;
+    const ac = new AbortController();
+    abortRef.current = ac;
+    let terminal = false;
+    let retryTimer = null;
 
-    es.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.progress) setProgress(data.progress);
-      if (data.status) setStatus(data.status);
-      if (data.error) setError(data.error);
+    // The fetch-based stream is one-shot: a transient close before the job
+    // finished reconnects with bounded backoff (the job keeps running server
+    // side and the next frames catch the card up).
+    const connect = attempt => {
+      if (ac.signal.aborted || terminal) return;
+      openSseStream(progressUrl, {
+        signal: ac.signal,
+        onEvent: (name, data) => {
+          if (name !== 'message' || !data || typeof data !== 'object' || 'raw' in data) return;
+          if (data.progress) setProgress(data.progress);
+          if (data.status) setStatus(data.status);
+          if (data.error) setError(data.error);
 
-      if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
-        es.close();
-        eventSourceRef.current = null;
+          if (TERMINAL_JOB_STATUSES.includes(data.status)) {
+            terminal = true;
+            ac.abort();
+            if (abortRef.current === ac) abortRef.current = null;
+          }
+        }
+      })
+        .then(() => {
+          if (!terminal && !ac.signal.aborted) scheduleRetry(attempt);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError' || ac.signal.aborted) return;
+          console.warn('OCR progress stream error:', err);
+          scheduleRetry(attempt);
+        });
+    };
+    const scheduleRetry = attempt => {
+      if (attempt >= MAX_PROGRESS_RECONNECTS) {
+        console.warn('OCR progress stream gave up reconnecting', job.jobId);
+        if (abortRef.current === ac) abortRef.current = null;
+        return;
       }
+      retryTimer = setTimeout(() => connect(attempt + 1), reconnectDelayMs(attempt));
     };
-
-    es.onerror = () => {
-      es.close();
-      eventSourceRef.current = null;
-    };
+    connect(0);
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      if (retryTimer) clearTimeout(retryTimer);
+      ac.abort();
+      if (abortRef.current === ac) abortRef.current = null;
     };
   }, [job.jobId, status]);
 
@@ -105,7 +139,7 @@ function JobCard({ job, onCancel }) {
         {status === 'completed' && (
           <button
             onClick={handleDownload}
-            className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors font-medium"
           >
             Download
           </button>
@@ -113,7 +147,7 @@ function JobCard({ job, onCancel }) {
         {isProcessing && (
           <button
             onClick={() => onCancel(job.jobId)}
-            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
           >
             Cancel
           </button>
@@ -369,7 +403,7 @@ export default function OcrPage() {
                 checked={debugMode}
                 onChange={e => setDebugMode(e.target.checked)}
                 disabled={isProcessing}
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
               Debug mode — add visible text pages
             </label>

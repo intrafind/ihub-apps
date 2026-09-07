@@ -12,7 +12,7 @@ import { DataTable, SearchInput, parseSortParam, formatSortParam } from '../comp
 function CodeCell({ link }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-8 w-8">
+      <div className="shrink-0 h-8 w-8">
         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
           <Icon name="link" className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
         </div>
@@ -214,7 +214,7 @@ function AdminShortLinks() {
             <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
               <button
                 onClick={() => navigate('/admin/shortlinks/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.shortlinks.addNew', 'Add New Link')}

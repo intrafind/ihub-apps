@@ -5,13 +5,13 @@ import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
-import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-8 w-8">
+      <div className="shrink-0 h-8 w-8">
         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
           <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
         </div>
@@ -72,7 +72,7 @@ function AdminModelsPage() {
       const data = response.data;
       setModels(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setModels([]);
     } finally {
       setLoading(false);
@@ -91,7 +91,7 @@ function AdminModelsPage() {
       const result = response.data;
       setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -100,7 +100,7 @@ function AdminModelsPage() {
       await toggleModels('*', true);
       setModels(prev => prev.map(m => ({ ...m, enabled: true })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -109,25 +109,30 @@ function AdminModelsPage() {
       await toggleModels('*', false);
       setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
   const testModel = async modelId => {
+    setTestingModel(modelId);
+    // The test endpoint maps a provider rejecting the server's key onto 502 (not
+    // 401), so the shared admin client is safe here: a 401 really is an expired
+    // admin session and must go through the global re-authentication flow.
     try {
-      setTestingModel(modelId);
       const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
         method: 'POST'
       });
-      setTestResults(prev => ({ ...prev, [modelId]: response.data }));
+      setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
     } catch (err) {
-      const errorData = err.response?.data || {};
+      // Server body: { error: headline, details: remediation text, code }
+      const body = err?.response?.data || {};
       setTestResults(prev => ({
         ...prev,
         [modelId]: {
           success: false,
-          message: errorData.message || 'Test failed',
-          error: errorData.error || err.message
+          message: body.error || t('admin.models.test.failed', 'Test Failed'),
+          error:
+            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         }
       }));
     } finally {
@@ -145,7 +150,7 @@ function AdminModelsPage() {
       await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
       setModels(prev => prev.filter(m => m.id !== modelId));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -164,7 +169,7 @@ function AdminModelsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download model config: ${err.message}`);
+      setError(`Failed to download model config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -194,12 +199,12 @@ function AdminModelsPage() {
       await loadModels();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload model config: ${err.message}`);
+        setError(`Failed to upload model config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);
@@ -301,7 +306,7 @@ function AdminModelsPage() {
         <div className="flex items-start space-x-3">
           {result.success ? (
             <>
-              <Icon name="check-circle" className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <Icon name="check-circle" className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-medium text-green-800 dark:text-green-300">
                   {t('admin.models.test.success', 'Test Successful')}
@@ -313,10 +318,7 @@ function AdminModelsPage() {
             </>
           ) : (
             <>
-              <Icon
-                name="exclamation-circle"
-                className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
-              />
+              <Icon name="exclamation-circle" className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-medium text-red-800 dark:text-red-300">
                   {result.message || t('admin.models.test.failed', 'Test Failed')}
@@ -387,7 +389,7 @@ function AdminModelsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => navigate('/admin/models/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.models.addNew', 'Add New Model')}
@@ -402,7 +404,7 @@ function AdminModelsPage() {
                 />
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={uploading}
                   title={t('admin.models.uploadConfig', 'Upload Model Config')}
                 >
@@ -417,14 +419,14 @@ function AdminModelsPage() {
               </div>
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                 onClick={enableAllModels}
               >
                 {t('admin.common.enableAll', 'Enable All')}
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                 onClick={disableAllModels}
               >
                 {t('admin.common.disableAll', 'Disable All')}
@@ -470,7 +472,7 @@ function AdminModelsPage() {
               action: (
                 <button
                   onClick={() => navigate('/admin/models/new')}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.models.addNew', 'Add New Model')}

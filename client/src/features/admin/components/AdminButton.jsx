@@ -1,6 +1,6 @@
 const VARIANT_CLASSES = {
   primary:
-    'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm border border-transparent focus:ring-indigo-500',
+    'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs border border-transparent focus:ring-indigo-500',
   secondary:
     'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 focus:ring-indigo-500',
   danger:
@@ -46,7 +46,7 @@ function AdminButton({
       className={[
         'inline-flex items-center justify-center rounded-lg font-medium',
         'transition-all duration-150',
-        'focus:outline-none focus:ring-2 focus:ring-offset-2',
+        'focus:outline-hidden focus:ring-2 focus:ring-offset-2',
         'active:scale-95',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.secondary,

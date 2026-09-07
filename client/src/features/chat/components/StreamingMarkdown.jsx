@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useLayoutEffect, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { renderMarkdown } from '../../../config/marked.config';
 import {
   transformCitations,
@@ -19,12 +19,18 @@ import './StreamingMarkdown.css';
  *   While true the container is GPU-promoted (will-change/translateZ) for smooth
  *   incremental updates; once streaming ends the promotion is dropped so finished
  *   messages don't each hold a permanent compositor layer.
+ *
+ * Exported wrapped in `memo`: the component owns its DOM through
+ * `dangerouslySetInnerHTML`, and React re-applies that prop whenever the object
+ * it is given is not reference-identical to the previous one — it never compares
+ * the HTML string. A parent re-render for an unrelated reason (hovering a chat
+ * message toggles its action row, for example) would therefore wipe and rebuild
+ * the whole markdown subtree, throwing away every rendered Mermaid diagram in it.
  */
 function StreamingMarkdown({ content, hasCitations, streaming = false }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
-  const [renderKey, setRenderKey] = useState(0);
-  const contentLengthRef = useRef(0);
+  const lastParsedContentRef = useRef(null);
   const citationsAppliedRef = useRef(false);
 
   const handleCitationClick = useCallback((type, num) => {
@@ -36,12 +42,13 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
   useLayoutEffect(() => {
     if (!content) {
       setHtmlContent('');
+      lastParsedContentRef.current = null;
       citationsAppliedRef.current = false;
       return;
     }
 
     // Re-parse when content changes or when citations become available but weren't applied yet
-    const contentChanged = content.length !== contentLengthRef.current;
+    const contentChanged = content !== lastParsedContentRef.current;
     const needsCitationTransform = hasCitations && !citationsAppliedRef.current;
 
     if (contentChanged || needsCitationTransform) {
@@ -53,11 +60,11 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
         if (transformHtml) {
           citationsAppliedRef.current = true;
         }
-        setHtmlContent(parsedContent);
-        contentLengthRef.current = content.length;
-
-        // Force a complete re-render by updating the key
-        setRenderKey(prevKey => prevKey + 1);
+        // Only push new HTML when it actually differs. Re-assigning identical
+        // markup would tear down and recreate every child node, which throws
+        // away already-rendered Mermaid diagrams.
+        setHtmlContent(prev => (prev === parsedContent ? prev : parsedContent));
+        lastParsedContentRef.current = content;
       } catch (error) {
         console.error('Error parsing markdown:', error);
       }
@@ -71,16 +78,21 @@ function StreamingMarkdown({ content, hasCitations, streaming = false }) {
     }
   }, [htmlContent, hasCitations, handleCitationClick]);
 
+  // Reference-stable as long as the markup is unchanged. React compares the
+  // `dangerouslySetInnerHTML` prop by object identity, so a fresh literal on
+  // every render would re-assign `innerHTML` — destroying and recreating every
+  // child node — even when the HTML is byte-identical.
+  const innerHtml = useMemo(() => ({ __html: htmlContent }), [htmlContent]);
+
   return (
     <div
-      key={renderKey}
       ref={containerRef}
-      className={`markdown-content break-words whitespace-normal streaming-markdown${
+      className={`markdown-content wrap-break-word whitespace-normal streaming-markdown${
         streaming ? ' is-streaming' : ''
       }`}
-      dangerouslySetInnerHTML={{ __html: htmlContent }} // sanitized with DOMPurify before setState
+      dangerouslySetInnerHTML={innerHtml} // sanitized with DOMPurify before setState
     />
   );
 }
 
-export default StreamingMarkdown;
+export default memo(StreamingMarkdown);

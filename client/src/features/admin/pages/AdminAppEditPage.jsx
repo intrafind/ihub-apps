@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import AppFormEditor from '../components/AppFormEditor';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
@@ -21,6 +21,7 @@ function AdminAppEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
@@ -224,7 +225,7 @@ function AdminAppEditPage() {
       setApp(appWithDefaults);
       setInitialData(appWithDefaults);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -304,19 +305,20 @@ function AdminAppEditPage() {
 
     // Check validation state
     if (!validationState.isValid) {
-      setError(
+      setSaveError(
         t('admin.apps.edit.validationErrorsExist', 'Please fix validation errors before saving')
       );
       return;
     }
 
     if (!app.id) {
-      setError('App ID is required');
+      setSaveError('App ID is required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = appId === 'new' ? 'POST' : 'PUT';
       const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
 
@@ -331,7 +333,7 @@ function AdminAppEditPage() {
       markSaved();
       navigate('/admin/apps');
     } catch (err) {
-      setError(err.message);
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -367,7 +369,7 @@ function AdminAppEditPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -423,7 +425,7 @@ function AdminAppEditPage() {
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
                 <Icon name="clock" className="w-4 h-4 mr-2" />
                 {t('admin.apps.edit.history', 'History')}
@@ -442,7 +444,7 @@ function AdminAppEditPage() {
                   linkElement.setAttribute('download', exportFileDefaultName);
                   linkElement.click();
                 }}
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
                 <Icon name="download" className="w-4 h-4 mr-2" />
                 {t('common.download')}
@@ -450,7 +452,7 @@ function AdminAppEditPage() {
             )}
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               onClick={() => navigate('/admin/apps')}
             >
               {t('admin.apps.edit.back', 'Back to Apps')}
@@ -458,6 +460,22 @@ function AdminAppEditPage() {
           </div>
         </div>
       </div>
+
+      {saveError && (
+        <div className="mt-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+          <div className="flex">
+            <div className="shrink-0">
+              <Icon name="x-circle" className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.apps.errorTitle', 'Error')}
+              </h3>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="mt-8">
         {/* Dual Mode Editor */}
@@ -499,14 +517,14 @@ function AdminAppEditPage() {
           <button
             type="button"
             onClick={() => navigate('/admin/apps')}
-            className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             {t('admin.apps.edit.cancel', 'Cancel')}
           </button>
           <button
             type="submit"
             disabled={saving || !validationState.isValid}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? (
               <div className="flex items-center">

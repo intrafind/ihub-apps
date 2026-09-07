@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { renderMarkdown } from '../../../config/marked.config';
 import ArtifactDownloadMenu from './ArtifactDownloadMenu';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Modal markdown viewer for agent run artifacts. Fetches the raw file from
@@ -20,9 +21,12 @@ function ArtifactViewer({ runId, name, onClose }) {
     setLoading(true);
     setError(null);
     setHtmlContent('');
-    fetch(`/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`, {
-      credentials: 'include'
-    })
+    fetch(
+      buildApiUrl(`agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`),
+      {
+        credentials: 'include'
+      }
+    )
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
@@ -56,7 +60,9 @@ function ArtifactViewer({ runId, name, onClose }) {
   }, [onClose]);
 
   if (!name) return null;
-  const artifactUrl = `/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`;
+  const artifactUrl = buildApiUrl(
+    `agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`
+  );
 
   return (
     <div
@@ -80,7 +86,7 @@ function ArtifactViewer({ runId, name, onClose }) {
               href={artifactUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs px-2 py-0.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+              className="text-xs px-2 py-0.5 border border-gray-300 rounded-sm text-gray-700 hover:bg-gray-50"
               title="Open raw"
             >
               raw
@@ -98,7 +104,7 @@ function ArtifactViewer({ runId, name, onClose }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading && <div className="text-sm text-gray-500">Loading…</div>}
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-sm p-3">
               {error}
             </div>
           )}

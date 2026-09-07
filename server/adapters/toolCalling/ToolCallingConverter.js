@@ -156,8 +156,8 @@ export async function convertResponseToGeneric(data, sourceProvider, streamId = 
 /**
  * Discard accumulated per-stream state (e.g. pending tool call accumulation) for a
  * stream that errored, was aborted, or otherwise ended without reaching its natural
- * completion event. Providers without stateful streaming (e.g. Google, Mistral) have
- * no clear function and this is a no-op for them.
+ * completion event. Providers without stateful streaming (e.g. Mistral) have no clear
+ * function and this is a no-op for them.
  * @param {string} sourceProvider - Source provider name
  * @param {string} streamId - Stream identifier to clear
  */

@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } fr
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ReactComponentRenderer from './ReactComponentRenderer';
+import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 /**
  * CustomResponseRenderer - Renders custom response components for structured app outputs
@@ -32,7 +33,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
         setError(null);
 
         // Fetch renderer code from API
-        const response = await fetch(`/api/renderers/${componentName}`);
+        const response = await fetch(buildApiUrl(`renderers/${componentName}`));
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -116,7 +117,7 @@ function CustomResponseRenderer({ componentName, data, rendererConfig, className
           <summary className="cursor-pointer text-sm text-red-600 hover:text-red-800">
             {t('common.details', 'Details')}
           </summary>
-          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded mt-2 overflow-auto">
+          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded-sm mt-2 overflow-auto">
             Renderer: {componentName}
             {'\n'}
             Error: {error}

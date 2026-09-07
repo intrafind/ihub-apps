@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessing';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * Shared rendering shell for the cloud-storage file pickers
@@ -132,7 +133,9 @@ const CloudFileBrowserShell = ({
 
   const handleConnect = () => {
     const returnUrl = window.location.pathname + window.location.search;
-    const authUrl = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
+    const authUrl = buildApiUrl(
+      `integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`
+    );
     window.location.href = authUrl;
   };
 
@@ -189,13 +192,13 @@ const CloudFileBrowserShell = ({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleConnect}
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+            className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             {t(i18nKeys.connect[0], i18nKeys.connect[1])}
           </button>
@@ -218,7 +221,7 @@ const CloudFileBrowserShell = ({
               onClick={() => selectSource(source.id)}
               className="w-full flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
             >
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-4">
+              <div className="shrink-0 w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-4">
                 <Icon
                   name={source.icon}
                   size="lg"
@@ -373,7 +376,7 @@ const CloudFileBrowserShell = ({
                 type="checkbox"
                 checked={!showUnsupportedFiles}
                 onChange={e => setShowUnsupportedFiles(!e.target.checked)}
-                className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                className="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
               />
               {t('cloudStorage.showSupportedOnly', 'Show supported files only')}
             </label>
@@ -476,7 +479,7 @@ const CloudFileBrowserShell = ({
                           checked={isSelected}
                           onChange={() => toggleFileSelection(item)}
                           disabled={!canSelect}
-                          className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50"
+                          className="mr-3 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm disabled:opacity-50"
                         />
                       )}
 
@@ -563,14 +566,14 @@ const CloudFileBrowserShell = ({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleAttachFiles}
                 disabled={selectedFiles.size === 0}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {t('cloudStorage.attachFiles', 'Attach {{count}} File(s)', {
                   count: selectedFiles.size

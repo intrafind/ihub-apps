@@ -399,6 +399,9 @@ const baseAppConfigSchema = z.object({
   websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
   workflows: z.array(z.string()).optional(),
+  // Other app ids this app may invoke as synthetic `app__<id>` tools
+  // (requires the `appAsTool` platform feature; see appToolsGateway).
+  apps: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
   skillSettings: z
     .object({

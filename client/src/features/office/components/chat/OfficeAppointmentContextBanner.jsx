@@ -113,12 +113,12 @@ function OfficeAppointmentContextBanner({
   const bodySent = includeBody !== false && hasBody;
   const outerClassName = embedded
     ? ''
-    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm';
+    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs';
 
   return (
     <div className={outerClassName}>
       <div className="flex items-start gap-2 px-3 py-2">
-        <div className="flex-shrink-0 mt-0.5 text-slate-500">
+        <div className="shrink-0 mt-0.5 text-slate-500">
           <Icon name="calendar" size="sm" />
         </div>
         <div className="flex-1 min-w-0">
@@ -127,12 +127,12 @@ function OfficeAppointmentContextBanner({
               {subject}
             </div>
             {hasBody && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer flex-shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0">
                 <input
                   type="checkbox"
                   checked={bodySent}
                   onChange={e => onToggleBody?.(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 Include body
               </label>
@@ -141,7 +141,7 @@ function OfficeAppointmentContextBanner({
 
           {timeLine && (
             <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1">
-              <Icon name="clock" size="xs" className="flex-shrink-0 text-slate-400" />
+              <Icon name="clock" size="xs" className="shrink-0 text-slate-400" />
               <span className="truncate" title={timeLine}>
                 {timeLine}
               </span>
@@ -149,7 +149,7 @@ function OfficeAppointmentContextBanner({
           )}
           {ctx?.location && (
             <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1">
-              <Icon name="globe" size="xs" className="flex-shrink-0 text-slate-400" />
+              <Icon name="globe" size="xs" className="shrink-0 text-slate-400" />
               <span className="truncate" title={ctx.location}>
                 {ctx.location}
               </span>
@@ -160,7 +160,7 @@ function OfficeAppointmentContextBanner({
               <span className="font-medium text-slate-600">Organizer:</span>{' '}
               {ctx.organizer.name || ctx.organizer.email}
               {ctx?.isOrganizer && (
-                <span className="ml-1.5 inline-flex items-center rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                <span className="ml-1.5 inline-flex items-center rounded-sm bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                   You
                 </span>
               )}

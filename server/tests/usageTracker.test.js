@@ -27,6 +27,15 @@ jest.unstable_mockModule('fs/promises', () => ({
   }
 }));
 
+// debouncedJsonStore saves via atomicWriteJSON (write-temp-then-rename), which
+// internally imports { promises as fs } from 'fs' rather than 'fs/promises' —
+// mock the utility directly so tests never touch the real filesystem.
+jest.unstable_mockModule('../utils/atomicWrite.js', () => ({
+  atomicWriteJSON: jest.fn(async (_file, data) => {
+    fileContents = JSON.stringify(data, null, 2);
+  })
+}));
+
 jest.unstable_mockModule('../featureRegistry.js', () => ({
   isFeatureEnabled: () => true
 }));

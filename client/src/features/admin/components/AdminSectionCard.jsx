@@ -5,11 +5,11 @@ function AdminSectionCard({ section }) {
   return (
     <Link
       to={section.href}
-      className="group relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden"
+      className="group relative bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 overflow-hidden"
     >
       <div className="p-6">
         <div className="flex items-center mb-4">
-          <div className={`p-3 rounded-lg ${section.color} flex-shrink-0`}>
+          <div className={`p-3 rounded-lg ${section.color} shrink-0`}>
             <Icon name={section.icon} className="h-6 w-6 text-white" />
           </div>
           <div className="ml-4">

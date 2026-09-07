@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -111,8 +112,12 @@ export function loadOAuthClients(clientsFilePath) {
  * Save OAuth clients to the OAuth clients file
  * @param {Object} clientsConfig - OAuth clients configuration object
  * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Tell the other cluster workers to
+ *   re-read the file. Pass false for writes that only record usage metadata, so
+ *   a per-minute `lastUsed` touch does not make every worker reload the file.
  */
-export async function saveOAuthClients(clientsConfig, clientsFilePath) {
+export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
   try {
     const fullPath = path.isAbsolute(clientsFilePath)
       ? clientsFilePath
@@ -139,6 +144,10 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
     }
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
+
+    // Otherwise a client registered on one worker cannot authenticate against
+    // the others until their cache TTL expires.
+    if (announce) announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save OAuth clients configuration', {
       component: 'OAuthClientManager',
@@ -274,9 +283,19 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     consentRequired: clientData.consentRequired !== false,
     // trusted: when true the client is pre-approved and bypasses the consent
     //   screen even when consentRequired is true at the platform level.
-    trusted: clientData.trusted || false
+    trusted: clientData.trusted || false,
+    // personal / owner*: set for clients a user created for themselves from the
+    //   integrations page. Tokens issued for a personal client authenticate as
+    //   the owner instead of as a standalone service account, and the owner
+    //   snapshot below is what jwtAuth/mcpAuth resolve the identity from on
+    //   every request.
+    personal: clientData.personal === true,
+    ownerUserId: clientData.ownerUserId || null,
+    ownerUsername: clientData.ownerUsername || null,
+    ownerName: clientData.ownerName || null,
+    ownerEmail: clientData.ownerEmail || null,
+    ownerGroups: clientData.ownerGroups || []
   };
-
   clientsConfig.clients[clientId] = newClient;
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
@@ -444,6 +463,61 @@ export function listOAuthClients(clientsFilePath) {
 }
 
 /**
+ * List the personal OAuth clients owned by a user (without secrets)
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} ownerUserId - Owner user ID
+ * @returns {Array<Object>} Array of the user's personal clients, newest first
+ */
+export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
+  if (!ownerUserId) return [];
+
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clients = clientsConfig.clients || {};
+
+  return Object.values(clients)
+    .filter(client => client.personal === true && client.ownerUserId === ownerUserId)
+    .map(client => {
+      const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+      return clientWithoutSecret;
+    })
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+/**
+ * Refresh the owner identity snapshot stored on a personal OAuth client.
+ *
+ * jwtAuth resolves the acting user from this snapshot on every request, so
+ * refreshing it (on key rotation, for instance) is what propagates a group
+ * change to keys that were issued earlier.
+ *
+ * @param {string} clientId - Client ID
+ * @param {Object} owner - Current owner details
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<Object|null>} Updated client without secret, or null if not found
+ */
+export async function updatePersonalClientOwner(clientId, owner, clientsFilePath) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+    ? clientsConfig.clients[clientId]
+    : undefined;
+
+  if (!client || client.personal !== true || client.ownerUserId !== owner?.id) {
+    return null;
+  }
+
+  client.ownerUsername = owner.username || client.ownerUsername || null;
+  client.ownerName = owner.name || client.ownerName || null;
+  client.ownerEmail = owner.email || client.ownerEmail || null;
+  client.ownerGroups = Array.isArray(owner.groups) ? owner.groups : client.ownerGroups || [];
+  client.updatedAt = new Date().toISOString();
+
+  await saveOAuthClients(clientsConfig, clientsFilePath);
+
+  const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+  return clientWithoutSecret;
+}
+
+/**
  * Update last used timestamp for a client
  * @param {string} clientId - Client ID
  * @param {string} clientsFilePath - Path to oauth-clients.json file
@@ -464,7 +538,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
     // Only update if it's been more than 1 minute since last update (reduce writes)
     if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
       client.lastUsed = now;
-      await saveOAuthClients(clientsConfig, clientsFilePath);
+      await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
     }
   } catch (error) {
     logger.error('OAuth failed to update last used for client', {

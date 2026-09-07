@@ -36,7 +36,7 @@ function ArrayField({ label, value = [], onChange, placeholder }) {
           return (
             <div key={index} className="flex items-start gap-1.5">
               {isComplex ? (
-                <pre className="flex-1 text-xs font-mono border border-amber-300 dark:border-amber-700 rounded px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+                <pre className="flex-1 text-xs font-mono border border-amber-300 dark:border-amber-700 rounded-sm px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200 whitespace-pre-wrap wrap-break-word max-h-24 overflow-y-auto">
                   {complexPreview}
                 </pre>
               ) : (
@@ -45,7 +45,7 @@ function ArrayField({ label, value = [], onChange, placeholder }) {
                   value={item ?? ''}
                   onChange={e => handleChange(index, e.target.value)}
                   placeholder={placeholder}
-                  className="flex-1 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  className="flex-1 text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                 />
               )}
               <button

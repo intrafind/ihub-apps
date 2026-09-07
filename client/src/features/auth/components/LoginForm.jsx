@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 // localStorage key for the last successfully logged-in username so we can
 // pre-fill the field on return visits when the user opted into "Remember me".
@@ -113,7 +114,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
     const returnUrl = window.location.href;
 
     // Redirect to NTLM login endpoint which will trigger NTLM authentication
-    const ntlmLoginUrl = `/api/auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    const ntlmLoginUrl = buildApiUrl(`auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`);
     window.location.href = ntlmLoginUrl;
   };
 
@@ -186,9 +187,9 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
   // Reusable "or" separator between auth method sections
   const orSeparator = (
     <div className="my-4 flex items-center">
-      <div className="flex-grow border-t border-gray-300"></div>
+      <div className="grow border-t border-gray-300"></div>
       <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
-      <div className="flex-grow border-t border-gray-300"></div>
+      <div className="grow border-t border-gray-300"></div>
     </div>
   );
 
@@ -207,7 +208,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               type="button"
               onClick={() => handleAuthMethodSelect('local')}
               disabled={isFormLoading}
-              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <span className="mr-2">🔑</span>
               {t('auth.login.localAuth', 'Local Authentication')}
@@ -219,7 +220,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               type="button"
               onClick={() => handleAuthMethodSelect('ldap')}
               disabled={isFormLoading}
-              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <span className="mr-2">🏢</span>
               {t('auth.login.ldapAuth', 'LDAP Authentication')}
@@ -253,7 +254,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
                 value={formData.provider}
                 onChange={handleInputChange}
                 disabled={isFormLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
               >
                 <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
                 {ldapProviders.map(provider => (
@@ -279,7 +280,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               onChange={handleInputChange}
               required
               disabled={isFormLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
               placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
             />
           </div>
@@ -298,7 +299,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               onChange={handleInputChange}
               required
               disabled={isFormLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
               placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
             />
           </div>
@@ -311,7 +312,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
               checked={formData.rememberMe}
               onChange={handleInputChange}
               disabled={isFormLoading}
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500 disabled:cursor-not-allowed"
             />
             <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
               {t('auth.login.rememberMe', 'Remember me')}
@@ -322,7 +323,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
             <button
               type="submit"
               disabled={isFormLoading || !formData.username || !formData.password}
-              className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isFormLoading ? (
                 <>
@@ -339,7 +340,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
                 type="button"
                 onClick={onCancel}
                 disabled={isFormLoading}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -363,7 +364,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
             type="button"
             onClick={() => handleOidcLogin(provider.name)}
             disabled={isFormLoading}
-            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
             <span className="mr-2">{getProviderIcon(provider.name)}</span>
             {provider.displayName || provider.name}
@@ -380,7 +381,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
         type="button"
         onClick={handleNtlmLogin}
         disabled={isFormLoading}
-        className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
       >
         <span className="mr-2">🔐</span>
         {t('auth.login.windowsAuth', 'Windows Authentication')}
@@ -399,7 +400,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
 
       {error && (
         <div
-          className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded"
+          className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-sm"
           role="alert"
         >
           {error}

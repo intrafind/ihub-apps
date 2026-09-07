@@ -186,7 +186,7 @@ function renderInline(text) {
       parts.push(
         <code
           key={key++}
-          className="bg-gray-100 dark:bg-gray-700 text-sm px-1 py-0.5 rounded font-mono"
+          className="bg-gray-100 dark:bg-gray-700 text-sm px-1 py-0.5 rounded-sm font-mono"
         >
           {codeMatch[1]}
         </code>
@@ -334,9 +334,9 @@ function AdminChangelogPage() {
               >
                 <div className="flex items-center gap-3">
                   {expanded ? (
-                    <ChevronDownIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                    <ChevronDownIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 shrink-0" />
                   ) : (
-                    <ChevronRightIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                    <ChevronRightIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 shrink-0" />
                   )}
                   <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     {t('admin.changelog.version', 'Version {{version}}', {
@@ -354,10 +354,26 @@ function AdminChangelogPage() {
               {/* Accordion body */}
               {expanded && (
                 <div className="px-5 py-4 bg-white dark:bg-gray-900">
-                  {/* Features */}
-                  {entry.features && (
+                  {/* New & improved. Labelled only when there are fixes to tell it
+                      apart from — a lone section needs no heading. */}
+                  {entry.features && entry.features.trim() && (
                     <div className="prose dark:prose-invert max-w-none">
+                      {entry.fixes && entry.fixes.trim() && (
+                        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                          {t('admin.changelog.features', 'New & Improved')}
+                        </h2>
+                      )}
                       {renderMarkdown(entry.features)}
+                    </div>
+                  )}
+
+                  {/* Fixes */}
+                  {entry.fixes && entry.fixes.trim() && (
+                    <div className="prose dark:prose-invert max-w-none mt-6">
+                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                        {t('admin.changelog.fixes', 'Fixes')}
+                      </h2>
+                      {renderMarkdown(entry.fixes)}
                     </div>
                   )}
 
@@ -366,7 +382,7 @@ function AdminChangelogPage() {
                     <div className="mt-4 border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
                       <div className="flex items-start gap-2">
                         <svg
-                          className="h-5 w-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                          className="h-5 w-5 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >

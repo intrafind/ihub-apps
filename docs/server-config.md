@@ -55,6 +55,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `HOST`                     | Host interface to bind to. Use `0.0.0.0` to listen on all interfaces (recommended), then access via `localhost` or `127.0.0.1` in your browser. **Never access via `http://0.0.0.0:*` as browsers will reject cookies.** | `0.0.0.0`                                        |
 | `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
 | `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
+| `LLM_TRANSIENT_RETRIES`    | How often a transient provider failure (429, 5xx, network) is retried with backoff before an LLM call fails. `WORKFLOW_LLM_TRANSIENT_RETRIES` is still honoured. | `3`                                              |
+| `LLM_DEBUG_DUMP_ALL`       | Set to `1` to write every outbound LLM request body to `contents/data/debug/llm-request/` (auth headers and URL keys redacted). Diagnostics only. | –                                                |
 | `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. See [Scaling with Multiple Workers](scaling.md). | `4`                                              |
 | `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `4`                                              |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |
@@ -90,6 +92,8 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
 | `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
+| `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |
+| `VERSION_CHECK_TIMEOUT_MS` | Abort deadline in milliseconds for the release lookup (alias: `IHUB_VERSION_CHECK_TIMEOUT_MS`). Clamped to 500–60000. | `1000` |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.

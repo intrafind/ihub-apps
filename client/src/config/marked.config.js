@@ -4,12 +4,26 @@ import {
   escapeHtml,
   getLanguageDisplayName,
   isMermaidLanguage,
-  generateId,
+  hashString,
   detectDiagramType
 } from '../utils/markdownHelpers';
 
+// Occurrence counter for the parse currently in progress. Diagram IDs are
+// derived from the diagram source so that re-parsing the same markdown yields
+// the same IDs; the counter only disambiguates identical diagrams that appear
+// more than once in the same document. `marked.parse()` is synchronous, so a
+// single module-level scope is safe.
+let mermaidIdScope = new Map();
+
+const nextMermaidId = code => {
+  const base = hashString(code);
+  const occurrence = mermaidIdScope.get(base) || 0;
+  mermaidIdScope.set(base, occurrence + 1);
+  return occurrence === 0 ? `mermaid-${base}` : `mermaid-${base}-${occurrence}`;
+};
+
 const renderMermaidPlaceholder = (code, language) => {
-  const diagramId = `mermaid-${generateId()}`;
+  const diagramId = nextMermaidId(code);
   const detectedType = detectDiagramType(code);
 
   return `
@@ -83,13 +97,13 @@ const createRenderer = t => {
     const highlightedCode = highlightCode(actualCode, lang);
 
     return `
-      <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
+      <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-xs">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
         <div class="code-block-toolbar flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
           <span class="text-xs font-medium text-gray-600">${displayLanguage}</span>
           <div class="flex flex-row items-center gap-2">
             <button
-              class="code-copy-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              class="code-copy-btn p-1.5 rounded-sm text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               type="button"
               title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}"
@@ -98,7 +112,7 @@ const createRenderer = t => {
               <span class="hidden sm:inline">${t ? t('common.copy', 'Copy') : 'Copy'}</span>
             </button>
             <button
-              class="code-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              class="code-download-btn p-1.5 rounded-sm text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               data-code-language="${lang}"
               type="button"
@@ -114,7 +128,7 @@ const createRenderer = t => {
   };
 
   // --- Link Renderer ---
-  renderer.link = token => {
+  renderer.link = function (token) {
     // In marked v5+, the renderer receives a token object instead of separate parameters
     // Extract href, title, and text from the token
     let actualHref = token.href;
@@ -213,6 +227,9 @@ export const renderMarkdown = (markdown, options = {}) => {
 
   try {
     const marked = getMarkedInstance(t);
+    // Reset the per-document occurrence counter so diagram IDs depend only on
+    // the document being parsed, never on how many parses happened before.
+    mermaidIdScope = new Map();
     const html = marked.parse(source);
     const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
     return DOMPurify.sanitize(transformedHtml, sanitizeOptions);

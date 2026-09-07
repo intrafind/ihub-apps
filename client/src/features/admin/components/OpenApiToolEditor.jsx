@@ -4,15 +4,14 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import { listCredentials, parseOpenApiSpec } from '../../../api/adminApi';
-
+import { getAdminApiErrorMessage, listCredentials, parseOpenApiSpec } from '../../../api/adminApi';
 /**
  * Shared input styling. The project does not use @tailwindcss/forms, so a bare
  * border class would render no border width. These classes set an explicit
  * border, padding, colour, and focus ring for legibility in light/dark mode.
  */
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
+  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
 const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
 
 /**
@@ -46,7 +45,7 @@ export function CredentialRefSelect({ value, onChange, types, label, help, requi
       const list = await listCredentials();
       setCredentials(list);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -375,7 +374,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
       </div>
 
       {/* Spec source + parse */}
-      <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-4 space-y-3">
+      <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-4 space-y-3">
         <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
           {t('admin.tools.openapi.form.spec', 'OpenAPI specification')}
         </legend>
@@ -395,7 +394,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
           type="button"
           onClick={handleParse}
           disabled={parsing || !form.source}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
         >
           {parsing ? (
             <>
@@ -499,7 +498,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
       </div>
 
       {/* Auth — supports public (no-auth) APIs as well as credential profiles. */}
-      <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-4 space-y-3">
+      <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-4 space-y-3">
         <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
           {t('admin.tools.openapi.form.auth', 'Authentication')}
         </legend>
@@ -540,7 +539,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
       </fieldset>
 
       {/* Optional overrides */}
-      <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-4 space-y-3">
+      <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-4 space-y-3">
         <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
           {t('admin.tools.openapi.form.advanced', 'Advanced (optional)')}
         </legend>
@@ -576,7 +575,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
               <button
                 type="button"
                 onClick={() => removeHeaderRow(idx)}
-                className="inline-flex items-center px-2 py-2 border border-red-300 dark:border-red-700 rounded text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                className="inline-flex items-center px-2 py-2 border border-red-300 dark:border-red-700 rounded-sm text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
               >
                 <Icon name="trash" size="sm" />
               </button>
@@ -637,7 +636,7 @@ function OpenApiToolEditor({ tool, onSave, saving }) {
             !/^https?:\/\//i.test(form.baseUrl) ||
             (form.authMode === 'credential' && !form.credentialRef)
           }
-          className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+          className="px-4 py-2 rounded-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
         >
           {saving
             ? t('common.saving', 'Saving…')

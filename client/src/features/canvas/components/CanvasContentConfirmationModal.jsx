@@ -30,7 +30,7 @@ const CanvasContentConfirmationModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -65,7 +65,7 @@ const CanvasContentConfirmationModal = ({
                 </h3>
               </div>
               <div className="p-4">
-                <div className="text-sm text-gray-700 bg-gray-50 rounded p-3 max-h-40 overflow-y-auto">
+                <div className="text-sm text-gray-700 bg-gray-50 rounded-sm p-3 max-h-40 overflow-y-auto">
                   {getCurrentTextPreview() || t('canvas.emptyDocument', 'Empty document')}
                 </div>
               </div>
@@ -80,7 +80,7 @@ const CanvasContentConfirmationModal = ({
                 </h3>
               </div>
               <div className="p-4">
-                <div className="text-sm text-gray-700 bg-blue-50 rounded p-3 max-h-40 overflow-y-auto">
+                <div className="text-sm text-gray-700 bg-blue-50 rounded-sm p-3 max-h-40 overflow-y-auto">
                   {getNewTextPreview()}
                 </div>
               </div>

@@ -111,7 +111,7 @@ function AdminVoiceInputPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
           </div>
         </div>
@@ -120,16 +120,16 @@ function AdminVoiceInputPage() {
   }
 
   const inputClass =
-    'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+    'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-start mb-2">
-            <Icon name="microphone" className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0" />
+            <Icon name="microphone" className="w-8 h-8 mr-3 text-blue-500 shrink-0" />
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('admin.voiceInput.title', 'Voice Input (Speech-to-Text)')}
@@ -157,7 +157,7 @@ function AdminVoiceInputPage() {
         )}
 
         {/* vLLM Realtime */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {t('admin.voiceInput.realtime.title', 'vLLM Realtime (server-proxied)')}
@@ -175,7 +175,7 @@ function AdminVoiceInputPage() {
               type="checkbox"
               checked={!!config.realtime.enabled}
               onChange={e => setRealtime('enabled', e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
             {t('admin.voiceInput.realtime.enabled', 'Enable vLLM realtime transcription')}
           </label>
@@ -250,7 +250,7 @@ function AdminVoiceInputPage() {
               >
                 <Icon
                   name={testResult.ok ? 'check-circle' : 'clearCircle'}
-                  className="w-4 h-4 flex-shrink-0"
+                  className="w-4 h-4 shrink-0"
                 />
                 {testResult.message}
               </span>
@@ -265,7 +265,7 @@ function AdminVoiceInputPage() {
         </div>
 
         {/* Azure */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {t('admin.voiceInput.azure.title', 'Azure Speech')}
@@ -283,7 +283,7 @@ function AdminVoiceInputPage() {
               type="checkbox"
               checked={!!config.azure.enabled}
               onChange={e => setAzure('enabled', e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
             {t('admin.voiceInput.azure.enabled', 'Enable Azure Speech')}
           </label>

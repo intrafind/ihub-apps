@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../shared/components/LoadingSpinner';
@@ -17,15 +17,14 @@ export default function UnifiedPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load Babel for React component compilation
-  useEffect(() => {
-    if (contentType === 'react' && typeof window.Babel === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, [contentType]);
+  // Parsed once per content change, and handed to React as a reference-stable
+  // object: React re-applies `dangerouslySetInnerHTML` whenever that object is
+  // new, so a fresh literal on every render would rebuild the whole subtree and
+  // discard rendered Mermaid diagrams even though the markup never changed.
+  const parsedContent = useMemo(
+    () => ({ __html: contentType === 'react' ? '' : renderMarkdown(pageContent || '') }),
+    [contentType, pageContent]
+  );
 
   useEffect(() => {
     const loadPageContent = async () => {
@@ -88,7 +87,7 @@ export default function UnifiedPage() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+          className="bg-gray-600 text-white px-4 py-2 rounded-sm hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
           {t('common.back')}
@@ -116,13 +115,9 @@ export default function UnifiedPage() {
       );
     } else {
       // Default to markdown rendering
-      const parsedContent = renderMarkdown(pageContent || '');
       return (
         <div className="prose prose-sm sm:prose lg:prose-lg mx-auto dark:prose-invert">
-          <div
-            className="markdown-content"
-            dangerouslySetInnerHTML={{ __html: parsedContent }}
-          ></div>
+          <div className="markdown-content" dangerouslySetInnerHTML={parsedContent}></div>
         </div>
       );
     }

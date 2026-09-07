@@ -1,14 +1,21 @@
 /**
- * Sticky session cluster primary.
+ * Sticky session cluster primary. Opt-in via `STICKY_SESSIONS=true`.
  *
  * Node.js's built-in cluster scheduler distributes incoming TCP connections
- * round-robin (or OS-scheduled) across workers. That breaks SSE-based chat
- * because our streaming state (`clients` and `activeRequests` maps in
+ * round-robin (or OS-scheduled) across workers. That used to break SSE-based
+ * chat, because streaming state (`clients` and `activeRequests` maps in
  * `server/sse.js`, and the `actionTracker` EventEmitter) lives in the worker's
- * process memory. A client that opens an SSE stream on worker A and then POSTs
- * a prompt that lands on worker B will never receive tokens and cannot cancel.
+ * process memory: a client that opened an SSE stream on worker A and then
+ * POSTed a prompt that landed on worker B would never receive tokens and could
+ * not cancel.
  *
- * This module replaces the default scheduler with a simple sticky router:
+ * That is no longer true. `server/clusterBus.js` relays per-chat events to
+ * whichever worker holds the stream, so the default scheduler is now both
+ * correct and the default. This module remains for deployments that want
+ * connection affinity anyway — iHub exposed directly to clients, with some
+ * worker-local state outside the chat path that benefits from pinning.
+ *
+ * It replaces the default scheduler with a simple sticky router:
  *   - Primary owns the real listening socket (`net.createServer`).
  *   - Each incoming connection is hashed by `remoteAddress` to a worker index.
  *   - The paused socket handle is forwarded to that worker over IPC.
@@ -18,9 +25,19 @@
  * for the lifetime of a chat session, so all per-chat in-memory state remains
  * consistent without any cross-worker coordination.
  *
- * Tradeoff: many users sharing one source IP (NAT, corporate proxy) will pile
- * on the same worker. For that case, deploy behind a reverse proxy that does
- * cookie or chatId-aware stickiness, or migrate to a Redis pub/sub fan-out.
+ * Tradeoff: the routing key is the TCP peer address, which is the only client
+ * identity available before any HTTP byte is parsed — `X-Forwarded-For` is not
+ * visible at this layer. Every caller that reaches iHub through the same hop
+ * therefore hashes to the same worker:
+ *
+ *   - behind a reverse proxy / ingress (i.e. every typical production setup)
+ *     that is ALL traffic, so one worker serves everything and the rest idle;
+ *   - behind NAT or a corporate proxy it is every user on that egress IP.
+ *
+ * `logStickyRoutingCaveat` below reports the collapse once at startup so it is
+ * visible rather than something to discover under load. The fix is to stop
+ * asking for stickiness: unset `STICKY_SESSIONS` and let the cluster balance
+ * connections, since the bus already carries chat state across workers.
  */
 
 import net from 'node:net';
@@ -45,6 +62,28 @@ function pickWorker(workers, key) {
     if (fallback && !fallback.isDead?.()) return fallback;
   }
   return null;
+}
+
+/**
+ * Warn once that sticky routing keys on the TCP peer address, so a deployment
+ * behind a reverse proxy concentrates all traffic on a single worker.
+ *
+ * Emitted at startup rather than per connection: by the time a worker is
+ * saturated the symptom ("the server stopped responding, even the health
+ * probes") gives no hint that the other workers were idle the whole time.
+ *
+ * @param {number} workerCount - Number of forked workers.
+ */
+export function logStickyRoutingCaveat(workerCount) {
+  if (workerCount <= 1) return;
+  logger.warn({
+    component: 'StickyCluster',
+    message:
+      'STICKY_SESSIONS is on: routing hashes the TCP peer address, which a reverse proxy makes identical for every request — all traffic will land on one of the ' +
+      workerCount +
+      ' workers. Chat no longer needs stickiness (per-chat events are relayed across workers), so unset STICKY_SESSIONS unless something else in your deployment requires connection affinity.',
+    workerCount
+  });
 }
 
 /**

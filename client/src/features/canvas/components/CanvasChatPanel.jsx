@@ -55,7 +55,7 @@ const CanvasChatPanel = ({
       </div>
 
       {/* Chat Input */}
-      <div className="canvas-chat-input flex-shrink-0 p-4 border-t border-gray-200 bg-white">
+      <div className="canvas-chat-input shrink-0 p-4 border-t border-gray-200 bg-white">
         {selectedText && (
           <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200 relative">
             <button

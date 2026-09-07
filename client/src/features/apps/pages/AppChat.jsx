@@ -853,14 +853,7 @@ function AppChat({ preloadedApp = null }) {
     sendMessage: text => {
       setInput(text);
       setTimeout(() => {
-        const form = document.querySelector('form');
-        if (form) {
-          const submitEvent = new Event('submit', {
-            cancelable: true,
-            bubbles: true
-          });
-          form.dispatchEvent(submitEvent);
-        }
+        formRef.current?.requestSubmit();
       }, 0);
     },
     isProcessing: processing,
@@ -1194,14 +1187,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     setTimeout(() => {
-      const form = document.querySelector('form');
-      if (form) {
-        const submitEvent = new Event('submit', {
-          cancelable: true,
-          bubbles: true
-        });
-        form.dispatchEvent(submitEvent);
-      }
+      formRef.current?.requestSubmit();
     }, 0);
   };
 
@@ -1259,7 +1245,9 @@ function AppChat({ preloadedApp = null }) {
     ]
   );
 
-  // Handle citation document actions (openExternal, preview, download, openInApp)
+  // Handle citation document actions (openExternal, download, openInApp).
+  // "preview" is handled inside CitationPanel, which owns the passage texts the
+  // preview highlights.
   const handleDocumentAction = useCallback(
     (action, item, targetAppId) => {
       const getMeta = (doc, key) => {
@@ -1275,19 +1263,6 @@ function AppChat({ preloadedApp = null }) {
       if (action === 'openExternal') {
         if (deepLink) {
           window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'preview') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
-            convertToPdf: 'true'
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
         }
       } else if (action === 'download') {
         if (accessLink?.documentId) {
@@ -2028,7 +2003,7 @@ function AppChat({ preloadedApp = null }) {
           <p>{error}</p>
           <button
             onClick={clearAppCache}
-            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-sm"
           >
             {t('pages.appChat.clearCache', 'Clear Cache & Reload')}
           </button>
@@ -2088,7 +2063,7 @@ function AppChat({ preloadedApp = null }) {
 
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={e => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -2097,7 +2072,7 @@ function AppChat({ preloadedApp = null }) {
           }}
         >
           <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
+            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
               <h3 className="font-medium text-gray-900 dark:text-gray-100">
                 {t('pages.appChat.inputParameters')}
               </h3>
@@ -2115,7 +2090,7 @@ function AppChat({ preloadedApp = null }) {
                 localizedVariables={localizedVariables}
               />
             </div>
-            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
+            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <button
                 onClick={handleParametersCancel}
                 className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
@@ -2159,7 +2134,7 @@ function AppChat({ preloadedApp = null }) {
                   ephemeral={ephemeral}
                 />
               </div>
-              <div className="flex-shrink-0 px-4 pt-2">
+              <div className="shrink-0 px-4 pt-2">
                 <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
               </div>
             </>
@@ -2202,7 +2177,7 @@ function AppChat({ preloadedApp = null }) {
                     </div>
                   )}
                 </div>
-                <div className="flex-shrink-0 px-4 pt-2">
+                <div className="shrink-0 px-4 pt-2">
                   <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
                 </div>
               </div>
@@ -2273,7 +2248,7 @@ function AppChat({ preloadedApp = null }) {
                     onDocumentAction={handleDocumentAction}
                   />
                 </div>
-                <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
+                <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
               </div>
 
               {/* Desktop layout: normal flex column */}
@@ -2310,7 +2285,7 @@ function AppChat({ preloadedApp = null }) {
         </div>
 
         {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
+          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0">
             <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
               {t('pages.appChat.inputParameters')}
             </h3>

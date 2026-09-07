@@ -7,7 +7,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
@@ -20,6 +20,7 @@ function AdminUserEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
 
@@ -70,7 +71,7 @@ function AdminUserEditPage() {
           setUser(loadedUser);
           setInitialData(loadedUser);
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         } finally {
           setLoading(false);
         }
@@ -103,12 +104,13 @@ function AdminUserEditPage() {
     if (!data) data = user;
 
     if (!data.username) {
-      setError('Username is required');
+      setSaveError('Username is required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = isNewUser ? 'POST' : 'PUT';
       const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
 
@@ -149,8 +151,7 @@ function AdminUserEditPage() {
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
-      setError(err.message);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -178,7 +179,7 @@ function AdminUserEditPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Icon name="warning" size="md" className="text-red-400" />
             </div>
             <div className="ml-3">
@@ -232,7 +233,7 @@ function AdminUserEditPage() {
                     linkElement.setAttribute('download', exportFileDefaultName);
                     linkElement.click();
                   }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="download" className="h-4 w-4 mr-2" />
                   {t('common.download')}
@@ -240,7 +241,7 @@ function AdminUserEditPage() {
               )}
               <button
                 onClick={() => navigate('/admin/users')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-left" className="h-4 w-4 mr-2" />
                 {t('admin.users.edit.backToList', 'Back to Users')}
@@ -248,6 +249,20 @@ function AdminUserEditPage() {
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+            <div className="flex">
+              <div className="shrink-0">
+                <Icon name="warning" size="md" className="text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <DualModeEditor
@@ -272,14 +287,14 @@ function AdminUserEditPage() {
             <button
               type="button"
               onClick={() => navigate('/admin/users')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {t('admin.users.edit.cancel', 'Cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {saving ? (
                 <>

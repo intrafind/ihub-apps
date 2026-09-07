@@ -12,26 +12,152 @@
  */
 
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import { isValidRunId } from '../services/loop/RunLog.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
-import { recordPendingFinish } from '../services/workflow/chatBridge.js';
+import { recordPendingFinish, buildReplayStepsFromState } from '../services/workflow/chatBridge.js';
 import { actionTracker } from '../actionTracker.js';
-import { clients } from '../sse.js';
+import {
+  RunStreamEmitter,
+  streamEmitter,
+  bindStreamRun,
+  unbindStreamRun,
+  checkpointToInteraction,
+  getStreamRun
+} from '../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
+import { hasChatClient } from '../sse.js';
+import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-
-/** Maps chatId → { executionId, engine } for active workflow executions in chat */
-export const activeWorkflowExecutions = new Map();
+import { getLocalizedString } from '../utils/localize.js';
 
 /**
- * Extract a plain string from a localized object or return as-is
- * @param {string|Object} value - Plain string or { en: "...", de: "..." }
- * @param {string} lang - Preferred language
- * @returns {string}
+ * Maps chatId → { executionId, engine } for active workflow executions in chat.
+ *
+ * A presence map: the engine object itself cannot leave this process, but its
+ * membership is mirrored cluster-wide so a stop request or an SSE reconnect
+ * landing on another worker can find out who is running the workflow and ask
+ * that worker to act. See `server/clusterBus.js`.
  */
+export const activeWorkflowExecutions = createPresenceMap('workflow');
+
+const CANCEL_CHANNEL = 'workflow:cancel';
+const REPLAY_CHANNEL = 'workflow:replay-request';
+
+/**
+ * Cancel the workflow execution bridged to a chat, wherever it is running.
+ *
+ * @param {string} chatId
+ * @returns {Promise<boolean>} True if the workflow was cancelled here, or the
+ *   request was relayed to the worker running it. False when there is nothing
+ *   to cancel, and when the engine refused the cancellation — the execution is
+ *   then still running, so callers must not report success.
+ */
+export async function cancelChatWorkflow(chatId) {
+  const workflowExec = activeWorkflowExecutions.get(chatId);
+  if (workflowExec) {
+    try {
+      await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
+    } catch (error) {
+      logger.error('Error cancelling workflow', {
+        component: 'workflowRunner',
+        chatId,
+        executionId: workflowExec.executionId,
+        error: error.message
+      });
+      // Keep the registration: the execution is presumably still running, and
+      // dropping it here would leave nothing for a retry or the stop route to
+      // find.
+      return false;
+    }
+    activeWorkflowExecutions.delete(chatId);
+    logger.info('Cancelled workflow', {
+      component: 'workflowRunner',
+      executionId: workflowExec.executionId,
+      chatId
+    });
+    return true;
+  }
+  if (hasRemote('workflow', chatId)) {
+    publish(CANCEL_CHANNEL, { chatId }, { kind: 'workflow', key: chatId });
+    return true;
+  }
+  return false;
+}
+
+subscribe(CANCEL_CHANNEL, ({ chatId }) => {
+  if (!activeWorkflowExecutions.has(chatId)) return;
+  cancelChatWorkflow(chatId).catch(error => {
+    logger.error('Error cancelling workflow on behalf of another worker', {
+      component: 'workflowRunner',
+      chatId,
+      error: error.message
+    });
+  });
+});
+
+/**
+ * Re-emit step progress for a still-running workflow so a reconnecting chat
+ * catches up on what it missed.
+ *
+ * When the workflow is running on another worker, ask that worker to do it
+ * rather than trying to read its engine state from here: it emits through
+ * `actionTracker`, and the SSE relay carries the events back to whichever
+ * worker now holds the stream. Persisted workflow state is cached in-process,
+ * so a remote read could also serve a stale snapshot.
+ *
+ * @param {string} chatId
+ * @returns {Promise<number>} Number of replayed steps (0 when relayed).
+ */
+export async function replayChatWorkflowProgress(chatId) {
+  const active = activeWorkflowExecutions.get(chatId);
+  if (!active) {
+    if (hasRemote('workflow', chatId))
+      publish(REPLAY_CHANNEL, { chatId }, { kind: 'workflow', key: chatId });
+    return 0;
+  }
+  if (!active.engine || !active.executionId) return 0;
+
+  const state = await active.engine.stateManager.get(active.executionId);
+  const workflow = state?.data?._workflowDefinition;
+  if (!state || !workflow) return 0;
+
+  const replayEvents = buildReplayStepsFromState(state, workflow);
+  const replayStream = streamEmitter(chatId);
+  replayEvents.forEach((ev, index) => {
+    replayStream.emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+      executionId: active.executionId,
+      nodeId: String(ev.nodeId || `${active.executionId}:replay:${index + 1}`),
+      ...(ev.nodeName ? { nodeName: String(ev.nodeName) } : {}),
+      ...(ev.nodeType ? { nodeType: String(ev.nodeType) } : {}),
+      status: ev.status || 'running',
+      progress: { workflowName: workflow.name, chatVisible: ev.chatVisible !== false, replay: true }
+    });
+  });
+  if (replayEvents.length > 0) {
+    logger.info('Replayed workflow steps on SSE reconnect', {
+      component: 'workflowRunner',
+      chatId,
+      executionId: active.executionId,
+      steps: replayEvents.length
+    });
+  }
+  return replayEvents.length;
+}
+
+subscribe(REPLAY_CHANNEL, ({ chatId }) => {
+  if (!activeWorkflowExecutions.has(chatId)) return;
+  replayChatWorkflowProgress(chatId).catch(error => {
+    logger.warn('Workflow replay on behalf of another worker failed', {
+      component: 'workflowRunner',
+      chatId,
+      error: error.message
+    });
+  });
+});
+
 function resolveLocalized(value, lang = 'en') {
-  if (!value) return '';
-  if (typeof value === 'string') return value;
-  return value[lang] || value.en || Object.values(value)[0] || '';
+  return getLocalizedString(value, lang);
 }
 
 /**
@@ -131,6 +257,7 @@ export default async function workflowRunner(params = {}) {
     input,
     modelId,
     passthrough,
+    runId: chatRunId,
     appConfig: _appConfig,
     _chatHistory,
     _fileData,
@@ -156,7 +283,8 @@ export default async function workflowRunner(params = {}) {
   // Note: workflows with human-checkpoint nodes are supported in chat. The
   // engine emits `workflow.human.required` when it pauses; the bridge below
   // forwards it as a `workflow.checkpoint` chat event so the chat UI can
-  // render the prompt and POST the response to /workflows/executions/:id/respond.
+  // render the prompt and answer it through the one answer endpoint
+  // (POST /api/runs/:runId/interactions/:interactionId/answer).
 
   // 3. Prepare initial data from input variables
   const initialData = {
@@ -240,7 +368,14 @@ export default async function workflowRunner(params = {}) {
   const engine = getWorkflowEngine();
   let state;
   try {
-    state = await engine.start(workflow, initialData, { user, checkpointOnNode: true });
+    // A chat-launched workflow is the run the chat stream announced: the
+    // execution adopts that run id so its ledger, interactions and answer
+    // endpoint all key off one id.
+    state = await engine.start(workflow, initialData, {
+      user,
+      checkpointOnNode: true,
+      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {})
+    });
   } catch (error) {
     logger.error('Failed to start workflow', {
       component: 'workflowRunner',
@@ -274,7 +409,64 @@ export default async function workflowRunner(params = {}) {
     });
   }
 
-  // 5. Bridge workflow events to chat SSE channel
+  // 5. Bridge workflow events to the chat's SSE v2 stream. The workflow is
+  // its own run (run id === execution id, matching its ledger and its
+  // interactions). For a direct @mention launch the route minted that id and
+  // announced the run; inside a chat turn (passthrough tool) the workflow is a
+  // child of the chat run: announce it here with the chat run as parent.
+  const stream = chatId ? new RunStreamEmitter({ streamId: chatId, runId: executionId }) : null;
+  if (stream && !chatRunId) {
+    const parent = getStreamRun(chatId);
+    stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
+      kind: 'workflow',
+      ...(parent?.runId ? { parentRunId: parent.runId } : {}),
+      refs: { chatId, executionId, workflowId }
+    });
+  }
+  let bridgeStep = 0;
+  const emitStep = ({ nodeId, nodeName, nodeType, status, chatVisible }) => {
+    if (!stream) return;
+    bridgeStep += 1;
+    stream.emit(SSE_V2_EVENTS.PROGRESS_NODE, {
+      executionId,
+      nodeId: String(nodeId || `${executionId}:${nodeType || 'step'}:${bridgeStep}`),
+      ...(nodeName ? { nodeName: String(nodeName) } : {}),
+      ...(nodeType ? { nodeType: String(nodeType) } : {}),
+      status,
+      progress: { workflowName, chatVisible: chatVisible !== false }
+    });
+  };
+  const emitResult = ({ status, error, outputFormat }) => {
+    if (!stream) return;
+    stream.emit(SSE_V2_EVENTS.META, {
+      executionId,
+      extra: {
+        workflow: {
+          status,
+          workflowName,
+          outputFormat: outputFormat || 'markdown',
+          ...(error ? { error: String(error) } : {})
+        }
+      }
+    });
+  };
+  // The workflow run ends here in both cases. A direct (@mention) launch also
+  // streams the answer on this run; a passthrough launch leaves the answer to
+  // the chat turn (the passthrough seam streams it on the chat run).
+  const emitDirectAnswer = (text, { status, finishReason, error }) => {
+    if (!stream) return;
+    if (text && !passthrough) {
+      stream.emit(SSE_V2_EVENTS.STEP_DELTA, { step: 0, kind: 'text', content: text });
+    }
+    stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+      status,
+      finishReason,
+      ...(error ? { error: { message: String(error) } } : {})
+    });
+  };
+
+  if (chatId && chatRunId && stream) bindStreamRun(chatId, chatRunId, stream);
+
   if (chatId) {
     // Register for cancellation support
     activeWorkflowExecutions.set(chatId, { executionId, engine });
@@ -283,13 +475,7 @@ export default async function workflowRunner(params = {}) {
       ? `Starting: "${input.substring(0, 80)}${input.length > 80 ? '...' : ''}"`
       : 'Starting workflow...';
 
-    actionTracker.trackWorkflowStep(chatId, {
-      workflowName,
-      nodeName: inputPreview,
-      nodeType: 'start',
-      status: 'running',
-      executionId
-    });
+    emitStep({ nodeName: inputPreview, nodeType: 'start', status: 'running' });
   }
 
   // 6. Wait for workflow completion by listening to events
@@ -312,11 +498,11 @@ export default async function workflowRunner(params = {}) {
         activeWorkflowExecutions.delete(chatId);
         engine.cancel(executionId, 'timeout').catch(() => {});
         if (chatId) {
-          actionTracker.trackWorkflowResult(chatId, {
-            workflowName,
-            status: 'failed',
-            error: 'Workflow execution timed out',
-            executionId
+          emitResult({ status: 'failed', error: 'Workflow execution timed out' });
+          emitDirectAnswer('Workflow failed: Workflow execution timed out', {
+            status: 'error',
+            finishReason: 'error',
+            error: 'Workflow execution timed out'
           });
         }
         resolve({ status: 'failed', executionId, error: 'Workflow execution timed out' });
@@ -340,20 +526,26 @@ export default async function workflowRunner(params = {}) {
         }
         const node = (workflow.nodes || []).find(n => n.id === event.checkpoint?.nodeId);
         const nodeName = node ? resolveLocalized(node.name, language) : event.checkpoint?.nodeId;
-        actionTracker.trackWorkflowStep(chatId, {
-          workflowName,
+        emitStep({
+          nodeId: event.checkpoint?.nodeId,
           nodeName,
           nodeType: 'human',
           status: 'paused',
-          executionId,
           chatVisible: node?.config?.chatVisible !== false
         });
-        actionTracker.emit('fire-sse', {
-          event: 'workflow.checkpoint',
-          chatId,
-          executionId,
-          checkpoint: event.checkpoint
-        });
+        if (stream) {
+          const interaction = checkpointToInteraction(
+            { ...event.checkpoint, nodeName },
+            // The interaction belongs to the execution's run — that is the
+            // run id the answer endpoint expects.
+            { runId: executionId, executionId, chatId }
+          );
+          stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
+          stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {
+            reason: 'interaction',
+            interactionId: interaction.id
+          });
+        }
         return;
       }
 
@@ -363,6 +555,11 @@ export default async function workflowRunner(params = {}) {
           isPaused = false;
           armTimeout();
         }
+        stream?.emit(SSE_V2_EVENTS.RUN_RESUMED, {
+          ...(event.checkpointId || event.checkpoint?.id
+            ? { interactionId: String(event.checkpointId || event.checkpoint?.id) }
+            : {})
+        });
         return;
       }
 
@@ -374,12 +571,11 @@ export default async function workflowRunner(params = {}) {
         const nodeName = node ? resolveLocalized(node.name, language) : event.nodeId;
         const nodeType = node?.type || 'unknown';
 
-        actionTracker.trackWorkflowStep(chatId, {
-          workflowName,
+        emitStep({
+          nodeId: event.nodeId,
           nodeName,
           nodeType,
           status: 'running',
-          executionId,
           chatVisible: node?.config?.chatVisible !== false
         });
       }
@@ -401,12 +597,10 @@ export default async function workflowRunner(params = {}) {
           // auto-completes the previous 'running' step when a new 'running'
           // step arrives — that gives a clean one-step-per-iteration UX
           // for loop bodies.
-          actionTracker.trackWorkflowStep(chatId, {
-            workflowName,
+          emitStep({
             nodeName: event.message || event.nodeId || 'progress',
             nodeType: 'prompt',
             status: event.status || 'running',
-            executionId,
             chatVisible: true
           });
         }
@@ -419,12 +613,11 @@ export default async function workflowRunner(params = {}) {
         const nodeName = node ? resolveLocalized(node.name, language) : event.nodeId;
         const nodeType = node?.type || 'unknown';
 
-        actionTracker.trackWorkflowStep(chatId, {
-          workflowName,
+        emitStep({
+          nodeId: event.nodeId,
           nodeName,
           nodeType,
           status: 'completed',
-          executionId,
           chatVisible: node?.config?.chatVisible !== false
         });
       }
@@ -445,26 +638,22 @@ export default async function workflowRunner(params = {}) {
         const outputText = event.output ? extractReadableOutput(event.output, primaryOutput) : null;
 
         if (chatId) {
-          actionTracker.trackWorkflowResult(chatId, {
-            workflowName,
+          emitResult({
             status: 'completed',
-            executionId,
             outputFormat: workflow.chatIntegration?.outputFormat || 'markdown'
           });
 
-          // In passthrough mode, executePassthroughTool handles streaming.
-          // In @mention / direct mode, stream the content ourselves.
-          if (!passthrough && outputText) {
-            actionTracker.trackChunk(chatId, { content: outputText });
-            actionTracker.trackDone(chatId, { finishReason: 'stop' });
-          }
+          // In passthrough mode the chat turn streams the answer and ends the
+          // run. In @mention / direct mode we own the run.
+          emitDirectAnswer(outputText, { status: 'completed', finishReason: 'stop' });
 
           // If the chat SSE client disconnected, stash the finish so it can be
           // delivered when the user reconnects (final output backfill).
-          if (!clients.has(chatId)) {
+          if (!hasChatClient(chatId)) {
             recordPendingFinish(chatId, {
               workflowName,
               executionId,
+              runId: stream?.runId || null,
               status: 'completed',
               outputText,
               outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
@@ -473,7 +662,7 @@ export default async function workflowRunner(params = {}) {
           }
         }
 
-        // Return readable output string for passthrough (ToolExecutor streams it),
+        // Return readable output string for passthrough (the chat passthrough seam streams it),
         // or full output object for @mention / non-chat callers.
         resolve(
           passthrough
@@ -510,24 +699,19 @@ export default async function workflowRunner(params = {}) {
           : `Workflow failed: ${errorMsg}`;
 
         if (chatId) {
-          actionTracker.trackWorkflowResult(chatId, {
-            workflowName,
-            status: finalStatus,
-            error: errorMsg,
-            executionId
+          emitResult({ status: finalStatus, error: errorMsg });
+          emitDirectAnswer(errorContent, {
+            status: isCancelled ? 'aborted' : 'error',
+            finishReason: isCancelled ? 'cancelled' : 'error',
+            error: errorMsg
           });
 
-          // In passthrough mode, executePassthroughTool handles streaming.
-          if (!passthrough) {
-            actionTracker.trackChunk(chatId, { content: errorContent });
-            actionTracker.trackDone(chatId, { finishReason: isCancelled ? 'cancelled' : 'error' });
-          }
-
           // Stash for backfill if the chat client is no longer connected.
-          if (!clients.has(chatId)) {
+          if (!hasChatClient(chatId)) {
             recordPendingFinish(chatId, {
               workflowName,
               executionId,
+              runId: stream?.runId || null,
               status: finalStatus,
               outputText: errorContent,
               outputFormat: 'markdown',
@@ -556,6 +740,8 @@ export default async function workflowRunner(params = {}) {
     // also re-arms when the workflow resumes after a human checkpoint.
     armTimeout();
   });
+
+  if (chatId && chatRunId) unbindStreamRun(chatId, chatRunId);
 
   logger.info('Workflow execution finished', {
     component: 'workflowRunner',

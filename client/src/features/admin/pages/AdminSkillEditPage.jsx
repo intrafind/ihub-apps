@@ -8,13 +8,13 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminSkillDetail,
-  updateSkill,
-  toggleSkill,
   deleteSkill,
-  exportSkill
+  exportSkill,
+  fetchAdminSkillDetail,
+  getAdminApiErrorMessage,
+  toggleSkill,
+  updateSkill
 } from '../../../api/adminApi';
-
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -79,7 +79,7 @@ function AdminSkillEditPage() {
       setInitialOverrides(loadedOverrides);
     } catch (err) {
       console.error('Error loading skill:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ function AdminSkillEditPage() {
       await toggleSkill(skillName);
       await loadSkill();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -259,7 +259,7 @@ function AdminSkillEditPage() {
             {/* Back */}
             <button
               onClick={() => navigate('/admin/skills')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-left" className="h-4 w-4 mr-2" />
               {t('common.back', 'Back')}
@@ -268,7 +268,7 @@ function AdminSkillEditPage() {
             {/* Toggle enabled/disabled */}
             <button
               onClick={handleToggle}
-              className={`inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              className={`inline-flex items-center px-4 py-2 border rounded-md shadow-xs text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${
                 isEnabled
                   ? 'border-red-300 text-red-700 bg-white hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:bg-gray-800 dark:hover:bg-red-900/30 focus:ring-red-500'
                   : 'border-green-300 text-green-700 bg-white hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:bg-gray-800 dark:hover:bg-green-900/30 focus:ring-green-500'
@@ -283,7 +283,7 @@ function AdminSkillEditPage() {
             {/* Export */}
             <button
               onClick={handleExport}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="download" className="h-4 w-4 mr-2" />
               {t('admin.skills.export', 'Export')}
@@ -292,7 +292,7 @@ function AdminSkillEditPage() {
             {/* Delete */}
             <button
               onClick={handleDelete}
-              className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-xs text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
               <Icon name="trash" className="h-4 w-4 mr-2" />
               {t('admin.skills.delete', 'Delete')}
@@ -405,7 +405,7 @@ function AdminSkillEditPage() {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Metadata card */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                   {t('admin.skills.metadata', 'Skill Metadata')}
@@ -458,7 +458,7 @@ function AdminSkillEditPage() {
                     </dt>
                     <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">
                       {metadata.version ? (
-                        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm">
                           {metadata.version}
                         </code>
                       ) : (
@@ -510,7 +510,7 @@ function AdminSkillEditPage() {
 
             {/* SKILL.md content */}
             {skill.body && (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+              <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                   <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                     {t('admin.skills.documentation', 'Documentation (SKILL.md)')}
@@ -531,7 +531,7 @@ function AdminSkillEditPage() {
         {/*  TAB: Files                                                      */}
         {/* ================================================================ */}
         {activeTab === 'files' && (
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.skills.fileList', 'Skill Files')}
@@ -562,14 +562,14 @@ function AdminSkillEditPage() {
                                 ? 'photograph'
                                 : 'document-text'
                           }
-                          className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-3 flex-shrink-0"
+                          className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-3 shrink-0"
                         />
                         <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
                           {fileName}
                         </span>
                       </div>
                       {fileType && (
-                        <span className="ml-4 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                        <span className="ml-4 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                           {fileType}
                         </span>
                       )}
@@ -601,7 +601,7 @@ function AdminSkillEditPage() {
         {/*  TAB: Configuration overrides                                    */}
         {/* ================================================================ */}
         {activeTab === 'config' && (
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.skills.configOverrides', 'Configuration Overrides')}
@@ -625,7 +625,7 @@ function AdminSkillEditPage() {
                 <textarea
                   id="override-description"
                   rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder={t(
                     'admin.skills.field.customDescriptionPlaceholder',
                     'Enter a custom description to override the default...'
@@ -640,14 +640,14 @@ function AdminSkillEditPage() {
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
               <button
                 onClick={() => navigate('/admin/skills')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleSaveOverrides}
                 disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {saving ? (
                   <>

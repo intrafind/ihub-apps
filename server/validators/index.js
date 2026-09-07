@@ -31,7 +31,11 @@ export const feedbackSchema = {
         message: 'Rating must be in 0.5 increments (0.5, 1.0, 1.5, ..., 5.0)'
       }),
     feedback: z.string().optional(),
-    modelId: z.string().optional()
+    modelId: z.string().optional(),
+    conversationId: z.string().optional(),
+    ifinderMessageId: z.string().optional(),
+    /** Run the rated message belongs to — records a `human/event` on its ledger. */
+    runId: z.string().optional()
   })
 };
 

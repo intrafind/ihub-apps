@@ -17,7 +17,8 @@ import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
 import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
-import { WorkflowLLMHelper } from '../services/workflow/WorkflowLLMHelper.js';
+import { LLMClient } from '../services/loop/LLMClient.js';
+import { sseResponse } from './loop/helpers/llmFixtures.js';
 
 describe('resolveNativeWebSearchProvider', () => {
   it('returns a provider directive for google, openai-responses, and anthropic', () => {
@@ -360,18 +361,25 @@ describe('convertAnthropicResponseToGeneric - native web search response handlin
   });
 });
 
-describe('WorkflowLLMHelper.processStreamingResponse — grounding metadata accumulation', () => {
-  /** Build a fake fetch Response streaming the given events as SSE. */
-  function sseResponse(events) {
-    const payload = events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
-    return {
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(payload));
-          controller.close();
-        }
-      })
-    };
+describe('LLMClient.complete — grounding metadata accumulation', () => {
+  /**
+   * Run one completion through a client whose transport streams `events` as
+   * SSE and whose request construction / API-key resolution are stubbed, so
+   * only the adapter's stream parsing and the client's grounding-metadata
+   * merge are exercised.
+   */
+  function completeWith(model, events) {
+    const client = new LLMClient({
+      transport: async () => sseResponse(events),
+      createRequest: async () => ({ url: 'https://x', headers: {}, body: {} }),
+      apiKeyVerifier: { verifyApiKey: async () => ({ success: true, apiKey: 'k' }) },
+      getModels: () => ({ data: [model] })
+    });
+    return client.complete({
+      model,
+      messages: [{ role: 'user', content: 'search' }],
+      telemetry: { autoRun: false }
+    });
   }
 
   it('merges Anthropic searchResults and citations arriving across many chunks', async () => {
@@ -446,10 +454,10 @@ describe('WorkflowLLMHelper.processStreamingResponse — grounding metadata accu
       { type: 'message_stop' }
     ];
 
-    const helper = new WorkflowLLMHelper();
-    const collected = await helper.processStreamingResponse(sseResponse(events), {
-      provider: 'anthropic'
-    });
+    const collected = await completeWith(
+      { id: 'an', provider: 'anthropic', modelId: 'claude' },
+      events
+    );
 
     assert.strictEqual(collected.content, 'Answer with sources.');
     assert.ok(collected.groundingMetadata);
@@ -479,11 +487,11 @@ describe('WorkflowLLMHelper.processStreamingResponse — grounding metadata accu
       candidates: [{ content: { parts: [{ text: 'done' }], role: 'model' }, finishReason: 'STOP' }]
     };
 
-    const helper = new WorkflowLLMHelper();
-    const collected = await helper.processStreamingResponse(
-      sseResponse([chunk('https://g1.example', 'G1'), chunk('https://g2.example', 'G2'), finish]),
-      { provider: 'google' }
-    );
+    const collected = await completeWith({ id: 'gm', provider: 'google', modelId: 'gemini' }, [
+      chunk('https://g1.example', 'G1'),
+      chunk('https://g2.example', 'G2'),
+      finish
+    ]);
 
     assert.ok(collected.groundingMetadata);
     assert.deepStrictEqual(

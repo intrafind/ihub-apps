@@ -237,11 +237,10 @@ executor.contextSummarizer.compactIfOversized = (messages, opts) => {
 const HUGE = 'y'.repeat(20000);
 executor.executeToolCall = async () => ({ role: 'tool', content: HUGE });
 
-// Fake LLM helper: two rounds of tool calls, then a tool-less final answer.
+// Fake LLM client: two rounds of tool calls, then a tool-less final answer.
 let turn = 0;
-executor.llmHelper = {
-  verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-  executeStreamingRequest: async ({ messages }) => {
+executor.llmClient = {
+  complete: async ({ messages }) => {
     turn += 1;
     // Record the largest single prompt the model was asked to ingest.
     const promptChars = messages
@@ -252,10 +251,10 @@ executor.llmHelper = {
       return {
         content: '',
         toolCalls: [{ id: `c${turn}`, function: { name: 'webContentExtractor', arguments: '{}' } }],
-        usage: { prompt_tokens: Math.round(promptChars / 4), completion_tokens: 10 }
+        usage: { promptTokens: Math.round(promptChars / 4), completionTokens: 10 }
       };
     }
-    return { content: 'final answer', toolCalls: [], usage: { prompt_tokens: 100, completion_tokens: 10 } };
+    return { content: 'final answer', toolCalls: [], usage: { promptTokens: 100, completionTokens: 10 } };
   }
 };
 let maxPromptChars = 0;
@@ -267,7 +266,7 @@ const messages = [
 ];
 
 // Verified signature: executeLLMWithTools({ model, messages, tools, config, context, nodeId }).
-// apiKey is resolved INTERNALLY via this.llmHelper.verifyApiKey (stubbed above);
+// API keys are resolved INSIDE the LLM client (stubbed above via executor.llmClient);
 // language defaults from context.language || 'en'. No apiKey/language params.
 const response = await executor.executeLLMWithTools({
   model,

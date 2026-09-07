@@ -64,7 +64,7 @@ function LoggingConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.logging.title')}
         </h2>
@@ -74,12 +74,9 @@ function LoggingConfig() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
       <div className="flex items-start mb-4">
-        <Icon
-          name="AdjustmentsHorizontalIcon"
-          className="w-6 h-6 mr-2 text-blue-500 flex-shrink-0"
-        />
+        <Icon name="AdjustmentsHorizontalIcon" className="w-6 h-6 mr-2 text-blue-500 shrink-0" />
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.system.logging.title')}
@@ -151,7 +148,7 @@ function LoggingConfig() {
           <div className="flex items-start">
             <Icon
               name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
-              className="w-5 h-5 mr-2 flex-shrink-0"
+              className="w-5 h-5 mr-2 shrink-0"
             />
             <p className="text-sm">{message.text}</p>
           </div>
@@ -163,7 +160,7 @@ function LoggingConfig() {
         <div className="flex items-start">
           <Icon
             name="InformationCircleIcon"
-            className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0"
+            className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0"
           />
           <div className="text-sm text-blue-800 dark:text-blue-300">
             <p className="font-medium mb-1">{t('common.note', 'Note')}:</p>

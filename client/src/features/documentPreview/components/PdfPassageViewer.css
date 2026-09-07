@@ -1,0 +1,71 @@
+/*
+ * Minimal replacement for pdf.js's `web/pdf_viewer.css`. Only the text-layer
+ * rules the `TextLayer` class actually relies on are reproduced here, plus the
+ * highlight overlay this viewer paints on top of the canvas. Pulling in the
+ * full viewer stylesheet would drag in styling for viewer chrome this app does
+ * not render.
+ */
+
+.ihub-pdf-page {
+  position: relative;
+  margin: 0 auto 1rem;
+  background: #fff;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 20%),
+    0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.ihub-pdf-page canvas {
+  display: block;
+}
+
+/* Transparent, selectable text on top of the rendered page. */
+.ihub-pdf-text-layer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 2;
+}
+
+.ihub-pdf-text-layer span,
+.ihub-pdf-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.ihub-pdf-text-layer span.markedContent {
+  top: 0;
+  height: 0;
+}
+
+.ihub-pdf-text-layer ::selection {
+  background: rgb(59 130 246 / 30%);
+}
+
+/* Highlights sit between canvas and text layer so text stays selectable. */
+.ihub-pdf-highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ihub-pdf-highlight {
+  position: absolute;
+  background: rgb(250 204 21 / 45%);
+  border-radius: 2px;
+}
+
+.ihub-pdf-highlight--selected {
+  background: rgb(249 115 22 / 50%);
+  box-shadow: 0 0 0 1px rgb(194 65 12 / 90%);
+}

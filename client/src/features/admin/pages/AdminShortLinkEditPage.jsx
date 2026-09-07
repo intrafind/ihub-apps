@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -85,7 +85,7 @@ function AdminShortLinkEditPage() {
       markSaved();
       navigate('/admin/shortlinks');
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -125,7 +125,7 @@ function AdminShortLinkEditPage() {
               value={link.code}
               onChange={e => handleChange('code', e.target.value)}
               disabled={!isNew}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-600"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-600"
             />
           </div>
           <div>
@@ -136,7 +136,7 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.appId}
               onChange={e => handleChange('appId', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -147,7 +147,7 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.userId}
               onChange={e => handleChange('userId', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -158,7 +158,7 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.path || ''}
               onChange={e => handleChange('path', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -169,7 +169,7 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.url || ''}
               onChange={e => handleChange('url', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div className="flex items-center">
@@ -177,7 +177,7 @@ function AdminShortLinkEditPage() {
               type="checkbox"
               checked={link.includeParams}
               onChange={e => handleChange('includeParams', e.target.checked)}
-              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
               {t('admin.shortlinks.includeParams', 'Include Params')}
@@ -191,7 +191,7 @@ function AdminShortLinkEditPage() {
               type="datetime-local"
               value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
               onChange={e => handleChange('expiresAt', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
@@ -202,7 +202,7 @@ function AdminShortLinkEditPage() {
               rows="4"
               value={paramsText}
               onChange={e => setParamsText(e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
             />
           </div>
           <div className="flex justify-end space-x-4">

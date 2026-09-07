@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -71,7 +71,7 @@ function AdminProviderEditPage() {
       setFormData(formDataObj);
       setInitialData(formDataObj);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -139,7 +139,7 @@ function AdminProviderEditPage() {
         navigate('/admin/providers');
       }, 1500);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -208,7 +208,7 @@ function AdminProviderEditPage() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
           {/* Provider ID (Read-only) */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -310,7 +310,7 @@ function AdminProviderEditPage() {
             <div className="flex items-start">
               <Icon
                 name="InformationCircleIcon"
-                className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 flex-shrink-0"
+                className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 shrink-0"
               />
               <div className="text-sm text-blue-700 dark:text-blue-300">
                 <p className="font-medium mb-1">
@@ -334,7 +334,7 @@ function AdminProviderEditPage() {
                 checked={formData.enabled}
                 onChange={e => handleChange('enabled', e.target.checked)}
                 disabled
-                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 cursor-not-allowed"
+                className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500 cursor-not-allowed"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.providers.edit.enabled', 'Provider Enabled')}

@@ -105,7 +105,7 @@ function NDAResultsRenderer({ data, t }) {
     <div className="space-y-6 p-4">
       {/* Overall Risk Summary */}
       <div
-        className={`rounded-lg border-2 ${overallColors.container} ${overallColors.border} border-l-8 p-6 shadow-sm`}
+        className={`rounded-lg border-2 ${overallColors.container} ${overallColors.border} border-l-8 p-6 shadow-xs`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -262,7 +262,7 @@ function ClauseCard({ clause, t }) {
 
   return (
     <div
-      className={`rounded-lg border ${colors.container} ${colors.border} border-l-4 shadow-sm transition-all duration-200 hover:shadow-md`}
+      className={`rounded-lg border ${colors.container} ${colors.border} border-l-4 shadow-xs transition-all duration-200 hover:shadow-md`}
     >
       <div className="p-4">
         {/* Clause Header */}
@@ -281,7 +281,7 @@ function ClauseCard({ clause, t }) {
         </div>
 
         {/* Reason */}
-        <div className={`mb-3 p-3 rounded bg-white bg-opacity-50 ${colors.text}`}>
+        <div className={`mb-3 p-3 rounded-sm bg-white/50 ${colors.text}`}>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{clause.reason}</p>
         </div>
 
@@ -290,7 +290,7 @@ function ClauseCard({ clause, t }) {
           <div className="mt-3">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className={`flex items-center space-x-2 text-sm font-medium ${colors.text} hover:underline focus:outline-none`}
+              className={`flex items-center space-x-2 text-sm font-medium ${colors.text} hover:underline focus:outline-hidden`}
             >
               <svg
                 className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -322,7 +322,7 @@ function ClauseCard({ clause, t }) {
                 {clause.citation.map((cite, citIdx) => (
                   <div
                     key={citIdx}
-                    className={`p-3 rounded border-l-2 bg-white bg-opacity-70 ${colors.border} text-sm italic ${colors.text}`}
+                    className={`p-3 rounded-sm border-l-2 bg-white/70 ${colors.border} text-sm italic ${colors.text}`}
                   >
                     <span className="text-xs font-semibold not-italic opacity-60">
                       {t ? t('nda.citation', 'Citation') : 'Citation'} {citIdx + 1}:

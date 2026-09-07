@@ -317,10 +317,15 @@ scrape_configs:
 | `server/telemetry/metrics.js` | Histograms, counters, observable gauges |
 | `server/telemetry/exporters.js` | Console / OTLP / Prometheus exporter wiring |
 | `server/telemetry/GenAIInstrumentation.js` | Span lifecycle helper |
-| `server/telemetry/llmInstrumentation.js` | Reusable wrapper used at chat fetch sites |
+| `server/telemetry/llmInstrumentation.js` | Standalone `instrumentLLMCall` wrapper for provider calls made outside `LLMClient` |
 | `server/telemetry/ActivityTracker.js` | Rolling-window active users / chats tracker |
 
-The chat call sites (`server/services/chat/NonStreamingHandler.js`,
-`server/services/chat/StreamingHandler.js`, `server/routes/openaiProxy.js`) all
-register activity, record iHub counters, and create gen-ai spans around the
-provider HTTP call.
+The gen-ai span around a provider call is owned by `LLMClient`
+(`server/services/loop/LLMClient.js`): one span per model call, whoever the
+caller is (chat, workflow nodes, the OpenAI-compatible inference API, admin
+utilities). Chat adds its own bookkeeping on top in
+`server/services/chat/chatTelemetry.js`: `recordChatCallStart()` /
+`recordChatCallEnd()` run from the chat turn seam once per model call — so every
+round of a tool loop is counted — and record usage tracking, user activity,
+per-app usage and conversation metrics, and the stream outcome. The inference
+API (`server/routes/openaiProxy.js`) records activity and counters itself.

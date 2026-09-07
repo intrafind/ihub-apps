@@ -137,6 +137,35 @@ All apps are **fully configurable** via the admin interface — customize prompt
 
 ---
 
+## 🧩 Core Concepts — Apps, Skills, Sources & Tools
+
+iHub is built from a handful of building blocks. Knowing which one to reach for is the fastest way to turn an idea into a working use case:
+
+| Building block     | Answers the question                                  |
+| ------------------ | ----------------------------------------------------- |
+| **Provider**       | How does iHub reach a model or external service?      |
+| **Model**          | Which model answers, with which limits and abilities? |
+| **App**            | What is the concrete use case and its frame?          |
+| **Skill**          | Which reusable procedure, rules, or know-how apply?   |
+| **Source**         | What domain knowledge does the model need?            |
+| **Tool**           | What can the model _do_ beyond producing text?        |
+| **Prompt library** | Which reusable text can a user drop into a chat?      |
+| **Group**          | Who sees all of the above?                            |
+
+**Providers and models.** Providers hold the technical connection — endpoint and credentials — to an external or local service; API keys are administered centrally and stored encrypted at rest. Models (GPT, Claude, Gemini, Mistral, or a local model) are what apps and users select. It pays to split models by use case: internal or sensitive scenarios on a local or dedicated model, public ones on a cloud model. Model choice can be narrowed per app (`allowedModels`) or fully predetermined (`disallowModelSelection`).
+
+**Apps vs. prompt library vs. skills.** Apps are standardized use cases with a fixed frame — prompt, variables, tools, sources, model — and are rolled out per user group, including groups mapped from LDAP or OIDC. The prompt library is the flexible counterpart inside general chat, but a flat list of many prompts becomes hard to navigate. Skills package complex, multi-step procedures and reusable rules modularly: rather than growing one giant app prompt, split a workflow such as a story generator into separate skills for interviewing, structuring, and drafting.
+
+**Sources.** Sources give the model its knowledge: local files (Markdown, PDF, text, JSON), URLs, iFinder documents, and internal pages. URLs suit content that changes regularly, at the risk that page boilerplate adds noise to the context; local files give a more controlled context but must be updated by hand. Each source is either loaded into the prompt up front or fetched on demand as a tool.
+
+**Tools.** Tools extend iHub beyond text generation — web search, API calls, screenshots, people search, Jira, iFinder, and further systems via MCP.
+
+In short: **apps** frame the use case, **skills** define reusable procedures, **sources** deliver the knowledge, and **tools** let the model act. Groups decide who gets what.
+
+📖 **[Full Core Concepts Guide](docs/concepts.md)**
+
+---
+
 ## 🎆 Why Teams Choose iHub Apps
 
 ### 🔒 Full Data Control
@@ -275,10 +304,12 @@ Best for: customization, contributing, building new apps.
 
 | What                         | Where                                                   |
 | ---------------------------- | ------------------------------------------------------- |
+| 🧩 Understand the concepts   | [Core Concepts](docs/concepts.md)                       |
 | 📱 Create custom AI apps     | [App Creation Guide](docs/apps.md)                      |
 | 🤖 Add LLM providers         | [Model Configuration](docs/models.md)                   |
 | 📚 Connect knowledge sources | [Sources System](docs/sources.md)                       |
 | 🔍 Enable web search tools   | [Web Tools](docs/web-tools.md)                          |
+| 🛠️ Add tools & MCP servers   | [Tool Calling](docs/tool-calling.md)                    |
 | 🔐 Configure SSO / OIDC      | [Authentication Guide](docs/external-authentication.md) |
 | 🖥️ Local LLMs (privacy mode) | [Local LLM Providers](docs/local-llm-providers.md)      |
 | 🔧 Full documentation        | [docs/README.md](docs/README.md)                        |
@@ -290,19 +321,35 @@ Best for: customization, contributing, building new apps.
 ### 🤖 AI & LLM Integration
 
 - **Multi-provider**: OpenAI, Anthropic Claude, Google Gemini, Mistral — unified API
+- **Central provider management**: Endpoints and API keys administered in one place, encrypted at rest
 - **Local LLMs**: LM Studio, Jan.ai, vLLM — complete privacy, zero API costs
+- **Per-app model control**: Restrict the selectable models or fix the model entirely
 - **Streaming responses**: Real-time token streaming via Server-Sent Events
 - **Structured output**: JSON schema validation for AI responses
 - **Tool calling**: Function calling and agentic workflows
+- **Vision**: Image understanding on models that support it
 - **Thinking models**: Extended reasoning support (Claude, o1-series)
+- **Compare Mode**: Send one input to two models and compare the answers side by side
 
 ### 📚 Knowledge & Sources
 
 - **Filesystem**: Local markdown, text, and JSON files as AI context
 - **Web pages**: Intelligent content extraction from any URL
 - **Enterprise docs**: iFinder document management integration
+- **Internal pages**: Reuse FAQ and help pages as AI context
 - **Multi-source**: Combine multiple knowledge sources per app
+- **On-demand or up front**: Load a source into the prompt or let the model fetch it as a tool
 - **Admin interface**: Create, test, and preview sources without coding
+
+### 🧠 Apps, Skills & Prompts
+
+- **Apps**: Standardized use cases with a fixed prompt, variables, tools, sources, and model
+- **Skills**: Reusable, modular instruction packages (`SKILL.md` + references) for multi-step procedures
+- **Prompt library**: Searchable, reusable prompts users insert into the general chat
+- **Magic Prompt**: Turns short or incomplete input into a well-formed prompt, with undo
+- **Group-based rollout**: Deliver apps, skills, models, and prompts to specific departments or roles
+- **Portable configuration**: Export an app as JSON and re-create it on another installation
+- **No-code authoring**: Create and edit everything through the admin UI or a raw JSON editor
 
 ### 🛠️ Tools & Integrations
 
@@ -313,6 +360,9 @@ Best for: customization, contributing, building new apps.
 - **File processing**: Upload and analyze PDFs, text, images, audio
 - **Microsoft Entra**: Corporate directory and people search
 - **Jira integration**: Issue tracking and project management
+- **MCP**: Connect further systems via the Model Context Protocol
+- **Self-hosted speech-to-text**: Realtime transcription on your own GPU host — audio never reaches a third party
+- **Outlook add-in & browser extension**: Centrally distributable, group-based rollout
 
 ### 🔐 Security & Authentication
 

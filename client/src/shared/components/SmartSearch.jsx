@@ -66,7 +66,7 @@ function SmartSearch() {
       placeholder={t('smartSearch.placeholder', 'Search apps...')}
       renderResult={app => (
         <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center">
+          <div className="shrink-0 w-6 h-6 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center">
             <Icon
               name={app.icon || 'lightning-bolt'}
               className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400"

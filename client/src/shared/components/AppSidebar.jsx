@@ -407,7 +407,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               placeholder={t('sidebar.searchPlaceholder', 'Search chats & apps')}
               aria-label={t('sidebar.searchChatsApps', 'Search chats & apps')}
               autoFocus
-              className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-gray-50 dark:bg-gray-800 text-sm outline-none focus:border-indigo-400 dark:text-gray-100"
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-gray-50 dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100"
             />
           </div>
         </div>

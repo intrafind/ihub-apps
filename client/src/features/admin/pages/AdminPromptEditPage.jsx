@@ -6,10 +6,11 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
-  fetchAdminPrompts,
   createPrompt,
-  updatePrompt,
-  fetchAdminApps
+  fetchAdminApps,
+  fetchAdminPrompts,
+  getAdminApiErrorMessage,
+  updatePrompt
 } from '../../../api/adminApi';
 import { clearApiCache, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
@@ -43,6 +44,7 @@ function AdminPromptEditPage() {
   const [loading, setLoading] = useState(!isNewPrompt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [apps, setApps] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
@@ -126,7 +128,7 @@ function AdminPromptEditPage() {
       setPromptData(processedPrompt);
       setInitialData(processedPrompt);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -135,6 +137,7 @@ function AdminPromptEditPage() {
   const handleSave = async data => {
     try {
       setSaving(true);
+      setSaveError(null);
 
       if (isNewPrompt) {
         await createPrompt(data);
@@ -150,8 +153,7 @@ function AdminPromptEditPage() {
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
-      console.error('Error saving prompt:', err);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -227,7 +229,7 @@ function AdminPromptEditPage() {
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(true)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="clock" className="h-4 w-4 mr-2" />
                   {t('admin.prompts.edit.history', 'History')}
@@ -246,7 +248,7 @@ function AdminPromptEditPage() {
                     linkElement.setAttribute('download', exportFileDefaultName);
                     linkElement.click();
                   }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="download" className="h-4 w-4 mr-2" />
                   {t('common.download')}
@@ -254,7 +256,7 @@ function AdminPromptEditPage() {
               )}
               <button
                 onClick={() => navigate('/admin/prompts')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-left" className="h-4 w-4 mr-2" />
                 {t('admin.prompts.edit.backToList', 'Back to Prompts')}
@@ -262,6 +264,20 @@ function AdminPromptEditPage() {
             </div>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-4">
+            <div className="flex">
+              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {t('admin.prompts.errorTitle', 'Error')}
+                </h3>
+                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{saveError}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleFormSubmit} className="space-y-8">
           <DualModeEditor
@@ -287,14 +303,14 @@ function AdminPromptEditPage() {
             <button
               type="button"
               onClick={() => navigate('/admin/prompts')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {t('admin.prompts.edit.cancel', 'Cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {saving ? (
                 <>

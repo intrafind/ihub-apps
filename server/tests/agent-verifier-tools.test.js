@@ -30,10 +30,9 @@ function check(label, cond, details) {
   if (!cond && details) console.log(`   ${details}`);
 }
 
-const stubLlmHelper = {
-  verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
+const stubLlmClient = {
   // Used by the toolless path.
-  executeStreamingRequest: async () => ({
+  complete: async () => ({
     content: JSON.stringify({ verdict: 'PASS', failures: [], rationale: 'looks solid' })
   })
 };
@@ -58,7 +57,7 @@ async function run() {
         };
       }
     };
-    const exec = new VerifierNodeExecutor({ llmHelper: stubLlmHelper, promptExecutor });
+    const exec = new VerifierNodeExecutor({ llmClient: stubLlmClient, promptExecutor });
     const node = {
       id: 'verify1',
       config: { mode: 'adversarial', tools: ['web_search'], criteria: 'All claims must be sourced' }
@@ -89,7 +88,7 @@ async function run() {
         return { content: '{}' };
       }
     };
-    const exec = new VerifierNodeExecutor({ llmHelper: stubLlmHelper, promptExecutor });
+    const exec = new VerifierNodeExecutor({ llmClient: stubLlmClient, promptExecutor });
     const node = { id: 'verify2', config: { mode: 'adversarial', criteria: 'Be complete' } }; // no tools
     const result = await exec.execute(node, stateWith('a report'), { language: 'en' });
 
@@ -99,13 +98,12 @@ async function run() {
 
   console.log('\n🧪 quality mode is unaffected by tools wiring\n');
   {
-    const qualityHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({
+    const qualityClient = {
+      complete: async () => ({
         content: JSON.stringify({ score: 0.9, passed: true, feedback: 'good' })
       })
     };
-    const exec = new VerifierNodeExecutor({ llmHelper: qualityHelper });
+    const exec = new VerifierNodeExecutor({ llmClient: qualityClient });
     const node = { id: 'verify3', config: { mode: 'quality', threshold: 0.7 } };
     const result = await exec.execute(node, stateWith('output'), { language: 'en' });
     check('quality score passes', result.branch === 'pass' && result.output.score === 0.9);

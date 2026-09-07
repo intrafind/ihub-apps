@@ -34,7 +34,7 @@ function PromptForm({ config, onChange }) {
   const fetchModelsFn = useCallback(() => fetchModels(), []);
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   return (

@@ -99,7 +99,7 @@ export default function ChatHistoryPage() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder={t('chatHistory.searchPlaceholder', 'Search your chats…')}
-              className="w-full pl-11 pr-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-none focus:border-indigo-400 dark:text-gray-100 dark:placeholder-gray-500"
+              className="w-full pl-11 pr-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-hidden focus:border-indigo-400 dark:text-gray-100 dark:placeholder-gray-500"
             />
             {query && (
               <button
@@ -119,7 +119,7 @@ export default function ChatHistoryPage() {
                 onClick={() => setGrouping(g)}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   grouping === g
-                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >

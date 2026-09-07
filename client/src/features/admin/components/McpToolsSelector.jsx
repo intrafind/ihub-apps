@@ -5,6 +5,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { fetchMcpToolCatalog } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 /**
  * Dedicated picker for tools exposed by configured MCP servers. Unlike the
  * generic ToolsSelector (which lists statically configured tools), this groups
@@ -36,7 +37,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
         const ids = data.flatMap(s => (s.tools || []).map(tool => tool.name));
         onMcpToolIdsChange?.(ids);
       } catch (err) {
-        if (active) setError(err.message);
+        if (active) setError(getAdminApiErrorMessage(err));
       } finally {
         if (active) setLoading(false);
       }
@@ -148,7 +149,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
 
             {server.error ? (
               <div className="px-3 py-2 text-sm text-red-700 dark:text-red-400 flex items-center">
-                <Icon name="x-circle" size="sm" className="mr-1.5 flex-shrink-0" />
+                <Icon name="x-circle" size="sm" className="mr-1.5 shrink-0" />
                 {t('admin.apps.edit.mcpTools.serverError', 'Could not list tools: {{error}}', {
                   error: server.error
                 })}
@@ -164,7 +165,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
                     <label className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <input
                         type="checkbox"
-                        className="mt-0.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                        className="mt-0.5 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         checked={selectedTools.includes(tool.name)}
                         onChange={() => toggleTool(tool.name)}
                       />

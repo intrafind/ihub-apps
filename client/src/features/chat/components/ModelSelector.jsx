@@ -183,7 +183,7 @@ function ModelSelector({
                       <Icon
                         name="check"
                         size="sm"
-                        className="text-indigo-600 dark:text-indigo-400 flex-shrink-0"
+                        className="text-indigo-600 dark:text-indigo-400 shrink-0"
                       />
                     )}
                   </div>

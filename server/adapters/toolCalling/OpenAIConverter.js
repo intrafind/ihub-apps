@@ -13,6 +13,7 @@ import {
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 import { isPlausibleToolName, validateProviderToolName } from './toolNameValidator.js';
+import { buildThoughtSignatureExtraContent, extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -109,7 +110,7 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
       args = JSON.stringify(toolCall.arguments);
     }
 
-    return {
+    const openAIToolCall = {
       index: toolCall.index || 0,
       id: toolCall.id,
       type: 'function',
@@ -118,6 +119,20 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
         arguments: args
       }
     };
+
+    // Gemini thinking models require their thought signature back on the same
+    // function call in the next turn, and the OpenAI schema has nowhere to put
+    // it. Google's own compatibility layer nests it under
+    // `extra_content.google.thought_signature`, so we emit the same shape —
+    // callers that echo the tool call verbatim keep multi-turn tool calling
+    // working. Only Gemini responses ever set this metadata, so the field never
+    // appears for other providers.
+    const thoughtSignature = extractThoughtSignature(toolCall);
+    if (thoughtSignature) {
+      openAIToolCall.extra_content = buildThoughtSignatureExtraContent(thoughtSignature);
+    }
+
+    return openAIToolCall;
   });
 }
 
@@ -182,7 +197,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
 
       // For streaming chunks with empty names, create minimal objects to avoid overwriting
-      // the tool name during merging in ToolExecutor
+      // the tool name during merging in the tool-call accumulator
       if (!toolName && args.__raw_arguments !== undefined) {
         // This is a streaming chunk with arguments but no name
         // Create a minimal object that won't overwrite the existing tool name
@@ -198,17 +213,23 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
             rawArguments: argString
           },
           function: {
-            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            name: '', // Keep empty so the accumulator won't overwrite existing name
             arguments: argString
           }
         };
       }
 
+      // Accept back the Gemini thought signature we emit in
+      // `extra_content.google.thought_signature`, so an OpenAI-shaped tool call
+      // that originated from a Gemini model keeps it in the generic format.
+      const thoughtSignature = extractThoughtSignature(toolCall);
+
       return createGenericToolCall(toolId, toolName, args, toolIndex, {
         originalFormat: 'openai',
         type: toolCall.type || 'function',
         // Keep raw arguments for streaming merging
-        rawArguments: argString
+        rawArguments: argString,
+        ...(thoughtSignature ? { thoughtSignature } : {})
       });
     })
     .filter(toolCall => {
@@ -382,7 +403,7 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
             } catch (error) {
               logger.warn('Failed to parse accumulated OpenAI tool arguments', {
                 component: 'OpenAIConverter',
-                error: e
+                error
               });
               parsedArgs = { __raw_arguments: pending.arguments };
             }

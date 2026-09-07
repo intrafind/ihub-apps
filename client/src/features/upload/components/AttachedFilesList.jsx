@@ -101,7 +101,7 @@ export default function AttachedFilesList({
   }
 
   return (
-    <div className="mt-2 mb-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+    <div className="mt-2 mb-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 shadow-xs">
       {/* Collapsible header — only when the list is long enough to threaten the layout */}
       {showHeader && (
         <div className="flex items-center gap-2 px-3 py-2">
@@ -120,7 +120,7 @@ export default function AttachedFilesList({
             <Icon
               name="paper-clip"
               size="sm"
-              className="flex-shrink-0 text-gray-500 dark:text-gray-400"
+              className="shrink-0 text-gray-500 dark:text-gray-400"
             />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -133,7 +133,7 @@ export default function AttachedFilesList({
             <Icon
               name={expanded ? 'chevronUp' : 'chevronDown'}
               size="sm"
-              className="flex-shrink-0 text-gray-400"
+              className="shrink-0 text-gray-400"
               aria-hidden
             />
           </button>
@@ -144,7 +144,7 @@ export default function AttachedFilesList({
               type="button"
               onClick={onRemoveAll}
               disabled={disabled}
-              className="flex-shrink-0 text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t('attachedFiles.removeAll', 'Remove All')}
             </button>
@@ -174,14 +174,14 @@ export default function AttachedFilesList({
               >
                 {/* Source icon */}
                 <div
-                  className="flex-shrink-0 text-gray-500 dark:text-gray-400"
+                  className="shrink-0 text-gray-500 dark:text-gray-400"
                   title={getSourceLabel(file)}
                 >
                   <Icon name={getSourceIcon(file)} size="sm" />
                 </div>
 
                 {/* File type icon or loading spinner */}
-                <div className="flex-shrink-0 text-gray-600 dark:text-gray-300">
+                <div className="shrink-0 text-gray-600 dark:text-gray-300">
                   {file.loading ? (
                     <svg
                       className="animate-spin h-5 w-5 text-indigo-500"
@@ -224,7 +224,7 @@ export default function AttachedFilesList({
                   type="button"
                   onClick={() => onRemoveFile(index)}
                   disabled={disabled || file.loading}
-                  className="flex-shrink-0 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1"
+                  className="shrink-0 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1"
                   title={t('attachedFiles.remove', 'Remove file')}
                   aria-label={t('attachedFiles.remove', 'Remove file')}
                 >

@@ -1,4 +1,6 @@
-import writeXlsxFile from 'write-excel-file';
+// write-excel-file v4 dropped the root entry point in favor of per-runtime
+// subpaths ('/browser', '/node', '/universal').
+import writeXlsxFile from 'write-excel-file/browser';
 import { Document, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 

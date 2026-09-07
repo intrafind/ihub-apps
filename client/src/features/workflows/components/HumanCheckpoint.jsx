@@ -6,6 +6,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
 
 /**
  * Render any data value as a readable UI block.
@@ -78,7 +79,7 @@ function StringValue({ value }) {
     );
   }
   return (
-    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap wrap-break-word">
       {value}
     </p>
   );
@@ -108,7 +109,7 @@ function DisplayValue({ value, depth = 0 }) {
       return (
         <ul className="list-disc list-outside ml-5 space-y-1 text-sm text-gray-800 dark:text-gray-200">
           {value.map((item, idx) => (
-            <li key={idx} className="break-words">
+            <li key={idx} className="wrap-break-word">
               {typeof item === 'string' ? item : <PrimitiveValue value={item} />}
             </li>
           ))}
@@ -144,7 +145,7 @@ function DisplayValue({ value, depth = 0 }) {
             <dt className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
               {humanizeKey(k)}
             </dt>
-            <dd className="text-gray-800 dark:text-gray-200 break-words">
+            <dd className="text-gray-800 dark:text-gray-200 wrap-break-word">
               <DisplayValue value={v} depth={depth + 1} />
             </dd>
           </div>
@@ -171,7 +172,7 @@ function DisplayData({ displayData, showTechnical }) {
       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {t('workflows.checkpoint.relevantData', 'Relevant Data')}
       </h4>
-      <div className="bg-white/90 dark:bg-gray-800/60 rounded-lg p-4 space-y-5 max-h-[32rem] overflow-y-auto border border-yellow-200 dark:border-yellow-800/40">
+      <div className="bg-white/90 dark:bg-gray-800/60 rounded-lg p-4 space-y-5 max-h-128 overflow-y-auto border border-yellow-200 dark:border-yellow-800/40">
         {entries.map(([key, value]) => (
           <section key={key}>
             <h5 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -199,7 +200,7 @@ function DisplayData({ displayData, showTechnical }) {
               : t('workflows.checkpoint.showRawJson', 'Show raw data')}
           </button>
           {showRaw && (
-            <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-900 rounded p-2 overflow-auto max-h-64 text-gray-800 dark:text-gray-200">
+            <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-900 rounded-sm p-2 overflow-auto max-h-64 text-gray-800 dark:text-gray-200">
               {JSON.stringify(displayData, null, 2)}
             </pre>
           )}
@@ -221,12 +222,40 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
   const { t } = useTranslation();
   const [selectedOption, setSelectedOption] = useState(null);
   const [formData, setFormData] = useState({});
+  // A question asked by the workflow / agent (`ask_user`, or a legacy `input`
+  // node): the widget follows `inputType` — text, number, date, confirm,
+  // single / multi select (with an optional "other" entry) — and the answer
+  // may be skipped when the prompt allows it. Approvals / reviews keep the
+  // option buttons below.
+  const isQuestion =
+    isQuestionCheckpoint(checkpoint) &&
+    !(checkpoint.inputSchema && checkpoint.inputSchema.properties);
+  const hasOptions = Array.isArray(checkpoint.options) && checkpoint.options.length > 0;
+  const inputType = checkpoint.inputType || (hasOptions ? 'single_select' : 'text');
+  const isMulti = inputType === 'multi_select';
+  const [answer, setAnswer] = useState(isMulti ? [] : '');
+  const [otherText, setOtherText] = useState('');
+  const questionValue = () => {
+    const other = otherText.trim();
+    if (isMulti) {
+      const values = Array.isArray(answer) ? [...answer] : [];
+      if (checkpoint.allowOther && other) values.push(other);
+      return values;
+    }
+    if (checkpoint.allowOther && other) return other;
+    return typeof answer === 'string' ? answer.trim() : answer;
+  };
+  const questionAnswered = () => {
+    const v = questionValue();
+    return Array.isArray(v) ? v.length > 0 : v !== '' && v !== null && v !== undefined;
+  };
+  const canSubmit = isQuestion ? questionAnswered() : !!selectedOption;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [pendingConfirm, setPendingConfirm] = useState(null);
   const [showTechnical] = useTechnicalDetailsToggle();
 
-  const submitResponse = async optionValue => {
+  const submitResponse = async (optionValue, { skipped = false } = {}) => {
     setSubmitting(true);
     setError(null);
 
@@ -234,7 +263,8 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
       await onRespond({
         checkpointId: checkpoint.id,
         response: optionValue,
-        data: Object.keys(formData).length > 0 ? formData : undefined
+        data: Object.keys(formData).length > 0 ? formData : undefined,
+        ...(skipped ? { skipped: true } : {})
       });
     } catch (err) {
       console.error('Failed to submit checkpoint response:', err);
@@ -246,6 +276,11 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
   };
 
   const handleSubmit = () => {
+    if (isQuestion) {
+      if (!questionAnswered()) return;
+      submitResponse(questionValue());
+      return;
+    }
     if (!selectedOption) return;
     const option = checkpoint.options?.find(o => o.value === selectedOption);
     if (option?.style === 'danger') {
@@ -257,7 +292,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
 
   const getButtonClasses = (option, isSelected) => {
     const base =
-      'flex-1 px-4 py-3 rounded-lg font-medium transition-all border-2 text-center focus:outline-none focus:ring-2 focus:ring-offset-2';
+      'flex-1 px-4 py-3 rounded-lg font-medium transition-all border-2 text-center focus:outline-hidden focus:ring-2 focus:ring-offset-2';
 
     if (isSelected) {
       switch (option.style) {
@@ -281,10 +316,10 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-l-4 border-yellow-400 rounded-lg p-6 shadow-md">
+    <div className="bg-linear-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-l-4 border-yellow-400 rounded-lg p-6 shadow-md">
       <div className="flex items-center gap-3 mb-4">
         <div
-          className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center flex-shrink-0"
+          className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center shrink-0"
           aria-hidden="true"
         >
           <Icon name="hand-raised" className="w-6 h-6 text-white" />
@@ -299,7 +334,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 shadow-xs">
         <p className="text-gray-700 dark:text-gray-300">{checkpoint.message}</p>
       </div>
 
@@ -307,7 +342,7 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
         <DisplayData displayData={displayData} showTechnical={showTechnical} />
       )}
 
-      {checkpoint.options && checkpoint.options.length > 0 && (
+      {!isQuestion && checkpoint.options && checkpoint.options.length > 0 && (
         <div className="mb-4">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t('workflows.checkpoint.selectOption', 'Select an option')}
@@ -329,6 +364,106 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {isQuestion && (
+        <div className="mb-4">
+          <label
+            htmlFor={`checkpoint-answer-${checkpoint.id}`}
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            {t('workflows.checkpoint.yourAnswer', 'Your answer')}
+          </label>
+          {(inputType === 'single_select' || isMulti || inputType === 'confirm') && (
+            <div className="flex flex-wrap gap-3 mb-3" role="group">
+              {(hasOptions
+                ? checkpoint.options
+                : [
+                    { value: 'yes', label: t('common.yes', 'Yes') },
+                    { value: 'no', label: t('common.no', 'No') }
+                  ]
+              ).map(option => {
+                const selected = isMulti
+                  ? Array.isArray(answer) && answer.includes(option.value)
+                  : answer === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={submitting}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setAnswer(prev =>
+                        isMulti
+                          ? prev.includes(option.value)
+                            ? prev.filter(v => v !== option.value)
+                            : [...prev, option.value]
+                          : option.value
+                      )
+                    }
+                    className={getButtonClasses(option, selected)}
+                  >
+                    {option.label || option.value}
+                    {option.description && (
+                      <span className="block text-xs opacity-75 mt-1">{option.description}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {(inputType === 'single_select' || isMulti) && checkpoint.allowOther && (
+            <input
+              id={`checkpoint-answer-${checkpoint.id}`}
+              type="text"
+              value={otherText}
+              onChange={e => setOtherText(e.target.value)}
+              disabled={submitting}
+              placeholder={t('workflows.checkpoint.otherAnswer', 'Other (type your own answer)')}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {inputType === 'number' && (
+            <input
+              id={`checkpoint-answer-${checkpoint.id}`}
+              type="number"
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              disabled={submitting}
+              placeholder={checkpoint.placeholder || ''}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {inputType === 'date' && (
+            <input
+              id={`checkpoint-answer-${checkpoint.id}`}
+              type="date"
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              disabled={submitting}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {!['single_select', 'multi_select', 'confirm', 'number', 'date'].includes(inputType) && (
+            <textarea
+              id={`checkpoint-answer-${checkpoint.id}`}
+              rows={3}
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              disabled={submitting}
+              placeholder={
+                checkpoint.placeholder ||
+                t('workflows.checkpoint.answerPlaceholder', 'Type your answer')
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          )}
+          {checkpoint.validation?.message && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {checkpoint.validation.message}
+            </p>
+          )}
         </div>
       )}
 
@@ -390,9 +525,9 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!selectedOption || submitting}
-        className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-          !selectedOption || submitting
+        disabled={!canSubmit || submitting}
+        className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+          !canSubmit || submitting
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
             : 'bg-indigo-600 hover:bg-indigo-700 text-white'
         }`}
@@ -409,6 +544,17 @@ function HumanCheckpoint({ checkpoint, onRespond, displayData }) {
           </>
         )}
       </button>
+
+      {isQuestion && checkpoint.allowSkip && (
+        <button
+          type="button"
+          onClick={() => submitResponse(null, { skipped: true })}
+          disabled={submitting}
+          className="w-full mt-2 py-2 px-4 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-gray-400"
+        >
+          {t('workflows.checkpoint.skip', 'Skip this question')}
+        </button>
+      )}
 
       {checkpoint.expiresAt && (
         <div className="mt-3 text-sm text-gray-600 dark:text-gray-400 text-center">

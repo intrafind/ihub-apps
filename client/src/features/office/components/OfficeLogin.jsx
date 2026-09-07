@@ -140,7 +140,7 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
 
           <div className="px-6 pt-4 pb-6 flex flex-col gap-4">
             {(sessionBanner || apiError) && (
-              <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2 space-y-1">
+              <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-sm px-3 py-2 space-y-1">
                 {sessionBanner && <p className="m-0">{sessionBanner}</p>}
                 {apiError && (
                   <p className={`m-0 ${sessionBanner ? 'pt-1 border-t border-red-100' : ''}`}>

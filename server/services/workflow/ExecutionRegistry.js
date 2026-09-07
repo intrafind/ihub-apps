@@ -435,7 +435,7 @@ export class ExecutionRegistry {
         if (error.code !== 'ENOENT') {
           logger.warn('Error loading registry file, will rebuild from checkpoints', {
             component: 'ExecutionRegistry',
-            error: err
+            error
           });
         }
       }
@@ -515,7 +515,7 @@ export class ExecutionRegistry {
           logger.debug('Skipping directory without valid checkpoint', {
             component: 'ExecutionRegistry',
             executionId,
-            error: err
+            error
           });
         }
       }
@@ -524,7 +524,7 @@ export class ExecutionRegistry {
         // State directory doesn't exist yet, that's fine
         logger.debug('State directory does not exist yet', { component: 'ExecutionRegistry' });
       } else {
-        throw err;
+        throw error;
       }
     }
   }

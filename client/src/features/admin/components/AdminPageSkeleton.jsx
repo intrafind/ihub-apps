@@ -19,12 +19,12 @@ function AdminPageSkeleton({ rows = 5, hasHeader = true }) {
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Table header */}
         <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-6 py-3 flex gap-6">
-          <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-          <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
-          <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded ml-auto" />
+          <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded-sm" />
+          <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded-sm" />
+          <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded-sm ml-auto" />
         </div>
 
         {/* Rows */}
@@ -33,20 +33,20 @@ function AdminPageSkeleton({ rows = 5, hasHeader = true }) {
             key={i}
             className="px-6 py-4 flex items-center gap-4 border-b border-gray-100 dark:border-gray-700/50 last:border-0"
           >
-            <div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded-sm" />
             <div className="flex-1 space-y-2">
               <div
-                className="h-4 bg-gray-200 dark:bg-gray-700 rounded"
+                className="h-4 bg-gray-200 dark:bg-gray-700 rounded-sm"
                 style={{ width: `${45 + (i % 3) * 15}%` }}
               />
               <div
-                className="h-3 bg-gray-100 dark:bg-gray-700/60 rounded"
+                className="h-3 bg-gray-100 dark:bg-gray-700/60 rounded-sm"
                 style={{ width: `${25 + (i % 4) * 10}%` }}
               />
             </div>
             <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full" />
-            <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded" />
-            <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-sm" />
+            <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-sm" />
           </div>
         ))}
       </div>

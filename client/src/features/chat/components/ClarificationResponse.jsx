@@ -100,10 +100,10 @@ function ClarificationResponse({
   }, [answer, options, inputType, skipped, preformattedDisplayText, t]);
 
   return (
-    <div className="flex flex-col gap-2 py-3 px-4 my-2 rounded-lg bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-800 border border-gray-200 dark:border-gray-700">
+    <div className="flex flex-col gap-2 py-3 px-4 my-2 rounded-lg bg-linear-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-800 border border-gray-200 dark:border-gray-700">
       {/* Question row */}
       <div className="flex items-start gap-2">
-        <div className="flex-shrink-0 mt-0.5">
+        <div className="shrink-0 mt-0.5">
           <Icon
             name="question-mark-circle"
             size="sm"
@@ -120,7 +120,7 @@ function ClarificationResponse({
 
       {/* Answer row */}
       <div className="flex items-start gap-2 ml-6">
-        <div className="flex-shrink-0 mt-0.5">
+        <div className="shrink-0 mt-0.5">
           <Icon
             name={skipped ? 'arrow-right' : 'check-circle'}
             size="sm"

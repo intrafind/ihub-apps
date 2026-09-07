@@ -225,7 +225,7 @@ function Layout() {
                           alt={
                             getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'
                           }
-                          className="h-7 w-7 flex-shrink-0"
+                          className="h-7 w-7 shrink-0"
                         />
                       )}
                       <div className="flex flex-col leading-tight">
@@ -331,7 +331,7 @@ function Layout() {
             </header>
           )}
 
-          <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
+          <main id="main-content" tabIndex={-1} className="grow w-full overflow-y-auto">
             <div className="container mx-auto px-4">
               <Outlet />
             </div>

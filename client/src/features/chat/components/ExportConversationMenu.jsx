@@ -79,7 +79,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
   }
 
   return (
-    <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg z-20">
+    <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded-sm shadow-lg z-20">
       {/* PDF Export with Options */}
       <>
         <div className="relative">
@@ -102,7 +102,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
           </button>
 
           {showPdfOptions && (
-            <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg min-w-[300px] p-3 z-30">
+            <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded-sm shadow-lg min-w-[300px] p-3 z-30">
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -111,7 +111,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
                   <select
                     value={pdfConfig.template}
                     onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                    className="w-full text-sm border border-gray-300 rounded-sm px-2 py-1"
                   >
                     <option value="default">
                       {t('pages.appChat.export.templateDefault', 'Default')}
@@ -138,7 +138,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
                         watermark: { ...prev.watermark, text: e.target.value }
                       }))
                     }
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                    className="w-full text-sm border border-gray-300 rounded-sm px-2 py-1"
                     placeholder="Enter watermark text"
                   />
                 </div>
@@ -155,7 +155,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
                         watermark: { ...prev.watermark, position: e.target.value }
                       }))
                     }
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                    className="w-full text-sm border border-gray-300 rounded-sm px-2 py-1"
                   >
                     <option value="bottom-right">
                       {t('pages.appChat.export.bottomRight', 'Bottom Right')}
@@ -194,7 +194,7 @@ function ExportConversationMenu({ app, messages = [], settings = {}, onClose, ap
                   <button
                     onClick={() => handleExport('pdf')}
                     disabled={isExporting}
-                    className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded-sm hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {isExporting
                       ? t('pages.appChat.export.generating', 'Generating...')

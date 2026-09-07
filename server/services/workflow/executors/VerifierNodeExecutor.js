@@ -20,7 +20,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient, { usageToBudget } from '../../loop/LLMClient.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
@@ -30,11 +30,12 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
   /**
    * Create a new VerifierNodeExecutor
    * @param {Object} options - Executor options
-   * @param {WorkflowLLMHelper} [options.llmHelper] - LLM helper instance for API calls
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for the verification call (defaults to the shared singleton; tests inject a stub)
    */
   constructor(options = {}) {
     super(options);
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
     // Lazily-created PromptNodeExecutor used to run the tool-enabled
     // adversarial verifier (so it can actually run checks/searches before
     // its verdict). Dynamic-imported to avoid an executor-index import cycle.
@@ -50,7 +51,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
   async getPromptExecutor() {
     if (!this._promptExecutor) {
       const { PromptNodeExecutor } = await import('./PromptNodeExecutor.js');
-      this._promptExecutor = new PromptNodeExecutor({ llmHelper: this.llmHelper });
+      this._promptExecutor = new PromptNodeExecutor({ llmClient: this.llmClient });
     }
     return this._promptExecutor;
   }
@@ -238,10 +239,8 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         return this.createErrorResult('No model available for verification', { nodeId: node.id });
       }
 
-      const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-      if (!apiKeyResult.success) {
-        throw new Error(apiKeyResult.error?.message || 'API key verification failed');
-      }
+      // API-key resolution happens inside LLMClient.complete(); a missing key
+      // throws an LLMError (AUTH_FAILED) caught by the outer try/catch below.
 
       const criteria =
         config.criteria || 'Evaluate the quality, completeness, and accuracy of the output.';
@@ -292,20 +291,21 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         // executeLLMWithTools already returns an { input, output } accumulator.
         responseTokens = toolResp.tokens || null;
       } else {
-        const response = await this.llmHelper.executeStreamingRequest({
+        const response = await this.llmClient.complete({
           model,
           messages,
-          apiKey: apiKeyResult.apiKey,
           options: { temperature: 0.3, ...thinkingConfigToOptions(node.config?.thinking) },
-          language
+          language,
+          signal: context.abortSignal,
+          telemetry: {
+            runId: context.runId || context.executionId || state?.executionId,
+            step: context.iteration ?? 0,
+            purpose: 'verifier',
+            refs: { executionId: state?.executionId, nodeId: node.id }
+          }
         });
         responseContent = response.content || '';
-        const u = response.usage;
-        if (u) {
-          const input = u.prompt_tokens || u.input_tokens || 0;
-          const output = u.completion_tokens || u.output_tokens || 0;
-          responseTokens = input || output ? { input, output } : null;
-        }
+        responseTokens = usageToBudget(response.usage);
       }
 
       // Parse a JSON object out of the response (both modes return JSON).

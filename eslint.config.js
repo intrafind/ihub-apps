@@ -47,7 +47,8 @@ export default [
           caughtErrorsIgnorePattern: '^_'
         }
       ],
-      'no-console': 'off'
+      'no-console': 'off',
+      'no-undef': 'error'
       // Removed all formatting rules that conflict with Prettier
       // Prettier handles: indent, quotes, semi, no-multiple-empty-lines, eol-last,
       // comma-dangle, object-curly-spacing, array-bracket-spacing, space-before-function-paren,
@@ -105,6 +106,58 @@ export default [
       globals: {
         ...globals.node,
         ...globals.es2024
+      }
+    }
+  },
+  {
+    // One agentic loop: every model call goes through LLMClient. Building
+    // provider requests or parsing provider responses anywhere else is a lint
+    // error, so a second private LLM path can never grow back.
+    files: ['server/**/*.js'],
+    ignores: ['server/services/loop/**', 'server/adapters/**', 'server/tests/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/adapters/index.js', '**/adapters/index'],
+              importNames: ['createCompletionRequest', 'getAdapter'],
+              message:
+                'Build LLM requests through server/services/loop/LLMClient.js (execute/complete), not the adapter registry.'
+            },
+            {
+              group: [
+                '**/adapters/toolCalling/index.js',
+                '**/adapters/toolCalling/ToolCallingConverter.js'
+              ],
+              importNames: ['convertResponseToGeneric', 'clearStreamingState'],
+              message:
+                'Provider responses are parsed by server/services/loop/LLMClient.js; consume its GenericChunks instead.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    files: ['tests/**/*.js', 'tests/**/*.jsx', 'server/tests/**/*.js', '**/__tests__/**/*.js'],
+    languageOptions: {
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      },
+      globals: {
+        ...globals.jest
+      }
+    }
+  },
+  {
+    files: ['browser-extension/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.webextensions
       }
     }
   }

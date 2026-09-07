@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 function AdminUserViewPage() {
@@ -12,6 +12,8 @@ function AdminUserViewPage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Captured once per mount — the static "days ago" label needs no live clock
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const loadUser = async () => {
@@ -28,7 +30,7 @@ function AdminUserViewPage() {
 
         setUser(userData);
       } catch (err) {
-        setError(err.message);
+        setError(getAdminApiErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -50,7 +52,7 @@ function AdminUserViewPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Icon name="warning" size="md" className="text-red-400" />
             </div>
             <div className="ml-3">
@@ -90,21 +92,21 @@ function AdminUserViewPage() {
                 linkElement.setAttribute('download', exportFileDefaultName);
                 linkElement.click();
               }}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="download" className="h-4 w-4 mr-2" />
               {t('common.download', 'Download')}
             </button>
             <button
               onClick={() => navigate(`/admin/users/${userId}`)}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="edit" className="h-4 w-4 mr-2" />
               {t('admin.users.view.edit', 'Edit User')}
             </button>
             <button
               onClick={() => navigate('/admin/users')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-left" className="h-4 w-4 mr-2" />
               {t('admin.users.view.backToList', 'Back to Users')}
@@ -114,11 +116,11 @@ function AdminUserViewPage() {
       </div>
 
       {/* Read-only user information */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs rounded-lg border border-gray-200 dark:border-gray-700">
         {/* User Avatar and Basic Info */}
         <div className="px-6 py-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-4">
-            <div className="flex-shrink-0 h-20 w-20">
+            <div className="shrink-0 h-20 w-20">
               <div className="h-20 w-20 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
                 <Icon name="user" size="lg" className="text-gray-600 dark:text-gray-300" />
               </div>
@@ -293,9 +295,7 @@ function AdminUserViewPage() {
                   <div className="flex flex-col">
                     <span>{new Date(user.lastActiveDate).toLocaleString()}</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {Math.floor(
-                        (Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24)
-                      )}{' '}
+                      {Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24))}{' '}
                       {t('admin.users.view.daysAgo', 'days ago')}
                     </span>
                   </div>

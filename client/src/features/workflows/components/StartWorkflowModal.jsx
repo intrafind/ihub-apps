@@ -109,7 +109,7 @@ function FormField({ variable, value, onChange, disabled, language, error, field
             checked={value || false}
             onChange={e => onChange(variable.name, e.target.checked)}
             disabled={disabled}
-            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            className="w-4 h-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
           />
           <span className="text-sm text-gray-600 dark:text-gray-400">{description}</span>
         </label>
@@ -315,10 +315,7 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={handleClose}
-      />
+      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={handleClose} />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
@@ -339,7 +336,7 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
             <button
               onClick={handleClose}
               disabled={submitting}
-              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500 rounded-sm"
               aria-label={t('common.close', 'Close')}
             >
               <Icon name="x" className="w-6 h-6" aria-hidden="true" />

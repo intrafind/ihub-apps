@@ -58,10 +58,66 @@ https://your-ihub-instance.com/api/inference/v1
 | `max_tokens`  | Maximum tokens to generate.                                    |
 | `tools`       | OpenAI tool/function definitions — translated to each provider.|
 | `tool_choice` | `none` \| `auto` \| `{ ... }`.                                 |
+| `stream_options` | `{ "include_usage": true }` appends a final chunk with `usage` (and empty `choices`) before `[DONE]`, as OpenAI does. |
 
 Tool calling works across all providers: iHub converts OpenAI-format tools into its generic
 format, dispatches to the provider, and converts the response (including streamed tool-call
 deltas) back into OpenAI format.
+
+### Tool calling with Gemini — thought signatures
+
+Thinking Gemini models (the 2.5 and 3 series) return a **thought signature** on tool calls: an
+encrypted snapshot of the model's reasoning that Gemini requires back in the conversation
+history. Gemini 3 validates this strictly and rejects a continuation request whose current-turn
+function calls are missing it:
+
+```
+400 ... Function call is missing a thought_signature in functionCall parts.
+```
+
+Gemini puts the signature on the **first** tool call of a response — with parallel tool calls,
+the rest carry none. Preserve it on exactly the call it came back on; do not copy it onto the
+others or synthesise one where there was none.
+
+The OpenAI schema has no field for this, so iHub follows Google's own compatibility
+convention and nests the signature inside the tool call it belongs to:
+
+```json
+{
+  "id": "call_0_1732531200000",
+  "type": "function",
+  "function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" },
+  "extra_content": { "google": { "thought_signature": "AgQKA..." } }
+}
+```
+
+**What callers should do:** echo the assistant message's `tool_calls` back **verbatim**,
+including `extra_content`, alongside the `role: "tool"` result. Reconstructing tool calls
+field-by-field, or using a client that drops unknown fields, loses the signature.
+
+This is the same field Gemini-aware OpenAI clients already handle. [Hermes
+Agent](https://github.com/NousResearch/hermes-agent), for example, captures `extra_content`
+off each tool call — including from the OpenAI SDK's unknown-field bag — and replays it when
+the model name looks Gemini-family, so it works against iHub with no changes.
+
+> **Name your Gemini models with `gemini` (or `gemma`) in the id.** Clients decide whether to
+> replay `extra_content` by pattern-matching the model name, because on a plain OpenAI
+> endpoint that is the only signal they have. A Gemini-backed model published as, say,
+> `fast-assistant` will have its signature dropped by such a client and fall back to the
+> degraded path below.
+
+If the signature does not come back, iHub substitutes Google's documented
+`skip_thought_signature_validator` sentinel on the affected function call so the request
+succeeds instead of failing with a 400. The conversation continues, but the model loses the
+reasoning context behind that tool call, which can degrade multi-step tool use — so
+round-tripping the real signature is always preferable. iHub logs a warning
+(`No thought signature for current-turn function call`) whenever it falls back.
+
+`extra_content` is only present when the upstream model actually returned a signature, so
+responses from other providers are unchanged. And because strict providers (Mistral,
+Fireworks, …) reject a request that *carries* the field, iHub strips it from outgoing
+`tool_calls` whenever the target model is not Gemini-family — so replaying a Gemini
+conversation against a different model is safe.
 
 ---
 
@@ -339,13 +395,30 @@ primary sources are:
 
 ---
 
+## Errors
+
+Errors are JSON objects with a `code` from iHub's canonical LLM error taxonomy
+(see [LLM Client](llm-client.md#error-taxonomy)):
+
+```json
+{ "error": "Rate limit exceeded for openai API. Please try again later.", "code": "RATE_LIMITED", "details": "<raw provider body>" }
+```
+
+- Provider failures keep the **upstream HTTP status** (`429`, `503`, …) and carry the provider's
+  raw response in `details`.
+- Validation failures use `400`/`403`/`404` with a localized `error` message (`Accept-Language`
+  selects the language).
+- When a **stream** fails after it started, the error is sent in-band as
+  `data: {"error": {"message": …, "type": "server_error", "code": …}}` followed by `data: [DONE]`.
+- If the client disconnects mid-stream the upstream model call is aborted immediately.
+
 ## Limitations
 
-- **Authentication is always required.** Anonymous access is not available on this endpoint, even
-  if anonymous access is enabled elsewhere on the platform.
-- **`usage` token counts are not populated** in non-streaming responses — `prompt_tokens`,
-  `completion_tokens`, and `total_tokens` are returned as `0`. Use iHub telemetry for accurate
-  usage accounting.
+- **Authentication follows the platform.** The endpoint sits behind `authRequired`: when anonymous
+  access is disabled on the platform, a token is required; when it is enabled, unauthenticated
+  calls are served and see every enabled model. Restrict access with groups / OAuth client scopes.
+- **Reasoning content is not forwarded.** Provider "thinking" deltas are consumed server-side and
+  never appear in the OpenAI wire.
 - **Compatibility scope.** The proxy implements `chat/completions` and `models`. Other OpenAI
   endpoints (e.g. legacy `completions`, `embeddings`, `images`) are not exposed here.
 
@@ -360,4 +433,5 @@ primary sources are:
 | `404` model not found            | The `model` id does not match any configured model. Check `GET .../models`.        |
 | `429 Too many requests`          | Inference rate limit hit. Back off or raise `rateLimit.inferenceApi.limit`.        |
 | `500` API key not found          | The underlying provider's API key is not configured on the server.                 |
+| `400 missing a thought_signature` (Gemini) | The tool call was sent back without its `extra_content.google.thought_signature`. Echo `tool_calls` verbatim — see [Tool calling with Gemini](#tool-calling-with-gemini--thought-signatures). |
 | Empty/blocked from a browser     | Add your origin to the `cors` configuration (see Server Configuration).            |

@@ -218,7 +218,7 @@ function SourcePicker({
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search sources by name, description, or ID..."
             disabled={disabled || loading}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
           />
         </div>
 
@@ -230,7 +230,7 @@ function SourcePicker({
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value)}
               disabled={disabled || loading}
-              className="block w-32 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
+              className="block w-32 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500"
             >
               <option value="all">All Types</option>
               <option value="filesystem">📁 Files</option>
@@ -346,7 +346,7 @@ function SourcePicker({
                         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {sourceName}
                         </h4>
-                        <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-sm">
                           {source.id}
                         </span>
                       </div>
@@ -394,7 +394,7 @@ function SourcePicker({
                       handleSourceToggle(sourceId);
                     }}
                     disabled={disabled}
-                    className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-blue-400 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-600 dark:hover:text-blue-200 focus:outline-none disabled:cursor-not-allowed"
+                    className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-blue-400 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 hover:text-blue-600 dark:hover:text-blue-200 focus:outline-hidden disabled:cursor-not-allowed"
                   >
                     <XMarkIcon className="w-3 h-3" />
                   </button>

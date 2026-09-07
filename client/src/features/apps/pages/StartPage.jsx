@@ -260,7 +260,7 @@ export default function StartPage() {
                 className="border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 px-5 py-4 animate-pulse"
                 aria-hidden="true"
               >
-                <div className="h-4 w-2/3 bg-gray-100 dark:bg-gray-700 rounded mb-3" />
+                <div className="h-4 w-2/3 bg-gray-100 dark:bg-gray-700 rounded-sm mb-3" />
                 <div className="flex items-center justify-between">
                   <div className="h-7 w-7 bg-gray-100 dark:bg-gray-700 rounded-lg" />
                   <div className="h-9 w-9 bg-gray-100 dark:bg-gray-700 rounded-xl" />
