@@ -13,6 +13,7 @@ import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -418,6 +419,39 @@ export default function registerAdminUIRoutes(app) {
         if (page !== null && (typeof page !== 'object' || Array.isArray(page))) {
           throw new Error(`errorPages.${pageKey} must be an object`);
         }
+      }
+    }
+
+    // Validate startPage section if present. `defaultAppId` ends up in a URL
+    // path (/apps/<id>) and an API call on the client, so it must look like an
+    // app id; `subtitle` is a localized `{ lang: value }` object.
+    if (config.startPage !== undefined) {
+      const { startPage } = config;
+      if (typeof startPage !== 'object' || startPage === null || Array.isArray(startPage)) {
+        throw new Error('startPage section must be an object');
+      }
+      if (startPage.showDefaultApp !== undefined && typeof startPage.showDefaultApp !== 'boolean') {
+        throw new Error('startPage.showDefaultApp must be a boolean');
+      }
+      if (
+        startPage.defaultAppId !== undefined &&
+        startPage.defaultAppId !== null &&
+        startPage.defaultAppId !== ''
+      ) {
+        if (
+          typeof startPage.defaultAppId !== 'string' ||
+          startPage.defaultAppId.length > APP_ID_MAX_LENGTH ||
+          !APP_ID_PATTERN.test(startPage.defaultAppId)
+        ) {
+          throw new Error('startPage.defaultAppId must be a valid app id');
+        }
+      }
+      if (
+        startPage.subtitle !== undefined &&
+        startPage.subtitle !== null &&
+        (typeof startPage.subtitle !== 'object' || Array.isArray(startPage.subtitle))
+      ) {
+        throw new Error('startPage.subtitle must be a localized object');
       }
     }
   }

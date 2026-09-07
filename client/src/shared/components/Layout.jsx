@@ -97,7 +97,7 @@ function Layout() {
 
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
     >
       <a
         href="#main-content"
@@ -331,8 +331,16 @@ function Layout() {
             </header>
           )}
 
-          <main id="main-content" tabIndex={-1} className="grow w-full overflow-y-auto">
-            <div className="container mx-auto px-4">
+          {/* App chats fill the remaining height (AppChat is h-full and brings its
+              own horizontal padding); other pages scroll inside a padded container. */}
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className={`grow w-full min-h-0 ${isAppPage ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
+          >
+            <div
+              className={`container mx-auto ${isAppPage ? 'flex flex-col flex-1 min-h-0' : 'px-4'}`}
+            >
               <Outlet />
             </div>
           </main>

@@ -90,11 +90,6 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
     return null;
   }
 
-  // For sidebar variant, don't render if user is not authenticated or is anonymous
-  if (variant === 'sidebar' && (!isAuthenticated || !user || user.id === 'anonymous')) {
-    return null;
-  }
-
   const handleLoginClick = () => {
     setShowDropdown(false);
     setShowAllGroups(false);
@@ -116,6 +111,31 @@ export default function UserAuthMenu({ variant = 'header', className = '', colla
     setShowDropdown(false);
     setShowAllGroups(false);
   };
+
+  // Sidebar variant for anonymous visitors: the sidebar is the only navigation
+  // on regular pages, so it must offer a way to sign in. A plain button opens
+  // the auth gate directly (the anonymous dropdown card is a header affordance).
+  if (variant === 'sidebar' && (!isAuthenticated || !user || user.id === 'anonymous')) {
+    const signIn = t('auth.menu.signIn', 'Sign In');
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={handleLoginClick}
+          title={signIn}
+          aria-label={collapsed ? signIn : undefined}
+          className={
+            collapsed
+              ? 'w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+              : 'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left'
+          }
+        >
+          <Icon name="login" size="sm" className="text-gray-500 dark:text-gray-400 flex-none" />
+          {!collapsed && <span className="truncate">{signIn}</span>}
+        </button>
+      </div>
+    );
+  }
 
   // Use the backend-calculated isAdmin flag instead of hardcoded group names.
   // Content admins (permissions.contentAdmin) aren't full admins (isAdmin) but

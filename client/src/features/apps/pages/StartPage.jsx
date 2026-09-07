@@ -34,10 +34,11 @@ export default function StartPage() {
   const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
-  const { apps, loading: appsLoading } = useApps();
+  const { apps, loading: appsLoading, error: appsError } = useApps();
   const { favorites: favoriteAppIds } = useFavorites('ihub_favorite_apps');
   const [draft, setDraft] = useState('');
   const [defaultAppDetails, setDefaultAppDetails] = useState(null);
+  const [detailsFailed, setDetailsFailed] = useState(false);
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(null);
 
@@ -60,9 +61,15 @@ export default function StartPage() {
 
   const greeting = useMemo(() => {
     const base = timeBasedGreeting(t);
-    const name = user?.name || user?.email?.split('@')[0] || '';
+    // Anonymous visitors carry a synthetic "Anonymous" name — greet them without it.
+    const isAnonymous = !user || user.id === 'anonymous';
+    const name = isAnonymous ? '' : user.name || user.email?.split('@')[0] || '';
     return name ? `${base}, ${name}` : base;
   }, [t, user]);
+
+  const subtitle =
+    getLocalizedContent(uiConfig?.startPage?.subtitle, currentLanguage) ||
+    t('startPage.subtitle', 'How can I help you today?');
 
   // Default app: admin-configured via uiConfig.startPage.defaultAppId, else first app
   const defaultApp = useMemo(() => {
@@ -77,6 +84,7 @@ export default function StartPage() {
   // Load the full default-app config so the chat input renders exactly what the
   // app is configured for (uploads, input mode, placeholder, etc.).
   useEffect(() => {
+    setDetailsFailed(false);
     if (!defaultApp?.id) {
       setDefaultAppDetails(null);
       return;
@@ -84,9 +92,14 @@ export default function StartPage() {
     let mounted = true;
     fetchAppDetails(defaultApp.id)
       .then(details => {
-        if (mounted && details) setDefaultAppDetails(details);
+        if (!mounted) return;
+        if (details) setDefaultAppDetails(details);
+        else setDetailsFailed(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Don't leave the skeleton pulsing forever — offer the app link instead.
+        if (mounted) setDetailsFailed(true);
+      });
     return () => {
       mounted = false;
     };
@@ -199,9 +212,7 @@ export default function StartPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-2">
             {greeting}!
           </h1>
-          <p className="text-base text-gray-500 dark:text-gray-400">
-            {t('startPage.subtitle', 'How can I help you today?')}
-          </p>
+          <p className="text-base text-gray-500 dark:text-gray-400">{subtitle}</p>
         </div>
 
         {/* Default chat input — renders the real app input (uploads, prompts,
@@ -228,7 +239,18 @@ export default function StartPage() {
               </button>
             </div>
 
-            {defaultAppDetails ? (
+            {detailsFailed && !defaultAppDetails ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/apps/${defaultApp.id}`)}
+                className="w-full border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 px-5 py-4 text-sm text-left text-gray-500 dark:text-gray-400 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
+              >
+                {t(
+                  'startPage.inputUnavailable',
+                  'The chat input could not be loaded. Open the app to start a conversation.'
+                )}
+              </button>
+            ) : defaultAppDetails ? (
               <ChatInput
                 app={defaultAppDetails}
                 value={draft}
@@ -274,6 +296,14 @@ export default function StartPage() {
           <div className="flex justify-center mb-8">
             <LoadingSpinner message={t('app.loading')} />
           </div>
+        )}
+
+        {!appsLoading && apps.length === 0 && (
+          <p role="status" className="text-center text-sm text-gray-500 dark:text-gray-400 mb-8">
+            {appsError
+              ? t('startPage.appsUnavailable', 'Apps could not be loaded. Please try again later.')
+              : t('startPage.noApps', 'No apps are available for your account yet.')}
+          </p>
         )}
 
         {/* Jump into an app */}

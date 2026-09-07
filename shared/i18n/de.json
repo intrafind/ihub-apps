@@ -1988,7 +1988,9 @@
         "defaultAppHelp": "Die App, deren Chat-Eingabe auf der Startseite angezeigt wird. Ohne Auswahl wird die erste zugängliche App verwendet.",
         "firstAvailable": "Erste verfügbare App (automatisch)",
         "showDefaultApp": "Standard-Chat-App anzeigen",
-        "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe."
+        "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe.",
+        "subtitle": "Untertitel",
+        "subtitleHelp": "Wird unter der Begrüßung angezeigt. Leer lassen, um den Standardtext zu verwenden."
       }
     },
     "groupSelect": {
@@ -2826,11 +2828,14 @@
     "greetingMorning": "Guten Morgen",
     "greetingAfternoon": "Guten Tag",
     "greetingEvening": "Guten Abend",
-    "subtitle": "Wie kann ich dir heute helfen?",
+    "subtitle": "Wie kann ich Ihnen heute helfen?",
     "openApp": "App vollständig öffnen",
     "jumpIntoApp": "In eine App springen",
     "browseAllApps": "Alle Apps durchsuchen",
-    "pickUpWhereYouLeftOff": "Mach dort weiter, wo du aufgehört hast"
+    "pickUpWhereYouLeftOff": "Machen Sie dort weiter, wo Sie aufgehört haben",
+    "inputUnavailable": "Die Chat-Eingabe konnte nicht geladen werden. Öffnen Sie die App, um ein Gespräch zu beginnen.",
+    "appsUnavailable": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
+    "noApps": "Für Ihr Konto sind noch keine Apps verfügbar."
   },
   "sidebar": {
     "navigation": "Navigation",
@@ -2850,16 +2855,18 @@
     "loadingApps": "Lädt…",
     "noAppsMatch": "Keine passenden Apps",
     "openMenu": "Navigation öffnen",
-    "closeMenu": "Navigation schließen"
+    "closeMenu": "Navigation schließen",
+    "noApps": "Keine Apps verfügbar"
   },
   "chatHistory": {
-    "title": "Deine Chats",
-    "subtitle": "{{count}} Unterhaltungen über deine Apps",
+    "title": "Ihre Chats",
+    "subtitle": "{{count}} Unterhaltungen in Ihren Apps",
     "searchPlaceholder": "Chats durchsuchen…",
     "groupRecent": "Aktuell",
     "groupByApp": "Nach App",
     "groupByDate": "Nach Datum",
-    "noResults": "Keine passenden Chats gefunden"
+    "noResults": "Keine passenden Chats gefunden",
+    "previewNotice": "Vorschau: Diese Seite zeigt Beispiel-Unterhaltungen. Der Chat-Verlauf wird noch nicht gespeichert."
   },
   "transcription": {
     "record": "Audio zum Transkribieren aufnehmen",

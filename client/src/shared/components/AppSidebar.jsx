@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../features/chat/data/mockChats';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import LanguageSelector from './LanguageSelector';
+import DarkModeToggle from './DarkModeToggle';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
@@ -68,7 +69,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { apps } = useApps();
+  const { apps, loading: appsLoading } = useApps();
   const { favorites: favoriteAppIds, isFavorite, toggleFavorite } = useFavorites(FAVORITE_APPS_KEY);
 
   const [collapsed, setCollapsed] = useState(() => {
@@ -328,6 +329,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
       <div className="flex-1" />
 
+      <DarkModeToggle variant="sidebar" className="mb-1" />
       <UserAuthMenu variant="sidebar" collapsed className="flex justify-center" />
     </aside>
   );
@@ -455,9 +457,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           <div className="px-2 pb-2">
             {sidebarApps.length === 0 && (
               <p className="text-xs text-gray-400 px-3 py-1">
-                {apps.length === 0
+                {appsLoading
                   ? t('sidebar.loadingApps', 'Loading…')
-                  : t('sidebar.noAppsMatch', 'No apps match')}
+                  : apps.length === 0
+                    ? t('sidebar.noApps', 'No apps available')
+                    : t('sidebar.noAppsMatch', 'No apps match')}
               </p>
             )}
             {sidebarApps.map(app => {
@@ -579,7 +583,10 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         <div className="flex-1 min-w-0">
           <UserAuthMenu variant="sidebar" />
         </div>
-        <LanguageSelector variant="sidebar" />
+        {uiConfig?.header?.languageSelector?.enabled !== false && (
+          <LanguageSelector variant="sidebar" />
+        )}
+        <DarkModeToggle variant="sidebar" />
       </div>
     </>
   );

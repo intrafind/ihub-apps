@@ -89,6 +89,20 @@ export default function ChatHistoryPage() {
           </button>
         </div>
 
+        {/* This page is a preview backed by sample data until chat persistence exists. */}
+        <div
+          role="note"
+          className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
+        >
+          <Icon name="information-circle" size="sm" className="mt-0.5 flex-none" />
+          <span>
+            {t(
+              'chatHistory.previewNotice',
+              'Preview: this page shows sample conversations. Chat history is not stored yet.'
+            )}
+          </span>
+        </div>
+
         {/* Search + grouping */}
         <div className="flex gap-3 mb-6 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">

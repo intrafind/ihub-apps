@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { fetchApps } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 /**
- * Start page configuration. Currently lets an admin pick the default app used
- * for the start page's chat input (uiConfig.startPage.defaultAppId).
+ * Start page configuration (uiConfig.startPage): whether the default app's chat
+ * input is shown, which app that is, and the subtitle under the greeting.
  */
 function StartPageCustomization({ config, onUpdate, t }) {
   const { i18n } = useTranslation();
@@ -44,6 +45,26 @@ function StartPageCustomization({ config, onUpdate, t }) {
       </p>
 
       <div className="max-w-lg space-y-6">
+        {/* Subtitle under the greeting */}
+        <div>
+          <DynamicLanguageEditor
+            label={t('admin.ui.startPage.subtitle', 'Subtitle')}
+            value={config?.subtitle || {}}
+            onChange={value => onUpdate({ subtitle: value })}
+            type="text"
+            placeholder={{
+              en: 'How can I help you today?',
+              de: 'Wie kann ich Ihnen heute helfen?'
+            }}
+          />
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.ui.startPage.subtitleHelp',
+              'Shown under the greeting. Leave empty to use the built-in text.'
+            )}
+          </p>
+        </div>
+
         {/* Toggle: show the default chat app input at all */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
