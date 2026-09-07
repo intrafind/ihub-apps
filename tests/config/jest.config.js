@@ -35,13 +35,15 @@ export default {
   },
   // Jest ignores node_modules when transforming by default, but some
   // dependencies now ship ESM only and have no CJS build — `uuid` 14 is
-  // `"type": "module"` with no `require` export — so a CJS test that reaches
-  // one through the code under test (useAppChat imports uuid) dies on
-  // `SyntaxError: Unexpected token 'export'` before a single assertion runs.
+  // `"type": "module"` with no `require` export, and `marked` 16+ /
+  // `eventsource-parser` 4+ dropped their CJS builds too — so a CJS test that
+  // reaches one through the code under test (useAppChat imports uuid,
+  // marked.config imports marked, BaseAdapter imports eventsource-parser) dies
+  // on `SyntaxError: Unexpected token 'export'` before a single assertion runs.
   // Let babel transform those, and only those. The pattern has to match nested
-  // installs too (`client/node_modules/uuid`), which it does: it tests the
+  // installs too (`client/node_modules/marked`), which it does: it tests the
   // whole resolved path.
-  transformIgnorePatterns: ['/node_modules/(?!(?:uuid)/)'],
+  transformIgnorePatterns: ['/node_modules/(?!(?:uuid|marked|eventsource-parser)/)'],
   testMatch: [
     '**/tests/integration/**/*.test.js',
     '**/tests/unit/server/**/*.test.js',
