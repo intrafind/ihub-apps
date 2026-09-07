@@ -111,14 +111,14 @@ export default function AdminAgentApprovalsPage() {
           ))}
         </div>
         {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
             {error}
           </div>
         )}
         {loading ? (
           <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
         ) : visible.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm p-8 text-center text-gray-500 dark:text-gray-400">
             {t('admin.interactions.empty', 'Nothing is waiting for you.')}
           </div>
         ) : (
@@ -126,7 +126,7 @@ export default function AdminAgentApprovalsPage() {
             {visible.map(interaction => (
               <li
                 key={interaction.id}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-4"
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm p-4"
               >
                 <div className="flex justify-between items-start gap-4">
                   <div className="min-w-0">
@@ -154,7 +154,7 @@ export default function AdminAgentApprovalsPage() {
                   </div>
                   <button
                     onClick={() => openRun(interaction)}
-                    className="shrink-0 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm"
+                    className="shrink-0 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-sm text-sm"
                   >
                     {t('admin.agents.approvals.openRun', 'Open run')}
                   </button>

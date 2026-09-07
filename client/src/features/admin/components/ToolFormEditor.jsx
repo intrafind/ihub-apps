@@ -24,7 +24,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
           value={value.id || ''}
           onChange={e => handleInputChange('id', e.target.value)}
           disabled={!isNewTool}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           placeholder="braveSearch"
         />
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -80,7 +80,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
             id="isSpecialTool"
             checked={value.isSpecialTool || false}
             onChange={e => handleInputChange('isSpecialTool', e.target.checked)}
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
           />
         </div>
         <div className="ml-3 text-sm">
@@ -106,7 +106,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
             type="text"
             value={value.provider || ''}
             onChange={e => handleInputChange('provider', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             placeholder="google, openai, openai-responses"
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -128,7 +128,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
             type="text"
             value={value.script || ''}
             onChange={e => handleInputChange('script', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             placeholder="braveSearch.js"
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -148,7 +148,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
           max="100"
           value={value.concurrency || 5}
           onChange={e => handleInputChange('concurrency', parseInt(e.target.value, 10))}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
         />
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {t('admin.tools.concurrencyHelp', 'Maximum number of concurrent executions')}
@@ -162,7 +162,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
           id="enabled"
           checked={value.enabled !== false}
           onChange={e => handleInputChange('enabled', e.target.checked)}
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
         />
         <label htmlFor="enabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
           {t('admin.tools.enabled', 'Enabled')}
@@ -190,7 +190,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
               }
             }}
             rows={12}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             placeholder='{"type": "object", "properties": {}, "required": []}'
           />
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -215,7 +215,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
             }
           }}
           rows={15}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           placeholder="{}"
         />
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -228,7 +228,7 @@ function ToolFormEditor({ value, onChange, isNewTool }) {
           <summary className="text-sm text-indigo-600 dark:text-indigo-400 cursor-pointer hover:text-indigo-800 dark:hover:text-indigo-300">
             {t('admin.tools.functionsExample', 'Show example multi-function configuration')}
           </summary>
-          <pre className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded text-xs overflow-auto text-gray-800 dark:text-gray-200">
+          <pre className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-sm text-xs overflow-auto text-gray-800 dark:text-gray-200">
             {`{
   "findUser": {
     "description": {

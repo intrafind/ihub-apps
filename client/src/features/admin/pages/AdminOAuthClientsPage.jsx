@@ -274,7 +274,7 @@ function AdminOAuthClientsPage() {
         <div className="mb-6 flex justify-end">
           <button
             onClick={() => navigate('/admin/oauth/clients/new')}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <Icon name="plus" size="md" className="mr-2" />
             {t('admin.auth.oauth.createClient', 'Create OAuth Client')}
@@ -283,7 +283,7 @@ function AdminOAuthClientsPage() {
       )}
       <div>
         {/* Enable/Disable Card */}
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -303,7 +303,7 @@ function AdminOAuthClientsPage() {
             </div>
             <button
               onClick={handleToggleClientsEnabled}
-              className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              className={`ml-4 relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 clientsEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
               }`}
             >
@@ -357,7 +357,7 @@ function AdminOAuthClientsPage() {
         )}
 
         {clients.length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
             <Icon name="key" className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.auth.oauth.noClients', 'No OAuth clients configured')}
@@ -370,7 +370,7 @@ function AdminOAuthClientsPage() {
                 <div className="mt-6">
                   <button
                     onClick={() => navigate('/admin/oauth/clients/new')}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     <Icon name="plus" size="md" className="mr-2" />
                     {t('admin.auth.oauth.createClient', 'Create OAuth Client')}
@@ -380,7 +380,7 @@ function AdminOAuthClientsPage() {
             )}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+          <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
               {clients.map(client => (
                 <li key={client.clientId}>
@@ -414,7 +414,7 @@ function AdminOAuthClientsPage() {
                           )}
                         </div>
                         <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400">
-                          <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs mr-4">
+                          <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm text-xs mr-4">
                             {client.clientId}
                           </code>
                           {client.description && <p className="truncate">{client.description}</p>}
@@ -437,28 +437,28 @@ function AdminOAuthClientsPage() {
                       <div className="flex space-x-2 ml-4">
                         <button
                           onClick={() => navigate(`/admin/oauth/clients/${client.clientId}`)}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           title={t('common.edit', 'Edit')}
                         >
                           <Icon name="pencil" size="sm" />
                         </button>
                         <button
                           onClick={() => openTokenGenerationModal(client.clientId)}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           title={t('admin.auth.oauth.generateToken', 'Generate Long-Term Token')}
                         >
                           <Icon name="key" size="sm" />
                         </button>
                         <button
                           onClick={() => handleRotateSecret(client.clientId)}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           title={t('admin.auth.oauth.rotateSecret', 'Rotate Secret')}
                         >
                           <Icon name="refresh" size="sm" />
                         </button>
                         <button
                           onClick={() => handleToggleClientStatus(client)}
-                          className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          className={`inline-flex items-center px-3 py-2 border shadow-xs text-sm leading-4 font-medium rounded-md focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${
                             client.active
                               ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 focus:ring-red-500'
                               : 'border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 bg-white dark:bg-gray-700 hover:bg-green-50 dark:hover:bg-green-900/50 focus:ring-green-500'
@@ -473,7 +473,7 @@ function AdminOAuthClientsPage() {
                         </button>
                         <button
                           onClick={() => handleDeleteClient(client.clientId)}
-                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           title={t('common.delete', 'Delete')}
                         >
                           <Icon name="trash" size="sm" />
@@ -492,7 +492,7 @@ function AdminOAuthClientsPage() {
       {showTokenModal && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 transition-opacity" />
+            <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 transition-opacity" />
 
             <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
@@ -524,7 +524,7 @@ function AdminOAuthClientsPage() {
                           max="3650"
                           value={tokenExpirationDays}
                           onChange={e => setTokenExpirationDays(Number(e.target.value))}
-                          className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500"
+                          className="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
@@ -540,7 +540,7 @@ function AdminOAuthClientsPage() {
                       type="button"
                       disabled={isGeneratingToken}
                       onClick={handleGenerateToken}
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:col-start-2 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-xs px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:col-start-2 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGeneratingToken ? (
                         <>
@@ -555,7 +555,7 @@ function AdminOAuthClientsPage() {
                       type="button"
                       disabled={isGeneratingToken}
                       onClick={closeTokenModal}
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:col-start-1 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-xs px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:col-start-1 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {t('common.cancel', 'Cancel')}
                     </button>
@@ -578,15 +578,15 @@ function AdminOAuthClientsPage() {
                           'Save this token now. It will not be shown again.'
                         )}
                       </p>
-                      <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded p-3 mb-2">
+                      <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-sm p-3 mb-2">
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           {t('admin.auth.oauth.token', 'Token')}:
                         </label>
-                        <code className="block text-xs break-all bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600 text-gray-900 dark:text-gray-100">
+                        <code className="block text-xs break-all bg-white dark:bg-gray-800 p-2 rounded-sm border dark:border-gray-600 text-gray-900 dark:text-gray-100">
                           {generatedToken.token}
                         </code>
                       </div>
-                      <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded p-3">
+                      <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-sm p-3">
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           {t('admin.auth.oauth.expiresAt', 'Expires At')}:
                         </label>
@@ -602,7 +602,7 @@ function AdminOAuthClientsPage() {
                             text: t('common.copiedToClipboard', 'Copied to clipboard')
                           });
                         }}
-                        className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
                         <Icon name="clipboard" size="sm" className="mr-2" />
                         {t('common.copyToClipboard', 'Copy to Clipboard')}
@@ -613,7 +613,7 @@ function AdminOAuthClientsPage() {
                     <button
                       type="button"
                       onClick={closeTokenModal}
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-xs px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
                     >
                       {t('common.close', 'Close')}
                     </button>

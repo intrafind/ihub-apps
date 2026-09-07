@@ -137,7 +137,7 @@ function BreakdownTable({ title, data, columns, expanded, onToggle }) {
   if (!data || data.length === 0) return null;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
@@ -405,7 +405,7 @@ export default function UsageTimeline() {
           <LoadingSpinner />
         </div>
       ) : chartData.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-12 text-center">
           <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">
             <svg
               className="w-16 h-16 mx-auto"
@@ -471,7 +471,7 @@ export default function UsageTimeline() {
           </div>
 
           {/* Token chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
             <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
               {t('admin.usage.timeline.tokensOverTime', 'Tokens Over Time')}
             </h4>
@@ -502,7 +502,7 @@ export default function UsageTimeline() {
           </div>
 
           {/* Messages chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
             <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
               {t('admin.usage.timeline.messagesOverTime', 'Messages Over Time')}
             </h4>

@@ -452,7 +452,7 @@ function ExportDialog({
                 <select
                   value={pdfConfig.template}
                   onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   disabled={isExporting}
                 >
                   <option value="default">
@@ -480,7 +480,7 @@ function ExportDialog({
                       watermark: { ...prev.watermark, text: e.target.value }
                     }))
                   }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   placeholder={t(
                     'pages.appChat.export.watermarkPlaceholder',
                     'Enter watermark text'
@@ -501,7 +501,7 @@ function ExportDialog({
                       watermark: { ...prev.watermark, position: e.target.value }
                     }))
                   }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   disabled={isExporting}
                 >
                   <option value="bottom-right">

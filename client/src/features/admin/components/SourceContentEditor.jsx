@@ -183,7 +183,7 @@ You can edit this content directly from the admin interface.
     if (contentType === 'markdown') {
       // Simple markdown preview - in a real implementation, use a proper markdown renderer
       return (
-        <div className="prose max-w-none p-4 bg-gray-50 rounded border">
+        <div className="prose max-w-none p-4 bg-gray-50 rounded-sm border">
           <pre className="whitespace-pre-wrap text-sm">{content}</pre>
         </div>
       );
@@ -193,13 +193,13 @@ You can edit this content directly from the admin interface.
       try {
         const parsed = JSON.parse(content);
         return (
-          <div className="p-4 bg-gray-50 rounded border">
+          <div className="p-4 bg-gray-50 rounded-sm border">
             <pre className="text-sm">{JSON.stringify(parsed, null, 2)}</pre>
           </div>
         );
       } catch (e) {
         return (
-          <div className="p-4 bg-red-50 border border-red-200 rounded">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-sm">
             <p className="text-red-600 text-sm">Invalid JSON: {e.message}</p>
           </div>
         );
@@ -207,7 +207,7 @@ You can edit this content directly from the admin interface.
     }
 
     return (
-      <div className="p-4 bg-gray-50 rounded border">
+      <div className="p-4 bg-gray-50 rounded-sm border">
         <pre className="whitespace-pre-wrap text-sm">{content}</pre>
       </div>
     );
@@ -216,7 +216,7 @@ You can edit this content directly from the admin interface.
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -301,7 +301,7 @@ You can edit this content directly from the admin interface.
                   <textarea
                     value={content}
                     onChange={e => handleContentChange(e.target.value)}
-                    className="flex-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 font-mono text-sm resize-none"
+                    className="flex-1 block w-full border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 font-mono text-sm resize-none"
                     placeholder="Enter source content here..."
                     style={{ minHeight: '400px' }}
                   />
@@ -332,7 +332,7 @@ You can edit this content directly from the admin interface.
             {hasChanges && (
               <button
                 onClick={discardChanges}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Discard Changes
               </button>
@@ -341,7 +341,7 @@ You can edit this content directly from the admin interface.
             <button
               onClick={saveContent}
               disabled={!hasChanges || saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <div className="flex items-center">

@@ -27,7 +27,7 @@ function HumanForm({ config, onChange }) {
   };
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   return (
@@ -45,7 +45,7 @@ function HumanForm({ config, onChange }) {
           {options.map((opt, index) => (
             <div
               key={index}
-              className="border border-gray-200 dark:border-gray-700 rounded p-2 space-y-1.5"
+              className="border border-gray-200 dark:border-gray-700 rounded-sm p-2 space-y-1.5"
             >
               {/* Three fields plus a delete button do not fit one row in the
                   320px panel; stack them so each stays readable. */}

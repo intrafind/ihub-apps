@@ -45,8 +45,8 @@ function MarkdownDownloadMenu({ content, name, size = 'sm', onError }) {
 
   const triggerClass =
     size === 'md'
-      ? 'text-xs px-2 py-1 border border-indigo-300 dark:border-indigo-700 rounded text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50'
-      : 'text-xs px-1.5 py-0.5 border border-indigo-300 dark:border-indigo-700 rounded text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50';
+      ? 'text-xs px-2 py-1 border border-indigo-300 dark:border-indigo-700 rounded-sm text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50'
+      : 'text-xs px-1.5 py-0.5 border border-indigo-300 dark:border-indigo-700 rounded-sm text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50';
 
   return (
     <div className="relative inline-block" ref={ref}>
@@ -60,7 +60,7 @@ function MarkdownDownloadMenu({ content, name, size = 'sm', onError }) {
         {busy ? '…' : '⬇ download ▾'}
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-20">
+        <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-lg z-20">
           <button
             type="button"
             onClick={() => run(() => exportAsMarkdown(content, name))}

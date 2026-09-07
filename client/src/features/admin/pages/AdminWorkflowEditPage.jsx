@@ -263,7 +263,7 @@ function AdminWorkflowEditPage() {
               <button
                 onClick={handleDelete}
                 disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-xs text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
               >
                 <Icon name="trash" className="h-4 w-4 mr-2" />
                 {t('common.delete', 'Delete')}
@@ -272,7 +272,7 @@ function AdminWorkflowEditPage() {
             {!isNewWorkflow && (
               <button
                 onClick={() => navigate(`/admin/workflows/${id}/edit`)}
-                className="inline-flex items-center px-4 py-2 border border-indigo-300 dark:border-indigo-700 rounded-md shadow-sm text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-indigo-300 dark:border-indigo-700 rounded-md shadow-xs text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="edit" className="h-4 w-4 mr-2" />
                 {t('admin.workflows.openVisualEditor', 'Open visual editor')}
@@ -280,7 +280,7 @@ function AdminWorkflowEditPage() {
             )}
             <button
               onClick={() => navigate('/admin/workflows')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-left" className="h-4 w-4 mr-2" />
               {t('common.back', 'Back')}
@@ -306,7 +306,7 @@ function AdminWorkflowEditPage() {
         {workflowData && (
           <>
             {/* Workflow Metadata Section */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.workflows.metadata', 'Workflow Metadata')}
               </h2>
@@ -325,7 +325,7 @@ function AdminWorkflowEditPage() {
                     value={workflowData.id || ''}
                     onChange={e => handleMetadataChange('id', e.target.value)}
                     disabled={!isNewWorkflow}
-                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-xs py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                     placeholder="my-workflow"
                   />
                   {!isNewWorkflow && (
@@ -351,7 +351,7 @@ function AdminWorkflowEditPage() {
                     id="workflow-version"
                     value={workflowData.version || ''}
                     onChange={e => handleMetadataChange('version', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-xs py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="1.0.0"
                   />
                 </div>
@@ -400,7 +400,7 @@ function AdminWorkflowEditPage() {
                       const ms = Math.min(seconds * 1000, 3600000);
                       handleMetadataChange('config.maxExecutionTime', ms);
                     }}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
@@ -416,7 +416,7 @@ function AdminWorkflowEditPage() {
                     <button
                       type="button"
                       onClick={() => handleMetadataChange('enabled', !workflowData.enabled)}
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                         workflowData.enabled !== false
                           ? 'bg-indigo-600'
                           : 'bg-gray-200 dark:bg-gray-600'
@@ -441,7 +441,7 @@ function AdminWorkflowEditPage() {
             </div>
 
             {/* JSON Editor Section */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.workflows.jsonEditor', 'JSON Editor')}
               </h2>
@@ -470,7 +470,7 @@ function AdminWorkflowEditPage() {
                 value={jsonText}
                 onChange={e => handleJsonChange(e.target.value)}
                 rows={25}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 ${
+                className={`w-full px-3 py-2 border rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 ${
                   jsonError
                     ? 'border-yellow-300 dark:border-yellow-700'
                     : 'border-gray-300 dark:border-gray-600'
@@ -484,14 +484,14 @@ function AdminWorkflowEditPage() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => navigate('/admin/workflows')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !!jsonError}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {saving ? (
                   <>

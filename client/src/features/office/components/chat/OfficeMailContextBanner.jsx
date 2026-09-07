@@ -112,7 +112,7 @@ function OfficeMailContextBanner({
   // section, so we render without our own rounded card / margins.
   const outerClassName = embedded
     ? ''
-    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm';
+    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs';
 
   return (
     <div className={outerClassName}>
@@ -136,7 +136,7 @@ function OfficeMailContextBanner({
             hasAttachments ? 'border-b border-slate-100' : ''
           }`}
         >
-          <div className="flex-shrink-0 mt-0.5 text-slate-500">
+          <div className="shrink-0 mt-0.5 text-slate-500">
             <Icon name="mail" size="sm" />
           </div>
           <div className="flex-1 min-w-0">
@@ -144,12 +144,12 @@ function OfficeMailContextBanner({
               <div className="text-sm font-medium text-slate-900 truncate" title={subject}>
                 {subject}
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer flex-shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0">
                 <input
                   type="checkbox"
                   checked={bodySent}
                   onChange={e => onToggleBody?.(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 Include body
               </label>
@@ -190,7 +190,7 @@ function OfficeMailContextBanner({
                 key={att.id || att.name}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 transition-colors"
               >
-                <div className="flex-shrink-0 text-slate-500">
+                <div className="shrink-0 text-slate-500">
                   <Icon name={isImage ? 'camera' : 'paper-clip'} size="sm" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -221,7 +221,7 @@ function OfficeMailContextBanner({
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment?.(att.id)}
-                  className="flex-shrink-0 text-slate-400 hover:text-rose-600 transition-colors p-1"
+                  className="shrink-0 text-slate-400 hover:text-rose-600 transition-colors p-1"
                   title="Remove attachment from this message"
                   aria-label={`Remove ${att.name || 'attachment'} from this message`}
                 >

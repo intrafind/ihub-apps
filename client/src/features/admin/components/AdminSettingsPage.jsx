@@ -130,7 +130,7 @@ function AdminSettingsPage({
 
       {(dirty || saving) && onSave && (
         <div
-          className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-700 shadow-lg"
+          className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 shadow-lg"
           role="region"
           aria-label="Save bar"
         >
@@ -154,7 +154,7 @@ function AdminSettingsPage({
                 type="button"
                 onClick={onSave}
                 disabled={saving}
-                className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md shadow-sm transition-colors active:scale-95"
+                className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md shadow-xs transition-colors active:scale-95"
               >
                 {saving ? 'Saving…' : saveLabel}
               </button>

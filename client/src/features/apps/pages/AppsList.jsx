@@ -441,7 +441,7 @@ function AppsList() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}
@@ -464,7 +464,7 @@ function AppsList() {
             t('error.checkServer', 'Check if the server is running and returning data correctly.')}
         </p>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}
@@ -480,7 +480,7 @@ function AppsList() {
         <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
           <Icon
             name={uiConfig?.icons?.appsListLogo || 'apps-svg-logo'}
-            className="text-indigo-600 w-[4rem] h-[4rem] mr-2"
+            className="text-indigo-600 w-16 h-16 mr-2"
           />
           {/* Use title from UI config if available, otherwise use translation */}
           {uiConfig?.appsList?.title
@@ -501,7 +501,7 @@ function AppsList() {
             searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'
           }`}
         >
-          <div className="relative flex-grow">
+          <div className="relative grow">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Icon name="search" className="h-5 w-5 text-gray-400" />
             </div>
@@ -530,7 +530,7 @@ function AppsList() {
             )}
           </div>
           {sortConfig.enabled && (
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <select
                 className="h-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
@@ -576,7 +576,7 @@ function AppsList() {
               onClick={() => {
                 clearSearch();
               }}
-              className="mt-4 px-4 py-2 text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
+              className="mt-4 px-4 py-2 text-indigo-600 border border-indigo-600 rounded-sm hover:bg-indigo-50"
             >
               {t('pages.appsList.clearFilters')}
             </button>
@@ -617,7 +617,7 @@ function AppsList() {
             <div className="text-center mt-6">
               <button
                 onClick={handleLoadMore}
-                className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2 px-4 border border-indigo-500 rounded shadow-sm transition-colors"
+                className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2 px-4 border border-indigo-500 rounded-sm shadow-xs transition-colors"
               >
                 {t('pages.appsList.loadMore', 'Load More')}
               </button>

@@ -148,7 +148,7 @@ function ChatMessageList({
           >
             {/* Message sender icon */}
             {showAvatars && (
-              <div className="flex-shrink-0 mt-1">
+              <div className="shrink-0 mt-1">
                 {message.role === 'assistant' ? (
                   <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
                 ) : message.role === 'user' ? (

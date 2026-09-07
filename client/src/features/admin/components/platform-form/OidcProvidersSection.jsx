@@ -132,7 +132,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           OIDC Authentication Settings
@@ -182,13 +182,13 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     type="checkbox"
                     checked={provider.enabled !== false}
                     onChange={e => updateOidcProvider(index, 'enabled', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                   />
                   <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                     {provider.displayName || provider.name || `Provider ${index + 1}`}
                   </h4>
                   {provider.enabled === false && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-800">
                       Disabled
                     </span>
                   )}
@@ -213,7 +213,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="google"
                     value={provider.name || ''}
                     onChange={e => updateOidcProvider(index, 'name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
@@ -225,7 +225,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="Google"
                     value={provider.displayName || ''}
                     onChange={e => updateOidcProvider(index, 'displayName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
@@ -237,7 +237,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="${GOOGLE_CLIENT_ID}"
                     value={provider.clientId || ''}
                     onChange={e => updateOidcProvider(index, 'clientId', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
@@ -261,7 +261,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://accounts.google.com/o/oauth2/v2/auth"
                     value={provider.authorizationURL || ''}
                     onChange={e => updateOidcProvider(index, 'authorizationURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
@@ -273,7 +273,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://www.googleapis.com/oauth2/v4/token"
                     value={provider.tokenURL || ''}
                     onChange={e => updateOidcProvider(index, 'tokenURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
@@ -285,7 +285,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="https://www.googleapis.com/oauth2/v2/userinfo"
                     value={provider.userInfoURL || ''}
                     onChange={e => updateOidcProvider(index, 'userInfoURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -303,7 +303,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     ).replace('{{providerName}}', provider.name || 'provider')}
                     value={provider.callbackURL || ''}
                     onChange={e => updateOidcProvider(index, 'callbackURL', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -327,7 +327,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                     placeholder="groups"
                     value={provider.groupsAttribute || ''}
                     onChange={e => updateOidcProvider(index, 'groupsAttribute', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -345,7 +345,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                         e.target.value.split(',').map(s => s.trim())
                       )
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -397,7 +397,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
 
       {/* OIDC Provider Selection Modal */}
       {showProviderModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900/80 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/80 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-center">
@@ -425,7 +425,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   onClick={() => addOidcProvider('auth0')}
                   className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
-                  <div className="flex-shrink-0 mt-1">
+                  <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                       <Icon name="key" size="md" className="text-orange-600 dark:text-orange-400" />
                     </div>
@@ -445,7 +445,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   onClick={() => addOidcProvider('google')}
                   className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
-                  <div className="flex-shrink-0 mt-1">
+                  <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                       <Icon name="key" size="md" className="text-red-600 dark:text-red-400" />
                     </div>
@@ -465,7 +465,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   onClick={() => addOidcProvider('microsoft')}
                   className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
-                  <div className="flex-shrink-0 mt-1">
+                  <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                       <Icon name="key" size="md" className="text-blue-600 dark:text-blue-400" />
                     </div>
@@ -488,7 +488,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   onClick={() => addOidcProvider('keycloak')}
                   className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
-                  <div className="flex-shrink-0 mt-1">
+                  <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                       <Icon name="key" size="md" className="text-green-600 dark:text-green-400" />
                     </div>
@@ -508,7 +508,7 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   onClick={() => addOidcProvider('custom')}
                   className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left md:col-span-2"
                 >
-                  <div className="flex-shrink-0 mt-1">
+                  <div className="shrink-0 mt-1">
                     <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
                       <Icon name="cog" size="md" className="text-gray-600 dark:text-gray-400" />
                     </div>

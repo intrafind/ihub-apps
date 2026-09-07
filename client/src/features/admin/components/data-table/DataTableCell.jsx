@@ -12,11 +12,11 @@ const ALIGN = {
 };
 
 const MAX_WIDTH = {
-  xs: 'max-w-[10rem]',
-  sm: 'max-w-[14rem]',
+  xs: 'max-w-40',
+  sm: 'max-w-56',
   md: 'max-w-[20rem]',
-  lg: 'max-w-[28rem]',
-  xl: 'max-w-[36rem]'
+  lg: 'max-w-md',
+  xl: 'max-w-xl'
 };
 
 const DEFAULT_MAX_WIDTH = 'max-w-[24rem]';

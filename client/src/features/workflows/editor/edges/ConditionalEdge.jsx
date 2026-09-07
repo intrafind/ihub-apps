@@ -77,7 +77,7 @@ export function ConditionalEdge({
       {label && (
         <EdgeLabelRenderer>
           <div
-            className="absolute bg-white dark:bg-gray-700 text-xs px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 pointer-events-none"
+            className="absolute bg-white dark:bg-gray-700 text-xs px-1.5 py-0.5 rounded-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 pointer-events-none"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`
             }}

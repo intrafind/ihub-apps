@@ -37,7 +37,7 @@ function StatCard({
   return (
     <Link
       to={href}
-      className="block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group"
+      className="block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs transition-all group"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -215,7 +215,7 @@ function QuickActions() {
           <Link
             key={action.href}
             to={action.href}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${action.color}`}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-xs ${action.color}`}
           >
             <Icon className="w-4 h-4" aria-hidden="true" />
             {action.label}
@@ -261,7 +261,7 @@ function ContentQuickActions() {
           <Link
             key={action.href}
             to={action.href}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${action.color}`}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-xs ${action.color}`}
           >
             <Icon className="w-4 h-4" aria-hidden="true" />
             {action.label}
@@ -324,7 +324,7 @@ function InfoRow({ icon: Icon, label, value, href }) {
     return (
       <Link
         to={href}
-        className="block hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded"
+        className="block hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded-sm"
       >
         {content}
       </Link>
@@ -455,7 +455,7 @@ function RecentActivityCard({ entries }) {
   const { t } = useTranslation();
   if (!entries) return null;
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {t('admin.overview.recentActivity', 'Recent activity')}
@@ -599,7 +599,7 @@ export default function AdminOverview() {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64" />
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-sm w-64" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-28 bg-gray-200 dark:bg-gray-700 rounded-lg" />

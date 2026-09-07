@@ -18,7 +18,7 @@ function Toggle({ checked, onChange, label, description }) {
         aria-checked={checked}
         aria-label={typeof label === 'string' ? label : undefined}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
           checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
         }`}
       >
@@ -175,7 +175,7 @@ function AdminMcpGatewayPage() {
           </div>
         )}
 
-        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 divide-y divide-gray-200 dark:divide-gray-700">
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 divide-y divide-gray-200 dark:divide-gray-700">
           <Toggle
             checked={!!gateway.enabled}
             onChange={v => update({ enabled: v })}
@@ -196,7 +196,7 @@ function AdminMcpGatewayPage() {
           />
         </section>
 
-        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
             {t('admin.mcp.gateway.authSection', 'Authentication')}
           </h2>
@@ -236,7 +236,7 @@ function AdminMcpGatewayPage() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-4">
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
             {t('admin.mcp.gateway.publicUrl', 'Public URL')}
           </h2>
@@ -255,7 +255,7 @@ function AdminMcpGatewayPage() {
           />
         </section>
 
-        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
             {t('admin.mcp.gateway.transports', 'Transports')}
           </h2>
@@ -326,7 +326,7 @@ function AdminMcpGatewayPage() {
           </div>
         </section>
 
-        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
             {t('admin.mcp.gateway.expose', 'Exposed resources')}
           </h2>

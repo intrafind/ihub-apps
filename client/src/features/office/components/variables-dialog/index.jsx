@@ -242,7 +242,7 @@ export default function VariablesDialog({
           <p className="text-xs sm:text-sm text-slate-500">{subText}</p>
 
           {saveError && (
-            <p className="text-sm text-red-600 break-words" role="alert">
+            <p className="text-sm text-red-600 wrap-break-word" role="alert">
               {saveError}
             </p>
           )}
@@ -262,7 +262,7 @@ export default function VariablesDialog({
                   <select
                     value={values[def.name] ?? ''}
                     onChange={e => setField(def.name, e.target.value)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
                   >
                     {presets.map(p => (
                       <option key={String(p.value)} value={String(p.value)}>
@@ -287,7 +287,7 @@ export default function VariablesDialog({
                     rows={4}
                     value={values[def.name] ?? ''}
                     onChange={e => setField(def.name, e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400 resize-none"
                   />
                 </div>
               );
@@ -303,7 +303,7 @@ export default function VariablesDialog({
                   type={htmlInputType(def.type)}
                   value={values[def.name] ?? ''}
                   onChange={e => setField(def.name, e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
                 />
               </div>
             );

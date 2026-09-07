@@ -96,7 +96,7 @@ function CorsConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.cors.title', 'CORS Configuration')}
         </h2>
@@ -106,9 +106,9 @@ function CorsConfig() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
       <div className="flex items-start mb-6">
-        <Icon name="GlobeAltIcon" className="w-6 h-6 mr-2 text-blue-500 flex-shrink-0" />
+        <Icon name="GlobeAltIcon" className="w-6 h-6 mr-2 text-blue-500 shrink-0" />
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.cors.title', 'CORS Configuration')}
@@ -175,12 +175,12 @@ function CorsConfig() {
               'admin.cors.originPlaceholder',
               'https://example.com or chrome-extension://abc123...'
             )}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
           />
           <button
             onClick={handleAddOrigin}
             disabled={!newOrigin.trim()}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             <Icon name="PlusIcon" className="w-4 h-4 mr-1" />
             {t('admin.cors.addOrigin', 'Add Origin')}
@@ -204,7 +204,7 @@ function CorsConfig() {
                 <div className="flex items-center min-w-0">
                   <Icon
                     name="GlobeAltIcon"
-                    className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2 flex-shrink-0"
+                    className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-2 shrink-0"
                   />
                   <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
                     {origin}
@@ -212,7 +212,7 @@ function CorsConfig() {
                 </div>
                 <button
                   onClick={() => handleRemoveOrigin(origin)}
-                  className="ml-3 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium flex-shrink-0"
+                  className="ml-3 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium shrink-0"
                 >
                   {t('common.remove', 'Remove')}
                 </button>
@@ -257,7 +257,7 @@ function CorsConfig() {
                 onChange={e => setConfig(prev => ({ ...prev, credentials: e.target.checked }))}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
         </div>
@@ -285,7 +285,7 @@ function CorsConfig() {
           onChange={e =>
             setConfig(prev => ({ ...prev, maxAge: parseInt(e.target.value, 10) || 0 }))
           }
-          className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -313,7 +313,7 @@ function CorsConfig() {
                 .filter(m => m)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
@@ -344,7 +344,7 @@ function CorsConfig() {
                 .filter(h => h)
             }))
           }
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 text-sm font-mono"
         />
       </div>
 
@@ -353,10 +353,10 @@ function CorsConfig() {
         <button
           onClick={handleSaveConfig}
           disabled={saving}
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
             saving
               ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
           }`}
         >
           {saving ? (

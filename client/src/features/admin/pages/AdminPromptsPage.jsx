@@ -19,7 +19,7 @@ import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-8 w-8">
+      <div className="shrink-0 h-8 w-8">
         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
           <Icon
             name={prompt.icon || 'clipboard'}
@@ -388,7 +388,7 @@ function AdminPromptsPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => navigate('/admin/prompts/new')}
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
                 >
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.prompts.createNew', 'Create New Prompt')}
@@ -403,7 +403,7 @@ function AdminPromptsPage() {
                   />
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={uploading}
                     title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
                   >
@@ -418,14 +418,14 @@ function AdminPromptsPage() {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={enableAllPrompts}
                 >
                   {t('admin.common.enableAll', 'Enable All')}
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={disableAllPrompts}
                 >
                   {t('admin.common.disableAll', 'Disable All')}
@@ -502,7 +502,7 @@ function AdminPromptsPage() {
                     onClick={() => setSelectedCategory(category.id)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                       selectedCategory === category.id
-                        ? 'text-white shadow'
+                        ? 'text-white shadow-sm'
                         : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                     style={{
@@ -536,7 +536,7 @@ function AdminPromptsPage() {
                   action: (
                     <button
                       onClick={() => navigate('/admin/prompts/new')}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       <Icon name="plus" className="h-4 w-4 mr-2" />
                       {t('admin.prompts.createNew', 'Create New Prompt')}
@@ -676,14 +676,14 @@ function VariablesTabContent() {
         <button
           onClick={handleCancel}
           disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t('common.cancel', 'Cancel')}
         </button>
         <button
           onClick={handleSave}
           disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+          className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
         >
           {saving && <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />}
           {t('common.save', 'Save Changes')}

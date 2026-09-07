@@ -43,12 +43,9 @@ const ChatHeader = ({
             <ArrowLeftIcon className="h-4 w-4" aria-hidden />
           </button>
         )}
-        {titleIcon && <span className="flex-shrink-0 text-slate-600">{titleIcon}</span>}
+        {titleIcon && <span className="shrink-0 text-slate-600">{titleIcon}</span>}
         {showCheckmark && (
-          <span
-            className="flex-shrink-0 text-green-600 font-bold text-base leading-none"
-            aria-hidden
-          >
+          <span className="shrink-0 text-green-600 font-bold text-base leading-none" aria-hidden>
             ✓
           </span>
         )}

@@ -426,7 +426,7 @@ const UnifiedUploader = ({
             {/* Drag overlay */}
             {isDragging && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 dark:bg-blue-500/30 pointer-events-none"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500/20 dark:bg-blue-500/30 pointer-events-none"
                 role="alert"
                 aria-live="polite"
                 aria-label={t(

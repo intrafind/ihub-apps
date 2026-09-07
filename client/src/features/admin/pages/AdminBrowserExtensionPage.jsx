@@ -310,7 +310,7 @@ function AdminBrowserExtensionPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
             {t('admin.browserExtension.title', 'Browser Extension')}
@@ -343,7 +343,7 @@ function AdminBrowserExtensionPage() {
           </div>
         ) : (
           <>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -384,7 +384,7 @@ function AdminBrowserExtensionPage() {
                   <span className="font-medium text-gray-700 dark:text-gray-300">
                     OAuth Client ID:
                   </span>{' '}
-                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-sm">
                     {status.oauthClientId}
                   </code>
                   {' — '}
@@ -402,7 +402,7 @@ function AdminBrowserExtensionPage() {
                   <span className="font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.browserExtension.configUrl', 'Runtime config URL')}:
                   </span>{' '}
-                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded break-all">
+                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-sm break-all">
                     {status.configUrl}
                   </code>
                 </div>
@@ -410,7 +410,7 @@ function AdminBrowserExtensionPage() {
             </div>
 
             {status?.enabled && !status?.signingKey?.extensionId && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                   {t(
                     'admin.browserExtension.signingKeyMissingTitle',
@@ -434,7 +434,7 @@ function AdminBrowserExtensionPage() {
             )}
 
             {status?.enabled && status?.signingKey?.extensionId && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {t('admin.browserExtension.packageTitle', 'Packaged Extension')}
                 </h2>
@@ -451,7 +451,7 @@ function AdminBrowserExtensionPage() {
                       {t('admin.browserExtension.extensionId', 'Extension ID')}
                     </dt>
                     <dd className="mt-1">
-                      <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all">
+                      <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm break-all">
                         {status.signingKey.extensionId}
                       </code>
                     </dd>
@@ -462,7 +462,7 @@ function AdminBrowserExtensionPage() {
                         {t('admin.browserExtension.previousExtensionId', 'Previous ID (grace)')}
                       </dt>
                       <dd className="mt-1">
-                        <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all">
+                        <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm break-all">
                           {status.signingKey.previousExtensionId}
                         </code>
                       </dd>
@@ -513,7 +513,7 @@ function AdminBrowserExtensionPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.browserExtension.idsTitle', 'Allowed extension IDs')}
               </h2>
@@ -579,7 +579,7 @@ function AdminBrowserExtensionPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveExtensionId(id)}
-                        className="shrink-0 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        className="shrink-0 rounded-sm px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                         aria-label={t('admin.browserExtension.idsRemove', 'Remove')}
                       >
                         {t('admin.browserExtension.idsRemove', 'Remove')}
@@ -601,7 +601,7 @@ function AdminBrowserExtensionPage() {
                     }
                   }}
                   placeholder="abcdefghijklmnopabcdefghijklmnop"
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 />
                 <button
                   type="button"
@@ -614,7 +614,7 @@ function AdminBrowserExtensionPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.browserExtension.groupsTitle', 'Allowed Groups')}
               </h2>
@@ -638,7 +638,7 @@ function AdminBrowserExtensionPage() {
               />
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.browserExtension.displayTitle', 'Display Settings')}
               </h2>
@@ -658,7 +658,7 @@ function AdminBrowserExtensionPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -702,7 +702,7 @@ function AdminBrowserExtensionPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, -1)}
                             disabled={index === 0}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.browserExtension.moveUp', 'Move up')}
                           >
                             ↑
@@ -711,7 +711,7 @@ function AdminBrowserExtensionPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, 1)}
                             disabled={index === starterPrompts.length - 1}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.browserExtension.moveDown', 'Move down')}
                           >
                             ↓
@@ -719,7 +719,7 @@ function AdminBrowserExtensionPage() {
                           <button
                             type="button"
                             onClick={() => handleRemovePrompt(index)}
-                            className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            className="rounded-sm px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             {t('admin.browserExtension.remove', 'Remove')}
                           </button>

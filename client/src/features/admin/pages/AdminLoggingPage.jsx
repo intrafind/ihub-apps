@@ -441,7 +441,7 @@ function AdminLoggingPage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
             <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
           </div>
         </div>
@@ -453,11 +453,11 @@ function AdminLoggingPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-start mb-2">
             <Icon
               name="AdjustmentsHorizontalIcon"
-              className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0"
+              className="w-8 h-8 mr-3 text-blue-500 shrink-0"
             />
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -485,7 +485,7 @@ function AdminLoggingPage() {
             <div className="flex items-start">
               <Icon
                 name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
-                className="w-5 h-5 mr-2 flex-shrink-0"
+                className="w-5 h-5 mr-2 shrink-0"
               />
               <p className="text-sm">{message.text}</p>
             </div>
@@ -493,7 +493,7 @@ function AdminLoggingPage() {
         )}
 
         {/* Log Level Configuration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="AdjustmentsVerticalIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.levelSection', 'Log Level')}
@@ -540,7 +540,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Log Format Configuration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="DocumentTextIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.formatSection', 'Log Format')}
@@ -581,7 +581,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Component Filtering */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="FunnelIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.componentSection', 'Component Filtering')}
@@ -598,7 +598,7 @@ function AdminLoggingPage() {
                     components: { ...prev.components, enabled: e.target.checked }
                   }))
                 }
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableComponentFilter', 'Enable component filtering')}
@@ -640,7 +640,7 @@ function AdminLoggingPage() {
                     type="checkbox"
                     checked={loggingConfig.components?.filter?.includes(component.id) || false}
                     onChange={() => handleComponentToggle(component.id)}
-                    className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="mt-1 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <div className="ml-3 flex-1">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -657,7 +657,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* PII & Privacy */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
             <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.privacySection', 'PII & Privacy')}
@@ -751,7 +751,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* File Logging */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon name="DocumentIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.fileSection', 'File Logging')}
@@ -768,7 +768,7 @@ function AdminLoggingPage() {
                     file: { ...prev.file, enabled: e.target.checked }
                   }))
                 }
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableFileLogging', 'Enable file logging')}
@@ -835,7 +835,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Authentication Debug Logging */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
             <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
             {t('admin.logging.authDebugSection', 'Authentication Debug Logging')}
@@ -853,7 +853,7 @@ function AdminLoggingPage() {
                 type="checkbox"
                 checked={authDebugConfig.enabled || false}
                 onChange={e => setAuthDebugConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 {t('admin.logging.enableAuthDebug', 'Enable authentication debug logging')}
@@ -869,7 +869,7 @@ function AdminLoggingPage() {
                     onChange={e =>
                       setAuthDebugConfig(prev => ({ ...prev, maskTokens: e.target.checked }))
                     }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.logging.maskTokens', 'Mask tokens in logs')}
@@ -886,7 +886,7 @@ function AdminLoggingPage() {
                         redactPasswords: e.target.checked
                       }))
                     }
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     {t('admin.logging.redactPasswords', 'Redact passwords in logs')}
@@ -904,7 +904,7 @@ function AdminLoggingPage() {
                           includeRawData: e.target.checked
                         }))
                       }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                       {t('admin.logging.includeRawData', 'Include raw authentication data')}
@@ -938,7 +938,7 @@ function AdminLoggingPage() {
                               }
                             }))
                           }
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">
                           {provider}
@@ -965,7 +965,7 @@ function AdminLoggingPage() {
         </div>
 
         {/* Save Button */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -995,7 +995,7 @@ function AdminLoggingPage() {
           <div className="flex items-start">
             <Icon
               name="InformationCircleIcon"
-              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
             />
             <div className="text-sm text-blue-800 dark:text-blue-300">
               <p className="font-medium mb-1">{t('common.note', 'Note')}:</p>

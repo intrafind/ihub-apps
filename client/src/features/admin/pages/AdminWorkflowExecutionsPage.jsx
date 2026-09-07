@@ -349,7 +349,7 @@ function AdminWorkflowExecutionsPage() {
                 role="switch"
                 aria-checked={autoRefresh}
                 onClick={() => setAutoRefresh(prev => !prev)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                   autoRefresh ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
                 }`}
               >
@@ -402,7 +402,7 @@ function AdminWorkflowExecutionsPage() {
                   key={status}
                   onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
                   className={`rounded-lg p-3 text-center transition-all ${
-                    statusFilter === status ? 'ring-2 ring-indigo-500 shadow-md' : 'hover:shadow-sm'
+                    statusFilter === status ? 'ring-2 ring-indigo-500 shadow-md' : 'hover:shadow-xs'
                   } ${badgeClasses.bg}`}
                 >
                   <div className={`text-2xl font-bold ${badgeClasses.text}`}>{count}</div>
@@ -424,7 +424,7 @@ function AdminWorkflowExecutionsPage() {
               </div>
               <input
                 type="text"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder={t(
                   'admin.workflowExecutions.searchPlaceholder',
                   'Search by user or workflow name...'
@@ -438,7 +438,7 @@ function AdminWorkflowExecutionsPage() {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             >
               <option value="all">{t('admin.workflowExecutions.filterAll', 'All Statuses')}</option>
               <option value="running">
@@ -464,7 +464,7 @@ function AdminWorkflowExecutionsPage() {
         <div className="mt-6 flex flex-col">
           <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
+              <div className="overflow-hidden shadow-sm ring-1 ring-black/5 dark:ring-gray-700/5 md:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
@@ -526,7 +526,7 @@ function AdminWorkflowExecutionsPage() {
                           onClick={() => handleInspect(execution.executionId)}
                         >
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <code className="text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                            <code className="text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-sm">
                               {shortenId(execution.executionId)}
                             </code>
                           </td>
@@ -535,7 +535,7 @@ function AdminWorkflowExecutionsPage() {
                               {resolveWorkflowName(execution.workflowName)}
                             </div>
                             <div
-                              className="text-xs text-gray-500 dark:text-gray-400 max-w-[10rem] truncate"
+                              className="text-xs text-gray-500 dark:text-gray-400 max-w-40 truncate"
                               title={execution.workflowId || '-'}
                             >
                               {execution.workflowId || '-'}
@@ -543,7 +543,7 @@ function AdminWorkflowExecutionsPage() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div
-                              className="text-sm text-gray-900 dark:text-gray-200 max-w-[12rem] truncate"
+                              className="text-sm text-gray-900 dark:text-gray-200 max-w-48 truncate"
                               title={execution.userId || '-'}
                             >
                               {execution.userId || '-'}
@@ -561,7 +561,7 @@ function AdminWorkflowExecutionsPage() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             {execution.currentNode ? (
                               <code
-                                className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded max-w-[8rem] truncate inline-block"
+                                className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-sm max-w-32 truncate inline-block"
                                 title={execution.currentNode}
                               >
                                 {execution.currentNode}

@@ -85,7 +85,7 @@ function NodePalette({ onAddNode }) {
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder={t('workflows.editor.searchNodes', 'Search steps...')}
-        className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 mb-3 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+        className="w-full text-xs border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 mb-3 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
         aria-label={t('workflows.editor.searchNodes', 'Search steps...')}
       />
       {groups.map(group => (
@@ -101,10 +101,10 @@ function NodePalette({ onAddNode }) {
                   key={type}
                   onClick={() => onAddNode(type)}
                   title={meta.description || ''}
-                  className="w-full text-left text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
+                  className="w-full text-left text-xs px-2 py-1.5 rounded-sm border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors"
                 >
                   <span
-                    className="w-5 h-5 rounded flex items-center justify-center text-white flex-shrink-0"
+                    className="w-5 h-5 rounded-sm flex items-center justify-center text-white shrink-0"
                     style={{ backgroundColor: NODE_TYPE_COLORS[type] }}
                   >
                     <NodeTypeIcon type={type} className="w-3 h-3" />
@@ -481,7 +481,7 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
           />
           {unknownReferences.length > 0 && (
             <Panel position="top-left">
-              <div className="max-w-sm bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+              <div className="max-w-sm bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-sm px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
                 <p className="font-medium">
                   {t(
                     'workflows.editor.unknownVariables',
@@ -518,28 +518,28 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
           <Panel position="top-right" className="flex gap-2">
             <button
               onClick={handleAutoLayout}
-              className="bg-gray-600 text-white text-xs px-3 py-1.5 rounded hover:bg-gray-700 transition-colors"
+              className="bg-gray-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-gray-700 transition-colors"
             >
               {t('workflows.editor.autoLayout', 'Auto Layout')}
             </button>
             {onPublish && (
               <button
                 onClick={() => onPublish(nodes, edges)}
-                className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 transition-colors"
+                className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-green-700 transition-colors"
               >
                 {t('workflows.editor.publish', 'Publish')}
               </button>
             )}
             <button
               onClick={() => onSave(nodes, edges)}
-              className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
             >
               {t('workflows.editor.save', 'Save')}
             </button>
           </Panel>
           {notice && (
             <Panel position="bottom-center">
-              <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow-lg max-w-md">
+              <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded-sm shadow-lg max-w-md">
                 {notice}
               </div>
             </Panel>

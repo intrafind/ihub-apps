@@ -129,7 +129,7 @@ function AdminPageEditPage() {
               onChange={e => setPage(prev => ({ ...prev, id: e.target.value }))}
               disabled={!isNew}
               required
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
           <DynamicLanguageEditor
@@ -152,7 +152,7 @@ function AdminPageEditPage() {
             <select
               value={page.contentType}
               onChange={e => setPage(prev => ({ ...prev, contentType: e.target.value }))}
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             >
               <option value="markdown">
                 {t('admin.pages.contentTypes.markdown', 'Markdown (.md)')}
@@ -179,7 +179,7 @@ function AdminPageEditPage() {
               type="checkbox"
               checked={page.authRequired}
               onChange={e => setPage(prev => ({ ...prev, authRequired: e.target.checked }))}
-              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
               htmlFor="authRequired"
@@ -197,7 +197,7 @@ function AdminPageEditPage() {
               value={page.allowedGroups}
               onChange={e => setPage(prev => ({ ...prev, allowedGroups: e.target.value }))}
               placeholder="admin, user or *"
-              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
           </div>
           {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}

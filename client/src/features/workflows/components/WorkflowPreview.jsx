@@ -158,7 +158,10 @@ function WorkflowPreview({ workflow }) {
                 {nodeConnections.length > 1 && (
                   <div className="flex gap-1 text-xs text-gray-500 dark:text-gray-400">
                     {nodeConnections.map((conn, i) => (
-                      <span key={i} className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                      <span
+                        key={i}
+                        className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-sm"
+                      >
                         {conn.label || `→ ${conn.target}`}
                       </span>
                     ))}

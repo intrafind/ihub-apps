@@ -217,7 +217,7 @@ function AdminOAuthServerPage() {
       <OAuthTabsHeader />
       <div>
         {/* Enable/Disable Card */}
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -237,7 +237,7 @@ function AdminOAuthServerPage() {
             </div>
             <button
               onClick={handleToggleOAuth}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 oauthEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
               }`}
             >
@@ -295,7 +295,7 @@ function AdminOAuthServerPage() {
           <>
             {/* Public Key Downloads Card */}
             {jwtAlgorithm === 'RS256' && (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+              <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
                   <Icon name="key" size="md" className="mr-2" />
                   {t('admin.auth.oauth.publicKey', 'Public Key Downloads')}
@@ -322,7 +322,7 @@ function AdminOAuthServerPage() {
                     <a
                       href={`${getServerBaseUrl()}/api/admin/oauth/public-key/pem`}
                       download="jwt-public-key.pem"
-                      className="ml-3 flex-shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      className="ml-3 shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <Icon name="download" size="sm" className="mr-2" />
                       {t('admin.auth.oauth.downloadPem', 'Download PEM')}
@@ -343,7 +343,7 @@ function AdminOAuthServerPage() {
                     <a
                       href={`${getServerBaseUrl()}/api/admin/oauth/public-key/base64`}
                       download="jwt-public-key-base64.txt"
-                      className="ml-3 flex-shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      className="ml-3 shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <Icon name="download" size="sm" className="mr-2" />
                       {t('admin.auth.oauth.downloadBase64', 'Download Base64')}
@@ -354,7 +354,7 @@ function AdminOAuthServerPage() {
             )}
 
             {/* Endpoints & Discovery Card */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
                 <Icon name="link" size="md" className="mr-2" />
                 {t('admin.auth.oauth.endpoints', 'Endpoints & Discovery')}
@@ -404,7 +404,7 @@ function AdminOAuthServerPage() {
                       </div>
                       <button
                         onClick={() => copyToClipboard(url)}
-                        className="ml-3 flex-shrink-0 inline-flex items-center px-2 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        className="ml-3 shrink-0 inline-flex items-center px-2 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         title={t('common.copyToClipboard', 'Copy to Clipboard')}
                       >
                         <Icon name="clipboard" size="sm" />
@@ -416,7 +416,7 @@ function AdminOAuthServerPage() {
             </div>
 
             {/* Authorization Server Settings Card */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 mb-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
                 <Icon name="settings" size="md" className="mr-2" />
                 {t('admin.auth.oauth.serverSettings', 'Authorization Server Settings')}
@@ -436,7 +436,7 @@ function AdminOAuthServerPage() {
                       'admin.auth.oauth.issuerHint',
                       'Leave blank for auto-detection from server origin'
                     )}
-                    className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
@@ -460,7 +460,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('defaultTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                   <div>
@@ -474,7 +474,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('maxTokenExpirationMinutes', Number(e.target.value))
                       }
-                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 </div>
@@ -499,7 +499,7 @@ function AdminOAuthServerPage() {
                         !oauthConfig.authorizationCodeEnabled
                       )
                     }
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                       oauthConfig.authorizationCodeEnabled
                         ? 'bg-blue-600'
                         : 'bg-gray-200 dark:bg-gray-600'
@@ -537,7 +537,7 @@ function AdminOAuthServerPage() {
                             Number(e.target.value)
                           )
                         }
-                        className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       />
                     </div>
 
@@ -558,7 +558,7 @@ function AdminOAuthServerPage() {
                         onClick={() =>
                           updateOAuthConfig('consentRequired', !oauthConfig.consentRequired)
                         }
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                           oauthConfig.consentRequired
                             ? 'bg-blue-600'
                             : 'bg-gray-200 dark:bg-gray-600'
@@ -589,7 +589,7 @@ function AdminOAuthServerPage() {
                           onChange={e =>
                             updateOAuthConfig('consentMemoryDays', Number(e.target.value))
                           }
-                          className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
@@ -619,7 +619,7 @@ function AdminOAuthServerPage() {
                     onClick={() =>
                       updateOAuthConfig('refreshTokenEnabled', !oauthConfig.refreshTokenEnabled)
                     }
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                       oauthConfig.refreshTokenEnabled
                         ? 'bg-blue-600'
                         : 'bg-gray-200 dark:bg-gray-600'
@@ -650,7 +650,7 @@ function AdminOAuthServerPage() {
                       onChange={e =>
                         updateOAuthConfig('refreshTokenExpirationDays', Number(e.target.value))
                       }
-                      className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="mt-1 w-full sm:w-48 rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                 )}
@@ -676,7 +676,7 @@ function AdminOAuthServerPage() {
                       onClick={() =>
                         updatePersonalKeys('enabled', !oauthConfig.personalKeys.enabled)
                       }
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                         oauthConfig.personalKeys.enabled
                           ? 'bg-blue-600'
                           : 'bg-gray-200 dark:bg-gray-600'
@@ -719,7 +719,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxKeysPerUser', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -737,7 +737,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('defaultExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                         <div>
@@ -752,7 +752,7 @@ function AdminOAuthServerPage() {
                             onChange={e =>
                               updatePersonalKeys('maxExpirationDays', Number(e.target.value))
                             }
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           />
                         </div>
                       </div>
@@ -777,7 +777,7 @@ function AdminOAuthServerPage() {
                             'admin.auth.oauth.personalKeys.allowedGroupsPlaceholder',
                             'Leave empty to allow every signed-in user'
                           )}
-                          className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
@@ -812,7 +812,7 @@ function AdminOAuthServerPage() {
                               !oauthConfig.personalKeys.allowClientCredentials
                             )
                           }
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                             oauthConfig.personalKeys.allowClientCredentials
                               ? 'bg-blue-600'
                               : 'bg-gray-200 dark:bg-gray-600'
@@ -860,7 +860,7 @@ function AdminOAuthServerPage() {
                   <button
                     onClick={handleSaveOAuthConfig}
                     disabled={savingConfig}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {savingConfig ? (
                       <>
