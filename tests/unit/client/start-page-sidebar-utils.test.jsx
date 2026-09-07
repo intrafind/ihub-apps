@@ -96,16 +96,19 @@ describe('useFavorites', () => {
     const { result } = renderHook(() => useFavorites(KEY));
     expect(result.current.favorites).toEqual([]);
 
+    // A plain Event with a `key` property stands in for the browser's
+    // StorageEvent (whose init-dict constructor CodeQL's externs don't model).
+    const storageEvent = key => Object.assign(new Event('storage'), { key });
     act(() => {
       localStorage.setItem(KEY, JSON.stringify(['email']));
-      window.dispatchEvent(new StorageEvent('storage', { key: KEY }));
+      window.dispatchEvent(storageEvent(KEY));
     });
     expect(result.current.favorites).toEqual(['email']);
 
     // A storage event for an unrelated key must not clobber state.
     act(() => {
       localStorage.setItem(KEY, JSON.stringify(['ignored']));
-      window.dispatchEvent(new StorageEvent('storage', { key: 'something_else' }));
+      window.dispatchEvent(storageEvent('something_else'));
     });
     expect(result.current.favorites).toEqual(['email']);
   });
