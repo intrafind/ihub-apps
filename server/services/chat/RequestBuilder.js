@@ -425,10 +425,16 @@ class RequestBuilder {
         language,
         enabledTools,
         modelProvider: model.provider,
+        model,
         websearchEnabled
       };
       const tools = await getToolsForApp(app, language, context);
-      const nativeWebSearch = resolveAppNativeWebSearch(app, model.provider, websearchEnabled);
+      const nativeWebSearch = resolveAppNativeWebSearch(
+        app,
+        model.provider,
+        websearchEnabled,
+        model
+      );
 
       // A web-search-enabled app's system prompt typically instructs the model
       // to "use the web search tool". When web search is toggled OFF for the

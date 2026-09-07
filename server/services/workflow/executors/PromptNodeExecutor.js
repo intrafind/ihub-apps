@@ -370,7 +370,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       let nativeWebSearch = null;
       if (configuredToolIds.includes('webSearch')) {
         configuredToolIds = configuredToolIds.filter(id => id !== 'webSearch');
-        nativeWebSearch = resolveNativeWebSearchProvider(model?.provider);
+        nativeWebSearch = resolveNativeWebSearchProvider(model?.provider, {
+          model,
+          maxUses: config.maxWebSearches
+        });
 
         if (nativeWebSearch?.provider === 'google') {
           // Apps are implemented as function tools too, so they're just as

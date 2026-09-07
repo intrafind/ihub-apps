@@ -1263,6 +1263,7 @@ Web search is configured per-app using the `websearch` object. This replaces the
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
+| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50) |
 
 The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
 

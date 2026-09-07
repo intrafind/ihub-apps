@@ -16,6 +16,7 @@ import {
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import CitationPanel from './CitationPanel';
+import GroundingSources from './GroundingSources';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
@@ -909,6 +910,11 @@ function ChatMessage({
         {/* Citation panel for iAssistant Conversation */}
         {!isUser && message.citations && !message.loading && (
           <CitationPanel citations={message.citations} onDocumentAction={onDocumentAction} />
+        )}
+
+        {/* Sources behind a grounded answer (provider-run web search) */}
+        {!isUser && !message.loading && message.groundingSources && (
+          <GroundingSources sources={message.groundingSources} />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}

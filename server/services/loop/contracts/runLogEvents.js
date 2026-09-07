@@ -33,6 +33,8 @@ export const usageSchema = z.object({
   cacheReadTokens: z.number().int().nonnegative().optional(),
   cacheWriteTokens: z.number().int().nonnegative().optional(),
   reasoningTokens: z.number().int().nonnegative().optional(),
+  /** Provider-run web searches billed for this call (Anthropic `server_tool_use.web_search_requests`). */
+  webSearchRequests: z.number().int().nonnegative().optional(),
   /** 'provider' when the numbers came from the provider, 'estimate' when estimated locally. */
   source: z.enum(['provider', 'estimate', 'mixed']).optional()
 });

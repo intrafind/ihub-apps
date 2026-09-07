@@ -1,5 +1,18 @@
 # Fixes — 5.5.0
 
+## Anthropic Web Search No Longer Truncates Long Searches or Fails the Answer When Unavailable
+
+Two failure modes of native web search on Claude models are now handled.
+
+- When Anthropic pauses a long search turn (`stop_reason: pause_turn`), the answer used to end
+  where the pause happened. The paused turn is now continued automatically on a follow-up request
+  (up to three times per call), so the user gets the complete answer.
+- When the provider rejects native web search — web search disabled for the organisation in the
+  Claude Console, a model or gateway that does not support the tool — the whole chat request used
+  to fail. The call is now retried with Brave Search instead, and the model is remembered as unable
+  to search natively for 15 minutes so later answers skip the failing request.
+- No configuration changes are required.
+
 ## The Admin Dashboard No Longer Waits for the GitHub Update Check
 
 On installations without outbound internet access, the admin start page showed nothing but grey

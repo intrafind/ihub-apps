@@ -5,6 +5,44 @@ import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 
+/** Basic web search — accepted by every Claude model and by Vertex AI / Foundry. */
+export const ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION = 'web_search_20250305';
+export const ANTHROPIC_WEB_SEARCH_VERSIONS = [
+  'web_search_20250305',
+  'web_search_20260209',
+  'web_search_20260318'
+];
+
+/**
+ * Build Anthropic's server-side web search tool block for one request.
+ *
+ * The tool version comes from the model config (`nativeWebSearch.toolVersion`,
+ * default basic). `web_search_20260209` and later default `allowed_callers` to
+ * code execution (dynamic filtering) — a 400 on models without programmatic
+ * tool calling and on Vertex AI / Azure-hosted Foundry — so the block pins
+ * direct calls unless the admin opted into dynamic filtering for the model.
+ * `max_uses` caps the billable searches for the call.
+ * See https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
+ *
+ * @param {Object} model - model config
+ * @param {{maxUses?: number}|null} directive - native web search directive
+ * @returns {Object} Anthropic tool block
+ */
+export function buildAnthropicWebSearchTool(model, directive) {
+  const config = model?.nativeWebSearch || {};
+  const type = ANTHROPIC_WEB_SEARCH_VERSIONS.includes(config.toolVersion)
+    ? config.toolVersion
+    : ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION;
+  const tool = { type, name: 'web_search' };
+  if (Number.isInteger(directive?.maxUses) && directive.maxUses > 0) {
+    tool.max_uses = directive.maxUses;
+  }
+  if (type !== ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION && config.dynamicFiltering !== true) {
+    tool.allowed_callers = ['direct'];
+  }
+  return tool;
+}
+
 class AnthropicAdapterClass extends BaseAdapter {
   /**
    * Format messages for Anthropic API, including handling image data
@@ -73,6 +111,17 @@ class AnthropicAdapterClass extends BaseAdapter {
           role: 'user',
           content: toolContent
         });
+      } else if (
+        msg.role === 'assistant' &&
+        msg.providerContent?.provider === 'anthropic' &&
+        Array.isArray(msg.providerContent.blocks)
+      ) {
+        // A turn Anthropic paused (`stop_reason: pause_turn`) is continued by
+        // replaying the assistant content blocks exactly as received —
+        // server_tool_use / web_search_tool_result blocks and their encrypted
+        // payloads included. Flattened text would be an assistant prefill,
+        // which current models reject.
+        processedMessages.push({ role: 'assistant', content: msg.providerContent.blocks });
       } else if (msg.role === 'assistant' && msg.tool_calls) {
         const content = [];
         if (msg.content) {
@@ -184,9 +233,8 @@ class AnthropicAdapterClass extends BaseAdapter {
     // Anthropic's server-side web search tool. Unlike Google, Anthropic allows
     // combining it with client-defined function tools in the same request, so
     // it's simply prepended rather than gated on finalTools being empty.
-    // See https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
     if (nativeWebSearch?.provider === 'anthropic') {
-      anthropicTools.unshift({ type: 'web_search_20250305', name: 'web_search' });
+      anthropicTools.unshift(buildAnthropicWebSearchTool(model, nativeWebSearch));
     }
 
     if (anthropicTools.length > 0) {

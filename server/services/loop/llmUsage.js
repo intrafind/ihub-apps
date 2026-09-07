@@ -6,7 +6,7 @@
  * Anthropic's split delivery across `message_start` / `message_delta`). The
  * canonical shape everywhere downstream is the ledger `usageSchema`:
  * `{ promptTokens, completionTokens, totalTokens, cacheReadTokens?,
- *    cacheWriteTokens?, reasoningTokens?, source }`.
+ *    cacheWriteTokens?, reasoningTokens?, webSearchRequests?, source }`.
  *
  * @module services/loop/llmUsage
  */
@@ -25,7 +25,8 @@ function num(...candidates) {
  * @param {Object|null|undefined} raw
  * @param {'provider'|'estimate'|'mixed'} [source='provider']
  * @returns {{promptTokens:number, completionTokens:number, totalTokens:number,
- *   cacheReadTokens?:number, cacheWriteTokens?:number, reasoningTokens?:number, source:string}|null}
+ *   cacheReadTokens?:number, cacheWriteTokens?:number, reasoningTokens?:number,
+ *   webSearchRequests?:number, source:string}|null}
  */
 export function normalizeUsage(raw, source = 'provider') {
   if (!raw || typeof raw !== 'object') return null;
@@ -60,13 +61,20 @@ export function normalizeUsage(raw, source = 'provider') {
     raw.completion_tokens_details?.reasoning_tokens,
     raw.output_tokens_details?.reasoning_tokens
   );
+  // Provider-run searches billed on top of tokens (Anthropic web search).
+  const webSearchRequests = num(
+    raw.webSearchRequests,
+    raw.web_search_requests,
+    raw.server_tool_use?.web_search_requests
+  );
 
   if (
     promptTokens === undefined &&
     completionTokens === undefined &&
     totalTokens === undefined &&
     cacheReadTokens === undefined &&
-    reasoningTokens === undefined
+    reasoningTokens === undefined &&
+    webSearchRequests === undefined
   ) {
     return null;
   }
@@ -78,6 +86,7 @@ export function normalizeUsage(raw, source = 'provider') {
   if (cacheReadTokens !== undefined) out.cacheReadTokens = cacheReadTokens;
   if (cacheWriteTokens !== undefined) out.cacheWriteTokens = cacheWriteTokens;
   if (reasoningTokens !== undefined) out.reasoningTokens = reasoningTokens;
+  if (webSearchRequests !== undefined) out.webSearchRequests = webSearchRequests;
   return out;
 }
 
@@ -105,6 +114,13 @@ export function mergeUsage(existing, incoming) {
     merged.promptTokens + merged.completionTokens
   );
   merged.totalTokens = total;
+  if (existing.webSearchRequests !== undefined || incoming.webSearchRequests !== undefined) {
+    // Cumulative within one response: the later frame is authoritative, never lower.
+    merged.webSearchRequests = Math.max(
+      existing.webSearchRequests || 0,
+      incoming.webSearchRequests || 0
+    );
+  }
   if (existing.source && incoming.source && existing.source !== incoming.source) {
     merged.source = 'mixed';
   }
@@ -126,7 +142,12 @@ export function addUsage(a, b) {
     totalTokens: (a.totalTokens || 0) + (b.totalTokens || 0),
     source: a.source === b.source ? a.source || 'provider' : 'mixed'
   };
-  for (const key of ['cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens']) {
+  for (const key of [
+    'cacheReadTokens',
+    'cacheWriteTokens',
+    'reasoningTokens',
+    'webSearchRequests'
+  ]) {
     if (a[key] !== undefined || b[key] !== undefined) out[key] = (a[key] || 0) + (b[key] || 0);
   }
   return out;
