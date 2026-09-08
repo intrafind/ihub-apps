@@ -1,5 +1,5 @@
 /**
- * Migration V089 — Add start-page section to ui.json
+ * Migration V090 — Add start-page section to ui.json
  *
  * The user-facing "/" route is now a personalized start page (greeting, the
  * default app's chat input, featured apps) instead of the apps list, which
@@ -18,7 +18,7 @@
  * see — it just exposes the defaults for editing.
  */
 
-export const version = '089';
+export const version = '090';
 export const description = 'Add start-page section to ui.json';
 
 export async function precondition(ctx) {
