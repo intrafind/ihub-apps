@@ -957,9 +957,11 @@ Native (provider-handled) web search is resolved directly by `toolLoader.resolve
 |----------|----------------------|
 | `google` | `{ google_search: {} }` — mutually exclusive with function calling (Gemini API limitation); function tools are dropped when native search is active |
 | `openai-responses` | `{ type: 'web_search' }` — combinable with function tools |
-| `anthropic` | `{ type: 'web_search_20250305', name: 'web_search' }` — combinable with function tools; billed separately by Anthropic per search |
+| `anthropic` | `{ type: <toolVersion>, name: 'web_search', max_uses: <cap> }` — the version comes from the model's `nativeWebSearch.toolVersion` (default `web_search_20250305`); newer versions are sent with `allowed_callers: ['direct']` unless the model enables `dynamicFiltering`; `max_uses` is the app's `websearch.maxSearches` or the node's `maxWebSearches` (default 5); combinable with function tools; billed separately by Anthropic per search |
 
-For any other provider, `websearch` config falls back to the real, script-backed `braveSearch` tool. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge and (for workflow agent nodes) the synthesizer's citation ledger.
+For any other provider — and for models with `nativeWebSearch.enabled: false` — `websearch` config falls back to the real, script-backed `braveSearch` tool. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge, the Sources list under the answer and (for workflow agent nodes) the synthesizer's citation ledger.
+
+Two runtime safeguards live in the agent loop and the LLM client: when the provider rejects the request with a client error that names web search, the loop retries once without the directive and with the `braveSearch` tool, and remembers the rejection per model for 15 minutes (`server/services/loop/nativeWebSearchFallback.js`); when Anthropic pauses a search turn (`stop_reason: pause_turn`), `LLMClient` replays the paused assistant blocks verbatim on a follow-up request (`providerContent`), up to three times per call.
 
 ## Built-in Tools Reference
 

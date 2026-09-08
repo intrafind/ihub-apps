@@ -47,6 +47,7 @@ Each model is defined with the following properties:
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
+| `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
 
 ### Tools
@@ -273,6 +274,28 @@ surface reasoning the same way in the UI (a separate "thinking" stream):
   reasoning text from the response's `reasoning` (current) or `reasoning_content` (legacy)
   field. Requires the vLLM server to be started with a matching `--reasoning-parser`.
   See [Local LLM Providers](local-llm-providers.md#reasoning-thinking-output).
+
+### Native Web Search
+
+Apps with `websearch.useNativeSearch` (the default) use the provider's built-in search on models from the `anthropic`, `google` and `openai-responses` providers — see [Web Tools → Native Search Providers](web-tools.md#native-search-providers). The optional `nativeWebSearch` object tunes this per model:
+
+| Property           | Type    | Default               | Description                                                                                                                                                                                                                       |
+| ------------------ | ------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | Boolean | `true`                | Set to `false` to never request native search on this model (for example an Anthropic-compatible gateway without the server tool). Apps then use Brave Search on this model                                                        |
+| `toolVersion`      | String  | `web_search_20250305` | Anthropic only. `web_search_20250305` (basic — every Claude model, Vertex AI, Foundry), `web_search_20260209` (dynamic filtering, Claude 4.6 and later), `web_search_20260318` (dynamic filtering plus response inclusion)          |
+| `dynamicFiltering` | Boolean | `false`               | Anthropic only. Let Claude filter search results in code before they enter the context window (Claude 4.6 and later on the Claude API). When off, newer tool versions are called directly (`allowed_callers: ["direct"]`)             |
+
+```json
+{
+  "id": "claude-sonnet",
+  "modelId": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "url": "https://api.anthropic.com/v1/messages",
+  "nativeWebSearch": { "toolVersion": "web_search_20260209", "dynamicFiltering": true }
+}
+```
+
+The number of searches per call is capped by the app (`websearch.maxSearches`) or the workflow node (`maxWebSearches`), not by the model.
 
 ### Model Selection in Apps
 

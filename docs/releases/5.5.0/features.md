@@ -1,5 +1,25 @@
 # Features — 5.5.0
 
+## Native Web Search: Per-Model Settings, Search Cap, Usage Tracking and Visible Sources
+
+Native web search on Claude, Gemini and GPT models is now configurable per model, capped per
+answer, tracked in the usage statistics, and its sources are shown to the user.
+
+- **Sources under the answer.** Chat answers grounded by a provider-run web search show a
+  collapsible *Sources* list with the cited pages (title, site and cited passage), next to the
+  existing "Grounding" badge.
+- **Search cap.** A new *Max Searches per Answer* setting on the app's web search card (default 5)
+  caps how many searches Claude may run for one call; workflow prompt nodes have the same setting
+  (*Max Web Searches*). Anthropic bills each search, so the cap bounds the cost of a research
+  prompt. Existing apps with web search get the default written into their configuration on
+  upgrade.
+- **Per-model settings.** Model configurations for Anthropic, Google and OpenAI Responses models
+  gain a *Native Web Search* section: turn native search off for a model (it then uses Brave
+  Search), and for Claude choose the web search tool version — including the newer versions with
+  dynamic filtering on Claude 4.6 and later — with direct calls as the safe default.
+- **Usage tracking.** The billable search count is recorded per call, in the run log and in the
+  admin usage statistics per app, model and user.
+
 ## OAuth Login for MCP Clients No Longer Fails With "Authorization code is invalid or expired"
 
 Fixed a bug that made the OAuth 2.0 authorization code flow fail on any multi-worker deployment

@@ -89,6 +89,22 @@ function union(list, items) {
   return out;
 }
 
+/**
+ * Merge provider grounding metadata that arrives piecemeal (Anthropic streams
+ * one citation per `citations_delta` and one result block per search): array
+ * fields are concatenated, scalar fields take the latest value.
+ */
+export function mergeGrounding(existing, incoming) {
+  if (!incoming || typeof incoming !== 'object') return existing ?? null;
+  if (!existing) return { ...incoming };
+  const merged = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (Array.isArray(value)) merged[key] = [...(existing[key] || []), ...value];
+    else if (value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
 function ensureRun(state, runId, init) {
   const existing = state.runs[runId];
   if (existing) return { state, run: existing };
@@ -367,7 +383,7 @@ export function reduceRunEvent(state, envelope) {
           };
           break;
         case 'grounding':
-          run = { ...run, grounding: data.data ?? null };
+          run = { ...run, grounding: mergeGrounding(run.grounding, data.data) };
           break;
         default:
           break;

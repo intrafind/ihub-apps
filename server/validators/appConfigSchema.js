@@ -59,7 +59,9 @@ const websearchSchema = z
     maxResults: z.number().int().min(1).max(20).optional().default(5),
     extractContent: z.boolean().optional().default(true),
     contentMaxLength: z.number().int().min(500).max(50000).optional().default(3000),
-    enabledByDefault: z.boolean().optional().default(false)
+    enabledByDefault: z.boolean().optional().default(false),
+    // Cap on provider-run searches per model call (Anthropic web search `max_uses`).
+    maxSearches: z.number().int().min(1).max(50).optional().default(5)
   })
   .optional();
 

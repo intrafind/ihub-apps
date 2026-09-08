@@ -7,13 +7,14 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, citations, answerSource, finishReason,
- * ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
+ * activeSkills, searchStatus, citations, groundingSources, answerSource,
+ * finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
  */
 import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
+import { extractGroundingSources } from './groundingSources';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
@@ -196,6 +197,16 @@ export function projectRunToMessage(run, options = {}) {
   }
   const citations = mergeCitationEntries(run.citations);
   if (citations) extras.citations = citations;
+  // Sources behind a grounded answer (provider-run web search). A completed
+  // step carries the server-merged metadata of that step; while streaming,
+  // the progress frames merged by the reducer stand in.
+  const stepGrounding = Object.values(run.steps || {})
+    .map(step => step.groundingMetadata)
+    .filter(Boolean);
+  const groundingSources = extractGroundingSources(
+    stepGrounding.length ? stepGrounding : run.grounding
+  );
+  if (groundingSources.length) extras.groundingSources = groundingSources;
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {

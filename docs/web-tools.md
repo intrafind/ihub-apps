@@ -64,6 +64,7 @@ Add a `websearch` object to your app configuration:
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
+| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
 
 ### How Provider Resolution Works
 
@@ -161,6 +162,19 @@ The system checks admin panel configuration first, then falls back to environmen
 
 Native search providers (Google Search, OpenAI Web Search, and Anthropic Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed. Anthropic's native web search is billed separately by Anthropic in addition to standard token costs — see [Anthropic's web search pricing](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool#usage-and-pricing).
 
+Native search is tuned per model in the model configuration (`nativeWebSearch`, see [Models → Native Web Search](models.md#native-web-search)):
+
+- `enabled: false` turns native search off for one model — for example an Anthropic-compatible gateway that does not implement the server tool — so apps fall back to Brave Search on that model.
+- Anthropic only: `toolVersion` selects the web search tool version (`web_search_20250305`, the basic version, by default; `web_search_20260209` and `web_search_20260318` add dynamic filtering on Claude 4.6 and later) and `dynamicFiltering` opts into filtering search results through code execution. Without it, newer versions are called directly (`allowed_callers: ["direct"]`), which is also what Google Cloud and Azure-hosted Foundry require.
+
+Three safeguards apply to every native search call:
+
+- **Search cap.** The app's `websearch.maxSearches` (default 5) or a workflow node's `maxWebSearches` is sent to Anthropic as `max_uses`. Once the cap is reached the model answers with what it has; the refused search reports `max_uses_exceeded` and is not billed.
+- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the `braveSearch` tool instead. The rejection is remembered for 15 minutes per model so later calls skip the failing request.
+- **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
+
+The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
+
 ## Tools Reference
 
 ### Brave Search (`braveSearch`)
@@ -186,7 +200,7 @@ Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not**
 | OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
 | Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
-None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them. Search results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge.
+None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the collapsible **Sources** list under the answer: the pages the model cited, with title, site and the cited passage where the provider supplies it.
 
 ### Web Content Extractor (`webContentExtractor`)
 
@@ -415,6 +429,12 @@ The web content extractor includes protection against Server-Side Request Forger
 5. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
    - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
+   - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to Brave Search
+
+6. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+   - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
+   - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses Brave Search without the failed attempt
+   - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
 
 ### Debugging
 

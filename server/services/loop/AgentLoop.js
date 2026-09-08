@@ -32,6 +32,12 @@ import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { planToolBatches } from './segmentPlanner.js';
 import { takeSteers, steerMessage } from './steering.js';
 import {
+  isNativeWebSearchRejection,
+  isNativeWebSearchUnavailable,
+  markNativeWebSearchUnavailable,
+  resolveNativeWebSearchFallbackTools as defaultResolveNativeWebSearchFallbackTools
+} from './nativeWebSearchFallback.js';
+import {
   compactIfOversized,
   microcompactMessages,
   isContextOverflowError,
@@ -119,12 +125,16 @@ export class AgentLoop {
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
    * @param {Object} [opts.logger]
    * @param {Array} [opts.seams] - initial seam registrations
+   * @param {Function} [opts.resolveNativeWebSearchFallbackTools] - `(directive, {app, language}) => tools`
+   *   offered when a provider rejects native web search (default: toolLoader's braveSearch)
    */
   constructor(opts = {}) {
     this.llmClient = opts.llmClient || defaultLlmClient;
     this.runLog = opts.runLog || runLogSingleton;
     this.logger = opts.logger || defaultLogger;
     this._seams = [...(opts.seams || [])];
+    this.resolveNativeWebSearchFallbackTools =
+      opts.resolveNativeWebSearchFallbackTools || defaultResolveNativeWebSearchFallbackTools;
   }
 
   /** Register a seam `{ name, preStep, preTool, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction }`. */
@@ -160,7 +170,8 @@ export class AgentLoop {
   async run(request) {
     const startedAt = Date.now();
     const policies = resolvePolicies(request.policies);
-    const tools = Array.isArray(request.tools) ? request.tools : [];
+    // Copied: the native web search fallback may add a tool for this run only.
+    const tools = Array.isArray(request.tools) ? [...request.tools] : [];
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
     const runId = request.runId || null;
@@ -200,7 +211,7 @@ export class AgentLoop {
     const options = { ...(request.options || {}) };
     const responseSchema = options.responseSchema;
     if (responseSchema && !options.responseFormat) options.responseFormat = 'json';
-    const nativeWebSearch = options.nativeWebSearch ?? null;
+    let nativeWebSearch = options.nativeWebSearch ?? null;
 
     const ctx = {
       request,
@@ -276,6 +287,48 @@ export class AgentLoop {
       ...extra
     });
 
+    // Native web search the provider turns down (a 400 naming web search:
+    // disabled for the organisation, unsupported by the model or a gateway)
+    // degrades to the script-backed search tool instead of failing the turn.
+    // The rejection is remembered per model so later calls skip the doomed
+    // request.
+    const applyNativeWebSearchFallback = async reason => {
+      const directive = nativeWebSearch;
+      nativeWebSearch = null;
+      let fallbackTools = [];
+      try {
+        fallbackTools = await this.resolveNativeWebSearchFallbackTools(directive, {
+          app: options.appConfig,
+          language: request.language
+        });
+      } catch (err) {
+        this.logger.warn('Could not resolve the native web search fallback tool', {
+          component: COMPONENT,
+          runId,
+          error: err?.message
+        });
+      }
+      const added = [];
+      for (const tool of fallbackTools || []) {
+        if (tool && !tools.some(t => t.id === tool.id)) {
+          tools.push(tool);
+          added.push(tool.id);
+        }
+      }
+      this.logger.warn('Native web search unavailable — falling back to a search tool', {
+        component: COMPONENT,
+        runId,
+        modelId: model.id,
+        provider: directive?.provider,
+        reason,
+        fallbackTools: added
+      });
+    };
+
+    if (nativeWebSearch && isNativeWebSearchUnavailable(model.id)) {
+      await applyNativeWebSearchFallback('provider rejected native web search earlier');
+    }
+
     try {
       // Past the round cap, exactly one more call is allowed when a budget gate
       // fired on the last round without a tool-less final call having been
@@ -338,6 +391,12 @@ export class AgentLoop {
           }
           result = stream.result();
         } catch (err) {
+          if (nativeWebSearch && !isAbortError(err) && isNativeWebSearchRejection(err)) {
+            markNativeWebSearchUnavailable(model.id, { reason: err.message });
+            await applyNativeWebSearchFallback(err.message);
+            iteration--;
+            continue;
+          }
           if (
             !isAbortError(err) &&
             isContextOverflowError(err) &&

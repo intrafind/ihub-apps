@@ -256,7 +256,13 @@ export const nodeConfigSchema = z.object({
        * planner, verifier, query-plan). Overrides the model's thinking config
        * for this node's LLM call only. See nodeThinkingSchema.
        */
-      thinking: nodeThinkingSchema
+      thinking: nodeThinkingSchema,
+      /**
+       * Cap on provider-run web searches per model call when the node's tools
+       * include the generic `webSearch` marker and the model has native search
+       * (Anthropic `max_uses`). Defaults to 5.
+       */
+      maxWebSearches: z.number().int().min(1).max(50).optional()
     })
     .passthrough()
     .optional(),

@@ -138,5 +138,5 @@ apps). The full apps browser with search, categories and sorting lives at `/apps
   contexts and with `?sidebar=false`; on regular pages the new sidebar takes over navigation.
 
 **Before upgrading:** Update any external link or iframe that relies on `/` rendering the apps
-list to use `/apps` instead. No configuration change is required — migration V088 seeds the new
+list to use `/apps` instead. No configuration change is required — migration V089 seeds the new
 `startPage` section.

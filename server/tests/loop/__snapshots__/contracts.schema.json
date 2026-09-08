@@ -208,6 +208,10 @@
                         "type": "integer",
                         "minimum": 0
                       },
+                      "webSearchRequests": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
                       "source": {
                         "type": "string",
                         "enum": ["provider", "estimate", "mixed"]
@@ -770,6 +774,10 @@
                         "minimum": 0
                       },
                       "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "webSearchRequests": {
                         "type": "integer",
                         "minimum": 0
                       },
@@ -1453,6 +1461,10 @@
                         "type": "integer",
                         "minimum": 0
                       },
+                      "webSearchRequests": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
                       "source": {
                         "type": "string",
                         "enum": ["provider", "estimate", "mixed"]
@@ -1487,6 +1499,10 @@
                         "minimum": 0
                       },
                       "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "webSearchRequests": {
                         "type": "integer",
                         "minimum": 0
                       },
@@ -1581,6 +1597,10 @@
                         "minimum": 0
                       },
                       "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "webSearchRequests": {
                         "type": "integer",
                         "minimum": 0
                       },
@@ -2590,6 +2610,10 @@
                 "type": "integer",
                 "minimum": 0
               },
+              "webSearchRequests": {
+                "type": "integer",
+                "minimum": 0
+              },
               "source": {
                 "type": "string",
                 "enum": ["provider", "estimate", "mixed"]
@@ -2624,6 +2648,10 @@
                 "minimum": 0
               },
               "reasoningTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "webSearchRequests": {
                 "type": "integer",
                 "minimum": 0
               },
@@ -3456,6 +3484,10 @@
                         "type": "integer",
                         "minimum": 0
                       },
+                      "webSearchRequests": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
                       "source": {
                         "type": "string",
                         "enum": ["provider", "estimate", "mixed"]
@@ -3737,6 +3769,10 @@
                         "minimum": 0
                       },
                       "reasoningTokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "webSearchRequests": {
                         "type": "integer",
                         "minimum": 0
                       },
@@ -4502,6 +4538,10 @@
             "minimum": 0
           },
           "reasoningTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "webSearchRequests": {
             "type": "integer",
             "minimum": 0
           },

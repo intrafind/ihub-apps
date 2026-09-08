@@ -54,7 +54,7 @@ import {
   parseRetryAfterMs,
   DEFAULT_TRANSIENT_RETRIES
 } from './llmRetry.js';
-import { normalizeUsage, mergeUsage } from './llmUsage.js';
+import { normalizeUsage, mergeUsage, addUsage } from './llmUsage.js';
 import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
@@ -95,6 +95,25 @@ const CONNECT_TIMEOUT_REASON = Symbol('llm-connect-timeout');
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
 // ── Chunk normalization ─────────────────────────────────────────────────────
+
+/**
+ * Continuations of a turn the provider paused (`stop_reason: pause_turn`,
+ * e.g. a long Anthropic web search). Each continuation is a new billable
+ * request, so the count is bounded.
+ */
+const MAX_PAUSE_TURN_CONTINUATIONS = 3;
+
+/**
+ * The assistant content blocks of a paused turn, when a completing chunk
+ * carries them (set by the provider converter), else null.
+ * @param {Object} chunk - normalized chunk
+ * @returns {Object[]|null}
+ */
+function pausedTurnContent(chunk) {
+  if (!chunk.complete || chunk.finishReason !== 'pause_turn') return null;
+  const blocks = chunk.metadata?.pausedAssistantContent;
+  return Array.isArray(blocks) && blocks.length > 0 ? blocks : null;
+}
 
 /**
  * Bring any adapter's chunk to the canonical GenericChunk shape: array fields
@@ -665,49 +684,140 @@ export class LLMClient {
     const client = this;
     const iterate = async function* () {
       let failure = null;
+      // A provider can pause a server-tool turn (`stop_reason: pause_turn`,
+      // e.g. a long Anthropic web search). The turn is continued on a fresh
+      // request that replays the paused assistant message verbatim; to the
+      // consumer it stays one uninterrupted stream.
+      let continuations = 0;
+      let priorUsage = null;
+      let currentResponse = response;
+      let currentRequest = request;
+      let currentMessages = messages;
       try {
-        if (effectiveStream) {
-          const adapter = getAdapter(model.provider);
-          const ctx = { model, chatId: requestId, request };
-          for await (const raw of adapter.parseResponseStream(response, ctx)) {
-            if (callSignal?.aborted) {
-              const abortErr = new Error('The operation was aborted');
-              abortErr.name = 'AbortError';
-              throw abortErr;
+        for (;;) {
+          let paused = null;
+          if (effectiveStream) {
+            const adapter = getAdapter(model.provider);
+            const ctx = { model, chatId: requestId, request: currentRequest };
+            for await (const raw of adapter.parseResponseStream(currentResponse, ctx)) {
+              if (callSignal?.aborted) {
+                const abortErr = new Error('The operation was aborted');
+                abortErr.name = 'AbortError';
+                throw abortErr;
+              }
+              if (!raw) continue;
+              const chunk = normalizeChunk(raw);
+              if (chunk.error) {
+                throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
+                  code: looksLikeOverflow(chunk.errorMessage)
+                    ? LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
+                    : LLM_ERROR_CODES.PROVIDER_ERROR,
+                  providerCode: 'STREAM_ERROR',
+                  provider: model.provider,
+                  modelId: model.id,
+                  details: chunk.errorMessage
+                });
+              }
+              const pausedBlocks = pausedTurnContent(chunk);
+              if (pausedBlocks && continuations < MAX_PAUSE_TURN_CONTINUATIONS) {
+                // The pause marker carries no content of its own; the
+                // continuation delivers the real end of the turn.
+                paused = pausedBlocks;
+                break;
+              }
+              if (pausedBlocks) {
+                logger.warn('pause_turn continuation limit reached — returning the partial turn', {
+                  component: COMPONENT,
+                  requestId,
+                  modelId: model.id,
+                  continuations
+                });
+              }
+              accumulator.push(chunk);
+              yield chunk;
+              if (chunk.complete) break;
             }
-            if (!raw) continue;
-            const chunk = normalizeChunk(raw);
+          } else {
+            const text = await currentResponse.text();
+            const raw = await convertResponseToGeneric(text, model.provider, requestId);
+            const chunk = normalizeChunk({ ...raw, complete: true });
             if (chunk.error) {
               throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
-                code: looksLikeOverflow(chunk.errorMessage)
-                  ? LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
-                  : LLM_ERROR_CODES.PROVIDER_ERROR,
-                providerCode: 'STREAM_ERROR',
+                code: LLM_ERROR_CODES.PROVIDER_ERROR,
+                providerCode: 'RESPONSE_PARSE_ERROR',
                 provider: model.provider,
                 modelId: model.id,
                 details: chunk.errorMessage
               });
             }
-            accumulator.push(chunk);
-            yield chunk;
-            if (chunk.complete) break;
+            const pausedBlocks = pausedTurnContent(chunk);
+            if (pausedBlocks && continuations < MAX_PAUSE_TURN_CONTINUATIONS) {
+              // Everything produced before the pause is part of the answer;
+              // only the completion marker is withheld.
+              const { pausedAssistantContent: _paused, ...metadata } = chunk.metadata;
+              const partial = normalizeChunk({
+                ...chunk,
+                metadata,
+                complete: false,
+                finishReason: null
+              });
+              accumulator.push(partial);
+              yield partial;
+              paused = pausedBlocks;
+            } else {
+              accumulator.push(chunk);
+              yield chunk;
+            }
           }
-        } else {
-          const text = await response.text();
-          const raw = await convertResponseToGeneric(text, model.provider, requestId);
-          const chunk = normalizeChunk({ ...raw, complete: true });
-          if (chunk.error) {
-            throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
-              code: LLM_ERROR_CODES.PROVIDER_ERROR,
-              providerCode: 'RESPONSE_PARSE_ERROR',
-              provider: model.provider,
-              modelId: model.id,
-              details: chunk.errorMessage
-            });
+          if (!paused) break;
+
+          continuations++;
+          // Each continuation is its own billable request: add, never merge.
+          priorUsage = addUsage(priorUsage, accumulator.usage);
+          accumulator.usage = null;
+          currentMessages = [
+            ...currentMessages,
+            {
+              role: 'assistant',
+              content: accumulator.content,
+              providerContent: { provider: model.provider, blocks: paused }
+            }
+          ];
+          logger.info('Provider paused the turn (pause_turn) — continuing on a new request', {
+            component: COMPONENT,
+            requestId,
+            runId,
+            modelId: model.id,
+            continuation: continuations
+          });
+          client._ledger(runId, RUN_LOG_EVENTS.REQUEST_RETRY, {
+            step,
+            requestId,
+            attempt: continuations,
+            code: 'PAUSE_TURN',
+            status: null,
+            delayMs: 0
+          });
+          try {
+            clearStreamingState(model.provider, requestId);
+          } catch {
+            /* providers without converter state */
           }
-          accumulator.push(chunk);
-          yield chunk;
+          currentRequest = await raceAbort(
+            () =>
+              client.createRequest(model, currentMessages, apiKey, adapterOptions, {
+                signal: callSignal
+              }),
+            callSignal,
+            () => abortError('Aborted while the continuation request was built')
+          );
+          const res = await client._connect(currentRequest, callSignal, model);
+          if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
+            throw await client._httpError(res, model, language, currentRequest);
+          }
+          currentResponse = res;
         }
+        if (priorUsage) accumulator.usage = addUsage(priorUsage, accumulator.usage);
       } catch (rawErr) {
         failure = toLLMError(rawErr, errCtx());
         throw failure;

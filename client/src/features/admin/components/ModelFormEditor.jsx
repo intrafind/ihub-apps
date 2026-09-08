@@ -835,6 +835,144 @@ function ModelFormEditor({
                 </div>
 
                 {/* Image Generation Configuration */}
+                {['anthropic', 'google', 'openai-responses'].includes(data.provider) && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.nativeWebSearch', 'Native Web Search')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.nativeWebSearch',
+                          "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search."
+                        )}
+                      </p>
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="nativeWebSearch.enabled"
+                              type="checkbox"
+                              checked={data.nativeWebSearch?.enabled !== false}
+                              onChange={e =>
+                                handleChange('nativeWebSearch', {
+                                  ...(data.nativeWebSearch || {}),
+                                  enabled: e.target.checked
+                                })
+                              }
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="nativeWebSearch.enabled"
+                              className="font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t(
+                                'admin.models.fields.nativeWebSearchEnabled',
+                                'Use native web search'
+                              )}
+                            </label>
+                          </div>
+                        </div>
+
+                        {data.provider === 'anthropic' &&
+                          data.nativeWebSearch?.enabled !== false && (
+                            <>
+                              <div>
+                                <label
+                                  htmlFor="nativeWebSearch.toolVersion"
+                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                  {t(
+                                    'admin.models.fields.nativeWebSearchToolVersion',
+                                    'Web search tool version'
+                                  )}
+                                </label>
+                                <select
+                                  id="nativeWebSearch.toolVersion"
+                                  value={data.nativeWebSearch?.toolVersion || 'web_search_20250305'}
+                                  onChange={e =>
+                                    handleChange('nativeWebSearch', {
+                                      ...(data.nativeWebSearch || {}),
+                                      toolVersion: e.target.value
+                                    })
+                                  }
+                                  className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                >
+                                  <option value="web_search_20250305">
+                                    web_search_20250305 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionBasic',
+                                      'basic (all Claude models, Vertex AI, Foundry)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260209">
+                                    web_search_20260209 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionFiltering',
+                                      'dynamic filtering (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260318">
+                                    web_search_20260318 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionInclusion',
+                                      'dynamic filtering + response inclusion (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                </select>
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                  {t(
+                                    'admin.models.hints.nativeWebSearchToolVersion',
+                                    'Newer versions let Claude filter search results in code before they reach the context window, which saves tokens on search-heavy prompts. Google Cloud and Azure-hosted Foundry only offer the basic version.'
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="nativeWebSearch.dynamicFiltering"
+                                    type="checkbox"
+                                    disabled={
+                                      (data.nativeWebSearch?.toolVersion ||
+                                        'web_search_20250305') === 'web_search_20250305'
+                                    }
+                                    checked={data.nativeWebSearch?.dynamicFiltering === true}
+                                    onChange={e =>
+                                      handleChange('nativeWebSearch', {
+                                        ...(data.nativeWebSearch || {}),
+                                        dynamicFiltering: e.target.checked
+                                      })
+                                    }
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label
+                                    htmlFor="nativeWebSearch.dynamicFiltering"
+                                    className="font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchDynamicFiltering',
+                                      'Enable dynamic filtering'
+                                    )}
+                                  </label>
+                                  <p className="text-gray-500 dark:text-gray-400">
+                                    {t(
+                                      'admin.models.hints.nativeWebSearchDynamicFiltering',
+                                      'Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly.'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
                 {data.supportsImageGeneration && (
                   <div className="col-span-6">
                     <fieldset>

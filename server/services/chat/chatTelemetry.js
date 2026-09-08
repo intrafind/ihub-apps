@@ -85,6 +85,7 @@ export async function recordChatCallEnd({ baseLog, model, usage, content, outcom
       modelId: model.id,
       tokens: completionTokens,
       tokenSource: usage ? 'provider' : 'estimate',
+      webSearchRequests: usage?.webSearchRequests || 0,
       user: baseLog.user
     });
   }

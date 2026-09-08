@@ -55,7 +55,7 @@ import { getLocalizedString } from '../../utils/localize.js';
  * @property {boolean} complete - Whether the response is complete
  * @property {boolean} error - Whether there was an error
  * @property {string|null} errorMessage - Error message if error occurred
- * @property {string|null} finishReason - Normalized finish reason ('stop', 'length', 'tool_calls', 'content_filter')
+ * @property {string|null} finishReason - Normalized finish reason ('stop', 'length', 'tool_calls', 'content_filter', 'pause_turn')
  * @property {Object} [metadata] - Provider-specific metadata for handling streaming state
  */
 
@@ -240,6 +240,9 @@ export function normalizeFinishReason(providerFinishReason, provider) {
   if (reason === 'tool_calls' || reason === 'tool_use') return 'tool_calls';
   if (reason === 'content_filter' || reason === 'safety' || reason === 'recitation')
     return 'content_filter';
+  // A server-tool turn the provider paused (Anthropic web search); LLMClient
+  // continues it on a new request, so this never ends a turn on its own.
+  if (reason === 'pause_turn') return 'pause_turn';
 
   // Provider-specific mappings
   switch (provider) {
