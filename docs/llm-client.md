@@ -118,7 +118,9 @@ provider body), `retryAfterMs`, `provider`, `modelId`, `cause`. Getters:
 
 | Setting                         | Default | Effect                                                                     |
 | ------------------------------- | ------- | -------------------------------------------------------------------------- |
-| `LLM_TRANSIENT_RETRIES`         | `3`     | Retry budget for transient failures (`WORKFLOW_LLM_TRANSIENT_RETRIES` still works) |
+| `LLM_TRANSIENT_RETRIES`         | `3`     | Retry budget for transient failures (`WORKFLOW_LLM_TRANSIENT_RETRIES` still works). Connect timeouts (`CONNECT_TIMEOUT`) and hostname resolution failures are not retried. |
+| `DNS_LOOKUP_TIMEOUT_MS`, `DNS_NEGATIVE_CACHE_MS` | `5000`, `30000` | Outbound DNS guard limits (see below)                                |
+| `UV_THREADPOOL_SIZE`            | `16`    | libuv threadpool size, set by `server/threadpool.js` when unset (environment only) |
 | `LLM_DEBUG_DUMP_ALL=1`          | off     | Dump every outbound request body to `contents/data/debug/llm-request/`     |
 | `model.maxOutputTokens`         | —       | Default `maxTokens` for calls that do not set one                          |
 | `model.concurrency`, `requestDelayMs` | — | Per-model throttling                                                       |
@@ -129,10 +131,43 @@ Requests to a model whose provider returns a non-transient 4xx are dumped to
 auth headers and URL keys redacted, and a shape summary (sizes and keys, no
 prompt text) is logged.
 
+## Outbound DNS guard
+
+Node resolves hostnames with `getaddrinfo` on the libuv threadpool, and libuv
+runs at most half of that pool as such "slow I/O" work — two lookups at a time
+with the default four threads, for the whole process. A lookup for a host whose
+resolver does not answer (a VPN-only vLLM endpoint with the VPN down) blocks a
+slot for the operating system's resolver timeout, and aborting the HTTP request
+does not cancel it. One chat turn issues several such lookups (discovery, then
+each connect attempt), so both slots fill and every other outbound request —
+any model, any user — waits behind them. Pages and API lists keep working
+because file reads are not subject to that cap, which is why only answers hung.
+
+Every direct (non-proxied) connection made through `httpFetch` now resolves
+through `server/utils/dnsGuard.js`:
+
+- concurrent lookups of one hostname share a single `getaddrinfo` call;
+- a lookup that takes longer than `DNS_LOOKUP_TIMEOUT_MS` fails the request
+  with a DNS error (`EAI_TIMEOUT`, mapped to the `dnsResolutionFailed`
+  message) while the OS call finishes in the background;
+- a failed or overdue lookup is remembered for `DNS_NEGATIVE_CACHE_MS`, so new
+  requests to that host fail immediately instead of queueing another lookup; a
+  late success clears the entry.
+
+Two related changes keep a dead endpoint from being probed repeatedly: a
+connect timeout is no longer retried, and a failed model discovery is
+remembered for 60 seconds. `server/threadpool.js` additionally sizes the
+threadpool to 16 (8 concurrent lookups) unless `UV_THREADPOOL_SIZE` is set;
+because libuv reads that variable when the pool is first used, the module is
+the first import of `server.js`.
+
 ## Testing
 
 - `server/tests/loop/llmClient.test.js` — behaviour specs (retries, abort,
   timeout, error mapping, ledger events, streaming vs collect).
+- `server/tests/dnsGuard.test.js`, `server/tests/loop/dnsFailure.test.js` —
+  DNS guard (sharing, timeout, negative cache) and the non-retry of DNS and
+  connect-timeout failures.
 - `server/tests/loop/adapterConformance.test.js` — the provider conformance
   matrix: every registered adapter driven through the client with wire-level
   fixtures (text, tool-call accumulation, parallel calls, thinking, usage,

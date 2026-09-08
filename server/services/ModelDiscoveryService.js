@@ -55,6 +55,13 @@ class ModelDiscoveryService {
     this.DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
     /**
+     * How long a failed discovery is remembered. Without this every message to
+     * an unreachable endpoint paid the discovery timeout again — and each
+     * attempt queued another blocking DNS lookup on the shared threadpool.
+     */
+    this.FAILURE_CACHE_TTL_MS = 60 * 1000;
+
+    /**
      * Track ongoing discovery requests to prevent duplicate simultaneous calls
      * @type {Map<string, Promise>}
      */
@@ -71,7 +78,7 @@ class ModelDiscoveryService {
   async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS) {
     // Return cached result if still valid
     const cached = this.cache.get(model.id);
-    if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
+    if (cached && Date.now() - cached.timestamp < (cached.ttlMs ?? cacheTtlMs)) {
       logger.debug('Using cached model discovery result', {
         component: 'ModelDiscoveryService',
         modelConfigId: model.id,
@@ -91,7 +98,7 @@ class ModelDiscoveryService {
     }
 
     // Create and track the discovery request
-    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs);
+    const discoveryPromise = this._performDiscovery(model, apiKey);
     this.pendingRequests.set(model.id, discoveryPromise);
 
     try {
@@ -107,7 +114,7 @@ class ModelDiscoveryService {
    * Internal method to perform the actual model discovery
    * @private
    */
-  async _performDiscovery(model, apiKey, cacheTtlMs) {
+  async _performDiscovery(model, apiKey) {
     if (!model.url) {
       logger.warn('Cannot discover model: no URL configured', {
         component: 'ModelDiscoveryService',
@@ -151,7 +158,7 @@ class ModelDiscoveryService {
           status: response.status,
           statusText: response.statusText
         });
-        return null;
+        return this._rememberFailure(model.id);
       }
 
       const data = await response.json();
@@ -163,7 +170,7 @@ class ModelDiscoveryService {
           modelConfigId: model.id,
           responseKeys: Object.keys(data)
         });
-        return null;
+        return this._rememberFailure(model.id);
       }
 
       // Get the first available model (vLLM typically serves one model at a time)
@@ -191,8 +198,23 @@ class ModelDiscoveryService {
         error: error.message,
         errorCode: error.code
       });
-      return null;
+      return this._rememberFailure(model.id);
     }
+  }
+
+  /**
+   * Record a failed discovery so the next calls within FAILURE_CACHE_TTL_MS
+   * fall back to the configured modelId immediately instead of waiting on the
+   * endpoint again.
+   * @private
+   */
+  _rememberFailure(modelConfigId) {
+    this.cache.set(modelConfigId, {
+      modelId: null,
+      timestamp: Date.now(),
+      ttlMs: this.FAILURE_CACHE_TTL_MS
+    });
+    return null;
   }
 
   /**

@@ -1,5 +1,31 @@
 # Fixes — 5.5.0
 
+## One Unreachable Model Endpoint No Longer Stalls Every Other Chat
+
+When a model endpoint could not be reached — typically a local vLLM behind a VPN that was not
+connected — a chat to that model hung for the full 5-minute request timeout, and while it hung,
+chats from other users to other, healthy models hung as well. Pages and menus kept loading; only
+answers stopped.
+
+The cause was hostname resolution. Node resolves hostnames on a small shared threadpool and lets only
+two lookups run at a time. A lookup for an unreachable host blocked one of those slots for the
+operating system's resolver timeout, could not be cancelled by stopping the chat, and one chat turn
+issued several of them. Every other outbound request in the process then waited in the queue.
+
+- Outbound connections now share one lookup per hostname, give up on a lookup after 5 seconds, and
+  remember a failed host for 30 seconds so new requests to it fail immediately. A chat to an
+  unreachable model fails within seconds with "endpoint could not be reached", and other chats are
+  unaffected.
+- A connect timeout is no longer retried, and a failed model auto-discovery is remembered for 60
+  seconds, so a dead endpoint is probed once rather than five times per message.
+- The server sizes Node's threadpool to 16 threads unless `UV_THREADPOOL_SIZE` is set.
+- New environment variables: `DNS_LOOKUP_TIMEOUT_MS` (default `5000`), `DNS_NEGATIVE_CACHE_MS`
+  (default `30000`), `UV_THREADPOOL_SIZE` (default `16`). See
+  [Server Configuration](../../server-config.md).
+- A chat request whose `Accept-Language` header is not a language tag (`*`, sent by some HTTP
+  clients) no longer fails with an internal error; the platform's default language is used for date
+  formatting in prompts.
+
 ## Anthropic Web Search No Longer Truncates Long Searches or Fails the Answer When Unavailable
 
 Two failure modes of native web search on Claude models are now handled.

@@ -11,6 +11,7 @@
  *
  * @module services/loop/llmRetry
  */
+import { isDnsFailure } from '../../utils/dnsGuard.js';
 
 /**
  * Default number of retries for transient LLM errors. Overridable per
@@ -24,8 +25,11 @@ export const DEFAULT_TRANSIENT_RETRIES = (() => {
   return Number.isFinite(fromEnv) && fromEnv >= 0 ? fromEnv : 3;
 })();
 
+// Hostname resolution failures (ENOTFOUND, EAI_*) are deliberately absent: a
+// name that did not resolve will not resolve on the next attempt either, and
+// each retry would queue another blocking getaddrinfo (see utils/dnsGuard.js).
 const NETWORK_ERROR_CODES =
-  /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EPIPE|ECONNABORTED|UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET/i;
+  /ECONNRESET|ETIMEDOUT|ECONNREFUSED|EPIPE|ECONNABORTED|UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET/i;
 const NETWORK_ERROR_MESSAGES = /fetch failed|network|socket hang up|timeout|terminated|aborted/i;
 
 /**
@@ -60,6 +64,11 @@ export function isTransientLlmError(err) {
   if (!err) return false;
   if (isAbortLike(err)) return false;
   if (err.status != null) return isTransientHttpStatus(err.status);
+  // Not transient: the host could not be resolved, or it did not answer the
+  // connect at all (SYNs blackholed). Retrying only repeats the same wait and,
+  // for DNS, queues another blocking getaddrinfo that stalls other callers.
+  if (isDnsFailure(err)) return false;
+  if (err.providerCode === 'CONNECT_TIMEOUT' || err.providerCode === 'DNS') return false;
   // A classified network/timeout LLMError (no HTTP status) is transient.
   if (err.code === 'NETWORK' || err.code === 'TIMEOUT') return true;
   const code = typeof err.code === 'string' ? err.code : '';

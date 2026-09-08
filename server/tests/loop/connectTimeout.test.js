@@ -44,11 +44,11 @@ test('a provider that never sends headers fails as a TIMEOUT, not after the whol
   assert.equal(calls.length, 1, 'one attempt with retries disabled');
 });
 
-test('the connect deadline is transient, so the retry budget still applies', async () => {
-  assert.ok(
-    RETRYABLE_LLM_ERROR_CODES.has(LLM_ERROR_CODES.TIMEOUT),
-    'TIMEOUT is transient, so a blackholed connect is retried rather than surfaced instantly'
-  );
+test('the connect deadline is not retried: a blackholed host is probed once per call', async () => {
+  // Retrying repeated the same 10 s wait — and, for a hostname, queued another
+  // blocking getaddrinfo on the shared threadpool that stalled other callers
+  // (see utils/dnsGuard.js). The TIMEOUT code stays retryable for slow reads.
+  assert.ok(RETRYABLE_LLM_ERROR_CODES.has(LLM_ERROR_CODES.TIMEOUT));
 
   let attempts = 0;
   const { client } = makeClient({
@@ -56,8 +56,6 @@ test('the connect deadline is transient, so the retry budget still applies', asy
     maxRetries: 2,
     transport: (request, ctx) => {
       attempts += 1;
-      // Recover on the last allowed attempt.
-      if (attempts > 2) return Promise.resolve(sseResponse(openaiText(['recovered'])));
       return new Promise((_resolve, reject) => {
         ctx.signal?.addEventListener('abort', () => {
           const err = new Error('The operation was aborted');
@@ -67,11 +65,11 @@ test('the connect deadline is transient, so the retry budget still applies', asy
       });
     }
   });
-
-  const stream = await client.execute({ modelId: 'oa', messages, timeoutMs: 5_000 });
-  const res = await client.collect(stream);
-  assert.equal(res.content, 'recovered');
-  assert.equal(attempts, 3, 'two connect timeouts then a success');
+  await assert.rejects(client.execute({ modelId: 'oa', messages, timeoutMs: 5_000 }), err => {
+    assert.equal(err.providerCode, 'CONNECT_TIMEOUT');
+    return true;
+  });
+  assert.equal(attempts, 1, 'single attempt despite maxRetries: 2');
 });
 
 test('slow headers followed by a long stream are NOT killed by the connect deadline', async () => {

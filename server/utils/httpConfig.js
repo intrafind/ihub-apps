@@ -11,6 +11,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { guardedLookup } from './dnsGuard.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -302,9 +303,8 @@ export function matchesProxyPattern(url, patterns) {
 /**
  * Build an agent for a direct (non-proxied) connection.
  *
- * Returns `undefined` (letting the fetch library use its default agent) when
- * no SSL bypass and no pinned DNS lookup are required, preserving prior
- * behavior. When a `lookup` is supplied it is attached to a concrete agent so
+ * Always returns a concrete agent so hostname resolution goes through the DNS
+ * guard. When a `lookup` is supplied it is attached to a per-request agent so
  * the connection resolves only to the caller-validated addresses (SSRF DNS
  * pinning); the lookup is intentionally never attached to proxy agents.
  *
@@ -314,22 +314,39 @@ export function matchesProxyPattern(url, patterns) {
  * @returns {http.Agent|https.Agent|undefined}
  */
 function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
-  const options = {};
-  // Admin opt-in only: reached solely when shouldIgnoreSSL is true, which
-  // requires ssl.ignoreInvalidCertificates=true AND an explicit per-domain
-  // whitelist match (see shouldIgnoreSSLForURL / isDomainWhitelisted). This is
-  // pre-existing, intentional behavior consolidated here from three prior call
-  // sites; it is not introduced by this change.
-  if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
-  if (typeof lookup === 'function') options.lookup = lookup;
+  // A caller-supplied lookup (the SSRF guard's DNS pinning) already resolved
+  // and validated the host; it is used as-is on a per-request agent.
+  if (typeof lookup === 'function') {
+    const options = { lookup };
+    if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+    return isHttps ? new https.Agent(options) : new http.Agent(options);
+  }
+  return sharedDirectAgent(isHttps, shouldIgnoreSSL);
+}
 
-  if (Object.keys(options).length === 0 && !isHttps) {
-    return undefined; // nothing to customize for plain HTTP -> default agent
+/**
+ * Direct agents are shared per (protocol, SSL bypass) so every outbound
+ * connection resolves hostnames through the DNS guard (see dnsGuard.js): one
+ * getaddrinfo per hostname at a time, a bounded wait, and a short negative
+ * cache — so an unreachable model endpoint cannot stall other requests by
+ * occupying the threadpool's DNS slots.
+ */
+const directAgents = new Map();
+function sharedDirectAgent(isHttps, shouldIgnoreSSL) {
+  const key = `${isHttps ? 'https' : 'http'}:${shouldIgnoreSSL ? 'insecure' : 'strict'}`;
+  let agent = directAgents.get(key);
+  if (!agent) {
+    const options = { lookup: guardedLookup };
+    // Admin opt-in only: reached solely when shouldIgnoreSSL is true, which
+    // requires ssl.ignoreInvalidCertificates=true AND an explicit per-domain
+    // whitelist match (see shouldIgnoreSSLForURL / isDomainWhitelisted). This is
+    // pre-existing, intentional behavior consolidated here from three prior call
+    // sites; it is not introduced by this change.
+    if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+    agent = isHttps ? new https.Agent(options) : new http.Agent(options);
+    directAgents.set(key, agent);
   }
-  if (Object.keys(options).length === 0) {
-    return undefined; // plain HTTPS with default settings -> default agent
-  }
-  return isHttps ? new https.Agent(options) : new http.Agent(options);
+  return agent;
 }
 
 /**

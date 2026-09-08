@@ -37,6 +37,7 @@ import crypto from 'node:crypto';
 import { getAdapter, createCompletionRequest } from '../../adapters/index.js';
 import { convertResponseToGeneric, clearStreamingState } from '../../adapters/toolCalling/index.js';
 import { throttledFetch } from '../../requestThrottler.js';
+import { isDnsFailure } from '../../utils/dnsGuard.js';
 import configCache from '../../configCache.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
@@ -331,6 +332,16 @@ export function toLLMError(err, ctx = {}) {
   }
   const code = String(err?.code || err?.cause?.code || '');
   const message = String(err?.message || '');
+  if (isDnsFailure(err)) {
+    // Checked before the timeout patterns: the DNS guard's own timeout is a
+    // resolution failure, not a slow model, and is never retried.
+    return new LLMError(message || 'Hostname of the model endpoint could not be resolved', {
+      ...base,
+      code: LLM_ERROR_CODES.NETWORK,
+      providerCode: 'DNS',
+      details: err?.cause?.message
+    });
+  }
   if (
     /ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT/i.test(code) ||
     /timed? ?out/i.test(message)
@@ -984,7 +995,9 @@ export class LLMClient {
    * it bounds exactly DNS + TCP + TLS + time-to-first-byte and leaves the
    * streamed body to the whole-call deadline. On expiry the attempt's own
    * signal is aborted so the socket is not left dangling, and the failure is
-   * reported as a timeout, which the retry budget treats as transient.
+   * reported as a timeout with providerCode CONNECT_TIMEOUT, which the retry
+   * budget does not retry: a host that ignored the SYN for the whole ceiling
+   * will not answer the next attempt either.
    *
    * @param {{url: string}} request - built provider request
    * @param {AbortSignal|undefined} callSignal - whole-call signal

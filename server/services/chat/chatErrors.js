@@ -6,11 +6,12 @@
  * already localized; network faults and timeouts are translated here with the
  * same keys the chat UI has always used (`requestTimeout`,
  * `dnsResolutionFailed`, `connectionRefused`, `networkError`,
- * `responseStreamError`).
+ * `responseStreamError`, `endpointUnreachable`).
  *
  * @module services/chat/chatErrors
  */
 import { isLLMError, LLM_ERROR_CODES } from '../loop/contracts/errors.js';
+import { isDnsFailure } from '../../utils/dnsGuard.js';
 
 async function translate(getLocalizedError, key, params, language) {
   if (typeof getLocalizedError !== 'function') return null;
@@ -43,7 +44,11 @@ export async function describeChatError(
   const timeoutSeconds = Math.round((timeoutMs || 0) / 1000);
   const t = (key, params) => translate(getLocalizedError, key, params, language);
 
-  if (llm?.code === LLM_ERROR_CODES.TIMEOUT) {
+  if (llm?.code === LLM_ERROR_CODES.TIMEOUT && llm.providerCode === 'CONNECT_TIMEOUT') {
+    // The endpoint never answered the connect: not "the model is slow".
+    message =
+      (await t('endpointUnreachable', { provider: model?.provider, model: model?.id })) || message;
+  } else if (llm?.code === LLM_ERROR_CODES.TIMEOUT) {
     message = (await t('requestTimeout', { timeout: timeoutSeconds })) || message;
   } else if (llm?.code === LLM_ERROR_CODES.NETWORK) {
     const cause = err.cause || {};
@@ -59,12 +64,12 @@ export async function describeChatError(
       params = {
         error: 'iAssistant server closed connection. Check authentication and request format.'
       };
-    } else if (causeCode === 'ENOTFOUND') {
+    } else if (llm.providerCode === 'DNS' || causeCode === 'ENOTFOUND' || isDnsFailure(cause)) {
       key = 'dnsResolutionFailed';
       params = {
         provider: model?.provider,
         model: model?.id,
-        hostname: cause.hostname || 'unknown'
+        hostname: cause.hostname || cause.cause?.hostname || 'unknown'
       };
     } else if (causeCode === 'ECONNREFUSED') {
       key = 'connectionRefused';
