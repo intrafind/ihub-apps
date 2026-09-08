@@ -410,7 +410,10 @@ The home page `/` is a personalized start page: a time-based greeting, the chat 
 default app so users can start a conversation immediately, up to four featured apps (favorites
 first, then by `order`) and a link to the full apps browser at `/apps`. Messages typed on the
 start page open the app at `/apps/{appId}` and are sent right away; attachments added on the
-start page are carried into the chat.
+start page are carried into the chat. The input follows the default app's model settings: the
+model selector appears unless the app disables it, lists the models the current user may use
+with that app, and shows the same "No models available" notice as the chat when the user's
+groups permit none.
 
 The `startPage` section configures it. It can be edited under **Admin → UI Customization →
 Start Page**; existing installations receive the defaults through a configuration migration.

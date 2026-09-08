@@ -6,6 +6,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import Icon from '../../../shared/components/Icon';
 import { fetchAppDetails, fetchModels } from '../../../api';
 import useApps from '../../../shared/hooks/useApps';
+import useAuthKey from '../../../shared/hooks/useAuthKey';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -31,6 +32,7 @@ export default function StartPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { user } = useAuth();
+  const authKey = useAuthKey();
   const { uiConfig, resetHeaderColor } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
@@ -40,7 +42,8 @@ export default function StartPage() {
   const [draft, setDraft] = useState('');
   const [defaultAppDetails, setDefaultAppDetails] = useState(null);
   const [detailsFailed, setDetailsFailed] = useState(false);
-  const [models, setModels] = useState([]);
+  // Models the viewer may use, tagged with the identity they were loaded for.
+  const [modelsState, setModelsState] = useState({ key: null, models: [], loaded: false });
   const [selectedModel, setSelectedModel] = useState(null);
 
   const inputRef = useRef(null);
@@ -130,24 +133,36 @@ export default function StartPage() {
   }, [defaultApp?.id]);
 
   // Load models so the start-page input can offer the model selector when the
-  // app allows it (mirrors the in-app chat).
+  // app allows it (mirrors the in-app chat). The list is permission-filtered
+  // per viewer, so wait for authentication to resolve and reload it whenever
+  // the viewer signs in or out — the page stays mounted across a sidebar
+  // sign-in, so a one-off fetch would keep showing the anonymous list.
   useEffect(() => {
+    if (!authKey) return undefined; // auth still resolving
     let mounted = true;
     fetchModels()
       .then(data => {
-        if (mounted && Array.isArray(data)) setModels(data);
+        if (mounted) {
+          setModelsState({ key: authKey, models: Array.isArray(data) ? data : [], loaded: true });
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted) setModelsState({ key: authKey, models: [], loaded: true });
+      });
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authKey]);
 
-  // Models the default app is actually allowed to use.
-  const compatibleModels = useMemo(
-    () => (defaultAppDetails ? filterModelsForApp(models, defaultAppDetails) : []),
-    [models, defaultAppDetails]
-  );
+  // Only trust a list that was loaded for the current identity.
+  const modelsLoaded = modelsState.key === authKey && modelsState.loaded;
+
+  // Models the default app is actually allowed to use (from the list loaded
+  // for the current identity only).
+  const compatibleModels = useMemo(() => {
+    if (!defaultAppDetails || modelsState.key !== authKey) return [];
+    return filterModelsForApp(modelsState.models, defaultAppDetails);
+  }, [modelsState, authKey, defaultAppDetails]);
 
   // Pick an initial model once the app + models are available.
   useEffect(() => {
@@ -158,10 +173,13 @@ export default function StartPage() {
     });
   }, [defaultAppDetails, compatibleModels]);
 
+  // Same rule as the in-app chat; ChatInput shows its "No models available"
+  // notice when the list is empty, so a misconfigured group is visible rather
+  // than silently hiding the selector. Kept hidden until the list has loaded.
   const showModelSelector =
     defaultAppDetails?.disallowModelSelection !== true &&
     defaultAppDetails?.settings?.model?.enabled !== false &&
-    compatibleModels.length > 0;
+    modelsLoaded;
 
   const micEnabled =
     (defaultAppDetails?.inputMode?.microphone?.enabled ??

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchApps } from '../../api';
-import { useAuth } from '../contexts/AuthContext';
+import useAuthKey from './useAuthKey';
 
 // The sidebar, the start page and the apps browser all need the apps list.
 // One module-level store shares a single in-flight request per user, keeps
@@ -48,8 +48,7 @@ export function invalidateAppsCache() {
  * @returns {{ apps: object[], loading: boolean, error: Error|null }}
  */
 export default function useApps() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const key = authLoading ? null : `${isAuthenticated ? 'auth' : 'anon'}:${user?.id ?? ''}`;
+  const key = useAuthKey();
   const [state, setState] = useState(() => ({
     apps: key && freshHit(key) ? cache.apps : [],
     loading: true,
