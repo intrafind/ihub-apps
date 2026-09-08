@@ -408,3 +408,22 @@ could be six months out while looking entirely confident.
   "Thursday, September 3, 2026" / "Donnerstag, 3. September 2026".
 - A new `{{date_iso}}` variable gives the unambiguous calendar date
   (`2026-09-03`) in the user's timezone for prompts that compare dates.
+
+## Context Token Counter Reflects the Whole Conversation
+
+The `~x / y context tokens` line above the chat input only counted the message
+being typed, so a long multiturn conversation still read as a few hundred tokens
+right up to the point where the model rejected the request as too large. Everything
+already in the chat is re-sent on every turn, but none of it was counted.
+
+- The estimate now covers the app's system prompt, the full chat history including
+  the text of attached documents, and the pending message — the whole prompt going
+  out with the next turn.
+- Turning **Send chat history** off drops the history from the estimate, matching
+  what is actually sent.
+- The counter appears as soon as a conversation exists, not only while typing, and
+  turns amber above 85% of the window and red once the window is exhausted.
+
+Sources and tool definitions are resolved on the server and are still not part of
+the estimate, so it remains a lower bound; the provider's own count after each turn
+stays authoritative.

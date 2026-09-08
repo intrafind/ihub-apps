@@ -1956,7 +1956,12 @@ function AppChat({ preloadedApp = null }) {
       // Clarification state
       clarificationPending,
       // Document token size warning
-      fileTokenWarning
+      fileTokenWarning,
+      // Conversation so far + the history toggle, so the context-window
+      // indicator reflects everything the next turn will send — not just the
+      // pending message (issue #2283).
+      messages,
+      sendChatHistory
     };
 
     // Always use ChatInput (which now has the NextGen design with model selector)
