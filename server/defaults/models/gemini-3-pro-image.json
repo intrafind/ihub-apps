@@ -2,14 +2,14 @@
   "id": "gemini-3-pro-image",
   "modelId": "gemini-3-pro-image",
   "name": {
-    "en": "Gemini 3 Pro Image",
-    "de": "Gemini 3 Pro Bild"
+    "en": "Nano Banana Pro (Gemini 3 Pro Image)",
+    "de": "Nano Banana Pro (Gemini 3 Pro Image)"
   },
   "description": {
-    "en": "Google's state-of-the-art image generation and editing model optimized for professional asset production. Supports text-to-image, image editing, and multi-turn conversations. Generates images up to 4K resolution.",
-    "de": "Googles hochmodernes Bildgenerierungs- und Bearbeitungsmodell, optimiert für professionelle Asset-Produktion. Unterstützt Text-zu-Bild, Bildbearbeitung und mehrfache Konversationen. Generiert Bilder bis zu 4K Auflösung."
+    "en": "Google's highest-quality image generation and editing model, for professional asset production. Text-to-image, image editing and multi-turn refinement at up to 4K.",
+    "de": "Googles hochwertigstes Modell zur Bildgenerierung und -bearbeitung für professionelle Asset-Produktion. Text-zu-Bild, Bildbearbeitung und mehrstufige Verfeinerung bis 4K."
   },
-  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent",
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:streamGenerateContent",
   "provider": "google",
   "contextWindow": 32768,
   "maxOutputTokens": 8192,
@@ -25,9 +25,8 @@
   },
   "thinking": {
     "enabled": true,
-    "budget": -1,
-    "thoughts": true
+    "level": "high"
   },
-  "enabled": false,
+  "enabled": true,
   "default": false
 }

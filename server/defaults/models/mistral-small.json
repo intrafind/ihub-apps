@@ -6,14 +6,17 @@
     "de": "Mistral Small"
   },
   "description": {
-    "en": "Mistral's fast model for general tasks",
-    "de": "Schnelles Mistral-Modell für allgemeine Aufgaben"
+    "en": "Mistral's efficient model unifying instruct, reasoning and coding (Mistral Small 4). Apache 2.0 licensed and self-hostable.",
+    "de": "Mistrals effizientes Modell, das Instruct, Reasoning und Coding vereint (Mistral Small 4). Apache-2.0-Lizenz und selbst hostbar."
   },
   "url": "https://api.mistral.ai/v1/chat/completions",
   "provider": "mistral",
-  "contextWindow": 128000,
+  "contextWindow": 256000,
   "maxOutputTokens": 8000,
   "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
+  "supportsStructuredOutput": true,
   "concurrency": 1,
   "requestDelayMs": 1000,
   "enabled": true,

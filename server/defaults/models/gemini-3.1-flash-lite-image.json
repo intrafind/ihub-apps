@@ -1,0 +1,32 @@
+{
+  "id": "gemini-3.1-flash-lite-image",
+  "modelId": "gemini-3.1-flash-lite-image",
+  "name": {
+    "en": "Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)",
+    "de": "Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)"
+  },
+  "description": {
+    "en": "Google's cheapest image generation and editing model, for high-volume or draft-quality assets.",
+    "de": "Googles günstigstes Modell zur Bildgenerierung und -bearbeitung für hohe Volumina oder Entwurfsqualität."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:streamGenerateContent",
+  "provider": "google",
+  "contextWindow": 32768,
+  "maxOutputTokens": 8192,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
+  "supportsImages": true,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "aspectRatio": "1:1",
+    "quality": "Low",
+    "maxReferenceImages": 14
+  },
+  "thinking": {
+    "enabled": true,
+    "level": "low"
+  },
+  "enabled": false,
+  "default": false
+}

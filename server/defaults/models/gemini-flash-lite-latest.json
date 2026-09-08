@@ -2,17 +2,17 @@
   "id": "gemini-flash-lite-latest",
   "modelId": "gemini-flash-lite-latest",
   "name": {
-    "en": "Gemini Flash Lite Latest",
-    "de": "Gemini Flash Lite Latest"
+    "en": "Gemini Flash Lite (latest)",
+    "de": "Gemini Flash Lite (aktuellste)"
   },
   "description": {
-    "en": "Google's versatile model optimized for text and code tasks",
-    "de": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben"
+    "en": "Google's cheapest and lowest-latency model, for high-volume and simple tasks. This alias always resolves to the newest Gemini Flash Lite release.",
+    "de": "Googles günstigstes Modell mit der geringsten Latenz für einfache Aufgaben mit hohem Volumen. Dieser Alias verweist immer auf die neueste Gemini-Flash-Lite-Version."
   },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent",
   "provider": "google",
-  "contextWindow": 1000000,
-  "maxOutputTokens": 8192,
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
   "supportsTools": true,
   "supportsVision": true,
   "supportsAudio": true,
@@ -21,7 +21,6 @@
   "default": false,
   "thinking": {
     "enabled": true,
-    "budget": -1,
-    "thoughts": true
+    "level": "low"
   }
 }

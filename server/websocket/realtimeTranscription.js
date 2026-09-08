@@ -3,11 +3,20 @@
  *
  * The browser opens a same-origin WebSocket to `/api/voice/realtime` and streams
  * raw PCM16 (16 kHz, mono) audio frames. This module authenticates the upgrade
- * (JWT `authToken` cookie, same logic as `authRequired`), then opens an upstream
- * WebSocket to a vLLM realtime endpoint (e.g. Voxtral on `/v1/realtime`) and
- * relays audio up / transcription text down. The vLLM URL and optional API key
- * stay server-side (`platform.speech.realtime`); the browser never talks to vLLM
- * directly.
+ * (JWT `authToken` cookie, same logic as `authRequired`), resolves which
+ * speech-to-text backend to use, and relays audio up / transcription text down.
+ * Upstream URLs and API keys stay server-side — the browser only ever sends a
+ * model *id*, never an endpoint or a credential.
+ *
+ * Which upstream, and how to talk to it, comes from the transcription provider
+ * registry (`server/transcription/index.js`); this module is provider-agnostic.
+ * Two provider shapes are driven here:
+ *   - `mode: 'stream'` — an upstream WebSocket (vLLM `/v1/realtime`, Gemini
+ *     Live API). The provider supplies the frames to send and reads the frames
+ *     that come back; this module supplies the socket and every guard below.
+ *   - `mode: 'batch'` — a request/response API (Gemini batch transcription).
+ *     No upstream socket: the audio is buffered here and handed to the provider
+ *     in one call when the client sends `stop`.
  *
  * Resource guards (a transcription session pins a GPU-backed upstream socket):
  *   - The upstream socket opens LAZILY on the first audio frame, not on connect,
@@ -19,23 +28,23 @@
  *   - `maxPayload` caps the size of a single inbound audio frame.
  *   - A keepalive ping/pong loop detects dead clients (crashed tab, suspended
  *     laptop) and keeps reverse-proxy read timeouts from killing quiet sessions.
- *   - Upstream-leg backpressure: when the iHub->vLLM socket's send buffer
+ *   - Upstream-leg backpressure: when the iHub->upstream socket's send buffer
  *     exceeds a high-water mark the client socket is paused (real TCP flow
  *     control), bounding per-connection memory instead of buffering the file.
+ *   - Batch providers buffer audio in memory, so both a per-connection and a
+ *     process-wide byte cap bound how much can be held at once.
  *   - A hard session-duration cap (platform.speech.realtime.maxSessionSeconds)
  *     bounds how LONG one connection can pin an upstream session.
  *
  * Browser <-> iHub protocol (iHub-defined, we own both ends):
  *   client -> server: JSON `{type:'start', modelId?, lang?}`, then binary PCM16
  *                     frames, then JSON `{type:'stop'}`
- *   server -> client: JSON `{type:'ready'}` once upstream is initialized,
+ *   server -> client: JSON `{type:'ready'}` once the backend is initialized,
  *                     `{type:'delta', text}` (streaming), `{type:'final', text}`
  *                     per completed segment, `{type:'done'}` once the transcript
  *                     is complete after `stop`, `{type:'error', message}`
- *
- * iHub <-> vLLM protocol (vLLM realtime API):
- *   see https://docs.vllm.ai/ — session.created / session.update /
- *   input_audio_buffer.append|commit / transcription.delta|done / error
+ *   The same protocol serves both provider modes, so the client does not know
+ *   or care whether its audio was streamed upstream or transcribed in one call.
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import configCache from '../configCache.js';
@@ -48,6 +57,7 @@ import {
 } from '../utils/authorization.js';
 import { buildApiPath } from '../utils/basePath.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
+import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
 
 // Close cleanly if the browser stops sending audio and no transcription is
 // flowing. Keeps orphaned upstream sockets from lingering.
@@ -61,11 +71,6 @@ const NO_AUDIO_GRACE_MS = 15_000;
 // has been quiet for this long following the last segment, rather than closing
 // on the first post-stop segment (which truncates multi-segment transcripts).
 const POST_STOP_SETTLE_MS = 2_500;
-// The vLLM realtime protocol sends `session.created` on connect; we defer our
-// session.update + initial commit (which starts transcription generation) until
-// then, so the client only streams into a fully-initialized session. If a build
-// doesn't emit session.created, initialize anyway after this fallback window.
-const SESSION_CREATED_FALLBACK_MS = 2_000;
 // WebSocket keepalive. Browsers cannot send protocol pings, and reverse proxies
 // (nginx `proxy_read_timeout` defaults to 60s) kill WS connections that go
 // quiet — e.g. while a busy upstream GPU processes a long tail after `stop`.
@@ -100,6 +105,22 @@ const DEFAULT_MAX_FRAME_BYTES = 256 * 1024;
 // bound — otherwise max-size frames would multiply it). 1 MB ≈ 32 s of PCM16
 // dictation audio, far beyond any realistic handshake.
 const MAX_PENDING_BYTES = 1024 * 1024;
+// Batch providers have no upstream socket to stream into, so the whole
+// recording is held in memory until `stop`. Two caps bound that: one per
+// connection (≈17 min of 16 kHz PCM16) and one across the process, so the
+// per-user/global connection caps can't be combined into an OOM. Both are
+// overridable via platform.speech.realtime.{maxBufferedAudioBytes,
+// maxBufferedAudioBytesTotal}.
+const DEFAULT_MAX_BATCH_BYTES = 32 * 1024 * 1024;
+const DEFAULT_MAX_BATCH_BYTES_TOTAL = 256 * 1024 * 1024;
+
+// Process-wide accounting for audio buffered by batch-mode connections.
+let batchBytesInFlight = 0;
+
+// Sample rate the browser resamples every source to before streaming
+// (client/src/utils/realtimeTranscriptionCore.js). Only needed to describe the
+// buffer to a batch provider and to log audio duration.
+const TARGET_SAMPLE_RATE = 16000;
 
 /**
  * Tracks concurrent bridge connections and enforces a per-user and a global cap
@@ -297,14 +318,15 @@ export function hasEnabledTranscriptionModel() {
  * dictation backend (unchanged behavior).
  *
  * A raw upstream URL is NEVER accepted from the client — only a server-resolved
- * model id — so the vLLM URL/API key never reach the browser.
+ * model id — so the upstream URL/API key never reach the browser.
  *
  * @param {{ modelId?: string, user?: Object }} params
- * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string } }
- *   | { ok: false, error: string }>}
+ * @returns {Promise<{ ok: true, upstream: { url: string, apiKey: string, model: string },
+ *   provider: Object } | { ok: false, code: string, error: string }>}
  */
 export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
-  // No model id → platform-wide dictation backend (unchanged).
+  // No model id → platform-wide dictation backend (unchanged). The platform
+  // dictation backend is a vLLM realtime endpoint, so it speaks that protocol.
   if (!modelId) {
     const cfg = getRealtimeConfig();
     if (!cfg) {
@@ -316,7 +338,8 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
     }
     return {
       ok: true,
-      upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model }
+      upstream: { url: cfg.url, apiKey: cfg.apiKey || '', model: cfg.model },
+      provider: vllmRealtimeProvider
     };
   }
 
@@ -369,7 +392,7 @@ export async function resolveTranscriptionUpstream({ modelId, user } = {}) {
       error: `Transcription model "${modelId}" has no endpoint URL`
     };
   }
-  return { ok: true, upstream };
+  return { ok: true, upstream, provider };
 }
 
 // --- Upstream error diagnostics (pure, unit-tested) ---
@@ -406,27 +429,6 @@ export function diagnoseUpstreamClose({ gotTranscription, upstreamReady, code, r
   return null;
 }
 
-/**
- * Extract the transcript text from a vLLM realtime transcription frame,
- * tolerating field-name variants across vLLM versions. The documented shapes
- * are `transcription.delta` → `{ delta }` and `transcription.done` → `{ text }`,
- * but some builds use `text` on delta or nest it under `.text`, so we look
- * across the known field names (in preference order for the given event) and
- * fall back to a nested `.text`.
- *
- * @param {Object} msg - Parsed upstream JSON frame.
- * @param {string[]} [preferred] - Field names to try first, in order.
- * @returns {string}
- */
-export function extractTranscriptText(msg = {}, preferred = ['delta', 'text', 'transcript']) {
-  for (const field of preferred) {
-    const val = msg[field];
-    if (typeof val === 'string' && val.length) return val;
-    if (val && typeof val === 'object' && typeof val.text === 'string') return val.text;
-  }
-  return '';
-}
-
 function sendJson(ws, obj) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
@@ -434,7 +436,7 @@ function sendJson(ws, obj) {
 }
 
 /**
- * Bridge a single accepted browser connection to a vLLM upstream socket. The
+ * Bridge a single accepted browser connection to a transcription backend. The
  * limiter slot has already been acquired by the caller; this function owns
  * releasing it exactly once on teardown.
  *
@@ -446,6 +448,11 @@ function sendJson(ws, obj) {
  * browser socket never pins an upstream GPU session; for model-based
  * transcription the socket opens as soon as config resolves so the client can
  * wait for `{type:'ready'}` and stream a whole buffer with backpressure.
+ *
+ * Everything upstream-specific — what to dial, which frames to send, how to
+ * read the frames that come back, or (for a batch provider) the single
+ * transcription call — comes from the resolved provider. See
+ * `server/transcription/index.js` for that contract.
  *
  * Terminology used here and in the docs: "transcription" is the feature,
  * "dictation" is the mic-to-input UX (no modelId), "realtime" is the transport.
@@ -459,8 +466,9 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   const { limiterKey = user.id, createUpstream = (url, opts) => new WebSocket(url, opts) } =
     options;
   let cfg = null; // resolved upstream { url, apiKey, model }; set on start/first-audio
+  let provider = null; // resolved transcription provider (protocol / batch call)
   let resolvingCfg = false; // guard so upstream config is resolved at most once
-  let upstream = null; // opened once config is resolved
+  let upstream = null; // opened once config is resolved (streaming providers only)
   let upstreamReady = false; // handshake complete, audio may flow
   let gotTranscription = false; // at least one delta/final was received
   let stopRequested = false; // client sent {type:'stop'} — arm completion signal (G8)
@@ -471,20 +479,35 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   let idleTimer = null;
   let graceTimer = null;
   let postStopSettleTimer = null; // fires once the upstream goes quiet after `stop`
-  let sessionInitTimer = null; // fallback if the upstream never sends session.created
+  let sessionInitTimer = null; // fallback when a provider has no ready signal
   let sessionInitDone = false; // guard so the upstream session is initialized once
   let keepaliveTimer = null; // periodic ping to the browser (and upstream)
   let clientAlive = true; // pong bookkeeping for the keepalive interval
   let sessionTimer = null; // hard cap on the whole session's lifetime
   let backpressureTimer = null; // polls upstream drain while the client is paused
   let clientPaused = false; // client socket paused due to upstream backpressure
-  const pending = []; // base64 audio frames buffered until upstream opens
+  const pending = []; // raw PCM buffers captured before the backend is ready
   let pendingBytes = 0; // byte-bound on `pending` (see MAX_PENDING_BYTES)
+  // Batch-provider state: the whole recording accumulates here until `stop`.
+  const batchChunks = [];
+  let batchBytes = 0; // bytes this connection has added to batchBytesInFlight
+  let batchRunning = false; // a transcription request is in flight
+  const abortController = new AbortController(); // cancels an in-flight request
+
+  const isBatch = () => provider?.mode === 'batch';
 
   const releaseSlot = () => {
     if (released) return;
     released = true;
     limiter.release(limiterKey);
+  };
+
+  // Give back this connection's share of the process-wide batch byte budget.
+  const releaseBatchBytes = () => {
+    if (!batchBytes) return;
+    batchBytesInFlight = Math.max(0, batchBytesInFlight - batchBytes);
+    batchBytes = 0;
+    batchChunks.length = 0;
   };
 
   const resetIdle = () => {
@@ -510,6 +533,10 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     sessionTimer = null;
     if (backpressureTimer) clearInterval(backpressureTimer);
     backpressureTimer = null;
+    // Cancel an in-flight batch request and free its buffered audio, so a
+    // client that walks away doesn't leave a fetch (and 30 MB) hanging around.
+    abortController.abort();
+    releaseBatchBytes();
     if (clientPaused) {
       clientPaused = false;
       // Un-pause before closing so the close handshake can complete.
@@ -603,14 +630,14 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     cleanup();
   };
 
-  // Initialize the upstream session once it can accept commands: identify the
-  // model and send the initial input_audio_buffer.commit (which starts
-  // transcription generation), then release the client to stream by sending
-  // `ready`. Deferred until the upstream's `session.created` (or a fallback
-  // timer) so a fast/short clip can't dump audio + commit into a not-yet-created
-  // session and transcribe nothing. The spurious empty transcription.done the
-  // initial commit can emit is handled by the post-stop settle timer, not by
-  // closing on the first `done`.
+  // Initialize the upstream session once it can accept commands: send the
+  // provider's `readyFrames` (for vLLM, session.update + the initial commit
+  // that starts transcription generation), then release the client to stream by
+  // sending `ready`. Deferred until the provider's session-ready frame (or a
+  // provider-specific fallback timer) so a fast/short clip can't dump audio into
+  // a not-yet-created session and transcribe nothing. Any spurious empty
+  // segment that initialization produces is absorbed by the post-stop settle
+  // timer, not by closing on the first `final`.
   const initUpstreamSession = trigger => {
     if (sessionInitDone || !upstream || upstream.readyState !== WebSocket.OPEN) return;
     sessionInitDone = true;
@@ -618,43 +645,44 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       clearTimeout(sessionInitTimer);
       sessionInitTimer = null;
     }
-    sendJson(upstream, { type: 'session.update', model: cfg.model });
-    sendJson(upstream, { type: 'input_audio_buffer.commit' });
+    for (const frame of provider.readyFrames(cfg)) sendJson(upstream, frame);
     upstreamReady = true;
     logger.info('Realtime STT: upstream ready', {
       component: 'RealtimeSTT',
       userId: user.id,
+      provider: provider.id,
       model: cfg.model,
       trigger
     });
     sendJson(clientWs, { type: 'ready' });
     // Flush any audio captured during the handshake.
-    for (const audio of pending) {
-      sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+    for (const chunk of pending) {
+      sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
     }
     pending.length = 0;
     pendingBytes = 0;
     // If the client already said `stop` while the handshake was still in flight
-    // (a very short dictation), the stop handler couldn't send the final commit
-    // — send it now, after the flushed audio, so the tail utterance isn't lost.
+    // (a very short dictation), the stop handler couldn't send the end-of-audio
+    // frames — send them now, after the flushed audio, so the tail isn't lost.
     if (stopRequested) {
-      sendJson(upstream, { type: 'input_audio_buffer.commit', final: true });
+      for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
     }
     resetIdle();
   };
 
-  // Open the upstream vLLM socket. Requires `cfg` (resolved upstream details) to
-  // already be set. The no-audio grace timer is cleared on the first audio
-  // frame — not here — so a socket that opens but never receives audio is still
-  // torn down.
+  // Open the upstream socket. Requires `cfg` and `provider` (resolved upstream
+  // details) to already be set. The no-audio grace timer is cleared on the first
+  // audio frame — not here — so a socket that opens but never receives audio is
+  // still torn down.
   const openUpstream = () => {
-    if (upstream || !cfg) return;
+    if (upstream || !cfg || !provider) return;
 
-    const headers = {};
-    if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
-
+    // The provider decides what to dial and how to authenticate. `cfg.url` stays
+    // credential-free for logging; `connect()` may return a URL that is not.
+    let dial;
     try {
-      upstream = createUpstream(cfg.url, { headers });
+      dial = provider.connect(cfg);
+      upstream = createUpstream(dial.url, dial.options || {});
     } catch (err) {
       failBridge('upstream-unreachable', 'Failed to reach transcription service', {
         reason: 'construct error',
@@ -669,14 +697,19 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     resetIdle();
 
     upstream.on('open', () => {
-      // Wait for the upstream's `session.created` before initializing (per the
-      // vLLM realtime protocol) — see initUpstreamSession. Arm a fallback so we
-      // still initialize if a build doesn't emit session.created.
       resetIdle();
-      sessionInitTimer = setTimeout(() => {
-        sessionInitTimer = null;
-        initUpstreamSession('fallback');
-      }, SESSION_CREATED_FALLBACK_MS);
+      // Frames the provider needs on the wire immediately (Gemini's `setup`
+      // must be the first message; vLLM sends nothing and waits instead).
+      for (const frame of provider.openFrames(cfg)) sendJson(upstream, frame);
+      // Wait for the provider's session-ready frame before initializing — see
+      // initUpstreamSession. Providers whose readiness signal is guaranteed set
+      // readyFallbackMs to 0 and rely on the idle timer for a hung handshake.
+      if (provider.readyFallbackMs > 0) {
+        sessionInitTimer = setTimeout(() => {
+          sessionInitTimer = null;
+          initUpstreamSession('fallback');
+        }, provider.readyFallbackMs);
+      }
     });
 
     upstream.on('message', data => {
@@ -685,73 +718,59 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       try {
         msg = JSON.parse(data.toString());
       } catch {
-        return; // vLLM realtime frames are JSON; ignore anything else
+        return; // upstream frames are JSON; ignore anything else
       }
-      switch (msg.type) {
-        case 'transcription.delta': {
+      const event = provider.interpret(msg);
+      switch (event.kind) {
+        case 'delta': {
           gotTranscription = true;
-          const text = extractTranscriptText(msg, ['delta', 'text', 'transcript']);
-          logger.debug('Realtime STT: transcription.delta', {
+          logger.debug('Realtime STT: transcript delta', {
             component: 'RealtimeSTT',
             userId: user.id,
-            textLen: text.length,
-            keys: Object.keys(msg)
+            provider: provider.id,
+            textLen: event.text?.length || 0
           });
-          sendJson(clientWs, { type: 'delta', text });
+          sendJson(clientWs, { type: 'delta', text: event.text || '' });
           // A file blasted at once can produce many segments after `stop`;
           // keep the completion window open while segments are still arriving.
           if (stopRequested) armPostStopSettle();
           break;
         }
-        case 'transcription.done': {
+        case 'final': {
           gotTranscription = true;
-          const text = extractTranscriptText(msg, ['text', 'transcript', 'delta']);
-          logger.debug('Realtime STT: transcription.done', {
+          logger.debug('Realtime STT: transcript segment', {
             component: 'RealtimeSTT',
             userId: user.id,
-            textLen: text.length,
-            keys: Object.keys(msg)
+            provider: provider.id,
+            textLen: event.text?.length || 0
           });
-          sendJson(clientWs, { type: 'final', text });
-          // Completion signaling (G8): vLLM emits one transcription.done per VAD
-          // segment, and a whole file streamed faster than realtime produces
-          // several after `stop`. Closing on the FIRST would truncate the
-          // transcript, so instead we (re)arm a short quiet timer on each
+          sendJson(clientWs, { type: 'final', text: event.text || '' });
+          // Completion signaling (G8): an upstream emits one finalized segment
+          // per utterance, and a whole file streamed faster than realtime
+          // produces several after `stop`. Closing on the FIRST would truncate
+          // the transcript, so instead we (re)arm a short quiet timer on each
           // post-stop segment and only send {type:'done'} + close once the
-          // upstream has gone quiet. Dictation clients ignore the `done` frame
-          // (default switch branch), so this stays backward-compatible.
+          // upstream has gone quiet. Dictation clients ignore the `done` frame,
+          // so this stays backward-compatible.
           if (stopRequested) armPostStopSettle();
           break;
         }
-        case 'session.created':
-          logger.debug('Realtime STT: upstream control frame', {
-            component: 'RealtimeSTT',
-            userId: user.id,
-            upstreamType: msg.type
-          });
+        case 'session-ready':
           // Session exists now — safe to configure it and start transcription.
-          initUpstreamSession('session.created');
-          break;
-        case 'session.updated':
-          logger.debug('Realtime STT: upstream control frame', {
-            component: 'RealtimeSTT',
-            userId: user.id,
-            upstreamType: msg.type
-          });
+          initUpstreamSession('session-ready');
           break;
         case 'error':
-          failBridge('upstream-error', `Transcription error: ${msg.error || 'unknown'}`, {
+          failBridge('upstream-error', `Transcription error: ${event.error || 'unknown'}`, {
             reason: 'upstream error frame',
-            upstreamError: msg.error
+            upstreamError: event.error
           });
           break;
-        // session.created and other control frames need no client action
         default:
-          break;
+          break; // control frames that need no client action
       }
     });
 
-    // The vLLM server rejected the WebSocket upgrade with an HTTP response
+    // The upstream rejected the WebSocket upgrade with an HTTP response
     // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
     upstream.on('unexpected-response', (_req, res) => {
       failBridge('upstream-rejected', diagnoseUnexpectedResponse(res), {
@@ -788,6 +807,91 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     });
   };
 
+  // --- Batch providers (no upstream socket) -------------------------------
+
+  const batchLimits = getBatchLimits();
+
+  /**
+   * Buffer one audio frame for a batch provider. Two byte caps guard the
+   * memory: this connection's own, and the process-wide total shared with every
+   * other batch connection.
+   */
+  const bufferBatchAudio = chunk => {
+    if (batchRunning) return; // audio after `stop` is ignored
+    // Once the bridge has failed, cleanup has already given this connection's
+    // bytes back to the process-wide budget — buffering more would re-charge
+    // them with nothing left to release them again. Matters most when a cap is
+    // hit part-way through draining `pending`.
+    if (errorSent || clientWs.readyState > WebSocket.OPEN) return;
+    if (batchBytes + chunk.length > batchLimits.maxBytes) {
+      failBridge(
+        'audio-too-long',
+        'Recording is too long for this transcription model. Split it into shorter parts.',
+        { batchBytes, maxBytes: batchLimits.maxBytes }
+      );
+      return;
+    }
+    if (batchBytesInFlight + chunk.length > batchLimits.maxBytesTotal) {
+      failBridge('server-busy', 'The transcription service is busy. Please try again shortly.', {
+        batchBytesInFlight,
+        maxBytesTotal: batchLimits.maxBytesTotal
+      });
+      return;
+    }
+    batchChunks.push(chunk);
+    batchBytes += chunk.length;
+    batchBytesInFlight += chunk.length;
+  };
+
+  /**
+   * Run the single transcription request a batch provider needs, then finish
+   * the session exactly the way a streaming provider does: one `final` carrying
+   * the transcript, then `done`.
+   *
+   * The idle timer is stopped for the duration — a long recording can take
+   * minutes to come back, far past IDLE_TIMEOUT_MS. The keepalive pings hold
+   * the browser socket (and any reverse proxy) open, and the hard session timer
+   * still bounds the whole thing.
+   */
+  const runBatchTranscription = async () => {
+    if (batchRunning) return;
+    batchRunning = true;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
+    if (graceTimer) clearTimeout(graceTimer);
+    graceTimer = null;
+
+    const pcm = Buffer.concat(batchChunks);
+    logger.info('Realtime STT: batch transcription started', {
+      component: 'RealtimeSTT',
+      userId: user.id,
+      provider: provider.id,
+      model: cfg.model,
+      audioBytes: pcm.length,
+      audioSeconds: Math.round(pcm.length / (TARGET_SAMPLE_RATE * 2))
+    });
+
+    try {
+      const result = await provider.transcribe({
+        cfg,
+        pcm,
+        sampleRate: TARGET_SAMPLE_RATE,
+        signal: abortController.signal
+      });
+      if (clientWs.readyState > WebSocket.OPEN) return; // client walked away
+      gotTranscription = true;
+      sendJson(clientWs, { type: 'final', text: result?.text || '' });
+      sendJson(clientWs, { type: 'done' });
+      cleanup();
+    } catch (err) {
+      if (abortController.signal.aborted) return; // teardown already in progress
+      failBridge('upstream-error', `Transcription failed: ${err.message}`, {
+        reason: 'batch transcription error',
+        error: err.message
+      });
+    }
+  };
+
   // Resolve upstream config (once) and, when requested, open the upstream
   // socket. `openImmediately` is true for model-based transcription (the client
   // waits for {type:'ready'} before streaming) and false for dictation, where
@@ -795,7 +899,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
   // open even in the lazy case so a fast dictation client isn't stranded.
   const resolveAndPrepare = async (modelId, { openImmediately } = {}) => {
     if (cfg || resolvingCfg || upstream) {
-      if (cfg && !upstream && (openImmediately || pending.length > 0)) openUpstream();
+      if (cfg && !upstream && !isBatch() && (openImmediately || pending.length > 0)) openUpstream();
       return;
     }
     resolvingCfg = true;
@@ -820,6 +924,21 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       return;
     }
     cfg = result.upstream;
+    provider = result.provider;
+
+    if (isBatch()) {
+      // Nothing to dial: the client is cleared to stream straight away and the
+      // audio is held here until `stop`. Audio captured while resolving moves
+      // into the batch buffer so nothing is lost.
+      upstreamReady = true;
+      sendJson(clientWs, { type: 'ready' });
+      for (const chunk of pending) bufferBatchAudio(chunk);
+      pending.length = 0;
+      pendingBytes = 0;
+      if (stopRequested) runBatchTranscription();
+      return;
+    }
+
     if (openImmediately || pending.length > 0) openUpstream();
   };
 
@@ -837,21 +956,27 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       }
       // Open the upstream once config is known. A client that skips the `start`
       // frame resolves against the platform dictation backend here.
-      if (!upstream) {
+      if (!upstream && !isBatch()) {
         if (cfg) openUpstream();
         else if (!resolvingCfg) resolveAndPrepare(undefined, { openImmediately: true });
       }
+      const chunk = Buffer.from(data);
+      if (isBatch()) {
+        resetIdle();
+        appendedFrames += 1;
+        bufferBatchAudio(chunk);
+        return;
+      }
       if (upstreamReady) resetIdle();
-      const audio = Buffer.from(data).toString('base64');
       if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
-        sendJson(upstream, { type: 'input_audio_buffer.append', audio });
+        sendJson(upstream, provider.audioFrame(chunk.toString('base64'), cfg));
         appendedFrames += 1;
         // If the upstream is the slow hop, stop reading the client socket until
         // the upstream send buffer drains (bounds per-connection memory).
         applyUpstreamBackpressure();
-      } else if (pendingBytes + audio.length <= MAX_PENDING_BYTES) {
-        pending.push(audio);
-        pendingBytes += audio.length;
+      } else if (pendingBytes + chunk.length <= MAX_PENDING_BYTES) {
+        pending.push(chunk);
+        pendingBytes += chunk.length;
       }
       return;
     }
@@ -872,15 +997,20 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
       resolveAndPrepare(msg.modelId, { openImmediately: msg.modelId != null });
     } else if (msg.type === 'stop') {
       stopRequested = true;
-      logger.info('Realtime STT: stop received, committing buffer', {
+      logger.info('Realtime STT: stop received', {
         component: 'RealtimeSTT',
         userId: user.id,
+        provider: provider?.id,
         appendedFrames,
         pendingFrames: pending.length,
         upstreamReady
       });
-      if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
-        sendJson(upstream, { type: 'input_audio_buffer.commit', final: true });
+      if (isBatch()) {
+        // The whole recording is buffered — transcribe it in one request. If
+        // config is still resolving, resolveAndPrepare picks this up instead.
+        if (cfg) runBatchTranscription();
+      } else if (upstreamReady && upstream.readyState === WebSocket.OPEN) {
+        for (const frame of provider.stopFrames(cfg)) sendJson(upstream, frame);
       }
     }
   });
@@ -962,6 +1092,21 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     component: 'RealtimeSTT',
     userId: user.id
   });
+}
+
+/**
+ * Read the batch-buffer byte caps from platform config, falling back to sane
+ * defaults. Exported for tests.
+ *
+ * @returns {{ maxBytes: number, maxBytesTotal: number }}
+ */
+export function getBatchLimits() {
+  const cfg = (configCache.getPlatform() || {}).speech?.realtime || {};
+  const toPositiveInt = (val, fallback) => (Number.isInteger(val) && val > 0 ? val : fallback);
+  return {
+    maxBytes: toPositiveInt(cfg.maxBufferedAudioBytes, DEFAULT_MAX_BATCH_BYTES),
+    maxBytesTotal: toPositiveInt(cfg.maxBufferedAudioBytesTotal, DEFAULT_MAX_BATCH_BYTES_TOTAL)
+  };
 }
 
 /**

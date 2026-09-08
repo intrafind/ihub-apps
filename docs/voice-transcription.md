@@ -26,6 +26,22 @@ Browser                          iHub Apps server                     GPU host
 └───────────────────────┘       └──────────────────────────┘        └─────────────────┘
 ```
 
+The GPU host above is one of three interchangeable backends. Which one a
+session uses comes from the selected transcription model's provider, and the
+browser-facing protocol is identical for all of them:
+
+| Provider | Upstream | Shape |
+| --- | --- | --- |
+| `vllm-realtime` | your own vLLM `/v1/realtime` | Streaming WebSocket |
+| `google-live` | Gemini Live API (`wss://…BidiGenerateContent`) | Streaming WebSocket |
+| `google-transcribe` | Gemini Files API + `/v1beta/interactions` | Batch: one HTTPS request on `stop` |
+
+A batch provider has no upstream socket. The server buffers the PCM the browser
+streams, makes a single transcription request when the client sends `stop`, and
+returns the result as one `final` frame followed by `done` — so the client
+cannot tell the difference. See [Batch providers and memory](models.md#batch-providers-and-memory)
+for the byte caps that bound the buffering.
+
 Key properties:
 
 - **All audio processing happens in the browser.** Decoding uploaded files (`decodeAudioData`), extracting the audio track from videos, downmixing to mono, and resampling to 16 kHz run client-side (AudioWorklet / `OfflineAudioContext`). The server only relays already-prepared PCM16 frames — there is no server-side decoding, no ffmpeg, and no CPU-heavy work on the Node.js event loop.
@@ -55,8 +71,10 @@ Error frames carry a stable machine-readable `code` alongside the human-readable
 | `unknown-model` / `not-transcription-model` / `model-disabled` | The requested `modelId` is invalid for transcription |
 | `not-permitted`                                 | The user's groups don't grant the model                     |
 | `unsupported-provider` / `no-endpoint` / `resolve-failed` | Model misconfiguration                            |
-| `upstream-unreachable` / `upstream-rejected` / `upstream-closed` / `upstream-error` | vLLM connectivity/protocol failures |
+| `upstream-unreachable` / `upstream-rejected` / `upstream-closed` / `upstream-error` | Upstream connectivity/protocol failures (vLLM, Gemini) |
 | `session-limit`                                 | The `maxSessionSeconds` cap was hit                          |
+| `audio-too-long`                                | Batch providers only: the recording exceeded `maxBufferedAudioBytes` |
+| `server-busy`                                   | Batch providers only: process-wide `maxBufferedAudioBytesTotal` reached |
 
 ### Connection lifecycle and guards
 
@@ -120,6 +138,47 @@ Field notes:
 - **`enabled`** — must be `true` for the model to be usable.
 
 Configure it in **Admin → Models** (select model type "Transcription"), or edit the JSON directly — changes are hot-reloaded. Use the **Test connection** button in Admin → Voice/Models to validate reachability and protocol without streaming audio.
+
+### Hosted alternative: Gemini transcription
+
+If you would rather not run a GPU, two Google-hosted transcription models ship
+disabled alongside Voxtral. Both reuse the Google credential the chat models
+already use (a per-model `apiKey`, the `google` entry in `providers.json`, or
+`GOOGLE_API_KEY`), and both send user audio to Google — which is exactly why
+they are off by default.
+
+```json
+{
+  "id": "gemini-3.5-transcribe-live",
+  "modelId": "gemini-3.5-transcribe-live",
+  "provider": "google-live",
+  "modelType": "transcription",
+  "config": { "languageCodes": [] },
+  "enabled": false
+}
+```
+
+- **`gemini-3.5-transcribe-live`** (`provider: "google-live"`) streams the
+  transcript as the audio arrives, like Voxtral. A Live API **session runs for at
+  most 10 minutes**; a longer recording is cut off, so use the batch model for
+  those. `config.languageCodes` pins languages (BCP-47); empty means auto-detect
+  across 85+ languages, including mid-sentence code-switching.
+- **`gemini-3.5-transcribe`** (`provider: "google-transcribe"`) handles complete
+  recordings up to **one hour**. It is a batch provider: the transcript arrives
+  in one piece at the end rather than word by word, and the audio is uploaded to
+  Google's Files API (48 h retention) for the duration of the request, then
+  deleted. `config` accepts `mode` (`"smart"` — punctuation, capitalization and
+  filler-word removal, the default — or `"verbatim"`), `languageCodes`, and
+  `customVocabulary` (up to 1,000 phrases biasing recognition toward domain
+  terms, acronyms and proper names).
+
+  Long recordings need the buffer cap raised: one hour of 16 kHz PCM16 is
+  ≈115 MB and the default `maxBufferedAudioBytes` is 32 MB. See
+  [Runtime limits and tuning](#runtime-limits-and-tuning).
+
+Speaker diarization and word-level timestamps are **not** exposed. iHub renders
+a plain transcript into a chat bubble with nowhere to show them, and Gemini
+rejects both in combination with `smart` mode and with custom vocabulary.
 
 Transcription models are deliberately invisible to the chat stack: `GET /api/models` returns chat models only (transcription models via the explicit `?type=transcription` query, with `url`/`apiKey` stripped), so they can never be picked as a chat model, magic-prompt model, or workflow model.
 
@@ -217,6 +276,8 @@ All knobs live under `platform.json` → `speech.realtime` and apply to the whol
 | `maxConnectionsPerUser` | `3`       | on server start     | Per-user concurrent connections per worker process.                   |
 | `maxFrameBytes`         | `262144`  | on server start     | Max size of one inbound WebSocket frame.                              |
 | `maxSessionSeconds`     | `3600`    | per new connection  | Hard cap on one session's lifetime. Hot-reloaded (no restart needed). |
+| `maxBufferedAudioBytes` | `33554432` | per new connection | Batch providers only: audio one connection may buffer (32 MB ≈ 17 min). Hot-reloaded. |
+| `maxBufferedAudioBytesTotal` | `268435456` | per new connection | Batch providers only: audio buffered across the whole process (256 MB). Hot-reloaded. |
 
 Sizing guidance: each concurrent connection holds one vLLM realtime session, so set `maxConnections` to what your GPU deployment sustains. Per-connection server memory is bounded by the backpressure high-water mark (~4 MB worst case, typically far less).
 
