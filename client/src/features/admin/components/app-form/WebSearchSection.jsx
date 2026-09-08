@@ -90,6 +90,31 @@ function WebSearchSection({ app, onChange }) {
                 </label>
               </div>
 
+              {/* Max Searches per model call (native search cap) */}
+              {(app.websearch?.useNativeSearch ?? true) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.websearchMaxSearches', 'Max Searches per Answer')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.apps.edit.websearchMaxSearchesDesc',
+                      'Caps how many searches the model may run per call with native search (Anthropic bills each search). 1–50, default 5.'
+                    )}
+                  </p>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={app.websearch?.maxSearches ?? 5}
+                    onChange={e =>
+                      handleWebSearchChange({ maxSearches: parseInt(e.target.value) || 5 })
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+              )}
+
               {/* Max Results */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -84,6 +84,14 @@ function PromptForm({ config, onChange }) {
         multi
         placeholder="Search tools..."
       />
+      <FormField
+        label="Max Web Searches"
+        type="number"
+        value={config.maxWebSearches}
+        onChange={v => onChange({ ...config, maxWebSearches: v })}
+        min={1}
+        max={50}
+      />
       <ResourcePicker
         label="Sources"
         fetchFn={fetchSources}

@@ -65,6 +65,23 @@ const hintSchema = z
   })
   .strict();
 
+// Native (provider-run) web search — see docs/web-tools.md. `enabled: false`
+// forces the script-backed braveSearch fallback for this model (an
+// Anthropic-compatible gateway without the server tool, an older model).
+// `toolVersion` / `dynamicFiltering` only apply to Anthropic models: newer
+// tool versions run dynamic filtering through code execution unless told to
+// call search directly, which is what the adapter does unless
+// `dynamicFiltering` is set.
+const nativeWebSearchSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    toolVersion: z
+      .enum(['web_search_20250305', 'web_search_20260209', 'web_search_20260318'])
+      .optional(),
+    dynamicFiltering: z.boolean().optional()
+  })
+  .strict();
+
 const baseModelConfigSchema = z
   .object({
     // Required fields
@@ -159,6 +176,7 @@ const baseModelConfigSchema = z
       .optional(),
     enabled: z.boolean().optional().default(true),
     thinking: thinkingSchema.optional(),
+    nativeWebSearch: nativeWebSearchSchema.optional(),
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),

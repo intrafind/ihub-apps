@@ -229,12 +229,45 @@ export async function loadTools(language = null) {
 const NATIVE_WEB_SEARCH_PROVIDERS = new Set(['google', 'openai-responses', 'anthropic']);
 
 /**
- * Whether the given model provider can run web search natively.
- * @param {string} modelProvider - Provider of the selected model
- * @returns {{provider: string} | null}
+ * Default cap on provider-run searches per model call. Anthropic bills every
+ * search separately, so an uncapped research prompt can fan out into dozens of
+ * billable searches for one answer. Overridable per app
+ * (`websearch.maxSearches`) and per workflow node (`maxWebSearches`).
  */
-export function resolveNativeWebSearchProvider(modelProvider) {
-  return NATIVE_WEB_SEARCH_PROVIDERS.has(modelProvider) ? { provider: modelProvider } : null;
+export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
+
+/** Script-backed search tool offered when native search cannot be used. */
+export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
+
+function normalizeMaxUses(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_NATIVE_WEB_SEARCH_MAX_USES;
+}
+
+/**
+ * Resolve the native web search directive for a model.
+ *
+ * Native search is a request-time capability the adapter enables directly on
+ * the provider request — never a "tool" the generic tool-calling pipeline has
+ * to know about. A model config can opt out with `nativeWebSearch.enabled:
+ * false` (an Anthropic-compatible gateway without the server tool, an older
+ * model); callers then fall back to the script-backed braveSearch tool, the
+ * same tool the loop switches to when the provider rejects the directive.
+ *
+ * @param {string} modelProvider - Provider of the selected model
+ * @param {Object} [options]
+ * @param {Object} [options.model] - Full model config (per-model opt-out)
+ * @param {number} [options.maxUses] - Per-call search cap (Anthropic `max_uses`)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
+ */
+export function resolveNativeWebSearchProvider(modelProvider, { model, maxUses } = {}) {
+  if (!NATIVE_WEB_SEARCH_PROVIDERS.has(modelProvider)) return null;
+  if (model?.nativeWebSearch?.enabled === false) return null;
+  return {
+    provider: modelProvider,
+    maxUses: normalizeMaxUses(maxUses),
+    fallback: NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
+  };
 }
 
 /**
@@ -244,9 +277,10 @@ export function resolveNativeWebSearchProvider(modelProvider) {
  * @param {Object} app - App configuration with optional websearch field
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
- * @returns {{provider: string} | null}
+ * @param {Object} [model] - Full model config (per-model opt-out)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
  */
-export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled) {
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model) {
   if (!app?.websearch?.enabled) return null;
 
   const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
@@ -256,7 +290,53 @@ export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled) 
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
   if (!effectiveEnabled || !useNativeSearch) return null;
 
-  return resolveNativeWebSearchProvider(modelProvider);
+  return resolveNativeWebSearchProvider(modelProvider, {
+    model,
+    maxUses: app.websearch.maxSearches
+  });
+}
+
+/**
+ * Clone the braveSearch tool definition with an app's `websearch` parameter
+ * defaults applied (never mutates the cached definition).
+ * @param {Object} toolDef - braveSearch tool definition
+ * @param {Object} [websearch] - app.websearch config
+ * @returns {Object} tool definition ready to offer to the model
+ */
+function buildBraveSearchTool(toolDef, websearch = {}) {
+  const { maxResults = 5, extractContent = true, contentMaxLength = 3000 } = websearch || {};
+  const cloned = JSON.parse(JSON.stringify(toolDef));
+  const props = cloned.parameters?.properties || {};
+
+  // Override parameter defaults with admin-configured websearch values
+  if (props.maxResults) props.maxResults.default = maxResults;
+  if (props.extractContent) props.extractContent.default = extractContent;
+  if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
+
+  return cloned;
+}
+
+/**
+ * Tools to offer instead of a native web search directive the provider turned
+ * down (see services/loop/nativeWebSearchFallback.js). Empty when the fallback
+ * tool is not installed.
+ * @param {{fallback?: string}|null} directive - the rejected directive
+ * @param {{app?: Object, language?: string}} [context]
+ * @returns {Promise<Object[]>}
+ */
+export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
+  const toolId = directive?.fallback || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  const allTools = await loadTools(language);
+  const toolDef = allTools.find(t => t.id === toolId);
+  if (!toolDef) {
+    logger.warn('Native web search fallback tool not found', { component: 'ToolLoader', toolId });
+    return [];
+  }
+  return [
+    toolId === NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
+      ? buildBraveSearchTool(toolDef, app?.websearch)
+      : toolDef
+  ];
 }
 
 /**
@@ -269,23 +349,19 @@ export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled) 
  * @param {string} modelProvider - Provider of the selected model
  * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
+ * @param {Object} [model] - Full model config (per-model native search opt-out)
  * @returns {Array} Zero or one tool definition to inject
  */
-function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
   if (!app.websearch?.enabled) return [];
 
-  const {
-    enabledByDefault = false,
-    maxResults = 5,
-    extractContent = true,
-    contentMaxLength = 3000
-  } = app.websearch;
+  const { enabledByDefault = false } = app.websearch;
 
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
   if (!effectiveEnabled) return [];
 
   // Native search handles this app/model combination — no tool needed.
-  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled)) return [];
+  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model)) return [];
 
   const toolDef = allTools.find(t => t.id === 'braveSearch');
   if (!toolDef) {
@@ -296,16 +372,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
     return [];
   }
 
-  // Deep-clone so we don't mutate the cached tool definition
-  const cloned = JSON.parse(JSON.stringify(toolDef));
-  const props = cloned.parameters?.properties || {};
-
-  // Override parameter defaults with admin-configured websearch values
-  if (props.maxResults) props.maxResults.default = maxResults;
-  if (props.extractContent) props.extractContent.default = extractContent;
-  if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
-
-  return [cloned];
+  return [buildBraveSearchTool(toolDef, app.websearch)];
 }
 
 /**
@@ -353,7 +420,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     app,
     context.modelProvider,
     allTools,
-    context.websearchEnabled
+    context.websearchEnabled,
+    context.model
   );
   appTools = appTools.concat(websearchTools);
 

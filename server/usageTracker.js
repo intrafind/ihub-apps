@@ -29,6 +29,8 @@ function createDefaultUsage() {
       prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
       completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
     },
+    // Provider-run web searches billed on top of tokens (Anthropic web search).
+    webSearch: { total: 0, perUser: {}, perApp: {}, perModel: {} },
     feedback: {
       total: 0,
       ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
@@ -217,6 +219,7 @@ async function recordChatMessage({
   modelId,
   tokens = 0,
   tokenSource = 'estimate',
+  webSearchRequests = 0,
   user
 }) {
   await loadConfig();
@@ -240,6 +243,13 @@ async function recordChatMessage({
   inc(directionBucket, 'total', tokens);
   if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
   data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
+  if (webSearchRequests > 0) {
+    if (!data.webSearch) data.webSearch = { total: 0, perUser: {}, perApp: {}, perModel: {} };
+    data.webSearch.total += webSearchRequests;
+    inc(data.webSearch.perUser, resolvedUser, webSearchRequests);
+    inc(data.webSearch.perApp, appId, webSearchRequests);
+    inc(data.webSearch.perModel, modelId, webSearchRequests);
+  }
   recordTokenUsage(tokens);
   logUsageEvent({
     type: direction === 'prompt' ? 'chat_request' : 'chat_response',
@@ -247,6 +257,7 @@ async function recordChatMessage({
     appId,
     modelId,
     ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
+    ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
     tokenSource
   });
   store.markDirty();

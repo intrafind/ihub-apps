@@ -195,6 +195,83 @@ function addWebSearchCitations(result, citations) {
   ensureWebSearchMetadata(result).citations.push(...citations);
 }
 
+/**
+ * Map Anthropic's usage object onto the generic shape.
+ * `server_tool_use.web_search_requests` is the billable search count of the
+ * response (cumulative on streaming `message_delta` frames).
+ */
+function toGenericUsage(usage, { includeInput = true } = {}) {
+  const promptTokens = includeInput ? usage.input_tokens || 0 : 0;
+  const completionTokens = usage.output_tokens || 0;
+  const generic = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
+  const searches = usage.server_tool_use?.web_search_requests;
+  if (Number.isInteger(searches) && searches >= 0) generic.webSearchRequests = searches;
+  return generic;
+}
+
+/**
+ * Mirror the assistant content blocks of a streamed message, block by block,
+ * so a turn the API pauses (`stop_reason: pause_turn`) can be replayed
+ * verbatim — server_tool_use / web_search_tool_result blocks and their
+ * encrypted payloads included — on the continuation request.
+ */
+function trackRawBlock(state, parsed) {
+  const index = parsed.index;
+  if (parsed.type === 'content_block_start' && parsed.content_block) {
+    const block = JSON.parse(JSON.stringify(parsed.content_block));
+    if (block.type === 'text' && typeof block.text !== 'string') block.text = '';
+    if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+      block.input = block.input || {};
+      state.rawJson[index] = '';
+    }
+    state.rawBlocks[index] = block;
+    return;
+  }
+  const block = state.rawBlocks[index];
+  if (!block) return;
+  if (parsed.type === 'content_block_delta' && parsed.delta) {
+    const delta = parsed.delta;
+    switch (delta.type) {
+      case 'text_delta':
+        block.text = (block.text || '') + (delta.text || '');
+        break;
+      case 'citations_delta':
+        if (delta.citation) block.citations = [...(block.citations || []), delta.citation];
+        break;
+      case 'input_json_delta':
+        state.rawJson[index] = (state.rawJson[index] || '') + (delta.partial_json || '');
+        break;
+      case 'thinking_delta':
+        block.thinking = (block.thinking || '') + (delta.thinking || '');
+        break;
+      case 'signature_delta':
+        block.signature = delta.signature;
+        break;
+      default:
+        break;
+    }
+    return;
+  }
+  if (parsed.type === 'content_block_stop') {
+    const json = state.rawJson[index];
+    if (typeof json === 'string' && json.length > 0) {
+      try {
+        block.input = JSON.parse(json);
+      } catch {
+        // keep the input the block started with
+      }
+    }
+    delete state.rawJson[index];
+  }
+}
+
+/** Blocks the API accepts back: drops gaps and text blocks that stayed empty. */
+function replayableBlocks(blocks) {
+  return (Array.isArray(blocks) ? blocks : []).filter(
+    block => block && !(block.type === 'text' && !block.text)
+  );
+}
+
 export async function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
@@ -203,7 +280,10 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
     streamingState.set(streamId, {
       finishReason: null,
       pendingToolCall: null,
-      toolCallIndex: 0
+      toolCallIndex: 0,
+      // Verbatim copy of the message's content blocks, for pause_turn replay.
+      rawBlocks: [],
+      rawJson: {}
     });
   }
   const state = streamingState.get(streamId);
@@ -213,32 +293,24 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
   try {
     const parsed = await parseJsonAsync(data);
 
-    // Extract usage from message_start (input tokens)
-    if (parsed.type === 'message_start' && parsed.message?.usage) {
-      result.metadata.usage = {
-        promptTokens: parsed.message.usage.input_tokens || 0,
-        completionTokens: parsed.message.usage.output_tokens || 0,
-        totalTokens:
-          (parsed.message.usage.input_tokens || 0) + (parsed.message.usage.output_tokens || 0)
-      };
+    if (typeof parsed.type === 'string' && parsed.type.startsWith('content_block')) {
+      trackRawBlock(state, parsed);
     }
 
-    // Extract usage from message_delta (final output token count)
+    // Extract usage from message_start (input tokens)
+    if (parsed.type === 'message_start' && parsed.message?.usage) {
+      result.metadata.usage = toGenericUsage(parsed.message.usage);
+    }
+
+    // Extract usage from message_delta (final output token count plus the
+    // cumulative server-tool counters)
     if (parsed.type === 'message_delta' && parsed.usage) {
-      result.metadata.usage = {
-        promptTokens: 0,
-        completionTokens: parsed.usage.output_tokens || 0,
-        totalTokens: parsed.usage.output_tokens || 0
-      };
+      result.metadata.usage = toGenericUsage(parsed.usage, { includeInput: false });
     }
 
     // Extract usage from non-streaming full response
     if (parsed.usage && (!parsed.type || parsed.type === 'message')) {
-      result.metadata.usage = {
-        promptTokens: parsed.usage.input_tokens || 0,
-        completionTokens: parsed.usage.output_tokens || 0,
-        totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0)
-      };
+      result.metadata.usage = toGenericUsage(parsed.usage);
     }
 
     // Handle full response object (non-streaming)
@@ -277,6 +349,9 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       result.complete = true;
       if (parsed.stop_reason) {
         result.finishReason = normalizeFinishReason(parsed.stop_reason, 'anthropic');
+      }
+      if (parsed.stop_reason === 'pause_turn') {
+        result.metadata.pausedAssistantContent = replayableBlocks(parsed.content);
       }
     }
     // Handle streaming content deltas
@@ -368,6 +443,11 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       result.complete = true;
       // Use the finish reason from state (set by message_delta)
       result.finishReason = state.finishReason || 'stop';
+      if (result.finishReason === 'pause_turn') {
+        // Hand the mirrored assistant blocks to LLMClient so it can replay the
+        // paused turn verbatim on the continuation request.
+        result.metadata.pausedAssistantContent = replayableBlocks(state.rawBlocks);
+      }
 
       // Clean up the state for this stream
       streamingState.delete(streamId);
