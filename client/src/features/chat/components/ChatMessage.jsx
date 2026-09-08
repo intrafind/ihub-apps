@@ -756,6 +756,28 @@ function ChatMessage({
             <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
           </div>
         )}
+        {/* Thinking/thoughts toggle: kept above the answer so it stays put while the
+            answer streams in below it, instead of being pushed down as content grows. */}
+        {!isUser && message.thoughts && message.thoughts.length > 0 && (
+          <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+            <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
+              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
+            </button>
+            {showThoughts && (
+              <ul className="list-disc pl-4 mt-1 space-y-1">
+                {message.thoughts.map((th, idx) => (
+                  <li key={idx}>
+                    {typeof th === 'string'
+                      ? th
+                      : t(`thoughts.${th.name}`, {
+                          defaultValue: th.content || JSON.stringify(th)
+                        })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
@@ -874,27 +896,6 @@ function ChatMessage({
                 )}
               </div>
             ))}
-          </div>
-        )}
-
-        {!isUser && message.thoughts && message.thoughts.length > 0 && (
-          <div className="mt-1 text-xs text-gray-600">
-            <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
-              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
-            </button>
-            {showThoughts && (
-              <ul className="list-disc pl-4 mt-1 space-y-1">
-                {message.thoughts.map((th, idx) => (
-                  <li key={idx}>
-                    {typeof th === 'string'
-                      ? th
-                      : t(`thoughts.${th.name}`, {
-                          defaultValue: th.content || JSON.stringify(th)
-                        })}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         )}
 

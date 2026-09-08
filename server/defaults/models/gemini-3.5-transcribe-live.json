@@ -1,0 +1,20 @@
+{
+  "id": "gemini-3.5-transcribe-live",
+  "modelId": "gemini-3.5-transcribe-live",
+  "name": {
+    "en": "Gemini 3.5 Transcribe Live",
+    "de": "Gemini 3.5 Transcribe Live"
+  },
+  "description": {
+    "en": "Google's hosted realtime speech-to-text over the Gemini Live API. Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. A session runs for at most 10 minutes, so use Gemini 3.5 Transcribe for longer recordings.",
+    "de": "Googles gehostete Echtzeit-Spracherkennung über die Gemini Live API. Liefert das Transkript, während das Audio noch eintrifft, erkennt über 85 Sprachen automatisch und beherrscht Sprachwechsel. Eine Sitzung dauert maximal 10 Minuten — für längere Aufnahmen Gemini 3.5 Transcribe verwenden."
+  },
+  "url": "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+  "provider": "google-live",
+  "modelType": "transcription",
+  "config": {
+    "languageCodes": []
+  },
+  "enabled": false,
+  "default": false
+}

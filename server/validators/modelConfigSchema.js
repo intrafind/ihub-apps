@@ -119,14 +119,23 @@ const baseModelConfigSchema = z
         'local',
         'iassistant-conversation',
         'bedrock',
+        // Speech-to-text providers. Only valid for modelType: 'transcription'
+        // — see TRANSCRIPTION_ONLY_PROVIDERS below.
+        //
         // Realtime speech-to-text via a self-hosted vLLM /v1/realtime endpoint
-        // (e.g. Voxtral). Only valid for modelType: 'transcription'.
-        'vllm-realtime'
+        // (e.g. Voxtral).
+        'vllm-realtime',
+        // Google Gemini Live API (wss://…BidiGenerateContent), e.g.
+        // gemini-3.5-transcribe-live. Streams audio, streams transcript back.
+        'google-live',
+        // Google Gemini batch transcription (Files API + /v1beta/interactions),
+        // e.g. gemini-3.5-transcribe. One request per recording.
+        'google-transcribe'
       ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime, google-live, google-transcribe'
         })
       }
     ),
@@ -183,6 +192,12 @@ const baseModelConfigSchema = z
     supportsVision: z.boolean().optional(),
     supportsAudio: z.boolean().optional(),
     supportsStructuredOutput: z.boolean().optional(),
+    // Whether the provider accepts sampling parameters (`temperature`) for this
+    // model. Newer reasoning models reject them outright — Claude Opus 5,
+    // Sonnet 5 and Fable 5.x return a 400 for `temperature` — so a model config
+    // can opt out and the adapter omits the field instead of failing every
+    // request. Defaults to true (unset) so existing model configs are unchanged.
+    supportsTemperature: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),
@@ -200,14 +215,19 @@ const baseModelConfigSchema = z
   })
   .strict(); // Use strict instead of passthrough for better validation
 
+// Providers that only ever back a speech-to-text model. Declaring one on a
+// chat model is a config error, not something to silently accept: it would put
+// a model into the chat selector that the LLM adapter pipeline cannot route.
+export const TRANSCRIPTION_ONLY_PROVIDERS = ['vllm-realtime', 'google-live', 'google-transcribe'];
+
 // Cross-field validation. Kept as a superRefine on top of the base object so
 // `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`
 // (a ZodEffects wrapper has no `.shape`).
 export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) => {
-  if (data.provider === 'vllm-realtime' && data.modelType !== 'transcription') {
+  if (TRANSCRIPTION_ONLY_PROVIDERS.includes(data.provider) && data.modelType !== 'transcription') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Provider "vllm-realtime" is only valid for modelType "transcription"',
+      message: `Provider "${data.provider}" is only valid for modelType "transcription"`,
       path: ['provider']
     });
   }

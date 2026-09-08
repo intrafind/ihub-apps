@@ -144,6 +144,18 @@ const getTranscriptionErrorMessage = (err, t) => {
       );
     case 'aborted':
       return t('transcription.errors.aborted', 'Transcription was cancelled.');
+    // Batch transcription models buffer the whole recording server-side, so
+    // they can reject it for size (this recording) or capacity (all of them).
+    case 'audio-too-long':
+      return t(
+        'transcription.errors.serverTooLong',
+        'This recording is too long for the configured transcription model. Please split it into shorter parts.'
+      );
+    case 'server-busy':
+      return t(
+        'transcription.errors.serverBusy',
+        'The transcription service is busy right now. Please try again in a moment.'
+      );
     case 'service':
       return err?.message
         ? t('transcription.errors.serviceDetail', 'Transcription failed: {{detail}}', {

@@ -6,14 +6,17 @@
     "de": "Mistral Medium"
   },
   "description": {
-    "en": "Mistral's fast model for general tasks",
-    "de": "Schnelles Mistral-Modell für allgemeine Aufgaben"
+    "en": "Mistral's frontier-class multimodal model optimized for agentic and coding use cases (Mistral Medium 3.5).",
+    "de": "Mistrals multimodales Spitzenmodell, optimiert für agentische und Coding-Anwendungen (Mistral Medium 3.5)."
   },
   "url": "https://api.mistral.ai/v1/chat/completions",
   "provider": "mistral",
-  "contextWindow": 128000,
+  "contextWindow": 256000,
   "maxOutputTokens": 8000,
   "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
+  "supportsStructuredOutput": true,
   "concurrency": 1,
   "requestDelayMs": 1000,
   "enabled": true,
