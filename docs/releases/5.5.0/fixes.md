@@ -398,6 +398,13 @@ are applied to, and every assignment was silently dropped.
 - Web search extracts page content again (5 results, 3000 characters each by
   default), so answers are built from the pages rather than the result list.
 
+## Thinking Steps No Longer Drift Down While an Answer Streams
+
+The "Show thinking"/"Hide thinking" toggle for models with extended thinking was rendered below
+the answer text, so each streamed chunk of the answer pushed it further down the message —
+readers watching a long response come in had to keep scrolling to find it. The toggle is now
+anchored above the answer and stays in the same place for the whole response.
+
 ## Dates in Prompts Are Spelled Out
 
 The current date reached the model as `9/3/2026`, which reads as 3 September in
