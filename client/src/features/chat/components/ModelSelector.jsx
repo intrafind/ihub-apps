@@ -131,67 +131,89 @@ function ModelSelector({
       </button>
 
       {isOpen && !disabled && (
-        <div
-          ref={menuRef}
-          role="menu"
-          tabIndex={-1}
-          aria-label={t('appConfig.selectModel', 'Select Model')}
-          className={`absolute ${
-            dropdownDirection === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'
-          } left-0 w-80 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50`}
-        >
-          <div className="p-2">
-            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
-              {t('appConfig.selectModel', 'Select Model')}
-            </div>
-            {filteredModels.map((model, index) => {
-              const name = getLocalizedContent(model.name, currentLanguage);
-              const desc = getLocalizedContent(model.description, currentLanguage);
-              const isSelected = model.id === selectedModel;
+        <>
+          {/* Scrim behind the mobile sheet. It needs its own onClick because it
+              lives inside dropdownRef, so the document mousedown handler above
+              never treats a tap on it as "outside". */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={handleClose}
+            aria-hidden="true"
+          />
+          <div
+            ref={menuRef}
+            role="menu"
+            tabIndex={-1}
+            aria-label={t('appConfig.selectModel', 'Select Model')}
+            /* Below `sm` this is a full-width bottom sheet: anchoring a 20rem
+               dropdown to a trigger that sits at the right end of the toolbar
+               pushed it off the viewport, clipping every model name and
+               description. Only side-specific radius/border utilities are used
+               here — `sm:rounded-lg` / `sm:border` would sort before the mobile
+               `rounded-t-2xl` / `border-t` and lose the override. */
+            className={`fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800 sm:absolute sm:inset-x-auto sm:left-0 sm:max-h-96 sm:w-80 sm:rounded-t-lg sm:rounded-b-lg sm:border-x sm:border-b ${
+              dropdownDirection === 'down'
+                ? 'sm:top-full sm:bottom-auto sm:mt-2'
+                : 'sm:bottom-full sm:mb-2'
+            }`}
+          >
+            <div className="p-2 pb-3 sm:pb-2">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                {t('appConfig.selectModel', 'Select Model')}
+              </div>
+              {filteredModels.map((model, index) => {
+                const name = getLocalizedContent(model.name, currentLanguage);
+                const desc = getLocalizedContent(model.description, currentLanguage);
+                const isSelected = model.id === selectedModel;
 
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  role="menuitem"
-                  tabIndex={index === activeIndex ? 0 : -1}
-                  onClick={() => handleModelSelect(model.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                    isSelected
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={`text-sm font-medium ${
-                          isSelected
-                            ? 'text-indigo-600 dark:text-indigo-400'
-                            : 'text-gray-900 dark:text-gray-100'
-                        }`}
-                      >
-                        {name}
-                      </div>
-                      {desc && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                          {desc}
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    role="menuitem"
+                    tabIndex={index === activeIndex ? 0 : -1}
+                    onClick={() => handleModelSelect(model.id)}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {/* Name on a single line and, on mobile, a single
+                            description line: mixing one- and two-line
+                            descriptions made row heights alternate between
+                            58px and 74px, which read as random gaps. */}
+                        <div
+                          className={`truncate text-sm font-medium ${
+                            isSelected
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-gray-900 dark:text-gray-100'
+                          }`}
+                        >
+                          {name}
                         </div>
+                        {desc && (
+                          <div className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-gray-400 sm:line-clamp-2">
+                            {desc}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Icon
+                          name="check"
+                          size="sm"
+                          className="text-indigo-600 dark:text-indigo-400 shrink-0"
+                        />
                       )}
                     </div>
-                    {isSelected && (
-                      <Icon
-                        name="check"
-                        size="sm"
-                        className="text-indigo-600 dark:text-indigo-400 shrink-0"
-                      />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
