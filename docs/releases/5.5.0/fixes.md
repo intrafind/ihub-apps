@@ -13,6 +13,17 @@ edge.
   view that shows the footer. App and admin views are unchanged.
 - Pages now scroll as a document rather than inside the content area, which also makes the header
   stay put while scrolling instead of only appearing to.
+  
+## Gemini Models Failed With a Bare `400` After Google Moved the `-latest` Aliases
+
+Every shipped Gemini model configuration still carried the Gemini 2.5 thinking settings
+(`thinking.budget` / `thinking.thoughts`). Google's Gemini 3 endpoints reject those fields with a
+bare `400 INVALID_ARGUMENT` that names no field, so once Google hot-swapped `gemini-flash-latest`
+— the default model for a fresh installation — to a Gemini 3 release, chat requests started
+failing with an error that gave no clue what was wrong.
+
+All shipped Gemini configurations now use the Gemini 3 `thinking.level` setting, and existing
+installations are migrated on upgrade. A thinking level you set yourself is left untouched.
 
 ## Anthropic Web Search No Longer Truncates Long Searches or Fails the Answer When Unavailable
 
@@ -412,6 +423,13 @@ are applied to, and every assignment was silently dropped.
 - Web search extracts page content again (5 results, 3000 characters each by
   default), so answers are built from the pages rather than the result list.
 
+## Thinking Steps No Longer Drift Down While an Answer Streams
+
+The "Show thinking"/"Hide thinking" toggle for models with extended thinking was rendered below
+the answer text, so each streamed chunk of the answer pushed it further down the message —
+readers watching a long response come in had to keep scrolling to find it. The toggle is now
+anchored above the answer and stays in the same place for the whole response.
+
 ## Dates in Prompts Are Spelled Out
 
 The current date reached the model as `9/3/2026`, which reads as 3 September in
@@ -422,3 +440,22 @@ could be six months out while looking entirely confident.
   "Thursday, September 3, 2026" / "Donnerstag, 3. September 2026".
 - A new `{{date_iso}}` variable gives the unambiguous calendar date
   (`2026-09-03`) in the user's timezone for prompts that compare dates.
+
+## The Model Selector Fits the Screen on Phones
+
+Opening the model list on a phone showed a panel that ran off the right edge of
+the screen, so model names and descriptions were cut off mid-word, and the rows
+sat at visibly uneven distances from one another.
+
+The list was a fixed 20 rem panel pinned to the left edge of its button, which
+sits at the right end of the chat toolbar — on a narrow screen there was no room
+left for it. Row heights came out uneven because a description that fitted on one
+line made a shorter row than one that wrapped onto two.
+
+- On phones the model list now opens as a full-width sheet from the bottom of the
+  screen, with the rest of the page dimmed behind it. Tapping outside the sheet
+  closes it.
+- Every row is the same height, so the list reads as an even column instead of
+  randomly spaced blocks.
+- On tablets and desktops the list is unchanged: it still opens as a panel next
+  to the model button, with the fuller two-line descriptions.

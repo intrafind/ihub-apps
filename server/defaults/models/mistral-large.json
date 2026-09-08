@@ -6,14 +6,17 @@
     "de": "Mistral Large"
   },
   "description": {
-    "en": "Mistral's fast model for general tasks",
-    "de": "Schnelles Mistral-Modell für allgemeine Aufgaben"
+    "en": "Mistral's open-weight, general-purpose multimodal flagship (Mistral Large 3). The -latest alias follows Mistral's releases without a config change.",
+    "de": "Mistrals allgemeines multimodales Flaggschiff mit offenen Gewichten (Mistral Large 3). Der -latest-Alias folgt Mistrals Releases ohne Konfigurationsänderung."
   },
   "url": "https://api.mistral.ai/v1/chat/completions",
   "provider": "mistral",
-  "contextWindow": 128000,
+  "contextWindow": 256000,
   "maxOutputTokens": 8000,
   "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
+  "supportsStructuredOutput": true,
   "concurrency": 1,
   "requestDelayMs": 1000,
   "enabled": true,

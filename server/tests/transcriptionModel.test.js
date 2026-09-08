@@ -9,11 +9,12 @@
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
-import vllmRealtimeProvider from '../transcription/vllmRealtimeProvider.js';
+import vllmRealtimeProvider, {
+  extractTranscriptText
+} from '../transcription/vllmRealtimeProvider.js';
 import {
   resolveTranscriptionUpstream,
-  hasEnabledTranscriptionModel,
-  extractTranscriptText
+  hasEnabledTranscriptionModel
 } from '../websocket/realtimeTranscription.js';
 import configCache from '../configCache.js';
 

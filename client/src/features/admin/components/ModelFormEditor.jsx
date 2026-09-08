@@ -103,15 +103,22 @@ const getEnvironmentVariableNames = model => {
     anthropic: 'ANTHROPIC_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
+    // Gemini transcription models reuse the same Google key as the chat models.
+    'google-live': 'GOOGLE_API_KEY',
+    'google-transcribe': 'GOOGLE_API_KEY',
     local: 'LOCAL_API_KEY'
     // Note: iAssistant uses JWT tokens (not static API keys), handled below
   };
+
+  // Providers with no provider-wide key: a self-hosted realtime endpoint is
+  // per-model (and often needs no auth at all), and iAssistant uses JWTs.
+  const noProviderWideKey = ['iassistant', 'iassistant-conversation', 'vllm-realtime'];
 
   const providerVar = providerMap[model.provider];
   if (providerVar) {
     // Known provider - show its env var
     envVars.push(providerVar);
-  } else if (model.provider !== 'iassistant' && model.provider !== 'iassistant-conversation') {
+  } else if (!noProviderWideKey.includes(model.provider)) {
     // Unknown provider - show generic pattern and default fallback
     envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
     envVars.push('DEFAULT_API_KEY');
@@ -242,7 +249,9 @@ function ModelFormEditor({
     { value: 'iassistant', label: 'iAssistant' },
     { value: 'iassistant-conversation', label: 'iAssistant Conversation' },
     { value: 'bedrock', label: 'AWS Bedrock' },
-    { value: 'vllm-realtime', label: 'vLLM Realtime (Transcription)' }
+    { value: 'vllm-realtime', label: 'vLLM Realtime (Transcription)' },
+    { value: 'google-live', label: 'Google Gemini Live (Transcription)' },
+    { value: 'google-transcribe', label: 'Google Gemini Batch (Transcription)' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
