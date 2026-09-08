@@ -419,6 +419,104 @@ GET /api/auth/status
 
 Returns current authentication configuration and user status.
 
+### Logout
+
+```http
+POST /api/auth/logout
+GET  /api/auth/oidc-logout
+```
+
+`POST /api/auth/logout` always clears iHub's own auth cookie. If the browser
+still carries a logout hint for a provider with `logoutURL` configured (see
+[Logout / RP-Initiated Logout](#logout--rp-initiated-logout) below), the
+response includes `"oidcLogoutRequired": true` and the client follows up with
+a top-level navigation to `GET /api/auth/oidc-logout`, which redirects the
+browser to the provider's own logout endpoint before landing back on iHub.
+
+## Logout / RP-Initiated Logout
+
+By default, logging out of iHub only ends iHub's own session. The OIDC
+provider's browser SSO session is separate and stays active (the normal case
+for Keycloak, Entra ID, Auth0, ADFS), so the next login can be answered from
+it without showing a login form. Across applications that is what SSO is
+for - but on a shared/kiosk device it means a different person can end up
+signed in as the previous user.
+
+To also end the session at the provider on logout
+([OIDC RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)),
+set the **Logout URL** field on the provider in Admin → Authentication
+(right below Callback URL). It's optional and off by default - not every
+OIDC/OAuth2 provider exposes a standard logout endpoint (Google, for
+example, does not), so this is opt-in per provider rather than assumed.
+Once set, the admin page shows the exact URL to register at the provider
+(see the required step below).
+
+Equivalent `oidcAuth.providers[]` entry (same field, editable directly via
+Admin → Authentication → JSON mode, or in `contents/config/platform.json`):
+
+```json
+{
+  "name": "keycloak",
+  "logoutURL": "https://your-keycloak-server/realms/your-realm/protocol/openid-connect/logout"
+}
+```
+
+Provider-specific endpoints:
+
+- **Keycloak**: `{issuer}/protocol/openid-connect/logout`
+- **Microsoft Entra ID**: `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/logout`
+- **Auth0**: `https://{domain}/oidc/logout` (the OIDC-compliant endpoint - not
+  the legacy `/v2/logout`)
+- **ADFS**: `https://{adfs-server}/adfs/oauth2/logout`
+- **Google**: not supported - Google has no `end_session_endpoint`
+
+**Required IdP-side step**: the provider must allow-list iHub's redirect
+target. iHub sends `<your iHub URL>/?logout=true` as the
+`post_logout_redirect_uri`; the admin page prints the exact value once
+**Logout URL** is set. In Keycloak, add it - or the wildcard
+`https://your-ihub-domain.com/*` - to the client's **Valid post logout
+redirect URIs**. Without this, the provider refuses the redirect back to iHub
+after logout (iHub's own session is still cleared either way - only the
+redirect back fails).
+
+Providers that compare the URI exactly, or reject a query string in it, need
+**Post-Logout Redirect URL** (`postLogoutRedirectURL`) set to something they
+will accept. Keep `?logout=true` on whatever you choose: it is what stops iHub
+from immediately signing the user back in on `autoRedirect` deployments. The
+same field pins the URI when iHub is reachable under several hostnames, since
+the default is derived from the incoming request's host.
+
+```json
+{
+  "name": "entra",
+  "logoutURL": "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/logout",
+  "postLogoutRedirectURL": "https://ihub.example.com/?logout=true"
+}
+```
+
+### Notes and limits
+
+- **The ID token travels in a cookie.** On login, iHub stores the provider name
+  and the raw ID token in an httpOnly, `SameSite=Strict` cookie
+  (`oidcLogoutHint`) scoped to `/api/auth`, so it can send `id_token_hint` at
+  logout. It is never readable from JavaScript and never returned in an API
+  response body. If the ID token is too large to store (a fat `groups` claim
+  can push it past the browser's ~4 KB per-cookie limit), iHub logs a warning
+  and falls back to a `client_id`-only logout request - still a real logout,
+  but some providers answer it with a confirmation page.
+- **Subpath deployments** need the reverse proxy to send `X-Forwarded-Prefix`,
+  which iHub already relies on for the OIDC callback URL. Without it the hint
+  cookie's path won't match and logout quietly stays local-only.
+- **Embedded hosts** (Nextcloud/Office add-ins, the browser extension) always
+  log out locally: an IdP logout page can't render inside an add-in frame.
+- **Not covered:** a session that has already expired in iHub. The provider's
+  SSO session typically outlives iHub's JWT, and once the JWT is gone the user
+  is offered "Log in" rather than "Log out". Ending the provider session in
+  that case needs a login-side prompt (`prompt=login` / `max_age=0`), which
+  iHub does not configure yet.
+- **Not covered:** logout initiated at the provider (front-channel or
+  back-channel logout). Signing out elsewhere does not end the iHub session.
+
 ## Client Integration
 
 ### Login Form

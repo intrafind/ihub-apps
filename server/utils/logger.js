@@ -457,7 +457,13 @@ function redactSensitiveData(data) {
     'sessionId',
     'refreshtoken',
     'refresh_token',
-    'refreshToken'
+    'refreshToken',
+    // A raw Cookie header (or a single cookie value) carries the authToken JWT
+    // and, on OIDC deployments with RP-Initiated Logout enabled, the provider's
+    // ID token. Only string values are redacted, so a deliberate
+    // `cookies: Object.keys(req.cookies)` array still logs the names.
+    'cookie',
+    'cookies'
   ];
 
   const redacted = {};

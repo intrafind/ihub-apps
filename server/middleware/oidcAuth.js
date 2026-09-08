@@ -10,6 +10,7 @@ import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 import { logAudit } from '../services/AuditLogService.js';
 
@@ -229,7 +230,13 @@ export function configureOidcProviders() {
               sessionId
             );
 
-            return done(null, validatedUser);
+            // Pass the raw ID token out via Passport's `info` argument rather than
+            // attaching it to validatedUser: that object flows into
+            // validateAndPersistExternalUser() above, which can persist user fields
+            // to contents/config/users.json, and the ID token must never end up
+            // there. `info` is only used transiently by createOidcCallbackHandler
+            // to set the (also transient, httpOnly) oidcLogoutHint cookie.
+            return done(null, validatedUser, { idToken: params?.id_token });
           } catch (error) {
             authDebugService.log(
               'oidc',
@@ -266,6 +273,26 @@ export function configureOidcProviders() {
         component: 'OidcAuth',
         providerName: provider.name
       });
+
+      // logoutURL enables RP-Initiated Logout (GET /api/auth/oidc-logout), but the
+      // provider must separately allow-list iHub's own URL as a post-logout redirect
+      // target - a setup step iHub cannot verify from here. Surface it now so it's
+      // caught during setup, not by a user hitting the IdP's error page at logout.
+      // info, not warn: a configured logoutURL is a correct setup, and warning on
+      // every boot for it trains operators to ignore the log.
+      if (provider.logoutURL) {
+        logger.info(
+          'OIDC provider has logoutURL configured (RP-Initiated Logout) - your iHub URL ' +
+            'must be allow-listed at the provider as a valid post-logout redirect target ' +
+            '(e.g. Keycloak: client "Valid post logout redirect URIs"), otherwise logout ' +
+            'will fail with an IdP-side error. See docs/oidc-authentication.md.',
+          {
+            component: 'OidcAuth',
+            providerName: provider.name,
+            logoutURL: provider.logoutURL
+          }
+        );
+      }
     } catch (error) {
       logger.error('Failed to configure OIDC provider', {
         component: 'OidcAuth',
@@ -674,7 +701,11 @@ export function createOidcCallbackHandler(providerName) {
               query: req.query,
               sessionId: req.sessionID,
               session: req.session,
-              cookies: req.headers.cookie
+              // Names only, never the raw Cookie header: it carries the authToken
+              // JWT and (for providers with a logoutURL) the oidcLogoutHint ID
+              // token. Which cookies arrived is what actually diagnoses a state
+              // failure; their values never were.
+              cookieNames: Object.keys(req.cookies || {})
             }
           );
         }
@@ -734,6 +765,23 @@ export function createOidcCallbackHandler(providerName) {
             active: user.active !== false,
             persistedUser: user.persistedUser || false
           }
+        });
+
+        // Carry the ID token for a possible later RP-Initiated Logout
+        // (https://openid.net/specs/openid-connect-rpinitiated-1_0.html) in a
+        // dedicated httpOnly cookie. Consumed exclusively by
+        // POST /api/auth/logout (presence only) and GET /api/auth/oidc-logout;
+        // never exposed to client JS or included in any JSON API response.
+        //
+        // Called unconditionally: setOidcLogoutHint() *clears* any existing hint
+        // when this provider has no logoutURL, so logging in via a second
+        // provider can't leave the first provider's stale hint behind. See
+        // utils/oidcLogoutHint.js.
+        setOidcLogoutHint(res, req, {
+          provider: providerName,
+          idToken: info?.idToken,
+          logoutURL: provider.logoutURL,
+          maxAge: expiresIn * 1000
         });
 
         authDebugService.log(

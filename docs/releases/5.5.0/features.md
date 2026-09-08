@@ -1344,3 +1344,25 @@ replaced by a collapsible left sidebar.
 - Preview: a **Chat History** feature flag (off by default) adds recent chats to the sidebar and a
   `/chats` page. It shows sample data only until chat persistence is implemented — leave it off in
   production.
+
+## Optional: Log Out of the OIDC Provider Too (RP-Initiated Logout)
+
+Logging out of iHub clears iHub's own session. The OIDC provider's browser SSO session is separate
+and stays active, so the next login can be answered from it without a credential prompt. That is
+how SSO is meant to work across applications — but on a shared or kiosk device it means the next
+person to click "Log in" is signed in as whoever logged out before them.
+
+Deployments that would rather trade the SSO convenience for a real login prompt can now opt in per
+provider. Nothing changes for a provider that leaves the field unset.
+
+- Set **Logout URL** on a provider in Admin → Authentication to the provider's
+  `end_session_endpoint` (RP-Initiated Logout, per the OIDC spec). For Keycloak:
+  `{issuer}/protocol/openid-connect/logout`. See the OIDC Authentication guide for Entra ID, Auth0
+  and ADFS endpoints. Google has no such endpoint and cannot be logged out this way.
+- The admin page then shows the exact post-logout redirect URI to register at the provider — in
+  Keycloak, under the client's **Valid post logout redirect URIs**. Without that entry the browser
+  isn't sent back to iHub after logging out; iHub's own session is cleared either way.
+- **Post-Logout Redirect URL** overrides that URI for providers that match it exactly, or when iHub
+  is reachable under several hostnames.
+- Embedded hosts (the Nextcloud and Office add-ins, the browser extension) keep logging out
+  locally: an identity provider's logout page can't render inside an add-in frame.

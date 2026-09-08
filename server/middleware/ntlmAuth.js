@@ -8,6 +8,7 @@ import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 import authDebugService from '../utils/authDebugService.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -684,6 +685,10 @@ export function ntlmAuthMiddleware(req, res, next) {
 
             // Set HTTP-only cookie for authentication
             res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
+            // Drop any oidcLogoutHint left over from an earlier OIDC login on this
+            // browser: it would keep an ID token around and send this session's logout
+            // through an unrelated provider. See utils/oidcLogoutHint.js.
+            clearOidcLogoutHint(res, req);
           } catch (tokenError) {
             logger.error('NTLM Auth: JWT token generation failed', {
               component: 'NtlmAuth',
