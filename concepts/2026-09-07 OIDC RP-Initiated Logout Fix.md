@@ -1,7 +1,19 @@
-# OIDC RP-Initiated Logout Fix
+# OIDC RP-Initiated Logout (opt-in)
 
-Status: Implemented (branch `fix/oidc-rp-initiated-logout`)
-Date: 2026-09-07
+Status: Implemented (branch `fix/oidc-rp-initiated-logout`); reviewed and
+revised on `claude/pr-2281-review-6u3fc7` - see "Review follow-up" at the end
+of this document for what changed and why.
+Date: 2026-09-07 (revised 2026-09-08)
+
+Note on framing: this document originally classified local-only OIDC logout as
+an oversight. The maintainer's position on
+[PR #2281](https://github.com/intrafind/ihub-apps/pull/2281) is that the
+existing behavior is intended - keeping a provider SSO session alive across
+applications is what SSO is for - and that RP-Initiated Logout is worth having
+as an optional feature. The implementation was already opt-in and backward
+compatible, so only the framing changed: the changelog entry now lives in
+`docs/releases/5.5.0/features.md`, and the "Root cause classification" section
+below should be read as "why it was never implemented", not "why it is a bug".
 
 ## Summary
 
@@ -66,12 +78,12 @@ purpose) versus an oversight. Evidence points to oversight:
 ### Mechanism
 
 Opt-in [OIDC RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
-per provider, via a new optional `endSessionURL` field. No behavior change
+per provider, via a new optional `logoutURL` field. No behavior change
 for any provider that leaves it unset - fully backward compatible, no
 config migration needed.
 
 1. **Login** (`server/middleware/oidcAuth.js`): when the provider has
-   `endSessionURL` configured, the ID token is passed out of the Passport
+   `logoutURL` configured, the ID token is passed out of the Passport
    verify callback via `done(null, user, { idToken })` - Passport's
    existing `info` argument, not the user object (which flows into
    `validateAndPersistExternalUser()` and can be persisted to
@@ -80,19 +92,21 @@ config migration needed.
    (`{ provider, idToken }`, same cookie options as the existing
    `authToken`).
 2. **Logout, step 1** (`POST /api/auth/logout`): clears `authToken` as
-   before, unconditionally. Additionally checks whether the *current*
-   session is OIDC-authenticated and `oidcLogoutHint` is present (never
-   reads/parses its content here), and returns that as
+   before, unconditionally. Additionally checks whether `oidcLogoutHint` is
+   present (never reads/parses its content here) and returns that as
    `oidcLogoutRequired: true|false`. Only clears `oidcLogoutHint` itself
    when that's `false` - when it's `true`, step 3 below is the one that
    reads and clears it (see Bug 4 for why clearing it here too would break
-   step 3).
+   step 3). Presence alone is authoritative because the hint is written on
+   every OIDC callback and cleared on every other login - see Review
+   follow-up items 3 and 4 for why an earlier draft gated this on
+   `req.user.authMode === 'oidc'` and why that gate was removed.
 3. **Logout, step 2** (new `GET /api/auth/oidc-logout`): if the client
    received `oidcLogoutRequired: true`, it navigates the whole page here
    (not a fetch/XHR call). This endpoint reads and parses the
    `oidcLogoutHint` cookie, looks up the provider, and - if it has
-   `endSessionURL` - 302-redirects the browser to
-   `{endSessionURL}?id_token_hint=...&post_logout_redirect_uri=...&client_id=...`.
+   `logoutURL` - 302-redirects the browser to
+   `{logoutURL}?id_token_hint=...&post_logout_redirect_uri=...&client_id=...`.
    Any missing/malformed/stale hint falls back safely to the plain
    `/?logout=true` landing page. The `oidcLogoutHint` cookie is cleared
    either way.
@@ -138,7 +152,7 @@ no separate Vite process.
 
 The redirect-building code has no provider-specific branching - it is a
 generic `id_token_hint` / `post_logout_redirect_uri` / `client_id` query
-builder against whatever `endSessionURL` is configured.
+builder against whatever `logoutURL` is configured.
 
 | Provider | End-session endpoint | Status |
 | --- | --- | --- |
@@ -147,7 +161,7 @@ builder against whatever `endSessionURL` is configured.
 | Auth0 | `https://{domain}/oidc/logout` (the OIDC-compliant endpoint - not the legacy `/v2/logout`) | Same as above |
 | ADFS | `https://{adfs-server}/adfs/oauth2/logout` | Same as above; no practical way to run ADFS locally (needs a full Windows Server + AD domain controller) |
 | Custom/generic OIDC | Admin-supplied | Covered by the same generic path as Keycloak |
-| Google | No `end_session_endpoint` exists at all | Explicitly out of scope - `endSessionURL` simply stays unset; would need a different, login-side mitigation (forcing `prompt=select_account`), not a logout-time fix |
+| Google | No `end_session_endpoint` exists at all | Explicitly out of scope - `logoutURL` simply stays unset; would need a different, login-side mitigation (forcing `prompt=select_account`), not a logout-time fix |
 
 ### Admin UI
 
@@ -171,7 +185,7 @@ to iHub after logout - iHub's own local session is still cleared either
 way; only the bounce-back fails, and the failure is visible (an error page
 at the provider), not a silent hang. A startup-time warning log
 (`server/middleware/oidcAuth.js`) now flags any provider with
-`endSessionURL` set, naming the requirement, so this is caught during
+`logoutURL` set, naming the requirement, so this is caught during
 setup rather than by an end user.
 
 ## Testing performed
@@ -181,7 +195,7 @@ setup rather than by an end user.
   never touching the token; the cookie is cleared in `POST /api/auth/logout`
   only when it won't be consumed downstream, and left alone otherwise (the
   bug 4 regression test); safe fallback on missing/malformed/unknown
-  -provider/no-endSessionURL/malformed-URL hints; correct
+  -provider/no-logoutURL/malformed-URL hints; correct
   `id_token_hint`/`post_logout_redirect_uri`/`client_id` construction;
   explicit regression test for the `X-Forwarded-Host` dev-proxy fix.
 - Manual end-to-end against a real local Keycloak (Docker), repeated after
@@ -192,7 +206,7 @@ setup rather than by an end user.
 - Verified via DevTools Network tab that the raw `id_token` never appears
   in any XHR/fetch response body - only in the `Location` header of the
   302 from `/api/auth/oidc-logout`.
-- Regression check: providers without `endSessionURL` behave identically
+- Regression check: providers without `logoutURL` behave identically
   to before (`oidcLogoutRequired: false`, direct redirect, no
   `oidcLogoutHint` cookie ever set).
 - Full repo test suite run for comparison: pre-existing, environment-level
@@ -234,9 +248,9 @@ access.
    `oidcLogoutHint` in `POST /api/auth/logout` **only when it won't be used**
    (`oidcLogoutRequired === false`) - see finding 4 below for why clearing it
    unconditionally there is itself a bug, not the fix.
-2. **Unguarded `new URL(provider.endSessionURL)`** could throw an uncaught
+2. **Unguarded `new URL(provider.logoutURL)`** could throw an uncaught
    exception (500) if an admin saved a malformed URL - `oidcProviderSchema`'s
-   `endSessionURL: z.string().url()` is only used for schema export, not
+   `logoutURL: z.string().url()` is only used for schema export, not
    actually enforced by the admin config save route. Fixed: wrapped in
    try/catch as another graceful-fallback branch, consistent with the other
    invalid-state checks in the same handler.
@@ -308,6 +322,156 @@ cookie's full lifecycle across both requests in sequence.
   request) - no `end_session_endpoint` exists for Google, so this needs a
   different, login-side mechanism.
 - Live verification against a real Entra ID / Auth0 / ADFS tenant.
-- The unrelated, pre-existing `logoutURL` doc/code mismatch in
-  `docs/ADFS-AUTHENTICATION-GUIDE.md` has been corrected to reference the
-  real `endSessionURL` field as part of this change.
+- The pre-existing `logoutURL` doc/code mismatch in
+  `docs/ADFS-AUTHENTICATION-GUIDE.md` is resolved by adopting that name for
+  the real field, rather than by correcting the doc: an admin who followed
+  that guide gets a working logout instead of a silently dead config key.
+
+## Review follow-up (2026-09-08)
+
+A review of PR #2281 found the following. All are addressed on
+`claude/pr-2281-review-6u3fc7` unless marked otherwise.
+
+### 1. The redirect endpoint was throttled by the credential rate limiter
+
+`READ_ONLY_AUTH_PATHS` in `server/middleware/rateLimiting.js` exempts
+`/logout` from the strict auth limiter (30 requests / 15 min in the shipped
+`platform.json`, and a single shared counter behind two proxy hops), and its
+`/oidc/` prefix rule does not match `/oidc-logout` - no slash. So the second
+half of the logout flow could answer 429 *after* `authToken` had already been
+cleared: user logged out of iHub, still signed in at the provider, looking at
+a JSON error. Fixed by adding `/oidc-logout` to the exempt set, with a
+regression test.
+
+### 2. The new tests never ran in CI
+
+`server/tests/oidc-logout.test.js` is matched by neither the root jest
+config's `testMatch` (`tests/integration/**`, `tests/unit/server/**`,
+`tests/unit/client/**`) nor any npm script, and CI runs only `test:quick` and
+`test:integration:ci`. All checks were green with the file never executed.
+
+It cannot simply move to `tests/unit/server/`: the root config transforms
+`.js` to CJS, and `routes/auth.js` reaches `middleware/localAuth.js`, which
+uses `import.meta.url`. So it stays where it is, under the server's own
+native-ESM jest, and is wired in through a new `test:auth-routes` script that
+`test:quick` chains. The pure-helper tests, which have no such constraint,
+live at `tests/unit/server/oidcLogoutHint.test.js`.
+
+### 3. A stale hint could point at the wrong provider
+
+The callback handler only ever *set* the hint cookie. Logging in via provider
+A (with a `logoutURL`), then via provider B (without one) and no logout in
+between, left A's cookie in place: the logout went to A's
+`end_session_endpoint` carrying A's long-dead ID token, and B's session was
+never ended. `setOidcLogoutHint()` is now called unconditionally and *clears*
+the hint when the provider has no `logoutURL`; `clearOidcLogoutHint()` also
+runs on every successful local / LDAP / NTLM / Teams login, so a hint can no
+longer outlive the OIDC session that created it.
+
+### 4. Gating on `authMode === 'oidc'` re-introduced the shared-device case
+
+Requiring the current session to still decode as OIDC tied the feature to a
+live iHub JWT. The provider's SSO session routinely outlives it (default 8 h),
+and once the JWT is gone `/auth/status` answers anonymous, so the client
+skipped the logout call entirely and the provider session survived - the exact
+scenario the feature exists for. With item 3 in place the cookie is
+authoritative on its own, so the gate is gone and the client now always calls
+`POST /api/auth/logout`.
+
+**Still not covered:** once the JWT has expired the user is offered "Log in",
+not "Log out", so nothing triggers a logout at all. Closing that needs a
+login-side `prompt=login` / `max_age=0` option on the authorization request -
+a separate feature, and also the only possible mitigation for Google. Left
+out deliberately rather than widening this change.
+
+### 5. Cross-site navigation could force a global SSO logout
+
+The hint cookie was `SameSite=Lax`, which *is* sent on cross-site top-level
+navigations. Any third-party page could `window.open()` the redirect endpoint
+and (a) end the victim's SSO session at every application federated to that
+IdP, and (b) consume the hint, so this session's real logout silently degraded
+to local-only - disarming the feature. The cookie is now `SameSite=Strict`:
+it is only ever read from a same-site navigation that iHub's own page starts,
+and the cross-site *set* at the IdP callback still works, because SameSite
+governs when a cookie is sent, not whether it may be stored.
+
+`GET /api/auth/oidc-logout` now also clears `authToken`, but only once a hint
+has actually been presented - so it can never end the provider session while
+leaving iHub signed in, without becoming a cross-site forced logout for iHub
+itself.
+
+### 6. The ID token in a cookie: size, header bloat, and a log path
+
+- **Size.** `{provider, idToken}`, URL-encoded, against a ~4096-byte
+  per-cookie limit; an Entra ID token with a `groups` claim gets close on its
+  own. An oversized cookie is dropped by the browser with no signal at all,
+  silently reverting to local-only logout. `setOidcLogoutHint()` now measures
+  the encoded value and, past `MAX_HINT_COOKIE_BYTES`, stores the provider
+  name alone and logs a warning; the redirect then omits `id_token_hint` and
+  identifies the client with `client_id`, which the spec allows and which
+  still terminates the session (some providers show a confirmation page).
+- **Header bloat.** With no `path`, the cookie defaulted to `/` and rode on
+  every request to the origin - assets, API, streaming - for the whole JWT
+  lifetime, alongside the `authToken` JWT. That can exceed nginx's default
+  `large_client_header_buffers 4 8k`. It is now scoped to `/api/auth`, which
+  covers both readers. This does mean a subpath deployment must send
+  `X-Forwarded-Prefix` (which OIDC callback URL generation already requires);
+  without it, logout degrades to local-only.
+- **Logs.** `oidcAuth.js` logged `cookies: req.headers.cookie` verbatim on a
+  state-verification failure, and the logger's redaction list had no
+  `cookie`/`cookies` entry - so the raw ID token (and the `authToken` JWT,
+  already) could reach the logs. That call site now logs cookie *names*, and
+  `cookie`/`cookies` were added to `redactSensitiveData` as a backstop. Only
+  string values are redacted, so a deliberate `Object.keys(req.cookies)` array
+  still logs names.
+
+### 7. `post_logout_redirect_uri` was not configurable
+
+The value was hard-coded to `<detected base URL>/?logout=true`. Providers that
+compare post-logout URIs exactly - or reject a query string in them - can
+refuse it, and the query cannot simply be dropped: `?logout=true` is what
+suppresses `autoRedirect` in `AuthContext` / `auth-gate`, so without it an
+`autoRedirect` deployment bounces straight back into the IdP. Multi-hostname
+deployments also had to register every host, since the default is derived from
+the request. A new optional `postLogoutRedirectURL` per provider pins the
+value. The admin hint now prints the exact URI iHub will send rather than only
+a `/*` wildcard, which is Keycloak syntax and misleads elsewhere.
+
+### 8. `new URL()` accepted anything
+
+Any scheme parsed (`javascript:` included), and an unresolved `${VAR}`
+placeholder - which `configCache` keeps verbatim, warning only - parses as a
+perfectly legal host, sending the browser to a nonexistent server instead of
+taking the graceful fallback every other invalid-state branch takes. Both are
+now rejected into that same fallback.
+
+### 9. Smaller items
+
+- The field is named `logoutURL`, not `endSessionURL`: that is the name
+  `docs/ADFS-AUTHENTICATION-GUIDE.md` had already documented, so an admin who
+  followed that guide now gets a working logout rather than a dead key.
+- The startup reminder about the provider-side allow-list is `logger.info`,
+  not `logger.warn`: a configured `logoutURL` is a correct setup, and warning
+  on every boot for it teaches operators to ignore the log.
+- The `en.json` / `de.json` strings had drifted from the inline JSX fallbacks
+  (the JSON wins, so the more informative fallback text was dead); they now
+  match.
+- The test file's header comment claimed the logout endpoint "always clears
+  both authToken and oidcLogoutHint, regardless of mode", which the two tests
+  below it contradicted.
+- Embedded hosts (Nextcloud/Office add-ins, browser extension) now explicitly
+  keep the local-only logout path: an IdP logout page cannot render in an
+  add-in frame, and in the extension panel `buildApiUrl()` returns an absolute
+  iHub URL that would navigate the panel off the extension.
+
+### Out of scope, raised for the record
+
+- Logging out of iHub does not revoke the OAuth access/refresh tokens iHub
+  itself issued to downstream clients (Office add-in, Nextcloud, browser
+  extension). iHub is an OP as well as an RP (`/api/oauth/logout`, advertised
+  in `.well-known`), so "logged out" is still not complete in that direction.
+- Provider-initiated logout (front-channel / back-channel) is not implemented:
+  signing out at the IdP or in another application leaves the iHub session
+  running for the rest of the JWT lifetime.
+- The outbound logout request sends no `state`, while iHub's own OP-side
+  implementation validates one. Optional per the spec; noted as an asymmetry.

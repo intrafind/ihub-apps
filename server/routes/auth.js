@@ -21,6 +21,7 @@ import { recordAuthEvent } from '../telemetry/metrics.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
+import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
 /**
  * Sanitize and validate authentication input
@@ -170,6 +171,8 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      // Drop any OIDC logout hint from an earlier login on this browser.
+      clearOidcLogoutHint(res, req);
 
       res.json({
         success: true,
@@ -352,6 +355,8 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      // Drop any OIDC logout hint from an earlier login on this browser.
+      clearOidcLogoutHint(res, req);
 
       res.json({
         success: true,
@@ -399,6 +404,8 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      // Drop any OIDC logout hint from an earlier login on this browser.
+      clearOidcLogoutHint(res, req);
 
       // Validate and sanitize return URL to prevent open redirect attacks
       const rawReturnUrl = req.query.returnUrl;
@@ -504,6 +511,8 @@ export default function registerAuthRoutes(app) {
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
+      // Drop any OIDC logout hint from an earlier login on this browser.
+      clearOidcLogoutHint(res, req);
 
       res.json({
         success: true,
@@ -549,28 +558,27 @@ export default function registerAuthRoutes(app) {
     // ID token it carries is only ever touched by GET /api/auth/oidc-logout,
     // never by this JSON-responding endpoint.
     //
-    // Also requires the *current* session to actually be OIDC-authenticated
-    // (req.user.authMode, decoded from the current authToken JWT - see
-    // jwtAuth.js). The cookie alone isn't enough: on a dual-auth deployment, a
-    // user could log in via OIDC (setting oidcLogoutHint), then log in again
-    // via local/LDAP/NTLM/Teams without an intervening logout - authToken gets
-    // overwritten but nothing else clears oidcLogoutHint, so without this
-    // check a later logout from that non-OIDC session would still redirect
-    // through the stale, unrelated OIDC provider's end_session_endpoint.
-    const oidcLogoutRequired =
-      req.user?.authMode === 'oidc' && req.cookies?.oidcLogoutHint !== undefined;
+    // Presence alone is authoritative because the hint is written on *every*
+    // OIDC callback and cleared on every other successful login (see
+    // setOidcLogoutHint / clearOidcLogoutHint call sites), so it can only
+    // exist for a live OIDC session that has a logoutURL. Deliberately NOT
+    // gated on req.user.authMode === 'oidc': the iHub JWT typically expires
+    // long before the provider's SSO session, and gating on it would mean a
+    // logout after that expiry silently stops ending the provider session -
+    // exactly the shared-device case this feature exists for.
+    const oidcLogoutRequired = req.cookies?.oidcLogoutHint !== undefined;
 
     // Clear the authentication cookie
     res.clearCookie('authToken', getClearAuthCookieOptions(req));
-    // Only clear the hint here when it WON'T be used - i.e. when this session
-    // isn't OIDC, so the client will redirect straight to /?logout=true and
-    // never call GET /api/auth/oidc-logout at all. When oidcLogoutRequired is
-    // true, that route is the one responsible for reading *and* clearing this
-    // cookie (see below) - clearing it here too would delete it before the
-    // client's follow-up navigation ever gets to read it, silently downgrading
-    // every OIDC logout to a local-only one.
+    // Only clear the hint here when it WON'T be used - i.e. when the client
+    // will redirect straight to /?logout=true and never call
+    // GET /api/auth/oidc-logout at all. When oidcLogoutRequired is true, that
+    // route is the one responsible for reading *and* clearing this cookie (see
+    // below) - clearing it here too would delete it before the client's
+    // follow-up navigation ever gets to read it, silently downgrading every
+    // OIDC logout to a local-only one.
     if (!oidcLogoutRequired) {
-      res.clearCookie('oidcLogoutHint', getClearAuthCookieOptions(req));
+      clearOidcLogoutHint(res, req);
     }
     recordAuthEvent(req.user?.authMode || 'unknown', 'logout');
     if (req.user && req.user.id !== 'anonymous') {
@@ -846,13 +854,18 @@ export default function registerAuthRoutes(app) {
    * OIDC RP-Initiated Logout redirect (https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
    * GET /api/auth/oidc-logout
    *
-   * Reads the ID token stashed in the httpOnly oidcLogoutHint cookie (set on
-   * OIDC login, see createOidcCallbackHandler) and redirects the browser to the
+   * Reads the hint stashed in the httpOnly oidcLogoutHint cookie (set on OIDC
+   * login, see createOidcCallbackHandler) and redirects the browser to the
    * provider's end_session_endpoint so it also terminates its own SSO session,
    * not just iHub's local one. Always safe to hit directly: with no usable hint
    * it just falls back to the normal post-logout landing page. Not gated behind
    * auth - it's an exit point of the auth flow, like the OIDC routes above, not
    * a protected resource.
+   *
+   * The hint cookie is SameSite=Strict (see utils/oidcLogoutHint.js), so a
+   * cross-site navigation to this URL never carries one and can only ever reach
+   * the local fallback below - it cannot force a global SSO logout at the user's
+   * IdP, nor burn the hint to downgrade this session's real logout.
    *
    * Note: this is a plain top-level navigation target (the client redirects the
    * whole page here via window.location.href), never called via fetch/XHR - the
@@ -862,26 +875,27 @@ export default function registerAuthRoutes(app) {
   app.get(buildServerPath('/api/auth/oidc-logout'), (req, res) => {
     const fallbackUrl = `${buildServerPath('/')}?logout=true`;
 
-    let hint;
-    let parseError = false;
-    try {
-      hint = req.cookies?.oidcLogoutHint ? JSON.parse(req.cookies.oidcLogoutHint) : null;
-    } catch {
-      hint = null;
-      parseError = true;
-    }
+    const { present, parseError, hint } = readOidcLogoutHint(req);
 
-    res.clearCookie('oidcLogoutHint', getClearAuthCookieOptions(req));
+    clearOidcLogoutHint(res, req);
 
-    if (!req.cookies?.oidcLogoutHint) {
+    if (!present) {
       // Expected whenever this URL is opened without going through
-      // POST /api/auth/logout first (e.g. a stale bookmark, or a browser
-      // that dropped the cookie between the two requests) - not an error.
+      // POST /api/auth/logout first (e.g. a stale bookmark, a cross-site
+      // navigation, or a browser that dropped the cookie between the two
+      // requests) - not an error.
       logger.info('OIDC logout redirect requested with no hint cookie - local logout only', {
         component: 'Auth'
       });
       return res.redirect(fallbackUrl);
     }
+
+    // A hint means this really is the second half of a logout, and a hint can
+    // only arrive on a same-site navigation (SameSite=Strict). Clear the iHub
+    // session too, so the endpoint can never end the provider session while
+    // leaving iHub signed in - and so that this doesn't double as a cross-site
+    // forced logout for iHub itself, which an unconditional clear would.
+    res.clearCookie('authToken', getClearAuthCookieOptions(req));
 
     if (parseError) {
       logger.warn('OIDC logout hint cookie was present but not valid JSON - falling back', {
@@ -891,56 +905,91 @@ export default function registerAuthRoutes(app) {
     }
 
     const provider = hint?.provider ? configuredProviders.get(hint.provider) : null;
-    if (!hint?.idToken) {
-      logger.warn('OIDC logout hint cookie had no idToken - falling back', {
-        component: 'Auth',
-        providerName: hint?.provider
-      });
-      return res.redirect(fallbackUrl);
-    }
     if (!provider) {
       // The provider referenced by the cookie is no longer configured - most
       // likely removed or renamed since the user logged in.
       logger.warn('OIDC logout hint referenced an unknown provider - falling back', {
         component: 'Auth',
-        providerName: hint.provider
+        providerName: hint?.provider
       });
       return res.redirect(fallbackUrl);
     }
-    if (!provider.endSessionURL) {
-      // Most likely endSessionURL was unset on this provider after the user
-      // logged in (the hint cookie is only ever set while it was configured).
-      logger.warn('OIDC logout hint referenced a provider without endSessionURL - falling back', {
+    if (!provider.logoutURL) {
+      // Most likely logoutURL was unset on this provider after the user logged
+      // in (the hint cookie is only ever set while it was configured).
+      logger.warn('OIDC logout hint referenced a provider without logoutURL - falling back', {
         component: 'Auth',
         providerName: provider.name
       });
       return res.redirect(fallbackUrl);
     }
+    // The spec requires the request to identify the client, via id_token_hint
+    // (RECOMMENDED) or client_id. The hint carries no ID token when it was too
+    // large to store (see setOidcLogoutHint); client_id alone still terminates
+    // the session, so only give up when neither is available.
+    if (!hint.idToken && !provider.clientId) {
+      logger.warn(
+        'OIDC logout hint has neither an idToken nor a configured clientId - falling back',
+        { component: 'Auth', providerName: provider.name }
+      );
+      return res.redirect(fallbackUrl);
+    }
 
-    // Use the shared X-Forwarded-Host-aware helper, not req.get('host') directly:
-    // in dev, Vite proxies /api/* to this server with changeOrigin (see
+    // logoutURL isn't validated at save time (platformConfigSchema is only used
+    // for schema export, not enforced by the admin config save route), so a
+    // malformed value can reach here - guard the same way as every other
+    // invalid-state branch above rather than letting new URL() throw.
+    let logoutUrl;
+    try {
+      logoutUrl = new URL(provider.logoutURL);
+    } catch {
+      logger.warn('OIDC provider logoutURL is not a valid URL - falling back', {
+        component: 'Auth',
+        providerName: provider.name
+      });
+      return res.redirect(fallbackUrl);
+    }
+    // new URL() happily parses `javascript:` and friends, and an unresolved
+    // `${VAR}` placeholder (configCache keeps those verbatim and only warns)
+    // parses as a perfectly legal host - both would send the browser somewhere
+    // useless. Take the same graceful fallback instead.
+    if (logoutUrl.protocol !== 'https:' && logoutUrl.protocol !== 'http:') {
+      logger.warn('OIDC provider logoutURL is not an http(s) URL - falling back', {
+        component: 'Auth',
+        providerName: provider.name,
+        protocol: logoutUrl.protocol
+      });
+      return res.redirect(fallbackUrl);
+    }
+    if (provider.logoutURL.includes('${')) {
+      logger.warn(
+        'OIDC provider logoutURL still contains an unresolved ${VAR} placeholder - ' +
+          'falling back. Set the environment variable it references.',
+        { component: 'Auth', providerName: provider.name }
+      );
+      return res.redirect(fallbackUrl);
+    }
+
+    // Where the provider sends the browser after it has logged the user out.
+    // `?logout=true` is load-bearing: it is what stops the client from
+    // immediately auto-redirecting back into the provider on `autoRedirect`
+    // deployments (see AuthContext / auth-gate). Providers that match
+    // post-logout URIs exactly and reject query strings need
+    // postLogoutRedirectURL set to whatever they will accept instead.
+    //
+    // Default uses the shared X-Forwarded-Host-aware helper, not req.get('host')
+    // directly: in dev, Vite proxies /api/* to this server with changeOrigin (see
     // vite.config.js), which rewrites Host to localhost:3000 - the backend port,
     // not the SPA the browser actually needs to land back on (localhost:5173).
     // Vite compensates by setting X-Forwarded-Host to the real browser host,
     // which buildPublicBaseUrl() already knows to prefer.
-    const baseUrl = buildPublicBaseUrl(req);
+    const postLogoutRedirectUri =
+      provider.postLogoutRedirectURL || `${buildPublicBaseUrl(req)}/?logout=true`;
 
-    // endSessionURL isn't validated at save time (platformConfigSchema is only
-    // used for schema export, not enforced by the admin config save route), so
-    // a malformed value can reach here - guard the same way as every other
-    // invalid-state branch above rather than letting new URL() throw.
-    let logoutUrl;
-    try {
-      logoutUrl = new URL(provider.endSessionURL);
-    } catch {
-      logger.warn('OIDC provider endSessionURL is not a valid URL - falling back', {
-        component: 'Auth',
-        providerName: provider.name
-      });
-      return res.redirect(fallbackUrl);
+    if (hint.idToken) {
+      logoutUrl.searchParams.set('id_token_hint', hint.idToken);
     }
-    logoutUrl.searchParams.set('id_token_hint', hint.idToken);
-    logoutUrl.searchParams.set('post_logout_redirect_uri', `${baseUrl}/?logout=true`);
+    logoutUrl.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
     if (provider.clientId) {
       logoutUrl.searchParams.set('client_id', provider.clientId);
     }
@@ -951,7 +1000,8 @@ export default function registerAuthRoutes(app) {
       component: 'Auth',
       providerName: provider.name,
       endSessionHost: logoutUrl.host,
-      postLogoutRedirectUri: `${baseUrl}/?logout=true`
+      hasIdTokenHint: !!hint.idToken,
+      postLogoutRedirectUri
     });
 
     res.redirect(logoutUrl.toString());

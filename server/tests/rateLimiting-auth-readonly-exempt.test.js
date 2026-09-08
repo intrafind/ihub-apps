@@ -38,12 +38,24 @@ function createTestApp(platformConfig = {}) {
   app.get('/api/auth/oidc/providers', (req, res) => res.status(200).json({ ok: true }));
   app.get('/api/auth/oidc/entra/callback', (req, res) => res.status(200).json({ ok: true }));
   app.post('/api/auth/logout', (req, res) => res.status(200).json({ ok: true }));
+  app.get('/api/auth/oidc-logout', (req, res) => res.status(200).json({ ok: true }));
   app.post('/api/auth/local/login', (req, res) => res.status(200).json({ ok: true }));
 
   return app;
 }
 
 const STRICT = { rateLimit: { authApi: { limit: 3, windowMs: 900_000 } } };
+
+describe('isReadOnlyAuthRequest', () => {
+  test('exempts the OIDC RP-Initiated Logout redirect', () => {
+    expect(isReadOnlyAuthRequest({ path: '/oidc-logout', method: 'GET' })).toBe(true);
+    expect(isReadOnlyAuthRequest({ path: '/oidc-logout/', method: 'GET' })).toBe(true);
+  });
+
+  test('still throttles credential endpoints', () => {
+    expect(isReadOnlyAuthRequest({ path: '/local/login', method: 'POST' })).toBe(false);
+  });
+});
 
 describe('read-only /api/auth endpoints are exempt from the credential limiter', () => {
   test('/api/auth/status keeps answering well past the auth limit', async () => {
@@ -70,6 +82,12 @@ describe('read-only /api/auth endpoints are exempt from the credential limiter',
     // Clearing a session must always be possible.
     for (let i = 0; i < 10; i++) {
       expect((await request(app).post('/api/auth/logout')).status).toBe(200);
+    }
+    // ...and OIDC logout is a two-request flow, so the second half counts too:
+    // a 429 here strands the user logged out of iHub but still signed in at the
+    // provider. Note `/oidc-logout` is NOT covered by the `/oidc/` prefix rule.
+    for (let i = 0; i < 10; i++) {
+      expect((await request(app).get('/api/auth/oidc-logout')).status).toBe(200);
     }
   });
 

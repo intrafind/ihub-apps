@@ -597,12 +597,12 @@ Use ADFS conditional access policies:
 ### Single Logout
 
 By default, logging out of iHub only ends iHub's own session - the ADFS
-session stays active in the browser. Set `endSessionURL` (also available as
-the **End Session URL** field in Admin → Authentication) to also end the
-session at ADFS on logout (RP-Initiated Logout). See
+session stays active in the browser. Set `logoutURL` (also available as the
+**Logout URL** field in Admin → Authentication) to also end the session at
+ADFS on logout (RP-Initiated Logout). See
 [OIDC Authentication - Logout / RP-Initiated Logout](./oidc-authentication.md#logout--rp-initiated-logout)
-for details, including the required "Valid post logout redirect URIs" entry
-on the ADFS client.
+for details, including the required post-logout redirect URI entry on the
+ADFS client.
 
 ```json
 {
@@ -610,7 +610,7 @@ on the ADFS client.
     "providers": [
       {
         "name": "adfs",
-        "endSessionURL": "https://adfs.yourdomain.com/adfs/oauth2/logout"
+        "logoutURL": "https://adfs.yourdomain.com/adfs/oauth2/logout"
       }
     ]
   }

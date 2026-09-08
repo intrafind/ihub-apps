@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
-import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
+import { buildPath, buildApiUrl, getApiBaseUrlOverride } from '../../utils/runtimeBasePath';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -499,17 +499,20 @@ export function AuthProvider({ children }) {
     try {
       console.log('🔒 LOGOUT: Redirecting to logout page to prevent auto-redirect');
 
-      // Call logout API if authenticated
-      if (state.isAuthenticated) {
-        const response = await apiClient.post(
-          '/auth/logout',
-          {},
-          {
-            headers: getAuthHeaders()
-          }
-        );
-        oidcLogoutRequired = response?.data?.oidcLogoutRequired === true;
-      }
+      // Always call the logout API, even when this tab believes it is not
+      // authenticated. The endpoint is idempotent, and it is the only thing
+      // that can tell us whether the browser still holds an OIDC logout hint -
+      // which outlives our own JWT, so skipping the call when `isAuthenticated`
+      // has already flipped to false would leave the provider's SSO session
+      // alive and silently sign the next person in as this user.
+      const response = await apiClient.post(
+        '/auth/logout',
+        {},
+        {
+          headers: getAuthHeaders()
+        }
+      );
+      oidcLogoutRequired = response?.data?.oidcLogoutRequired === true;
     } catch (error) {
       console.error('Logout API error:', error);
     } finally {
@@ -521,11 +524,21 @@ export function AuthProvider({ children }) {
       // (RP-Initiated Logout) before landing back home - otherwise the IdP's
       // SSO session stays active and the next login silently re-authenticates
       // without a login prompt. See GET /api/auth/oidc-logout.
+      //
+      // Not in an embedded host, though: an iframe (Nextcloud/Office embed)
+      // can't render an IdP logout page - most serve X-Frame-Options: DENY -
+      // and in the browser-extension panel buildApiUrl() returns an absolute
+      // iHub URL, which would navigate the panel off the extension entirely.
+      // Those hosts fall back to a local logout, same as before this feature.
+      const isEmbeddedHost =
+        (typeof window !== 'undefined' && window.self !== window.top) || !!getApiBaseUrlOverride();
+
       // Redirect to apps home page with logout parameter to prevent auto redirect
       // This ensures users don't remain on admin or other protected pages after logout
-      window.location.href = oidcLogoutRequired
-        ? buildApiUrl('auth/oidc-logout')
-        : buildPath('/?logout=true');
+      window.location.href =
+        oidcLogoutRequired && !isEmbeddedHost
+          ? buildApiUrl('auth/oidc-logout')
+          : buildPath('/?logout=true');
     }
   };
 
