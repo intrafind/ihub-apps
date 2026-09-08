@@ -40,6 +40,7 @@ Each model is defined with the following properties:
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
 | `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
 | `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
+| `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter omits the field instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
 | `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |
 | `imageGeneration`              | Object  | -        | Default image generation parameters for this model. See [Image Generation Defaults](#image-generation-defaults) below |
 | `apiKey`                       | String  | -        | Per-model API key stored encrypted on the server. Overrides the environment-level API key for this model only |
@@ -49,6 +50,28 @@ Each model is defined with the following properties:
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
+
+### Sampling Parameters
+
+Anthropic removed sampling parameters from its newer reasoning models. On Claude
+Opus 5, Claude Sonnet 5, Claude Fable 5.x and Claude Opus 4.7/4.8, sending
+`temperature` returns a `400` and the request fails outright — there is no
+graceful degradation. Set `supportsTemperature: false` on those model configs and
+the Anthropic adapter omits the field:
+
+```json
+{
+  "id": "claude-opus-5",
+  "modelId": "claude-opus-5",
+  "provider": "anthropic",
+  "supportsTemperature": false
+}
+```
+
+The app's temperature setting (and `preferredStyle`, which maps onto it) is then
+simply ignored for that model — the model decides its own sampling. Older models
+(Claude Haiku 4.5 and earlier, and every other provider) still accept
+`temperature`, so leave the flag unset for them.
 
 ### Tools
 
@@ -90,15 +113,17 @@ The system currently supports the following providers:
 
 3. **Anthropic** (`provider: "anthropic"`)
    - Compatible with the Anthropic Messages API format
-   - Examples: Claude 3 Opus, Claude 3 Sonnet
+   - Examples: Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5, Claude Fable 5.1
+   - Models from Claude Opus 4.7 onwards reject `temperature`; set `supportsTemperature: false` on those configs (see [Sampling Parameters](#sampling-parameters))
 
 4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
-   - Examples: Gemini 1.5 Flash
+   - Examples: Gemini 3.8 Flash, Gemini 3.1 Pro, Nano Banana Pro
+   - Gemini 3.x models need the `thinking.level` shape; the Gemini 2.5 `thinking.budget` fields are rejected with a bare `400` (see [Thinking Configuration](#model-thinking-configuration))
 
 5. **Mistral** (`provider: "mistral"`)
    - Compatible with Mistral's La Plateforme API format
-   - Examples: Mistral Small, Mixtral 8x7B
+   - Examples: Mistral Large 3, Mistral Medium 3.5, Mistral Small 4
 
 6. **Local Models** (can use any provider format they're compatible with)
    - Self-hosted models accessible via localhost or network
@@ -177,9 +202,19 @@ Models with `modelType: "transcription"` are **speech-to-text** models, not chat
 
 Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
 
-Currently one transcription provider ships:
+Three transcription providers ship. All three speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
+
+| Provider | Model | Shape | Use it for |
+| --- | --- | --- | --- |
+| `vllm-realtime` | `voxtral-mini-realtime` | Streaming (WebSocket) | Self-hosted, fully private transcription |
+| `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription, recordings up to 10 min |
+| `google-transcribe` | `gemini-3.5-transcribe` | Batch (one request) | Hosted transcription of complete recordings, up to 1 h |
 
 - **vLLM Realtime** (`provider: "vllm-realtime"`) — a self-hosted vLLM `/v1/realtime` endpoint (e.g. Voxtral). The `url` is a `ws://` / `wss://` WebSocket URL and stays server-side.
+- **Gemini Live** (`provider: "google-live"`) — Google's hosted realtime speech-to-text over the Gemini Live API (`wss://…BidiGenerateContent`). Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. **A Live API session runs for at most 10 minutes**, so longer recordings need the batch provider. Pin languages with `config.languageCodes` (BCP-47, empty means auto-detect).
+- **Gemini Batch** (`provider: "google-transcribe"`) — Google's hosted transcription for complete recordings, up to one hour of audio. It transcribes in a single request rather than streaming, so the transcript appears at the end instead of word by word. The audio is uploaded to Google's Files API first and deleted again afterwards. `config` accepts `mode` (`"smart"`, the default, or `"verbatim"`), `languageCodes`, and `customVocabulary` (up to 1,000 phrases that bias recognition toward domain terms).
+
+Both Gemini providers reuse the same credential as the Google chat models: a per-model `apiKey`, the `google` entry in `providers.json`, or `GOOGLE_API_KEY`.
 
 ```json
 {
@@ -202,7 +237,37 @@ Key points:
 - **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
 - **Dictation** (`platform.speech.realtime`, `settings.speechRecognition.service: "vllm-realtime"`) is a separate feature and continues to work unchanged. When a realtime session carries no `modelId` it falls back to the platform dictation backend.
 
-A default `voxtral-mini-realtime` model file ships disabled; enable it and point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
+```json
+{
+  "id": "gemini-3.5-transcribe-live",
+  "modelId": "gemini-3.5-transcribe-live",
+  "name": { "en": "Gemini 3.5 Transcribe Live" },
+  "description": { "en": "Google's hosted realtime speech-to-text." },
+  "url": "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+  "provider": "google-live",
+  "modelType": "transcription",
+  "config": { "languageCodes": [] },
+  "enabled": false
+}
+```
+
+Every transcription model file ships **disabled**. Enable the one you want:
+
+- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
+- `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
+
+#### Batch providers and memory
+
+A batch provider has no upstream socket to stream into, so the server holds the
+whole recording in memory until the client stops. Two caps bound that, both
+under `platform.speech.realtime`:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `maxBufferedAudioBytes` | 33554432 (32 MB, ≈17 min) | Per connection. Exceeding it fails the session with `audio-too-long`. |
+| `maxBufferedAudioBytesTotal` | 268435456 (256 MB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
+
+Raise `maxBufferedAudioBytes` for hour-long recordings (one hour of 16 kHz PCM16 is ≈115 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
 
 ### Image Generation Defaults
 
@@ -250,6 +315,16 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
 App-level `thinking` settings override these model defaults for a specific app.
+
+> **Gemini 3.x needs `thinking.level`, not `thinking.budget`.** The two Gemini
+> `thinkingConfig` schemas are not interchangeable: sending the Gemini 2.5
+> fields (`budget`/`thoughts`) to a Gemini 3 endpoint returns a bare
+> `400 INVALID_ARGUMENT` with no indication of which field is at fault, and
+> sending `level` to a Gemini 2.5 endpoint fails the same way. This matters most
+> for the `-latest` aliases: when Google hot-swaps `gemini-flash-latest` to a new
+> generation, a model config carrying the old shape starts failing every request.
+> Migration `V089` rewrote the shipped Gemini defaults to `thinking.level`; check
+> your own model files if you cloned them.
 
 #### Provider-specific behavior
 

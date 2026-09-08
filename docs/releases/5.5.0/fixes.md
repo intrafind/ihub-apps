@@ -1,5 +1,16 @@
 # Fixes — 5.5.0
 
+## Gemini Models Failed With a Bare `400` After Google Moved the `-latest` Aliases
+
+Every shipped Gemini model configuration still carried the Gemini 2.5 thinking settings
+(`thinking.budget` / `thinking.thoughts`). Google's Gemini 3 endpoints reject those fields with a
+bare `400 INVALID_ARGUMENT` that names no field, so once Google hot-swapped `gemini-flash-latest`
+— the default model for a fresh installation — to a Gemini 3 release, chat requests started
+failing with an error that gave no clue what was wrong.
+
+All shipped Gemini configurations now use the Gemini 3 `thinking.level` setting, and existing
+installations are migrated on upgrade. A thinking level you set yourself is left untouched.
+
 ## Anthropic Web Search No Longer Truncates Long Searches or Fails the Answer When Unavailable
 
 Two failure modes of native web search on Claude models are now handled.

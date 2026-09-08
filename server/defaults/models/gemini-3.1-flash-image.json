@@ -1,15 +1,15 @@
 {
   "id": "gemini-3.1-flash-image",
-  "modelId": "gemini-3.1-flash-image-preview",
+  "modelId": "gemini-3.1-flash-image",
   "name": {
-    "en": "Gemini 3.1 Flash Image Preview",
-    "de": "Gemini 3.1 Flash Bild Vorschau"
+    "en": "Nano Banana 2 (Gemini 3.1 Flash Image)",
+    "de": "Nano Banana 2 (Gemini 3.1 Flash Image)"
   },
   "description": {
-    "en": "Google's state-of-the-art image generation and editing model optimized for professional asset production. Supports text-to-image, image editing, and multi-turn conversations. Generates images up to 4K resolution.",
-    "de": "Googles hochmodernes Bildgenerierungs- und Bearbeitungsmodell, optimiert für professionelle Asset-Produktion. Unterstützt Text-zu-Bild, Bildbearbeitung und mehrfache Konversationen. Generiert Bilder bis zu 4K Auflösung."
+    "en": "Fast, general-purpose image generation and editing. Text-to-image, image editing and multi-turn refinement at a much lower cost than Nano Banana Pro.",
+    "de": "Schnelle Allzweck-Bildgenerierung und -bearbeitung. Text-zu-Bild, Bildbearbeitung und mehrstufige Verfeinerung zu deutlich geringeren Kosten als Nano Banana Pro."
   },
-  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:streamGenerateContent",
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:streamGenerateContent",
   "provider": "google",
   "contextWindow": 32768,
   "maxOutputTokens": 8192,
@@ -25,8 +25,7 @@
   },
   "thinking": {
     "enabled": true,
-    "budget": -1,
-    "thoughts": true
+    "level": "low"
   },
   "enabled": true,
   "default": false
