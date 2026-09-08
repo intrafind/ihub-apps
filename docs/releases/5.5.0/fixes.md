@@ -426,3 +426,22 @@ could be six months out while looking entirely confident.
   "Thursday, September 3, 2026" / "Donnerstag, 3. September 2026".
 - A new `{{date_iso}}` variable gives the unambiguous calendar date
   (`2026-09-03`) in the user's timezone for prompts that compare dates.
+
+## The Model Selector Fits the Screen on Phones
+
+Opening the model list on a phone showed a panel that ran off the right edge of
+the screen, so model names and descriptions were cut off mid-word, and the rows
+sat at visibly uneven distances from one another.
+
+The list was a fixed 20 rem panel pinned to the left edge of its button, which
+sits at the right end of the chat toolbar — on a narrow screen there was no room
+left for it. Row heights came out uneven because a description that fitted on one
+line made a shorter row than one that wrapped onto two.
+
+- On phones the model list now opens as a full-width sheet from the bottom of the
+  screen, with the rest of the page dimmed behind it. Tapping outside the sheet
+  closes it.
+- Every row is the same height, so the list reads as an even column instead of
+  randomly spaced blocks.
+- On tablets and desktops the list is unchanged: it still opens as a panel next
+  to the model button, with the fuller two-line descriptions.
