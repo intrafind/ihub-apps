@@ -48,6 +48,13 @@ function Layout() {
     return pathnameStartsWith(location.pathname, '/apps/');
   }, [location.pathname]);
 
+  // Admin routes own their scrolling (fixed sidebar + independently scrolling
+  // content pane); every other route scrolls the document so the footer ends up
+  // after the content instead of being pinned to the bottom of the viewport.
+  const isAdminRoute = useMemo(() => {
+    return pathnameStartsWith(location.pathname, '/admin');
+  }, [location.pathname]);
+
   // Store integration settings in localStorage for use by other components
   useEffect(() => {
     saveIntegrationSettings({ showHeader, showFooter, language });
@@ -80,7 +87,7 @@ function Layout() {
 
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${pathnameStartsWith(location.pathname, '/admin') ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${isAdminRoute ? 'h-screen overflow-hidden' : 'min-h-screen'}`}
     >
       <a
         href="#main-content"
@@ -95,7 +102,7 @@ function Layout() {
       )}
 
       {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
-      {!pathnameStartsWith(location.pathname, '/admin') && <SmartSearch />}
+      {!isAdminRoute && <SmartSearch />}
 
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
@@ -215,7 +222,7 @@ function Layout() {
       )}
 
       {/* Admin routes handle their own layout (sidebar + content); other routes use container */}
-      {pathnameStartsWith(location.pathname, '/admin') ? (
+      {isAdminRoute ? (
         <main
           id="main-content"
           tabIndex={-1}
@@ -224,7 +231,7 @@ function Layout() {
           <Outlet />
         </main>
       ) : (
-        <main id="main-content" tabIndex={-1} className="grow w-full overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="grow w-full">
           <div className="container mx-auto px-4">
             <Outlet />
           </div>

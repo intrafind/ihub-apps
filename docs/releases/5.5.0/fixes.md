@@ -1,5 +1,19 @@
 # Fixes — 5.5.0
 
+## The Footer No Longer Covers Content on Small Screens
+
+The footer sat in a fixed band at the bottom of the viewport and stayed there while the page
+scrolled behind it, cutting off the bottom of every page longer than the screen. On a phone, where
+the copyright line and the footer links stack into two rows, it took away roughly a seventh of the
+screen for the whole visit. The footer now comes after the content: it is off-screen until you
+scroll to the end of the page, and pages shorter than the viewport still show it along the bottom
+edge.
+
+- Applies to the apps list, the prompts library, the workflows page and all custom pages — every
+  view that shows the footer. App and admin views are unchanged.
+- Pages now scroll as a document rather than inside the content area, which also makes the header
+  stay put while scrolling instead of only appearing to.
+
 ## Anthropic Web Search No Longer Truncates Long Searches or Fails the Answer When Unavailable
 
 Two failure modes of native web search on Claude models are now handled.
