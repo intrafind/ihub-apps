@@ -17,6 +17,19 @@ const oidcProviderSchema = z.object({
   authorizationURL: z.string().url(),
   tokenURL: z.string().url(),
   userInfoURL: z.string().url(),
+  // RP-Initiated Logout (https://openid.net/specs/openid-connect-rpinitiated-1_0.html).
+  // Optional: when set, /api/auth/logout also ends the session at the provider
+  // instead of only clearing iHub's own auth cookie. This is the provider's
+  // `end_session_endpoint`; the field name matches the one already documented
+  // in docs/ADFS-AUTHENTICATION-GUIDE.md.
+  logoutURL: z.string().url().optional(),
+  // Optional override for the `post_logout_redirect_uri` sent with the logout
+  // request. Defaults to `<public base URL>/?logout=true`. Set this when the
+  // provider matches post-logout URIs exactly and rejects the default (query
+  // string, a hostname other than the request's, ...); it must be a URL the
+  // client will accept, and iHub needs `?logout=true` on it to suppress
+  // autoRedirect - see routes/auth.js.
+  postLogoutRedirectURL: z.string().url().optional(),
   scope: z.array(z.string()).default(['openid', 'profile', 'email']),
   callbackURL: z.string().url().optional(),
   groupsAttribute: z.string().default('groups'),

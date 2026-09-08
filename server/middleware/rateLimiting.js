@@ -24,7 +24,12 @@ import { recordRateLimitHit } from '../telemetry/metrics.js';
  *     `/api/auth/ntlm/status`, `/api/auth/teams/client-config`) — read-only.
  *   - `/api/auth/oidc/:provider/callback` — the SSO redirect target. One
  *     exhausted window here locks every user out of logging in.
- *   - `/api/auth/logout` — must always be able to clear a session.
+ *   - `/api/auth/logout` and `/api/auth/oidc-logout` — must always be able to
+ *     clear a session. Logging out of an OIDC deployment is a two-request flow
+ *     (the POST clears iHub's cookie, the GET redirects to the provider's
+ *     end_session_endpoint); throttling the second half strands the user
+ *     logged out of iHub but still signed in at the provider, which is the
+ *     exact failure RP-Initiated Logout exists to prevent.
  *
  * Behind two proxy hops `req.ip` resolves to the inner proxy for every caller
  * (see `trustProxy` in platform.json), so all users share a single counter and
@@ -39,6 +44,8 @@ const READ_ONLY_AUTH_PATHS = new Set([
   '/status',
   '/user',
   '/logout',
+  // Not covered by the `/oidc/` prefix rule below - that requires a slash.
+  '/oidc-logout',
   '/oidc/providers',
   '/ldap/providers',
   '/ntlm/status',

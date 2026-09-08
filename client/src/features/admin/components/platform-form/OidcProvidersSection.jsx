@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
+import { getBasePath } from '../../../../utils/runtimeBasePath';
 
 // OIDC Provider Templates
 const OIDC_PROVIDER_TEMPLATES = {
@@ -11,6 +12,9 @@ const OIDC_PROVIDER_TEMPLATES = {
     authorizationURL: 'https://${AUTH0_DOMAIN}/authorize',
     tokenURL: 'https://${AUTH0_DOMAIN}/oauth/token',
     userInfoURL: 'https://${AUTH0_DOMAIN}/userinfo',
+    // The OIDC-compliant endpoint - not the legacy /v2/logout, which uses
+    // different (non-standard) query parameters.
+    logoutURL: 'https://${AUTH0_DOMAIN}/oidc/logout',
     scope: ['openid', 'profile', 'email'],
     groupsAttribute: 'groups',
     pkce: true,
@@ -22,6 +26,8 @@ const OIDC_PROVIDER_TEMPLATES = {
     authorizationURL: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenURL: 'https://www.googleapis.com/oauth2/v4/token',
     userInfoURL: 'https://www.googleapis.com/oauth2/v2/userinfo',
+    // No logoutURL: Google has no end_session_endpoint, so RP-Initiated
+    // Logout isn't possible here - left unset deliberately.
     scope: ['openid', 'profile', 'email'],
     groupsAttribute: 'groups',
     pkce: true,
@@ -33,6 +39,7 @@ const OIDC_PROVIDER_TEMPLATES = {
     authorizationURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     tokenURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     userInfoURL: 'https://graph.microsoft.com/v1.0/me',
+    logoutURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/logout',
     scope: ['openid', 'profile', 'email', 'User.Read'],
     groupsAttribute: 'groups',
     pkce: true,
@@ -46,6 +53,7 @@ const OIDC_PROVIDER_TEMPLATES = {
     tokenURL: 'https://${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token',
     userInfoURL:
       'https://${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/userinfo',
+    logoutURL: 'https://${KEYCLOAK_SERVER}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout',
     scope: ['openid', 'profile', 'email'],
     groupsAttribute: 'groups',
     pkce: true,
@@ -69,6 +77,10 @@ const OIDC_PROVIDER_TEMPLATES = {
  * provider list (add/update/remove), and the provider-template selection modal.
  */
 function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
+  // The exact post_logout_redirect_uri the server will send when a provider has
+  // no explicit postLogoutRedirectURL - see GET /api/auth/oidc-logout. Shown so
+  // an admin can copy it straight into the provider's allow-list.
+  const postLogoutRedirectUri = `${window.location.origin}${getBasePath()}/?logout=true`;
   const [showProviderModal, setShowProviderModal] = useState(false);
 
   const updateNestedConfig = (section, field, value) => {
@@ -317,6 +329,71 @@ function OidcProvidersSection({ config, onChange, t, availableGroups = [] }) {
                       Auto-generated: /api/auth/oidc/{provider.name}/callback
                     </p>
                   )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.auth.logoutURL', 'Logout URL')}{' '}
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                      {t(
+                        'admin.auth.logoutURLOptional',
+                        '(Optional - enables full logout at the provider)'
+                      )}
+                    </span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder={t(
+                      'admin.auth.logoutURLPlaceholder',
+                      'https://your-provider/.../logout'
+                    )}
+                    value={provider.logoutURL || ''}
+                    onChange={e => updateOidcProvider(index, 'logoutURL', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t(
+                      'admin.auth.logoutURLHelp',
+                      'When set, logging out of iHub also ends the session at the provider (RP-Initiated Logout), so the next login always shows a real login prompt instead of silently reusing an active provider session. Leave empty to log out of iHub only.'
+                    )}
+                  </p>
+                  {/* Show the exact URI iHub will send, not just a wildcard: only
+                      some providers (Keycloak) accept wildcards in their post-logout
+                      allow-list, and the ones that don't need this value
+                      character-for-character. */}
+                  {provider.logoutURL && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      <Icon name="information-circle" className="h-3 w-3 inline mr-1" />
+                      {t(
+                        'admin.auth.logoutURLRegisterHint',
+                        'Register {{url}} as a valid post-logout redirect URI at your provider, or logout will fail with an error there. Providers that accept wildcards (e.g. Keycloak) can use {{wildcard}} instead.'
+                      )
+                        .replace('{{url}}', provider.postLogoutRedirectURL || postLogoutRedirectUri)
+                        .replace('{{wildcard}}', `${window.location.origin}${getBasePath()}/*`)}
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.auth.postLogoutRedirectURL', 'Post-Logout Redirect URL')}{' '}
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                      {t('admin.auth.postLogoutRedirectURLOptional', '(Optional - auto-detected)')}
+                    </span>
+                  </label>
+                  <input
+                    type="url"
+                    placeholder={postLogoutRedirectUri}
+                    value={provider.postLogoutRedirectURL || ''}
+                    onChange={e =>
+                      updateOidcProvider(index, 'postLogoutRedirectURL', e.target.value)
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t(
+                      'admin.auth.postLogoutRedirectURLHelp',
+                      'Where the provider sends the browser after logging out. Leave empty to detect it from the request. Override it for providers that match this URI exactly, or when iHub is reachable under several hostnames. Keep the ?logout=true query - it stops iHub from immediately signing the user back in.'
+                    )}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
