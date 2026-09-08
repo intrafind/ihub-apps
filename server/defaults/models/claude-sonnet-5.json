@@ -1,0 +1,22 @@
+{
+  "id": "claude-sonnet-5",
+  "modelId": "claude-sonnet-5",
+  "name": {
+    "en": "Claude Sonnet 5",
+    "de": "Claude Sonnet 5"
+  },
+  "description": {
+    "en": "Balanced Claude model for everyday and enterprise workloads, with a 1M token context window.",
+    "de": "Ausgewogenes Claude-Modell für Alltags- und Unternehmensaufgaben mit 1 Mio. Token Kontextfenster."
+  },
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "contextWindow": 1000000,
+  "maxOutputTokens": 32000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
+  "supportsTemperature": false,
+  "enabled": false,
+  "default": false
+}

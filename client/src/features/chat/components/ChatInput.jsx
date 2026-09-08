@@ -13,8 +13,22 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
-import { computeContextUsage } from '../../../shared/utils/tokenEstimatorClient.js';
-import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
+import {
+  computeContextUsage,
+  conversationTokenFragments
+} from '../../../shared/utils/tokenEstimatorClient.js';
+import {
+  useEstimatedTokenCount,
+  useEstimatedTokensForFragments
+} from '../../../shared/hooks/useEstimatedTokenCount.js';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+
+/**
+ * Stable empty default for the `messages` prop: a fresh `[]` per render would
+ * invalidate the memoized history fragments and re-run the token estimate on
+ * every render for surfaces that don't pass a conversation.
+ */
+const NO_MESSAGES = [];
 
 /** Format elapsed seconds as m:ss for the recording timer. */
 const formatElapsed = seconds => {
@@ -98,6 +112,14 @@ function ChatInput({
   onSkillSelect = null,
   // Skills slash command gating (when skills feature is enabled and app has skills)
   skillsSlashEnabled = false,
+  // Conversation so far. Every prior message is re-sent on each turn, so the
+  // context-window indicator has to count the whole history — not just the
+  // pending message (issue #2283). Optional: surfaces without it simply show
+  // the pending input's share of the window.
+  messages = NO_MESSAGES,
+  // Mirrors the app/user "send chat history" setting. When off, no history is
+  // re-sent and the estimate covers the pending message only.
+  sendChatHistory = true,
   // Clarification state
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
@@ -175,23 +197,53 @@ function ChatInput({
   // navigates emails or pins/unpins — not on every keystroke.
   const extraContextTokens = useEstimatedTokenCount(extraContextText || '', { debounceMs: 150 });
 
-  // Estimate how much of the model's context window the pending input would
-  // consume. This is a live, client-side estimate using the shared tokenizer;
-  // the provider-reported count after each turn is authoritative. Only shown
-  // when the model exposes a context window and inputTokens is non-zero.
+  // The conversation so far, flattened into the text fragments that go back to
+  // the model on the next turn (message content plus attached document text).
+  // Re-tokenized only when the message list actually changes, and per-fragment
+  // counts are memoized, so a long conversation is not re-scanned per render.
+  const historyFragments = useMemo(
+    () => conversationTokenFragments(messages, { includeHistory: sendChatHistory !== false }),
+    [messages, sendChatHistory]
+  );
+  const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
+
+  // The app's system prompt is part of every request. Sources, style/output-format
+  // instructions and tool definitions are resolved server-side and stay invisible
+  // here, so the estimate remains a lower bound on the real prompt size.
+  const systemPromptText = useMemo(
+    () => getLocalizedContent(app?.system, currentLanguage) || '',
+    [app?.system, currentLanguage]
+  );
+  const systemTokens = useEstimatedTokenCount(systemPromptText);
+
+  // Estimate how much of the model's context window the next request would
+  // consume: system prompt + full conversation + pending input. This is a live,
+  // client-side estimate using the shared tokenizer; the provider-reported count
+  // after each turn is authoritative. Only shown when the model exposes a context
+  // window and there is something to report — a fresh, untouched chat stays quiet.
   // Note: extraContextTokens (e.g. Outlook email body / pinned emails) can make
-  // inputTokens non-zero even when no text has been typed and no files attached.
+  // pendingTokens non-zero even when no text has been typed and no files attached.
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
-    const inputTokens = valueTokens + fileTokens + extraContextTokens;
-    if (inputTokens === 0) return null;
+    const pendingTokens = valueTokens + fileTokens + extraContextTokens;
+    if (pendingTokens === 0 && historyTokens === 0) return null;
     return computeContextUsage({
       contextWindow,
-      inputTokens,
+      inputTokens: systemTokens + historyTokens + pendingTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens]);
+  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens, historyTokens, systemTokens]);
+
+  // Warn as the window fills up: the indicator is the only place a user can see
+  // a multiturn conversation approaching the limit.
+  const contextUsageTone = !contextUsage
+    ? ''
+    : contextUsage.remaining <= 0
+      ? 'text-red-600 dark:text-red-400'
+      : contextUsage.usedRatio >= 0.85
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-gray-400 dark:text-gray-500';
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -494,7 +546,7 @@ function ChatInput({
                 'Messages are not saved and disappear when you leave or reload.'
               )}
           </span>
-          <span className="justify-self-end text-gray-400 dark:text-gray-500">
+          <span className={`justify-self-end ${contextUsageTone}`}>
             {contextUsage &&
               !fileTokenWarning &&
               t('chat.contextUsage', {

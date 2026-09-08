@@ -2962,6 +2962,8 @@
       "connection": "Could not reach the transcription service. Please try again later.",
       "timeout": "Transcription timed out. The file may be too long.",
       "aborted": "Transcription was cancelled.",
+      "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
+      "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
       "service": "Transcription failed.",
       "serviceDetail": "Transcription failed: {{detail}}",
       "generic": "Transcription failed. Please try again.",

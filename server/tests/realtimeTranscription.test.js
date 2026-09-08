@@ -21,6 +21,7 @@ import {
   diagnoseUpstreamClose
 } from '../websocket/realtimeTranscription.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { getTranscriptionProvider } from '../transcription/index.js';
 import configCache from '../configCache.js';
 
 // verifyJwt (called inside authenticateUpgrade) resolves its algorithm and
@@ -465,5 +466,302 @@ describe('bridgeConnection state machine (fake sockets)', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].code).toBe('session-limit');
     expect(limiter.total).toBe(0);
+  });
+});
+
+/**
+ * Batch-provider mode (issue #2282).
+ *
+ * A batch provider (Gemini's unary transcription) has no upstream socket: the
+ * bridge clears the client to stream straight away, buffers the PCM, and makes
+ * one `transcribe()` call on `stop`. The browser-facing protocol is identical
+ * to a streaming provider's, which is what lets the client stay unchanged.
+ */
+describe('bridgeConnection — batch providers', () => {
+  const user = {
+    id: 'u1',
+    name: 'u1',
+    permissions: { models: new Set(['gemini-3.5-transcribe']) }
+  };
+
+  const batchModel = {
+    id: 'gemini-3.5-transcribe',
+    modelId: 'gemini-3.5-transcribe',
+    url: 'https://generativelanguage.googleapis.com',
+    provider: 'google-transcribe',
+    modelType: 'transcription',
+    enabled: true
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    configCache.setCacheEntry('config/platform.json', {
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'realtime-stt-test-secret' }
+    });
+    configCache.setCacheEntry('config/models.json', [batchModel]);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    for (const key of ['config/platform.json', 'config/models.json']) {
+      const timer = configCache.refreshTimers?.get(key);
+      if (timer) clearTimeout(timer);
+      configCache.refreshTimers?.delete(key);
+    }
+  });
+
+  const setup = () => {
+    const client = new FakeWs();
+    const limiter = new ConnectionLimiter({ maxTotal: 5, maxPerUser: 5 });
+    limiter.tryAcquire(user.id);
+    const createUpstream = jest.fn(() => {
+      throw new Error('a batch provider must never open an upstream socket');
+    });
+    bridgeConnection(client, user, limiter, { createUpstream });
+    return { client, limiter, createUpstream };
+  };
+
+  const start = async client => {
+    client.emit(
+      'message',
+      JSON.stringify({ type: 'start', modelId: 'gemini-3.5-transcribe' }),
+      false
+    );
+    await jest.advanceTimersByTimeAsync(0);
+  };
+
+  test('golden path: ready without a socket → audio buffered → stop → final + done', async () => {
+    const { client, limiter, createUpstream } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest
+      .spyOn(provider, 'transcribe')
+      .mockResolvedValue({ text: 'the whole transcript' });
+
+    try {
+      await start(client);
+      // No handshake to wait for: the client is cleared immediately.
+      expect(client.framesOfType('ready')).toHaveLength(1);
+      expect(createUpstream).not.toHaveBeenCalled();
+
+      client.emit('message', Buffer.from([1, 2, 3, 4]), true);
+      client.emit('message', Buffer.from([5, 6]), true);
+      await jest.advanceTimersByTimeAsync(0);
+      // Nothing is emitted while audio is still arriving.
+      expect(client.framesOfType('final')).toHaveLength(0);
+
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const call = spy.mock.calls[0][0];
+      expect(call.pcm).toEqual(Buffer.from([1, 2, 3, 4, 5, 6]));
+      expect(call.sampleRate).toBe(16000);
+      expect(call.cfg.model).toBe('gemini-3.5-transcribe');
+
+      const finals = client.framesOfType('final');
+      expect(finals).toHaveLength(1);
+      expect(finals[0].text).toBe('the whole transcript');
+      expect(client.framesOfType('done')).toHaveLength(1);
+      expect(limiter.total).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('audio that arrives before the model resolves is not lost', async () => {
+    const { client } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest.spyOn(provider, 'transcribe').mockResolvedValue({ text: 'ok' });
+
+    try {
+      // Send `start` and audio in the same tick, before resolution completes.
+      client.emit(
+        'message',
+        JSON.stringify({ type: 'start', modelId: 'gemini-3.5-transcribe' }),
+        false
+      );
+      client.emit('message', Buffer.from([9, 9]), true);
+      await jest.advanceTimersByTimeAsync(0);
+
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(spy.mock.calls[0][0].pcm).toEqual(Buffer.from([9, 9]));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('a stop that arrives while the model is still resolving still transcribes', async () => {
+    const { client } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest.spyOn(provider, 'transcribe').mockResolvedValue({ text: 'tail' });
+
+    try {
+      client.emit(
+        'message',
+        JSON.stringify({ type: 'start', modelId: 'gemini-3.5-transcribe' }),
+        false
+      );
+      client.emit('message', Buffer.from([7]), true);
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(client.framesOfType('done')).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('a failed transcription is reported as an error frame, not a silent close', async () => {
+    const { client, limiter } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest
+      .spyOn(provider, 'transcribe')
+      .mockRejectedValue(new Error('Gemini transcription request failed (HTTP 429)'));
+
+    try {
+      await start(client);
+      client.emit('message', Buffer.from([1, 2]), true);
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      const errors = client.framesOfType('error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe('upstream-error');
+      expect(errors[0].message).toMatch(/HTTP 429/);
+      expect(limiter.total).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('the per-connection byte cap rejects an over-long recording', async () => {
+    configCache.setCacheEntry('config/platform.json', {
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'realtime-stt-test-secret' },
+      speech: { realtime: { maxBufferedAudioBytes: 8 } }
+    });
+    const { client, limiter } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    const spy = jest.spyOn(provider, 'transcribe').mockResolvedValue({ text: 'never' });
+
+    try {
+      await start(client);
+      client.emit('message', Buffer.alloc(6), true);
+      client.emit('message', Buffer.alloc(6), true); // 12 > 8
+      await jest.advanceTimersByTimeAsync(0);
+
+      const errors = client.framesOfType('error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe('audio-too-long');
+      expect(spy).not.toHaveBeenCalled();
+      expect(limiter.total).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('hitting the cap while draining buffered audio does not leak the global budget', async () => {
+    // The per-connection cap can be hit part-way through draining the audio
+    // captured while the model was still resolving. Cleanup gives this
+    // connection's bytes back to the process-wide budget once; buffering the
+    // remaining chunks afterwards would re-charge them with nothing left to
+    // release them again, permanently shrinking the budget for every later
+    // session. The total cap is set tiny here so a few bytes of leak per run
+    // become visible as a switch from `audio-too-long` to `server-busy`.
+    configCache.setCacheEntry('config/platform.json', {
+      jwt: { algorithm: 'HS256' },
+      auth: { jwtSecret: 'realtime-stt-test-secret' },
+      speech: { realtime: { maxBufferedAudioBytes: 8, maxBufferedAudioBytesTotal: 32 } }
+    });
+
+    for (let run = 0; run < 10; run += 1) {
+      const { client } = setup();
+      client.emit(
+        'message',
+        JSON.stringify({ type: 'start', modelId: 'gemini-3.5-transcribe' }),
+        false
+      );
+      // Three chunks arrive before resolution finishes, so all three are drained
+      // from `pending` in one loop — the second trips the 8-byte per-connection
+      // cap, and the third must not be charged to the global budget after that.
+      for (let i = 0; i < 3; i += 1) client.emit('message', Buffer.alloc(6), true);
+      await jest.advanceTimersByTimeAsync(0);
+
+      const errors = client.framesOfType('error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe('audio-too-long');
+    }
+  });
+
+  test('the idle timeout does not fire while a batch request is in flight', async () => {
+    const { client } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    // A long recording can take minutes to come back — well past IDLE_TIMEOUT_MS.
+    let resolveTranscribe;
+    const spy = jest
+      .spyOn(provider, 'transcribe')
+      .mockReturnValue(new Promise(resolve => (resolveTranscribe = resolve)));
+
+    try {
+      // Simulate a real browser, which auto-pongs the keepalive ping per
+      // RFC 6455 — otherwise the keepalive (not the idle timer) closes us.
+      client.ping = () => {
+        client.pings += 1;
+        client.emit('pong');
+      };
+
+      await start(client);
+      client.emit('message', Buffer.from([1, 2]), true);
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      // Two full idle windows pass with no upstream traffic.
+      await jest.advanceTimersByTimeAsync(150_000);
+      expect(client.readyState).toBe(WebSocket.OPEN);
+      expect(client.pings).toBeGreaterThan(1);
+      expect(client.framesOfType('error')).toHaveLength(0);
+
+      resolveTranscribe({ text: 'finally' });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(client.framesOfType('final')[0].text).toBe('finally');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('a client that disconnects mid-request gets no frames and frees its slot', async () => {
+    const { client, limiter } = setup();
+    const provider = getTranscriptionProvider('google-transcribe');
+    let rejectTranscribe;
+    const spy = jest.spyOn(provider, 'transcribe').mockImplementation(({ signal }) => {
+      return new Promise((_resolve, reject) => {
+        rejectTranscribe = reject;
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    });
+
+    try {
+      await start(client);
+      client.emit('message', Buffer.from([1, 2]), true);
+      client.emit('message', JSON.stringify({ type: 'stop' }), false);
+      await jest.advanceTimersByTimeAsync(0);
+
+      client.close();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(client.framesOfType('error')).toHaveLength(0);
+      expect(client.framesOfType('final')).toHaveLength(0);
+      expect(limiter.total).toBe(0);
+      expect(typeof rejectTranscribe).toBe('function');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -212,9 +212,19 @@ class AnthropicAdapterClass extends BaseAdapter {
       model: model.modelId,
       messages: formattedMessages,
       stream,
-      temperature: parseFloat(temperature),
       max_tokens: maxTokens
     };
+
+    // Sampling parameters were removed from Anthropic's newer reasoning models
+    // (Claude Opus 5, Sonnet 5, Fable 5.x, Opus 4.7/4.8): sending `temperature`
+    // returns a 400 and the whole request fails. Model configs opt out with
+    // `supportsTemperature: false`; everything else keeps sending it.
+    if (model.supportsTemperature !== false) {
+      const parsedTemperature = parseFloat(temperature);
+      if (Number.isFinite(parsedTemperature)) {
+        requestBody.temperature = parsedTemperature;
+      }
+    }
 
     let finalTools = tools ? [...tools] : [];
     if (responseSchema) {

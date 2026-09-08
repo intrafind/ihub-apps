@@ -2927,6 +2927,8 @@
       "connection": "Der Transkriptionsdienst konnte nicht erreicht werden. Bitte versuchen Sie es später erneut.",
       "timeout": "Zeitüberschreitung bei der Transkription. Die Datei ist möglicherweise zu lang.",
       "aborted": "Die Transkription wurde abgebrochen.",
+      "serverTooLong": "Diese Aufnahme ist zu lang für das konfigurierte Transkriptionsmodell. Bitte teilen Sie sie in kürzere Abschnitte auf.",
+      "serverBusy": "Der Transkriptionsdienst ist derzeit ausgelastet. Bitte versuchen Sie es in einem Moment erneut.",
       "service": "Transkription fehlgeschlagen.",
       "serviceDetail": "Transkription fehlgeschlagen: {{detail}}",
       "generic": "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut.",

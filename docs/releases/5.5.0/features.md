@@ -1,5 +1,38 @@
 # Features — 5.5.0
 
+## Refreshed Default Models and Gemini Transcription
+
+The shipped model catalog now matches the current lineups from Google, Anthropic and Mistral, and
+two Google-hosted speech-to-text models join the self-hosted Voxtral option.
+
+- **Anthropic.** Claude Opus 5, Claude Sonnet 5 and Claude Fable 5.1 are shipped as default model
+  configurations, and Claude Haiku 4.5 is described correctly. The retired `claude-4-opus` and
+  `claude-4-sonnet` entries are removed. These models reject the `temperature` parameter, which
+  previously meant every request to them failed with a `400`; a new *Supports Temperature* model
+  setting tells the Anthropic adapter to omit it, and it is preset on the models that need it.
+- **Google.** Gemini 3.8 Flash and Gemini 3.5 Flash Lite are added, Gemini 3.1 Pro is kept as the
+  most capable Gemini, and the image models are renamed to the Nano Banana line they belong to
+  (Nano Banana Pro, Nano Banana 2, and the new Nano Banana 2 Lite). The image models' preview
+  endpoint ids are promoted to their stable releases.
+- **Mistral.** Mistral Large, Medium and Small now describe the current generations (Large 3,
+  Medium 3.5, Small 4) with their real 256K context window and their vision and structured-output
+  capabilities.
+- **Gemini transcription.** Two new transcription models: **Gemini 3.5 Transcribe Live** streams a
+  transcript as the audio arrives (85+ languages with automatic detection and code-switching,
+  sessions up to 10 minutes), and **Gemini 3.5 Transcribe** transcribes complete recordings of up
+  to one hour in a single request, with an optional custom vocabulary of up to 1,000 domain terms.
+  Both ship **disabled** — enabling one sends user audio to Google — and both reuse the Google API
+  key the chat models already use. Everything in the product that already worked with Voxtral
+  (audio upload, video upload, browser recording) works with them unchanged.
+- **Retired defaults removed.** `gpt-4` (8K context) and `gpt-oss-vllm` are gone. The latter
+  shipped enabled and pointed at a private development host, so it appeared in every
+  installation's model selector and failed on use. `local-vllm` is now shipped disabled, as the
+  endpoint template it is.
+
+Existing installations are migrated on upgrade: retired model files are removed, apps that
+referenced one are repointed to its replacement, and the new models are added. A model file you
+customized is never deleted — it is disabled instead, and the reason is written to the server log.
+
 ## Native Web Search: Per-Model Settings, Search Cap, Usage Tracking and Visible Sources
 
 Native web search on Claude, Gemini and GPT models is now configurable per model, capped per

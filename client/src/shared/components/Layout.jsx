@@ -82,6 +82,9 @@ function Layout() {
   // first screen, and the Nextcloud/Office embeds never use those paths.
   const embeddedHostKind = useEmbeddedHostKind();
   const inTeams = isTeamsEnvironment();
+  // Admin routes and the sidebar shell own their scrolling (fixed sidebar +
+  // independently scrolling content pane); classic-layout pages scroll the
+  // document so the footer ends up after the content (#2289).
   const isAdminRoute = pathnameStartsWith(location.pathname, '/admin');
   const isSetupRoute = pathnameStartsWith(location.pathname, '/setup');
   const isLoginRoute = pathnameEquals(location.pathname, '/login');
@@ -119,7 +122,7 @@ function Layout() {
 
   return (
     <div
-      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen h-full'}`}
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
     >
       <a
         href="#main-content"
@@ -133,7 +136,7 @@ function Layout() {
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
       )}
 
-      {/* Global smart search overlay — not shown on admin routes */}
+      {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
       {!isAdminRoute && <SmartSearch />}
 
       {/* Sidebar layout (non-admin, non-embedded pages) */}
@@ -363,7 +366,7 @@ function Layout() {
           <main
             id="main-content"
             tabIndex={-1}
-            className={`grow w-full min-h-0 ${isAppPage ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
+            className={`grow w-full min-h-0 ${isAppPage ? 'flex flex-col overflow-hidden' : ''}`}
           >
             <div
               className={`container mx-auto ${isAppPage ? 'flex flex-col flex-1 min-h-0' : 'px-4'}`}
