@@ -687,6 +687,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                   setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
                 }
                 clarificationPending={adapter.clarificationPending}
+                // Conversation so far + the app's history setting, so the
+                // context-window indicator counts the whole multiturn context.
+                messages={adapter.messages}
+                sendChatHistory={selectedApp?.sendChatHistory !== false}
                 // Include email body, pinned emails AND extracted attachment
                 // content in the live token estimate so the context-window
                 // indicator accounts for what will actually be sent to the LLM.
