@@ -289,6 +289,7 @@ function AdminUICustomization() {
           {activeTab === 'startPage' && (
             <StartPageCustomization
               config={config.startPage || {}}
+              pages={config.pages || {}}
               onUpdate={updates => updateConfig('startPage', updates)}
               t={t}
             />

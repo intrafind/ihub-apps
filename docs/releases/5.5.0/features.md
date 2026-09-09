@@ -1366,3 +1366,22 @@ provider. Nothing changes for a provider that leaves the field unset.
   is reachable under several hostnames.
 - Embedded hosts (the Nextcloud and Office add-ins, the browser extension) keep logging out
   locally: an identity provider's logout page can't render inside an add-in frame.
+
+## Choose What the Home Page Opens
+
+The `/` route no longer has to be the new start page. Admins pick the landing view under
+**UI Customization → Start Page**, right above the default chat app setting, and everyone who
+signs in or clicks the logo goes there.
+
+- Four choices: the **start page** (greeting and chat input, unchanged default), **all apps**
+  (the apps browser), a **content page** from Admin → Pages, or **a specific app** opened
+  straight into its chat.
+- The start page now has its own route, `/start`, alongside `/apps` for the apps browser. `/`
+  simply redirects to whichever view is configured, so the URL, the sidebar's active item and
+  bookmarks always match what is on screen.
+- The start page stays reachable at `/start` whatever `/` is set to, and the sidebar's
+  **New chat** button always goes there.
+- Access rules still apply: a page or app the user's groups do not permit shows the usual
+  access-denied screen, so pick a target everyone reaching `/` can open.
+- Existing installations keep the start page as home; a configuration migration writes that
+  choice so nothing changes until an admin picks something else.

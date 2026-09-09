@@ -9,6 +9,7 @@ import Icon from './Icon';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { sortFavoritesFirst } from '../../utils/favoriteItems';
+import { START_PAGE_PATH } from '../../utils/homePage';
 import useMediaQuery from '../hooks/useMediaQuery';
 import BrandTitle from './BrandTitle';
 import { isActivePath } from '../../utils/pathUtils';
@@ -325,7 +326,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
       <nav aria-label={navigationLabel} className="flex flex-col items-center gap-1.5">
         <Link
-          to="/"
+          to={START_PAGE_PATH}
           title={t('sidebar.newChat', 'New chat')}
           aria-label={t('sidebar.newChat', 'New chat')}
           className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
@@ -477,7 +478,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       {/* New chat + search */}
       <div className="px-4 pt-3.5 pb-1 flex gap-2">
         <Link
-          to="/"
+          to={START_PAGE_PATH}
           onClick={onMobileClose}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
         >

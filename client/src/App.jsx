@@ -160,6 +160,7 @@ import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
+import { resolveHomePath } from './utils/homePage';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
@@ -264,7 +265,10 @@ function SetupCheck({ children }) {
     }
   }, [setupConfigured, navigate]);
 
-  if (setupConfigured === null) {
+  // Also covers `false`: the effect above is navigating to the wizard, and
+  // rendering children meanwhile would let the "/" redirect win the race and
+  // carry the user past setup.
+  if (!setupConfigured) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -273,6 +277,17 @@ function SetupCheck({ children }) {
   }
 
   return children;
+}
+
+// The "/" route is a pointer, never a page of its own: every view it can send
+// users to has its own route (/start, /apps, /pages/:id, /apps/:id), so the URL,
+// the sidebar's active item and bookmarks always match what is on screen. Which
+// one is admin-configurable (Admin → UI Customization → Start Page) and lives in
+// the UI config, so wait for that to load before redirecting.
+function HomeRoute() {
+  const { uiConfig, isLoading } = useUIConfig();
+  if (isLoading) return <AdminLoading />;
+  return <Navigate to={resolveHomePath(uiConfig)} replace />;
 }
 
 function App() {
@@ -365,10 +380,12 @@ function App() {
             index
             element={
               <SetupCheck>
-                <SafeStartPage />
+                <HomeRoute />
               </SetupCheck>
             }
           />
+          {/* Start page — greeting, the default app's chat input and featured apps */}
+          <Route path="start" element={<SafeStartPage />} />
           {/* Apps browser — full list with search/filter */}
           <Route path="apps" element={<SafeAppsList />} />
           {/* Chat history page — feature-flagged, uses mock data */}

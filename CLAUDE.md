@@ -346,27 +346,35 @@ The system automatically resolves group inheritance at startup:
 2. **Client Feature**: Create feature module in `client/src/features/`
 3. **Configuration**: Add to relevant JSON config file
 4. **Permissions**: Update `groups.json` if needed
-5. **Known Routes** ⚠️: If adding new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
+5. **Known Routes** ⚠️: If adding new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js` **and** the inline copy in `client/index.html`
 
 ### When Adding New Routes
 
-**CRITICAL**: When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+**CRITICAL**: When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the route list in **both** places that detect the base path:
 
-This array is essential for:
+1. `KNOWN_ROUTES` in `client/src/utils/runtimeBasePath.js` — used by the React app.
+2. The inline `knownRoutes` array in `client/index.html` — runs before any bundle loads, so the pre-React auth gate knows where `/api` lives.
+
+The two lists must stay identical; `tests/unit/client/known-routes-sync.test.jsx` fails if they drift.
+
+These lists are essential for:
 
 - Detecting the base path for subpath deployments (e.g., `/ihub/apps`)
 - Preventing incorrect redirects during logout
 - Ensuring assets load from correct paths
 
+Miss the copy in `index.html` and the route still renders, but a **cold load** of it (not a client-side navigation to it) treats the route segment as the base path: the auth gate requests `/<route>/api/auth/status`, gets a 404, and shows "Unable to connect to the server" over the page.
+
 **Steps**:
 
 1. Add your route in `App.jsx` (e.g., `<Route path="reports" element={...} />`)
-2. Add the route to `knownRoutes` array in `client/src/utils/runtimeBasePath.js` (e.g., `'/reports'`)
-3. Test both root deployment (`/reports`) and subpath deployment (`/ihub/reports`)
+2. Add the route to `KNOWN_ROUTES` in `client/src/utils/runtimeBasePath.js` (e.g., `'reports'`)
+3. Add the same entry to the inline `knownRoutes` array in `client/index.html`
+4. Test both root deployment (`/reports`) and subpath deployment (`/ihub/reports`), loading each URL directly rather than only navigating to it inside the SPA
 
-**Example routes that must be in the array**:
+**Example routes that must be in the arrays**:
 
-- `/apps`, `/admin`, `/auth`, `/login`, `/prompts`, `/settings`, `/teams`, `/s`
+- `/start`, `/apps`, `/admin`, `/auth`, `/login`, `/prompts`, `/settings`, `/teams`, `/s`
 
 ### Breaking Changes & Backward Compatibility
 

@@ -406,11 +406,12 @@ The same `categories` structure is also available under `promptsList.categories`
 
 ### Start Page Configuration
 
-The home page `/` is a personalized start page: a time-based greeting, the chat input of a
-default app so users can start a conversation immediately, up to four featured apps (favorites
-first, then by `order`) and a link to the full apps browser at `/apps`. Messages typed on the
-start page open the app at `/apps/{appId}` and are sent right away; attachments added on the
-start page are carried into the chat. The input follows the default app's model settings: the
+The start page at `/start` is a personalized landing view: a time-based greeting, the chat input
+of a default app so users can start a conversation immediately, up to four featured apps
+(favorites first, then by `order`) and a link to the full apps browser at `/apps`. It is where
+`/` sends users by default, and where the sidebar's **New chat** button always goes. Messages
+typed on the start page open the app at `/apps/{appId}` and are sent right away; attachments
+added on the start page are carried into the chat. The input follows the default app's model settings: the
 model selector appears unless the app disables it, lists the models the current user may use
 with that app, and shows the same "No models available" notice as the chat when the user's
 groups permit none.
@@ -420,6 +421,7 @@ Start Page**; existing installations receive the defaults through a configuratio
 
 ```json
 "startPage": {
+  "defaultPage": "start",
   "showDefaultApp": true,
   "defaultAppId": "chat",
   "subtitle": {
@@ -429,11 +431,45 @@ Start Page**; existing installations receive the defaults through a configuratio
 }
 ```
 
-| Property         | Type    | Description                                                                                                                                                          |
-| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `showDefaultApp` | Boolean | Show the default app's chat input on the start page (default: `true`). When `false`, the page shows the greeting and the featured apps only.                          |
-| `defaultAppId`   | String  | ID of the app whose chat input is shown. When unset — or when the current user cannot access that app — the first app the user can access is used instead.            |
-| `subtitle`       | Object  | Localized line shown under the greeting (overrides the translation value).                                                                                           |
+| Property           | Type    | Description                                                                                                                                                            |
+| ------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultPage`      | String  | Which view `/` opens: `start` (default), `apps`, `page` or `app`. See [Choosing the home page](#choosing-the-home-page).                                                |
+| `defaultPageId`    | String  | ID of the content page shown when `defaultPage` is `page`. Must be a key of the `pages` section.                                                                        |
+| `defaultPageAppId` | String  | ID of the app opened when `defaultPage` is `app`.                                                                                                                       |
+| `showDefaultApp`   | Boolean | Show the default app's chat input on the start page (default: `true`). When `false`, the page shows the greeting and the featured apps only.                            |
+| `defaultAppId`     | String  | ID of the app whose chat input is shown. When unset — or when the current user cannot access that app — the first app the user can access is used instead.              |
+| `subtitle`         | Object  | Localized line shown under the greeting (overrides the translation value).                                                                                             |
+
+#### Choosing the home page
+
+`/` is a pointer, not a page of its own: it redirects to one of the views below — after signing
+in, and whenever a user clicks the logo. `defaultPage` picks which. Every view keeps its own
+route either way, so the URL bar, the sidebar's active item, the document title and bookmarks
+always agree with what is on screen.
+
+| Value   | `/` opens                           | Route         |
+| ------- | ----------------------------------- | ------------- |
+| `start` | The personalized start page         | `/start`      |
+| `apps`  | The apps browser                    | `/apps`       |
+| `page`  | The content page in `defaultPageId` | `/pages/{id}` |
+| `app`   | The app in `defaultPageAppId`       | `/apps/{id}`  |
+
+```json
+"startPage": {
+  "defaultPage": "page",
+  "defaultPageId": "welcome"
+}
+```
+
+Notes:
+
+- **The start page stays reachable.** `/start` renders it whatever `defaultPage` is set to, and
+  the sidebar's *New chat* button always links there.
+- **Access still applies.** A content page with `authRequired` or `allowedGroups`, or an app a
+  user's groups do not permit, shows the usual access-denied screen. Pick a target everyone who
+  reaches `/` can open.
+- **A missing target is not a dead end.** When `defaultPage` is `page` or `app` but the matching
+  id is unset, `/` falls back to `/start`.
 
 ### Prompts List Configuration
 

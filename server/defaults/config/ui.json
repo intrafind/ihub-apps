@@ -256,6 +256,7 @@
     }
   },
   "startPage": {
+    "defaultPage": "start",
     "showDefaultApp": true,
     "subtitle": {
       "en": "How can I help you today?",
