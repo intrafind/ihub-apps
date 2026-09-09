@@ -80,6 +80,7 @@ const PASSTHROUGH_FIELDS = [
 
 const TIMEOUT_REASON = Symbol('llm-timeout');
 const CONNECT_TIMEOUT_REASON = Symbol('llm-connect-timeout');
+const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
 
 /**
  * Ceiling for the connect/headers phase of one provider attempt.
@@ -94,6 +95,21 @@ const CONNECT_TIMEOUT_REASON = Symbol('llm-connect-timeout');
  * provider is generating slowly".
  */
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
+
+/**
+ * Ceiling for the gap between two chunks of a stream that has already started
+ * producing.
+ *
+ * The connect ceiling above only covers the phase before the first byte, and
+ * the whole-call deadline is five minutes, so a provider that emits some of
+ * the answer and then goes silent without closing the stream or sending a
+ * finish reason held the turn open for those five minutes: the answer sat on
+ * screen with the stop button still lit and no source badge, because nothing
+ * had ended the run. Some OpenAI-compatible servers do exactly this. Timing
+ * only the gaps *after* the first chunk leaves a provider that thinks for a
+ * long time before answering to the whole-call deadline, where it belongs.
+ */
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 // ── Chunk normalization ─────────────────────────────────────────────────────
 
@@ -316,6 +332,16 @@ export function toLLMError(err, ctx = {}) {
   if (isLLMError(err)) return err;
   const model = ctx.model || {};
   const base = { provider: model.provider, modelId: model.id, cause: err };
+  if (ctx.streamIdleTimedOut) {
+    return new LLMError(
+      `Provider ${model.provider} stopped sending stream chunks for ${ctx.streamIdleTimeoutMs} ms`,
+      {
+        ...base,
+        code: LLM_ERROR_CODES.TIMEOUT,
+        providerCode: 'STREAM_IDLE_TIMEOUT'
+      }
+    );
+  }
   if (ctx.timedOut) {
     return new LLMError(`LLM request timed out after ${ctx.timeoutMs} ms`, {
       ...base,
@@ -387,6 +413,8 @@ export class LLMClient {
    * @param {(ms:number)=>Promise<void>} [opts.sleep] - retry sleep (tests stub it)
    * @param {(includeDisabled?:boolean)=>{data:Array}} [opts.getModels] - model catalog seam
    * @param {number} [opts.connectTimeoutMs] - connect/headers ceiling per attempt; <=0 disables
+   * @param {number} [opts.streamIdleTimeoutMs] - ceiling for the gap between two chunks of a
+   *   stream that has already produced one; <=0 disables
    */
   constructor(opts = {}) {
     this.transport = opts.transport || defaultTransport;
@@ -402,6 +430,9 @@ export class LLMClient {
     this.connectTimeoutMs = Number.isFinite(opts.connectTimeoutMs)
       ? opts.connectTimeoutMs
       : DEFAULT_CONNECT_TIMEOUT_MS;
+    this.streamIdleTimeoutMs = Number.isFinite(opts.streamIdleTimeoutMs)
+      ? opts.streamIdleTimeoutMs
+      : DEFAULT_STREAM_IDLE_TIMEOUT_MS;
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> { hash, count } of the last messages (request/header dedupe), LRU-bounded
@@ -541,19 +572,76 @@ export class LLMClient {
     // construction (model discovery may hit the network), the transport and
     // the body reader — the advertised whole-call deadline starts here.
     let timedOut = false;
+    let streamIdleTimedOut = false;
     let timer = null;
-    let callSignal = signal;
+    let idleTimer = null;
+    const signals = signal ? [signal] : [];
     if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
       const controller = new AbortController();
       timer = setTimeout(() => {
         timedOut = true;
         controller.abort(TIMEOUT_REASON);
       }, timeoutMs);
-      callSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+      signals.push(controller.signal);
     }
-    const errCtx = () => ({ model, timedOut, timeoutMs });
+    const streamIdleTimeoutMs = this.streamIdleTimeoutMs;
+    const streamIdleEnabled = Number.isFinite(streamIdleTimeoutMs) && streamIdleTimeoutMs > 0;
+    const idleController = streamIdleEnabled ? new AbortController() : null;
+    if (idleController) signals.push(idleController.signal);
+    const callSignal =
+      signals.length === 0
+        ? undefined
+        : signals.length === 1
+          ? signals[0]
+          : AbortSignal.any(signals);
+    const errCtx = () => ({
+      model,
+      timedOut,
+      timeoutMs,
+      streamIdleTimedOut,
+      streamIdleTimeoutMs
+    });
+    const clearStreamIdle = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+    /**
+     * Race one pending chunk read against the idle deadline. The streaming
+     * loop below drives its iterator by hand rather than with `for await`
+     * precisely so this can settle first: aborting the request is not enough
+     * on its own, because a body that ignores the signal would leave the read
+     * pending forever. The abort still fires, so the socket is released even
+     * though we have stopped reading from it.
+     *
+     * Only used from the second read onwards — see the loop.
+     */
+    const raceStreamIdle = pending => {
+      if (!streamIdleEnabled) return pending;
+      return new Promise((resolve, reject) => {
+        clearStreamIdle();
+        idleTimer = setTimeout(() => {
+          idleTimer = null;
+          streamIdleTimedOut = true;
+          idleController.abort(STREAM_IDLE_REASON);
+          reject(toLLMError(new Error('LLM stream went idle'), errCtx()));
+        }, streamIdleTimeoutMs);
+        pending.then(
+          value => {
+            clearStreamIdle();
+            resolve(value);
+          },
+          err => {
+            clearStreamIdle();
+            reject(err);
+          }
+        );
+      });
+    };
     const failEarly = err => {
       if (timer) clearTimeout(timer);
+      clearStreamIdle();
       throw err;
     };
 
@@ -710,43 +798,73 @@ export class LLMClient {
           if (effectiveStream) {
             const adapter = getAdapter(model.provider);
             const ctx = { model, chatId: requestId, request: currentRequest };
-            for await (const raw of adapter.parseResponseStream(currentResponse, ctx)) {
-              if (callSignal?.aborted) {
-                const abortErr = new Error('The operation was aborted');
-                abortErr.name = 'AbortError';
-                throw abortErr;
+            const chunks = adapter
+              .parseResponseStream(currentResponse, ctx)
+              [Symbol.asyncIterator]();
+            // The first read is left to the whole-call deadline: a reasoning
+            // model can be silent for a long time before its first token, and
+            // that is not the same failure as a stream that stops mid-answer.
+            let produced = false;
+            try {
+              for (;;) {
+                const next = produced ? await raceStreamIdle(chunks.next()) : await chunks.next();
+                if (next.done) break;
+                produced = true;
+                const raw = next.value;
+                if (callSignal?.aborted) {
+                  const abortErr = new Error('The operation was aborted');
+                  abortErr.name = 'AbortError';
+                  throw abortErr;
+                }
+                if (!raw) continue;
+                const chunk = normalizeChunk(raw);
+                if (chunk.error) {
+                  throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
+                    code: looksLikeOverflow(chunk.errorMessage)
+                      ? LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
+                      : LLM_ERROR_CODES.PROVIDER_ERROR,
+                    providerCode: 'STREAM_ERROR',
+                    provider: model.provider,
+                    modelId: model.id,
+                    details: chunk.errorMessage
+                  });
+                }
+                const pausedBlocks = pausedTurnContent(chunk);
+                if (pausedBlocks && continuations < MAX_PAUSE_TURN_CONTINUATIONS) {
+                  // The pause marker carries no content of its own; the
+                  // continuation delivers the real end of the turn.
+                  paused = pausedBlocks;
+                  break;
+                }
+                if (pausedBlocks) {
+                  logger.warn(
+                    'pause_turn continuation limit reached — returning the partial turn',
+                    {
+                      component: COMPONENT,
+                      requestId,
+                      modelId: model.id,
+                      continuations
+                    }
+                  );
+                }
+                accumulator.push(chunk);
+                yield chunk;
+                if (chunk.complete) break;
               }
-              if (!raw) continue;
-              const chunk = normalizeChunk(raw);
-              if (chunk.error) {
-                throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
-                  code: looksLikeOverflow(chunk.errorMessage)
-                    ? LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
-                    : LLM_ERROR_CODES.PROVIDER_ERROR,
-                  providerCode: 'STREAM_ERROR',
-                  provider: model.provider,
-                  modelId: model.id,
-                  details: chunk.errorMessage
-                });
+            } finally {
+              clearStreamIdle();
+              // `for await` released the parser on break/throw; do it by hand
+              // now that the iterator is driven by hand — but never await it.
+              // The generator is suspended inside `reader.read()`, so `return()`
+              // only settles once that read does, which on the very stall this
+              // deadline exists for is never. Its own `finally` releases the
+              // reader whenever the aborted body errors, and the outer
+              // `finally` below clears the converter state either way.
+              try {
+                Promise.resolve(chunks.return?.()).catch(() => {});
+              } catch {
+                /* the parser is already finished */
               }
-              const pausedBlocks = pausedTurnContent(chunk);
-              if (pausedBlocks && continuations < MAX_PAUSE_TURN_CONTINUATIONS) {
-                // The pause marker carries no content of its own; the
-                // continuation delivers the real end of the turn.
-                paused = pausedBlocks;
-                break;
-              }
-              if (pausedBlocks) {
-                logger.warn('pause_turn continuation limit reached — returning the partial turn', {
-                  component: COMPONENT,
-                  requestId,
-                  modelId: model.id,
-                  continuations
-                });
-              }
-              accumulator.push(chunk);
-              yield chunk;
-              if (chunk.complete) break;
             }
           } else {
             const text = await currentResponse.text();
@@ -834,6 +952,7 @@ export class LLMClient {
         throw failure;
       } finally {
         if (timer) clearTimeout(timer);
+        clearStreamIdle();
         try {
           clearStreamingState(model.provider, requestId);
         } catch {

@@ -48,6 +48,12 @@ export async function describeChatError(
     // The endpoint never answered the connect: not "the model is slow".
     message =
       (await t('endpointUnreachable', { provider: model?.provider, model: model?.id })) || message;
+  } else if (llm?.code === LLM_ERROR_CODES.TIMEOUT && llm.providerCode === 'STREAM_IDLE_TIMEOUT') {
+    // The answer started arriving and then stopped: whatever was streamed is
+    // already on screen, so say the answer is incomplete rather than blaming
+    // the whole request on a timeout.
+    message =
+      (await t('streamStalled', { provider: model?.provider, model: model?.id })) || message;
   } else if (llm?.code === LLM_ERROR_CODES.TIMEOUT) {
     message = (await t('requestTimeout', { timeout: timeoutSeconds })) || message;
   } else if (llm?.code === LLM_ERROR_CODES.NETWORK) {

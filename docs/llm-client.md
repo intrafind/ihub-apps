@@ -100,7 +100,7 @@ Callers branch on `err.code`, never on message text.
 | `RATE_LIMITED`            | Provider 429                                         | yes     | 429                  |
 | `CONTENT_POLICY`          | Provider refused on policy grounds                   | no      | 400                  |
 | `EMPTY_RESPONSE`          | Completed without any output (raised by AgentLoop)   | no      | 502                  |
-| `TIMEOUT`                 | `timeoutMs` elapsed or connect timeout               | yes     | 504                  |
+| `TIMEOUT`                 | `timeoutMs`, connect or stream-idle deadline elapsed | yes     | 504                  |
 | `NETWORK`                 | DNS / connection / socket failure                    | yes     | 502                  |
 | `PROVIDER_ERROR`          | Any other provider failure (5xx, in-band error frame)| 5xx yes | upstream status      |
 | `AUTH_FAILED`             | Bad or missing API key (`providerCode` says which)   | no      | 401 / 500            |
@@ -130,6 +130,34 @@ Requests to a model whose provider returns a non-transient 4xx are dumped to
 `contents/data/debug/llm-failures/<timestamp>-<model>-<status>.json` with
 auth headers and URL keys redacted, and a shape summary (sizes and keys, no
 prompt text) is logged.
+
+## Stream deadlines
+
+Three separate deadlines cover one model call, because "cannot reach the
+provider", "the provider is thinking" and "the provider died mid-answer" are
+different failures and only the middle one deserves patience:
+
+| Phase                                     | Deadline                       | `providerCode` on expiry |
+| ----------------------------------------- | ------------------------------ | ------------------------ |
+| Connect + response headers, per attempt   | 10 s                           | `CONNECT_TIMEOUT`        |
+| Headers → first stream chunk              | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+| Gap between two stream chunks             | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
+
+The stream-idle deadline is armed only after a chunk has been handed to the
+consumer, so a reasoning model that is silent for minutes before its first
+token is governed by the whole-call deadline rather than cut off. A provider
+that emits part of an answer and then stops without closing the body or sending
+a finish reason used to hold the turn open for the whole five minutes, which on
+the client reads as a hung chat: the streamed text is on screen but no
+`step/completed` or `run/ended` frame has been emitted, so the stop button
+stays lit and the answer-source badge never appears. Chunks delivered before
+the stall are kept; the turn ends with the `streamStalled` message.
+
+The deadline races the read rather than only aborting the request, because a
+response body that ignores its abort signal would otherwise leave the read
+pending forever. The abort still fires, so the socket is released. Both
+ceilings are constructor options (`connectTimeoutMs`, `streamIdleTimeoutMs`,
+`<= 0` disables) rather than environment variables.
 
 ## Outbound DNS guard
 
@@ -165,6 +193,9 @@ the first import of `server.js`.
 
 - `server/tests/loop/llmClient.test.js` — behaviour specs (retries, abort,
   timeout, error mapping, ledger events, streaming vs collect).
+- `server/tests/loop/connectTimeout.test.js`,
+  `server/tests/loop/streamIdleTimeout.test.js` — the connect and stream-idle
+  deadlines, including that the wait for the first chunk is left alone.
 - `server/tests/dnsGuard.test.js`, `server/tests/loop/dnsFailure.test.js` —
   DNS guard (sharing, timeout, negative cache) and the non-retry of DNS and
   connect-timeout failures.

@@ -560,33 +560,51 @@ function AppChat({ preloadedApp = null }) {
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
+  // The intent has to be latched on the first render that sees it: the
+  // URL-parameter effect above strips `send` and `prefill` as soon as it
+  // applies anything, so by the time the settings below are ready the query
+  // string no longer says the message should be sent.
+  const autoSendPending = useRef(false);
 
   // Reset auto-send trigger when appId changes
   useEffect(() => {
     autoSendTriggered.current = false;
+    autoSendPending.current = false;
   }, [appId]);
 
   useEffect(() => {
-    const shouldAutoSend = searchParams.get('send') === 'true';
-
-    if (shouldAutoSend && !autoSendTriggered.current && prefillMessage && app && !processing) {
-      autoSendTriggered.current = true;
-
-      // Clean up the send and prefill parameters from URL so a later reload
-      // doesn't repopulate the input with the already-sent message
-      const newSearch = new URLSearchParams(searchParams);
-      newSearch.delete('send');
-      newSearch.delete('prefill');
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-
-      // Trigger the form submission after a short delay to ensure everything is initialized
-      setTimeout(() => {
-        if (formRef.current) {
-          formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        }
-      }, 100);
+    if (searchParams.get('send') === 'true' && prefillMessage && !autoSendTriggered.current) {
+      autoSendPending.current = true;
     }
-  }, [app, processing, prefillMessage, searchParams, navigate]);
+    if (!autoSendPending.current || autoSendTriggered.current) return;
+    if (!app || processing) return;
+    // Wait for the model catalogue before firing. `useAppSettings` resolves
+    // the app's initial model (and its temperature, output format, …) only
+    // once the catalogue has loaded, and a model carried over from the start
+    // page arrives via `?model=` which the URL-parameter effect above applies
+    // on the same gate. Sending before that goes out as `modelId: null`,
+    // which the server rejects with `400 Invalid request` — a race only slow
+    // devices lost, so on a phone the handoff from the start page failed
+    // while on a desktop the 100 ms below always covered it.
+    if (modelsLoading || !selectedModel) return;
+
+    autoSendTriggered.current = true;
+    autoSendPending.current = false;
+
+    // Clean up the send and prefill parameters from URL so a later reload
+    // doesn't repopulate the input with the already-sent message
+    const newSearch = new URLSearchParams(searchParams);
+    newSearch.delete('send');
+    newSearch.delete('prefill');
+    navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+
+    // Trigger the form submission after a short delay to ensure everything is initialized
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
+    }, 100);
+  }, [app, processing, prefillMessage, searchParams, navigate, modelsLoading, selectedModel]);
 
   // Fetch and attach document when navigated from "Open in App" with source params
   const documentAttached = useRef(false);

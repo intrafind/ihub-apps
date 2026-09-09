@@ -535,3 +535,34 @@ line made a shorter row than one that wrapped onto two.
   randomly spaced blocks.
 - On tablets and desktops the list is unchanged: it still opens as a panel next
   to the model button, with the fuller two-line descriptions.
+
+## Starting a Chat From the Start Page Keeps Your Model on Slow Devices
+
+Typing a message on the start page and pressing Enter opens the chosen app and
+sends the message straight away. On a phone — or any device where the app and
+the model list took a moment longer to arrive — the message was sent before the
+app's settings had been applied, so it went out with no model at all and came
+back as **Invalid request** instead of an answer. When it did get through, it
+could still use the wrong temperature, because the app's configured value had
+not been applied yet either.
+
+- The message now waits for the app's model list before it is sent, so the model
+  you picked on the start page (or the app's default) is the one that answers.
+- Desktops were never affected: the fixed 100 ms head start the send used to
+  rely on was always enough there, and always too short on a phone.
+
+## A Model That Stops Mid-Answer No Longer Hangs the Chat for Five Minutes
+
+If a model endpoint sent part of an answer and then went quiet — without
+closing the connection or marking the answer finished — the chat stayed stuck
+in its "answering" state: the text that had arrived sat on screen with the stop
+button still lit, the typing indicator still running and no answer-source badge,
+until the five-minute request deadline finally expired. Self-hosted
+OpenAI-compatible servers are the usual culprits.
+
+- Once an answer has started arriving, a gap of more than 60 seconds with no
+  further data now ends the turn and reports that the endpoint stopped sending.
+  The part of the answer that did arrive stays on screen and the message can be
+  sent again.
+- The wait *before* the first piece of an answer is unchanged, so a model that
+  thinks for a long time before it starts writing is not cut off.
