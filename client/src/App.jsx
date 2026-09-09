@@ -160,7 +160,7 @@ import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
-import { resolveHomeRedirect } from './utils/homePage';
+import { resolveHomePath } from './utils/homePage';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
@@ -265,7 +265,10 @@ function SetupCheck({ children }) {
     }
   }, [setupConfigured, navigate]);
 
-  if (setupConfigured === null) {
+  // Also covers `false`: the effect above is navigating to the wizard, and
+  // rendering children meanwhile would let the "/" redirect win the race and
+  // carry the user past setup.
+  if (!setupConfigured) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -276,18 +279,15 @@ function SetupCheck({ children }) {
   return children;
 }
 
-// The "/" route. Admins choose what home is (Admin → UI Customization → Start
-// Page): the personalized start page, the apps browser, a content page or an
-// app. Everything but the start page is a redirect to that view's own route, so
-// the URL, the sidebar's active item and bookmarks match what is on screen.
-// The choice lives in the UI config, so wait for it rather than rendering the
-// start page and yanking it away a moment later.
+// The "/" route is a pointer, never a page of its own: every view it can send
+// users to has its own route (/start, /apps, /pages/:id, /apps/:id), so the URL,
+// the sidebar's active item and bookmarks always match what is on screen. Which
+// one is admin-configurable (Admin → UI Customization → Start Page) and lives in
+// the UI config, so wait for that to load before redirecting.
 function HomeRoute() {
   const { uiConfig, isLoading } = useUIConfig();
   if (isLoading) return <AdminLoading />;
-  const redirectTo = resolveHomeRedirect(uiConfig);
-  if (redirectTo) return <Navigate to={redirectTo} replace />;
-  return <SafeStartPage />;
+  return <Navigate to={resolveHomePath(uiConfig)} replace />;
 }
 
 function App() {
@@ -384,6 +384,8 @@ function App() {
               </SetupCheck>
             }
           />
+          {/* Start page — greeting, the default app's chat input and featured apps */}
+          <Route path="start" element={<SafeStartPage />} />
           {/* Apps browser — full list with search/filter */}
           <Route path="apps" element={<SafeAppsList />} />
           {/* Chat history page — feature-flagged, uses mock data */}

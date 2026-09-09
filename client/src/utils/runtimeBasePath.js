@@ -17,6 +17,7 @@
  * instead of /ihub).
  */
 export const KNOWN_ROUTES = [
+  'start', // Start page (greeting, chat input, featured apps)
   'apps', // App listing and individual app routes
   'admin', // Admin panel and all admin sub-routes
   'login', // Standalone login page

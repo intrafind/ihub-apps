@@ -1,14 +1,21 @@
 /**
- * Which view the "/" route shows.
+ * Which view the "/" route sends users to.
  *
- * Admins pick this under Admin → UI Customization → Start Page, stored as
- * `ui.json → startPage.defaultPage`. "start" keeps the personalized start
- * page rendered at "/"; every other choice hands "/" over to an existing
- * route via a redirect, so the URL bar, the sidebar's active item, the
- * document title and bookmarks all agree with what is on screen.
+ * Every view has its own route — the start page at `/start`, the apps browser
+ * at `/apps`, content pages at `/pages/{id}`, apps at `/apps/{id}` — and "/"
+ * is just a pointer at one of them. Admins choose which under Admin → UI
+ * Customization → Start Page, stored as `ui.json → startPage.defaultPage`.
+ * Because "/" only ever redirects, the URL bar, the sidebar's active item, the
+ * document title and bookmarks always agree with what is on screen.
  */
 
 import { sortFavoritesFirst } from './favoriteItems';
+
+/** The start page — greeting, chat input and featured apps. */
+export const START_PAGE_PATH = '/start';
+
+/** The apps browser — the full, searchable list. */
+export const APPS_PAGE_PATH = '/apps';
 
 export const DEFAULT_HOME_PAGE = 'start';
 
@@ -19,25 +26,25 @@ export const HOME_PAGE_CHOICES = ['start', 'apps', 'page', 'app'];
  * Resolve where "/" should send the user.
  *
  * @param {object} uiConfig - The UI configuration (`useUIConfig().uiConfig`).
- * @returns {string|null} The path to redirect to, or `null` to render the start page.
+ * @returns {string} The path to redirect to; always a real route.
  */
-export const resolveHomeRedirect = uiConfig => {
+export const resolveHomePath = uiConfig => {
   const startPage = uiConfig?.startPage;
   switch (startPage?.defaultPage || DEFAULT_HOME_PAGE) {
     case 'apps':
-      return '/apps';
+      return APPS_PAGE_PATH;
     case 'page': {
       // A half-configured choice must not strand users on a broken route —
       // fall back to the start page until an admin picks the target.
       const pageId = startPage?.defaultPageId;
-      return pageId ? `/pages/${encodeURIComponent(pageId)}` : null;
+      return pageId ? `/pages/${encodeURIComponent(pageId)}` : START_PAGE_PATH;
     }
     case 'app': {
       const appId = startPage?.defaultPageAppId;
-      return appId ? `/apps/${encodeURIComponent(appId)}` : null;
+      return appId ? `/apps/${encodeURIComponent(appId)}` : START_PAGE_PATH;
     }
     default:
-      return null;
+      return START_PAGE_PATH;
   }
 };
 
@@ -67,22 +74,4 @@ export const pickDefaultChatApp = (apps, favoriteAppIds, uiConfig) => {
     (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)
   );
   return ranked.find(isChatApp) || null;
-};
-
-/**
- * Where the sidebar's "New chat" button points. "/" only works while it still
- * shows something with a chat input; once an admin makes the apps browser or a
- * content page the home view, the button goes straight to the default app.
- *
- * @param {object} uiConfig - The UI configuration.
- * @param {Array} apps - Apps the current user may access.
- * @param {string[]} favoriteAppIds - Locally favorited app ids.
- * @returns {string} The path to link to.
- */
-export const resolveNewChatPath = (uiConfig, apps, favoriteAppIds) => {
-  const redirect = resolveHomeRedirect(uiConfig);
-  // No redirect means "/" is the start page; an app home already is a chat.
-  if (!redirect || redirect.startsWith('/apps/')) return '/';
-  const app = pickDefaultChatApp(apps, favoriteAppIds, uiConfig);
-  return app ? `/apps/${encodeURIComponent(app.id)}` : '/apps';
 };

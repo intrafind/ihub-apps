@@ -99,7 +99,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
           <p className={helpClass}>
             {t(
               'admin.ui.startPage.defaultPageHelp',
-              'What users see at "/" — after signing in and whenever they click the logo. Anything other than the start page redirects to that view.'
+              'Where "/" sends users — after signing in and whenever they click the logo. Each view keeps its own route, so the start page stays at /start and the apps browser at /apps whatever you pick here.'
             )}
           </p>
         </div>
@@ -177,7 +177,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
           <p className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
             {t(
               'admin.ui.startPage.targetMissing',
-              'Nothing selected yet — users keep seeing the start page until you choose a target.'
+              'Nothing selected yet — "/" keeps opening the start page until you choose a target.'
             )}
           </p>
         )}
@@ -188,7 +188,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t(
               'admin.ui.startPage.notHomeNotice',
-              'The start page is not the home page right now. The settings below apply when you switch back to it; the default chat app is also where the sidebar’s "New chat" button leads.'
+              'The start page is not what "/" opens right now, but it stays reachable at /start — that is where the sidebar’s "New chat" button leads, so the settings below still apply.'
             )}
           </p>
         )}
