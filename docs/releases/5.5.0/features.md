@@ -1425,3 +1425,24 @@ heading says, under **UI Customization → Start Page**.
   renders empty falls back to the built-in greeting, so the page always has one.
 - Existing installations keep greeting users by name; a configuration migration writes that
   choice, and the heading stays unset so the bundled greeting translations continue to be used.
+
+## Pluggable Storage Providers (Groundwork)
+
+Runtime data — chats, run ledgers, workflow state — is moving behind a **storage provider** so a
+later release can keep it in SQLite, PostgreSQL or OpenSearch instead of on disk. This release
+ships the abstraction and its filesystem provider only: nothing in the product reads or writes
+through it yet, and behaviour is unchanged.
+
+- `platform.json` gains a `storage` section: `storage.provider` (`filesystem`, the only provider
+  that ships today) and `storage.filesystem` with `dataDir` (under `contents/`, default `data`)
+  and `flushIntervalMs`. A configuration migration adds the block to existing installations.
+- `IHUB_STORAGE_PROVIDER` overrides the configured provider per environment. Changing the provider
+  requires a server restart.
+- The filesystem provider stores documents, append-only log streams, blobs and locks under
+  `contents/data/`, keeps a per-owner index so "list my chats" never scans a namespace, and
+  reports what it can and cannot do (no transactions, in-process change notification,
+  single-instance) rather than leaving that to guesswork.
+- This is the foundation for durable chats: closing the browser mid-answer without losing the
+  reply, chat history, and continuing a past conversation.
+
+See [Storage Providers](../../storage.md).

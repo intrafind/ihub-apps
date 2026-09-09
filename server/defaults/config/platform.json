@@ -380,5 +380,12 @@
     "cleanupEnabled": true,
     "flushIntervalMs": 2000,
     "spillThresholdBytes": 65536
+  },
+  "storage": {
+    "provider": "filesystem",
+    "filesystem": {
+      "dataDir": "data",
+      "flushIntervalMs": 2000
+    }
   }
 }

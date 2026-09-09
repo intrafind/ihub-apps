@@ -255,6 +255,38 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .default({}),
+    // Storage abstraction: which provider backs runtime data (documents,
+    // append-logs, locks, change events). Nothing reads it yet — it is the
+    // foundation for durable chats — so these settings only describe where that
+    // data will live. `provider` is deliberately a free string rather than an
+    // enum so an install can be pre-configured for a provider a later release
+    // registers, without failing platform validation on the older one.
+    storage: z
+      .object({
+        provider: z
+          .string()
+          .default('filesystem')
+          .describe(
+            'Storage provider backing runtime data. Only "filesystem" ships today; override per environment with IHUB_STORAGE_PROVIDER. Changing it requires a restart.'
+          ),
+        filesystem: z
+          .object({
+            dataDir: z
+              .string()
+              .default('data')
+              .describe('Directory under contents/ holding storage data.'),
+            flushIntervalMs: z
+              .number()
+              .int()
+              .positive()
+              .default(2000)
+              .describe('Debounce for buffered append-log writes.')
+          })
+          .passthrough()
+          .default({})
+      })
+      .passthrough()
+      .default({}),
     // Realtime speech-to-text: the browser streams mic audio to iHub over a
     // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
     // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with
