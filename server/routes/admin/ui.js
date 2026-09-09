@@ -443,7 +443,7 @@ export default function registerAdminUIRoutes(app) {
 
     // Validate startPage section if present. `defaultAppId` ends up in a URL
     // path (/apps/<id>) and an API call on the client, so it must look like an
-    // app id; `subtitle` is a localized `{ lang: value }` object.
+    // app id; `title` and `subtitle` are localized `{ lang: value }` objects.
     if (config.startPage !== undefined) {
       const { startPage } = config;
       if (typeof startPage !== 'object' || startPage === null || Array.isArray(startPage)) {
@@ -451,6 +451,9 @@ export default function registerAdminUIRoutes(app) {
       }
       if (startPage.showDefaultApp !== undefined && typeof startPage.showDefaultApp !== 'boolean') {
         throw new Error('startPage.showDefaultApp must be a boolean');
+      }
+      if (startPage.showUserName !== undefined && typeof startPage.showUserName !== 'boolean') {
+        throw new Error('startPage.showUserName must be a boolean');
       }
       if (
         startPage.defaultAppId !== undefined &&
@@ -465,12 +468,12 @@ export default function registerAdminUIRoutes(app) {
           throw new Error('startPage.defaultAppId must be a valid app id');
         }
       }
-      if (
-        startPage.subtitle !== undefined &&
-        startPage.subtitle !== null &&
-        (typeof startPage.subtitle !== 'object' || Array.isArray(startPage.subtitle))
-      ) {
-        throw new Error('startPage.subtitle must be a localized object');
+      for (const field of ['title', 'subtitle']) {
+        const value = startPage[field];
+        if (value === undefined || value === null) continue;
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          throw new Error(`startPage.${field} must be a localized object`);
+        }
       }
       // `defaultPage` decides what the "/" route shows. Anything but "start"
       // redirects to another route, so the ids it points at reach a URL path

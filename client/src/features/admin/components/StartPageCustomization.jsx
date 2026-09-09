@@ -16,7 +16,7 @@ import {
 /**
  * Start page configuration (uiConfig.startPage): which view the "/" route
  * shows, whether the default app's chat input is on the start page, which app
- * that is, the subtitle under the greeting, and the app shortcuts the start
+ * that is, the heading and subtitle above it, and the app shortcuts the start
  * page and the sidebar show (which apps, how they rank, how many).
  */
 function StartPageCustomization({ config, pages, onUpdate, t }) {
@@ -56,6 +56,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
 
   const defaultAppId = config?.defaultAppId || '';
   const showDefaultApp = config?.showDefaultApp !== false;
+  const showUserName = config?.showUserName !== false;
   const defaultPage = config?.defaultPage || 'start';
   const defaultPageId = config?.defaultPageId || '';
   const defaultPageAppId = config?.defaultPageAppId || '';
@@ -242,6 +243,68 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
             )}
           </p>
         )}
+
+        {/* Heading: whether the viewer's name appears in it, and an optional
+            fixed replacement for the built-in greeting. */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <span
+              id="startPage-showUserName-label"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.ui.startPage.showUserName', 'Greet users by name')}
+            </span>
+            <p
+              id="startPage-showUserName-help"
+              className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t(
+                'admin.ui.startPage.showUserNameHelp',
+                'When off, the heading is the time-based greeting alone — use it where the directory has no presentable names.'
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showUserName}
+            aria-labelledby="startPage-showUserName-label"
+            aria-describedby="startPage-showUserName-help"
+            onClick={() => onUpdate({ showUserName: !showUserName })}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
+              showUserName ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                showUserName ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div>
+          <DynamicLanguageEditor
+            label={t('admin.ui.startPage.heading', 'Heading')}
+            value={config?.title || {}}
+            onChange={value => onUpdate({ title: value })}
+            type="text"
+            placeholder={{
+              en: 'Good morning, {{name}}!',
+              de: 'Guten Morgen, {{name}}!'
+            }}
+          />
+          {/* The placeholder tokens are passed in as values so i18next does not
+              try to interpolate them out of the help text itself. */}
+          <p className={helpClass}>
+            {t(
+              'admin.ui.startPage.headingHelp',
+              "Replaces the greeting above the chat input. Leave empty to use the built-in time-based greeting. {{greetingToken}} inserts the greeting for the time of day, {{nameToken}} the user's name — when there is no name to show, it is dropped together with the separator in front of it.",
+              { greetingToken: '{{greeting}}', nameToken: '{{name}}' }
+            )}
+          </p>
+        </div>
 
         {/* Subtitle under the greeting */}
         <div>

@@ -423,7 +423,12 @@ Start Page**; existing installations receive the defaults through a configuratio
 "startPage": {
   "defaultPage": "start",
   "showDefaultApp": true,
+  "showUserName": true,
   "defaultAppId": "chat",
+  "title": {
+    "en": "{{greeting}}, {{name}}!",
+    "de": "{{greeting}}, {{name}}!"
+  },
   "subtitle": {
     "en": "How can I help you today?",
     "de": "Wie kann ich Ihnen heute helfen?"
@@ -442,6 +447,8 @@ Start Page**; existing installations receive the defaults through a configuratio
 | `defaultPageAppId` | String  | ID of the app opened when `defaultPage` is `app`.                                                                                                                       |
 | `showDefaultApp`   | Boolean | Show the default app's chat input on the start page (default: `true`). When `false`, the page shows the greeting and the featured apps only.                            |
 | `defaultAppId`     | String  | ID of the app whose chat input is shown. When unset — or when the current user cannot access that app — the first app the user can access is used instead.              |
+| `showUserName`     | Boolean | Greet the user by name (default: `true`). When `false`, the heading is the time-based greeting alone. See [The heading](#the-heading).                                  |
+| `title`            | Object  | Localized heading that replaces the built-in greeting. Supports the `{{greeting}}` and `{{name}}` placeholders. See [The heading](#the-heading).                        |
 | `subtitle`         | Object  | Localized line shown under the greeting (overrides the translation value).                                                                                             |
 | `appsMode`         | String  | How apps that are neither favorites nor default apps rank in both app-shortcut lists: `order` (default) or `recent`. See [App shortcuts](#app-shortcuts).               |
 | `appsCount`        | Number  | How many apps the start-page grid shows (0–12, default `4`). `0` hides the grid.                                                                                        |
@@ -477,6 +484,32 @@ Two related settings live elsewhere:
   default apps above. When it is unset, the top-ranked chat app is used — favorites first, then
   the default apps, then `order`. `appsMode` deliberately does not apply here: with `recent`, the
   chat input would change app every time the user opened a different one.
+
+#### The heading
+
+By default the heading is the greeting for the time of day plus the user's name — "Good morning,
+Ada!". The name comes from the identity provider: `user.name`, or the local part of the email
+address when there is no name. Anonymous visitors are always greeted without one.
+
+Not every directory delivers a presentable name — some hand over an id, a login or an empty
+field. Two settings cover that:
+
+- **`showUserName: false`** drops the name, leaving "Good morning!". Nothing else changes, and
+  the greeting stays translated for every UI language.
+- **`title`** replaces the heading with your own text, per language. Two placeholders are
+  available: `{{greeting}}` for the greeting of the time of day ("Good morning") and `{{name}}`
+  for the user's name. Anything else in the field is shown verbatim, so a fixed message such as
+  `"Welcome to the AI Hub"` works as well.
+
+When there is no name to show — an anonymous visitor, a missing name, or `showUserName: false` —
+a `{{name}}` placeholder is dropped together with the separator in front of it, so
+`"{{greeting}}, {{name}}!"` reads "Good morning!" rather than "Good morning, !". A `title` that
+renders empty (a blank field, or only a `{{name}}` the user does not have) falls back to the
+built-in greeting, so the page is never left without a heading.
+
+Leave `title` unset to use the bundled greeting translations, which cover every UI language; a
+configured `title` only covers the languages you write into it (other languages fall back to
+`en`, as everywhere else).
 
 #### Choosing the home page
 

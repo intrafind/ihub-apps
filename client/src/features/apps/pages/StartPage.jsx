@@ -22,13 +22,7 @@ import ChatInput from '../../chat/components/ChatInput';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
-
-function timeBasedGreeting(t) {
-  const h = new Date().getHours();
-  if (h < 12) return t('startPage.greetingMorning', 'Good morning');
-  if (h < 18) return t('startPage.greetingAfternoon', 'Good afternoon');
-  return t('startPage.greetingEvening', 'Good evening');
-}
+import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
 
 export default function StartPage() {
   const { t, i18n } = useTranslation();
@@ -70,16 +64,18 @@ export default function StartPage() {
     sendMessage: () => formRef.current?.requestSubmit?.()
   });
 
-  const greeting = useMemo(() => {
-    const base = timeBasedGreeting(t);
-    // Anonymous visitors carry a synthetic "Anonymous" name — greet them without it.
-    const isAnonymous = !user || user.id === 'anonymous';
-    const name = isAnonymous ? '' : user.name || user.email?.split('@')[0] || '';
-    // Punctuation and name placement are locale-specific — keep them translatable.
-    return name
-      ? t('startPage.greetingWithName', '{{greeting}}, {{name}}!', { greeting: base, name })
-      : t('startPage.greetingNoName', '{{greeting}}!', { greeting: base });
-  }, [t, user]);
+  // Time-based greeting with the viewer's name, unless the admin turned the
+  // name off or configured a heading of their own (startPage.title).
+  const greeting = useMemo(
+    () =>
+      buildStartPageGreeting({
+        startPage: uiConfig?.startPage,
+        user,
+        language: currentLanguage,
+        t
+      }),
+    [uiConfig?.startPage, user, currentLanguage, t]
+  );
 
   const subtitle =
     getLocalizedContent(uiConfig?.startPage?.subtitle, currentLanguage) ||
