@@ -1407,3 +1407,21 @@ Start Page**, and the order apps appear in can be set by drag and drop in **Admi
   no favorites still gets app shortcuts there.
 - Existing installations receive the current behaviour as explicit defaults through a configuration
   migration — nothing changes on screen until an admin edits the settings.
+
+## Configurable Start Page Heading
+
+The start page greeted every user by name. Where the directory has no presentable name — an id, a
+login, an empty field — that read badly and could not be turned off. Admins now decide what the
+heading says, under **UI Customization → Start Page**.
+
+- **Greet users by name** (on by default) drops the name when switched off, leaving the
+  time-based greeting alone: "Good morning!". It stays translated for every UI language.
+- **Heading** replaces the greeting with your own text, per language — a fixed message such as
+  "Welcome to the AI Hub", or a template built from two placeholders: `{{greeting}}` for the
+  greeting of the time of day and `{{name}}` for the user's name.
+- With no name to show — an anonymous visitor, a missing name, or names switched off — a
+  `{{name}}` placeholder is dropped together with the separator in front of it, so
+  "{{greeting}}, {{name}}!" reads "Good morning!" and never "Good morning, !". A heading that
+  renders empty falls back to the built-in greeting, so the page always has one.
+- Existing installations keep greeting users by name; a configuration migration writes that
+  choice, and the heading stays unset so the bundled greeting translations continue to be used.
