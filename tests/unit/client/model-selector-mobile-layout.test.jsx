@@ -93,7 +93,14 @@ describe('ModelSelector menu layout', () => {
       expect(name).toHaveClass('truncate');
 
       if (model.description) {
-        expect(desc).toHaveClass('line-clamp-1', 'sm:line-clamp-2');
+        // `truncate` rather than `line-clamp-1`: a `-webkit-line-clamp`
+        // element inside a flex item keeps its full unclamped height in
+        // WebKit, so long descriptions rendered one line of text followed by
+        // a tall empty box. Two lines are allowed from `sm` up, bounded by
+        // max-h so the same quirk cannot add height there either.
+        expect(desc).toHaveClass('truncate', 'sm:whitespace-normal', 'sm:line-clamp-2');
+        expect(desc).toHaveClass('sm:max-h-8');
+        expect(desc.className).not.toMatch(/(^|\s)line-clamp-1(\s|$)/);
       } else {
         expect(desc).toBeUndefined();
       }

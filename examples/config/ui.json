@@ -290,6 +290,13 @@
       ]
     }
   },
+  "startPage": {
+    "showDefaultApp": true,
+    "subtitle": {
+      "en": "How can I help you today?",
+      "de": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
   "promptsList": {
     "sort": {
       "enabled": true,

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import useDarkMode from '../../hooks/useDarkMode';
 
-function DarkModeToggle({ className = '' }) {
+function DarkModeToggle({ className = '', variant = 'header' }) {
   const { t } = useTranslation();
   const { preference, toggleMode } = useDarkMode();
 
@@ -43,10 +43,17 @@ function DarkModeToggle({ className = '' }) {
 
   const { icon, label, nextLabel } = getIconAndLabel();
 
+  // The header variant sits on the coloured top bar; the sidebar variant sits
+  // on a white/dark surface next to the compact language selector.
+  const variantClasses =
+    variant === 'sidebar'
+      ? 'p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-400'
+      : 'px-2 py-1.5 rounded-sm border border-white/50 hover:bg-white/10 focus:outline-hidden focus:ring-1 focus:ring-white text-sm';
+
   return (
     <button
       onClick={toggleMode}
-      className={`flex items-center justify-center px-2 py-1.5 rounded-sm border border-white/50 hover:bg-white/10 focus:outline-hidden focus:ring-1 focus:ring-white transition-colors text-sm ${className}`}
+      className={`flex items-center justify-center transition-colors ${variantClasses} ${className}`}
       aria-label={nextLabel}
       title={`${label} - ${nextLabel}`}
     >

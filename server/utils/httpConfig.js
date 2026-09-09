@@ -11,6 +11,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { guardedLookup } from './dnsGuard.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -333,6 +334,30 @@ function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
 }
 
 /**
+ * Direct agent for a URL, resolving hostnames through the DNS guard.
+ *
+ * Without a caller-supplied lookup the agent is shared per (protocol, SSL
+ * bypass) so every outbound connection goes through `guardedLookup` (see
+ * dnsGuard.js): one getaddrinfo per hostname at a time, a bounded wait and a
+ * short negative cache, so an unreachable model endpoint cannot stall other
+ * requests by occupying the threadpool's DNS slots. A caller-supplied lookup
+ * (the SSRF guard's DNS pinning) is request-specific and gets its own agent.
+ */
+const sharedDirectAgents = new Map();
+function guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
+  if (typeof lookup === 'function') {
+    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+  }
+  const key = `${isHttps ? 'https' : 'http'}:${shouldIgnoreSSL ? 'insecure' : 'strict'}`;
+  let agent = sharedDirectAgents.get(key);
+  if (!agent) {
+    agent = createDirectAgent(isHttps, shouldIgnoreSSL, guardedLookup);
+    sharedDirectAgents.set(key, agent);
+  }
+  return agent;
+}
+
+/**
  * Create HTTP/HTTPS agent with global SSL and proxy configuration
  * @param {string} url - Request URL (used to determine protocol and proxy bypass)
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
@@ -360,7 +385,7 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
     logger.info('Bypassing proxy for URL', { component: 'HttpConfig', url });
     // Direct connection: apply SSL bypass and/or DNS pinning as needed.
-    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Check if URL matches selective proxy patterns
@@ -372,7 +397,7 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
   ) {
     logger.info('URL does not match proxy patterns', { component: 'HttpConfig', url });
     // Direct connection: apply SSL bypass and/or DNS pinning as needed.
-    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Apply proxy configuration
@@ -415,7 +440,7 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
       proxyConfigured: Boolean(proxyConfig.https)
     });
   }
-  return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+  return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
 }
 
 /**

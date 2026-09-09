@@ -1,12 +1,42 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { i18nService } from '../../i18n/i18n';
+import Icon from './Icon';
+import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 
-function LanguageSelector() {
+function LanguageSelector({ variant = 'header' }) {
   const { i18n, t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const [isChanging, setIsChanging] = useState(false);
+  const [open, setOpen] = useState(false);
+  const compactRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Arrow keys / Home / End move between languages, Enter or Space picks one,
+  // Escape closes; focus returns to the trigger when the popover closes.
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+  useKeyboardNavigation(menuRef, {
+    isActive: open,
+    onSelect: index => {
+      menuRef.current?.querySelectorAll('[role="menuitemradio"]')?.[index]?.click();
+    },
+    onClose: closeMenu
+  });
+
+  // Close the compact popover when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = e => {
+      if (compactRef.current && !compactRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
 
   // Handle language change with error handling
   const changeLanguage = async language => {
@@ -66,12 +96,73 @@ function LanguageSelector() {
     return <div className="language-selector-loading">{t('common.loading', 'Loading...')}</div>;
   }
 
+  // Compact variant for the sidebar: a small button showing just the current
+  // language code (EN/DE); clicking opens a popover with the full names so it
+  // never overlaps the neighbouring user button.
+  if (variant === 'sidebar') {
+    const current = (i18n.language || 'en').split('-')[0];
+    return (
+      <div className="relative flex-none" ref={compactRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          disabled={isChanging}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={t('common.selectLanguage', 'Select language')}
+          className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
+        >
+          {current.toUpperCase()}
+          <Icon
+            name="chevron-down"
+            size="xs"
+            className={`transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {open && (
+          <ul
+            ref={menuRef}
+            role="menu"
+            aria-label={t('common.selectLanguage', 'Select language')}
+            className="absolute bottom-full right-0 mb-2 min-w-32 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
+          >
+            {availableLanguages.map(lang => (
+              <li key={lang.code} role="none">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={i18n.language === lang.code}
+                  onClick={() => {
+                    changeLanguage(lang.code);
+                    closeMenu();
+                  }}
+                  className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    i18n.language === lang.code
+                      ? 'text-indigo-600 dark:text-indigo-400 font-medium'
+                      : 'text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {lang.name}
+                  {i18n.language === lang.code && <Icon name="check" size="sm" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  const selectClassName =
+    'bg-transparent text-white border border-white rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-1 focus:ring-white cursor-pointer';
+
   return (
     <div className="language-selector">
       <select
         value={i18n.language || 'en'}
         onChange={e => changeLanguage(e.target.value)}
-        className="bg-transparent text-white border border-white rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-1 focus:ring-white cursor-pointer"
+        className={selectClassName}
         disabled={isChanging}
         aria-label={t('common.selectLanguage', 'Select language')}
       >

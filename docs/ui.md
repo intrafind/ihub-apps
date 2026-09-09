@@ -29,6 +29,9 @@ The UI configuration contains the following top-level sections:
   "appsList": {
     /* Apps list configuration */
   },
+  "startPage": {
+    /* Start page configuration */
+  },
   "pages": {
     /* Static page content */
   }
@@ -91,13 +94,13 @@ The `header` section controls the appearance and content of the application head
 | `titleLight`               | Object  | Localized text for the light-weight part of the header title (e.g., `"iHub"`) |
 | `titleBold`                | Object  | Localized text for the bold part of the header title (e.g., `" Apps"`) |
 | `tagline`                  | Object  | Localized tagline displayed beneath the title (e.g., `"by IntraFind"`) |
-| `defaultColor`             | String  | Background color for the header              |
+| `defaultColor`             | String  | Background color of the classic top header (embedded contexts and `?sidebar=false`, see below) |
 | `favicon`                  | String  | Path to the browser tab icon (favicon). Leave empty to use the built-in default. Configurable from the admin **UI Customization > Header** tab |
 | `logo.url`                 | String  | Path to the logo image                       |
 | `logo.alt`                 | Object  | Localized alt text for the logo              |
 | `logo.containerStyle`      | Object  | Optional inline style for the logo container |
 | `logo.imageStyle`          | Object  | Optional inline style for the logo image     |
-| `links`                    | Array   | Navigation links for the header              |
+| `links`                    | Array   | Navigation links, shown in the sidebar (and in the classic header where that is used) |
 | `languageSelector.enabled` | Boolean | Show the language selector (default: true)   |
 
 The `titleLight` and `titleBold` fields split the application name into two typographic weights. `titleLight` renders in a lighter font weight while `titleBold` renders in a heavier weight, together forming the full brand name shown in the header. Example:
@@ -109,6 +112,37 @@ The `titleLight` and `titleBold` fields split the application name into two typo
   "tagline": { "en": "by IntraFind", "de": "von IntraFind" }
 }
 ```
+
+### Navigation Sidebar
+
+On regular pages the top header is replaced by a collapsible left sidebar (284 px wide, or a
+72 px icon rail when collapsed; the collapsed state is remembered per browser). It shows:
+
+- the brand mark built from `header.logo`, `header.titleLight` / `header.titleBold` and
+  `header.tagline`,
+- a **New chat** button that leads to the [start page](#start-page-configuration) and a search
+  over the user's apps,
+- the configured `header.links` — entries pointing to `/` and `/apps` are represented by the
+  dedicated **Home** and **Browse all apps** buttons and are not repeated; `/pages/*` links honour
+  the page's `authRequired` / `allowedGroups`, and links to feature-gated routes disappear with
+  the feature,
+- the user's apps with favorites first (the star marks an app as favorite; favorites are stored
+  per browser and shared with the start page and the apps browser),
+- the account menu, the language selector (`header.languageSelector.enabled`) and the dark-mode
+  toggle.
+
+On small screens the sidebar becomes a drawer opened from a slim top bar.
+
+The classic top header (with `header.defaultColor`) is still used where the sidebar is not: in
+Microsoft Teams, Office add-ins and Nextcloud, in iframes opened with `?header=false`, and when
+the sidebar is switched off. These URL parameters are remembered in the browser (`localStorage`)
+until they are passed again with another value:
+
+| Parameter        | Effect                                                                 |
+| ---------------- | ---------------------------------------------------------------------- |
+| `?sidebar=false` | Use the classic top header instead of the sidebar (`?sidebar=true` resets) |
+| `?header=false`  | Hide the header and the sidebar entirely — for embedding (`?header=true` resets) |
+| `?footer=false`  | Hide the footer (`?footer=true` resets)                                |
 
 ### Footer Configuration
 
@@ -270,7 +304,7 @@ The `appsListLogo` can also be configured from the admin panel under **UI Custom
 
 ### Apps List Configuration
 
-The `appsList` section controls the behavior and appearance of the apps list/home page:
+The `appsList` section controls the behavior and appearance of the apps browser at `/apps` — the full list with search, categories and sorting. The home page `/` is the [start page](#start-page-configuration), which links to the apps browser.
 
 ```json
 "appsList": {
@@ -370,6 +404,37 @@ The `appsList.categories` section enables a category filter bar on the apps list
 
 The same `categories` structure is also available under `promptsList.categories` and follows identical rules for the prompts library.
 
+### Start Page Configuration
+
+The home page `/` is a personalized start page: a time-based greeting, the chat input of a
+default app so users can start a conversation immediately, up to four featured apps (favorites
+first, then by `order`) and a link to the full apps browser at `/apps`. Messages typed on the
+start page open the app at `/apps/{appId}` and are sent right away; attachments added on the
+start page are carried into the chat. The input follows the default app's model settings: the
+model selector appears unless the app disables it, lists the models the current user may use
+with that app, and shows the same "No models available" notice as the chat when the user's
+groups permit none.
+
+The `startPage` section configures it. It can be edited under **Admin → UI Customization →
+Start Page**; existing installations receive the defaults through a configuration migration.
+
+```json
+"startPage": {
+  "showDefaultApp": true,
+  "defaultAppId": "chat",
+  "subtitle": {
+    "en": "How can I help you today?",
+    "de": "Wie kann ich Ihnen heute helfen?"
+  }
+}
+```
+
+| Property         | Type    | Description                                                                                                                                                          |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showDefaultApp` | Boolean | Show the default app's chat input on the start page (default: `true`). When `false`, the page shows the greeting and the featured apps only.                          |
+| `defaultAppId`   | String  | ID of the app whose chat input is shown. When unset — or when the current user cannot access that app — the first app the user can access is used instead.            |
+| `subtitle`       | Object  | Localized line shown under the greeting (overrides the translation value).                                                                                           |
+
 ### Prompts List Configuration
 
 The `promptsList` section controls sorting behavior of the prompts library:
@@ -421,6 +486,17 @@ Static pages can be accessed through URL routes using the pattern `/page/{pageId
 
 Navigation links pointing to pages are automatically hidden if the current user does not meet the `authRequired` or `allowedGroups` restrictions.
 These settings can also be managed via the admin interface at `/admin/pages`.
+
+The main user-facing routes are:
+
+| Route           | Page                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `/`             | [Start page](#start-page-configuration)                                                     |
+| `/apps`         | Apps browser ([`appsList`](#apps-list-configuration))                                       |
+| `/apps/{appId}` | Chat with an app                                                                            |
+| `/prompts`      | Prompts library (`promptsList`, feature flag `promptsLibrary`)                              |
+| `/pages/{id}`   | Static pages                                                                                |
+| `/chats`        | Chat history — preview behind the `chatHistoryPreview` feature flag (off by default, sample data only) |
 
 ### Theme Configuration
 

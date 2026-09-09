@@ -252,6 +252,7 @@ export function makeClient(opts = {}) {
     sleep: opts.sleep || (async () => {}),
     maxRetries: opts.maxRetries,
     connectTimeoutMs: opts.connectTimeoutMs,
+    streamIdleTimeoutMs: opts.streamIdleTimeoutMs,
     debugDumps: false
   });
   return { client, calls };

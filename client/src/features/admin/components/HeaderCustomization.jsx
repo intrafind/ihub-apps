@@ -128,7 +128,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.ui.header.colorHint',
-              'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229))'
+              'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it.'
             )}
           </p>
         </div>

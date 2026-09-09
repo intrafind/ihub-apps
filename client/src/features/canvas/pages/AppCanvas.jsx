@@ -573,7 +573,7 @@ export default function AppCanvas() {
   }
 
   return (
-    <div className="canvas-container flex flex-col h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)] min-h-0 overflow-hidden pt-4 pb-2 bg-white">
+    <div className="canvas-container flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden pt-4 pb-2 bg-white">
       {/* Shared Header */}
       <SharedAppHeader
         app={app}

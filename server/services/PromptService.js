@@ -28,6 +28,21 @@ const promptKnowledgeSources = new Map();
  * @param {string} timeZone - IANA zone
  * @returns {string} e.g. "2026-09-03"
  */
+/**
+ * Pick a locale Intl accepts for date/time formatting. Falls back to
+ * `fallback` when `language` is missing, not a BCP 47 tag (`*`), or unknown.
+ */
+function resolveFormattingLocale(language, fallback) {
+  if (typeof language === 'string' && language.trim()) {
+    try {
+      if (Intl.DateTimeFormat.supportedLocalesOf([language]).length > 0) return language;
+    } catch {
+      // RangeError: not a structurally valid language tag
+    }
+  }
+  return fallback;
+}
+
 function isoDateInTimeZone(now, timeZone) {
   try {
     return new Intl.DateTimeFormat('en-CA', {
@@ -103,11 +118,15 @@ class PromptService {
     // machine form for prompts that want to compare dates.
     const tzOptions = { timeZone: timezone };
     const defaultLang = platformConfig.defaultLanguage || 'en';
-    const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, {
+    // Clients may send a language that is not a BCP 47 tag (Node's fetch sends
+    // `Accept-Language: *`); Intl throws on those, which used to fail the whole
+    // chat request. Fall back to the platform default instead.
+    const locale = resolveFormattingLocale(language, defaultLang);
+    const dateFormatter = new Intl.DateTimeFormat(locale, {
       ...tzOptions,
       dateStyle: 'full'
     });
-    const timeFormatter = new Intl.DateTimeFormat(language || defaultLang, {
+    const timeFormatter = new Intl.DateTimeFormat(locale, {
       ...tzOptions,
       timeStyle: 'medium'
     });

@@ -2,11 +2,14 @@ import { useEffect, useState, useSyncExternalStore, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
+import { isTeamsEnvironment } from './utils/teamsEnvironment';
 import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
+import StartPage from './features/apps/pages/StartPage';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
@@ -170,25 +173,34 @@ const TeamsAuthEnd = lazyWithRetry(() => import('./features/teams/TeamsAuthEnd')
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
+const SafeStartPage = withSafeRoute(StartPage);
 const SafeAppRouterWrapper = withSafeRoute(AppRouterWrapper);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
-// Detect Teams environment without loading the Teams SDK (~484KB)
+// Detect Teams environment without loading the Teams SDK (~484KB). The
+// detection is shared with Layout, which keeps the classic header in Teams.
 function useIsTeamsEnvironment() {
-  const [isTeams] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (
-      params.has('loginHint') ||
-      params.has('userObjectId') ||
-      params.has('theme') ||
-      params.has('isTeams') ||
-      window.name === 'embedded' ||
-      window.location.hostname === 'teams.microsoft.com'
-    );
-  });
+  const [isTeams] = useState(isTeamsEnvironment);
   return isTeams;
+}
+
+// Chat-history preview page. Feature-flag gating has to happen INSIDE the
+// providers: App() renders above <AppProviders>, so hooks called there only
+// ever see the default (empty, still-loading) platform config and a route
+// conditionally rendered from App() could never turn on. Deciding in the
+// element also avoids flashing the 404 page while the config is loading.
+function ChatHistoryRoute() {
+  const { isLoading } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
+  if (isLoading) return <AdminLoading />;
+  if (!featureFlags.isEnabled('chatHistoryPreview', false)) return <NotFound />;
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <ChatHistoryPage />
+    </Suspense>
+  );
 }
 
 // Loading component for lazy-loaded admin components
@@ -353,10 +365,16 @@ function App() {
             index
             element={
               <SetupCheck>
-                <SafeAppsList />
+                <SafeStartPage />
               </SetupCheck>
             }
           />
+          {/* Apps browser — full list with search/filter */}
+          <Route path="apps" element={<SafeAppsList />} />
+          {/* Chat history page — feature-flagged, uses mock data */}
+          {/* Chat history preview — the element gates on the feature flag (see
+              ChatHistoryRoute); the route itself is always registered. */}
+          <Route path="chats" element={<ChatHistoryRoute />} />
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />

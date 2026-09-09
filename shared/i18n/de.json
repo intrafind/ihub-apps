@@ -3,7 +3,8 @@
     "skipToContent": "Zum Hauptinhalt springen"
   },
   "footer": {
-    "navigation": "Fußzeilen-Navigation"
+    "navigation": "Fußzeilen-Navigation",
+    "copyright": "© {{year}} iHub Apps"
   },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
@@ -539,6 +540,8 @@
     "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
     "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
+    "endpointUnreachable": "Der {provider}-Endpunkt für Modell {model} ist nicht erreichbar: Er hat auf den Verbindungsversuch nicht geantwortet. Prüfen Sie, ob der Server läuft und von iHub aus erreichbar ist (VPN, Firewall, Hostname).",
+    "streamStalled": "Der {provider}-Endpunkt für Modell {model} hat die Übertragung abgebrochen, bevor die Antwort vollständig war. Alles oberhalb dieser Zeile ist die Teilantwort — senden Sie die Nachricht erneut, um es noch einmal zu versuchen.",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
     "dnsResolutionFailed": "Der Hostname für die {provider} API (Modell {model}) konnte nicht aufgelöst werden. DNS-Lookup für {hostname} fehlgeschlagen. Wenn Sie sich hinter einem Firmen-Proxy befinden, stellen Sie sicher, dass HTTPS_PROXY konfiguriert ist.",
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
@@ -1997,6 +2000,37 @@
         }
       }
     },
+    "sidebar": {
+      "backToApp": "Zurück zu iHub",
+      "adminPanel": "Admin-Bereich",
+      "expand": "Seitenleiste ausklappen",
+      "collapse": "Seitenleiste einklappen",
+      "search": "Admin durchsuchen...",
+      "searchPlaceholder": "Admin durchsuchen... Cmd+K",
+      "navLabel": "Admin-Navigation",
+      "openMenu": "Menü öffnen",
+      "closeMenu": "Menü schließen"
+    },
+    "ui": {
+      "tabs": {
+        "startPage": "Startseite"
+      },
+      "startPage": {
+        "title": "Startseiten-Konfiguration",
+        "description": "Konfigurieren Sie die personalisierte Startseite für Nutzer.",
+        "defaultApp": "Standard-Chat-App",
+        "defaultAppHelp": "Die App, deren Chat-Eingabe auf der Startseite angezeigt wird. Ohne Auswahl wird die erste zugängliche App verwendet.",
+        "firstAvailable": "Erste verfügbare App (automatisch)",
+        "showDefaultApp": "Standard-Chat-App anzeigen",
+        "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe.",
+        "subtitle": "Untertitel",
+        "subtitleHelp": "Wird unter der Begrüßung angezeigt. Leer lassen, um den Standardtext zu verwenden.",
+        "unknownApp": "nicht gefunden"
+      },
+      "header": {
+        "colorHint": "Verwenden Sie Hex-Farben (#4f46e5) oder RGB-Werte (rgb(79, 70, 229)). Die Farbe gilt für die klassische Kopfzeile (Teams-, Office- und Nextcloud-Einbettungen, ?sidebar=false); das Seitenleisten-Layout verwendet sie nicht."
+      }
+    },
     "groupSelect": {
       "placeholder": "Gruppen suchen oder Namen eingeben…",
       "empty": "Noch keine Gruppen ausgewählt",
@@ -2628,7 +2662,9 @@
     "admin": "Admin",
     "settings": "Einstellungen",
     "workflows": "Workflows",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "apps": "Apps",
+    "chats": "Chats"
   },
   "darkMode": {
     "auto": "Auto (System)",
@@ -2770,7 +2806,8 @@
   },
   "apps": {
     "searchApps": "Apps durchsuchen",
-    "sortBy": "Sortieren nach"
+    "sortBy": "Sortieren nach",
+    "appsList": "App-Liste"
   },
   "search": {
     "dialogLabel": "Anwendungen suchen",
@@ -2827,6 +2864,64 @@
     "showMore": "Mehr anzeigen",
     "showLess": "Weniger anzeigen",
     "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."
+  },
+  "startPage": {
+    "greetingMorning": "Guten Morgen",
+    "greetingAfternoon": "Guten Tag",
+    "greetingEvening": "Guten Abend",
+    "subtitle": "Wie kann ich Ihnen heute helfen?",
+    "openApp": "App vollständig öffnen",
+    "jumpIntoApp": "In eine App springen",
+    "browseAllApps": "Alle Apps durchsuchen",
+    "pickUpWhereYouLeftOff": "Machen Sie dort weiter, wo Sie aufgehört haben",
+    "inputUnavailable": "Die Chat-Eingabe konnte nicht geladen werden. Öffnen Sie die App, um ein Gespräch zu beginnen.",
+    "appsUnavailable": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
+    "noApps": "Für Ihr Konto sind noch keine Apps verfügbar.",
+    "greetingWithName": "{{greeting}}, {{name}}!",
+    "greetingNoName": "{{greeting}}!"
+  },
+  "sidebar": {
+    "navigation": "Navigation",
+    "newChat": "Neuer Chat",
+    "prompts": "Prompts",
+    "browseApps": "Alle Apps durchsuchen",
+    "apps": "Apps",
+    "recents": "Letzte",
+    "allApps": "Alle Apps",
+    "allChats": "Alle Chats",
+    "search": "Suche",
+    "searchPlaceholder": "Chats & Apps durchsuchen",
+    "searchChatsApps": "Chats & Apps durchsuchen",
+    "collapse": "Seitenleiste einklappen",
+    "expand": "Seitenleiste ausklappen",
+    "home": "Startseite",
+    "loadingApps": "Lädt…",
+    "noAppsMatch": "Keine passenden Apps",
+    "openMenu": "Navigation öffnen",
+    "closeMenu": "Navigation schließen",
+    "noApps": "Keine Apps verfügbar",
+    "label": "Seitenleiste",
+    "searchApps": "Apps durchsuchen",
+    "appsUnavailable": "Die Apps konnten nicht geladen werden",
+    "sampleBadge": "Beispiel"
+  },
+  "chatHistory": {
+    "title": "Ihre Chats",
+    "searchPlaceholder": "Chats durchsuchen…",
+    "groupRecent": "Aktuell",
+    "groupByApp": "Nach App",
+    "groupByDate": "Nach Datum",
+    "noResults": "Keine passenden Chats gefunden",
+    "previewNotice": "Vorschau: Diese Seite zeigt Beispiel-Unterhaltungen. Der Chat-Verlauf wird noch nicht gespeichert.",
+    "subtitle_one": "{{count}} Unterhaltung in Ihren Apps",
+    "subtitle_other": "{{count}} Unterhaltungen in Ihren Apps",
+    "groupBy": "Gruppieren nach",
+    "group": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "last7days": "Letzte 7 Tage",
+      "older": "Älter"
+    }
   },
   "transcription": {
     "record": "Audio zum Transkribieren aufnehmen",

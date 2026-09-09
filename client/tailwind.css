@@ -103,3 +103,16 @@
   --default-ring-width: 3px;
   --default-ring-color: var(--color-blue-500);
 }
+
+/*
+ * Full-height app shell (sidebar layout, admin, app pages). `dvh` follows the
+ * mobile browser's dynamic toolbars so the chat input is never hidden behind
+ * them; `vh` is the fallback for browsers without dvh support. Lives here so
+ * every entry stylesheet (app, Office, extension, Nextcloud) has it.
+ */
+@utility h-shell {
+  height: 100vh;
+  @supports (height: 100dvh) {
+    height: 100dvh;
+  }
+}

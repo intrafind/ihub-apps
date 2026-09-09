@@ -3,7 +3,8 @@
     "skipToContent": "Skip to main content"
   },
   "footer": {
-    "navigation": "Footer navigation"
+    "navigation": "Footer navigation",
+    "copyright": "© {{year}} iHub Apps"
   },
   "attachedFiles": {
     "removeAll": "Remove All",
@@ -1740,6 +1741,37 @@
         }
       }
     },
+    "sidebar": {
+      "backToApp": "Back to iHub",
+      "adminPanel": "Admin Panel",
+      "expand": "Expand sidebar",
+      "collapse": "Collapse sidebar",
+      "search": "Search admin...",
+      "searchPlaceholder": "Search admin... Cmd+K",
+      "navLabel": "Admin navigation",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
+    },
+    "ui": {
+      "tabs": {
+        "startPage": "Start Page"
+      },
+      "startPage": {
+        "title": "Start Page Configuration",
+        "description": "Configure the personalized start page shown to users.",
+        "defaultApp": "Default chat app",
+        "defaultAppHelp": "The app whose chat input is shown on the start page. When unset, the first app the user can access is used.",
+        "firstAvailable": "First available app (automatic)",
+        "showDefaultApp": "Show default chat app",
+        "showDefaultAppHelp": "When off, the start page shows the greeting and apps but no chat input.",
+        "subtitle": "Subtitle",
+        "subtitleHelp": "Shown under the greeting. Leave empty to use the built-in text.",
+        "unknownApp": "not found"
+      },
+      "header": {
+        "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it."
+      }
+    },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
       "empty": "No groups selected yet",
@@ -2185,6 +2217,8 @@
     "requestTimeout": "Request timed out after {timeout} seconds. The model might be under high load.",
     "llmApiError": "LLM API request failed with status {status}",
     "responseStreamError": "Error processing response stream: {error}",
+    "endpointUnreachable": "The {provider} endpoint for model {model} could not be reached: it did not answer the connection attempt. Check that the server is running and reachable from iHub (VPN, firewall, hostname).",
+    "streamStalled": "The {provider} endpoint for model {model} stopped sending data before the answer was finished. Anything above this line is the partial answer — send the message again to retry.",
     "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
     "dnsResolutionFailed": "Could not resolve hostname for {provider} API (model {model}). DNS lookup failed for {hostname}. If you are behind a corporate proxy, ensure HTTPS_PROXY is configured.",
     "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
@@ -2663,7 +2697,9 @@
     "admin": "Admin",
     "settings": "Settings",
     "workflows": "Workflows",
-    "prompts": "Prompts"
+    "prompts": "Prompts",
+    "apps": "Apps",
+    "chats": "Chats"
   },
   "darkMode": {
     "auto": "Auto (system)",
@@ -2805,7 +2841,8 @@
   },
   "apps": {
     "searchApps": "Search apps",
-    "sortBy": "Sort by"
+    "sortBy": "Sort by",
+    "appsList": "Apps list"
   },
   "search": {
     "dialogLabel": "Search applications",
@@ -2862,6 +2899,64 @@
     "showMore": "Show more",
     "showLess": "Show less",
     "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."
+  },
+  "startPage": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "subtitle": "How can I help you today?",
+    "openApp": "Open full app",
+    "jumpIntoApp": "Jump into an app",
+    "browseAllApps": "Browse all apps",
+    "pickUpWhereYouLeftOff": "Pick up where you left off",
+    "inputUnavailable": "The chat input could not be loaded. Open the app to start a conversation.",
+    "appsUnavailable": "Apps could not be loaded. Please try again later.",
+    "noApps": "No apps are available for your account yet.",
+    "greetingWithName": "{{greeting}}, {{name}}!",
+    "greetingNoName": "{{greeting}}!"
+  },
+  "sidebar": {
+    "navigation": "Navigation",
+    "newChat": "New chat",
+    "prompts": "Prompts",
+    "browseApps": "Browse all apps",
+    "apps": "Apps",
+    "recents": "Recents",
+    "allApps": "All apps",
+    "allChats": "All chats",
+    "search": "Search",
+    "searchPlaceholder": "Search chats & apps",
+    "searchChatsApps": "Search chats & apps",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "home": "Home",
+    "loadingApps": "Loading…",
+    "noAppsMatch": "No apps match",
+    "openMenu": "Open navigation",
+    "closeMenu": "Close navigation",
+    "noApps": "No apps available",
+    "label": "Sidebar",
+    "searchApps": "Search apps",
+    "appsUnavailable": "Apps could not be loaded",
+    "sampleBadge": "Sample"
+  },
+  "chatHistory": {
+    "title": "Your chats",
+    "searchPlaceholder": "Search your chats…",
+    "groupRecent": "Recent",
+    "groupByApp": "By app",
+    "groupByDate": "By date",
+    "noResults": "No chats match your search",
+    "previewNotice": "Preview: this page shows sample conversations. Chat history is not stored yet.",
+    "subtitle_one": "{{count}} conversation across your apps",
+    "subtitle_other": "{{count}} conversations across your apps",
+    "groupBy": "Group by",
+    "group": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7days": "Last 7 days",
+      "older": "Older"
+    }
   },
   "transcription": {
     "record": "Record audio to transcribe",

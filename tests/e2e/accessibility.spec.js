@@ -65,30 +65,37 @@ function formatViolationSummary(violations) {
 }
 
 test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
-  test.describe('Home / Apps list page', () => {
-    test('should not have critical or serious accessibility violations', async ({ page }) => {
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
+  // "/" is the start page (greeting, default-app input, featured apps) and
+  // "/apps" the apps browser; both are user-facing entry points.
+  for (const [label, path] of [
+    ['Start page', '/'],
+    ['Apps browser', '/apps']
+  ]) {
+    test.describe(label, () => {
+      test('should not have critical or serious accessibility violations', async ({ page }) => {
+        await page.goto(path);
+        await page.waitForLoadState('networkidle');
 
-      const results = await createAxeScanner(page).analyze();
+        const results = await createAxeScanner(page).analyze();
 
-      const blocking = getBlockingViolations(results.violations);
+        const blocking = getBlockingViolations(results.violations);
 
-      // Log all violations for awareness regardless of severity
-      if (results.violations.length > 0) {
-        console.log(
-          `[a11y] Home page — ${results.violations.length} total violation(s):\n` +
-            formatViolationSummary(results.violations)
-        );
-      }
+        // Log all violations for awareness regardless of severity
+        if (results.violations.length > 0) {
+          console.log(
+            `[a11y] ${label} — ${results.violations.length} total violation(s):\n` +
+              formatViolationSummary(results.violations)
+          );
+        }
 
-      expect(
-        blocking,
-        `Home page has ${blocking.length} critical/serious a11y violation(s):\n` +
-          formatViolationSummary(blocking)
-      ).toEqual([]);
+        expect(
+          blocking,
+          `${label} has ${blocking.length} critical/serious a11y violation(s):\n` +
+            formatViolationSummary(blocking)
+        ).toEqual([]);
+      });
     });
-  });
+  }
 
   test.describe('Login page', () => {
     test('should not have critical or serious accessibility violations', async ({ page }) => {

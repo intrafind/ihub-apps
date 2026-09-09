@@ -50,6 +50,17 @@ export const createFavoriteItemHelpers = storageKey => {
       }
 
       localStorage.setItem(storageKey, JSON.stringify(newFavorites));
+      // Notify other mounted components (e.g. the sidebar and the apps list)
+      // so they can refresh their favorite state without a page reload.
+      try {
+        window.dispatchEvent(
+          new CustomEvent('ihub:favorites-changed', {
+            detail: { storageKey, favorites: newFavorites }
+          })
+        );
+      } catch {
+        // Ignore environments without window/CustomEvent (e.g. SSR/tests)
+      }
       return !isCurrentlyFavorite; // Return the new status
     } catch (error) {
       console.error(`Error toggling favorite item for ${storageKey}:`, error);
@@ -62,4 +73,22 @@ export const createFavoriteItemHelpers = storageKey => {
     isFavorite,
     toggleFavorite
   };
+};
+
+/**
+ * Stable sort: favorites first, then `tieBreaker` (if given), else input order.
+ * Shared by the start page, the sidebar and the apps browser so "favorites
+ * first" means the same thing everywhere.
+ * @param {Array<{id: string}>} items
+ * @param {string[]} favoriteIds
+ * @param {(a: object, b: object) => number} [tieBreaker]
+ */
+export const sortFavoritesFirst = (items, favoriteIds, tieBreaker = null) => {
+  const favorites = new Set(favoriteIds || []);
+  return [...items].sort((a, b) => {
+    const aFav = favorites.has(a.id);
+    const bFav = favorites.has(b.id);
+    if (aFav !== bFav) return aFav ? -1 : 1;
+    return tieBreaker ? tieBreaker(a, b) : 0;
+  });
 };

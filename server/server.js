@@ -1,4 +1,7 @@
 // Import required modules
+// Must stay the first import: sizes the libuv threadpool before any module
+// touches it (see threadpool.js).
+import { uvThreadpoolSize } from './threadpool.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import http from 'http';
@@ -739,7 +742,8 @@ if (cluster.isPrimary && workerCount > 1) {
         message: 'Server is listening on all interfaces',
         protocol,
         bindAddress: HOST,
-        port: PORT
+        port: PORT,
+        uvThreadpoolSize
       });
 
       if (HOST === '0.0.0.0' || HOST === '::') {

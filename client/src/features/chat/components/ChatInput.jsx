@@ -537,16 +537,19 @@ function ChatInput({
       {/* Status line above the input: ephemeral "not saved" notice centered,
           token count right. Rendered as one row to keep vertical space tight. */}
       {(ephemeral || (contextUsage && !fileTokenWarning)) && (
-        <div className="mx-2 mb-0.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
-          <span />
-          <span className="text-center text-violet-600 dark:text-violet-400">
+        /* Flex on mobile so the token count gets the width it needs: in the
+           three-column grid it was squeezed into a 1fr column and wrapped
+           ("~290 / 32,768 context" + "tokens" on a second line). */
+        <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 text-xs sm:grid sm:grid-cols-[1fr_auto_1fr]">
+          <span className="hidden sm:block" />
+          <span className="min-w-0 truncate text-center text-violet-600 dark:text-violet-400">
             {ephemeral &&
               t(
                 'chat.ephemeral.activeNotice',
                 'Messages are not saved and disappear when you leave or reload.'
               )}
           </span>
-          <span className={`justify-self-end ${contextUsageTone}`}>
+          <span className={`shrink-0 whitespace-nowrap justify-self-end ${contextUsageTone}`}>
             {contextUsage &&
               !fileTokenWarning &&
               t('chat.contextUsage', {
@@ -646,7 +649,7 @@ function ChatInput({
           </div>
 
           {/* Bottom line: Actions menu, model selector, send/stop button */}
-          <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+          <div className="flex items-center gap-2 px-3 pb-1.5 border-t border-gray-100 dark:border-gray-700/50 pt-1.5 sm:pb-2 sm:pt-2">
             {/* Chat Input Actions Menu */}
             <ChatInputActionsMenu
               app={app}
@@ -812,7 +815,7 @@ function ChatInput({
               type="button"
               onClick={isProcessing ? handleCancel : handleSubmit}
               disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-              className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
                 disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : isProcessing
@@ -831,16 +834,19 @@ function ChatInput({
             (incognito) toggle right-aligned under the send button. The active
             "not saved" notice lives in the status line above the input. */}
         {(ephemeralToggleAvailable || disclaimer) && (
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <span />
-            <div className="text-center">{disclaimer}</div>
-            <div className="justify-self-end">
+          <div className="flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+            <span className="hidden sm:block" />
+            <div className="min-w-0 flex-1 text-center sm:flex-none">{disclaimer}</div>
+            <div className="shrink-0 justify-self-end">
               {ephemeralToggleAvailable && (
                 <button
                   type="button"
                   onClick={() => onEphemeralChange(!ephemeral)}
                   disabled={isInputDisabled || isProcessing}
                   aria-pressed={ephemeral}
+                  // Explicit name: below `sm` the visible label is hidden, and
+                  // a `title` alone is an unreliable accessible name.
+                  aria-label={t('chat.ephemeral.label', 'Incognito mode')}
                   title={
                     ephemeral
                       ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
@@ -856,7 +862,13 @@ function ChatInput({
                   }`}
                 >
                   <Icon name="ghost" size="sm" solid={ephemeral} />
-                  <span>{t('chat.ephemeral.label', 'Incognito mode')}</span>
+                  {/* Icon-only below `sm` (phones and the Outlook taskpane):
+                      the label cost ~110px of the row and pushed the
+                      disclaimer onto a third line. The button's `title` and
+                      `aria-pressed` still name it for assistive tech. */}
+                  <span className="hidden sm:inline">
+                    {t('chat.ephemeral.label', 'Incognito mode')}
+                  </span>
                 </button>
               )}
             </div>
