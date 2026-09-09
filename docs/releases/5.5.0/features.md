@@ -1385,3 +1385,25 @@ signs in or clicks the logo goes there.
   access-denied screen, so pick a target everyone reaching `/` can open.
 - Existing installations keep the start page as home; a configuration migration writes that
   choice so nothing changes until an admin picks something else.
+
+## Configure Which Apps the Start Page and Sidebar Show, and in What Order
+
+The start-page grid and the sidebar's Apps section used to be fixed at four and five apps ranked
+by favorites and the app's `order`. Both lists are now configurable under **UI Customization →
+Start Page**, and the order apps appear in can be set by drag and drop in **Admin → Apps**.
+
+- **Default apps.** Pick the apps that lead both lists and drag them into the order you want. A
+  user's own favorites always stay above them, and users who cannot access an app never see it.
+- **Separate counts.** "Apps on the start page" and "Apps in the sidebar" are set independently
+  (0–12 each). Set one to 0 to hide that list.
+- **Ranking mode.** Everything after the favorites and the default apps follows either the
+  configured order (the app's `order` field) or **Recently used first** — the same ranking the
+  apps browser offers, now available on the start page and in the sidebar.
+- **Reorder apps.** **Admin → Apps** has a new **Reorder** button: drag a row, or use the up/down
+  arrows, then choose **Save order**. It writes each app's `order` field, so the new order also
+  applies to the apps browser. Every app is listed, so search and filters do not apply while
+  reordering, and nothing is saved until you confirm.
+- The collapsed icon rail now shows the same ranked apps instead of favorites only, so a user with
+  no favorites still gets app shortcuts there.
+- Existing installations receive the current behaviour as explicit defaults through a configuration
+  migration — nothing changes on screen until an admin edits the settings.

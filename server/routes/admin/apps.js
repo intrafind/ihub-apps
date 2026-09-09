@@ -861,6 +861,128 @@ export default function registerAdminAppsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/apps/_reorder:
+   *   post:
+   *     summary: Set the display order of applications
+   *     description: |
+   *       Rewrites the `order` field of the given applications so it matches the
+   *       order the ids are sent in: the first id gets `order: 1`, the second
+   *       `order: 2`, and so on. This is what the reorder view in
+   *       **Admin → Apps** saves, and what the apps browser, the start page and
+   *       the sidebar rank by.
+   *
+   *       Only the `order` field of each app's own configuration file is
+   *       touched; apps that are not listed keep the order they have.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - ids
+   *             properties:
+   *               ids:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: App ids, in the order they should appear
+   *           example:
+   *             ids: ["chat-assistant", "translator", "code-reviewer"]
+   *     responses:
+   *       200:
+   *         description: Order successfully applied
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *                 ids:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                 updated:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                   description: Apps whose file actually changed
+   *             example:
+   *               message: "App order updated successfully"
+   *               ids: ["chat-assistant", "translator"]
+   *               updated: ["translator"]
+   *       400:
+   *         description: Bad request - missing, duplicated or unknown ids
+   *       500:
+   *         description: Internal server error
+   */
+  app.post(buildServerPath('/api/admin/apps/_reorder'), contentAdminAuth, async (req, res) => {
+    try {
+      const { ids: requestedIds } = req.body || {};
+      if (!Array.isArray(requestedIds) || requestedIds.length === 0) {
+        return sendBadRequest(res, 'ids must be a non-empty array of app ids');
+      }
+      if (new Set(requestedIds).size !== requestedIds.length) {
+        return sendBadRequest(res, 'ids must not contain duplicates');
+      }
+
+      // Same id validation as every other app route — these reach the filesystem.
+      const ids = validateIdsForPath(requestedIds, 'app', res);
+      if (!ids) {
+        return;
+      }
+
+      const { data: apps } = configCache.getApps(true);
+      const known = new Set(apps.map(a => a.id));
+      const unknown = ids.filter(id => !known.has(id));
+      if (unknown.length > 0) {
+        return sendBadRequest(res, `Unknown app ids: ${unknown.join(', ')}`);
+      }
+
+      const appsDir = join(getRootDir(), 'contents', 'apps');
+      const updated = [];
+
+      for (const [index, id] of ids.entries()) {
+        const order = index + 1;
+        const filename = await findAppFile(id, appsDir);
+        if (!filename) {
+          logger.warn('App file not found', { component: 'AdminApps', id });
+          continue;
+        }
+        const appFilePath = join(appsDir, filename);
+        // Read the file, not the cached entry: the cache holds inheritance
+        // already merged in, and writing that back would freeze a child app's
+        // inherited fields into its own config.
+        const stored = JSON.parse(await fs.readFile(appFilePath, 'utf8'));
+        if (stored.order === order) continue;
+        stored.order = order;
+        await atomicWriteJSON(appFilePath, stored);
+        updated.push(id);
+      }
+
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'app',
+        resourceId: updated.join(','),
+        summary: `Reordered ${ids.length} apps (${updated.length} changed)`
+      });
+
+      res.json({ message: 'App order updated successfully', ids, updated });
+    } catch (error) {
+      return sendInternalError(res, error, 'reorder apps');
+    }
+  });
+
+  /**
+   * @swagger
    * /api/admin/apps/{appIds}/_toggle:
    *   post:
    *     summary: Batch toggle applications enabled/disabled status

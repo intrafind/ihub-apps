@@ -261,7 +261,11 @@
     "subtitle": {
       "en": "How can I help you today?",
       "de": "Wie kann ich Ihnen heute helfen?"
-    }
+    },
+    "appsMode": "order",
+    "appsCount": 4,
+    "sidebarAppsCount": 5,
+    "featuredAppIds": []
   },
   "promptsList": {
     "sort": {

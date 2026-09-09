@@ -10,7 +10,8 @@ import useAuthKey from '../../../shared/hooks/useAuthKey';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { sortFavoritesFirst } from '../../../utils/favoriteItems';
+import { rankAppShortcuts, readAppShortcutConfig } from '../../../utils/appShortcuts';
+import { getRecentAppIds } from '../../../utils/recentApps';
 import { pickDefaultChatApp } from '../../../utils/homePage';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
@@ -84,16 +85,28 @@ export default function StartPage() {
     getLocalizedContent(uiConfig?.startPage?.subtitle, currentLanguage) ||
     t('startPage.subtitle', 'How can I help you today?');
 
-  // Favorites first, then the admin-defined `order` — the ranking behind the
-  // featured grid (and, in pickDefaultChatApp, the default-app fallback).
+  // How many apps the grid shows, which ones lead it and how the rest rank —
+  // all admin-configured under UI Customization → Start Page.
+  const { mode, featuredAppIds, startPageCount } = useMemo(
+    () => readAppShortcutConfig(uiConfig),
+    [uiConfig]
+  );
+
+  // Read once per visit: re-reading on every render would reshuffle the grid
+  // under the user's cursor. Only the `recent` mode needs the list at all.
+  const recentAppIds = useMemo(() => (mode === 'recent' ? getRecentAppIds() : []), [mode]);
+
+  // Favorites first, then the admin's default apps, then the rest by mode.
   const rankedApps = useMemo(
     () =>
-      sortFavoritesFirst(
-        apps,
+      rankAppShortcuts(apps, {
         favoriteAppIds,
-        (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)
-      ),
-    [apps, favoriteAppIds]
+        featuredAppIds,
+        mode,
+        recentAppIds,
+        currentLanguage
+      }),
+    [apps, favoriteAppIds, featuredAppIds, mode, recentAppIds, currentLanguage]
   );
 
   // Default app: admin-configured via uiConfig.startPage.defaultAppId; when it
@@ -181,8 +194,11 @@ export default function StartPage() {
     (defaultAppDetails?.inputMode?.microphone?.enabled ??
       defaultAppDetails?.microphone?.enabled) !== false;
 
-  // Featured apps: the top four of the shared ranking
-  const featuredApps = useMemo(() => rankedApps.slice(0, 4), [rankedApps]);
+  // Featured apps: the top of the shared ranking, capped by the admin's count.
+  const featuredApps = useMemo(
+    () => rankedApps.slice(0, startPageCount),
+    [rankedApps, startPageCount]
+  );
 
   const recentChats = chatHistoryEnabled ? MOCK_CHATS.slice(0, 3) : [];
 

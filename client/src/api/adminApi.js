@@ -198,6 +198,18 @@ export const toggleApps = async (ids, enabled) => {
   return response.data;
 };
 
+/**
+ * Save the display order of apps: the first id becomes `order: 1`, the second
+ * `order: 2`, and so on. Apps left out of `ids` keep the order they have.
+ */
+export const reorderApps = async ids => {
+  const response = await makeAdminApiCall('/admin/apps/_reorder', {
+    method: 'POST',
+    body: { ids }
+  });
+  return response.data;
+};
+
 export const fetchAdminPages = async () => {
   const response = await makeAdminApiCall('/admin/pages');
   return response.data;
@@ -945,6 +957,7 @@ export const adminApi = {
   updatePrompt,
   translateText,
   toggleApps,
+  reorderApps,
   fetchAdminPages,
   fetchAdminPage,
   createPage,

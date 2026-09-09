@@ -1915,6 +1915,13 @@
         "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
         "appsAsToolsNoApps": "Keine Apps verfügbar",
         "removeAppTool": "{{name}} entfernen"
+      },
+      "reorder": "Reihenfolge",
+      "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
+      "saveOrder": "Reihenfolge speichern",
+      "savingOrder": "Reihenfolge wird gespeichert...",
+      "status": {
+        "disabled": "Deaktiviert"
       }
     },
     "features": {
@@ -2040,7 +2047,21 @@
         "showDefaultAppHelp": "Wenn deaktiviert, zeigt die Startseite die Begrüßung und Apps, aber keine Chat-Eingabe.",
         "subtitle": "Untertitel",
         "subtitleHelp": "Wird unter der Begrüßung angezeigt. Leer lassen, um den Standardtext zu verwenden.",
-        "unknownApp": "nicht gefunden"
+        "unknownApp": "nicht gefunden",
+        "shortcuts": "App-Verknüpfungen",
+        "shortcutsHelp": "Die kurzen App-Listen auf der Startseite und in der Seitenleiste. Die Favoriten eines Benutzers stehen immer zuerst, dann die unten festgelegten Standard-Apps, danach alle übrigen in der gewählten Reihenfolge.",
+        "appsMode": "Reihenfolge der übrigen Apps",
+        "appsModeOrder": "Konfigurierte Reihenfolge (Feld „order“ der App)",
+        "appsModeRecent": "Zuletzt verwendete zuerst",
+        "appsModeHelp": "Gilt für beide Listen. „Zuletzt verwendete“ sortiert die Apps nach der letzten Nutzung durch den jeweiligen Benutzer, genauso wie in der App-Übersicht; die Standard-Apps stehen weiterhin vorn.",
+        "appsCount": "Apps auf der Startseite",
+        "sidebarAppsCount": "Apps in der Seitenleiste",
+        "appsCountHelp": "Jeweils zwischen 0 und {{max}}. Mit 0 wird die Liste ausgeblendet.",
+        "featuredApps": "Standard-Apps",
+        "featuredAppsEmpty": "Noch keine Standard-Apps – beide Listen folgen der Reihenfolge oben.",
+        "featuredAppsHelp": "Werden in dieser Reihenfolge direkt nach den Favoriten des Benutzers angezeigt. Benutzer ohne Zugriff auf eine App sehen sie nicht. Zum Sortieren ziehen oder die Pfeile verwenden.",
+        "addFeaturedApp": "Standard-App hinzufügen",
+        "removeFeaturedApp": "{{name}} entfernen"
       },
       "header": {
         "colorHint": "Verwenden Sie Hex-Farben (#4f46e5) oder RGB-Werte (rgb(79, 70, 229)). Die Farbe gilt für die klassische Kopfzeile (Teams-, Office- und Nextcloud-Einbettungen, ?sidebar=false); das Seitenleisten-Layout verwendet sie nicht."
@@ -2193,6 +2214,11 @@
         "noMatches": "Keine passenden Werte",
         "noOptions": "Keine Werte"
       }
+    },
+    "reorder": {
+      "dragHandle": "Zum Sortieren ziehen",
+      "moveUp": "{{name}} nach oben verschieben",
+      "moveDown": "{{name}} nach unten verschieben"
     }
   },
   "cloudStorage": {
