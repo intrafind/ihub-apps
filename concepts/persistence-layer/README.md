@@ -4,7 +4,8 @@ This folder contains design documents for the pluggable persistence layer initia
 
 ## Documents
 
-- **[2026-03-18 Pluggable Persistence Layer PRD](./2026-03-18%20Pluggable%20Persistence%20Layer%20PRD.md)** — Comprehensive product requirements document covering the storage abstraction, five provider implementations (Filesystem, SQLite, PostgreSQL, OpenSearch, S3), change propagation, migration strategy, and extensibility guide.
+- **[2026-09-09 Storage Provider and Durable Chats Design](./2026-09-09%20Storage%20Provider%20and%20Durable%20Chats%20Design.md)** — **Current.** Approved design: StorageProvider abstraction (documents + append-logs + notifier + locks), durable chat persistence on top of the run ledger, provider lineup (Filesystem default, SQLite, PostgreSQL, OpenSearch), admin UI, multi-instance enablement, and the GitHub issue stack.
+- **[2026-03-18 Pluggable Persistence Layer PRD](./2026-03-18%20Pluggable%20Persistence%20Layer%20PRD.md)** — Superseded by the 2026-09-09 design. Original PRD covering the storage abstraction, five provider implementations (Filesystem, SQLite, PostgreSQL, OpenSearch, S3), change propagation, migration strategy, and extensibility guide.
 
 ## Context
 
