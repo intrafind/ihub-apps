@@ -120,6 +120,56 @@ function Layout() {
 
   const canAccessLink = link => canAccessLinkShared(link, { uiConfig, isAuthenticated, user });
 
+  // Slim footer for content pages (never on the app chat, which needs the
+  // full height). On desktop it stays pinned to the bottom of the shell; it
+  // is one 36px line there. On mobile the same bar would permanently eat
+  // ~57px of a ~660px viewport, so it is rendered inside the scrolling
+  // region and scrolls away after the content (matching #2289's intent for
+  // the classic layout).
+  const slimFooter =
+    uiConfig?.footer?.enabled !== false && showFooter && !isAppPage ? (
+      <footer className="flex-none border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+          <span className="truncate">
+            {uiConfig?.footer?.text
+              ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
+              : t('footer.copyright', '© {{year}} iHub Apps', {
+                  year: new Date().getFullYear()
+                })}
+          </span>
+          {uiConfig?.footer?.links && (
+            <nav
+              aria-label={t('footer.navigation', 'Footer navigation')}
+              className="flex flex-wrap items-center gap-x-4 gap-y-1"
+            >
+              {uiConfig.footer.links
+                .filter(link => {
+                  const featureId = featureRoutes[link.url];
+                  if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                  return canAccessLink(link);
+                })
+                .map((link, index) => (
+                  <Link
+                    key={index}
+                    to={link.url}
+                    onClick={resetHeaderColor}
+                    className="hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                    target={
+                      link.url.startsWith('http') || link.url.startsWith('mailto:')
+                        ? '_blank'
+                        : undefined
+                    }
+                    rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  >
+                    {getLocalizedContent(link.name, currentLanguage)}
+                  </Link>
+                ))}
+            </nav>
+          )}
+        </div>
+      </footer>
+    ) : null;
+
   return (
     <div
       className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${showSidebar || isAdminRoute || isAppPage ? 'h-shell overflow-hidden' : 'min-h-screen'}`}
@@ -179,52 +229,9 @@ function Layout() {
                   <Outlet />
                 </div>
               )}
+              <div className="md:hidden">{slimFooter}</div>
             </main>
-            {/* Slim footer — links shown at the bottom of content pages (not on
-                the app chat, which needs the full height). Disable with
-                footer=false or via UI config. */}
-            {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
-              <footer className="flex-none border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-2.5 text-xs text-gray-500 dark:text-gray-400">
-                  <span className="truncate">
-                    {uiConfig?.footer?.text
-                      ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                      : t('footer.copyright', '© {{year}} iHub Apps', {
-                          year: new Date().getFullYear()
-                        })}
-                  </span>
-                  {uiConfig?.footer?.links && (
-                    <nav
-                      aria-label={t('footer.navigation', 'Footer navigation')}
-                      className="flex flex-wrap items-center gap-x-4 gap-y-1"
-                    >
-                      {uiConfig.footer.links
-                        .filter(link => {
-                          const featureId = featureRoutes[link.url];
-                          if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
-                          return canAccessLink(link);
-                        })
-                        .map((link, index) => (
-                          <Link
-                            key={index}
-                            to={link.url}
-                            onClick={resetHeaderColor}
-                            className="hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            target={
-                              link.url.startsWith('http') || link.url.startsWith('mailto:')
-                                ? '_blank'
-                                : undefined
-                            }
-                            rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                          >
-                            {getLocalizedContent(link.name, currentLanguage)}
-                          </Link>
-                        ))}
-                    </nav>
-                  )}
-                </div>
-              </footer>
-            )}
+            <div className="hidden md:block flex-none">{slimFooter}</div>
           </div>
         </div>
       ) : isAdminRoute ? (

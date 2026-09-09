@@ -195,7 +195,16 @@ function ModelSelector({
                           {name}
                         </div>
                         {desc && (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-gray-400 sm:line-clamp-2">
+                          /* Mobile uses `truncate` (nowrap + ellipsis) rather
+                             than line-clamp-1: an element with
+                             `-webkit-line-clamp` inside a flex item keeps its
+                             full unclamped height in WebKit, so a long
+                             description showed one line of text followed by a
+                             tall empty box. `truncate` is exactly one line in
+                             every engine. From `sm` up two lines are allowed,
+                             bounded by max-h so the same quirk cannot add
+                             height there either. */
+                          <div className="mt-0.5 truncate text-xs leading-4 text-gray-500 dark:text-gray-400 sm:max-h-8 sm:whitespace-normal sm:line-clamp-2">
                             {desc}
                           </div>
                         )}

@@ -1,5 +1,36 @@
 # Fixes — 5.5.0
 
+## More Room for the Conversation on Phones
+
+On a phone the chat gave the conversation less than half the screen: a 390x664 viewport spent 392px
+on chrome and left 272px for messages. Several pieces are now compact below the `sm` breakpoint,
+which also covers the Outlook taskpane and the browser-extension side panel.
+
+- The app header uses a smaller icon, back button and title, and less padding.
+- The status line above the input no longer squeezes the context-window counter into a narrow
+  column, so "~290 / 32,768 context tokens" fits on one line instead of wrapping.
+- The disclaimer below the input gets the full row width, and the incognito toggle shows just its
+  icon; the toggle keeps its name for screen readers.
+- The toolbar row and send button are slightly tighter.
+
+The conversation now gets 339px of the same 664px viewport, up from 272px. Layouts from `sm` up are
+unchanged.
+
+## The Footer No Longer Takes a Permanent Strip on Phones
+
+In the sidebar layout the slim footer was pinned to the bottom of the viewport, costing about 57px
+of a ~660px phone screen on every content page and clipping the content above it. On small screens
+it now sits after the content and scrolls out of the way; on desktop, where it is a single 36px
+line, it stays pinned as before.
+
+## Model Descriptions No Longer Leave a Gap in the Model Picker
+
+In the model picker on iOS, rows whose description was long showed one line of text followed by a
+tall empty box, so the list looked randomly spaced. The single-line description now uses ordinary
+truncation instead of a line clamp, whose height WebKit computes from the full unclamped text when
+the element sits inside a flex item. Two-line descriptions from `sm` up are bounded by an explicit
+maximum height for the same reason.
+
 ## One Unreachable Model Endpoint No Longer Stalls Every Other Chat
 
 When a model endpoint could not be reached — typically a local vLLM behind a VPN that was not
