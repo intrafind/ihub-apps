@@ -473,7 +473,7 @@ These optional fields work for all app types:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | Boolean | `true` | Whether the app is enabled |
-| `order` | Number | - | Display order in app list |
+| `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
@@ -528,7 +528,7 @@ Each app is defined with the following essential properties:
 | `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
 | `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
 | `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
-| `order`                 | Number  | Optional. Display order in the app list                                                                                  |
+| `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |

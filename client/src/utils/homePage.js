@@ -9,7 +9,7 @@
  * document title and bookmarks always agree with what is on screen.
  */
 
-import { sortFavoritesFirst } from './favoriteItems';
+import { rankAppShortcuts, readAppShortcutConfig } from './appShortcuts';
 
 /** The start page — greeting, chat input and featured apps. */
 export const START_PAGE_PATH = '/start';
@@ -53,8 +53,12 @@ const isChatApp = app => (app?.type || 'chat') === 'chat';
 /**
  * The app whose chat input the start page shows: the admin-configured
  * `startPage.defaultAppId` when the viewer may use it, otherwise the
- * top-ranked chat app (favorites first, then the admin-defined `order`).
+ * top-ranked chat app — favorites first, then the admin's default apps
+ * (`startPage.featuredAppIds`), then the app's `order`.
  * Only chat apps qualify — an iframe/redirect app has no chat to send to.
+ *
+ * The fallback deliberately ignores `startPage.appsMode`: with `recent` the
+ * chat input would swap apps every time the user opened a different one.
  *
  * @param {Array} apps - Apps the current user may access.
  * @param {string[]} favoriteAppIds - Locally favorited app ids.
@@ -68,10 +72,11 @@ export const pickDefaultChatApp = (apps, favoriteAppIds, uiConfig) => {
     const found = list.find(app => app.id === configuredId);
     if (found && isChatApp(found)) return found;
   }
-  const ranked = sortFavoritesFirst(
-    list,
+  const { featuredAppIds } = readAppShortcutConfig(uiConfig);
+  const ranked = rankAppShortcuts(list, {
     favoriteAppIds,
-    (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)
-  );
+    featuredAppIds,
+    mode: 'order'
+  });
   return ranked.find(isChatApp) || null;
 };

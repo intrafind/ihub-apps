@@ -407,8 +407,8 @@ The same `categories` structure is also available under `promptsList.categories`
 ### Start Page Configuration
 
 The start page at `/start` is a personalized landing view: a time-based greeting, the chat input
-of a default app so users can start a conversation immediately, up to four featured apps
-(favorites first, then by `order`) and a link to the full apps browser at `/apps`. It is where
+of a default app so users can start a conversation immediately, a grid of app shortcuts and a
+link to the full apps browser at `/apps`. It is where
 `/` sends users by default, and where the sidebar's **New chat** button always goes. Messages
 typed on the start page open the app at `/apps/{appId}` and are sent right away; attachments
 added on the start page are carried into the chat. The input follows the default app's model settings: the
@@ -427,7 +427,11 @@ Start Page**; existing installations receive the defaults through a configuratio
   "subtitle": {
     "en": "How can I help you today?",
     "de": "Wie kann ich Ihnen heute helfen?"
-  }
+  },
+  "appsMode": "order",
+  "appsCount": 4,
+  "sidebarAppsCount": 5,
+  "featuredAppIds": ["chat", "translator"]
 }
 ```
 
@@ -439,6 +443,40 @@ Start Page**; existing installations receive the defaults through a configuratio
 | `showDefaultApp`   | Boolean | Show the default app's chat input on the start page (default: `true`). When `false`, the page shows the greeting and the featured apps only.                            |
 | `defaultAppId`     | String  | ID of the app whose chat input is shown. When unset — or when the current user cannot access that app — the first app the user can access is used instead.              |
 | `subtitle`         | Object  | Localized line shown under the greeting (overrides the translation value).                                                                                             |
+| `appsMode`         | String  | How apps that are neither favorites nor default apps rank in both app-shortcut lists: `order` (default) or `recent`. See [App shortcuts](#app-shortcuts).               |
+| `appsCount`        | Number  | How many apps the start-page grid shows (0–12, default `4`). `0` hides the grid.                                                                                        |
+| `sidebarAppsCount` | Number  | How many apps the sidebar's Apps section shows (0–12, default `5`). `0` hides the list.                                                                                 |
+| `featuredAppIds`   | Array   | Ids of the default apps, shown in this order right after each user's favorites. Empty by default.                                                                       |
+
+#### App shortcuts
+
+The start-page grid and the sidebar's **Apps** section are the same list of shortcuts in two
+places, so they share one ranking and one set of settings. The ranking is always:
+
+1. **The user's favorites** — the apps they starred, which no configuration can push off the list.
+2. **The default apps** — `featuredAppIds`, in exactly the order the array holds them.
+3. **Everything else** — by `appsMode`: `order` uses each app's `order` field (see
+   [Apps](apps.md)), `recent` puts each user's most recently used apps first, the same way the
+   apps browser's *Relevance* sorting does.
+
+Ties fall back to the app's localized name, so the lists never reshuffle between renders. Apps a
+user may not access are filtered out before ranking, so a default app that is disabled or outside
+the user's groups is simply skipped.
+
+`appsCount` and `sidebarAppsCount` then cut the ranked list to length; because they are separate,
+the start page can show a wide grid while the sidebar stays short. Setting either to `0` hides
+that list. The collapsed sidebar rail shows the same ranking, trimmed to the icons that fit.
+
+Two related settings live elsewhere:
+
+- **The order of the apps themselves** is edited in **Admin → Apps → Reorder** — drag a row or use
+  the up/down arrows, then **Save order**. That writes each app's `order` field, so it also
+  changes the apps browser. All apps are always listed there, so search and filters do not apply
+  while reordering.
+- **The default chat app** (`defaultAppId`, the chat input on the start page) is separate from the
+  default apps above. When it is unset, the top-ranked chat app is used — favorites first, then
+  the default apps, then `order`. `appsMode` deliberately does not apply here: with `recent`, the
+  chat input would change app every time the user opened a different one.
 
 #### Choosing the home page
 

@@ -8,7 +8,8 @@ import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
-import { sortFavoritesFirst } from '../../utils/favoriteItems';
+import { rankAppShortcuts, readAppShortcutConfig } from '../../utils/appShortcuts';
+import { getRecentAppIds } from '../../utils/recentApps';
 import { START_PAGE_PATH } from '../../utils/homePage';
 import useMediaQuery from '../hooks/useMediaQuery';
 import BrandTitle from './BrandTitle';
@@ -221,9 +222,33 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     [toggleFavorite]
   );
 
+  // Which apps the Apps section shows, in which order and how many — shared
+  // with the start page and configured under UI Customization → Start Page.
+  const { mode, featuredAppIds, sidebarCount } = useMemo(
+    () => readAppShortcutConfig(uiConfig),
+    [uiConfig]
+  );
+
+  // Read once per mount: re-reading on every render would reorder the list
+  // while the user is aiming at it. Only the `recent` mode needs it.
+  const recentAppIds = useMemo(() => (mode === 'recent' ? getRecentAppIds() : []), [mode]);
+
+  // Favorites first, then the admin's default apps, then the rest by mode.
+  const rankedApps = useMemo(
+    () =>
+      rankAppShortcuts(apps, {
+        favoriteAppIds,
+        featuredAppIds,
+        mode,
+        recentAppIds,
+        currentLanguage
+      }),
+    [apps, favoriteAppIds, featuredAppIds, mode, recentAppIds, currentLanguage]
+  );
+
   const sidebarApps = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = sortFavoritesFirst(apps, favoriteAppIds);
+    let list = rankedApps;
     if (q) {
       list = list.filter(a => {
         const name = getLocalizedContent(a.name, currentLanguage) || '';
@@ -231,8 +256,15 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
       });
     }
-    return list.slice(0, 5);
-  }, [apps, favoriteAppIds, search, currentLanguage]);
+    return list.slice(0, sidebarCount);
+  }, [rankedApps, search, currentLanguage, sidebarCount]);
+
+  // The collapsed rail has room for icons only, so it shows the same ranking
+  // trimmed to what fits next to the navigation buttons.
+  const railApps = useMemo(
+    () => rankedApps.slice(0, Math.min(sidebarCount, 4)),
+    [rankedApps, sidebarCount]
+  );
 
   const recentChats = useMemo(() => {
     if (!chatHistoryEnabled) return [];
@@ -401,24 +433,21 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
 
         <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" aria-hidden="true" />
 
-        {apps
-          .filter(a => favoriteAppIds.includes(a.id))
-          .slice(0, 4)
-          .map(app => {
-            const name = getLocalizedContent(app.name, currentLanguage) || app.id;
-            return (
-              <Link
-                key={app.id}
-                to={`/apps/${app.id}`}
-                title={name}
-                aria-label={name}
-                className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition hover:brightness-110"
-                style={{ backgroundColor: app.color || '#4f46e5' }}
-              >
-                <Icon name={app.icon} size="md" />
-              </Link>
-            );
-          })}
+        {railApps.map(app => {
+          const name = getLocalizedContent(app.name, currentLanguage) || app.id;
+          return (
+            <Link
+              key={app.id}
+              to={`/apps/${app.id}`}
+              title={name}
+              aria-label={name}
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-white transition hover:brightness-110"
+              style={{ backgroundColor: app.color || '#4f46e5' }}
+            >
+              <Icon name={app.icon} size="md" />
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="flex-1" />

@@ -22,6 +22,18 @@ import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPat
  */
 const VALID_DEFAULT_PAGES = ['start', 'apps', 'page', 'app'];
 
+/**
+ * How the start page and the sidebar rank the apps that are neither favorites
+ * nor admin-picked defaults. Mirrored on the client in utils/appShortcuts.js.
+ */
+const VALID_APP_SHORTCUT_MODES = ['order', 'recent'];
+
+/** Upper bound for `startPage.appsCount` / `startPage.sidebarAppsCount`. */
+const MAX_APP_SHORTCUTS = 12;
+
+/** Nobody curates more default apps than this; the counts cap the lists anyway. */
+const MAX_FEATURED_APPS = 50;
+
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
@@ -483,6 +495,50 @@ export default function registerAdminUIRoutes(app) {
           !APP_ID_PATTERN.test(value)
         ) {
           throw new Error(`startPage.${field} must be a valid id`);
+        }
+      }
+      // App shortcuts: which apps lead the start-page grid and the sidebar's
+      // Apps section, how the rest rank, and how many each list shows.
+      if (
+        startPage.appsMode !== undefined &&
+        startPage.appsMode !== null &&
+        startPage.appsMode !== ''
+      ) {
+        if (!VALID_APP_SHORTCUT_MODES.includes(startPage.appsMode)) {
+          throw new Error(
+            `startPage.appsMode must be one of: ${VALID_APP_SHORTCUT_MODES.join(', ')}`
+          );
+        }
+      }
+      for (const field of ['appsCount', 'sidebarAppsCount']) {
+        const value = startPage[field];
+        // Unset means "use the built-in default", which the client applies.
+        if (value === undefined || value === null || value === '') continue;
+        if (!Number.isInteger(value) || value < 0 || value > MAX_APP_SHORTCUTS) {
+          throw new Error(
+            `startPage.${field} must be an integer between 0 and ${MAX_APP_SHORTCUTS}`
+          );
+        }
+      }
+      if (startPage.featuredAppIds !== undefined && startPage.featuredAppIds !== null) {
+        const { featuredAppIds } = startPage;
+        if (!Array.isArray(featuredAppIds)) {
+          throw new Error('startPage.featuredAppIds must be an array of app ids');
+        }
+        if (featuredAppIds.length > MAX_FEATURED_APPS) {
+          throw new Error(
+            `startPage.featuredAppIds must not hold more than ${MAX_FEATURED_APPS} ids`
+          );
+        }
+        // These ids end up in /apps/<id> links on the client, so they get the
+        // same treatment as every other app id in this config.
+        for (const id of featuredAppIds) {
+          if (typeof id !== 'string' || id.length > APP_ID_MAX_LENGTH || !APP_ID_PATTERN.test(id)) {
+            throw new Error('startPage.featuredAppIds must only contain valid app ids');
+          }
+        }
+        if (new Set(featuredAppIds).size !== featuredAppIds.length) {
+          throw new Error('startPage.featuredAppIds must not contain duplicates');
         }
       }
     }

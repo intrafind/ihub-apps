@@ -1656,6 +1656,13 @@
         "appsAsToolsNoResults": "No apps match your search",
         "appsAsToolsNoApps": "No apps available",
         "removeAppTool": "Remove {{name}}"
+      },
+      "reorder": "Reorder",
+      "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
+      "saveOrder": "Save order",
+      "savingOrder": "Saving order...",
+      "status": {
+        "disabled": "Disabled"
       }
     },
     "features": {
@@ -1781,7 +1788,21 @@
         "showDefaultAppHelp": "When off, the start page shows the greeting and apps but no chat input.",
         "subtitle": "Subtitle",
         "subtitleHelp": "Shown under the greeting. Leave empty to use the built-in text.",
-        "unknownApp": "not found"
+        "unknownApp": "not found",
+        "shortcuts": "App shortcuts",
+        "shortcutsHelp": "The short app lists on the start page and in the sidebar. A user’s favorites always come first, then the default apps below, then everything else in the order you pick.",
+        "appsMode": "Order of the remaining apps",
+        "appsModeOrder": "Configured order (the app’s order field)",
+        "appsModeRecent": "Recently used first",
+        "appsModeHelp": "Applies to both lists. \"Recently used\" ranks the apps each user opened most recently, the same way the apps browser does; the default apps below still lead the list.",
+        "appsCount": "Apps on the start page",
+        "sidebarAppsCount": "Apps in the sidebar",
+        "appsCountHelp": "Between 0 and {{max}} each. Set 0 to hide a list.",
+        "featuredApps": "Default apps",
+        "featuredAppsEmpty": "No default apps yet — both lists follow the order above.",
+        "featuredAppsHelp": "Shown in this order, right after each user’s favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder.",
+        "addFeaturedApp": "Add a default app",
+        "removeFeaturedApp": "Remove {{name}}"
       },
       "header": {
         "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it."
@@ -1934,6 +1955,11 @@
         "noMatches": "No matching values",
         "noOptions": "No values"
       }
+    },
+    "reorder": {
+      "dragHandle": "Drag to reorder",
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down"
     }
   },
   "cloudStorage": {

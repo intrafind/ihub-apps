@@ -3,11 +3,21 @@ import { fetchAdminApps } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import Icon from '../../../shared/components/Icon';
+import ReorderableList from './ReorderableList';
+import {
+  APP_SHORTCUT_MODES,
+  DEFAULT_APP_SHORTCUT_MODE,
+  DEFAULT_SIDEBAR_APPS_COUNT,
+  DEFAULT_START_PAGE_APPS_COUNT,
+  MAX_APP_SHORTCUTS
+} from '../../../utils/appShortcuts';
 
 /**
  * Start page configuration (uiConfig.startPage): which view the "/" route
  * shows, whether the default app's chat input is on the start page, which app
- * that is, and the subtitle under the greeting.
+ * that is, the subtitle under the greeting, and the app shortcuts the start
+ * page and the sidebar show (which apps, how they rank, how many).
  */
 function StartPageCustomization({ config, pages, onUpdate, t }) {
   const { i18n } = useTranslation();
@@ -64,6 +74,46 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
     `${getLocalizedContent(app.name, currentLanguage) || app.id}${
       app.enabled === false ? ' (disabled)' : ''
     }`;
+
+  // ---- App shortcuts: the short app lists on /start and in the sidebar ----
+  const appsMode = APP_SHORTCUT_MODES.includes(config?.appsMode)
+    ? config.appsMode
+    : DEFAULT_APP_SHORTCUT_MODE;
+  const featuredAppIds = Array.isArray(config?.featuredAppIds) ? config.featuredAppIds : [];
+
+  // An unset count means "use the built-in default", so show that number
+  // rather than an empty box the admin has to guess at.
+  const countValue = (value, fallback) =>
+    value === undefined || value === null || value === '' ? fallback : value;
+
+  const handleCountChange = (field, raw) => {
+    if (raw === '') {
+      // Clearing the box goes back to the built-in default.
+      onUpdate({ [field]: undefined });
+      return;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isNaN(parsed)) return;
+    onUpdate({ [field]: Math.min(Math.max(parsed, 0), MAX_APP_SHORTCUTS) });
+  };
+
+  // Keep ids that no longer resolve to an app in the list so they stay
+  // removable instead of silently occupying a slot.
+  const featuredItems = featuredAppIds.map(id => ({
+    id,
+    app: apps.find(app => app.id === id) || null
+  }));
+  const addableApps = apps.filter(app => !featuredAppIds.includes(app.id));
+
+  const addFeaturedApp = id => {
+    if (!id || featuredAppIds.includes(id)) return;
+    onUpdate({ featuredAppIds: [...featuredAppIds, id] });
+  };
+  const removeFeaturedApp = id => {
+    onUpdate({ featuredAppIds: featuredAppIds.filter(entry => entry !== id) });
+  };
+  const featuredLabel = item =>
+    item.app ? getLocalizedContent(item.app.name, currentLanguage) || item.id : item.id;
 
   return (
     <div className="p-6">
@@ -283,6 +333,172 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
             {t(
               'admin.ui.startPage.defaultAppHelp',
               'The app whose chat input is shown on the start page. When unset, the first app the user can access is used.'
+            )}
+          </p>
+        </div>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        {/* App shortcuts — shared by the start page grid and the sidebar */}
+        <div>
+          <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+            {t('admin.ui.startPage.shortcuts', 'App shortcuts')}
+          </h4>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.ui.startPage.shortcutsHelp',
+              'The short app lists on the start page and in the sidebar. A user’s favorites always come first, then the default apps below, then everything else in the order you pick.'
+            )}
+          </p>
+        </div>
+
+        {/* How the apps that are not favorites or default apps rank */}
+        <div>
+          <label htmlFor="startPage-appsMode" className={labelClass}>
+            {t('admin.ui.startPage.appsMode', 'Order of the remaining apps')}
+          </label>
+          <select
+            id="startPage-appsMode"
+            value={appsMode}
+            onChange={e => onUpdate({ appsMode: e.target.value })}
+            className={selectClass}
+          >
+            <option value="order">
+              {t('admin.ui.startPage.appsModeOrder', 'Configured order (the app’s order field)')}
+            </option>
+            <option value="recent">
+              {t('admin.ui.startPage.appsModeRecent', 'Recently used first')}
+            </option>
+          </select>
+          <p className={helpClass}>
+            {t(
+              'admin.ui.startPage.appsModeHelp',
+              'Applies to both lists. "Recently used" ranks the apps each user opened most recently, the same way the apps browser does; the default apps below still lead the list.'
+            )}
+          </p>
+        </div>
+
+        {/* Separate counts: the grid and the sidebar have very different room */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="startPage-appsCount" className={labelClass}>
+              {t('admin.ui.startPage.appsCount', 'Apps on the start page')}
+            </label>
+            <input
+              id="startPage-appsCount"
+              type="number"
+              min="0"
+              max={MAX_APP_SHORTCUTS}
+              value={countValue(config?.appsCount, DEFAULT_START_PAGE_APPS_COUNT)}
+              onChange={e => handleCountChange('appsCount', e.target.value)}
+              className={selectClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="startPage-sidebarAppsCount" className={labelClass}>
+              {t('admin.ui.startPage.sidebarAppsCount', 'Apps in the sidebar')}
+            </label>
+            <input
+              id="startPage-sidebarAppsCount"
+              type="number"
+              min="0"
+              max={MAX_APP_SHORTCUTS}
+              value={countValue(config?.sidebarAppsCount, DEFAULT_SIDEBAR_APPS_COUNT)}
+              onChange={e => handleCountChange('sidebarAppsCount', e.target.value)}
+              className={selectClass}
+            />
+          </div>
+        </div>
+        <p className="-mt-4 text-xs text-gray-500 dark:text-gray-400">
+          {t(
+            'admin.ui.startPage.appsCountHelp',
+            'Between 0 and {{max}} each. Set 0 to hide a list.',
+            {
+              max: MAX_APP_SHORTCUTS
+            }
+          )}
+        </p>
+
+        {/* The curated default apps, in the order they should appear */}
+        <div>
+          <span className={labelClass}>{t('admin.ui.startPage.featuredApps', 'Default apps')}</span>
+          {featuredItems.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 dark:border-gray-600 px-3 py-4 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.ui.startPage.featuredAppsEmpty',
+                'No default apps yet — both lists follow the order above.'
+              )}
+            </p>
+          ) : (
+            <ReorderableList
+              items={featuredItems}
+              onReorder={items => onUpdate({ featuredAppIds: items.map(item => item.id) })}
+              getKey={item => item.id}
+              getLabel={featuredLabel}
+              renderItem={(item, index) => (
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-gray-400 dark:text-gray-500">
+                    {index + 1}.
+                  </span>
+                  {item.app && (
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white"
+                      style={{ backgroundColor: item.app.color || '#4f46e5' }}
+                    >
+                      <Icon name={item.app.icon} size="sm" className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100">
+                    {featuredLabel(item)}
+                    {!item.app && !loading && (
+                      <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                        ({t('admin.ui.startPage.unknownApp', 'not found')})
+                      </span>
+                    )}
+                    {item.app?.enabled === false && (
+                      <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                        ({t('admin.apps.status.disabled', 'Disabled')})
+                      </span>
+                    )}
+                  </span>
+                </span>
+              )}
+              renderActions={item => (
+                <button
+                  type="button"
+                  onClick={() => removeFeaturedApp(item.id)}
+                  aria-label={t('admin.ui.startPage.removeFeaturedApp', 'Remove {{name}}', {
+                    name: featuredLabel(item)
+                  })}
+                  title={t('admin.ui.startPage.removeFeaturedApp', 'Remove {{name}}', {
+                    name: featuredLabel(item)
+                  })}
+                  className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                >
+                  <Icon name="trash" size="sm" />
+                </button>
+              )}
+            />
+          )}
+          <select
+            id="startPage-addFeaturedApp"
+            value=""
+            disabled={loading || addableApps.length === 0}
+            onChange={e => addFeaturedApp(e.target.value)}
+            aria-label={t('admin.ui.startPage.addFeaturedApp', 'Add a default app')}
+            className={`${selectClass} mt-2`}
+          >
+            <option value="">{t('admin.ui.startPage.addFeaturedApp', 'Add a default app')}</option>
+            {addableApps.map(app => (
+              <option key={app.id} value={app.id}>
+                {appOptionLabel(app)}
+              </option>
+            ))}
+          </select>
+          <p className={helpClass}>
+            {t(
+              'admin.ui.startPage.featuredAppsHelp',
+              'Shown in this order, right after each user’s favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder.'
             )}
           </p>
         </div>
