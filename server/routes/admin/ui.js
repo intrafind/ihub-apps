@@ -15,6 +15,13 @@ import { recordUpload } from '../../telemetry/metrics.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
 
+/**
+ * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
+ * personalized start page, the apps browser, a content page (`defaultPageId`)
+ * or an app (`defaultPageAppId`). Mirrored on the client in utils/homePage.js.
+ */
+const VALID_DEFAULT_PAGES = ['start', 'apps', 'page', 'app'];
+
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
@@ -452,6 +459,31 @@ export default function registerAdminUIRoutes(app) {
         (typeof startPage.subtitle !== 'object' || Array.isArray(startPage.subtitle))
       ) {
         throw new Error('startPage.subtitle must be a localized object');
+      }
+      // `defaultPage` decides what the "/" route shows. Anything but "start"
+      // redirects to another route, so the ids it points at reach a URL path
+      // and get the same treatment as `defaultAppId` above.
+      if (
+        startPage.defaultPage !== undefined &&
+        startPage.defaultPage !== null &&
+        startPage.defaultPage !== ''
+      ) {
+        if (!VALID_DEFAULT_PAGES.includes(startPage.defaultPage)) {
+          throw new Error(
+            `startPage.defaultPage must be one of: ${VALID_DEFAULT_PAGES.join(', ')}`
+          );
+        }
+      }
+      for (const field of ['defaultPageId', 'defaultPageAppId']) {
+        const value = startPage[field];
+        if (value === undefined || value === null || value === '') continue;
+        if (
+          typeof value !== 'string' ||
+          value.length > APP_ID_MAX_LENGTH ||
+          !APP_ID_PATTERN.test(value)
+        ) {
+          throw new Error(`startPage.${field} must be a valid id`);
+        }
       }
     }
   }

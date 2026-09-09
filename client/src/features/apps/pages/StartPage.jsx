@@ -11,6 +11,7 @@ import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { sortFavoritesFirst } from '../../../utils/favoriteItems';
+import { pickDefaultChatApp } from '../../../utils/homePage';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
 import { MOCK_CHATS } from '../../chat/data/mockChats';
@@ -83,8 +84,8 @@ export default function StartPage() {
     getLocalizedContent(uiConfig?.startPage?.subtitle, currentLanguage) ||
     t('startPage.subtitle', 'How can I help you today?');
 
-  // Favorites first, then the admin-defined `order` — the same ranking for
-  // the featured grid and for the default-app fallback below.
+  // Favorites first, then the admin-defined `order` — the ranking behind the
+  // featured grid (and, in pickDefaultChatApp, the default-app fallback).
   const rankedApps = useMemo(
     () =>
       sortFavoritesFirst(
@@ -96,17 +97,12 @@ export default function StartPage() {
   );
 
   // Default app: admin-configured via uiConfig.startPage.defaultAppId; when it
-  // is unset or not accessible to this user, the top-ranked app. Only chat
-  // apps qualify — an iframe/redirect app has no chat to send the message to.
-  const isChatApp = app => (app?.type || 'chat') === 'chat';
-  const defaultApp = useMemo(() => {
-    const defaultId = uiConfig?.startPage?.defaultAppId;
-    if (defaultId) {
-      const found = apps.find(a => a.id === defaultId);
-      if (found && isChatApp(found)) return found;
-    }
-    return rankedApps.find(isChatApp) || null;
-  }, [apps, rankedApps, uiConfig]);
+  // is unset or not accessible to this user, the top-ranked chat app. Shared
+  // with the sidebar's "New chat" button so both open the same app.
+  const defaultApp = useMemo(
+    () => pickDefaultChatApp(apps, favoriteAppIds, uiConfig),
+    [apps, favoriteAppIds, uiConfig]
+  );
 
   // Load the full default-app config so the chat input renders exactly what the
   // app is configured for (uploads, input mode, placeholder, etc.).

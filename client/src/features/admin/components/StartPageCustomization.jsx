@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchAdminApps } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 /**
- * Start page configuration (uiConfig.startPage): whether the default app's chat
- * input is shown, which app that is, and the subtitle under the greeting.
+ * Start page configuration (uiConfig.startPage): which view the "/" route
+ * shows, whether the default app's chat input is on the start page, which app
+ * that is, and the subtitle under the greeting.
  */
-function StartPageCustomization({ config, onUpdate, t }) {
+function StartPageCustomization({ config, pages, onUpdate, t }) {
   const { i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [apps, setApps] = useState([]);
@@ -20,8 +21,7 @@ function StartPageCustomization({ config, onUpdate, t }) {
     fetchAdminApps()
       .then(data => {
         const list = Array.isArray(data) ? data : Array.isArray(data?.apps) ? data.apps : [];
-        // The start page needs a chat to send the message to — skip iframe/redirect apps.
-        if (mounted) setApps(list.filter(app => (app.type || 'chat') === 'chat'));
+        if (mounted) setApps(list);
       })
       .catch(() => {})
       .finally(() => {
@@ -32,8 +32,38 @@ function StartPageCustomization({ config, onUpdate, t }) {
     };
   }, []);
 
+  // The start page needs a chat to send the message to — skip iframe/redirect
+  // apps there. As the home view any app works, so that selector keeps them.
+  const chatApps = useMemo(() => apps.filter(app => (app.type || 'chat') === 'chat'), [apps]);
+
+  const pageOptions = useMemo(() => {
+    const entries = Object.entries(pages || {}).map(([id, page]) => ({
+      id,
+      label: getLocalizedContent(page?.title, currentLanguage) || id
+    }));
+    return entries.sort((a, b) => a.label.localeCompare(b.label));
+  }, [pages, currentLanguage]);
+
   const defaultAppId = config?.defaultAppId || '';
   const showDefaultApp = config?.showDefaultApp !== false;
+  const defaultPage = config?.defaultPage || 'start';
+  const defaultPageId = config?.defaultPageId || '';
+  const defaultPageAppId = config?.defaultPageAppId || '';
+
+  // A target that was never picked (or has since been deleted) would send users
+  // nowhere, so "/" falls back to the start page — say so instead of failing silently.
+  const targetMissing =
+    (defaultPage === 'page' && !defaultPageId) || (defaultPage === 'app' && !defaultPageAppId);
+
+  const selectClass =
+    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+  const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+  const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
+
+  const appOptionLabel = app =>
+    `${getLocalizedContent(app.name, currentLanguage) || app.id}${
+      app.enabled === false ? ' (disabled)' : ''
+    }`;
 
   return (
     <div className="p-6">
@@ -48,6 +78,121 @@ function StartPageCustomization({ config, onUpdate, t }) {
       </p>
 
       <div className="max-w-lg space-y-6">
+        {/* Which view "/" shows */}
+        <div>
+          <label htmlFor="startPage-defaultPage" className={labelClass}>
+            {t('admin.ui.startPage.defaultPage', 'Home page')}
+          </label>
+          <select
+            id="startPage-defaultPage"
+            value={defaultPage}
+            onChange={e => onUpdate({ defaultPage: e.target.value })}
+            className={selectClass}
+          >
+            <option value="start">
+              {t('admin.ui.startPage.defaultPageStart', 'Start page (greeting and chat input)')}
+            </option>
+            <option value="apps">{t('admin.ui.startPage.defaultPageApps', 'All apps')}</option>
+            <option value="page">{t('admin.ui.startPage.defaultPagePage', 'Content page')}</option>
+            <option value="app">{t('admin.ui.startPage.defaultPageApp', 'A specific app')}</option>
+          </select>
+          <p className={helpClass}>
+            {t(
+              'admin.ui.startPage.defaultPageHelp',
+              'What users see at "/" — after signing in and whenever they click the logo. Anything other than the start page redirects to that view.'
+            )}
+          </p>
+        </div>
+
+        {/* Target for the "content page" choice */}
+        {defaultPage === 'page' && (
+          <div>
+            <label htmlFor="startPage-defaultPageId" className={labelClass}>
+              {t('admin.ui.startPage.defaultPageId', 'Content page')}
+            </label>
+            <select
+              id="startPage-defaultPageId"
+              value={defaultPageId}
+              onChange={e => onUpdate({ defaultPageId: e.target.value || undefined })}
+              className={selectClass}
+            >
+              <option value="">{t('admin.ui.startPage.selectPage', 'Select a page…')}</option>
+              {pageOptions.map(page => (
+                <option key={page.id} value={page.id}>
+                  {page.label}
+                </option>
+              ))}
+              {/* Keep a stored id visible even if the page no longer exists. */}
+              {defaultPageId && !pageOptions.some(page => page.id === defaultPageId) && (
+                <option value={defaultPageId}>
+                  {defaultPageId} ({t('admin.ui.startPage.unknownPage', 'not found')})
+                </option>
+              )}
+            </select>
+            <p className={helpClass}>
+              {t(
+                'admin.ui.startPage.defaultPageIdHelp',
+                'One of the pages from Admin → Pages. Users who may not open it see the usual access-denied screen, so pick a page everyone can read.'
+              )}
+            </p>
+          </div>
+        )}
+
+        {/* Target for the "specific app" choice */}
+        {defaultPage === 'app' && (
+          <div>
+            <label htmlFor="startPage-defaultPageAppId" className={labelClass}>
+              {t('admin.ui.startPage.defaultPageAppId', 'App')}
+            </label>
+            <select
+              id="startPage-defaultPageAppId"
+              value={defaultPageAppId}
+              disabled={loading}
+              onChange={e => onUpdate({ defaultPageAppId: e.target.value || undefined })}
+              className={selectClass}
+            >
+              <option value="">{t('admin.ui.startPage.selectApp', 'Select an app…')}</option>
+              {apps.map(app => (
+                <option key={app.id} value={app.id}>
+                  {appOptionLabel(app)}
+                </option>
+              ))}
+              {/* Keep a stored id visible even if the app no longer exists. */}
+              {!loading && defaultPageAppId && !apps.some(app => app.id === defaultPageAppId) && (
+                <option value={defaultPageAppId}>
+                  {defaultPageAppId} ({t('admin.ui.startPage.unknownApp', 'not found')})
+                </option>
+              )}
+            </select>
+            <p className={helpClass}>
+              {t(
+                'admin.ui.startPage.defaultPageAppIdHelp',
+                'Opens this app straight away. Users without access to it see the usual access-denied screen.'
+              )}
+            </p>
+          </div>
+        )}
+
+        {targetMissing && (
+          <p className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            {t(
+              'admin.ui.startPage.targetMissing',
+              'Nothing selected yet — users keep seeing the start page until you choose a target.'
+            )}
+          </p>
+        )}
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        {defaultPage !== 'start' && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.ui.startPage.notHomeNotice',
+              'The start page is not the home page right now. The settings below apply when you switch back to it; the default chat app is also where the sidebar’s "New chat" button leads.'
+            )}
+          </p>
+        )}
+
         {/* Subtitle under the greeting */}
         <div>
           <DynamicLanguageEditor
@@ -60,7 +205,7 @@ function StartPageCustomization({ config, onUpdate, t }) {
               de: 'Wie kann ich Ihnen heute helfen?'
             }}
           />
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <p className={helpClass}>
             {t(
               'admin.ui.startPage.subtitleHelp',
               'Shown under the greeting. Leave empty to use the built-in text.'
@@ -109,10 +254,7 @@ function StartPageCustomization({ config, onUpdate, t }) {
 
         {/* Default app selector */}
         <div>
-          <label
-            htmlFor="startPage-defaultApp"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-          >
+          <label htmlFor="startPage-defaultApp" className={labelClass}>
             {t('admin.ui.startPage.defaultApp', 'Default chat app')}
           </label>
           <select
@@ -120,25 +262,24 @@ function StartPageCustomization({ config, onUpdate, t }) {
             value={defaultAppId}
             disabled={loading || !showDefaultApp}
             onChange={e => onUpdate({ defaultAppId: e.target.value || undefined })}
-            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={selectClass}
           >
             <option value="">
               {t('admin.ui.startPage.firstAvailable', 'First available app (automatic)')}
             </option>
-            {apps.map(app => (
+            {chatApps.map(app => (
               <option key={app.id} value={app.id}>
-                {getLocalizedContent(app.name, currentLanguage) || app.id}
-                {app.enabled === false ? ' (disabled)' : ''}
+                {appOptionLabel(app)}
               </option>
             ))}
             {/* Keep a stored id visible even if the app no longer exists. */}
-            {!loading && defaultAppId && !apps.some(app => app.id === defaultAppId) && (
+            {!loading && defaultAppId && !chatApps.some(app => app.id === defaultAppId) && (
               <option value={defaultAppId}>
                 {defaultAppId} ({t('admin.ui.startPage.unknownApp', 'not found')})
               </option>
             )}
           </select>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <p className={helpClass}>
             {t(
               'admin.ui.startPage.defaultAppHelp',
               'The app whose chat input is shown on the start page. When unset, the first app the user can access is used.'

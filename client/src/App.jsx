@@ -160,6 +160,7 @@ import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
+import { resolveHomeRedirect } from './utils/homePage';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
@@ -275,6 +276,20 @@ function SetupCheck({ children }) {
   return children;
 }
 
+// The "/" route. Admins choose what home is (Admin → UI Customization → Start
+// Page): the personalized start page, the apps browser, a content page or an
+// app. Everything but the start page is a redirect to that view's own route, so
+// the URL, the sidebar's active item and bookmarks match what is on screen.
+// The choice lives in the UI config, so wait for it rather than rendering the
+// start page and yanking it away a moment later.
+function HomeRoute() {
+  const { uiConfig, isLoading } = useUIConfig();
+  if (isLoading) return <AdminLoading />;
+  const redirectTo = resolveHomeRedirect(uiConfig);
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
+  return <SafeStartPage />;
+}
+
 function App() {
   // Use the custom hook for session management
   useSessionManagement();
@@ -365,7 +380,7 @@ function App() {
             index
             element={
               <SetupCheck>
-                <SafeStartPage />
+                <HomeRoute />
               </SetupCheck>
             }
           />
