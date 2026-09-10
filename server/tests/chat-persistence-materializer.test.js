@@ -552,3 +552,68 @@ describe('chatMaterializer: nothing to write to', () => {
     });
   });
 });
+
+describe('chatMaterializer: the order the two writes become visible', () => {
+  it('stores the answer before the chat is announced idle with unseen activity', async () => {
+    // `releaseRun` publishes "idle, and there is something new to read"
+    // (activeRunId: null + hasUnseenActivity) while `appendMessage` stores the
+    // answer, and the two take the chat lock separately — so whatever a reader
+    // sees between them is a real state the API can serve. Releasing first
+    // exposes a settled chat whose answer is missing: opening it there clears
+    // the unseen flag and returns a transcript without the answer, and the
+    // flag never comes back. This pins the safe order rather than the timing
+    // that happens to make a `waitFor` pass.
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+
+      const seen = [];
+      const spy = Object.create(repository);
+      spy.appendMessage = async (...args) => {
+        seen.push('append');
+        return repository.appendMessage(...args);
+      };
+      spy.releaseRun = async (...args) => {
+        // What a concurrent reader would observe at the instant the chat is
+        // declared idle. Read through the real repository, not the spy.
+        const messages = await repository.getMessages(CHAT_ID);
+        seen.push(
+          messages.messages.some(m => m.role === 'assistant')
+            ? 'release-after-answer'
+            : 'release-before-answer'
+        );
+        return repository.releaseRun(...args);
+      };
+
+      await materializeAssistantTurn({
+        repository: spy,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'Run the rotate script.' },
+        clientConnected: false
+      });
+
+      assert.deepEqual(seen, ['append', 'release-after-answer']);
+
+      // And the settled document agrees with the transcript it points at.
+      const chat = await repository.getChat(CHAT_ID);
+      const messages = await repository.getMessages(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.hasUnseenActivity, true);
+      assert.equal(chat.messageCount, messages.messages.length);
+      assert.equal(messages.messages.at(-1).role, 'assistant');
+    });
+  });
+
+  it('still releases the run when a paused turn stores no answer', async () => {
+    // The early return for a clarification pause must not leave the chat
+    // looking like it is still running.
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const message = await assistantTurn(repository, { status: 'paused', content: '' });
+
+      assert.equal(message, null);
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+    });
+  });
+});

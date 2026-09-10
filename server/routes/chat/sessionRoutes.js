@@ -290,9 +290,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         replaceFromMessageId:
    *           type: string
    *           description: |
-   *             Persisted chats only. Stored message id to fork the history from
+   *             Persisted chats only. Message id to fork the history from
    *             (inclusive) before the new message is appended — an edit or a
-   *             regenerate. Unknown ids are rejected with 400 UNKNOWN_MESSAGE.
+   *             regenerate. Matches either the stored id or the client exchange
+   *             id the message was stored under (clientMessageId). Unknown ids
+   *             are rejected with 400 UNKNOWN_MESSAGE.
+   *         sendChatHistory:
+   *           type: boolean
+   *           description: |
+   *             Persisted chats only. False prompts the model with just this
+   *             message instead of the stored transcript — the viewer's
+   *             "Include chat history in requests" setting. Advisory: it can
+   *             only remove history, never add it.
    *         ephemeral:
    *           type: boolean
    *           description: |
@@ -836,7 +845,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           requestedSkill,
           documentIds,
           replaceFromMessageId,
-          ephemeral
+          ephemeral,
+          sendChatHistory
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -916,17 +926,30 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const stored = await repository.getMessages(chatId);
           let history = stored.messages;
           if (replaceFromMessageId) {
-            const forkAt = history.findIndex(entry => entry.id === replaceFromMessageId);
+            // Either id the client can know this message by: the stored id it
+            // was given on hydrate, or — for a turn made in the session that
+            // is still open, which never learns the stored id — the exchange
+            // id it sent and the store filed as `clientMessageId`. Without the
+            // second, regenerating the answer you just got would carry no fork
+            // id at all and the retry would be appended to the untouched
+            // history, duplicating the exchange.
+            const forkAt = history.findIndex(
+              entry =>
+                entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
+            );
             // Appending onto the untouched history instead would silently
             // duplicate everything the edit meant to replace, so refuse.
             if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
             history = history.slice(0, forkAt);
           }
           // An app that opted out of chat history stays a one-shot prompt:
-          // storing the transcript must not start feeding it back to the model.
+          // storing the transcript must not start feeding it back to the
+          // model. The viewer's own "Include chat history in requests" toggle
+          // says the same thing for one turn: with the client posting a single
+          // message either way, this field is the only channel it has left.
           const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
           conversation =
-            chatApp?.sendChatHistory === false
+            chatApp?.sendChatHistory === false || sendChatHistory === false
               ? [newMessage]
               : [...historyForPrompt(history), newMessage];
 

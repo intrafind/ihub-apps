@@ -14,6 +14,9 @@ import { usePlatformConfig } from '../../../client/src/shared/contexts/PlatformC
 import useChats, {
   CHATS_PAGE_SIZE,
   invalidateChatsCache,
+  patchChatInCache,
+  removeChatFromCache,
+  useChatHistoryRouteState,
   useChatPersistence
 } from '../../../client/src/shared/hooks/useChats';
 
@@ -70,6 +73,83 @@ describe('useChatPersistence', () => {
   test('is off while the platform config is still loading', () => {
     usePlatformConfig.mockReturnValue({ platformConfig: null, isLoading: true });
     expect(renderHook(() => useChatPersistence()).result.current).toBe(false);
+  });
+});
+
+describe('useChatHistoryRouteState', () => {
+  test('is ready for a signed-in viewer of an installation that stores chats', () => {
+    expect(renderHook(() => useChatHistoryRouteState()).result.current).toBe('ready');
+  });
+
+  test('waits for the auth status instead of answering "no such page"', () => {
+    // The capability needs the platform config *and* the auth status, and the
+    // two are fetched independently. `useChatPersistence` has to answer false
+    // until both land, so a route that gates on the platform config alone
+    // renders the full-page 404 at a signed-in user and then swaps it for
+    // their chat list — which is exactly what deciding in the element was
+    // supposed to prevent.
+    useAuth.mockReturnValue({ user: null, isAuthenticated: false, isLoading: true });
+
+    expect(renderHook(() => useChatPersistence()).result.current).toBe(false);
+    expect(renderHook(() => useChatHistoryRouteState()).result.current).toBe('loading');
+  });
+
+  test('waits for the platform config too', () => {
+    usePlatformConfig.mockReturnValue({ platformConfig: null, isLoading: true });
+    expect(renderHook(() => useChatHistoryRouteState()).result.current).toBe('loading');
+  });
+
+  test('says the page does not exist once both have answered no', () => {
+    usePlatformConfig.mockReturnValue({ platformConfig: {}, isLoading: false });
+    expect(renderHook(() => useChatHistoryRouteState()).result.current).toBe('unavailable');
+
+    usePlatformConfig.mockReturnValue(persistenceOn);
+    useAuth.mockReturnValue(anonymous);
+    expect(renderHook(() => useChatHistoryRouteState()).result.current).toBe('unavailable');
+  });
+});
+
+describe('answering a rename or a delete before the server has', () => {
+  test('removeChatFromCache drops the row for every mounted consumer at once', async () => {
+    fetchChats.mockResolvedValue(page(CHATS));
+    const sidebar = renderHook(() => useChats());
+    const historyPage = renderHook(() => useChats());
+    await waitFor(() => expect(sidebar.result.current.loading).toBe(false));
+
+    act(() => {
+      removeChatFromCache('chat-a');
+    });
+
+    expect(sidebar.result.current.chats.map(c => c.id)).toEqual(['chat-b']);
+    expect(historyPage.result.current.chats.map(c => c.id)).toEqual(['chat-b']);
+  });
+
+  test('patchChatInCache retitles it for every mounted consumer at once', async () => {
+    fetchChats.mockResolvedValue(page(CHATS));
+    const sidebar = renderHook(() => useChats());
+    const historyPage = renderHook(() => useChats());
+    await waitFor(() => expect(sidebar.result.current.loading).toBe(false));
+
+    act(() => {
+      patchChatInCache('chat-a', { title: 'Renamed' });
+    });
+
+    expect(sidebar.result.current.chats[0].title).toBe('Renamed');
+    expect(historyPage.result.current.chats[0].title).toBe('Renamed');
+  });
+
+  test('neither touches a chat the cache does not hold', async () => {
+    fetchChats.mockResolvedValue(page(CHATS));
+    const { result } = renderHook(() => useChats());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const before = result.current.chats;
+
+    act(() => {
+      removeChatFromCache('chat-missing');
+      patchChatInCache('chat-missing', { title: 'nope' });
+    });
+
+    expect(result.current.chats).toBe(before);
   });
 });
 

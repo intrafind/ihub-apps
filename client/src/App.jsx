@@ -167,7 +167,7 @@ import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
-import { useChatPersistence } from './shared/hooks/useChats';
+import { useChatHistoryRouteState } from './shared/hooks/useChats';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
@@ -194,10 +194,12 @@ function useIsTeamsEnvironment() {
 // conditionally rendered from App() could never turn on. Deciding in the
 // element also avoids flashing the 404 page while the config is loading.
 function ChatHistoryRoute() {
-  const { isLoading } = usePlatformConfig();
-  const chatPersistence = useChatPersistence();
-  if (isLoading) return <AdminLoading />;
-  if (!chatPersistence) return <NotFound />;
+  // The capability needs the auth status as well as the platform config, and
+  // the two resolve independently — see `useChatHistoryRouteState`, which owns
+  // the wait so a signed-in user is never shown the 404 while it is running.
+  const state = useChatHistoryRouteState();
+  if (state === 'loading') return <AdminLoading />;
+  if (state === 'unavailable') return <NotFound />;
   return (
     <Suspense fallback={<AdminLoading />}>
       <ChatHistoryPage />

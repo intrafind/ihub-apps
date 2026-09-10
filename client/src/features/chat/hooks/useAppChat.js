@@ -109,35 +109,66 @@ function useAppChat({
   // runId → assistant message id (bound on run/started via refs.messageId).
   const runMessageMapRef = useRef(new Map());
 
+  // `/apps/:appId/c/:chatId` swaps chats without remounting this hook, so a
+  // chat change has to tear the current turn down the way `clearChat` does.
+  // The first run is the mount, where there is nothing to tear down.
+  const chatMountedRef = useRef(false);
   useEffect(() => {
     streamStateRef.current = createStreamState(chatId);
     runMessageMapRef.current = new Map();
     // A pending fork belongs to the chat it was latched in.
     pendingReplaceFromRef.current = null;
+    if (!chatMountedRef.current) {
+      chatMountedRef.current = true;
+      return;
+    }
+    // Leaving a chat mid-turn: `useEventSource` has already released this
+    // surface's stream slot, but nothing else knows the turn is over. Without
+    // this the composer of the chat just opened stays disabled behind a Stop
+    // button, and a queued-but-unsent message would be posted to the wrong
+    // chat as soon as the new stream connected.
+    setProcessing(false);
+    setClarificationPending(false);
+    activeClarificationRef.current = null;
+    lastMessageIdRef.current = null;
+    pendingMessageDataRef.current = null;
+    isCancellingRef.current = false;
   }, [chatId]);
 
   /**
    * The protocol fields every send shares, consumed once per request.
    *
+   * @param {boolean} [sendChatHistory=true] - The viewer's "Include chat history in
+   *   requests" setting. A server-backed chat no longer communicates it by
+   *   truncating the array it posts — it posts one message either way — so it
+   *   has to travel as a field of its own.
    * @returns {Object} Extra request params.
    */
-  const takeProtocolParams = useCallback(() => {
-    const replaceFromMessageId = pendingReplaceFromRef.current;
-    pendingReplaceFromRef.current = null;
-    return {
-      // A turn the server must not store. Every surface that is not running
-      // the server-backed protocol has to say so, because it still posts its
-      // whole local history and a persisted chat rejects that outright with
-      // `CLIENT_HISTORY_NOT_ALLOWED`. That covers the incognito toggle, the
-      // compare panels and the canvas — the last two mint their own chat ids
-      // (`compare-<uuid>`, `canvas-<uuid>`) and fan a single user submit out
-      // to several of them, so they never belong in a history list either.
-      ...(serverBacked ? {} : { ephemeral: true }),
-      // Edit and regenerate no longer speak through a truncated array: the
-      // server forks its stored history here instead.
-      ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {})
-    };
-  }, [serverBacked]);
+  const takeProtocolParams = useCallback(
+    (sendChatHistory = true) => {
+      const replaceFromMessageId = pendingReplaceFromRef.current;
+      pendingReplaceFromRef.current = null;
+      return {
+        // A turn the server must not store. Every surface that is not running
+        // the server-backed protocol has to say so, because it still posts its
+        // whole local history and a persisted chat rejects that outright with
+        // `CLIENT_HISTORY_NOT_ALLOWED`. That covers the incognito toggle, the
+        // compare panels and the canvas — the last two mint their own chat ids
+        // (`compare-<uuid>`, `canvas-<uuid>`) and fan a single user submit out
+        // to several of them, so they never belong in a history list either.
+        ...(serverBacked ? {} : { ephemeral: true }),
+        // Edit and regenerate no longer speak through a truncated array: the
+        // server forks its stored history here instead.
+        ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {}),
+        // "Include chat history in requests", off. Every other mode says this by
+        // posting a one-element array; a server-backed chat posts one message
+        // whatever the setting, so without this field the server would keep
+        // prepending the stored transcript and the opt-out would be inert.
+        ...(serverBacked && sendChatHistory === false ? { sendChatHistory: false } : {})
+      };
+    },
+    [serverBacked]
+  );
 
   /**
    * Truncate the transcript from `messageId` (inclusive) — the local half of a
@@ -145,11 +176,16 @@ function useAppChat({
    *
    * That truncated array used to be the whole message to the server, since the
    * client posted it. A server-backed chat posts only the new message, so the
-   * same intent has to travel explicitly: latch the *stored* id and let the
-   * next send carry it as `replaceFromMessageId`. Only hydrated messages have
-   * one — the store mints its own ids and no stream frame reports them — so a
-   * turn produced in this same session truncates locally and leaves the
-   * superseded exchange in the stored transcript.
+   * same intent has to travel explicitly: latch the id the stored history knows
+   * this message by and let the next send carry it as `replaceFromMessageId`.
+   *
+   * A hydrated message carries the store's own id on `serverId`. A turn made in
+   * this same session has none — no stream frame reports the id the store
+   * minted for it — but the store did record the exchange id this client sent
+   * as `clientMessageId`, and the fork lookup accepts either. Without that the
+   * majority case (regenerate the answer you just got) would send no fork id at
+   * all and the server would append the retry onto the untouched history,
+   * duplicating the exchange in the stored transcript on every retry.
    *
    * @param {string} messageId - Message to truncate from.
    */
@@ -157,8 +193,13 @@ function useAppChat({
     messageId => {
       if (serverBacked) {
         const target = messagesRef.current.find(m => m.id === messageId);
-        pendingReplaceFromRef.current =
-          typeof target?.serverId === 'string' ? target.serverId : null;
+        const forkFrom =
+          typeof target?.serverId === 'string'
+            ? target.serverId
+            : typeof target?.clientMessageId === 'string'
+              ? target.clientMessageId
+              : null;
+        pendingReplaceFromRef.current = forkFrom;
       }
       deleteMessage(messageId);
     },
@@ -442,6 +483,11 @@ function useAppChat({
 
         addUserMessage(contentToAdd, {
           ...(displayMessage?.meta || {}),
+          // The exchange id is what the store files this turn under
+          // (`clientMessageId`), so it is the only handle an edit or a
+          // regenerate of a turn made in this session can fork the stored
+          // history by. Only server-backed chats have a store to address.
+          ...(serverBacked ? { clientMessageId: exchangeId } : {}),
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData
@@ -466,7 +512,7 @@ function useAppChat({
           params: {
             ...params,
             ...(requestedSkill ? { requestedSkill } : {}),
-            ...takeProtocolParams()
+            ...takeProtocolParams(sendChatHistory)
           }
         };
 
@@ -490,6 +536,7 @@ function useAppChat({
       initEventSource,
       addSystemMessage,
       takeProtocolParams,
+      serverBacked,
       t,
       appId,
       chatId
@@ -673,7 +720,10 @@ function useAppChat({
             value: response.value,
             skipped: response.skipped
           },
-          isClarificationAnswer: true
+          isClarificationAnswer: true,
+          // Same reason as `sendMessage`: the store files this turn under the
+          // exchange id, so an edit of it later has something to fork from.
+          ...(serverBacked ? { clientMessageId: exchangeId } : {})
         });
 
         // Add placeholder for assistant response
@@ -731,6 +781,7 @@ function useAppChat({
       addSystemMessage,
       messagesRef,
       takeProtocolParams,
+      serverBacked,
       t,
       appId,
       chatId

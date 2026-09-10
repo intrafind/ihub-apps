@@ -27,9 +27,21 @@ const MAX_TITLE_LENGTH = 200;
  * @param {string} [props.placeholder] - Placeholder for an as-yet untitled chat.
  * @param {string} [props.label] - Accessible name; defaults to "Chat title".
  * @param {string} [props.className] - Extra classes for the input.
+ * @param {{ current: HTMLElement|null }} [props.returnFocusRef] - Where the keyboard goes
+ *   when the edit ends. Needed because the control that opened the editor is
+ *   usually swapped out for it and is therefore detached by the time the edit
+ *   is over; a ref still points at whatever took its place.
  * @returns {JSX.Element} The ChatTitleEditor component.
  */
-function ChatTitleEditor({ value = '', onCommit, onCancel, placeholder, label, className = '' }) {
+function ChatTitleEditor({
+  value = '',
+  onCommit,
+  onCancel,
+  placeholder,
+  label,
+  className = '',
+  returnFocusRef
+}) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
   const [draft, setDraft] = useState(value);
@@ -44,10 +56,18 @@ function ChatTitleEditor({ value = '', onCommit, onCancel, placeholder, label, c
   }, [value]);
 
   // Entering edit mode focuses the field with the caret at the end, so typing
-  // extends the existing title instead of replacing it.
+  // extends the existing title instead of replacing it — and leaving it hands
+  // focus back to whatever opened the editor, normally the row's Rename
+  // button. Both callers end an edit by unmounting this input, so without the
+  // restore `document.activeElement` becomes `<body>`: Tab restarts at the top
+  // of the document, and inside the mobile drawer that is worse than a lost
+  // position — the drawer's trap only intercepts Tab when focus is on its
+  // first or last focusable, so body focus walks out into the page behind the
+  // scrim with no way back in.
   useEffect(() => {
+    const opener = document.activeElement;
     const el = inputRef.current;
-    if (!el) return;
+    if (!el) return undefined;
     el.focus();
     const pos = el.value.length;
     try {
@@ -55,7 +75,24 @@ function ChatTitleEditor({ value = '', onCommit, onCancel, placeholder, label, c
     } catch {
       // setSelectionRange can throw on some input types; ignore.
     }
-  }, []);
+    return () => {
+      // The caller's target first: the button that opened the editor was
+      // usually replaced by it, so the node captured above is detached by now
+      // while the ref points at the one that took its place. Fall back to the
+      // opener, and to nothing at all when neither is in the document — a row
+      // that was deleted along with the edit has nowhere to hand focus back
+      // to, and `<body>` is what we are trying not to end up on.
+      const target = returnFocusRef?.current;
+      if (target?.isConnected) {
+        target.focus?.();
+        return;
+      }
+      if (opener && opener !== document.body && opener.isConnected) {
+        opener.focus?.();
+      }
+    };
+    // `returnFocusRef` is a ref object: stable for the life of the editor.
+  }, [returnFocusRef]);
 
   const commit = useCallback(() => {
     if (settledRef.current) return;

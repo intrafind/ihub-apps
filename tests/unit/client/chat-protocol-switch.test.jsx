@@ -388,7 +388,13 @@ describe('replaceFromMessageId', () => {
     expect(requestAt(1).params.replaceFromMessageId).toBeUndefined();
   });
 
-  test('a turn made in this session has no stored id, so it only truncates locally', async () => {
+  test('editing a turn made in this session forks at the exchange id it was stored under', async () => {
+    // The store mints its own ids and no stream frame reports them, so a turn
+    // made in the session that is still open never learns one. It does know
+    // the exchange id it sent, which the store filed as `clientMessageId` and
+    // the fork lookup accepts. Without that, regenerating the answer you just
+    // got would carry no fork id, and the server would append the retry to the
+    // untouched history — a duplicated exchange per retry.
     const { result } = renderHook(() =>
       useAppChat({ appId: 'app1', chatId: 'chat-local', serverBacked: true })
     );
@@ -398,7 +404,10 @@ describe('replaceFromMessageId', () => {
 
     send(result, 'brand new question');
     await connect('chat-local');
+    const exchangeId = requestAt(0).messages[0].messageId;
+    expect(exchangeId).toBeTruthy();
     const localUserId = result.current.messages[0].id;
+    expect(localUserId).not.toBe(exchangeId);
 
     act(() => {
       result.current.resendMessage(localUserId, 'brand new question, rephrased');
@@ -406,7 +415,71 @@ describe('replaceFromMessageId', () => {
     send(result, 'brand new question, rephrased');
     await connect('chat-local');
 
-    expect(requestAt(1).params.replaceFromMessageId).toBeUndefined();
+    expect(requestAt(1).params.replaceFromMessageId).toBe(exchangeId);
+  });
+
+  test('regenerating an answer produced in this session forks at its own question', async () => {
+    const { result } = renderHook(() =>
+      useAppChat({ appId: 'app1', chatId: 'chat-local-regen', serverBacked: true })
+    );
+    act(() => {
+      result.current.loadServerMessages([]);
+    });
+
+    send(result, 'explain X');
+    await connect('chat-local-regen');
+    const exchangeId = requestAt(0).messages[0].messageId;
+    const assistantId = result.current.messages[1].id;
+    act(() => {
+      result.current.updateAssistantMessage(assistantId, 'first answer', false);
+    });
+
+    let resend;
+    act(() => {
+      resend = result.current.resendMessage(assistantId);
+    });
+    expect(resend.content).toBe('explain X');
+    send(result, resend.content);
+    await connect('chat-local-regen');
+
+    expect(requestAt(1).params.replaceFromMessageId).toBe(exchangeId);
+    expect(requestAt(1).messages).toHaveLength(1);
+  });
+
+  test('a fork latched in one chat is not carried into the next', async () => {
+    // `/apps/:appId/c/:chatId` swaps chats without remounting the hook, so an
+    // abandoned edit in chat A could otherwise address A's stored history from
+    // inside chat B — where the id does not exist, and the send fails with
+    // 400 UNKNOWN_MESSAGE for no visible reason.
+    const { result, rerender } = renderHook(
+      ({ chatId }) => useAppChat({ appId: 'app1', chatId, serverBacked: true }),
+      { initialProps: { chatId: 'chat-a' } }
+    );
+    hydrate(result);
+
+    act(() => {
+      result.current.resendMessage('srv-3', 'rephrased');
+    });
+
+    rerender({ chatId: 'chat-b' });
+    hydrate(result, [stored('other-1', 'user', 'unrelated')]);
+
+    send(result, 'a question in the other chat');
+    await connect('chat-b');
+
+    expect(requestAt(0).chatId).toBe('chat-b');
+    expect(requestAt(0).params.replaceFromMessageId).toBeUndefined();
+  });
+
+  test('an ordinary chat carries no exchange id on its user messages', () => {
+    // The field only means something to the durable store; every other mode
+    // posts its whole local array, and that array must not grow a field the
+    // wire has no use for.
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain-id' }));
+
+    send(result, 'one');
+
+    expect(result.current.messages[0].clientMessageId).toBeUndefined();
   });
 
   test('an ordinary chat never sends a fork id — it still posts the truncated array', async () => {
@@ -429,6 +502,53 @@ describe('replaceFromMessageId', () => {
     expect(requestAt(1).messages.map(m => m.content)).toEqual(['one, rephrased']);
     expect(requestAt(1).params.replaceFromMessageId).toBeUndefined();
     expect(requestAt(1).params.ephemeral).toBe(true);
+  });
+});
+
+describe('sendChatHistory', () => {
+  test('a server-backed turn says the history is off, because the array cannot', async () => {
+    // Every other mode communicates the viewer's "Include chat history in
+    // requests" toggle by posting a shorter array. A server-backed chat posts
+    // exactly one message either way, so without this field the server would
+    // keep prepending the stored transcript and the opt-out would be inert.
+    const { result } = renderHook(() =>
+      useAppChat({ appId: 'app1', chatId: 'chat-nohist', serverBacked: true })
+    );
+    hydrate(result);
+
+    send(result, 'a standalone question', { sendChatHistory: false });
+    await connect('chat-nohist');
+
+    expect(requestAt(0).messages).toHaveLength(1);
+    expect(requestAt(0).params.sendChatHistory).toBe(false);
+  });
+
+  test('leaving the toggle on says nothing — the stored transcript is the default', async () => {
+    const { result } = renderHook(() =>
+      useAppChat({ appId: 'app1', chatId: 'chat-hist', serverBacked: true })
+    );
+    hydrate(result);
+
+    send(result, 'a follow-up');
+    await connect('chat-hist');
+
+    expect(requestAt(0).params.sendChatHistory).toBeUndefined();
+  });
+
+  test('an ordinary chat keeps saying it with the array alone', async () => {
+    const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-plain-hist' }));
+
+    send(result, 'one');
+    await connect('chat-plain-hist');
+    act(() => {
+      result.current.updateAssistantMessage(result.current.messages[1].id, 'answered', false);
+    });
+
+    send(result, 'two', { sendChatHistory: false });
+    await connect('chat-plain-hist');
+
+    expect(requestAt(1).messages.map(m => m.content)).toEqual(['two']);
+    expect(requestAt(1).params.sendChatHistory).toBeUndefined();
   });
 });
 

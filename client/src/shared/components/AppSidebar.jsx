@@ -4,7 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import useFeatureFlags from '../hooks/useFeatureFlags';
 import useApps from '../hooks/useApps';
-import useChats, { invalidateChatsCache, useChatPersistence } from '../hooks/useChats';
+import useChats, {
+  invalidateChatsCache,
+  patchChatInCache,
+  removeChatFromCache,
+  useChatPersistence
+} from '../hooks/useChats';
 import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
@@ -320,17 +325,39 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       ? t('sidebar.unseenBadge', '{{count}} new', { count: unseenChatCount })
       : null;
 
+  // One ref per row's Rename button, so ending an inline rename can hand the
+  // keyboard back to it. The button is swapped out for the editor while the
+  // rename is open, so the node has to be reached through a ref that follows
+  // the remount — the editor's own capture is detached by then, and focus
+  // would fall to `<body>`, which in the mobile drawer escapes its focus trap.
+  const renameButtonRefsRef = useRef(new Map());
+  const renameButtonRefFor = chatId => {
+    const refs = renameButtonRefsRef.current;
+    if (!refs.has(chatId)) refs.set(chatId, { current: null });
+    return refs.get(chatId);
+  };
+
   // A chat is opened inside its app. `appId` is set for every chat the chat
   // route creates, but the document allows null, and there is nowhere to open
   // such a chat — send those to the list rather than to `/apps/null/c/…`.
   const chatLinkFor = chat => (chat.appId ? `/apps/${chat.appId}/c/${chat.id}` : '/chats');
 
+  // Rename and delete answer in the shared list immediately and reconcile
+  // afterwards. Waiting for the refetch would leave the old title — or the
+  // deleted row — on screen for a round trip, and if that refetch fails the
+  // hook keeps the list it already had, so the row would simply never go away.
   const handleRenameChat = useCallback(
     async (chatId, title) => {
       setRenamingChatId(null);
       setChatActionError(null);
+      patchChatInCache(chatId, { title, titleSetByUser: true });
       try {
-        await renameChat(chatId, title);
+        // The server normalizes the title (whitespace collapsed, length
+        // capped), so show what it actually stored rather than what was typed.
+        const result = await renameChat(chatId, title);
+        if (typeof result?.chat?.title === 'string') {
+          patchChatInCache(chatId, { title: result.chat.title });
+        }
       } catch {
         setChatActionError(
           t('chatHistory.renameFailed', 'The chat could not be renamed. Please try again.')
@@ -360,6 +387,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         onConfirm: async () => {
           setConfirmDialog(null);
           setChatActionError(null);
+          removeChatFromCache(chat.id);
           try {
             await deleteChat(chat.id);
           } catch {
@@ -367,12 +395,20 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               t('chatHistory.deleteFailed', 'The chat could not be deleted. Please try again.')
             );
           }
+          // Either way: on success this reconciles with the server, on failure
+          // it puts the chat that is still there back.
           invalidateChatsCache();
         }
       });
     },
     [t, untitledChatLabel, onMobileClose]
   );
+
+  // `/apps/:appId/c/:chatId` matches the app row's prefix test as well as the
+  // Recents row for that exact chat. `aria-current="page"` names *the* current
+  // page, so the broader match yields: hearing "current page" on two links
+  // with different hrefs tells a screen-reader user nothing.
+  const isOnStoredChatRoute = /^\/apps\/[^/]+\/c\//.test(location.pathname);
 
   const isOnPrompts = location.pathname.startsWith('/prompts');
   const isOnChats = location.pathname.startsWith('/chats');
@@ -734,7 +770,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                     to={`/apps/${app.id}`}
                     onClick={onMobileClose}
                     title={name}
-                    aria-current={isActive ? 'page' : undefined}
+                    aria-current={isActive && !isOnStoredChatRoute ? 'page' : undefined}
                     className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 text-left min-w-0"
                   >
                     <span
@@ -824,6 +860,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             value={chat.title || ''}
                             onCommit={next => handleRenameChat(chat.id, next)}
                             onCancel={() => setRenamingChatId(null)}
+                            returnFocusRef={renameButtonRefFor(chat.id)}
                             className="text-[13px]"
                           />
                         </div>
@@ -856,6 +893,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             )}
                           </Link>
                           <button
+                            ref={renameButtonRefFor(chat.id)}
                             onClick={e => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -864,7 +902,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             }}
                             aria-label={t('chatHistory.rename', 'Rename chat')}
                             title={t('chatHistory.rename', 'Rename chat')}
-                            className="w-7 h-7 flex-none rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                            className="w-7 h-7 flex-none rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 max-md:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                           >
                             <Icon name="pencil" size="sm" className="w-3.5 h-3.5" />
                           </button>
@@ -872,7 +910,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             onClick={e => requestDeleteChat(e, chat)}
                             aria-label={t('chatHistory.delete', 'Delete chat')}
                             title={t('chatHistory.delete', 'Delete chat')}
-                            className="w-7 h-7 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                            className="w-7 h-7 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 max-md:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           >
                             <Icon name="trash" size="sm" className="w-3.5 h-3.5" />
                           </button>

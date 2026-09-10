@@ -1,10 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useApps from '../../../shared/hooks/useApps';
-import useChats, { invalidateChatsCache } from '../../../shared/hooks/useChats';
+import useChats, {
+  invalidateChatsCache,
+  patchChatInCache,
+  removeChatFromCache
+} from '../../../shared/hooks/useChats';
 import { deleteChat, renameChat } from '../../../api';
 import { CHAT_GROUPS, chatRecencyGroup } from '../../../utils/chatGroups';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -97,6 +101,10 @@ function EmptyState({ icon, title, description, children }) {
  */
 function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRename, onDelete }) {
   const { t } = useTranslation();
+  // Where the keyboard goes when the rename ends. The button itself is swapped
+  // out for the editor, so it has to be reached through a ref that points at
+  // the one remounted alongside the editor's teardown, not the detached node.
+  const renameButtonRef = useRef(null);
 
   const tile = (
     <span
@@ -150,6 +158,7 @@ function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRe
             value={chat.title}
             onCommit={onRename}
             onCancel={onCancelRename}
+            returnFocusRef={renameButtonRef}
             className="flex-1"
           />
         </div>
@@ -176,6 +185,7 @@ function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRe
           <div className="flex-none flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
             <button
               type="button"
+              ref={renameButtonRef}
               onClick={onStartRename}
               aria-label={t('chatHistory.rename', 'Rename chat')}
               title={t('chatHistory.rename', 'Rename chat')}
@@ -212,11 +222,14 @@ export default function ChatHistoryPage() {
   const [editingId, setEditingId] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [actionError, setActionError] = useState(null);
-  // A rename or a delete is answered immediately in the list; the shared chat
-  // cache only catches up on the refetch that follows, and until then the row
-  // would still show the old title or the deleted chat.
-  const [removedIds, setRemovedIds] = useState([]);
-  const [titleOverrides, setTitleOverrides] = useState({});
+  // Success is silent for a screen reader otherwise: `actionError` is only
+  // ever filled by a failure.
+  const [actionStatus, setActionStatus] = useState('');
+  // Deleting a row unmounts the button that was focused, in the same commit
+  // the confirmation dialog is torn down, so the dialog's focus trap restores
+  // focus to a detached node and the document is left focused on <body>.
+  const listRef = useRef(null);
+  const restoreListFocusRef = useRef(false);
 
   const appsById = useMemo(() => {
     const map = new Map();
@@ -230,29 +243,27 @@ export default function ChatHistoryPage() {
   // list so it cannot split across a midnight boundary mid-render.
   const resolvedChats = useMemo(() => {
     const now = new Date();
-    return (chats || [])
-      .filter(chat => chat && !removedIds.includes(chat.id))
-      .map(chat => {
-        const app = chat.appId ? appsById.get(chat.appId) : null;
-        const title = titleOverrides[chat.id] ?? chat.title ?? '';
-        const appName =
-          (app && getLocalizedContent(app.name, currentLanguage)) ||
-          chat.appId ||
-          t('chatHistory.unknownApp', 'Unknown app');
-        return {
-          ...chat,
-          title,
-          displayTitle: title || t('chatHistory.untitled', 'Untitled chat'),
-          appName,
-          appColor: app?.color || DEFAULT_APP_COLOR,
-          appIcon: app?.icon || DEFAULT_APP_ICON,
-          group: chatRecencyGroup(chat.lastMessageAt, now),
-          to: chat.appId
-            ? `/apps/${encodeURIComponent(chat.appId)}/c/${encodeURIComponent(chat.id)}`
-            : null
-        };
-      });
-  }, [chats, removedIds, titleOverrides, appsById, currentLanguage, t]);
+    return (chats || []).filter(Boolean).map(chat => {
+      const app = chat.appId ? appsById.get(chat.appId) : null;
+      const title = chat.title ?? '';
+      const appName =
+        (app && getLocalizedContent(app.name, currentLanguage)) ||
+        chat.appId ||
+        t('chatHistory.unknownApp', 'Unknown app');
+      return {
+        ...chat,
+        title,
+        displayTitle: title || t('chatHistory.untitled', 'Untitled chat'),
+        appName,
+        appColor: app?.color || DEFAULT_APP_COLOR,
+        appIcon: app?.icon || DEFAULT_APP_ICON,
+        group: chatRecencyGroup(chat.lastMessageAt, now),
+        to: chat.appId
+          ? `/apps/${encodeURIComponent(chat.appId)}/c/${encodeURIComponent(chat.id)}`
+          : null
+      };
+    });
+  }, [chats, appsById, currentLanguage, t]);
 
   const filteredChats = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -302,23 +313,29 @@ export default function ChatHistoryPage() {
 
   const handleClearSearch = useCallback(() => setQuery(''), []);
 
+  // Both actions answer in the shared chat cache first and reconcile on the
+  // refetch. A private copy of the new title here would outlive that refetch
+  // and then mask it: the server normalizes a title (whitespace collapsed,
+  // length capped) and another surface can rename the same chat, and the row
+  // would keep showing neither.
   const handleRename = useCallback(
     async (chat, title) => {
       setEditingId(null);
       setActionError(null);
-      setTitleOverrides(prev => ({ ...prev, [chat.id]: title }));
+      patchChatInCache(chat.id, { title, titleSetByUser: true });
       try {
-        await renameChat(chat.id, title);
+        const result = await renameChat(chat.id, title);
+        if (typeof result?.chat?.title === 'string') {
+          patchChatInCache(chat.id, { title: result.chat.title });
+        }
+        setActionStatus(t('chatHistory.renamed', 'Chat renamed'));
         invalidateChatsCache();
       } catch {
-        setTitleOverrides(prev => {
-          const next = { ...prev };
-          delete next[chat.id];
-          return next;
-        });
         setActionError(
           t('chatHistory.renameFailed', 'The chat could not be renamed. Please try again.')
         );
+        // Put the stored title back.
+        invalidateChatsCache();
       }
     },
     [t]
@@ -338,21 +355,42 @@ export default function ChatHistoryPage() {
         onConfirm: async () => {
           setConfirmDialog(null);
           setActionError(null);
-          setRemovedIds(prev => [...prev, chat.id]);
+          // The row that owns the focused Delete button is about to unmount,
+          // so claim the focus before the dialog's trap tries to restore it.
+          restoreListFocusRef.current = true;
+          removeChatFromCache(chat.id);
+          setActionStatus(t('chatHistory.deleted', 'Chat deleted'));
           try {
             await deleteChat(chat.id);
             invalidateChatsCache();
           } catch {
-            setRemovedIds(prev => prev.filter(id => id !== chat.id));
+            setActionStatus('');
             setActionError(
               t('chatHistory.deleteFailed', 'The chat could not be deleted. Please try again.')
             );
+            invalidateChatsCache();
           }
         }
       });
     },
     [t]
   );
+
+  // Runs in the same commit that removes the row, so it wins the race against
+  // the focus trap's `queueMicrotask` restore onto the now-detached button.
+  useLayoutEffect(() => {
+    if (!restoreListFocusRef.current) return;
+    restoreListFocusRef.current = false;
+    listRef.current?.focus();
+  });
+
+  // The status line is an announcement, not a banner: clear it once it has
+  // been read so a later, identical action announces again.
+  useEffect(() => {
+    if (!actionStatus) return undefined;
+    const timer = setTimeout(() => setActionStatus(''), 4000);
+    return () => clearTimeout(timer);
+  }, [actionStatus]);
 
   const groupingLabels = {
     recent: t('chatHistory.groupRecent', 'Recent'),
@@ -373,11 +411,21 @@ export default function ChatHistoryPage() {
               {t('chatHistory.title', 'Your chats')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {t('chatHistory.subtitle', {
-                count: filteredChats.length,
-                defaultValue_one: '{{count}} conversation across your apps',
-                defaultValue_other: '{{count}} conversations across your apps'
-              })}
+              {/* How many are on screen, not how many exist: the list is
+                  cursor-paged and there is no cheap total, so with more still
+                  to fetch the count says "30+" rather than claiming 30 is all
+                  of them right above a "Show older chats" button. */}
+              {hasMore
+                ? t('chatHistory.subtitleMore', {
+                    count: filteredChats.length,
+                    defaultValue_one: '{{count}}+ conversation across your apps',
+                    defaultValue_other: '{{count}}+ conversations across your apps'
+                  })
+                : t('chatHistory.subtitle', {
+                    count: filteredChats.length,
+                    defaultValue_one: '{{count}} conversation across your apps',
+                    defaultValue_other: '{{count}} conversations across your apps'
+                  })}
             </p>
           </div>
           <button
@@ -435,6 +483,12 @@ export default function ChatHistoryPage() {
             ))}
           </div>
         </div>
+
+        {/* Success has to be said out loud too: the row simply vanishing is
+            nothing a screen reader reports. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {actionStatus}
+        </span>
 
         {actionError && (
           <div
@@ -497,7 +551,9 @@ export default function ChatHistoryPage() {
             </EmptyState>
           )
         ) : (
-          <>
+          // `tabIndex={-1}` so deleting a row has somewhere to put the focus
+          // that the removed button was holding.
+          <div ref={listRef} tabIndex={-1} className="outline-hidden">
             {histGroups.map(group => (
               <div key={group.key} className="mb-2">
                 {group.showLabel && (
@@ -534,7 +590,7 @@ export default function ChatHistoryPage() {
                 </button>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 

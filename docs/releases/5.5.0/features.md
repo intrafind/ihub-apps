@@ -1502,6 +1502,11 @@ preview flag, which is retired.
   off, or without a working storage provider, the history UI is absent entirely.
 - **The chat client posts one message per turn** for a stored chat, which is what a
   server-assembled history requires; anonymous and incognito chats keep the previous protocol
-  unchanged.
+  unchanged. Editing or regenerating a turn rewrites the stored transcript from that point,
+  whether the turn came back from the store or was sent a moment ago, and switching off
+  *Include chat history in requests* still gives the model just the one message.
+- **Opening another chat mid-answer no longer cancels it.** Leaving a conversation while it is
+  still streaming releases the browser's connection and nothing else; the answer keeps being
+  written and is waiting when the chat is reopened. Only the Stop button cancels a turn.
 
 See [Chat Persistence](../../chat-persistence.md).

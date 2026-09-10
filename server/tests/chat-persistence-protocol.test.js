@@ -404,6 +404,83 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
     });
   });
 
+  it('forks at the client exchange id a same-session turn was stored under', async () => {
+    // A turn made in the session that is still open never learns the id the
+    // store minted for it — nothing on the stream reports it. What it does
+    // know is the exchange id it sent, which the store kept as
+    // `clientMessageId`, so an edit or a regenerate of that turn addresses the
+    // history by that. Without this the fork id would be absent and the retry
+    // would be appended to the untouched history, duplicating the exchange.
+    const chatId = 'chat-fork-client-id';
+    const repository = getChatRepository();
+    await repository.ensureChat({ chatId, ownerId: USER.id, identityMode: 'default' });
+    await repository.appendMessage(chatId, {
+      role: 'user',
+      content: 'what is the retention default?',
+      runId: 'chat-run-1',
+      clientMessageId: 'msg-1700000000000-1'
+    });
+    await repository.appendMessage(chatId, {
+      role: 'assistant',
+      content: 'ninety days',
+      runId: 'chat-run-1'
+    });
+
+    await withPreparedRequests(async calls => {
+      const res = await postChat({
+        chatId,
+        body: {
+          replaceFromMessageId: 'msg-1700000000000-1',
+          messages: [{ role: 'user', content: 'let me rephrase' }]
+        }
+      });
+
+      assert.notEqual(res.statusCode, 400);
+      assert.deepEqual(
+        calls[0].messages.map(entry => entry.content),
+        ['let me rephrase'],
+        'the forked-off exchange is gone from the prompt, not duplicated'
+      );
+    });
+  });
+
+  it('honours the caller opting out of chat history for one turn', async () => {
+    // With the client posting exactly one message either way, this field is
+    // the only channel the viewer's "Include chat history in requests" toggle
+    // has left; truncating the array no longer says anything.
+    const chatId = 'chat-no-history';
+    await seedChat(chatId);
+
+    await withPreparedRequests(async calls => {
+      await postChat({
+        chatId,
+        body: { sendChatHistory: false, messages: [{ role: 'user', content: 'standalone' }] }
+      });
+
+      assert.deepEqual(
+        calls[0].messages.map(entry => entry.content),
+        ['standalone']
+      );
+    });
+  });
+
+  it('still assembles the stored transcript when the caller says nothing', async () => {
+    const chatId = 'chat-history-default';
+    await seedChat(chatId);
+
+    await withPreparedRequests(async calls => {
+      await postChat({
+        chatId,
+        body: { sendChatHistory: true, messages: [{ role: 'user', content: 'follow-up' }] }
+      });
+
+      assert.deepEqual(
+        calls[0].messages.map(entry => entry.content),
+        ['what is the retention default?', 'ninety days', 'follow-up']
+      );
+    });
+  });
+
   it('rejects an unknown replaceFromMessageId instead of replaying everything', async () => {
     const chatId = 'chat-fork-unknown';
     await seedChat(chatId);

@@ -116,6 +116,50 @@ export function invalidateChatsCache() {
 }
 
 /**
+ * Drop one chat from the shared list right now, before the server has been
+ * asked.
+ *
+ * A delete that only invalidates leans entirely on the refetch that follows:
+ * when that request fails the hook keeps the previous list, so the row the
+ * user just deleted stays on screen — with no error to explain it, because the
+ * DELETE itself succeeded. Answering locally first makes the outcome visible
+ * whatever the refetch does; roll back with {@link invalidateChatsCache} if the
+ * DELETE is the thing that failed.
+ *
+ * @param {string} chatId - Chat to remove.
+ */
+export function removeChatFromCache(chatId) {
+  if (!cache?.chats || !chatId) return;
+  const chats = cache.chats.filter(chat => chat?.id !== chatId);
+  if (chats.length === cache.chats.length) return;
+  cache = { ...cache, chats };
+  notify();
+}
+
+/**
+ * Merge fields into one chat of the shared list right now.
+ *
+ * Used for a rename, so every mounted consumer shows the new title on the same
+ * frame instead of each surface keeping a private override that outlives — and
+ * then masks — the stored value.
+ *
+ * @param {string} chatId - Chat to patch.
+ * @param {Object} fields - Fields to merge into the stored document.
+ */
+export function patchChatInCache(chatId, fields) {
+  if (!cache?.chats || !chatId || !fields) return;
+  let changed = false;
+  const chats = cache.chats.map(chat => {
+    if (chat?.id !== chatId) return chat;
+    changed = true;
+    return { ...chat, ...fields };
+  });
+  if (!changed) return;
+  cache = { ...cache, chats };
+  notify();
+}
+
+/**
  * Whether durable chats are available **to the current viewer**.
  *
  * Two things have to be true. The platform has to be storing chats at all —
@@ -154,6 +198,28 @@ export function useChatPersistenceResolving() {
   const { isLoading: platformLoading } = usePlatformConfig();
   const { isLoading: authLoading } = useAuth();
   return platformLoading === true || authLoading === true;
+}
+
+/**
+ * What the `/chats` route should render.
+ *
+ * The route cannot decide from {@link useChatPersistence} alone: that hook has
+ * to answer `false` until the platform config *and* the auth status have both
+ * landed, and the two are fetched independently, so "false" reads as "this
+ * installation does not store chats" a beat before it becomes "you have 40 of
+ * them". Gating on the platform config alone therefore paints the full-page
+ * 404 at a signed-in user and swaps it for their chat list a moment later —
+ * which is exactly what deciding inside the element was supposed to avoid.
+ *
+ * `resolving` already covers the platform config, so it is the only wait.
+ *
+ * @returns {'loading'|'unavailable'|'ready'}
+ */
+export function useChatHistoryRouteState() {
+  const resolving = useChatPersistenceResolving();
+  const persistence = useChatPersistence();
+  if (resolving) return 'loading';
+  return persistence ? 'ready' : 'unavailable';
 }
 
 /**

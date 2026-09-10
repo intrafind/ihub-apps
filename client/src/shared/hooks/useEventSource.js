@@ -21,7 +21,8 @@ import { RUN_EVENTS } from '../run/runReducer';
  * Terminal frames: `run/ended` of the turn's run and `stream/error` close the
  * fetch (release the HTTP/1.1 connection slot) and flip processing to false.
  * Also includes connection timeout, the chat heartbeat (`checkAppChatStatus`)
- * and `stopAppChatStream` on cleanup.
+ * and, **on unmount only**, `stopAppChatStream`. Switching `chatId` while the
+ * surface stays mounted merely detaches — see the teardown effect.
  *
  * @param {Object} options
  * @param {string} options.appId - App ID (used for heartbeat + cleanup)
@@ -254,12 +255,42 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     ]
   );
 
-  // Cleanup on unmount — release the slot synchronously, then notify the server
-  // in the background. Awaiting the public async cleanup here would race the
-  // browser navigation; abortAndClearTimers is enough to free the connection.
+  // Whether this hook is still mounted. Declared before the teardown effect so
+  // its cleanup runs first: React destroys effects in declaration order, so by
+  // the time the teardown below runs on a real unmount this is already false,
+  // while a mere dependency change leaves it true.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Read through a ref so the teardown below stays keyed on the stream's
+  // identity alone: an unstable callback in the dependency array would abort a
+  // live stream on an unrelated re-render.
+  const onProcessingChangeRef = useRef(onProcessingChange);
+  onProcessingChangeRef.current = onProcessingChange;
+
+  // Teardown. This effect is keyed on the stream's identity, so it also runs
+  // when the surface stays mounted and simply switches to another chat —
+  // `/apps/:appId/c/:chatId` does exactly that.
+  //
+  // Only a real unmount tells the server to stop. `POST …/stop` is built to
+  // reach a turn whose client is gone, which is precisely the durable turn the
+  // user was promised would finish, so cancelling it merely because they
+  // opened a different chat would throw away the answer they are still
+  // waiting for. Leaving a chat therefore only detaches: release the HTTP
+  // slot, drop the timers, and report the turn as no longer processing *here*
+  // so the composer of the chat just opened is not stuck behind a Stop button.
   useEffect(() => {
     return () => {
-      abortAndClearTimers();
+      const wasActive = abortAndClearTimers();
+      if (mountedRef.current) {
+        if (wasActive) onProcessingChangeRef.current?.(false);
+        return;
+      }
       if (appId && chatId) {
         stopAppChatStream(appId, chatId).catch(() => {
           // server may be unreachable on tab close — best effort only

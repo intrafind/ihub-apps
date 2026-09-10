@@ -173,6 +173,10 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
   // The mode can change after the first render: the persistence capability
   // rides on the platform config, which resolves asynchronously.
   const prevServerBackedRef = useRef(serverBacked);
+  // …and it can change because the *user* changed it: the incognito toggle is
+  // live. Only the browser-persisted mode can be holding a stale sessionStorage
+  // copy, so only a transition out of it may drop the transcript.
+  const prevBrowserPersistedRef = useRef(browserPersisted);
 
   // The two effects below reset `hydrated` — but an effect runs *after* the
   // render that triggered it has painted, so on the frame a chat becomes
@@ -182,22 +186,31 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
   // prevent, so both transitions are read straight from the refs here, in
   // render, where they are already visible. The refs still hold the previous
   // values until those effects run.
-  const becomingServerBacked = serverBacked && !prevServerBackedRef.current;
+  const becomingServerBacked =
+    serverBacked && !prevServerBackedRef.current && prevBrowserPersistedRef.current;
   const switchingChat = prevChatIdRef.current !== chatId;
   const hydrating = serverBacked && (!hydrated || becomingServerBacked || switchingChat);
 
   useEffect(() => {
     const wasServerBacked = prevServerBackedRef.current;
+    const wasBrowserPersisted = prevBrowserPersistedRef.current;
     prevServerBackedRef.current = serverBacked;
-    if (serverBacked && !wasServerBacked) {
+    prevBrowserPersistedRef.current = browserPersisted;
+    if (serverBacked && !wasServerBacked && wasBrowserPersisted) {
       // Becoming server-backed hands the transcript to the store. Whatever
       // the sessionStorage initializer loaded before the capability resolved
       // is a stale shadow of it, and would otherwise sit above the hydrated
       // history as a second copy.
+      //
+      // Only the browser-persisted mode can be holding such a copy. Coming
+      // back from incognito is the same `serverBacked` transition but there
+      // was never a second copy to discard — the messages on screen are the
+      // only one — so clearing there would wipe the conversation the user is
+      // in, which is the opposite of what flipping incognito has always done.
       setMessages([]);
       setHydrated(false);
     }
-  }, [serverBacked]);
+  }, [serverBacked, browserPersisted]);
 
   /**
    * Mark hydration finished without replacing anything: the chat has no stored
@@ -611,9 +624,15 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
    * discriminator — the conversation shape has only ever carried `type`.
    *
    * @param {Array} serverMessages - Messages from either endpoint
+   * @param {Object} [options] - Load options.
+   * @param {boolean} [options.preserveLocal] - Keep messages added while the fetch was in
+   *   flight and put the loaded transcript in front of them, instead of replacing. A
+   *   hydrate races the composer: the user (or an auto-send) can start a turn during the
+   *   round trip, and replacing would silently drop that turn from the screen while the
+   *   server keeps appending to it.
    * @returns {string|null} The last assistant message ID (for parent_id chaining)
    */
-  const loadServerMessages = useCallback(serverMessages => {
+  const loadServerMessages = useCallback((serverMessages, { preserveLocal = false } = {}) => {
     setHydrated(true);
     if (!serverMessages || serverMessages.length === 0) return null;
 
@@ -631,7 +650,11 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       return message;
     });
 
-    setMessages(transformed);
+    setMessages(prev => {
+      if (!preserveLocal || prev.length === 0) return transformed;
+      const loaded = new Set(transformed.map(message => message.id));
+      return [...transformed, ...prev.filter(message => !loaded.has(message.id))];
+    });
     return lastAssistantId;
   }, []);
 

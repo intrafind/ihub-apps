@@ -247,6 +247,39 @@ export async function materializeAssistantTurn({
   const error = messageError(summary);
   const usage = normalizeUsage(summary?.usage);
   try {
+    // A turn that paused for a clarification produced no answer — the question
+    // is an interaction, not a message. Everything else is recorded, an empty
+    // answer and an abort included, so the stored history says what happened.
+    // The run is still released below either way, or the chat stays "running".
+    const pausedWithoutAnswer = status === 'paused' && !content && !error;
+
+    // Store the answer BEFORE announcing the run finished. `releaseRun` clears
+    // `activeRunId` and raises `hasUnseenActivity` — together, "this chat is
+    // idle and has an answer waiting" — and the two calls take the chat lock
+    // separately, so there is a window between them. In the other order a
+    // reader lands in that window and sees a settled chat whose answer is not
+    // stored yet: `GET /api/chats/:id` then clears the unseen flag and returns
+    // a transcript without the answer, and the flag never comes back. This
+    // order can only ever show a chat as briefly still running, which the next
+    // poll corrects.
+    const appended = pausedWithoutAnswer
+      ? null
+      : await repository.appendMessage(
+          chatId,
+          {
+            role: 'assistant',
+            content,
+            ts: new Date().toISOString(),
+            runId,
+            finishReason: summary?.finishReason ?? null,
+            ...(usage ? { usage } : {}),
+            ...(error ? { error } : {})
+          },
+          // The end of the transcript for an ordinary turn, and the position
+          // right after this run's own question for a superseded one.
+          { insertAfterRunId: runId }
+        );
+
     const { chat } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,
       status: status === 'error' ? 'error' : 'active',
@@ -262,25 +295,6 @@ export async function materializeAssistantTurn({
       });
       return null;
     }
-    // A turn that paused for a clarification produced no answer — the question
-    // is an interaction, not a message. Everything else is recorded, an empty
-    // answer and an abort included, so the stored history says what happened.
-    if (status === 'paused' && !content && !error) return null;
-    const appended = await repository.appendMessage(
-      chatId,
-      {
-        role: 'assistant',
-        content,
-        ts: new Date().toISOString(),
-        runId,
-        finishReason: summary?.finishReason ?? null,
-        ...(usage ? { usage } : {}),
-        ...(error ? { error } : {})
-      },
-      // The end of the transcript for an ordinary turn, and the position right
-      // after this run's own question for a superseded one.
-      { insertAfterRunId: runId }
-    );
     return appended?.message ?? null;
   } catch (err) {
     logger.error('Chat assistant turn not materialized', {

@@ -208,6 +208,79 @@ describe('useChatMessages in server-backed mode', () => {
     expect(result.current.hydrating).toBe(true);
   });
 
+  test('leaving incognito keeps the conversation that is on screen', () => {
+    // `serverBacked` is `persistence && !ephemeral`, and incognito is a live
+    // toggle: turning it off is the same false→true transition as the
+    // capability resolving. But there is no stale browser copy to discard in
+    // that case — the messages on screen are the only copy — so clearing them
+    // would blank the chat the user is in, permanently (the hydration guard
+    // in AppChat has already been latched for this chat).
+    const { result, rerender } = renderHook(
+      ({ ephemeral }) =>
+        useChatMessages('chat-incognito-off', { serverBacked: !ephemeral, ephemeral }),
+      { initialProps: { ephemeral: false } }
+    );
+    act(() => {
+      result.current.loadServerMessages(STORED);
+    });
+    expect(result.current.messages).toHaveLength(2);
+
+    // Incognito on: nothing is stored, but what is on screen stays.
+    rerender({ ephemeral: true });
+    act(() => {
+      result.current.addUserMessage('something private');
+    });
+    expect(result.current.messages).toHaveLength(3);
+
+    // …and off again.
+    rerender({ ephemeral: false });
+
+    expect(result.current.messages.map(m => m.content)).toEqual([
+      'stored question',
+      'stored answer',
+      'something private'
+    ]);
+    expect(result.current.hydrating).toBe(false);
+  });
+
+  test('a turn started during the hydrate is kept, with the stored history in front', () => {
+    // The fetch and the composer race: an auto-send from the start page, or a
+    // user typing behind the spinner, adds a turn while the round trip is out.
+    // Replacing would drop that turn from the screen while the server keeps
+    // appending to it, and the two transcripts diverge from there.
+    const { result } = renderHook(() => useChatMessages('chat-race', { serverBacked: true }));
+
+    act(() => {
+      result.current.addUserMessage('sent while loading');
+      result.current.addAssistantMessage('pending-1');
+    });
+
+    act(() => {
+      result.current.loadServerMessages(STORED, { preserveLocal: true });
+    });
+
+    expect(result.current.messages.map(m => m.content)).toEqual([
+      'stored question',
+      'stored answer',
+      'sent while loading',
+      ''
+    ]);
+    expect(result.current.hydrating).toBe(false);
+  });
+
+  test('without preserveLocal the stored transcript still replaces everything', () => {
+    const { result } = renderHook(() => useChatMessages('chat-replace', { serverBacked: true }));
+    act(() => {
+      result.current.addUserMessage('local only');
+    });
+
+    act(() => {
+      result.current.loadServerMessages(STORED);
+    });
+
+    expect(result.current.messages.map(m => m.id)).toEqual(['srv-1', 'srv-2']);
+  });
+
   test('the very frame a chat becomes server-backed already reports hydrating', () => {
     // `hydrated` is reset in an effect, and React runs effects after the
     // render that scheduled them has painted. Read from that state alone,

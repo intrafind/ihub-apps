@@ -96,6 +96,14 @@ export const chatPostSchema = {
      * The turn is incognito: never written to the chat store. Client-asserted
      * and therefore advisory — it can only ever turn persistence off.
      */
-    ephemeral: z.boolean().optional()
+    ephemeral: z.boolean().optional(),
+    /**
+     * The viewer's "Include chat history in requests" setting, off. Every
+     * non-persisted surface says this by posting a one-element array; a
+     * persisted chat posts one message whatever the setting, so it has to say
+     * so out loud or the server would prepend the stored transcript anyway.
+     * Like the app-level flag it can only ever remove history, never add it.
+     */
+    sendChatHistory: z.boolean().optional()
   })
 };

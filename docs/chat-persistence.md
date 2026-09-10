@@ -123,10 +123,18 @@ own it and could only get a 404 from it.
 Editing an earlier message and sending it again rewrites the stored transcript
 from that message, the same way it rewrites what is on screen — that is the
 `replaceFromMessageId` half of
-[The server owns the history](#the-server-owns-the-history). It works on
-messages that came back from the store; an exchange produced in the same
-session, before any reload, is only truncated locally and stays in the stored
-transcript behind the newer answer.
+[The server owns the history](#the-server-owns-the-history). It works on any
+message, whether it came back from the store or was sent a moment ago in this
+same session: a hydrated message is addressed by its stored id, and one made in
+the open session by the exchange id it was sent with, which the store keeps as
+`clientMessageId`. Regenerating the answer you just got is the common case, and
+without the second form it would leave the superseded exchange in the stored
+transcript and grow the conversation by one discarded round per retry.
+
+Opening a different chat while an answer is still streaming does **not** cancel
+it — that is the durable turn the feature exists for. The page releases its
+stream and shows the chat you opened; the answer keeps being written and is
+there when you come back. Only the Stop button cancels a turn.
 
 ### "Answered while you were away"
 
@@ -144,16 +152,18 @@ is what "seen" means.
 ### Renaming and deleting
 
 Hovering a chat, in the sidebar or on `/chats`, reveals a rename and a delete
-button; on `/chats` they are always visible on a touch screen.
+button; on a touch screen, where nothing hovers, both are always visible.
 
 - **Rename** turns the title into an input in place. Enter or clicking away
   commits, Escape cancels, and an unchanged or emptied field writes nothing. A
   title set this way is marked as the user's and no later turn derives one over
-  it; it is capped at 200 characters.
+  it; it is capped at 200 characters. What the row then shows is what the
+  server stored, not what was typed — the title is normalized (whitespace
+  collapsed, length capped) on the way in.
 - **Delete** asks first, in an in-app confirmation, and then erases the chat,
   its transcript and the runs behind it — the cascade described under
-  [API](#api). There is no undo. The row disappears immediately and comes back
-  with an error message if the call fails.
+  [API](#api). There is no undo. The row disappears immediately, everywhere it
+  is listed, and comes back with an error message if the call fails.
 
 Chats the user never renames are titled from their first message.
 
@@ -167,7 +177,9 @@ exactly the conversations with no history:
   Nothing is stored for them, so there would be nothing to list.
 - **Incognito chats.** With the ghost toggle under the chat input switched on
   the turn is posted `ephemeral: true`, the transcript stays in the browser as
-  it always did, and no trace of it reaches the list.
+  it always did, and no trace of it reaches the list. Toggling it back off
+  resumes storing new turns; what is already on screen stays there and is not
+  re-fetched.
 - **Compare panels and the canvas.** Each panel mints its own chat id and a
   single submit fans out to several of them, so both surfaces send
   `ephemeral: true` too — a comparison never fills the history with half
@@ -208,7 +220,10 @@ What still stops a run:
   registered for abort whether or not it streams, so Stop reaches a turn posted
   without an SSE stream too. When it finds nothing in flight — the turn ended
   in the meantime — it answers 404 rather than reporting a stop that did not
-  happen.
+  happen. It is also the *only* thing in the UI that stops a turn: opening
+  another chat releases this tab's stream without asking the server to stop,
+  because a persisted turn whose client is gone is precisely the turn
+  durability is for.
 - **The model's own output cap** (`maxOutputTokens`) and the agent loop's round
   cap, unchanged.
 - **A server restart**, which is not a graceful stop — see
@@ -283,10 +298,18 @@ the browser. The chat POST changes shape:
   hands that to the request builder.
 - `replaceFromMessageId` truncates the stored history from that message
   (inclusive) before the append — the server-side form of "edit this message and
-  regenerate". An id that is not in the history is `400 UNKNOWN_MESSAGE`, never
-  a silent append onto the untouched history.
+  regenerate". It matches either the stored message id or the `clientMessageId`
+  the message was stored under, because a client only learns the stored id by
+  hydrating and a turn it sent a moment ago has never been through that. An id
+  that matches neither is `400 UNKNOWN_MESSAGE`, never a silent append onto the
+  untouched history.
 - An app with `sendChatHistory: false` still gets only the new message. Storing
   a transcript must not start feeding it to a one-shot prompt.
+- `sendChatHistory: false` in the body says the same thing for one turn — the
+  viewer's "Include chat history in requests" setting. Every non-persisted
+  surface expresses that by posting a shorter array; a persisted chat posts one
+  message either way, so it needs a field. Like the app-level flag it can only
+  ever remove history, never add it.
 
 Requests that are not persisted keep posting their whole array and take the same
 code path they always did.

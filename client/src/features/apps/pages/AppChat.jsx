@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   getOrCreateChatId,
+  readChatId,
   resetChatId,
   getConversationId,
   clearConversationId
@@ -466,15 +467,28 @@ function AppChat({ preloadedApp = null }) {
   // falls back to the id this tab already holds for the app. State rather than a
   // ref, because changing it has to re-run the message hook, the stream state
   // and the hydration below.
-  const [chatId, setChatId] = useState(() => routeChatId || getOrCreateChatId(appId));
+  // Chat ids this tab minted itself. Such an id cannot exist in the durable
+  // store by construction, so asking for it can only ever 404 — and that round
+  // trip is paid for with a "Loading chat…" spinner where the greeting and the
+  // starter prompts belong, plus a red `API Error` in the console every time.
+  const mintedChatIdsRef = useRef(new Set());
+  const resolveChatId = useCallback(() => {
+    if (routeChatId) return routeChatId;
+    const stored = readChatId(appId);
+    if (stored) return stored;
+    const minted = getOrCreateChatId(appId);
+    mintedChatIdsRef.current.add(minted);
+    return minted;
+  }, [appId, routeChatId]);
+  const [chatId, setChatId] = useState(resolveChatId);
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
 
   // Follow the URL: another app, or another chat under the same app.
   useEffect(() => {
-    const next = routeChatId || getOrCreateChatId(appId);
+    const next = resolveChatId();
     setChatId(current => (current === next ? current : next));
-  }, [appId, routeChatId]);
+  }, [resolveChatId]);
 
   /**
    * Leave the current chat and start a fresh one for this app. A URL that names
@@ -486,6 +500,9 @@ function AppChat({ preloadedApp = null }) {
    */
   const startNewChat = useCallback(() => {
     const nextChatId = resetChatId(appId);
+    // Minted here, so the store has never heard of it: skip the hydration
+    // round trip that could only 404.
+    mintedChatIdsRef.current.add(nextChatId);
     setChatId(nextChatId);
     if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
     return nextChatId;
@@ -603,37 +620,76 @@ function AppChat({ preloadedApp = null }) {
   // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
   // this tab minted but never sent is not in the store yet: that 404 is the
   // ordinary case for a new chat, not a failure worth reporting.
+  // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
+  // on the mode too, because leaving and re-entering server-backed mode (the
+  // incognito toggle) is a second entry into the same chat — a chat-id-only
+  // guard would answer "already done" and then never fetch, never finish
+  // hydrating, and leave the surface spinning "Loading chat…" for good.
   const chatHydratedRef = useRef(null);
+  // Whether the fetch below is still out. A re-run of the effect must not end
+  // hydration behind its back — that is the greeting flash all over again.
+  const hydrationPendingRef = useRef(false);
   useEffect(() => {
-    if (!serverBackedChat || !app || messages.length > 0) return undefined;
-    if (chatHydratedRef.current === chatId) return undefined;
-    chatHydratedRef.current = chatId;
+    if (!serverBackedChat || !app) return undefined;
+    const attempt = `${chatId}|${serverBackedChat}`;
+    if (chatHydratedRef.current === attempt) {
+      // This chat has already been fetched (or deliberately not fetched) in
+      // this mode. Nothing else clears the loading flag, so say so here.
+      if (!hydrationPendingRef.current) finishHydration();
+      return undefined;
+    }
+    // Already showing a conversation: the browser copy that becoming
+    // server-backed discards is cleared in the same commit, so a non-empty
+    // transcript here is one that belongs on screen — an incognito stretch, or
+    // a handoff that seeded it. Hydration is left alone rather than finished:
+    // the clearing case re-runs this effect a frame later with nothing on
+    // screen, and finishing here would uncover the greeting in between.
+    if (messages.length > 0) return undefined;
+    if (mintedChatIdsRef.current.has(chatId)) {
+      // This tab minted the id, so the store has never heard of it: asking
+      // would buy a guaranteed 404, a console error, and a spinner where the
+      // greeting and the starter prompts belong.
+      chatHydratedRef.current = attempt;
+      hydrationPendingRef.current = false;
+      finishHydration();
+      return undefined;
+    }
+    chatHydratedRef.current = attempt;
+    hydrationPendingRef.current = true;
 
-    let cancelled = false;
+    // Superseded only by another attempt — a different chat, or a mode change
+    // — never by a re-render. A turn started during the round trip used to
+    // cancel this fetch through the effect's own cleanup and, because the
+    // guard above was already latched, the stored transcript was then lost for
+    // the rest of the chat's life.
+    const owns = () => chatHydratedRef.current === attempt;
     (async () => {
       try {
         const result = await fetchChat(chatId);
-        if (cancelled) return;
+        if (!owns()) return;
         // The store is the source of truth, so it replaces whatever is here —
         // and an empty transcript still ends the loading state rather than
-        // letting the greeting appear a beat late.
-        loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
+        // letting the greeting appear a beat late. A turn started meanwhile is
+        // kept, with the stored history restored in front of it.
+        loadServerMessages(Array.isArray(result?.messages) ? result.messages : [], {
+          preserveLocal: true
+        });
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
         invalidateChatsCache();
       } catch (err) {
-        if (cancelled) return;
+        if (!owns()) return;
         if (err?.status !== 404) {
           console.warn('Failed to load the stored chat, starting empty:', err.message);
         }
         finishHydration();
+      } finally {
+        if (owns()) hydrationPendingRef.current = false;
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return undefined;
   }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
 
   // A finished turn is what changes the chat list: a brand-new chat appears in
@@ -835,11 +891,27 @@ function AppChat({ preloadedApp = null }) {
     autoStartTriggered.current = false;
   }, [appId, chatId]);
 
+  // The latest values the delayed send below has to re-check. Hydration can
+  // land inside those 300 ms, and the timer closes over nothing else.
+  const autoStartGateRef = useRef(null);
+  autoStartGateRef.current = {
+    hydrating,
+    chatModeResolving,
+    messageCount: messages.length
+  };
+
   useEffect(() => {
     // Check if we should auto-start the conversation
     const shouldAutoStart =
       app?.autoStart === true && // App has autoStart enabled
       messages.length === 0 && // No messages yet
+      // …and an empty transcript really does mean "new chat". In server-backed
+      // mode it is also what a chat with a hundred stored turns looks like
+      // until `GET /api/chats/:id` answers, so firing here would append a
+      // blank turn — and re-prompt the model with the whole history — every
+      // single time the user opens that chat from the history.
+      !hydrating &&
+      !chatModeResolving &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -852,6 +924,13 @@ function AppChat({ preloadedApp = null }) {
       // Send an empty message to trigger the LLM
       // The empty user message will be filtered out in ChatMessageList
       setTimeout(() => {
+        // Re-check: the stored transcript may have landed while this timer
+        // was pending, and this was never a new chat after all.
+        const gate = autoStartGateRef.current;
+        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
+          debugLog('Auto-start abandoned: the chat is not empty after all');
+          return;
+        }
         const params = {
           modelId: selectedModel,
           style: selectedStyle,
@@ -920,6 +999,8 @@ function AppChat({ preloadedApp = null }) {
   }, [
     app,
     messages.length,
+    hydrating,
+    chatModeResolving,
     processing,
     appId,
     selectedModel,
