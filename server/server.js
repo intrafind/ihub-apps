@@ -378,7 +378,16 @@ if (cluster.isPrimary && workerCount > 1) {
     await prepareContents();
   }
 
-  // Load platform configuration and initialize telemetry
+  // Load platform configuration and initialize telemetry.
+  //
+  // This is the one configuration read that cannot be served by the storage
+  // provider: `storage.provider` and its settings live in this very file, so
+  // the provider is constructed from what is read here and does not exist yet.
+  // The configuration store answers it from the contained filesystem path for
+  // exactly that reason — the same bootstrap exception `migrations/runner.js`
+  // makes when it reads its settings out of platform.json before configCache
+  // exists. Nothing above this line may read configuration through the
+  // provider, and moving `bootstrapStorage` above it would deadlock.
   let platformConfig = {};
   try {
     platformConfig = await loadJson('config/platform.json');
@@ -475,7 +484,11 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Initialize configuration cache for optimal performance
+  // Initialize configuration cache for optimal performance. This must stay
+  // after `bootstrapStorage`: the cache reads every config file through the
+  // provider and subscribes to the provider's change stream as it starts, and
+  // with no provider up it would fall back to the filesystem for the whole
+  // boot and follow nothing afterwards.
   try {
     await configCache.initialize();
     // Set configCache reference in logger after initialization

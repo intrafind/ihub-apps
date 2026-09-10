@@ -4,9 +4,7 @@ import { listSnapshots, getSnapshot } from '../../services/ChangeHistoryService.
 import { sendNotFound, sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 
@@ -97,47 +95,48 @@ export default function registerAdminChangesRoutes(app) {
           return sendNotFound(res, 'Snapshot or before state');
         }
 
-        const rootDir = getRootDir();
         const beforeState = snapshot.before;
 
-        // Rollback based on resource type
+        // Rollback based on resource type. Per-resource files are addressed
+        // through resolveIdToPath: a file whose name diverges from the id
+        // inside it must be rolled back in place, not forked into `<id>.json`.
         switch (resource) {
           case 'app': {
-            const appFilePath = join(rootDir, 'contents', 'apps', `${id}.json`);
-            await atomicWriteJSON(appFilePath, beforeState);
+            await configStore.writeJson(await configStore.resolveIdToPath('apps', id), beforeState);
             await configCache.refreshAppsCache();
             break;
           }
           case 'prompt': {
-            const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
-            await atomicWriteJSON(promptFilePath, beforeState);
+            await configStore.writeJson(
+              await configStore.resolveIdToPath('prompts', id),
+              beforeState
+            );
             await configCache.refreshPromptsCache();
             break;
           }
           case 'model': {
-            const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
-            await atomicWriteJSON(modelFilePath, beforeState);
+            await configStore.writeJson(
+              await configStore.resolveIdToPath('models', id),
+              beforeState
+            );
             await configCache.refreshModelsCache();
             break;
           }
           case 'group': {
-            const groupsPath = join(rootDir, 'contents', 'config', 'groups.json');
             const { data: groupsConfig } = configCache.getGroups();
             const config = groupsConfig || { groups: {} };
             config.groups[id] = beforeState;
-            await atomicWriteJSON(groupsPath, config);
+            await configStore.writeJson('config/groups.json', config);
             await configCache.refreshCacheEntry('config/groups.json');
             break;
           }
           case 'platform': {
-            const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
-            await atomicWriteJSON(platformPath, beforeState);
+            await configStore.writeJson('config/platform.json', beforeState);
             await configCache.refreshCacheEntry('config/platform.json');
             break;
           }
           case 'feature': {
-            const featuresPath = join(rootDir, 'contents', 'config', 'features.json');
-            await atomicWriteJSON(featuresPath, beforeState);
+            await configStore.writeJson('config/features.json', beforeState);
             await configCache.refreshCacheEntry('config/features.json');
             break;
           }

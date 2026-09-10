@@ -5,7 +5,7 @@ import fs from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -297,14 +297,11 @@ export default function registerAdminUIRoutes(app) {
         });
       }
 
-      // Get the current config path
-      const configPath = join(getRootDir(), 'contents/config/ui.json');
-
       // Validate the configuration structure (basic validation)
       validateUIConfig(config);
 
       // Write the updated configuration atomically
-      await atomicWriteJSON(configPath, config);
+      await configStore.writeJson('config/ui.json', config);
 
       // Refresh the cache
       await configCache.refreshCacheEntry('config/ui.json');
@@ -338,15 +335,10 @@ export default function registerAdminUIRoutes(app) {
       const uiConfig = configCache.getUI();
       const currentConfig = uiConfig?.data || {};
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = join(getRootDir(), 'contents/backups');
 
-      // Create backup directory if it doesn't exist
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
-      }
-
-      const backupPath = join(backupDir, `ui-config-backup-${timestamp}.json`);
-      await atomicWriteJSON(backupPath, currentConfig);
+      // `backups/` is not a configuration namespace, so this lands on the
+      // contained path — the store creates the directory on the way.
+      await configStore.writeJson(`backups/ui-config-backup-${timestamp}.json`, currentConfig);
 
       logAudit({
         req,

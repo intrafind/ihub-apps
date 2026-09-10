@@ -1,7 +1,4 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
@@ -12,6 +9,9 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+
+/** The platform configuration, as a path relative to `contents/`. */
+const PLATFORM_FILE = 'config/platform.json';
 
 /**
  * Check if a value is an environment variable placeholder
@@ -172,14 +172,8 @@ export default function registerAdminConfigRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-
-      let platformConfig = {};
-      try {
-        const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
-        platformConfig = JSON.parse(platformConfigData);
-      } catch {
+      let platformConfig = await configStore.readJson(PLATFORM_FILE);
+      if (!platformConfig) {
         logger.info('Platform config not found, returning default config', {
           component: 'AdminConfigs'
         });
@@ -285,18 +279,13 @@ export default function registerAdminConfigRoutes(app) {
         return sendBadRequest(res, 'Invalid configuration data');
       }
 
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-
       // Load existing config to preserve other fields and track changes
-      let existingConfig = {};
-      try {
-        const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
-        existingConfig = JSON.parse(existingConfigData);
-      } catch {
+      const storedConfig = await configStore.readJson(PLATFORM_FILE);
+      if (!storedConfig) {
         // File doesn't exist, start with empty config
         logger.info('Creating new platform config file', { component: 'AdminConfigs' });
       }
+      const existingConfig = storedConfig || {};
 
       // Merge the authentication-related config with existing config
       const mergedConfig = {
@@ -373,8 +362,9 @@ export default function registerAdminConfigRoutes(app) {
         mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
       }
 
-      // Save to file
-      await atomicWriteJSON(platformConfigPath, mergedConfig);
+      // Save to file. Every secret has already been restored-if-redacted and
+      // encrypted above; what reaches the store is a plain object.
+      await configStore.writeJson(PLATFORM_FILE, mergedConfig);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
