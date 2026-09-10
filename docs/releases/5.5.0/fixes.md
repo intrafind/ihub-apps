@@ -580,3 +580,21 @@ server — so a second save appeared to apply the *previous* one.
   heading and the view "/" redirects to, straight away.
 - With app shortcuts set to rank **by recent use**, the sidebar also reorders as
   soon as an app is opened, in this tab and in any other tab that is open.
+  
+## Web Search and Tools Are Available From the Start Page
+
+The chat box on the start page hid most of the app's per-chat features. Opening
+the **+** menu there showed no web search toggle at all, and the app's tools were
+listed with every one switched off and no way to turn any of them on — so a
+question that needed a web lookup or a tool had to be re-typed inside the app.
+
+- The **+** menu on the start page now offers the same controls as the app it
+  starts: web search, the app's tools (pre-selected exactly as the app
+  configures them), the transcription toggle and the image-generation settings.
+- Magic Prompt now works from the start page too.
+- Whatever is picked there applies to the first message, which is sent
+  automatically on arrival in the app — the choice is no longer lost in the jump.
+- The toggles open in the state already chosen for that app in the current
+  session, so the start page and the app agree.
+- Upload options now follow the model selected on the start page, so image or
+  audio attachments are offered based on the model that will actually answer.
