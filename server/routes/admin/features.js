@@ -1,9 +1,6 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
@@ -84,23 +81,11 @@ export default function registerAdminFeaturesRoutes(app) {
         }
       }
 
-      // Read existing features.json
-      const rootDir = getRootDir();
-      const featuresPath = join(rootDir, 'contents', 'config', 'features.json');
-
-      let existing = {};
-      try {
-        const data = await fs.readFile(featuresPath, 'utf8');
-        existing = JSON.parse(data);
-      } catch {
-        // File doesn't exist yet, start fresh
-      }
-
-      // Merge updates
+      // features.json is a sparse override map: no file means every flag is at
+      // its registry default, so an absent one starts fresh rather than failing.
+      const existing = (await configStore.readJson('config/features.json')) || {};
       const merged = { ...existing, ...updates };
-
-      // Write back
-      await atomicWriteJSON(featuresPath, merged);
+      await configStore.writeJson('config/features.json', merged);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/features.json');

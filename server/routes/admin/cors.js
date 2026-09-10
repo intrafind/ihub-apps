@@ -2,11 +2,8 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 
 const DEFAULT_CORS_CONFIG = {
   origin: [],
@@ -128,16 +125,12 @@ export default function registerAdminCorsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
+      const platformConfig = await configStore.readJson('config/platform.json');
+      if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
       platformConfig.cors = { origin, credentials, maxAge, methods, allowedHeaders };
 
-      await atomicWriteJSON(platformPath, platformConfig);
+      await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');
 
       logger.info('CORS configuration updated', {
