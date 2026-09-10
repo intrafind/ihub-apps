@@ -1,5 +1,5 @@
 /**
- * Migration V094 — Surface the LLM transport ceilings in platform.json
+ * Migration V095 — Surface the LLM transport ceilings in platform.json
  *
  * Two ceilings guard a provider call besides the whole-call deadline
  * (REQUEST_TIMEOUT): the phase before the provider's first response byte, and
@@ -20,7 +20,7 @@
  * LLM_CONNECT_TIMEOUT_MS and LLM_STREAM_IDLE_TIMEOUT_MS.
  */
 
-export const version = '094';
+export const version = '095';
 export const description = 'Surface the LLM transport ceilings in platform.json';
 
 export async function precondition(ctx) {
