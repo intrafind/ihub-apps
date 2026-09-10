@@ -176,12 +176,36 @@ export function resolveGroupInheritance(groupsConfig) {
 }
 
 /**
- * Load unified groups configuration
+ * Load unified groups configuration, with inheritance already resolved.
+ *
+ * The cache is the real source: `configCache` loads `config/groups.json`
+ * through the `ConfigStore` — so through the storage provider — and stores it
+ * with inheritance resolved, which is the same shape this returns. Reading it
+ * from there is also what makes a group change take effect on every worker; a
+ * disk read here would keep serving whatever this worker's filesystem said at
+ * the moment it was asked.
+ *
+ * This function is synchronous and cannot become async: `adminAuth` and
+ * `contentAdminAuth` call it in the middleware path of every admin request,
+ * and every test in the tree stubs it as a sync function. The disk read below
+ * is the fallback for a cache that has not been populated — before
+ * `configCache.initialize()` finishes, and in tests that never boot it.
+ *
+ * `CONTENTS_DIR` is read from the environment rather than from
+ * `server/config.js`, whose import pulls dotenv and envalid into every module
+ * that touches this one; `group-handling.test.js` automocks `fs`, and an
+ * env-validating module loaded under that mock does not survive it. The
+ * default repeated here is the one `config.js` declares.
+ *
  * @returns {Object} Groups configuration with permissions and mappings
  */
 export function loadGroupsConfiguration() {
+  const cached = configCache.getGroups();
+  if (cached?.data) return cached.data;
+
   try {
-    const configPath = path.join(__dirname, '../../contents/config/groups.json');
+    const contentsDir = process.env.CONTENTS_DIR || 'contents';
+    const configPath = path.join(__dirname, '../..', contentsDir, 'config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance

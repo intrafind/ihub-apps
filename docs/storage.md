@@ -27,6 +27,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
 | `runtime-imports`           | markers saying a one-time legacy import has already run       | –                           | [Run Ledger](run-ledger.md)              |
+| `config`, `apps`, `models`, `prompts`, `tools`, `workflows`, `agents`, `locales` | an installation's configuration, read and written where it already lives | – | [Configuration Storage](configuration.md) |
 
 `integration-conversations` is the smallest of them and the least visible: two
 fields per chat (the remote conversation id and the id of the last answer,
@@ -176,6 +177,144 @@ than silently turning into JSON.
   and keeps the metadata.
 - An unknown namespace lists empty; it never throws.
 
+## Raw namespaces: configuration stays where it is
+
+Configuration is the one kind of data that could not move. Every file under
+`contents/config/`, `contents/apps/`, `contents/models/` and their siblings is
+hand-edited, git-tracked, docker-mounted, seeded from `server/defaults/` and
+rewritten by the checksum-frozen migrations. Storing it as documents the way
+everything above does would relocate it to `contents/data/` *and* wrap it in
+the envelope: every installation's tree would change, `git status` would light
+up, a docker mount would no longer match the image, and the migrations would
+be editing files nothing reads any more.
+
+So the document store has a second mode. A namespace declared **raw** is a
+*view over files that already exist*: the JSON file at
+`<contents>/<dir>/<key>.json` **is** the document body, serialized exactly the
+way `utils/atomicWrite.js` has always serialized it (`JSON.stringify(data,
+null, 2)`, no trailing newline). Nothing is relocated, nothing is wrapped, and
+an installation's `contents/` is byte-identical before and after the release
+that introduced this. That is not an aspiration:
+`server/tests/config-store-byte-identity.test.js` hashes every file of a
+populated tree, drives a boot's worth of reads and a save of each config type
+through the store, and compares the hashes again.
+
+`server/storage/namespaces.js` holds the whole map, and is the only place it is
+written down:
+
+| Namespace   | Directory under `contents/` | Holds                                        |
+| ----------- | --------------------------- | -------------------------------------------- |
+| `config`    | `config/`                   | `platform.json`, `ui.json`, `groups.json`, …  |
+| `apps`      | `apps/`                     | one file per AI app                           |
+| `models`    | `models/`                   | one file per LLM model                        |
+| `prompts`   | `prompts/`                  | one file per prompt                           |
+| `tools`     | `tools/`                    | one file per tool definition                  |
+| `workflows` | `workflows/`                | one file per workflow                         |
+| `agents`    | `agents/profiles/`          | agent profiles (`agents/memory` is runtime state) |
+| `locales`   | `locales/`                  | translation overrides layered over the builtin locales |
+
+Only directories that hold JSON documents **one level deep** are namespaces.
+Page bodies (`contents/pages/<lang>/<id>.md`), markdown sources, renderers and
+skill trees are text, or nested, or whole directories installed as a unit; they
+reach the same seam — `ConfigStore` — but not the provider. See
+[Configuration Storage](configuration.md) for that seam and for what a database
+provider would have to answer.
+
+### What raw changes
+
+|                     | Enveloped document                        | Raw document                                       |
+| ------------------- | ----------------------------------------- | -------------------------------------------------- |
+| On disk             | `contents/data/<ns>/<key>.json`, wrapped  | `contents/<dir>/<key>.json`, the file itself        |
+| `etag`              | sha256 of `JSON.stringify(data)`          | sha256 of the file's **bytes**                      |
+| `ownerId`           | an owner, or null                         | rejected — `NotSupportedError`                      |
+| `createdAt`/`updatedAt` | recorded in the envelope              | both `stat.mtime`                                   |
+| `contentType`       | any                                       | `application/json` only                             |
+| Sidecars            | `.owners/`, `.locks/` inside the namespace | none inside the namespace                          |
+
+Each of those is a consequence of "the file is the document", not a limitation
+someone chose:
+
+- **The etag is over the bytes** because that is what a compare-and-set has to
+  compare. Two files with equal data but different formatting are different
+  documents here, which is exactly what makes a conditional write notice that
+  somebody edited the file by hand between the read and the write.
+- **There is no owner.** Configuration belongs to the installation, so
+  `put(..., { ownerId })` and `list(ns, { ownerId })` are rejected rather than
+  quietly ignored — a silently dropped owner filter is how a permission check
+  turns into a full listing.
+- **Timestamps come from `stat`.** The file carries no creation record, and an
+  atomic replace gives it a new inode, so any "created" metadata the filesystem
+  offers would reset on every save and report a falsehood. Both fields are the
+  modification time and say so.
+- **No sidecars, ever.** `resourceLoader` loads every `*.json` under
+  `contents/apps` as an app, so a `.locks/` marker dropped next to a config
+  file would eventually be loaded as one. Raw locks live in the provider's own
+  base directory, under `contents/data/.config-locks/`.
+- **A read never throws and never invents a value.** Missing, unreadable and
+  malformed all resolve to `null`, because `configCache` branches on
+  `data !== null` in eleven places and a throw during boot would change
+  behaviour that has held for years. A missing locale override is silent — an
+  installation without translation overrides is the normal case, not a fault.
+
+A provider reports which of its namespaces follow these rules as
+`getCapabilities().rawNamespaces`, so a caller — the conformance suite above
+all — knows before it calls, instead of discovering it when an owner-scoped
+call fails.
+
+Raw writes publish `document.put` and `document.delete` through the same
+[change notifier](#change-notification) as every other document. On the
+filesystem provider that notifier is in-process and the writer has already
+refreshed its own cache by the time the event arrives, so today it is a
+same-instance no-op that runs *alongside* the cluster announcement, never
+instead of it. It exists for the release that adds a push-capable provider:
+that is the day an admin save on one instance invalidates the config cache on
+every other one.
+
+### What is deliberately not behind the seam
+
+Configuration reaches the filesystem in exactly one place —
+`server/services/config/ConfigStore.js` — and
+`scripts/check-config-fs-access.js` (`npm run lint:config-access`, part of
+`npm run test:quick`) fails the build on any direct `fs` or `atomicWrite*` call
+against a config path outside it.
+
+Five subsystems cannot honour that rule. They are an explicit allowlist in the
+guard, each carrying the reason it is there, and the guard prints every reason
+on every run — an exception nobody can restate in six months is one nobody can
+re-examine. An allowlisted call site that later disappears fails the guard too,
+so the list cannot outlive its subject.
+
+| Excluded                                       | Why it cannot go through the provider                                                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `server/migrations/`                           | The runner executes in the cluster primary *before* `configCache` and before any provider exists — the provider is configured from `platform.json`, which a migration may be creating. Its migrations are frozen by checksum and use `moveFile`/`deleteFile`/`listFiles(glob)`, which have no document-store equivalent. |
+| `server/services/TokenStorageService.js`       | Key material (`.encryption-key`, `.jwt-*`, `.usage-pepper`) is needed before a provider can be constructed, and none of it is a JSON document.                                                                      |
+| `server/routes/admin/backup.js`                | Export and import are a directory zip and an `fs.rename` swap of the live tree. It operates on the tree *as a tree*; a document API is the wrong shape for it.                                                       |
+| `loadBuiltinLocaleJson` / `listBuiltinLocales` | The builtin locales live in `shared/i18n/`, which ships with the application rather than with an installation. They are outside `contents/` entirely, so no configuration provider owns them.                        |
+| `loadGroupsConfiguration()`                    | It is synchronous and cannot become async: `adminAuth` and `contentAdminAuth` call it in the middleware path of every admin request. It reads `configCache` — populated through the store — and drops to a direct file read only for a cache that has not been initialized yet, which the async store cannot serve.                       |
+
+The first four were named up front; the fifth surfaced during the conversion
+and is listed for the same reason as the others rather than being quietly
+skipped.
+
+Alongside them the guard carries a second, smaller list of *non-config* call
+sites inside otherwise guarded files — uploaded UI assets, tool implementation
+scripts under `server/tools/`, skill directory trees, the shipped release
+notes, `contents/data/` runtime files, the seeding of a fresh `contents/` from
+`server/defaults/` (which happens beside the migration runner, before a
+provider exists), and the escape hatch that lets `localAuth.usersFile` and
+`oauth.clientsFile` point outside `contents/` altogether. Those are not exceptions to the rule; they are outside its subject
+matter. They are pinned by what the call's argument is named rather than by
+line number, so the exemption cannot silently widen when a genuine config write
+is added to the same file later.
+
+There is one more read that is not a violation and not an allowlist entry: the
+bootstrap load of `config/platform.json` in `server/server.js`. It goes through
+`ConfigStore` like everything else, and the store answers it from the contained
+filesystem path because no provider exists yet — the provider is built from
+what that read returns. Configuration therefore never depends on optional
+runtime storage: a malformed `storage` block cannot stop the server from
+reading the file that block lives in.
+
 ## Append-logs
 
 **Sequence numbers stay with the caller.** `RunLog` assigns `seq` synchronously
@@ -310,7 +449,13 @@ contents/data/
   logs/<stream segments>.jsonl        one append-log stream, one JSON per line
   logs/<stream segments>.blobs/       that stream's blobs
   locks/<sha256(name)[0..40]>.lock    LockManager leases
+  .config-locks/<ns>/<key>.lock       compare-and-set locks for the raw namespaces
 ```
+
+`.config-locks/` is the one part of the data directory that guards files
+outside it: the [raw namespaces](#raw-namespaces-configuration-stays-where-it-is)
+are views over `contents/config`, `contents/apps` and the rest, and their locks
+are kept here precisely so no sidecar ever appears next to a config file.
 
 The envelope is written with `atomicWriteJSON`:
 
@@ -398,12 +543,17 @@ special-case a provider by name:
   search: boolean,
   multiInstance: boolean,
   blobs: boolean,
-  conditionalWrites: boolean
+  conditionalWrites: boolean,
+  rawNamespaces: string[]   // namespaces served in raw mode; [] when none
 }
 ```
 
 The filesystem provider reports
-`{ transactions: false, notifications: 'in-process', locking: 'advisory-single-machine', search: false, multiInstance: false, blobs: true, conditionalWrites: true }`.
+`{ transactions: false, notifications: 'in-process', locking: 'advisory-single-machine', search: false, multiInstance: false, blobs: true, conditionalWrites: true }`,
+plus every namespace from `server/storage/namespaces.js` in `rawNamespaces`. A
+provider that leaves `rawNamespaces` empty serves no configuration, which is a
+supported answer: `ConfigStore` then reads and writes those files on the
+contained filesystem path, and logs which of the two is happening at startup.
 
 The planned lineup, from the design:
 
@@ -439,19 +589,32 @@ runProviderConformance({
   name: 'my-provider',
   createProvider: async ({ reuse } = {}) => ({ provider, cleanup }),
   capabilities: {
-    /* what getCapabilities() must return */
+    /* what getCapabilities() must return, rawNamespaces included */
+  },
+  rawFiles: {
+    /* how the suite reads a raw document's stored bytes back — optional */
   }
 });
 ```
 
-`server/storage/__tests__/providerConformance.js` is provider-agnostic: 59
+`server/storage/__tests__/providerConformance.js` is provider-agnostic: 84
 `node:test` cases covering lifecycle, document CRUD and etag semantics,
 owner listing and cursor paging, append-log slicing and **restart recovery**
 (`createProvider({ reuse: true })` opens a second instance over the same
 location and must report the same `lastSeq`), blobs, lock ordering and TTL
-takeover, and notifier delivery. `server/tests/storage-filesystem-conformance.test.js`
-is the filesystem provider's four-line wiring of it over a temp directory —
-copy that file for a new provider.
+takeover, notifier delivery, and a raw-mode group that asserts the
+no-envelope, no-owner, etag-over-bytes rules above.
+`server/tests/storage-filesystem-conformance.test.js` is the filesystem
+provider's four-line wiring of it over a temp directory — copy that file for a
+new provider.
+
+The raw-mode group is skipped unless the runner declares `rawNamespaces` in
+`capabilities` *and* supplies `rawFiles`, and that default is deliberate: the
+suite writes to the
+namespaces it is given, and a raw namespace is a view over an installation's
+real configuration directories.
+`server/tests/config-store-raw-conformance.test.js` is the runner that opts in,
+by pointing a provider's config view at a scratch tree first.
 
 ```bash
 npm run test:storage

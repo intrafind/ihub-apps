@@ -1,16 +1,11 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
-import { hashPasswordWithUserId, loadUsers } from '../utils/userManager.js';
+import { hashPasswordWithUserId, loadUsers, saveUsers } from '../utils/userManager.js';
 import configCache from '../configCache.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const DUMMY_USER_ID = 'nonexistent-user';
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
 
@@ -155,18 +150,13 @@ export async function createUser(userData, usersFilePath) {
   users[userId] = newUser;
   usersConfig.users = users;
 
-  // Save to file
-  const fullPath = path.isAbsolute(usersFilePath)
-    ? usersFilePath
-    : path.join(__dirname, '../../', usersFilePath);
-
-  // Ensure directory exists
-  const dir = path.dirname(fullPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  fs.writeFileSync(fullPath, JSON.stringify(usersConfig, null, 2));
+  // `saveUsers` is the only writer of this file: it goes through the
+  // `ConfigStore`, refreshes the cache entry and tells the other cluster
+  // workers to re-read it. Writing the file here directly — as this did —
+  // left every other worker authenticating against a users file it still
+  // believed was current, and the next save from one of them rewrote the
+  // whole file from that stale snapshot, dropping the new user.
+  await saveUsers(usersConfig, usersFilePath);
 
   // Return user without sensitive data
 

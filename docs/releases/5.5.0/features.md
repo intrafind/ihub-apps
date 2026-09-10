@@ -1563,3 +1563,52 @@ exceptions below, which are fixes.
 
 See [Run Ledger](../../run-ledger.md), [Workflows](../../workflows.md) and
 [Storage Providers](../../storage.md).
+
+## Configuration Is Read and Written Through the Storage Provider
+
+Configuration — `platform.json` and its siblings, every app, model, prompt,
+tool, workflow and agent profile, the locale overrides and the page bodies —
+now goes through the same storage provider as runtime data, instead of every
+admin route, loader and installer reaching for the files itself.
+
+**Your `contents/` directory does not change.** Not a path, not a byte. The
+provider serves configuration through *raw namespaces*: the JSON file at
+`contents/<dir>/<key>.json` is the document, written with the serializer that
+has always written it (two-space indent, no trailing newline). Hand-editing,
+`git`, docker mounts, seeding from `server/defaults/` and the configuration
+migrations all keep working unchanged, and the acceptance test for the change
+is exactly that — a populated tree is hashed file by file, driven through a
+boot and a save of every configuration type, and hashed again.
+
+- **Admin saves are visible immediately.** This is a real behaviour change.
+  `configLoader` kept its own 60-second cache underneath `configCache`, and
+  nothing invalidated it: after saving a setting, the server could go on
+  serving the previous value for up to a minute, with the correct value
+  already on disk and nothing in the logs to explain it. That cache is gone —
+  `configCache` was always the cache that mattered.
+- **A relocated `contents/` directory works for apps and models too.** The
+  loader behind apps, models, prompts, tools, workflows and agents built a
+  hardcoded `contents/` path and ignored the `CONTENTS_DIR` setting, so an
+  installation that relocated the directory silently loaded none of them. It
+  reads through the store now, like everything else.
+- **Configuration never depends on optional runtime storage.** The provider is
+  configured from `platform.json`, so that file is read before any provider
+  exists, and an installation whose provider fails to come up reads and writes
+  configuration exactly as before. A broken `storage` block cannot stop the
+  server from reading the file that block lives in.
+- **A CI guard keeps the seam closed.** `npm run lint:config-access` fails the
+  build on any direct filesystem access to a configuration path outside the
+  store. Five subsystems genuinely cannot go through it — the migration
+  runner, encryption key material, backup export/import, the locales that ship
+  with the application, and the cold-cache fallback of the synchronous
+  group-permission read in the admin middleware path — and each is an
+  allowlist entry whose reason the guard prints on every run.
+- **Cross-instance invalidation is now wired, and waiting for a provider.**
+  The config cache follows the provider's change stream in addition to the
+  existing cluster announcement, never instead of it. On the filesystem
+  provider that stream is in-process and the addition changes nothing today;
+  it is what lets a save on one instance invalidate every other instance's
+  cache the day a push-capable provider ships.
+
+See [Configuration Storage](../../configuration.md) and
+[Storage Providers](../../storage.md).
