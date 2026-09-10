@@ -1,5 +1,6 @@
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
+import serverConfig from '../../config.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -28,11 +29,19 @@ const UI_FILE = 'config/ui.json';
  * onto its base name; a page whose registry entry escapes is skipped instead,
  * which is what this route has always done.
  *
+ * The base directory is the configured one, the same directory the store
+ * itself resolves against. A literal `contents` here would judge every path
+ * against a directory that need not exist on an installation with
+ * `CONTENTS_DIR` set, and `resolveAndValidatePath` answers null for a base it
+ * cannot canonicalize — so every page body would read as empty and a delete
+ * would drop the registry entry while leaving the files behind.
+ *
  * @param {string} relPath - Path relative to `contents/`, from `page.filePath`
  * @returns {Promise<boolean>} True when the path is contained
  */
 async function isContainedPagePath(relPath) {
-  return (await resolveAndValidatePath(relPath, join(getRootDir(), 'contents'))) !== null;
+  const contentsDir = join(getRootDir(), serverConfig.CONTENTS_DIR);
+  return (await resolveAndValidatePath(relPath, contentsDir)) !== null;
 }
 
 export default function registerAdminPagesRoutes(app) {
