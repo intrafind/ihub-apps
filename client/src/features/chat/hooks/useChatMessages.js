@@ -2,26 +2,119 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 
 /**
+ * One message of a stored chat transcript, as the chat UI renders it.
+ *
+ * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
+ * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
+ * error?, attachments? }`.
+ *
+ * The stored id is adopted as the message id and kept a second time on
+ * `serverId`: `replaceFromMessageId` addresses the server's history by that
+ * id, and a locally minted `user-<ts>-<rand>` means nothing to the store.
+ *
+ * @param {Object} msg - Stored message.
+ * @returns {Object} Chat message.
+ */
+function transformStoredMessage(msg) {
+  const message = {
+    id: msg.id,
+    serverId: msg.id,
+    role: msg.role === 'user' || msg.role === 'system' ? msg.role : 'assistant',
+    content: typeof msg.content === 'string' ? msg.content : '',
+    loading: false,
+    fromServer: true
+  };
+
+  if (msg.ts) message.ts = msg.ts;
+  if (msg.runId) message.runId = msg.runId;
+  if (msg.usage) message.usage = msg.usage;
+  if (msg.finishReason) message.finishReason = msg.finishReason;
+  if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+    message.attachments = msg.attachments;
+  }
+  if (msg.error) {
+    // A stopped turn kept whatever it had already produced — that is a
+    // cancelled message, not a failed one. `error` is only ever read as a
+    // strict boolean (`ChatMessage.jsx`), so the stored `{ code, message }`
+    // must not be handed through as-is.
+    if (msg.error.code === 'ABORTED') message.cancelled = true;
+    else message.error = true;
+  }
+
+  return message;
+}
+
+/**
+ * One message of an iAssistant conversation, as the chat UI renders it.
+ * Shape on the wire: `{ id?, type: 'USER'|'ERROR'|…, content, references?,
+ * result_items? }`.
+ *
+ * @param {Object} msg - Conversation message.
+ * @returns {Object} Chat message.
+ */
+function transformConversationMessage(msg) {
+  const message = {
+    id: msg.id || `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    role: msg.type === 'USER' ? 'user' : msg.type === 'ERROR' ? 'system' : 'assistant',
+    content: msg.content || '',
+    loading: false,
+    fromServer: true
+  };
+
+  // Map citations
+  if (msg.references || msg.result_items) {
+    message.citations = {
+      references: msg.references || [],
+      resultItems: msg.result_items || []
+    };
+  }
+
+  if (msg.type === 'ERROR') {
+    message.error = true;
+    message.isErrorMessage = true;
+  }
+
+  return message;
+}
+
+/**
  * Custom hook for managing chat messages
  * Messages will persist during page refreshes using sessionStorage
  * Each new browser tab will start with a new chat session
+ *
+ * Three modes, and only one of them owns the transcript:
+ *   - **normal** — sessionStorage is the source of truth (the original behaviour)
+ *   - **ephemeral** — nothing is stored anywhere
+ *   - **server-backed** — the durable chat store is the source of truth: the
+ *     transcript arrives by hydration, the browser copy is skipped entirely
+ *     and a request carries only the new message, because a persisted chat
+ *     rejects a longer array with `CLIENT_HISTORY_NOT_ALLOWED`.
+ *
+ * Anything that is not server-backed keeps the browser behaviour unchanged.
  *
  * @param {string} chatId - The ID of the current chat for storage purposes
  * @param {Object} [options] - Additional options
  * @param {boolean} [options.ephemeral] - When true, messages are never persisted to
  *   sessionStorage and are reset to empty whenever the chatId changes.
+ * @param {boolean} [options.serverBacked] - When true, the chat is stored on the
+ *   server: skip the sessionStorage copy, expose a `hydrating` state while the
+ *   stored transcript is being fetched, and send only the new message to the API.
  * @returns {Object} Chat message management functions and state
  */
-function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
+function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked = false } = {}) {
   // Use sessionStorage for persistence during page refreshes
   const storageKey = `ai_hub_chat_messages_${chatId}`;
+
+  // The browser copy exists only for the mode that has no other home for the
+  // transcript. Ephemeral wants no copy at all; server-backed has the store.
+  const browserPersisted = !ephemeral && !serverBacked;
 
   // Track the previous chatId to detect changes
   const prevChatIdRef = useRef(chatId);
 
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
-    if (ephemeral) return [];
+    if (!browserPersisted) return [];
     try {
       const storedData = sessionStorage.getItem(storageKey);
       debugLog(
@@ -66,6 +159,42 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
 
   const [messages, setMessages] = useState(loadInitialMessages);
 
+  // True while a server-backed transcript is still on its way. Callers need it
+  // to hold back the greeting: an empty `messages` is indistinguishable from
+  // "not fetched yet", so an async hydrate otherwise flashes the empty state
+  // and the starter prompts for a paint before the history lands.
+  // Derived rather than mirrored, so leaving server-backed mode — incognito
+  // switched on, the capability gone — can never strand the surface in a
+  // loading state. The messages already on screen stay put in that case:
+  // flipping incognito mid-chat has always kept the visible conversation and
+  // only stopped persisting it.
+  const [hydrated, setHydrated] = useState(!serverBacked);
+  const hydrating = serverBacked && !hydrated;
+
+  // The mode can change after the first render: the persistence capability
+  // rides on the platform config, which resolves asynchronously.
+  const prevServerBackedRef = useRef(serverBacked);
+  useEffect(() => {
+    const wasServerBacked = prevServerBackedRef.current;
+    prevServerBackedRef.current = serverBacked;
+    if (serverBacked && !wasServerBacked) {
+      // Becoming server-backed hands the transcript to the store. Whatever
+      // the sessionStorage initializer loaded before the capability resolved
+      // is a stale shadow of it, and would otherwise sit above the hydrated
+      // history as a second copy.
+      setMessages([]);
+      setHydrated(false);
+    }
+  }, [serverBacked]);
+
+  /**
+   * Mark hydration finished without replacing anything: the chat has no stored
+   * transcript yet, or the fetch failed and the caller has already reported it.
+   */
+  const finishHydration = useCallback(() => {
+    setHydrated(true);
+  }, []);
+
   // Load messages when chatId changes (app switching)
   useEffect(() => {
     if (prevChatIdRef.current !== chatId && prevChatIdRef.current !== null) {
@@ -76,8 +205,10 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
         chatId,
         '- loading messages for new chat'
       );
-      if (ephemeral) {
+      if (!browserPersisted) {
         setMessages([]);
+        // A different chat means a different stored transcript to fetch.
+        setHydrated(false);
         prevChatIdRef.current = chatId;
         return;
       }
@@ -109,7 +240,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
       }
     }
     prevChatIdRef.current = chatId;
-  }, [chatId, ephemeral]);
+  }, [chatId, browserPersisted, serverBacked]);
 
   // Use a ref to store a copy of messages for read-only operations
   const messagesRef = useRef(messages);
@@ -128,6 +259,16 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
       } catch {
         /* ignore */
       }
+      return;
+    }
+    if (serverBacked) {
+      // The chat store is the source of truth. A copy written here would go
+      // stale the moment another tab — or a run that outlived this one —
+      // appended a turn, and hydration would then be racing it. A key left
+      // over from before the chat became server-backed is deliberately left
+      // alone: `WorkflowExecutionPage` seeds one directly to hand a workflow
+      // result into a chat, and deleting other people's data is not this
+      // effect's job.
       return;
     }
     try {
@@ -194,7 +335,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
         }
       }
     }
-  }, [messages, storageKey, ephemeral]);
+  }, [messages, storageKey, ephemeral, serverBacked]);
 
   /**
    * Add a user message to the chat
@@ -449,42 +590,30 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
   }, []);
 
   /**
-   * Load messages from the conversation API (iAssistant Conversation).
-   * Transforms server message format to iHub chat format.
-   * @param {Array} serverMessages - Messages from the conversation API
+   * Replace the whole transcript with one loaded from the server, and end
+   * hydration.
+   *
+   * Two shapes arrive here and both are server truth: a stored chat
+   * transcript (`GET /api/chats/:chatId`) and an iAssistant conversation
+   * (`GET /api/apps/:appId/conversations/:id/messages`). `role` is the
+   * discriminator — the conversation shape has only ever carried `type`.
+   *
+   * @param {Array} serverMessages - Messages from either endpoint
    * @returns {string|null} The last assistant message ID (for parent_id chaining)
    */
   const loadServerMessages = useCallback(serverMessages => {
+    setHydrated(true);
     if (!serverMessages || serverMessages.length === 0) return null;
 
     let lastAssistantId = null;
     const transformed = serverMessages.map(msg => {
-      const id = msg.id || `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const role = msg.type === 'USER' ? 'user' : msg.type === 'ERROR' ? 'system' : 'assistant';
+      const message =
+        typeof msg?.role === 'string'
+          ? transformStoredMessage(msg)
+          : transformConversationMessage(msg);
 
-      if (role === 'assistant') {
-        lastAssistantId = msg.id;
-      }
-
-      const message = {
-        id,
-        role,
-        content: msg.content || '',
-        loading: false,
-        fromServer: true
-      };
-
-      // Map citations
-      if (msg.references || msg.result_items) {
-        message.citations = {
-          references: msg.references || [],
-          resultItems: msg.result_items || []
-        };
-      }
-
-      if (msg.type === 'ERROR') {
-        message.error = true;
-        message.isErrorMessage = true;
+      if (message.role === 'assistant') {
+        lastAssistantId = message.id;
       }
 
       return message;
@@ -500,22 +629,32 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
    * @param {Object} additionalMessage - An additional message to include
    * @returns {Array} Messages formatted for API consumption
    */
-  const getMessagesForApi = useCallback((includeFull = true, additionalMessage = null) => {
-    // Using messagesRef instead of messages dependency
-    // Filter out greeting messages for API requests
-    let messagesForApi = includeFull ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
+  const getMessagesForApi = useCallback(
+    (includeFull = true, additionalMessage = null) => {
+      // A server-backed chat posts exactly one message — the new one. The
+      // server reads the rest back out of the store and rejects a longer array
+      // with `CLIENT_HISTORY_NOT_ALLOWED`, so a client can no longer rewrite
+      // what it already said. `includeFull` is still honoured server-side:
+      // an app with `sendChatHistory: false` gets only the new message there
+      // too. Every other mode keeps posting its whole array.
+      // Using messagesRef instead of messages dependency
+      // Filter out greeting messages for API requests
+      let messagesForApi =
+        includeFull && !serverBacked ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
 
-    if (additionalMessage) {
-      messagesForApi = [...messagesForApi, additionalMessage];
-    }
+      if (additionalMessage) {
+        messagesForApi = [...messagesForApi, additionalMessage];
+      }
 
-    // Strip UI-specific properties that the API doesn't need
-    return messagesForApi.map(msg => {
-      const { rawContent, ...apiMsg } = msg;
-      const content = rawContent !== undefined ? rawContent : apiMsg.content;
-      return { ...apiMsg, content };
-    });
-  }, []); // No dependency on messages anymore
+      // Strip UI-specific properties that the API doesn't need
+      return messagesForApi.map(msg => {
+        const { rawContent, ...apiMsg } = msg;
+        const content = rawContent !== undefined ? rawContent : apiMsg.content;
+        return { ...apiMsg, content };
+      });
+    },
+    [serverBacked]
+  ); // No dependency on messages anymore
 
   /**
    * Merge citation data into a message in a race-safe way.
@@ -544,6 +683,8 @@ function useChatMessages(chatId = 'default', { ephemeral = false } = {}) {
   return {
     messages,
     messagesRef,
+    hydrating,
+    finishHydration,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,

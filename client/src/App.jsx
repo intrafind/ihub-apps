@@ -407,6 +407,13 @@ function App() {
             </>
           )}
           <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
+          {/* Opening a stored chat. Same element and guards as the bare app
+              route — AppChat reads `:chatId` and hydrates it from the durable
+              chat store instead of the id this tab holds in sessionStorage.
+              `apps` is already in both KNOWN_ROUTES lists and only the
+              top-level segment matters for base-path detection, so neither
+              list changes. */}
+          <Route path="apps/:appId/c/:chatId" element={<SafeAppRouterWrapper />} />
           <Route
             path="apps/:appId/canvas"
             element={

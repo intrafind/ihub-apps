@@ -35,18 +35,30 @@ import { projectMessageRuns } from '../runToMessage';
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
  * @param {boolean} options.ephemeral - When true, chat is never persisted to browser storage
  *   and no conversationId is stored.
+ * @param {boolean} options.serverBacked - When true, the durable chat store owns the
+ *   transcript: the request carries only the new message (a persisted chat rejects a
+ *   longer array with `CLIENT_HISTORY_NOT_ALLOWED`), an edit or a regenerate travels as
+ *   `replaceFromMessageId`, and the turn is not flagged ephemeral on the wire. Every
+ *   other surface keeps posting its whole local history exactly as before.
  */
 function useAppChat({
   appId,
   chatId: initialChatId,
   onMessageComplete,
   persistConversationId = true,
-  ephemeral = false
+  ephemeral = false,
+  serverBacked = false
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
-  // This allows the useChatMessages hook to properly react to chatId changes
-  const chatId = initialChatId || `chat-${uuidv4()}`;
+  // This allows the useChatMessages hook to properly react to chatId changes.
+  //
+  // The fallback is minted once and then kept. Evaluating `chat-${uuidv4()}`
+  // inline made every render of a caller with a falsy chatId a *different*
+  // chat: a fresh sessionStorage key, a reset stream state, and a new chat id
+  // on the wire for every keystroke that re-rendered the surface.
+  const [fallbackChatId] = useState(() => `chat-${uuidv4()}`);
+  const chatId = initialChatId || fallbackChatId;
   const [processing, setProcessing] = useState(false);
   const [conversationTitle, setConversationTitle] = useState(null);
   // Clarification state - tracks when a clarification question is pending
@@ -59,13 +71,23 @@ function useAppChat({
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
   const messageMetadataRef = useRef(null); // Store metadata for the current message
+  // Stored id of the message an edit, a regenerate or a delete replaces.
+  // Latched by `deleteFromMessage`, consumed by the next send. It survives an
+  // abandoned resend on purpose: the local transcript was already truncated,
+  // so forking the stored one at the same point is what puts the two back in
+  // agreement.
+  const pendingReplaceFromRef = useRef(null);
 
   // Never persist the iAssistant conversationId for ephemeral chats.
   const shouldPersistConversationId = persistConversationId && !ephemeral;
 
+  // Reacts to chatId changes, and owns which of the three transcript modes
+  // (browser-persisted, ephemeral, server-backed) is in force.
   const {
     messages,
     messagesRef,
+    hydrating,
+    finishHydration,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
@@ -76,7 +98,7 @@ function useAppChat({
     clearMessages,
     getMessagesForApi,
     loadServerMessages
-  } = useChatMessages(chatId, { ephemeral }); // Now this will properly react to chatId changes
+  } = useChatMessages(chatId, { ephemeral, serverBacked });
 
   const cleanupEventSourceRef = useRef();
 
@@ -90,7 +112,58 @@ function useAppChat({
   useEffect(() => {
     streamStateRef.current = createStreamState(chatId);
     runMessageMapRef.current = new Map();
+    // A pending fork belongs to the chat it was latched in.
+    pendingReplaceFromRef.current = null;
   }, [chatId]);
+
+  /**
+   * The protocol fields every send shares, consumed once per request.
+   *
+   * @returns {Object} Extra request params.
+   */
+  const takeProtocolParams = useCallback(() => {
+    const replaceFromMessageId = pendingReplaceFromRef.current;
+    pendingReplaceFromRef.current = null;
+    return {
+      // A turn the server must not store. Every surface that is not running
+      // the server-backed protocol has to say so, because it still posts its
+      // whole local history and a persisted chat rejects that outright with
+      // `CLIENT_HISTORY_NOT_ALLOWED`. That covers the incognito toggle, the
+      // compare panels and the canvas — the last two mint their own chat ids
+      // (`compare-<uuid>`, `canvas-<uuid>`) and fan a single user submit out
+      // to several of them, so they never belong in a history list either.
+      ...(serverBacked ? {} : { ephemeral: true }),
+      // Edit and regenerate no longer speak through a truncated array: the
+      // server forks its stored history here instead.
+      ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {})
+    };
+  }, [serverBacked]);
+
+  /**
+   * Truncate the transcript from `messageId` (inclusive) — the local half of a
+   * delete, an edit or a regenerate.
+   *
+   * That truncated array used to be the whole message to the server, since the
+   * client posted it. A server-backed chat posts only the new message, so the
+   * same intent has to travel explicitly: latch the *stored* id and let the
+   * next send carry it as `replaceFromMessageId`. Only hydrated messages have
+   * one — the store mints its own ids and no stream frame reports them — so a
+   * turn produced in this same session truncates locally and leaves the
+   * superseded exchange in the stored transcript.
+   *
+   * @param {string} messageId - Message to truncate from.
+   */
+  const deleteFromMessage = useCallback(
+    messageId => {
+      if (serverBacked) {
+        const target = messagesRef.current.find(m => m.id === messageId);
+        pendingReplaceFromRef.current =
+          typeof target?.serverId === 'string' ? target.serverId : null;
+      }
+      deleteMessage(messageId);
+    },
+    [deleteMessage, messagesRef, serverBacked]
+  );
 
   /**
    * Send the message queued by sendMessage / submitClarificationResponse once
@@ -392,7 +465,8 @@ function useAppChat({
           messages: messagesForAPI,
           params: {
             ...params,
-            ...(requestedSkill ? { requestedSkill } : {})
+            ...(requestedSkill ? { requestedSkill } : {}),
+            ...takeProtocolParams()
           }
         };
 
@@ -415,6 +489,7 @@ function useAppChat({
       getMessagesForApi,
       initEventSource,
       addSystemMessage,
+      takeProtocolParams,
       t,
       appId,
       chatId
@@ -452,9 +527,9 @@ function useAppChat({
             ? prevUser.rawContent || ''
             : prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
-        deleteMessage(prevUser.id);
+        deleteFromMessage(prevUser.id);
       } else {
-        deleteMessage(messageId);
+        deleteFromMessage(messageId);
         if (contentToResend === undefined) {
           imageDataToRestore = messageToResend.imageData || null;
           fileDataToRestore = messageToResend.fileData || null;
@@ -481,7 +556,7 @@ function useAppChat({
         audioData: audioDataToRestore
       };
     },
-    [messages, deleteMessage]
+    [messages, deleteFromMessage]
   );
 
   const cancelGeneration = useCallback(() => {
@@ -626,7 +701,10 @@ function useAppChat({
               questionId: response.questionId,
               value: response.value,
               skipped: response.skipped
-            }
+            },
+            // Same protocol as `sendMessage`: this path builds its own body
+            // and would otherwise fork away from it.
+            ...takeProtocolParams()
           }
         };
 
@@ -652,6 +730,7 @@ function useAppChat({
       initEventSource,
       addSystemMessage,
       messagesRef,
+      takeProtocolParams,
       t,
       appId,
       chatId
@@ -666,11 +745,15 @@ function useAppChat({
     chatId: chatId,
     messages,
     processing,
+    // True while a server-backed transcript is still being fetched, so a
+    // surface can render a loading state instead of flashing its greeting.
+    hydrating,
+    finishHydration,
     clarificationPending,
     conversationTitle,
     sendMessage,
     resendMessage,
-    deleteMessage,
+    deleteMessage: deleteFromMessage,
     editMessage,
     clearMessages,
     cancelGeneration,

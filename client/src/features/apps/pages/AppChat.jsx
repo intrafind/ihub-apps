@@ -7,7 +7,7 @@ import {
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api';
+import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -26,6 +26,7 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { useChatPersistence } from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -98,7 +99,15 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
-const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
+const renderStartupState = (app, welcomeMessage, handleStarterPromptClick, hydrating, t) => {
+  // A server-backed chat starts with an empty `messages` whether it is brand
+  // new or holds a hundred turns — the difference only arrives with
+  // `GET /api/chats/:id`. Greeting the user as if this were a new chat and then
+  // swapping in the history a moment later is the flash this guard prevents.
+  if (hydrating) {
+    return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
+  }
+
   const starterPrompts = app?.starterPrompts || [];
   if (starterPrompts.length > 0) {
     return (
@@ -171,7 +180,7 @@ const getTranscriptionErrorMessage = (err, t) => {
 function AppChat({ preloadedApp = null }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { appId } = useParams();
+  const { appId, chatId: routeChatId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -433,14 +442,35 @@ function AppChat({ preloadedApp = null }) {
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
-  const chatId = useRef(getOrCreateChatId(appId));
+  // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
+  // — that is how the history opens a stored conversation — while `/apps/:appId`
+  // falls back to the id this tab already holds for the app. State rather than a
+  // ref, because changing it has to re-run the message hook, the stream state
+  // and the hydration below.
+  const [chatId, setChatId] = useState(() => routeChatId || getOrCreateChatId(appId));
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
 
-  // Restore existing chat ID when the appId changes
+  // Follow the URL: another app, or another chat under the same app.
   useEffect(() => {
-    chatId.current = getOrCreateChatId(appId);
-  }, [appId]);
+    const next = routeChatId || getOrCreateChatId(appId);
+    setChatId(current => (current === next ? current : next));
+  }, [appId, routeChatId]);
+
+  /**
+   * Leave the current chat and start a fresh one for this app. A URL that names
+   * a stored chat has to be dropped along with it, or the effect above would
+   * immediately pin the chat that was just left. Nothing is lost when chats are
+   * persisted — the old one simply stays in the history.
+   *
+   * @returns {string} The new chat id.
+   */
+  const startNewChat = useCallback(() => {
+    const nextChatId = resetChatId(appId);
+    setChatId(nextChatId);
+    if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
+    return nextChatId;
+  }, [appId, navigate, routeChatId]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -505,8 +535,18 @@ function AppChat({ preloadedApp = null }) {
     [shouldAutoRedirectToCanvas, handleOpenInCanvas, app]
   );
 
+  // Durable chats: the server owns the transcript, so the browser copy is
+  // skipped, a turn posts only the new message, and a past conversation gets
+  // back on screen through the hydration below. Incognito switches it off for
+  // this chat; anonymous viewers and installations without the capability never
+  // had it, and keep exactly the behaviour they have today.
+  const chatPersistence = useChatPersistence();
+  const serverBackedChat = chatPersistence && !ephemeral;
+
   const {
     messages,
+    hydrating,
+    finishHydration,
     processing,
     clarificationPending,
     sendMessage: sendChatMessage,
@@ -525,18 +565,57 @@ function AppChat({ preloadedApp = null }) {
     updateAssistantMessage
   } = useAppChat({
     appId,
-    chatId: chatId.current,
+    chatId,
     onMessageComplete: handleMessageComplete,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, nothing is persisted to browser storage.
-    ephemeral
+    ephemeral,
+    serverBacked: serverBackedChat
   });
+
+  // Hydrate a server-backed chat from the durable store. That mode keeps no
+  // browser copy, so this fetch is the only thing that puts a stored transcript
+  // back on screen — both when the history opens a chat by URL and on a plain
+  // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
+  // this tab minted but never sent is not in the store yet: that 404 is the
+  // ordinary case for a new chat, not a failure worth reporting.
+  const chatHydratedRef = useRef(null);
+  useEffect(() => {
+    if (!serverBackedChat || !app || messages.length > 0) return undefined;
+    if (chatHydratedRef.current === chatId) return undefined;
+    chatHydratedRef.current = chatId;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fetchChat(chatId);
+        if (cancelled) return;
+        // The store is the source of truth, so it replaces whatever is here —
+        // and an empty transcript still ends the loading state rather than
+        // letting the greeting appear a beat late.
+        loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.status !== 404) {
+          console.warn('Failed to load the stored chat, starting empty:', err.message);
+        }
+        finishHydration();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
   useEffect(() => {
     if (conversationResumed.current || !app || messages.length > 0) return;
-    if (ephemeral) return;
+    // A server-backed chat hydrates from the durable store instead, and that
+    // store is the source of truth for it. Two loaders replacing the same array
+    // would race, and the loser would silently win on a slow network.
+    if (ephemeral || serverBackedChat) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
@@ -556,7 +635,7 @@ function AppChat({ preloadedApp = null }) {
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages, ephemeral]);
+  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -712,7 +791,7 @@ function AppChat({ preloadedApp = null }) {
   // Reset auto-start trigger when appId or chatId changes
   useEffect(() => {
     autoStartTriggered.current = false;
-  }, [appId, chatId.current]);
+  }, [appId, chatId]);
 
   useEffect(() => {
     // Check if we should auto-start the conversation
@@ -852,7 +931,7 @@ function AppChat({ preloadedApp = null }) {
       cancelGeneration();
       clearMessages();
       resetConversationState();
-      chatId.current = resetChatId(appId);
+      startNewChat();
       clearConversationId(appId);
       conversationResumed.current = false;
 
@@ -990,8 +1069,9 @@ function AppChat({ preloadedApp = null }) {
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
-    // Don't show welcome message if there are any messages
-    if (!app || loading || messages.length > 0) return null;
+    // Don't show welcome message if there are any messages, or while a stored
+    // transcript is still on its way — see renderStartupState.
+    if (!app || loading || hydrating || messages.length > 0) return null;
 
     // Skip if starter prompts are configured - they take priority
     if (app.starterPrompts && app.starterPrompts.length > 0) {
@@ -1012,7 +1092,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     return greeting;
-  }, [app, loading, currentLanguage, messages.length]);
+  }, [app, loading, hydrating, currentLanguage, messages.length]);
 
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
@@ -1335,7 +1415,7 @@ function AppChat({ preloadedApp = null }) {
         // Clear regular chat
         clearMessages();
         resetConversationState();
-        chatId.current = resetChatId(appId);
+        startNewChat();
         clearConversationId(appId);
         conversationResumed.current = false;
       }
@@ -2053,7 +2133,7 @@ function AppChat({ preloadedApp = null }) {
       <SharedAppHeader
         app={app}
         appId={appId}
-        chatId={chatId.current}
+        chatId={chatId}
         mode="chat"
         messages={messages}
         variables={variables}
@@ -2189,7 +2269,7 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
@@ -2206,7 +2286,13 @@ function AppChat({ preloadedApp = null }) {
                     <div className="w-full h-full overflow-y-auto">
                       <div className="min-h-full flex items-center justify-center p-4">
                         <div className="w-full max-w-4xl">
-                          {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                          {renderStartupState(
+                            app,
+                            welcomeMessage,
+                            handleStarterPromptClick,
+                            hydrating,
+                            t
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2230,7 +2316,7 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
@@ -2245,7 +2331,13 @@ function AppChat({ preloadedApp = null }) {
                     </div>
                   ) : (
                     <div className="mb-8">
-                      {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                      {renderStartupState(
+                        app,
+                        welcomeMessage,
+                        handleStarterPromptClick,
+                        hydrating,
+                        t
+                      )}
                     </div>
                   )}
                   <div>{renderChatInput()}</div>
@@ -2266,7 +2358,7 @@ function AppChat({ preloadedApp = null }) {
                     onResend={handleResendMessage}
                     editable={true}
                     appId={appId}
-                    chatId={chatId.current}
+                    chatId={chatId}
                     modelId={selectedModel}
                     starterPrompts={app?.starterPrompts || []}
                     onSelectPrompt={handleStarterPromptClick}
@@ -2296,7 +2388,7 @@ function AppChat({ preloadedApp = null }) {
                   onResend={handleResendMessage}
                   editable={true}
                   appId={appId}
-                  chatId={chatId.current}
+                  chatId={chatId}
                   modelId={selectedModel}
                   starterPrompts={app?.starterPrompts || []}
                   onSelectPrompt={handleStarterPromptClick}
@@ -2335,7 +2427,13 @@ function AppChat({ preloadedApp = null }) {
       {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}
-          path={window.location.pathname}
+          // A share link points at the app, never at one stored chat: the
+          // recipient does not own it and could only ever get a 404 from it.
+          path={
+            routeChatId
+              ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+              : window.location.pathname
+          }
           params={{
             model: selectedModel,
             style: selectedStyle,
