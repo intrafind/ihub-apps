@@ -18,6 +18,7 @@ import {
   isSchedulerOwner
 } from './schedulerLock.js';
 import logger from '../../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 
 /** @type {TriggerManager|null} */
 let triggerManagerInstance = null;
@@ -234,7 +235,7 @@ export class TriggerManager {
       let workflow;
       if (this.workflowLoader) {
         const workflows = await this.workflowLoader(false);
-        workflow = workflows.find(w => w.id === workflowId);
+        workflow = findByIdCaseInsensitive(workflows, workflowId);
       }
 
       if (!workflow) {

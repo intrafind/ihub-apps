@@ -4,6 +4,7 @@ import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
@@ -202,7 +203,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const app = apps.find(a => a.id === appId);
+      const app = findByIdCaseInsensitive(apps, appId);
       if (!app) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';
@@ -267,6 +268,13 @@ class RequestBuilder {
       // route and the MCP gateway — without changing the app-default path when
       // no model is requested.
       let requestedModelId = modelId;
+      if (requestedModelId) {
+        // Normalize to the configured casing up front so the permission
+        // check and every downstream `id === requestedModelId` comparison
+        // line up regardless of how the caller cased the model id.
+        const matchedModel = findByIdCaseInsensitive(models, requestedModelId);
+        if (matchedModel) requestedModelId = matchedModel.id;
+      }
       if (requestedModelId && !isModelPermittedForUser(user, requestedModelId)) {
         logger.warn('Requested model not permitted for user; falling back to app default', {
           component: 'RequestBuilder',

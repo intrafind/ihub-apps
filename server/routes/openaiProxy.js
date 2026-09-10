@@ -265,7 +265,9 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
     }
     if (req.user && req.user.permissions) {
       const allowed = req.user.permissions.models || new Set();
-      if (!allowed.has('*') && !allowed.has(modelId)) {
+      // Check against the resolved model's canonical id, not the raw
+      // (possibly differently-cased) id the caller sent.
+      if (!allowed.has('*') && !allowed.has(model.id)) {
         const msg = await getLocalizedError('modelAccessDenied', {}, lang);
         return res.status(403).json({ error: msg });
       }

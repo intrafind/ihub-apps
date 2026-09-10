@@ -34,13 +34,14 @@ import logger from '../../utils/logger.js';
 import ChatService from './ChatService.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const chatService = new ChatService();
 
 function getAppById(appId) {
   const apps = configCache.getApps(true);
   if (!apps?.data) return null;
-  return apps.data.find(a => a.id === appId) || null;
+  return findByIdCaseInsensitive(apps.data, appId) || null;
 }
 
 function buildToolParameters(app) {
@@ -121,10 +122,10 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
       continue;
     }
     if (app.enabled === false) continue;
-    if (user && !isAppInvocationAllowed(user, appId)) {
+    if (user && !isAppInvocationAllowed(user, app.id)) {
       logger.info('App-as-tool: app filtered by user permissions', {
         component: 'AppToolsGateway',
-        appId,
+        appId: app.id,
         userId: user.id
       });
       continue;
@@ -135,12 +136,12 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
     // locale here, do NOT re-wrap as a localized object.
     const appName = getLocalizedString(app.name, language, undefined, app.id);
     tools.push({
-      id: `app__${appId}`,
+      id: `app__${app.id}`,
       name: `App: ${appName}`,
       description: localizedDescription(app, language),
       parameters: buildToolParameters(app),
       isAppAsTool: true,
-      _appId: appId
+      _appId: app.id
     });
   }
   return tools;
@@ -225,8 +226,8 @@ export async function invokeAppTool({
 
   // Enforce the calling user's app permissions — invoking an app through a
   // tool must not grant more access than opening it directly would.
-  if (!isAppInvocationAllowed(user, appId)) {
-    return { error: true, message: `You do not have permission to access app ${appId}` };
+  if (!isAppInvocationAllowed(user, app.id)) {
+    return { error: true, message: `You do not have permission to access app ${app.id}` };
   }
 
   const messageBody = args.message || JSON.stringify(args);
@@ -248,7 +249,7 @@ export async function invokeAppTool({
 
   try {
     const result = await chatService.invokeAppInternal({
-      appId,
+      appId: app.id,
       user: nestedUser,
       messages,
       variables,

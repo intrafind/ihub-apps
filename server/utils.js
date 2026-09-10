@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
+import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 
 /**
  * Sanitize user-provided input for logging to prevent log injection
@@ -45,7 +46,7 @@ export async function getApiKeyForModel(modelId) {
     }
 
     // Find the model by ID
-    const model = models.find(m => m.id === modelId);
+    const model = findByIdCaseInsensitive(models, modelId);
     if (!model) {
       logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });
       return null;

@@ -8,6 +8,7 @@ import {
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 
 /**
  * Strip server-side secrets before a model is sent to the browser.
@@ -169,7 +170,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         if (!models) {
           return sendFailedOperationError(res, 'load models configuration');
         }
-        const model = models.find(m => m.id === modelId);
+        const model = findByIdCaseInsensitive(models, modelId);
         // Transcription models are not exposed through this public chat-model
         // route (G9); their internal ws:// url / apiKey must never reach the
         // browser. Treat them as not-found here.
@@ -181,7 +182,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         // Check if user has permission to access this model
         if (req.user && req.user.permissions) {
           const allowedModels = req.user.permissions.models || new Set();
-          if (!allowedModels.has('*') && !allowedModels.has(modelId)) {
+          if (!allowedModels.has('*') && !allowedModels.has(model.id)) {
             const errorMessage = await getLocalizedError('modelNotFound', {}, language);
             return sendNotFound(res, errorMessage);
           }

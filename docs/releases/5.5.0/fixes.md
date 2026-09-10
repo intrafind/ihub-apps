@@ -632,3 +632,17 @@ request:
 
 When the ceiling does fire, the error names the setting to raise, and the server log records the
 endpoint that was tried (with URL secrets redacted) next to the model and provider.
+
+## Model, App, and Workflow IDs Are No Longer Case-Sensitive
+
+Calling a model, app, or workflow by id with different casing than it was configured with — for
+example through the OpenAI-compatible inference API, an MCP tool call, or a public `GET` endpoint —
+failed with a "not found" or "access denied" error even though the resource existed and the caller
+had permission to use it.
+
+- Model, app, and workflow lookups now match ids case-insensitively, so `GPT-4o` resolves the same
+  model as `gpt-4o`.
+- The app/model access check applied to every chat request now compares ids case-insensitively
+  too, so a differently-cased id is no longer rejected as access-denied right after being found.
+- New app and workflow ids must now be lowercase when created or edited, matching the existing rule
+  for model and prompt ids.

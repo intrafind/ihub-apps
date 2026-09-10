@@ -1003,7 +1003,7 @@ function BasicInfoStep({
           required
           title={t(
             'admin.apps.wizard.basic.appIdTitle',
-            'Only letters, numbers, dots (.), underscores (_), and hyphens (-) allowed'
+            'Only lowercase letters, numbers, dots (.), underscores (_), and hyphens (-) allowed'
           )}
         />
         {fieldErrors.id ? (
@@ -1016,7 +1016,7 @@ function BasicInfoStep({
           <p className="mt-1 text-sm text-gray-500">
             {t(
               'admin.apps.wizard.basic.appIdHelp',
-              `Use only letters, numbers, dots (.), underscores (_), and hyphens (-). Max ${APP_ID_MAX_LENGTH} characters.`
+              `Use only lowercase letters, numbers, dots (.), underscores (_), and hyphens (-). Max ${APP_ID_MAX_LENGTH} characters.`
             )}
           </p>
         )}
