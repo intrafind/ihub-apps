@@ -174,6 +174,18 @@ export async function saveUsers(usersConfig, usersFilePath) {
 }
 
 /**
+ * Case-insensitively compare two identifier strings (username/email).
+ * Login-facing identifiers must not be treated as distinct just because
+ * they differ in case (e.g. "Daniel.Manzke" vs "daniel.manzke").
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean} True if both are strings and equal ignoring case
+ */
+export function equalsIgnoreCase(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/**
  * Find user by various identifiers (username, email, oidcSubject)
  * @param {Object} usersConfig - Users configuration
  * @param {string} identifier - Username, email, or OIDC subject ID
@@ -191,10 +203,11 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
       continue;
     }
 
-    // Match by username, email, or auth-specific subject
+    // Match by username, email (both case-insensitive), or auth-specific subject
+    // (provider subject IDs are opaque and compared exactly)
     if (
-      user.username === identifier ||
-      (identifier && user.email === identifier) ||
+      equalsIgnoreCase(user.username, identifier) ||
+      (identifier && equalsIgnoreCase(user.email, identifier)) ||
       (user.oidcData && user.oidcData.subject === identifier) ||
       (user.proxyData && user.proxyData.subject === identifier) ||
       (user.teamsData && user.teamsData.subject === identifier) ||

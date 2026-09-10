@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
-import { hashPasswordWithUserId, loadUsers } from '../utils/userManager.js';
+import { equalsIgnoreCase, hashPasswordWithUserId, loadUsers } from '../utils/userManager.js';
 import configCache from '../configCache.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
@@ -55,8 +55,10 @@ export async function loginUser(username, password, localAuthConfig) {
   const usersConfig = loadUsers(localAuthConfig.usersFile || 'contents/config/users.json');
   const users = usersConfig.users || {};
 
-  // Find user by username or email
-  const user = Object.values(users).find(u => u.username === username || u.email === username);
+  // Find user by username or email (case-insensitive)
+  const user = Object.values(users).find(
+    u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, username)
+  );
 
   if (!user) {
     await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
@@ -125,8 +127,10 @@ export async function createUser(userData, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
   const users = usersConfig.users || {};
 
-  // Check if user already exists
-  const existingUser = Object.values(users).find(u => u.username === username || u.email === email);
+  // Check if user already exists (case-insensitive)
+  const existingUser = Object.values(users).find(
+    u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, email)
+  );
 
   if (existingUser) {
     throw new Error('User with this username or email already exists');
