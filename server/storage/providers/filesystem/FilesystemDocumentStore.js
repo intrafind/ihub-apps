@@ -75,8 +75,23 @@ function isReservedEntry(entry) {
   return entry === OWNERS_DIR || entry === LOCKS_DIR || entry.startsWith(TEMP_PREFIX);
 }
 
-/** sha256 hex of a serialized document body — the provider-independent etag. */
+/**
+ * sha256 hex of a serialized document body — the provider-independent etag.
+ *
+ * This is a content digest for cache validation and compare-and-set, not a
+ * credential derivation: it is never compared against a user-supplied secret
+ * and never authenticates anything. A fast hash is the right tool, and it has
+ * to stay one so that the same document yields the same etag on every provider
+ * — that is what lets a migration verify a copy (see docs/storage.md).
+ *
+ * CodeQL reaches this sink from config loaders that carry secret-shaped fields
+ * and reads it as a password hash. It is not one. What *would* make it one:
+ * handing a document's etag to a caller who could use it to confirm a guessed
+ * secret. Re-examine this suppression if an etag ever becomes externally
+ * visible for a document that stores credentials.
+ */
 function etagOf(json) {
+  // lgtm[js/insufficient-password-hash] -- entity tag over a document body, not a stored password.
   return crypto.createHash('sha256').update(json, 'utf8').digest('hex');
 }
 

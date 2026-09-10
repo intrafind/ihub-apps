@@ -531,7 +531,7 @@ describe('startChatRetentionSweep', () => {
             'a pending sweep must never keep the process alive'
           );
         } finally {
-          if (typeof stop === 'function') stop();
+          stop();
           await delay(POLL_MS * 2);
         }
       });
@@ -560,8 +560,8 @@ describe('startChatRetentionSweep', () => {
           assert.equal(reads, 1, 'the second start must not add a second sweep');
           assert.equal(timers.length, 1);
         } finally {
-          if (typeof stop === 'function') stop();
-          if (typeof stopAgain === 'function') stopAgain();
+          stop();
+          stopAgain();
           await delay(POLL_MS * 2);
         }
       });
@@ -588,7 +588,7 @@ describe('startChatRetentionSweep', () => {
             'an admin turning the feature off is not asking for a purge'
           );
         } finally {
-          if (typeof stop === 'function') stop();
+          stop();
           await delay(POLL_MS * 2);
         }
       });
@@ -620,7 +620,7 @@ describe('startChatRetentionSweep', () => {
             'a later tick to pick up the lowered limit'
           );
         } finally {
-          if (typeof stop === 'function') stop();
+          stop();
           // Let an in-flight tick clear the module's re-entrancy guard, or the
           // next test's sweep would find it still set and skip itself.
           await delay(POLL_MS * 2);
