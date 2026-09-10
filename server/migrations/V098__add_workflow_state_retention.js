@@ -25,7 +25,7 @@
  * opt out of deletion entirely — keeps it.
  */
 
-export const version = '096';
+export const version = '098';
 export const description = 'add_workflow_state_retention';
 
 export async function precondition(ctx) {

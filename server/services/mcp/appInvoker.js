@@ -3,6 +3,7 @@ import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 const chatService = new ChatService();
 
@@ -52,7 +53,7 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
   // Look up the app against configCache; pass only the trusted app.id
   // back downstream so the user-controlled appId stops here.
   const { data: apps = [] } = configCache.getApps();
-  const app = apps.find(a => a.id === safeAppId);
+  const app = findByIdCaseInsensitive(apps, safeAppId);
   if (!app) {
     throw new Error(`App not found: ${safeAppId}`);
   }

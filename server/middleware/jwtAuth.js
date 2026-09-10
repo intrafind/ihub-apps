@@ -5,7 +5,7 @@ import {
 } from '../utils/oauthClientManager.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
-import { loadUsers, isUserActive } from '../utils/userManager.js';
+import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
@@ -560,7 +560,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email (OIDC users may have different IDs)
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('oidc')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('oidc')
           );
         }
 
@@ -610,13 +610,15 @@ export default function jwtAuthMiddleware(req, res, next) {
 
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('ldap')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
           );
         }
 
         if (!userRecord && decoded.username) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.ldapData?.username === decoded.username && u.authMethods?.includes('ldap')
+            u =>
+              equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
+              u.authMethods?.includes('ldap')
           );
         }
 
@@ -663,7 +665,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('teams')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('teams')
           );
         }
 
@@ -712,7 +714,9 @@ export default function jwtAuthMiddleware(req, res, next) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u =>
               (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
-              (decoded.email && u.email === decoded.email && u.authMethods?.includes('ntlm'))
+              (decoded.email &&
+                equalsIgnoreCase(u.email, decoded.email) &&
+                u.authMethods?.includes('ntlm'))
           );
         }
 

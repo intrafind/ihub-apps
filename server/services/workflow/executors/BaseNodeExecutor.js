@@ -13,6 +13,7 @@
 
 import logger from '../../../utils/logger.js';
 import promptService from '../../PromptService.js';
+import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 
 /**
  * Execution result returned by node executors
@@ -393,7 +394,7 @@ export class BaseNodeExecutor {
    */
   resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {
     if (!Array.isArray(models) || models.length === 0) return null;
-    const byId = id => (id ? models.find(m => m.id === id) : undefined);
+    const byId = id => (id ? findByIdCaseInsensitive(models, id) : undefined);
 
     // 1. Node-level model: explicit config.modelId, else the durable per-node
     //    agent model. `config.modelId || …` matches the prompt node — a set-but-

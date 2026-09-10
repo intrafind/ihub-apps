@@ -46,6 +46,7 @@ import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {
   sendNotFound,
   sendFailedOperationError,
@@ -416,7 +417,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             new Error('models is null')
           );
         }
-        const model = models.find(m => m.id === modelId);
+        const model = findByIdCaseInsensitive(models, modelId);
         if (!model) {
           return sendNotFound(res, 'Model');
         }
@@ -428,7 +429,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const result = await llmClient.complete({
             model,
             messages,
-            stream: false,
             timeoutMs: DEFAULT_TIMEOUT,
             retries: 0,
             language,

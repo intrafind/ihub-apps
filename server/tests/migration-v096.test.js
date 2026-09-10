@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * Migration V096 specs — seeding the `workflowState` section in platform.json.
+ * Migration V096 specs — seeding the `storage` section in platform.json.
  *
- * The seeded values are the built-in defaults of the new retention sweep, so
- * the upgrade itself changes nothing an admin has decided: it makes the
- * section visible in Admin → Platform Configuration. The interesting cases
- * are the meaningful zero (`retentionDays: 0` means "keep terminal
- * executions forever" and must survive) and an explicit `cleanupEnabled:
- * false`, which is how an installation opts out of the sweep entirely.
+ * The storage abstraction ships inert: only the filesystem provider exists and
+ * no production code path reads the section yet. The migration therefore seeds
+ * nothing but the built-in defaults, so an upgrade changes no behaviour — it
+ * only makes the section visible in Admin → Platform Configuration. An admin
+ * who already picked a provider (possibly one a later release registers) keeps
+ * that choice.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V096__add_workflow_state_retention.js';
+import { up, precondition, version } from '../migrations/V096__add_storage_settings.js';
 import { setDefault } from '../migrations/utils.js';
 
 function fakeCtx(files) {
@@ -41,50 +41,52 @@ test('precondition is false when platform.json does not exist', async () => {
   assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-test('a plain install gets the workflow state retention defaults', async () => {
+test('a plain install gets the filesystem provider and its defaults', async () => {
   const ctx = fakeCtx({ 'config/platform.json': { defaultLanguage: 'en' } });
 
   await up(ctx);
 
-  assert.deepEqual(ctx.files['config/platform.json'].workflowState, {
-    retentionDays: 30,
-    cleanupEnabled: true
+  assert.deepEqual(ctx.files['config/platform.json'].storage, {
+    provider: 'filesystem',
+    filesystem: { dataDir: 'data', flushIntervalMs: 2000 }
   });
-  assert.ok(ctx.logs.some(l => l.includes('workflowState')));
+  assert.ok(ctx.logs.some(l => l.includes('storage')));
 });
 
-test("an admin's existing retention window wins over the default", async () => {
+test("an admin's existing choice wins over the default", async () => {
   const ctx = fakeCtx({
     'config/platform.json': {
-      workflowState: { retentionDays: 0 }
+      storage: { provider: 'postgres', postgres: { url: 'postgres://db/ihub' } }
     }
   });
 
   await up(ctx);
-  const { workflowState } = ctx.files['config/platform.json'];
+  const { storage } = ctx.files['config/platform.json'];
 
-  // retentionDays 0 means "keep terminal executions forever" — a meaningful
-  // value, not a missing one, so the default must not overwrite it.
-  assert.equal(workflowState.retentionDays, 0);
-  assert.equal(workflowState.cleanupEnabled, true);
+  // A provider this release does not register is left alone: `provider` is a
+  // free string in the schema precisely so such an install stays valid.
+  assert.equal(storage.provider, 'postgres');
+  assert.deepEqual(storage.postgres, { url: 'postgres://db/ihub' });
+  // The filesystem block is still seeded — it is the fallback provider's config.
+  assert.deepEqual(storage.filesystem, { dataDir: 'data', flushIntervalMs: 2000 });
 });
 
-test('an install that switched the sweep off stays off', async () => {
+test('a partially configured filesystem block keeps its tuned values', async () => {
   const ctx = fakeCtx({
     'config/platform.json': {
-      workflowState: { cleanupEnabled: false }
+      storage: { filesystem: { flushIntervalMs: 500 } }
     }
   });
 
   await up(ctx);
-  const { workflowState } = ctx.files['config/platform.json'];
+  const { storage } = ctx.files['config/platform.json'];
 
-  assert.equal(workflowState.cleanupEnabled, false);
-  assert.equal(workflowState.retentionDays, 30);
+  assert.equal(storage.provider, 'filesystem');
+  assert.deepEqual(storage.filesystem, { flushIntervalMs: 500, dataDir: 'data' });
 });
 
 test('running the migration twice is a no-op', async () => {
-  const ctx = fakeCtx({ 'config/platform.json': { workflowState: {} } });
+  const ctx = fakeCtx({ 'config/platform.json': { storage: {} } });
   await up(ctx);
   const once = JSON.stringify(ctx.files['config/platform.json']);
   await up(ctx);
@@ -96,9 +98,8 @@ test('unrelated platform sections survive untouched', async () => {
     'config/platform.json': {
       defaultLanguage: 'de',
       auth: { mode: 'oidc', authenticatedGroup: 'authenticated' },
-      runLog: { enabled: true, retentionDays: 90, cleanupEnabled: true },
-      chats: { enabled: true, retentionDays: 90, maxChatsPerUser: 200 },
-      storage: { provider: 'filesystem', filesystem: { dataDir: 'data' } }
+      runLog: { enabled: true, retentionDays: 90, flushIntervalMs: 2000 },
+      features: { runLog: false }
     }
   });
 
@@ -107,7 +108,6 @@ test('unrelated platform sections survive untouched', async () => {
 
   assert.equal(platform.defaultLanguage, 'de');
   assert.deepEqual(platform.auth, { mode: 'oidc', authenticatedGroup: 'authenticated' });
-  assert.deepEqual(platform.runLog, { enabled: true, retentionDays: 90, cleanupEnabled: true });
-  assert.deepEqual(platform.chats, { enabled: true, retentionDays: 90, maxChatsPerUser: 200 });
-  assert.deepEqual(platform.storage, { provider: 'filesystem', filesystem: { dataDir: 'data' } });
+  assert.deepEqual(platform.runLog, { enabled: true, retentionDays: 90, flushIntervalMs: 2000 });
+  assert.deepEqual(platform.features, { runLog: false });
 });

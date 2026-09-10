@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 import logger from './logger.js';
 import configCache from '../configCache.js';
+import { hasIdCaseInsensitive } from './resourceLookup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -449,7 +450,7 @@ export function intersectWithClientAllowList(userAllowed, clientAllowed) {
   const result = new Set();
   const clientSet = new Set(clientAllowed);
   for (const id of userAllowed || []) {
-    if (clientSet.has(id)) {
+    if (hasIdCaseInsensitive(clientSet, id)) {
       result.add(id);
     }
   }
@@ -495,7 +496,7 @@ export function filterResourcesByPermissions(resources, allowedResources) {
   // Filter resources based on allowed IDs
   return resources.filter(resource => {
     const resourceId = resource.id || resource.modelId || resource.name;
-    return allowedResources.has(resourceId);
+    return hasIdCaseInsensitive(allowedResources, resourceId);
   });
 }
 
@@ -748,7 +749,7 @@ export function canUserAccessResource(user, resourceType, resourceId) {
   const allowedResources = user.permissions[resourceType];
   if (!allowedResources) return false;
 
-  return allowedResources.has('*') || allowedResources.has(resourceId);
+  return allowedResources.has('*') || hasIdCaseInsensitive(allowedResources, resourceId);
 }
 
 /**

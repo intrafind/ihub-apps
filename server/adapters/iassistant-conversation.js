@@ -10,6 +10,7 @@ import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
 import conversationApiService from '../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
+import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
 
 class IAssistantConversationAdapterClass extends BaseAdapter {
@@ -42,6 +43,21 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     const modelConfig = model.config || {};
     const serviceConfig = iAssistantService.getConfig();
 
+    // extraContext / systemPromptPreamble support global prompt variables
+    // ({{user_name}}, {{user_email}}, {{date}}, admin-defined custom
+    // variables, …) so the conversation is personalized per requesting user
+    // instead of carrying one hardcoded identity for everyone.
+    let extraContext = appConfig.extraContext || modelConfig.extraContext;
+    let systemPromptPreamble = appConfig.systemPromptPreamble || modelConfig.systemPromptPreamble;
+    if (extraContext?.includes('{{') || systemPromptPreamble?.includes('{{')) {
+      const variables = PromptService.resolveGlobalPromptVariables(
+        options.user,
+        model?.modelId || model?.id
+      );
+      extraContext = PromptService.substituteVariables(extraContext, variables);
+      systemPromptPreamble = PromptService.substituteVariables(systemPromptPreamble, variables);
+    }
+
     return {
       baseUrl: appConfig.baseUrl || modelConfig.baseUrl || serviceConfig.baseUrl,
       profileId: appConfig.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
@@ -56,8 +72,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       labels: appConfig.labels || modelConfig.labels,
       ephemeral:
         appConfig.ephemeral ?? options.appConfig?.ephemeral ?? modelConfig.ephemeral ?? false,
-      extraContext: appConfig.extraContext || modelConfig.extraContext,
-      systemPromptPreamble: appConfig.systemPromptPreamble || modelConfig.systemPromptPreamble
+      extraContext,
+      systemPromptPreamble
     };
   }
 

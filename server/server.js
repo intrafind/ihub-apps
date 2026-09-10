@@ -11,6 +11,7 @@ import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 import logger from './utils/logger.js';
+import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
 import { registerConfigReloadHooks } from './configReloadHooks.js';
@@ -927,7 +928,7 @@ if (cluster.isPrimary && workerCount > 1) {
         return { definition, options: { user: principal, timeout: RESUME_NODE_TIMEOUT_MS } };
       }
       const workflows = await loadWorkflows(false);
-      const definition = workflows.find(w => w.id === state.workflowId);
+      const definition = findByIdCaseInsensitive(workflows, state.workflowId);
       if (!definition) return null;
       return {
         definition,

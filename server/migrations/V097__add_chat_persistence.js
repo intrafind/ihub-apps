@@ -26,7 +26,7 @@
  * left in place — it still gates the preview UI in this release.
  */
 
-export const version = '095';
+export const version = '097';
 export const description = 'add_chat_persistence';
 
 export async function precondition(ctx) {

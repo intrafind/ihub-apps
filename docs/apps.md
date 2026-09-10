@@ -966,6 +966,21 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
+| `iassistant.searchProfile`  | String | iAssistant search profile used for retrieval (e.g., `"searchprofile-standard"`)                  |
+| `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
+| `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
+
+**Prompt variables in `extraContext` and `systemPromptPreamble`:**
+
+Both fields support the same global prompt variables as system prompts — built-ins like `{{user_name}}`, `{{user_email}}`, `{{date}}`, `{{date_iso}}`, `{{time}}`, `{{timezone}}`, `{{locale}}`, plus any custom variables defined under **Admin → Prompts → Global Variables**. Values resolve against the requesting user when the conversation is created, so every user gets a personalized context:
+
+```json
+"iassistant": {
+  "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}), the user's timezone is {{timezone}}."
+}
+```
+
+Unknown placeholders are left in the text unchanged (the same behavior as system prompts), so typos are visible instead of silently disappearing. Note that the context is fixed when the conversation is created: date and time variables reflect the start of the conversation, not each individual message.
 
 #### Image Generation Configuration
 

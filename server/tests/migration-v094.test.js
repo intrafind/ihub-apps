@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 
 /**
- * Migration V094 specs — seeding the `storage` section in platform.json.
+ * Migration V094 specs — default iAssistant app and extraContext cleanup.
  *
- * The storage abstraction ships inert: only the filesystem provider exists and
- * no production code path reads the section yet. The migration therefore seeds
- * nothing but the built-in defaults, so an upgrade changes no behaviour — it
- * only makes the section visible in Admin → Platform Configuration. An admin
- * who already picked a provider (possibly one a later release registers) keeps
- * that choice.
+ * Ships the new default `apps/iassistant.json` (disabled, no model selector,
+ * templated extraContext) to installs that don't have the app yet, and
+ * replaces the known hardcoded test extraContext ("My name is Daniel …") that
+ * was configured before extraContext supported prompt variables. Deliberate
+ * custom extraContext values on other installs are left untouched.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V094__add_storage_settings.js';
-import { setDefault } from '../migrations/utils.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { up, version } from '../migrations/V094__add_default_iassistant_app.js';
+
+const defaultsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults');
 
 function fakeCtx(files) {
   const logs = [];
@@ -26,7 +29,8 @@ function fakeCtx(files) {
     writeJson: async (p, d) => {
       files[p] = d;
     },
-    setDefault,
+    // Read the real shipped default so the specs validate what installs get.
+    readDefaultJson: async p => JSON.parse(fs.readFileSync(path.join(defaultsDir, p), 'utf8')),
     log: m => logs.push(m),
     warn: m => logs.push(m)
   };
@@ -36,78 +40,74 @@ test('version is the next unused number', () => {
   assert.equal(version, '094');
 });
 
-test('precondition is false when platform.json does not exist', async () => {
-  assert.equal(await precondition(fakeCtx({})), false);
-  assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
-});
-
-test('a plain install gets the filesystem provider and its defaults', async () => {
-  const ctx = fakeCtx({ 'config/platform.json': { defaultLanguage: 'en' } });
-
+test('the shipped default app is disabled, hides the model selector, and templates the user', async () => {
+  const ctx = fakeCtx({});
   await up(ctx);
+  const app = ctx.files['apps/iassistant.json'];
 
-  assert.deepEqual(ctx.files['config/platform.json'].storage, {
-    provider: 'filesystem',
-    filesystem: { dataDir: 'data', flushIntervalMs: 2000 }
-  });
-  assert.ok(ctx.logs.some(l => l.includes('storage')));
+  assert.ok(app, 'default app was not seeded');
+  assert.equal(app.enabled, false);
+  assert.equal(app.disallowModelSelection, true);
+  assert.equal(app.settings.model.enabled, false);
+  assert.match(app.iassistant.extraContext, /\{\{user_name\}\}/);
+  assert.match(app.iassistant.extraContext, /\{\{user_email\}\}/);
+  assert.match(app.iassistant.extraContext, /\{\{date/);
 });
 
-test("an admin's existing choice wins over the default", async () => {
+test('an install without the app gets the default seeded', async () => {
+  const ctx = fakeCtx({});
+  await up(ctx);
+  assert.equal(ctx.files['apps/iassistant.json'].id, 'iassistant');
+});
+
+test('the known hardcoded test extraContext is replaced with the templated default', async () => {
   const ctx = fakeCtx({
-    'config/platform.json': {
-      storage: { provider: 'postgres', postgres: { url: 'postgres://db/ihub' } }
+    'apps/iassistant.json': {
+      id: 'iassistant',
+      enabled: true,
+      iassistant: {
+        profileId: 'iassistant-basic',
+        searchProfile: 'searchprofile-standard',
+        extraContext: 'My name is Daniel and I work for IntraFind Software AG.'
+      }
     }
   });
 
   await up(ctx);
-  const { storage } = ctx.files['config/platform.json'];
+  const app = ctx.files['apps/iassistant.json'];
 
-  // A provider this release does not register is left alone: `provider` is a
-  // free string in the schema precisely so such an install stays valid.
-  assert.equal(storage.provider, 'postgres');
-  assert.deepEqual(storage.postgres, { url: 'postgres://db/ihub' });
-  // The filesystem block is still seeded — it is the fallback provider's config.
-  assert.deepEqual(storage.filesystem, { dataDir: 'data', flushIntervalMs: 2000 });
+  assert.match(app.iassistant.extraContext, /\{\{user_name\}\}/);
+  assert.doesNotMatch(app.iassistant.extraContext, /Daniel/);
+  // The rest of the admin's configuration is untouched.
+  assert.equal(app.enabled, true);
+  assert.equal(app.iassistant.profileId, 'iassistant-basic');
+  assert.equal(app.iassistant.searchProfile, 'searchprofile-standard');
 });
 
-test('a partially configured filesystem block keeps its tuned values', async () => {
+test('a deliberate custom extraContext is left alone', async () => {
+  const custom = 'Answer strictly from the ACME knowledge base, in formal German.';
   const ctx = fakeCtx({
-    'config/platform.json': {
-      storage: { filesystem: { flushIntervalMs: 500 } }
-    }
+    'apps/iassistant.json': { id: 'iassistant', iassistant: { extraContext: custom } }
   });
 
   await up(ctx);
-  const { storage } = ctx.files['config/platform.json'];
-
-  assert.equal(storage.provider, 'filesystem');
-  assert.deepEqual(storage.filesystem, { flushIntervalMs: 500, dataDir: 'data' });
+  assert.equal(ctx.files['apps/iassistant.json'].iassistant.extraContext, custom);
 });
 
-test('running the migration twice is a no-op', async () => {
-  const ctx = fakeCtx({ 'config/platform.json': { storage: {} } });
-  await up(ctx);
-  const once = JSON.stringify(ctx.files['config/platform.json']);
-  await up(ctx);
-  assert.equal(JSON.stringify(ctx.files['config/platform.json']), once);
-});
-
-test('unrelated platform sections survive untouched', async () => {
+test('an already-templated extraContext is left alone', async () => {
+  const templated = 'You are talking to {{user_name}}. My name is Daniel.';
   const ctx = fakeCtx({
-    'config/platform.json': {
-      defaultLanguage: 'de',
-      auth: { mode: 'oidc', authenticatedGroup: 'authenticated' },
-      runLog: { enabled: true, retentionDays: 90, flushIntervalMs: 2000 },
-      features: { runLog: false }
-    }
+    'apps/iassistant.json': { id: 'iassistant', iassistant: { extraContext: templated } }
   });
 
   await up(ctx);
-  const platform = ctx.files['config/platform.json'];
+  assert.equal(ctx.files['apps/iassistant.json'].iassistant.extraContext, templated);
+});
 
-  assert.equal(platform.defaultLanguage, 'de');
-  assert.deepEqual(platform.auth, { mode: 'oidc', authenticatedGroup: 'authenticated' });
-  assert.deepEqual(platform.runLog, { enabled: true, retentionDays: 90, flushIntervalMs: 2000 });
-  assert.deepEqual(platform.features, { runLog: false });
+test('an existing app without extraContext is not modified', async () => {
+  const original = { id: 'iassistant', enabled: true, iassistant: { profileId: 'p-custom' } };
+  const ctx = fakeCtx({ 'apps/iassistant.json': JSON.parse(JSON.stringify(original)) });
+
+  await up(ctx);
+  assert.deepEqual(ctx.files['apps/iassistant.json'], original);
 });

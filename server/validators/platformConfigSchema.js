@@ -242,6 +242,25 @@ export const platformConfigSchema = z
       .passthrough()
       .default({}),
     usageTracking: usageTrackingRetentionSchema.default({}),
+    // Transport ceilings for provider calls, in milliseconds (see
+    // services/loop/LLMClient.js). Both fall back to the env vars
+    // LLM_CONNECT_TIMEOUT_MS / LLM_STREAM_IDLE_TIMEOUT_MS when unset, and a
+    // single model can override either one in its own config. 0 disables a
+    // ceiling and leaves the call to the whole-call deadline
+    // (REQUEST_TIMEOUT, 5 minutes by default).
+    llm: z
+      .object({
+        // Ceiling for the phase before the provider's first response byte,
+        // per attempt. Every provider call streams, so those headers arrive
+        // as soon as the request is accepted and the phase measures reach
+        // rather than generation.
+        connectTimeoutMs: z.number().int().min(0).optional(),
+        // Ceiling for the gap between two chunks of a stream that has already
+        // produced one.
+        streamIdleTimeoutMs: z.number().int().min(0).optional()
+      })
+      .passthrough()
+      .default({}),
     // Unified runtime ledger (RunLog): one append-only JSONL per run. The
     // feature itself is gated by features.runLog; these are its settings.
     runLog: z

@@ -92,6 +92,10 @@
     }
   },
   "requestConcurrency": 5,
+  "llm": {
+    "connectTimeoutMs": 10000,
+    "streamIdleTimeoutMs": 60000
+  },
   "trustProxy": 1,
   "refreshSalt": {
     "salt": 1,

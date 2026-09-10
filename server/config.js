@@ -14,6 +14,15 @@ const env = cleanEnv(
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
     REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
+    // Ceiling for the phase before a provider's first response byte, per
+    // attempt (see services/loop/LLMClient.js). Every provider call streams,
+    // so that phase is reach rather than generation. 0 disables it.
+    // Overridable per deployment via platform.json `llm` and per model via
+    // the model config's `connectTimeoutMs`.
+    LLM_CONNECT_TIMEOUT_MS: num({ default: 10000 }),
+    // Ceiling for the gap between two chunks of a stream that has already
+    // produced one. 0 disables it.
+    LLM_STREAM_IDLE_TIMEOUT_MS: num({ default: 60000 }),
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
     // Opt back in to pinning each client to one worker by hashing its TCP peer
@@ -64,6 +73,8 @@ const config = Object.freeze({
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
+  LLM_CONNECT_TIMEOUT_MS: env.LLM_CONNECT_TIMEOUT_MS,
+  LLM_STREAM_IDLE_TIMEOUT_MS: env.LLM_STREAM_IDLE_TIMEOUT_MS,
   WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
   STICKY_SESSIONS: env.STICKY_SESSIONS,
   SSL_KEY: env.SSL_KEY,

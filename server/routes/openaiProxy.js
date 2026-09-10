@@ -231,7 +231,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
     const {
       model: modelId,
       messages,
-      stream = false,
+      stream: clientWantsStream = false,
       stream_options: streamOptions,
       temperature = 0.7,
       tools = null,
@@ -244,7 +244,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
       component: 'OpenAIProxy',
       modelId,
       messageCount: Array.isArray(messages) ? messages.length : undefined,
-      stream,
+      stream: clientWantsStream,
       temperature,
       hasTools: !!tools,
       toolNames: Array.isArray(tools) ? tools.map(t => t.function?.name ?? t.name) : null,
@@ -265,7 +265,9 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
     }
     if (req.user && req.user.permissions) {
       const allowed = req.user.permissions.models || new Set();
-      if (!allowed.has('*') && !allowed.has(modelId)) {
+      // Check against the resolved model's canonical id, not the raw
+      // (possibly differently-cased) id the caller sent.
+      if (!allowed.has('*') && !allowed.has(model.id)) {
         const msg = await getLocalizedError('modelAccessDenied', {}, lang);
         return res.status(403).json({ error: msg });
       }
@@ -330,7 +332,16 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
           toolChoice,
           user: req.user
         },
-        stream,
+        // Always stream from the provider, whatever shape the client asked for.
+        // `clientWantsStream` is about our own response: a non-streamed reply is
+        // this stream collected below, not a buffered request upstream. Asking a
+        // provider for one piece means its response headers only arrive with the
+        // finished answer — on Google that is `:generateContent` — which makes
+        // time-to-first-byte indistinguishable from generation time, so the
+        // connect ceiling capped generation and reported the endpoint as
+        // unreachable. Streaming also gets us the stream-idle guard and lets a
+        // client disconnect free the provider call promptly.
+        stream: true,
         signal: upstream.signal,
         language: lang,
         retries: 0,
@@ -366,7 +377,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
           error,
           modelId,
           provider: model.provider,
-          stream
+          stream: clientWantsStream
         });
       }
       if (!isLLMError(error)) {
@@ -378,7 +389,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
 
     const completionId = newCompletionId();
 
-    if (!stream) {
+    if (!clientWantsStream) {
       try {
         const result = await llmClient.collect(llmStream);
         run.finish(result);

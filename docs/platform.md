@@ -360,6 +360,31 @@ Configuration for PDF export functionality.
 - **requestConcurrency** (number) – Default concurrency level for outbound requests. If omitted or below `1`, concurrency is unlimited. Default: `5`
 - **requestDelayMs** (number) – Default delay in milliseconds between outbound requests. Default: `0`
 
+### llm
+
+Transport ceilings for provider calls, in milliseconds. Both fall back to the
+env vars `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`, and a single
+model can override either in its own config. `0` disables a ceiling and leaves
+the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
+
+```json
+"llm": {
+  "connectTimeoutMs": 10000,
+  "streamIdleTimeoutMs": 60000
+}
+```
+
+- **connectTimeoutMs** (number) – Longest a provider call waits for the
+  response headers, per attempt, before failing as unreachable. Every provider
+  call streams, so those headers arrive as soon as the request is accepted;
+  time spent queued in the per-model throttle does not count. Default: `10000`
+- **streamIdleTimeoutMs** (number) – Longest gap between two chunks of a
+  stream that has already produced one. Armed only after the first chunk, so a
+  model that thinks for minutes before answering is not cut off.
+  Default: `60000`
+
+See [Stream deadlines](llm-client.md#stream-deadlines).
+
 ### **telemetry**
 OpenTelemetry integration configuration.
 

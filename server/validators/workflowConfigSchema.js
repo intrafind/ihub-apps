@@ -478,7 +478,7 @@ const baseWorkflowConfigSchema = z.object({
     .string()
     .regex(
       APP_ID_PATTERN,
-      'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
+      'ID must contain only lowercase alphanumeric characters, underscores, dots, and hyphens'
     )
     .min(1, 'ID cannot be empty')
     .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),

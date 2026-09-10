@@ -36,6 +36,7 @@ import {
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
@@ -523,7 +524,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         const workflows = await loadWorkflows();
-        const workflow = workflows.find(w => w.id === id);
+        const workflow = findByIdCaseInsensitive(workflows, id);
 
         if (!workflow) {
           return sendNotFound(res, 'Workflow');
@@ -881,7 +882,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         // Load and validate workflow access
         const workflows = await loadWorkflows();
-        const workflow = workflows.find(w => w.id === id);
+        const workflow = findByIdCaseInsensitive(workflows, id);
 
         if (!workflow) {
           return sendNotFound(res, 'Workflow');

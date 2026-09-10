@@ -183,6 +183,24 @@ const baseModelConfigSchema = z
       .min(0, 'Request delay cannot be negative')
       .max(10000, 'Request delay cannot exceed 10 seconds')
       .optional(),
+    // Per-model transport ceilings, in milliseconds. Both override the
+    // platform-wide `llm` settings (and their env fallbacks) for this model
+    // only; 0 disables the ceiling and leaves the call to the whole-call
+    // deadline. Use them for an endpoint whose reach or streaming cadence
+    // differs from the rest of the catalog — a VPN-only host that needs
+    // longer to connect, or a slow local server between chunks.
+    connectTimeoutMs: z
+      .number()
+      .int()
+      .min(0, 'Connect timeout cannot be negative')
+      .max(300000, 'Connect timeout cannot exceed 5 minutes')
+      .optional(),
+    streamIdleTimeoutMs: z
+      .number()
+      .int()
+      .min(0, 'Stream idle timeout cannot be negative')
+      .max(300000, 'Stream idle timeout cannot exceed 5 minutes')
+      .optional(),
     enabled: z.boolean().optional().default(true),
     thinking: thinkingSchema.optional(),
     nativeWebSearch: nativeWebSearchSchema.optional(),

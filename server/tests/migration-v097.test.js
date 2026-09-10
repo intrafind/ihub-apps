@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration V095 specs — seeding the `chats` section in platform.json and
+ * Migration V097 specs — seeding the `chats` section in platform.json and
  * carrying the chat-history preview flag over to durable chats.
  *
  * The seeded values are the built-in defaults, so the upgrade itself changes
@@ -14,7 +14,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V095__add_chat_persistence.js';
+import { up, precondition, version } from '../migrations/V097__add_chat_persistence.js';
 import { setDefault } from '../migrations/utils.js';
 
 function fakeCtx(files) {
@@ -34,7 +34,7 @@ function fakeCtx(files) {
 }
 
 test('version is the next unused number', () => {
-  assert.equal(version, '095');
+  assert.equal(version, '097');
 });
 
 test('precondition is false when platform.json does not exist', async () => {

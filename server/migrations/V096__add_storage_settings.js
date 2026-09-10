@@ -19,7 +19,7 @@
  * register) keeps it.
  */
 
-export const version = '094';
+export const version = '096';
 export const description = 'add_storage_settings';
 
 export async function precondition(ctx) {
