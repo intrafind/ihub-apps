@@ -197,7 +197,11 @@ test('upstream request construction through the real OpenAI adapter', async () =
       })
     );
   const toolReq = calls[1].request.body;
-  assert.equal(toolReq.stream, false);
+  // The client asked for no streaming; we still stream from the provider and
+  // collect (see the non-streaming specs below). Asking for a buffered
+  // response would put the answer's whole generation inside the phase the
+  // connect ceiling times.
+  assert.equal(toolReq.stream, true);
   assert.equal(toolReq.tool_choice, 'auto');
   assert.equal(toolReq.tools[0].function.name, 'get_weather');
   assert.deepEqual(toolReq.tools[0].function.parameters.properties, { city: { type: 'string' } });
@@ -254,20 +258,17 @@ test('inferenceErrorStatus mapping', () => {
 });
 
 test('non-streaming — chat.completion with real usage, regenerated id, iHub model id', async () => {
-  const { client } = makeClient({
+  // The upstream fixture is SSE even though the client wants one object: the
+  // proxy streams from the provider and collects. `stream_options` on the wire
+  // gets us usage in the final frame.
+  const { client, calls } = makeClient({
     transport: async () =>
-      jsonResponse({
-        id: 'x',
-        object: 'chat.completion',
-        created: 1,
-        model: 'gpt-4o-2024',
-        choices: [
-          { index: 0, message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }
-        ],
-        usage: { prompt_tokens: 9, completion_tokens: 1, total_tokens: 10 }
-      })
+      sseResponse(
+        openaiText(['Hi'], { usage: { prompt_tokens: 9, completion_tokens: 1, total_tokens: 10 } })
+      )
   });
   const res = await request(buildApp(client)).post(CHAT).send(body());
+  assert.equal(calls[0].request.body.stream, true, 'streamed upstream');
   assert.equal(res.status, 200);
   assert.match(res.body.id, /^chatcmpl-[0-9a-f]{32}$/);
   assert.equal(res.body.object, 'chat.completion');
@@ -280,28 +281,72 @@ test('non-streaming — chat.completion with real usage, regenerated id, iHub mo
   assert.deepEqual(Object.keys(res.body), ['id', 'object', 'created', 'model', 'choices', 'usage']);
 });
 
+test('non-streaming — a generation slower than the connect ceiling still answers', async () => {
+  // The reported failure: a summary/translation pass through this API came back
+  // as `Provider google sent no response headers within 10000 ms — endpoint
+  // unreachable` while the model was answering normally. The request was
+  // non-streamed, so its headers only arrived with the finished answer and the
+  // connect ceiling was timing the generation. Now that the upstream call
+  // streams, the headers land immediately and the ceiling only ever sees reach.
+  const answer = 'ein etwas laengerer uebersetzter Absatz';
+  const { client, calls } = makeClient({
+    connectTimeoutMs: 40,
+    transport: async () => {
+      // Headers now (as a real SSE endpoint does) …
+      const res = sseResponse(openaiText([answer]));
+      // … and a body that takes much longer than the ceiling to finish.
+      const original = res.body;
+      res.body = new ReadableStream({
+        async start(controller) {
+          await new Promise(r => setTimeout(r, 150));
+          const reader = original.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+        }
+      });
+      return res;
+    }
+  });
+
+  const res = await request(buildApp(client))
+    .post(CHAT)
+    .send(body({ stream: false }));
+  assert.equal(res.status, 200, 'not a 504 CONNECT_TIMEOUT');
+  assert.equal(res.body.object, 'chat.completion');
+  assert.equal(res.body.choices[0].message.content, answer);
+  assert.equal(calls[0].request.body.stream, true, 'streamed upstream despite stream: false');
+});
+
 test('non-streaming — tool calls are replayed with index/id/function and null content', async () => {
   const { client } = makeClient({
     transport: async () =>
-      jsonResponse({
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [
-                {
-                  id: 'call_1',
-                  type: 'function',
-                  function: { name: 'get_weather', arguments: '{"city": "Berlin"}' }
-                }
-              ]
-            },
-            finish_reason: 'tool_calls'
-          }
-        ]
-      })
+      sseResponse([
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: 'assistant',
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    type: 'function',
+                    function: { name: 'get_weather', arguments: '{"city": "Berlin"}' }
+                  }
+                ]
+              },
+              finish_reason: null
+            }
+          ]
+        },
+        { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] },
+        '[DONE]'
+      ])
   });
   const res = await request(buildApp(client)).post(CHAT).send(body());
   assert.equal(res.body.choices[0].finish_reason, 'tool_calls');
@@ -320,22 +365,24 @@ test('non-streaming — tool calls are replayed with index/id/function and null 
 test('non-streaming — Gemini thought signature surfaces as extra_content', async () => {
   const { client } = makeClient({
     transport: async () =>
-      jsonResponse({
-        candidates: [
-          {
-            content: {
-              parts: [
-                {
-                  functionCall: { name: 'get_weather', args: { city: 'Berlin' } },
-                  thoughtSignature: 'SIG'
-                }
-              ],
-              role: 'model'
-            },
-            finishReason: 'STOP'
-          }
-        ]
-      })
+      sseResponse([
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: { name: 'get_weather', args: { city: 'Berlin' } },
+                    thoughtSignature: 'SIG'
+                  }
+                ],
+                role: 'model'
+              },
+              finishReason: 'STOP'
+            }
+          ]
+        }
+      ])
   });
   const res = await request(buildApp(client))
     .post(CHAT)

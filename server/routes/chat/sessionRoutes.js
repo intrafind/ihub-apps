@@ -278,7 +278,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const result = await llmClient.complete({
             model,
             messages,
-            stream: false,
             timeoutMs: DEFAULT_TIMEOUT,
             retries: 0,
             language,

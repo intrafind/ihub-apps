@@ -231,7 +231,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
     const {
       model: modelId,
       messages,
-      stream = false,
+      stream: clientWantsStream = false,
       stream_options: streamOptions,
       temperature = 0.7,
       tools = null,
@@ -244,7 +244,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
       component: 'OpenAIProxy',
       modelId,
       messageCount: Array.isArray(messages) ? messages.length : undefined,
-      stream,
+      stream: clientWantsStream,
       temperature,
       hasTools: !!tools,
       toolNames: Array.isArray(tools) ? tools.map(t => t.function?.name ?? t.name) : null,
@@ -330,7 +330,16 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
           toolChoice,
           user: req.user
         },
-        stream,
+        // Always stream from the provider, whatever shape the client asked for.
+        // `clientWantsStream` is about our own response: a non-streamed reply is
+        // this stream collected below, not a buffered request upstream. Asking a
+        // provider for one piece means its response headers only arrive with the
+        // finished answer — on Google that is `:generateContent` — which makes
+        // time-to-first-byte indistinguishable from generation time, so the
+        // connect ceiling capped generation and reported the endpoint as
+        // unreachable. Streaming also gets us the stream-idle guard and lets a
+        // client disconnect free the provider call promptly.
+        stream: true,
         signal: upstream.signal,
         language: lang,
         retries: 0,
@@ -366,7 +375,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
           error,
           modelId,
           provider: model.provider,
-          stream
+          stream: clientWantsStream
         });
       }
       if (!isLLMError(error)) {
@@ -378,7 +387,7 @@ export default function registerOpenAIProxyRoutes(app, { llmClient = defaultLlmC
 
     const completionId = newCompletionId();
 
-    if (!stream) {
+    if (!clientWantsStream) {
       try {
         const result = await llmClient.collect(llmStream);
         run.finish(result);

@@ -289,7 +289,6 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
     apiKey,
     messages,
     options: { temperature: 0.1, maxTokens: 8192 },
-    stream: false,
     telemetry: { kind: 'utility', purpose: 'ocr', refs: {} }
   });
 
