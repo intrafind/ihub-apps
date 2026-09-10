@@ -73,9 +73,10 @@ const OWNER_PAGE_SIZE = 200;
  * Hard bound on how many of one owner's chats are loaded for the in-memory
  * sort. `platform.chats.maxChatsPerUser` (default 200) keeps the real number
  * well under this; the cap only decides what happens when retention is off and
- * a user has accumulated thousands. Then the newest chats by *key* order are
- * loaded and the rest are invisible to the list — see the honesty note on
- * {@link ChatRepository#listChats}.
+ * a user has accumulated thousands. Then the first 1000 chats in ascending key
+ * order are loaded and the rest are invisible to the list. Chat ids are random
+ * uuids, so that slice has no relation to recency in either direction — see
+ * the honesty note on {@link ChatRepository#listChats}.
  */
 const MAX_OWNER_CHATS = 1000;
 
@@ -261,6 +262,21 @@ function buildMessage(message = {}) {
     if (message[field] !== undefined && message[field] !== null) stored[field] = message[field];
   }
   return stored;
+}
+
+/**
+ * Index of the last stored message belonging to a run, or -1 when it wrote
+ * none.
+ *
+ * @param {Object[]} messages - Stored transcript.
+ * @param {string} runId - Run to locate.
+ * @returns {number}
+ */
+function lastIndexOfRun(messages, runId) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.runId === runId) return index;
+  }
+  return -1;
 }
 
 /**
@@ -490,9 +506,12 @@ export class ChatRepository {
    * directory read plus one small read per chat), sorts them in memory and
    * then pages. `platform.chats.maxChatsPerUser` — 200 by default — is what
    * keeps that bounded, and {@link MAX_OWNER_CHATS} bounds it even when
-   * retention is switched off; past that bound the newest chats *by id* are
-   * loaded rather than by activity. A database-backed provider will answer
-   * this with an index instead, and this method should shrink to a query then.
+   * retention is switched off. Past that bound only the first 1000 chats in
+   * ascending key order are loaded, and since chat ids are random uuids that
+   * slice is unrelated to recency: an owner over the bound has chats that this
+   * listing simply cannot see, whatever their activity. A database-backed
+   * provider will answer this with an index instead, and this method should
+   * shrink to a query then.
    *
    * @param {string} ownerId - Owning principal id.
    * @param {Object} [options]
@@ -607,6 +626,35 @@ export class ChatRepository {
   }
 
   /**
+   * Release a run's hold on a chat: apply `patch` only while `runId` is still
+   * the chat's active run.
+   *
+   * Turns on one chat overlap by design — `ChatService.runTurn` supersedes an
+   * in-flight turn rather than refusing the new one — so the superseded turn
+   * finishes *after* its replacement has already claimed the chat. An
+   * unconditional patch there would announce the chat idle (`status: 'active'`,
+   * `activeRunId: null`) while the replacement is still generating, and would
+   * overwrite its `hasUnseenActivity`. The compare happens inside the chat's
+   * own lock, so the check and the write cannot straddle another writer.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} runId - Run releasing the chat.
+   * @param {Object} [patch] - Fields to apply when the run still owns the chat.
+   * @returns {Promise<{chat: Object|null, released: boolean}>} The chat as it
+   *   stands (null when it does not exist or cannot be stored) and whether the
+   *   patch was applied.
+   */
+  async releaseRun(chatId, runId, patch = {}) {
+    if (!this._usable(chatId, 'releaseRun')) return { chat: null, released: false };
+    return this._withChatLock(chatId, async () => {
+      const existing = await this._readChat(chatId);
+      if (!existing) return { chat: null, released: false };
+      if (existing.activeRunId !== runId) return { chat: existing, released: false };
+      return { chat: await this._writeChat(applyChatPatch(existing, patch)), released: true };
+    });
+  }
+
+  /**
    * Give a chat a user-chosen title.
    *
    * The title is marked as user-set so no later turn derives over it. An empty
@@ -679,17 +727,30 @@ export class ChatRepository {
    * title are updated inside the same lock, so a reader never sees a
    * transcript and a metadata document that disagree.
    *
+   * `insertAfterRunId` places the message directly after the last stored
+   * message of that run instead of at the very end. For the ordinary turn
+   * those are the same position; they differ only when a superseded turn
+   * finishes after its replacement already wrote a user message, and there
+   * appending would interleave the two exchanges permanently — the transcript
+   * is what later turns replay to the model.
+   *
    * @param {string} chatId - Chat id.
    * @param {Object} message - Message to store; see {@link buildMessage}.
    * @param {Object} [options]
    * @param {string|null} [options.replaceFromMessageId=null] - Stored message
    *   id to truncate from, inclusive.
+   * @param {string|null} [options.insertAfterRunId=null] - Place the message
+   *   after the last message of this run; appends when the run has none.
    * @returns {Promise<{message: Object, messages: Object[]}|null>} Null when
    *   the chat does not exist or cannot be stored.
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
-  async appendMessage(chatId, message, { replaceFromMessageId = null } = {}) {
+  async appendMessage(
+    chatId,
+    message,
+    { replaceFromMessageId = null, insertAfterRunId = null } = {}
+  ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
       const chat = await this._readChat(chatId);
@@ -714,7 +775,11 @@ export class ChatRepository {
       }
 
       const entry = buildMessage(message);
-      messages = [...messages, entry];
+      const at = insertAfterRunId ? lastIndexOfRun(messages, insertAfterRunId) : -1;
+      messages =
+        at === -1
+          ? [...messages, entry]
+          : [...messages.slice(0, at + 1), entry, ...messages.slice(at + 1)];
       await this._writeMessages(chatId, chat.ownerId, messages);
 
       const patch = { lastMessageAt: entry.ts, messageCount: messages.length };

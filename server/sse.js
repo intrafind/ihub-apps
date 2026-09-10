@@ -24,13 +24,20 @@ export const clients = createPresenceMap('sse');
 export const activeRequests = createPresenceMap('request');
 
 /**
- * chatId → `true` while a durable (persisted) turn is running for that chat.
+ * chatId → how many durable (persisted) turns are running for that chat.
  *
  * A durable turn outlives the browser that started it: its answer is written
  * to the chat store whether or not anyone is watching, so the paths that abort
  * a run because the client went away have to leave it alone. Presence-mapped
  * like the two maps above, because the worker that notices the disconnect is
  * frequently not the worker running the turn.
+ *
+ * A count rather than a flag because turns on one chat overlap by design:
+ * `ChatService.runTurn` supersedes an in-flight turn instead of refusing the
+ * new one, and the superseded turn's request handler then unwinds *while the
+ * new one is still producing*. With a plain flag that unwind would drop the
+ * mark the live turn depends on, leaving it one disconnect away from being
+ * killed silently.
  */
 const durableChats = createPresenceMap('chat-durable');
 
@@ -158,22 +165,29 @@ export function hasActiveChatRequest(chatId) {
  * Mark a chat's in-flight turn as durable, so losing the client no longer
  * cancels it. Called when a persisted turn starts.
  *
+ * Every call must be paired with exactly one {@link clearChatDurable}: the
+ * mark is released when the last durable turn on the chat has ended, not when
+ * the first one does.
+ *
  * @param {string} chatId
  */
 export function markChatDurable(chatId) {
   if (!chatId) return;
-  durableChats.set(chatId, true);
+  durableChats.set(chatId, (durableChats.get(chatId) || 0) + 1);
 }
 
 /**
- * Drop a chat's durable mark. Called when the turn ends, whatever its outcome —
- * from then on a disconnect aborts again, because there is nothing to protect.
+ * Release one durable turn's hold on a chat. Called when that turn ends,
+ * whatever its outcome — once the last one has, a disconnect aborts again,
+ * because there is nothing left to protect.
  *
  * @param {string} chatId
  */
 export function clearChatDurable(chatId) {
   if (!chatId) return;
-  durableChats.delete(chatId);
+  const remaining = (durableChats.get(chatId) || 0) - 1;
+  if (remaining > 0) durableChats.set(chatId, remaining);
+  else durableChats.delete(chatId);
 }
 
 /**

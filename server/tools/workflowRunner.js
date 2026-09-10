@@ -505,7 +505,12 @@ export default async function workflowRunner(params = {}) {
             error: 'Workflow execution timed out'
           });
         }
-        resolve({ status: 'failed', executionId, error: 'Workflow execution timed out' });
+        resolve({
+          status: 'failed',
+          executionId,
+          error: 'Workflow execution timed out',
+          outputText: 'Workflow failed: Workflow execution timed out'
+        });
       }, maxExecutionTime);
     };
 
@@ -663,14 +668,18 @@ export default async function workflowRunner(params = {}) {
         }
 
         // Return readable output string for passthrough (the chat passthrough seam streams it),
-        // or full output object for @mention / non-chat callers.
+        // or full output object for @mention / non-chat callers. `outputText`
+        // rides along on the object form because it is the text the run
+        // streamed to the chat, and a persisted chat has to store the answer
+        // the user actually read rather than re-derive it.
         resolve(
           passthrough
             ? outputText || ''
             : {
                 status: 'completed',
                 executionId,
-                output: event.output
+                output: event.output,
+                outputText: outputText || ''
               }
         );
       }
@@ -728,7 +737,8 @@ export default async function workflowRunner(params = {}) {
             : {
                 status: finalStatus,
                 executionId,
-                error: errorMsg
+                error: errorMsg,
+                outputText: errorContent
               }
         );
       }

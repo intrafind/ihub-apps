@@ -31,6 +31,10 @@ import {
 } from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
+import {
+  materializeAssistantTurn,
+  materializeUserTurn
+} from '../../services/chat/chatMaterializer.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
 import { getChatRepository, isPersistableChatId } from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
@@ -93,13 +97,95 @@ function historyForPrompt(stored) {
  * normalize. The base64 payloads stay in the request: what a stored message
  * keeps is the fact that a file was attached, not the file.
  *
+ * Each of the three fields is a single object for one upload and an array for
+ * several — the shape the chat client has always sent and `RequestBuilder`
+ * already handles — so they are flattened here. Without that an array is
+ * `typeof 'object'` and survives as one opaque descriptor, turning three named
+ * PDFs into a single nameless `{ type: 'file' }`.
+ *
  * @param {Object} message - The new user message from the request.
  * @returns {Array<Object>}
  */
-function messageAttachments(message) {
-  return [message?.fileData, message?.imageData, message?.audioData].filter(
-    entry => entry && typeof entry === 'object'
-  );
+export function messageAttachments(message) {
+  return [message?.fileData, message?.imageData, message?.audioData]
+    .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
+    .filter(entry => entry && typeof entry === 'object');
+}
+
+/**
+ * The outcome a workflow run resolved with, in the shape the materializer's
+ * `summary` describes. A cancelled workflow is an abort, anything that is not
+ * a completion is a failure, and the answer text is the one the run streamed.
+ *
+ * @param {Object} result - What `workflowRunner` resolved with.
+ * @returns {Object}
+ */
+export function workflowSummary(result) {
+  const content = typeof result?.outputText === 'string' ? result.outputText : '';
+  if (result?.status === 'completed') return { status: 'success', content, finishReason: 'stop' };
+  if (result?.status === 'cancelled') {
+    return { status: 'aborted', content, finishReason: 'cancelled' };
+  }
+  return {
+    status: 'error',
+    content,
+    finishReason: 'error',
+    errorInfo: {
+      code: 'WORKFLOW_FAILED',
+      message: String(result?.error || 'Workflow execution failed')
+    }
+  };
+}
+
+/**
+ * Write the human half of an @mention workflow turn, or nothing when the chat
+ * is not persisted.
+ *
+ * @param {Object} params
+ * @param {Object|null} params.persistence - Durable-chat context, or null.
+ * @param {string} params.chatId - Chat id.
+ * @param {string} params.appId - App the chat belongs to.
+ * @param {string} [params.modelId] - Model the chat last used.
+ * @param {string} params.runId - The workflow's run id.
+ * @returns {Promise<void>}
+ */
+async function materializeWorkflowUserTurn({ persistence, chatId, appId, modelId, runId }) {
+  if (!persistence) return;
+  await materializeUserTurn({
+    repository: persistence.repository,
+    chatId,
+    ownerId: persistence.ownerId,
+    identityMode: persistence.identityMode,
+    appId,
+    modelId,
+    runId,
+    content: persistence.content,
+    clientMessageId: persistence.clientMessageId,
+    attachments: persistence.attachments,
+    replaceFromMessageId: persistence.replaceFromMessageId
+  });
+}
+
+/**
+ * Write the assistant half of an @mention workflow turn and release the chat,
+ * or nothing when the chat is not persisted.
+ *
+ * @param {Object} params
+ * @param {Object|null} params.persistence - Durable-chat context, or null.
+ * @param {string} params.chatId - Chat id.
+ * @param {string} params.runId - The workflow's run id.
+ * @param {Object} params.summary - Turn outcome; see {@link workflowSummary}.
+ * @returns {Promise<void>}
+ */
+async function materializeWorkflowAssistantTurn({ persistence, chatId, runId, summary }) {
+  if (!persistence) return;
+  await materializeAssistantTurn({
+    repository: persistence.repository,
+    chatId,
+    runId,
+    summary,
+    clientConnected: hasChatClient(chatId)
+  });
 }
 
 export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
@@ -948,6 +1034,19 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               });
             };
 
+            // A workflow turn is a turn: the user asked something in this chat
+            // and read an answer in it. The launch never goes through
+            // `ChatService`, which is what materializes an ordinary turn, so
+            // both halves are written here or the exchange is missing from the
+            // transcript — and from the history every later turn replays.
+            await materializeWorkflowUserTurn({
+              persistence,
+              chatId,
+              appId,
+              modelId,
+              runId: workflowRunId
+            });
+
             try {
               const workflowRunnerMod = await import('../../tools/workflowRunner.js');
 
@@ -965,12 +1064,29 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                   _fileData: fileData || imageData || undefined,
                   language: clientLanguage
                 })
+                .then(result =>
+                  // The assistant half comes off the resolved run rather than
+                  // the SSE frames: the client may be long gone by now, and
+                  // the store is the thing that has to outlive it.
+                  materializeWorkflowAssistantTurn({
+                    persistence,
+                    chatId,
+                    runId: workflowRunId,
+                    summary: workflowSummary(result)
+                  })
+                )
                 .catch(error => {
                   logger.error('Error running @mention workflow', {
                     component: 'sessionRoutes',
                     error
                   });
                   failLaunch(`Workflow execution failed: ${error.message}`);
+                  return materializeWorkflowAssistantTurn({
+                    persistence,
+                    chatId,
+                    runId: workflowRunId,
+                    summary: workflowSummary({ status: 'failed', error: error.message })
+                  });
                 });
 
               // Return immediately — the SSE channel delivers all progress + final output
@@ -978,6 +1094,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             } catch (error) {
               logger.error('Error loading workflow runner', { component: 'sessionRoutes', error });
               failLaunch(`Workflow execution failed: ${error.message}`);
+              // The user half is already stored and the chat is marked
+              // `running` for a run that will never start; close it out.
+              await materializeWorkflowAssistantTurn({
+                persistence,
+                chatId,
+                runId: workflowRunId,
+                summary: workflowSummary({ status: 'failed', error: error.message })
+              });
               return res.json({ status: 'error', message: error.message });
             }
           }
@@ -1250,10 +1374,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // helper resolves its own owner and relays if it is not this process.
       // The abort is deliberately the unconditional one — Stop overrides
       // durability, which only ever protects a run from a *disconnect*.
-      abortChatRequest(chatId);
+      const aborted = abortChatRequest(chatId);
 
       // Also cancel any running workflow execution for this chatId
-      await cancelChatWorkflow(chatId);
+      const workflowCancelled = await cancelChatWorkflow(chatId);
 
       // Note the awaits above: cancelling the workflow yields the event loop,
       // and the SSE connection can close in that gap (its req.on('close')
@@ -1263,7 +1387,16 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // instead of dereferencing undefined. An unguarded
       // `client.response.end()` throws a TypeError that crashes the whole
       // process as an unhandled rejection on Node >= 15.
-      closeChatClient(chatId);
+      const closed = closeChatClient(chatId);
+
+      // Report what actually happened. The guard above passes on the durable
+      // mark alone, and a mark can outlive the thing it marks by the width of
+      // this handler — answering `success: true` there would tell the user a
+      // turn was stopped when nothing was found to stop.
+      if (!aborted && !workflowCancelled && !closed) {
+        logger.info('Chat stop found nothing in flight', { component: 'sessionRoutes', chatId });
+        return sendNotFound(res, 'Chat session');
+      }
       logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
       return res.status(200).json({ success: true, message: 'Chat stream stopped' });
     }

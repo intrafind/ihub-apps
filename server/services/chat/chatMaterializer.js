@@ -50,18 +50,24 @@ export function deriveChatTitle(content) {
  * survives: the base64 payload of an upload belongs in the request, never in a
  * document that is read back for as long as the chat lives.
  *
+ * The field names are read generously because the upload shapes differ: the
+ * chat client sends `{ type: 'document', fileName, fileSize, fileType }`,
+ * where `type` is the upload *kind* and the mime type lives on `fileType`.
+ * Recording the kind as the type would lose which format was sent, so a real
+ * mime type wins when one is present.
+ *
  * @param {Array<Object>} [attachments] - upload metadata as the route saw it
  * @returns {Array<{type: string, name?: string, bytes?: number}>}
  */
 export function normalizeAttachments(attachments) {
   if (!Array.isArray(attachments)) return [];
   return attachments
-    .filter(entry => entry && typeof entry === 'object')
+    .filter(entry => entry && typeof entry === 'object' && !Array.isArray(entry))
     .map(entry => {
       const name = entry.name || entry.fileName;
-      const bytes = Number(entry.bytes ?? entry.size);
+      const bytes = Number(entry.bytes ?? entry.size ?? entry.fileSize);
       return {
-        type: String(entry.type || entry.fileType || entry.mimeType || 'file'),
+        type: String(entry.fileType || entry.mimeType || entry.type || 'file'),
         ...(name ? { name: String(name) } : {}),
         ...(Number.isFinite(bytes) ? { bytes } : {})
       };
@@ -208,9 +214,15 @@ export async function materializeUserTurn({
  * `run/end`, so every terminal shape — normal, aborted, error, passthrough
  * answer, malformed response — lands here with the same summary.
  *
- * The chat is released first: `updateChat` returning null is also how we learn
- * the chat document is gone (its user turn never reached storage), and
+ * The chat is released first: a null chat back from the release is also how we
+ * learn the chat document is gone (its user turn never reached storage), and
  * appending an answer to a chat that does not exist would leave an orphan.
+ *
+ * "Released" is conditional on this run still owning the chat. A superseded
+ * turn finishes after its replacement has already claimed the chat, and it
+ * must not announce the chat idle while the replacement is generating, nor
+ * push its answer behind the replacement's question — both are permanent, and
+ * the second one is replayed to the model on every later turn.
  *
  * @param {Object} params
  * @param {import('./ChatRepository.js').default} params.repository
@@ -235,7 +247,7 @@ export async function materializeAssistantTurn({
   const error = messageError(summary);
   const usage = normalizeUsage(summary?.usage);
   try {
-    const chat = await repository.updateChat(chatId, {
+    const { chat } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,
       status: status === 'error' ? 'error' : 'active',
       // Nobody was watching when the answer landed, so the history list marks
@@ -254,15 +266,21 @@ export async function materializeAssistantTurn({
     // is an interaction, not a message. Everything else is recorded, an empty
     // answer and an abort included, so the stored history says what happened.
     if (status === 'paused' && !content && !error) return null;
-    const appended = await repository.appendMessage(chatId, {
-      role: 'assistant',
-      content,
-      ts: new Date().toISOString(),
-      runId,
-      finishReason: summary?.finishReason ?? null,
-      ...(usage ? { usage } : {}),
-      ...(error ? { error } : {})
-    });
+    const appended = await repository.appendMessage(
+      chatId,
+      {
+        role: 'assistant',
+        content,
+        ts: new Date().toISOString(),
+        runId,
+        finishReason: summary?.finishReason ?? null,
+        ...(usage ? { usage } : {}),
+        ...(error ? { error } : {})
+      },
+      // The end of the transcript for an ordinary turn, and the position right
+      // after this run's own question for a superseded one.
+      { insertAfterRunId: runId }
+    );
     return appended?.message ?? null;
   } catch (err) {
     logger.error('Chat assistant turn not materialized', {

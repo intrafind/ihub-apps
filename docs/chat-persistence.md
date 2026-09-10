@@ -105,7 +105,11 @@ What still stops a run:
   The endpoint used to 404 when no SSE client was attached, which is exactly the
   situation durable runs create; it now accepts anything in flight for the chat
   anywhere in the cluster and resolves the run from the chat's stream binding
-  or, failing that, the `activeRunId` on the chat document.
+  or, failing that, the `activeRunId` on the chat document. A durable turn is
+  registered for abort whether or not it streams, so Stop reaches a turn posted
+  without an SSE stream too. When it finds nothing in flight — the turn ended
+  in the meantime — it answers 404 rather than reporting a stop that did not
+  happen.
 - **The model's own output cap** (`maxOutputTokens`) and the agent loop's round
   cap, unchanged.
 - **A server restart**, which is not a graceful stop — see
@@ -186,6 +190,11 @@ the browser. The chat POST changes shape:
 
 Requests that are not persisted keep posting their whole array and take the same
 code path they always did.
+
+An `@workflow` mention is a turn like any other: the question is stored before
+the workflow launches and the answer — or the failure, or the cancellation — is
+stored when the run settles, under the workflow's run id. The launch does not go
+through the chat service, so both halves are written by the route.
 
 ## Ownership and identity
 
@@ -338,13 +347,21 @@ that is what you want.
   moves it on.
 - **One in-flight turn per chat, still.** Starting a turn on a chat that is
   already producing aborts the first one. Two tabs on the same chat cannot
-  corrupt the stored transcript, but they can cut each other off.
+  corrupt the stored transcript, but they can cut each other off. The aborted
+  turn's partial answer is stored next to the question it was answering rather
+  than after the newer one, and it does not release the chat — the turn that
+  took it over owns `status` and `activeRunId` until it finishes. Durability is
+  reference-counted for the same reason: the mark is released when the last
+  turn on the chat ends, not the first.
 - **Listing is an in-memory sort.** `DocumentStore.list` orders by key and only
   the owner filter is index-backed, so `GET /api/chats` loads the owner's chat
   documents (an indexed directory read plus one small read each), sorts them by
   `lastMessageAt` and pages the result. `maxChatsPerUser` is what keeps that
-  bounded, with a hard ceiling of 1000 documents per owner beyond which the
-  newest *by id* are loaded instead. This is not a scalable sort; a
+  bounded, with a hard ceiling of 1000 documents per owner: past it only the
+  first 1000 chats in ascending key order are loaded, and because chat ids are
+  random uuids that slice has nothing to do with recency — an owner over the
+  ceiling has chats the listing cannot see at all until retention brings them
+  back under it. This is not a scalable sort; a
   database-backed provider will answer the same call with an index and this code
   should shrink to a query then.
 - **The filesystem provider is single-machine.** Its locks are advisory and

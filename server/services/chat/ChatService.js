@@ -328,8 +328,15 @@ class ChatService {
 
     // One in-flight request per chat: a new turn supersedes the previous one
     // and the stop endpoint / client disconnect abort through this controller.
+    //
+    // A durable turn is tracked even without a stream. It was started by a
+    // caller with no SSE connection — an integration, or a client whose stream
+    // has not come up — and it keeps running after any client goes away, so
+    // leaving it out of `activeRequests` would make it the one turn Stop can
+    // never reach: the endpoint would answer "stopped" while the model ran to
+    // completion and billed the tokens.
     const controller = new AbortController();
-    const trackRequest = streaming && !!chatId;
+    const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
       if (activeRequests.has(chatId)) activeRequests.get(chatId).abort();
       activeRequests.set(chatId, controller);

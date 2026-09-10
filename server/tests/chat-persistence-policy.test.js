@@ -35,6 +35,7 @@ import {
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { ChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
+import { RunLog } from '../services/loop/RunLog.js';
 import { featureRegistry } from '../featureRegistry.js';
 import {
   abortChatRequest,
@@ -602,5 +603,127 @@ describe('the disconnect durability guard', () => {
     markChatDurable('');
     assert.equal(isChatDurable(''), false);
     assert.equal(isChatDurable(undefined), false);
+  });
+
+  it('two overlapping turns keep the mark until the second one ends', () => {
+    // `runTurn` supersedes rather than refuses: turn B marks the chat, aborts
+    // A's controller, and A's request handler then unwinds and clears. If that
+    // clear dropped the mark outright, B — the turn that is actually still
+    // producing — would spend the rest of its life one disconnect away from
+    // being killed with nothing written.
+    const chatId = 'chat-guard-overlap';
+    const turn = startTurn(chatId);
+    try {
+      markChatDurable(chatId); // turn A
+      markChatDurable(chatId); // turn B supersedes A
+      clearChatDurable(chatId); // A's handler unwinds first
+
+      assert.equal(isChatDurable(chatId), true, 'B is still running and still protected');
+      assert.equal(abortChatRequestOnDisconnect(chatId), false);
+      assert.equal(turn.aborted(), false);
+
+      clearChatDurable(chatId); // B ends
+      assert.equal(isChatDurable(chatId), false);
+      assert.equal(abortChatRequestOnDisconnect(chatId), true);
+      assert.equal(turn.aborted(), true);
+    } finally {
+      activeRequests.delete(chatId);
+      clearChatDurable(chatId);
+    }
+  });
+
+  it('clearing more often than marking cannot resurrect the mark', () => {
+    // The counter must not go negative: a stray clear would otherwise leave a
+    // chat that the next single mark could not protect.
+    const chatId = 'chat-guard-unbalanced';
+    try {
+      clearChatDurable(chatId);
+      clearChatDurable(chatId);
+      assert.equal(isChatDurable(chatId), false);
+
+      markChatDurable(chatId);
+      assert.equal(isChatDurable(chatId), true);
+      clearChatDurable(chatId);
+      assert.equal(isChatDurable(chatId), false);
+    } finally {
+      clearChatDurable(chatId);
+    }
+  });
+});
+
+describe('the ledger coupling (D4)', () => {
+  /**
+   * Run `fn` with a `RunLog` over a scratch directory and real storage
+   * bootstrapping available.
+   *
+   * @param {Object} options - `RunLog` options to merge in.
+   * @param {(ctx: {log: Object, baseDir: string}) => Promise<void>} fn - Test body.
+   * @returns {Promise<void>}
+   */
+  async function withRunLog(options, fn) {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-runlog-'));
+    const log = new RunLog({
+      baseDir: path.join(baseDir, 'run-log'),
+      getFeatures: () => FLAG_ON,
+      getPlatformConfig: () => ({}),
+      ...options
+    });
+    try {
+      await fn({ log, baseDir });
+    } finally {
+      await log.stop();
+      await shutdownStorageBootstrap();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  }
+
+  it('chat persistence alone turns the ledger on, once storage is up', async () => {
+    // Materialization reads the run's own events back, so a chat store with no
+    // ledger behind it would silently record nothing.
+    await withRunLog({}, async ({ log, baseDir }) => {
+      assert.equal(log.isEnabled(), false, 'no provider yet, so no persistence and no ledger');
+
+      await bootstrapStorage({
+        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+      });
+      assert.equal(log.isEnabled(), true, 'the chatPersistence flag alone is enough');
+    });
+  });
+
+  it('stays on for a persisted chat even when runLog.enabled is false', async () => {
+    await withRunLog(
+      { getPlatformConfig: () => ({ runLog: { enabled: false } }) },
+      async ({ log, baseDir }) => {
+        await bootstrapStorage({
+          storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+        });
+        assert.equal(
+          log.isEnabled(),
+          true,
+          'the platform switch turns off the flag, not the chats'
+        );
+      }
+    );
+  });
+
+  it('is off when chat persistence is off and the runLog flag is not set', async () => {
+    await withRunLog({ getFeatures: () => FLAG_OFF }, async ({ log, baseDir }) => {
+      await bootstrapStorage({
+        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+      });
+      assert.equal(log.isEnabled(), false);
+    });
+  });
+
+  it('forceEnabled still wins over the coupling in both directions', async () => {
+    await withRunLog({ forceEnabled: false }, async ({ log, baseDir }) => {
+      await bootstrapStorage({
+        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+      });
+      assert.equal(log.isEnabled(), false, 'the test override is absolute');
+    });
+    await withRunLog({ forceEnabled: true, getFeatures: () => FLAG_OFF }, async ({ log }) => {
+      assert.equal(log.isEnabled(), true);
+    });
   });
 });

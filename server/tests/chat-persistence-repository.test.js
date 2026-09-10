@@ -650,6 +650,155 @@ describe('ChatRepository: listing', () => {
       assert.equal(await repository.countChats('nobody'), 0);
     });
   });
+
+  it('past the owner ceiling it loads the lowest keys, which is not the newest', async () => {
+    // The documented behaviour, pinned so the docs and the code cannot drift
+    // apart again: `DocumentStore.list` is ascending by key and the walk stops
+    // at 1000, so an owner over the ceiling loses an arbitrary uuid-ordered
+    // slice — NOT their oldest chats. A stub store stands in for 1100 real
+    // documents; what is under test is the repository's paging loop, not the
+    // provider, which the conformance suite covers.
+    const total = 1100;
+    const docs = Array.from({ length: total }, (_, index) => ({
+      key: `chat-${String(index).padStart(4, '0')}`,
+      ownerId: OWNER,
+      // Newest activity on the HIGHEST keys, so a listing that respected
+      // recency and one that respects key order cannot be confused.
+      data: {
+        ownerId: OWNER,
+        lastMessageAt: new Date(Date.UTC(2026, 0, 1) + index * DAY_MS).toISOString()
+      }
+    }));
+    const documents = {
+      async list(_namespace, { limit = 200, cursor = null } = {}) {
+        const from = cursor ? Number(cursor) : 0;
+        const items = docs.slice(from, from + limit);
+        const next = from + items.length;
+        return { items, nextCursor: next < docs.length ? String(next) : null };
+      }
+    };
+    const { logger } = recordingLogger();
+    const repository = new ChatRepository({ documents, locks: {}, logger });
+
+    const page = await repository.listChats(OWNER, { limit: 100 });
+
+    assert.equal(page.items[0].id, 'chat-0999', 'the newest chat the walk reached, not chat-1099');
+    const loaded = new Set(page.items.map(chat => chat.id));
+    assert.equal(loaded.has('chat-1099'), false, 'the genuinely newest chat is invisible');
+  });
+});
+
+describe('ChatRepository: releasing a run', () => {
+  it('applies the patch while the run still owns the chat', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, identityMode: 'default' });
+      await repository.updateChat(CHAT_ID, { activeRunId: 'run-1', status: 'running' });
+
+      const { chat, released } = await repository.releaseRun(CHAT_ID, 'run-1', {
+        activeRunId: null,
+        status: 'active'
+      });
+
+      assert.equal(released, true);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.status, 'active');
+    });
+  });
+
+  it('leaves the chat alone when another run has taken it over', async () => {
+    await withRepository(async ({ repository }) => {
+      // Turn 2 superseded turn 1 and is still generating; turn 1's teardown
+      // must not announce the chat idle underneath it.
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, identityMode: 'default' });
+      await repository.updateChat(CHAT_ID, { activeRunId: 'run-2', status: 'running' });
+
+      const { chat, released } = await repository.releaseRun(CHAT_ID, 'run-1', {
+        activeRunId: null,
+        status: 'error',
+        hasUnseenActivity: true
+      });
+
+      assert.equal(released, false);
+      assert.equal(chat.activeRunId, 'run-2');
+      assert.equal(chat.status, 'running');
+      assert.equal((await repository.getChat(CHAT_ID)).activeRunId, 'run-2');
+    });
+  });
+
+  it('reports a missing chat the same way updateChat does', async () => {
+    await withRepository(async ({ repository }) => {
+      assert.deepEqual(await repository.releaseRun('chat-gone', 'run-1', { status: 'active' }), {
+        chat: null,
+        released: false
+      });
+    });
+
+    const { logger } = recordingLogger();
+    const unavailable = new ChatRepository({ logger });
+    assert.deepEqual(await unavailable.releaseRun(CHAT_ID, 'run-1', {}), {
+      chat: null,
+      released: false
+    });
+  });
+});
+
+describe('ChatRepository: insertAfterRunId', () => {
+  it('is a plain append when the run wrote the last message', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, identityMode: 'default' });
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'q', runId: 'run-1' });
+
+      const { messages } = await repository.appendMessage(
+        CHAT_ID,
+        { role: 'assistant', content: 'a', runId: 'run-1' },
+        { insertAfterRunId: 'run-1' }
+      );
+
+      assert.deepEqual(
+        messages.map(entry => entry.content),
+        ['q', 'a']
+      );
+    });
+  });
+
+  it('places the answer of a superseded run with its own question, not at the end', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, identityMode: 'default' });
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'q1', runId: 'run-1' });
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'q2', runId: 'run-2' });
+
+      const { messages } = await repository.appendMessage(
+        CHAT_ID,
+        { role: 'assistant', content: 'a1', runId: 'run-1' },
+        { insertAfterRunId: 'run-1' }
+      );
+
+      assert.deepEqual(
+        messages.map(entry => entry.content),
+        ['q1', 'a1', 'q2'],
+        'appending would interleave the two exchanges for good'
+      );
+      assert.equal((await repository.getChat(CHAT_ID)).messageCount, 3);
+    });
+  });
+
+  it('appends when the run has no message to sit behind', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, identityMode: 'default' });
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'q1', runId: 'run-1' });
+
+      const { messages } = await repository.appendMessage(
+        CHAT_ID,
+        { role: 'assistant', content: 'orphan', runId: 'run-9' },
+        { insertAfterRunId: 'run-9' }
+      );
+
+      assert.deepEqual(
+        messages.map(entry => entry.content),
+        ['q1', 'orphan']
+      );
+    });
+  });
 });
 
 describe('ChatRepository: degraded modes', () => {

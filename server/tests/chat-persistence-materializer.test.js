@@ -228,6 +228,28 @@ describe('chatMaterializer: a complete turn', () => {
     });
   });
 
+  it('stores the byte count and mime type of a document upload', async () => {
+    await withRepository(async ({ repository }) => {
+      // What the chat client actually sends for a file: `type` is the upload
+      // kind and the mime type is on `fileType`, with the size on `fileSize`.
+      const message = await userTurn(repository, {
+        attachments: [
+          {
+            type: 'document',
+            fileName: 'report.pdf',
+            fileSize: 4096,
+            fileType: 'application/pdf',
+            content: 'extracted text'
+          }
+        ]
+      });
+
+      assert.deepEqual(message.attachments, [
+        { type: 'application/pdf', name: 'report.pdf', bytes: 4096 }
+      ]);
+    });
+  });
+
   it('carries a fork through to the stored history', async () => {
     await withRepository(async ({ repository }) => {
       const first = await userTurn(repository, { content: 'first question' });
@@ -406,6 +428,74 @@ describe('chatMaterializer: turns that did not go well', () => {
       });
 
       assert.equal('usage' in answer, false);
+    });
+  });
+});
+
+describe('chatMaterializer: a turn that was superseded', () => {
+  /**
+   * The interleaving `ChatService.runTurn` produces when a second turn starts
+   * on a chat that is still generating: it aborts the first turn's controller
+   * and writes its own user message immediately, while the aborted turn is
+   * still unwinding towards its assistant half.
+   *
+   * @param {ChatRepository} repository - Repository under test.
+   * @returns {Promise<void>}
+   */
+  async function supersede(repository) {
+    await userTurn(repository, { content: 'first question' });
+    await userTurn(repository, { runId: 'chat-run-2', content: 'second question' });
+    await assistantTurn(repository, { status: 'aborted', content: 'half an ans' }, false);
+  }
+
+  it('does not announce the chat idle while its replacement is still running', async () => {
+    await withRepository(async ({ repository }) => {
+      await supersede(repository);
+
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, 'chat-run-2', 'the live run still owns the chat');
+      assert.equal(chat.status, 'running');
+      assert.equal(chat.hasUnseenActivity, false, 'the live turn decides this, not the dead one');
+    });
+  });
+
+  it('keeps the partial answer next to the question it answers', async () => {
+    await withRepository(async ({ repository }) => {
+      await supersede(repository);
+
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        messages.map(entry => entry.content),
+        ['first question', 'half an ans', 'second question'],
+        'appending would replay [user, user, assistant] to the model on every later turn'
+      );
+      assert.deepEqual(
+        messages.map(entry => entry.runId),
+        [RUN_ID, RUN_ID, 'chat-run-2']
+      );
+      assert.equal(messages[1].error.code, 'ABORTED');
+    });
+  });
+
+  it('the replacement still releases the chat when it finishes', async () => {
+    await withRepository(async ({ repository }) => {
+      await supersede(repository);
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: 'chat-run-2',
+        summary: { status: 'success', content: 'the real answer' },
+        clientConnected: true
+      });
+
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null);
+      assert.equal(chat.status, 'active');
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        messages.map(entry => entry.content),
+        ['first question', 'half an ans', 'second question', 'the real answer']
+      );
     });
   });
 });
