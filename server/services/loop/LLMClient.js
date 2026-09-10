@@ -10,7 +10,7 @@
  *   - model lookup (`resolveModel`, `findModel`) over the live model catalog
  *   - API key resolution (`resolveApiKey`) via ApiKeyVerifier
  *   - request construction through the adapter registry (always awaited)
- *   - per-model throttling (`throttledFetch`) with an injectable transport
+ *   - per-model throttling (`throttledRun`) with an injectable transport
  *   - transient retry with backoff / Retry-After (llmRetry.js)
  *   - the canonical `LLMError` taxonomy (contracts/errors.js)
  *   - streaming AND non-streaming responses normalized to GenericChunks,
@@ -36,9 +36,11 @@
 import crypto from 'node:crypto';
 import { getAdapter, createCompletionRequest } from '../../adapters/index.js';
 import { convertResponseToGeneric, clearStreamingState } from '../../adapters/toolCalling/index.js';
-import { throttledFetch } from '../../requestThrottler.js';
+import { throttledRun } from '../../requestThrottler.js';
+import { httpFetch, redactUrlSecrets } from '../../utils/httpConfig.js';
 import { isDnsFailure } from '../../utils/dnsGuard.js';
 import configCache from '../../configCache.js';
+import config from '../../config.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
@@ -93,6 +95,25 @@ const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
  * they were gone every other model looked broken too. Bounding only the phase
  * before the first byte separates "cannot reach the provider" from "the
  * provider is generating slowly".
+ *
+ * Two limits on where that inference holds, both learned the hard way:
+ *
+ *   - It only holds for a STREAMED response, whose headers are flushed as soon
+ *     as the provider accepts the request. A non-streamed response arrives in
+ *     one piece and its headers are withheld until the whole answer has been
+ *     generated — Google's `:generateContent`, and every other buffered
+ *     completion endpoint — so time-to-first-byte there *is* generation time.
+ *     Timing it capped generation at ten seconds and reported the provider as
+ *     unreachable, so non-streamed calls are left to the whole-call deadline
+ *     (see `_connectTimeoutMsFor`).
+ *   - It only holds for time actually spent waiting on the network. Every
+ *     attempt goes through the per-model throttle queue (platform
+ *     `requestConcurrency` defaults to 5), and a request still queued behind
+ *     five others has not been sent yet, let alone ignored. `_connect` arms
+ *     the ceiling inside its throttle slot for that reason.
+ *
+ * Operators can override the default per deployment (platform.json `llm` or
+ * LLM_CONNECT_TIMEOUT_MS) and per model (`connectTimeoutMs`).
  */
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
@@ -110,6 +131,27 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
  * long time before answering to the whole-call deadline, where it belongs.
  */
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
+
+/**
+ * Resolve one transport ceiling, most specific source first: the model's own
+ * override, then the value the client was constructed with (the embedding/test
+ * seam), then the platform config, then the env default. Read per call rather
+ * than cached in the constructor because the singleton below is built at
+ * module load, before `configCache` has read platform.json.
+ *
+ * @param {object|undefined} model - resolved model config
+ * @param {number|undefined} constructed - value passed to the constructor
+ * @param {'connectTimeoutMs'|'streamIdleTimeoutMs'} key
+ * @param {number} envDefault
+ * @returns {number} milliseconds; 0 (or negative) disables the ceiling
+ */
+function resolveTimeoutMs(model, constructed, key, envDefault) {
+  if (Number.isFinite(model?.[key])) return model[key];
+  if (Number.isFinite(constructed)) return constructed;
+  const platform = configCache.getPlatform() || {};
+  if (Number.isFinite(platform.llm?.[key])) return platform.llm[key];
+  return Number.isFinite(envDefault) ? envDefault : 0;
+}
 
 // ── Chunk normalization ─────────────────────────────────────────────────────
 
@@ -404,7 +446,8 @@ export function toLLMError(err, ctx = {}) {
 export class LLMClient {
   /**
    * @param {Object} [opts]
-   * @param {(request, ctx:{signal, model}) => Promise<Response>} [opts.transport] - defaults to throttledFetch
+   * @param {(request, ctx:{signal, model}) => Promise<Response>} [opts.transport] - defaults to
+   *   `httpFetch`; called inside the model's throttle slot (see `_connect`)
    * @param {Function} [opts.createRequest] - defaults to the adapter registry's createCompletionRequest
    * @param {ApiKeyVerifier} [opts.apiKeyVerifier]
    * @param {ErrorHandler} [opts.errorHandler]
@@ -412,9 +455,11 @@ export class LLMClient {
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
    * @param {(ms:number)=>Promise<void>} [opts.sleep] - retry sleep (tests stub it)
    * @param {(includeDisabled?:boolean)=>{data:Array}} [opts.getModels] - model catalog seam
-   * @param {number} [opts.connectTimeoutMs] - connect/headers ceiling per attempt; <=0 disables
+   * @param {number} [opts.connectTimeoutMs] - connect/headers ceiling per streamed attempt;
+   *   <=0 disables. Overrides platform.json `llm.connectTimeoutMs` and
+   *   LLM_CONNECT_TIMEOUT_MS, and is itself overridden by a model's own `connectTimeoutMs`.
    * @param {number} [opts.streamIdleTimeoutMs] - ceiling for the gap between two chunks of a
-   *   stream that has already produced one; <=0 disables
+   *   stream that has already produced one; <=0 disables. Same precedence as above.
    */
   constructor(opts = {}) {
     this.transport = opts.transport || defaultTransport;
@@ -427,12 +472,11 @@ export class LLMClient {
     this.runLog = opts.runLog || runLogSingleton;
     this.sleep = opts.sleep;
     this.getModels = opts.getModels || (includeDisabled => configCache.getModels(includeDisabled));
-    this.connectTimeoutMs = Number.isFinite(opts.connectTimeoutMs)
-      ? opts.connectTimeoutMs
-      : DEFAULT_CONNECT_TIMEOUT_MS;
-    this.streamIdleTimeoutMs = Number.isFinite(opts.streamIdleTimeoutMs)
-      ? opts.streamIdleTimeoutMs
-      : DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+    // Kept as the constructed values only; the effective ceilings are
+    // resolved per call so platform.json and per-model overrides apply to the
+    // module-level singleton too (see resolveTimeoutMs).
+    this._connectTimeoutMsOpt = opts.connectTimeoutMs;
+    this._streamIdleTimeoutMsOpt = opts.streamIdleTimeoutMs;
     // Operator diagnostics (request/failure dumps under contents/data/debug); tests turn them off.
     this.debugDumps = opts.debugDumps !== false;
     this._lastMessagesHash = new Map(); // runId -> { hash, count } of the last messages (request/header dedupe), LRU-bounded
@@ -584,7 +628,7 @@ export class LLMClient {
       }, timeoutMs);
       signals.push(controller.signal);
     }
-    const streamIdleTimeoutMs = this.streamIdleTimeoutMs;
+    const streamIdleTimeoutMs = this._streamIdleTimeoutMsFor(model);
     const streamIdleEnabled = Number.isFinite(streamIdleTimeoutMs) && streamIdleTimeoutMs > 0;
     const idleController = streamIdleEnabled ? new AbortController() : null;
     if (idleController) signals.push(idleController.signal);
@@ -731,7 +775,7 @@ export class LLMClient {
             abortErr.name = 'AbortError';
             throw abortErr;
           }
-          const res = await this._connect(request, callSignal, model);
+          const res = await this._connect(request, callSignal, model, effectiveStream);
           if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
             throw await this._httpError(res, model, language, request);
           }
@@ -940,7 +984,7 @@ export class LLMClient {
             callSignal,
             () => abortError('Aborted while the continuation request was built')
           );
-          const res = await client._connect(currentRequest, callSignal, model);
+          const res = await client._connect(currentRequest, callSignal, model, effectiveStream);
           if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
             throw await client._httpError(res, model, language, currentRequest);
           }
@@ -1108,27 +1152,80 @@ export class LLMClient {
 
   /** Build an LLMError for a non-2xx provider response (with diagnostics). */
   /**
-   * One transport attempt with a bounded connect/headers phase.
+   * The connect/headers ceiling that applies to one attempt, or 0 for none.
    *
-   * The transport promise settles when the response headers arrive, so timing
-   * it bounds exactly DNS + TCP + TLS + time-to-first-byte and leaves the
-   * streamed body to the whole-call deadline. On expiry the attempt's own
-   * signal is aborted so the socket is not left dangling, and the failure is
-   * reported as a timeout with providerCode CONNECT_TIMEOUT, which the retry
-   * budget does not retry: a host that ignored the SYN for the whole ceiling
-   * will not answer the next attempt either.
+   * Non-streamed calls always get 0: their headers arrive with the finished
+   * answer, so the phase this ceiling times is the generation itself (see
+   * DEFAULT_CONNECT_TIMEOUT_MS). An operator who wants a non-streamed call
+   * bounded sets the whole-call deadline (`timeoutMs`) instead.
+   *
+   * @param {object} model - resolved model config
+   * @param {boolean} stream - whether this attempt asked for a streamed response
+   * @returns {number} milliseconds; 0 disables the ceiling
+   */
+  _connectTimeoutMsFor(model, stream) {
+    if (stream === false) return 0;
+    return resolveTimeoutMs(
+      model,
+      this._connectTimeoutMsOpt,
+      'connectTimeoutMs',
+      config.LLM_CONNECT_TIMEOUT_MS ?? DEFAULT_CONNECT_TIMEOUT_MS
+    );
+  }
+
+  /**
+   * The idle ceiling between two chunks of an already-producing stream, or 0
+   * for none.
+   * @param {object} model - resolved model config
+   * @returns {number} milliseconds; 0 disables the ceiling
+   */
+  _streamIdleTimeoutMsFor(model) {
+    return resolveTimeoutMs(
+      model,
+      this._streamIdleTimeoutMsOpt,
+      'streamIdleTimeoutMs',
+      config.LLM_STREAM_IDLE_TIMEOUT_MS ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS
+    );
+  }
+
+  /**
+   * One transport attempt: the per-model throttle slot on the outside, the
+   * connect/headers ceiling on the inside.
+   *
+   * The order matters. Every attempt queues behind the model's own
+   * `concurrency` (or the platform's `requestConcurrency`, 5 by default), and
+   * queued time is not network time: arming the ceiling before the slot was
+   * granted reported the sixth request of a batch as an unreachable endpoint
+   * while the first five were still generating. So the timer starts once the
+   * request is actually about to be sent, and the queue wait is left to the
+   * whole-call deadline.
+   *
+   * Inside the slot, the transport promise settles when the response headers
+   * arrive, so timing it bounds exactly DNS + TCP + TLS + time-to-first-byte
+   * and leaves the streamed body to the whole-call deadline. On expiry the
+   * attempt's own signal is aborted so the socket is not left dangling, and
+   * the failure is reported as a timeout with providerCode CONNECT_TIMEOUT,
+   * which the retry budget does not retry: a host that ignored the SYN for the
+   * whole ceiling will not answer the next attempt either.
    *
    * @param {{url: string}} request - built provider request
    * @param {AbortSignal|undefined} callSignal - whole-call signal
    * @param {object} model - resolved model config
+   * @param {boolean} [stream=true] - whether this attempt asked for a streamed response
    * @returns {Promise<Response>}
    */
-  async _connect(request, callSignal, model) {
-    const ms = this.connectTimeoutMs;
-    if (!Number.isFinite(ms) || ms <= 0) {
-      return this.transport(request, { signal: callSignal, model });
-    }
+  async _connect(request, callSignal, model, stream = true) {
+    const ms = this._connectTimeoutMsFor(model, stream);
+    return throttledRun(model.id, () => {
+      if (!Number.isFinite(ms) || ms <= 0) {
+        return this.transport(request, { signal: callSignal, model });
+      }
+      return this._connectWithin(ms, request, callSignal, model);
+    });
+  }
 
+  /** `_connect`'s timed inner half; runs inside the throttle slot. */
+  async _connectWithin(ms, request, callSignal, model) {
     const attempt = new AbortController();
     const signal = callSignal ? AbortSignal.any([callSignal, attempt.signal]) : attempt.signal;
 
@@ -1144,8 +1241,21 @@ export class LLMClient {
       });
     } catch (err) {
       if (expired && !callSignal?.aborted) {
+        // The endpoint goes to the log, not to the message: the message
+        // travels to API clients (the inference API puts it in its error
+        // envelope) and an internal provider URL is not theirs to see.
+        logger.warn('Provider did not send response headers within the connect ceiling', {
+          component: COMPONENT,
+          provider: model.provider,
+          modelId: model.id,
+          connectTimeoutMs: ms,
+          url: redactUrlSecrets(request.url)
+        });
         throw new LLMError(
-          `Provider ${model.provider} sent no response headers within ${ms} ms — endpoint unreachable`,
+          `Provider ${model.provider} sent no response headers within ${ms} ms — ` +
+            `endpoint unreachable. Raise llm.connectTimeoutMs in platform.json, or ` +
+            `connectTimeoutMs on model ${model.id}, if this endpoint is reachable ` +
+            `but slow to answer.`,
           {
             code: LLM_ERROR_CODES.TIMEOUT,
             providerCode: 'CONNECT_TIMEOUT',
@@ -1437,8 +1547,13 @@ export class LLMClient {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function defaultTransport(request, { signal, model }) {
-  return throttledFetch(model.id, request.url, {
+/**
+ * The real transport: proxy/SSL-aware fetch, nothing else. Per-model
+ * throttling deliberately lives one level up, in `_connect`, so that queue
+ * time stays outside the connect/headers ceiling.
+ */
+function defaultTransport(request, { signal }) {
+  return httpFetch(request.url, {
     method: request.method || 'POST',
     headers: request.headers,
     body: request.body !== undefined ? JSON.stringify(request.body) : undefined,

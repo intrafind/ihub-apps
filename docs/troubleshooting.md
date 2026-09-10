@@ -816,6 +816,57 @@ handler.execute({
 
 ## LLM Provider Problems
 
+### "Sent no response headers within 10000 ms — endpoint unreachable"
+
+**Symptoms:**
+
+- A call fails with `{"error":"Provider google sent no response headers within
+  10000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
+  provider, while the same model answers fine from `curl`.
+- It hits longer jobs — a summary, a translation pass, a batch of them — and
+  short chats are unaffected.
+
+**Cause:**
+
+That message comes from the connect/headers ceiling, which bounds the phase
+before the provider's first response byte so an unreachable host fails fast
+instead of hanging on the 5-minute whole-call deadline (see
+[Stream deadlines](llm-client.md#stream-deadlines)). Two things made it fire on
+healthy providers, both fixed:
+
+- **Non-streamed calls.** A buffered completion endpoint (Google's
+  `:generateContent`, and every other one) withholds its headers until the
+  whole answer is generated, so its time-to-first-byte *is* generation time.
+  Any non-streamed call slower than the ceiling was reported as unreachable.
+  These calls are now governed by the whole-call deadline instead.
+- **Queue time.** Every attempt waits for a slot in the per-model throttle
+  (`platform.requestConcurrency` defaults to **5**). With more than five
+  requests in flight for one model, the ones still queued were timed as if
+  they had been sent and ignored. The ceiling is now armed inside the slot.
+
+**Solutions:**
+
+1. Upgrade to a build that carries both fixes.
+2. If a streamed call to a reachable-but-slow endpoint still trips it, raise
+   the ceiling — per installation in `platform.json`, or for the one model:
+
+```json
+// contents/config/platform.json
+{ "llm": { "connectTimeoutMs": 30000 } }
+
+// contents/models/gemini-2.5-flash.json
+{ "connectTimeoutMs": 30000 }
+```
+
+`LLM_CONNECT_TIMEOUT_MS` does the same for the whole process, and `0` disables
+the ceiling. Raise `platform.requestConcurrency` (or the model's own
+`concurrency`) if batches are queueing longer than you expect.
+
+3. If the endpoint really is unreachable, the server log names the URL it tried
+   (secrets redacted) alongside the model and provider. Check DNS, the proxy
+   and VPN reachability of that host from the server — not from your
+   workstation.
+
 ### API Key Issues
 
 **Symptoms:**

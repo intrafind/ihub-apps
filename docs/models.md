@@ -47,6 +47,8 @@ Each model is defined with the following properties:
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
+| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables). Only applies to streamed calls; raise it for an endpoint that is reachable but slow to accept a request. See [Stream deadlines](llm-client.md#stream-deadlines) |
+| `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |

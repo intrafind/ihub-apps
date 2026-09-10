@@ -137,11 +137,25 @@ Three separate deadlines cover one model call, because "cannot reach the
 provider", "the provider is thinking" and "the provider died mid-answer" are
 different failures and only the middle one deserves patience:
 
-| Phase                                     | Deadline                       | `providerCode` on expiry |
-| ----------------------------------------- | ------------------------------ | ------------------------ |
-| Connect + response headers, per attempt   | 10 s                           | `CONNECT_TIMEOUT`        |
-| Headers → first stream chunk              | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
-| Gap between two stream chunks             | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
+| Phase                                          | Deadline                       | `providerCode` on expiry |
+| ---------------------------------------------- | ------------------------------ | ------------------------ |
+| Connect + response headers, per streamed attempt | 10 s                         | `CONNECT_TIMEOUT`        |
+| Headers → first stream chunk                   | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+| Gap between two stream chunks                  | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
+| A non-streamed call, start to finish           | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+
+The connect ceiling covers **streamed** calls only, and only the time the
+request actually spends on the network:
+
+- A non-streamed response arrives in one piece and its headers are withheld
+  until the whole answer has been generated — Google's `:generateContent`, and
+  every other buffered completion endpoint — so its time-to-first-byte *is*
+  generation time. Timing it capped generation at ten seconds and reported the
+  provider as unreachable; those calls are left to the whole-call deadline.
+- Every attempt first waits for a slot in the per-model throttle
+  (`platform.requestConcurrency` defaults to 5). A request still queued behind
+  others has not been sent yet, so the ceiling is armed inside the slot, once
+  the request is about to go out.
 
 The stream-idle deadline is armed only after a chunk has been handed to the
 consumer, so a reasoning model that is silent for minutes before its first
@@ -155,9 +169,32 @@ the stall are kept; the turn ends with the `streamStalled` message.
 
 The deadline races the read rather than only aborting the request, because a
 response body that ignores its abort signal would otherwise leave the read
-pending forever. The abort still fires, so the socket is released. Both
-ceilings are constructor options (`connectTimeoutMs`, `streamIdleTimeoutMs`,
-`<= 0` disables) rather than environment variables.
+pending forever. The abort still fires, so the socket is released.
+
+### Tuning the ceilings
+
+Both are configurable, most specific source winning, and `0` disables a
+ceiling and leaves the call to the whole-call deadline:
+
+| Source                                                          | Scope              |
+| --------------------------------------------------------------- | ------------------ |
+| `connectTimeoutMs` / `streamIdleTimeoutMs` in a model's config   | that model         |
+| `llm.connectTimeoutMs` / `llm.streamIdleTimeoutMs` in `platform.json` | the installation |
+| `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`          | the process        |
+| built-in defaults (10 s / 60 s)                                  | —                  |
+
+Raise the connect ceiling for an endpoint that is reachable but slow to accept
+a request — a VPN-only host, or a gateway that authenticates before it
+forwards. A `CONNECT_TIMEOUT` names both knobs in its message:
+
+```
+Provider google sent no response headers within 10000 ms — endpoint
+unreachable. Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs
+on model gemini-2.5-flash, if this endpoint is reachable but slow to answer.
+```
+
+The endpoint it tried is logged rather than returned, with URL secrets
+redacted, because the message reaches inference-API clients.
 
 ## Outbound DNS guard
 
