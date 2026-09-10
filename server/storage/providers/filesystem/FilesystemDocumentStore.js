@@ -399,6 +399,48 @@ export class FilesystemDocumentStore extends DocumentStore {
     return { items, nextCursor };
   }
 
+  /**
+   * Walk a namespace once, yielding every document in ascending key order.
+   *
+   * The cursor-free counterpart to {@link FilesystemDocumentStore#list}. The
+   * enumeration and the sort happen once here instead of once per page, which
+   * is what makes a whole-namespace read O(N) rather than O(N) per page.
+   *
+   * Envelopes are read lazily, so a caller that breaks out of the loop pays
+   * only for what it consumed.
+   *
+   * @param {string} ns - Namespace
+   * @param {Object} [opts]
+   * @param {string} [opts.ownerId] - Restrict to one owner
+   * @param {string} [opts.prefix] - Keep only keys starting with this prefix
+   * @param {boolean} [opts.includeData=true] - False omits `data`
+   * @yields {Object} Documents in ascending key order
+   */
+  async *scan(ns, opts = {}) {
+    assertValidNamespace(ns);
+    const { ownerId, prefix, includeData = true } = opts || {};
+    let keys =
+      ownerId === undefined || ownerId === null
+        ? await this._namespaceKeys(ns)
+        : await this._ownerKeys(ns, ownerId);
+    keys.sort(compareKeys);
+    if (typeof prefix === 'string' && prefix.length > 0) {
+      keys = keys.filter(key => key.startsWith(prefix));
+    }
+    for (const key of keys) {
+      // Same reasoning as `list`: a missing envelope is a stale owner marker
+      // or a document deleted mid-walk, and is skipped rather than removed.
+      const envelope = await this._readEnvelope(ns, key);
+      if (!envelope) continue;
+      yield this._toDocument(ns, key, envelope, includeData !== false);
+    }
+  }
+
+  /** This store implements `scan`. @returns {boolean} true */
+  get supportsScan() {
+    return true;
+  }
+
   /** Namespace directory. @private */
   _nsDir(ns) {
     return containedPath(this._baseDir, ns);

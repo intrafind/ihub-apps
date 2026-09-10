@@ -388,6 +388,29 @@ export class RunSummaryRepository {
   } = {}) {
     const records = [];
     let examined = 0;
+
+    // One enumeration for the whole namespace. Paging this with a cursor made
+    // every page re-read and re-sort the entire directory, so a scan cost
+    // O(N) per page — and `GET /api/agents/runs` reaches here from a plain
+    // authenticated request, which made a namespace-sized scan something any
+    // signed-in user could ask for repeatedly.
+    if (this.documents.supportsScan) {
+      let exhausted = true;
+      for await (const doc of this.documents.scan(RUNS_NAMESPACE, {
+        ...(ownerId ? { ownerId } : {})
+      })) {
+        examined += 1;
+        const record = toSummary(doc);
+        if (record && (!match || match(record))) records.push(record);
+        if (records.length >= max || examined >= maxExamined) {
+          exhausted = false;
+          break;
+        }
+      }
+      return { records, truncated: !exhausted };
+    }
+
+    // A provider that does not implement `scan` keeps the paged walk.
     let cursor = null;
     do {
       const page = await this.documents.list(RUNS_NAMESPACE, {

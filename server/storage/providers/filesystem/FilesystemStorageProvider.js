@@ -187,6 +187,29 @@ class NamespaceRoutingDocumentStore extends DocumentStore {
   async list(ns, opts = {}) {
     return this.storeFor(ns).list(ns, opts);
   }
+
+  /**
+   * @param {string} ns - Namespace
+   * @param {Object} [opts] - Owner filter, prefix, data inclusion
+   * @yields {Object} Documents in ascending key order
+   */
+  async *scan(ns, opts = {}) {
+    yield* this.storeFor(ns).scan(ns, opts);
+  }
+
+  /**
+   * Both stores behind this router implement `scan`, so the router does.
+   *
+   * Worth stating rather than inheriting: the base class answers false, and a
+   * consumer that probes the router — which is what `provider.documents` hands
+   * out — would otherwise silently keep using the paged walk that `scan`
+   * exists to replace.
+   *
+   * @returns {boolean} true
+   */
+  get supportsScan() {
+    return true;
+  }
 }
 
 /**

@@ -174,4 +174,49 @@ export class DocumentStore {
   async list(_ns, _opts = {}) {
     throw new NotSupportedError('DocumentStore.list is not implemented');
   }
+
+  /**
+   * Every document in a namespace, in ascending key order, as a stream.
+   *
+   * `list` is the paged, REST-facing API: it takes a cursor and returns one
+   * page. That shape is wrong for the consumers that need the whole namespace
+   * — the run summary scan, the retention sweeps, the interaction service, the
+   * config listings — because a cursor page has to re-establish where it is.
+   * On the filesystem provider that means re-enumerating and re-sorting every
+   * key per page, so walking N documents costs O(N) per page rather than O(N)
+   * in total; a 100k-document namespace measured 120 s of directory reads to
+   * return 33 s worth of documents.
+   *
+   * This is the walk. One enumeration, one sort, documents yielded as they are
+   * read, so a caller that stops early stops the work too, and memory stays at
+   * one document plus the key list rather than the whole namespace.
+   *
+   * A provider that cannot stream may implement it over its own paging; the
+   * contract is only the order and the completeness, not the mechanism.
+   *
+   * @param {string} _ns - Namespace
+   * @param {Object} [_opts]
+   * @param {string} [_opts.ownerId] - Restrict to one owner
+   * @param {string} [_opts.prefix] - Keep only keys starting with this prefix
+   * @param {boolean} [_opts.includeData=true] - False omits `data`
+   * @yields {Object} Documents in ascending key order
+   */
+  async *scan(_ns, _opts = {}) {
+    throw new NotSupportedError('DocumentStore.scan is not implemented');
+  }
+
+  /**
+   * Whether {@link DocumentStore#scan} is implemented.
+   *
+   * `typeof store.scan === 'function'` is not a usable probe: every store
+   * inherits the throwing stub above, so it answers true for stores that
+   * cannot scan — including the hand-written doubles in the test suite. A
+   * consumer that wants the single-pass walk checks this and falls back to
+   * paged `list` when it is false.
+   *
+   * @returns {boolean} False on the base class; true on a store that overrides `scan`
+   */
+  get supportsScan() {
+    return false;
+  }
 }

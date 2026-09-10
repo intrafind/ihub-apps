@@ -440,6 +440,39 @@ export class RawDocumentStore extends DocumentStore {
   }
 
   /**
+   * Walk a namespace once, yielding every document in ascending key order.
+   *
+   * The cursor-free counterpart to {@link RawDocumentStore#list}, for the same
+   * reason: paging re-enumerated and re-sorted the directory per page.
+   *
+   * @param {string} ns - Raw namespace name
+   * @param {Object} [opts]
+   * @param {string} [opts.prefix] - Keep only keys starting with this prefix
+   * @param {boolean} [opts.includeData=true] - False omits `data`
+   * @yields {Object} Documents in ascending key order
+   */
+  async *scan(ns, opts = {}) {
+    this._assertNamespace(ns);
+    const { prefix, includeData = true } = opts || {};
+    let keys = await this._namespaceKeys(ns);
+    if (typeof prefix === 'string' && prefix.length > 0) {
+      keys = keys.filter(key => key.startsWith(prefix));
+    }
+    for (const key of keys) {
+      const file = await this._readFile(ns, key);
+      if (!file) continue;
+      const parsed = this._parse(ns, key, file.bytes);
+      if (parsed === undefined) continue;
+      yield this._toDocument(ns, key, file, parsed, includeData !== false);
+    }
+  }
+
+  /** This store implements `scan`. @returns {boolean} true */
+  get supportsScan() {
+    return true;
+  }
+
+  /**
    * Whether a document file is present, regardless of whether it parses.
    *
    * `get` and `list` both fold "absent", "unreadable" and "malformed" into

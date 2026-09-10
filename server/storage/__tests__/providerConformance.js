@@ -597,6 +597,74 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(page.nextCursor, null, 'a complete page has no cursor');
       });
 
+      it('scan walks the whole namespace in one pass, in key order', async () => {
+        // `list` is the paged REST-facing API; `scan` is the walk every
+        // whole-namespace consumer needs. A provider that implements it must
+        // agree with `list` on order and completeness — the difference is the
+        // cost, not the answer.
+        if (!shared.documents.supportsScan) return;
+        const ns = nextId('scan');
+        await seed(ns, { 'k-c': {}, 'k-a': {}, 'k-b': {}, 'k-d': {} });
+
+        const walked = [];
+        for await (const doc of shared.documents.scan(ns)) walked.push(doc.key);
+        assert.deepEqual(walked, ['k-a', 'k-b', 'k-c', 'k-d']);
+
+        const paged = [];
+        let cursor = null;
+        do {
+          const page = await shared.documents.list(ns, {
+            limit: 1,
+            ...(cursor ? { cursor } : {})
+          });
+          for (const item of page.items) paged.push(item.key);
+          cursor = page.nextCursor;
+        } while (cursor);
+        assert.deepEqual(walked, paged, 'scan and a full paged walk agree');
+      });
+
+      it('scan yields documents lazily, so stopping early stops the work', async () => {
+        if (!shared.documents.supportsScan) return;
+        const ns = nextId('scan');
+        await seed(ns, { 'k-a': {}, 'k-b': {}, 'k-c': {} });
+
+        const seen = [];
+        for await (const doc of shared.documents.scan(ns)) {
+          seen.push(doc.key);
+          break;
+        }
+        assert.deepEqual(seen, ['k-a'], 'the first document is available before the last is read');
+      });
+
+      it('scan honours ownerId and prefix the way list does', async () => {
+        if (!shared.documents.supportsScan) return;
+        const ns = nextId('scan');
+        await seed(ns, {
+          'ax-1': { ownerId: 'owner-a' },
+          'ax-2': { ownerId: 'owner-b' },
+          'bx-1': { ownerId: 'owner-a' }
+        });
+
+        const owned = [];
+        for await (const doc of shared.documents.scan(ns, { ownerId: 'owner-a' })) {
+          owned.push(doc.key);
+        }
+        assert.deepEqual(owned.sort(), ['ax-1', 'bx-1']);
+
+        const prefixed = [];
+        for await (const doc of shared.documents.scan(ns, { prefix: 'ax-' })) {
+          prefixed.push(doc.key);
+        }
+        assert.deepEqual(prefixed, ['ax-1', 'ax-2']);
+      });
+
+      it('scan on an unknown namespace yields nothing instead of throwing', async () => {
+        if (!shared.documents.supportsScan) return;
+        const walked = [];
+        for await (const doc of shared.documents.scan(nextId('scan'))) walked.push(doc.key);
+        assert.deepEqual(walked, []);
+      });
+
       it("ownerId returns only that owner's documents", async () => {
         const ns = nextId('list');
         await seed(ns, {
