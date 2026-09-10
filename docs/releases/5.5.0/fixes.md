@@ -567,6 +567,20 @@ OpenAI-compatible servers are the usual culprits.
 - The wait *before* the first piece of an answer is unchanged, so a model that
   thinks for a long time before it starts writing is not cut off.
 
+## Start Page and Sidebar Settings Take Effect Without a Page Reload
+
+Changes saved under **UI Customization → Start Page** did not reach the running
+app: the sidebar kept the app shortcuts it had loaded with, and "/" kept
+opening whatever view it opened before. Only a full browser reload picked up
+the change. Configuration responses are held in memory for 30 minutes, and the
+refresh that follows a save was answered out of that cache instead of from the
+server — so a second save appeared to apply the *previous* one.
+
+- Saving now refreshes the sidebar's app list and count, the featured apps, the
+  heading and the view "/" redirects to, straight away.
+- With app shortcuts set to rank **by recent use**, the sidebar also reorders as
+  soon as an app is opened, in this tab and in any other tab that is open.
+  
 ## Web Search and Tools Are Available From the Start Page
 
 The chat box on the start page hid most of the app's per-chat features. Opening

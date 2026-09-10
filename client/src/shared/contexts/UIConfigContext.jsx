@@ -1,5 +1,5 @@
-import { createContext, useState, useContext, useEffect } from 'react';
-import { fetchUIConfig } from '../../api';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { fetchUIConfig, invalidateUIConfigCache } from '../../api';
 import { buildPath, buildAssetUrl } from '../../utils/runtimeBasePath';
 import { cacheErrorPagesConfig } from '../../utils/errorPagesCache';
 
@@ -26,10 +26,21 @@ export function UIConfigProvider({ children }) {
   const [headerColor, setHeaderColor] = useState(FALLBACK_COLOR);
   const [defaultHeaderColor, setDefaultHeaderColor] = useState(FALLBACK_COLOR);
 
-  // Fetch UI config function
-  const fetchUiConfig = async () => {
+  // Fetch UI config function.
+  //
+  // `refresh` is what an admin save needs: API responses are cached in memory
+  // for 30 minutes, so a plain refetch was answered from that cache and every
+  // consumer of this context — the sidebar's app shortcuts, the "/" redirect —
+  // kept the configuration it had until a full page reload. Dropping the entry
+  // first sends the request to the server and repopulates the cache with the
+  // saved configuration.
+  const loadUiConfig = useCallback(async ({ refresh = false } = {}) => {
     try {
-      setIsLoading(true);
+      // A refresh keeps the current config on screen while it runs: flipping
+      // `isLoading` would swap live UI (language selector, "/" redirect) for a
+      // loading state we already have an answer for.
+      if (!refresh) setIsLoading(true);
+      if (refresh) invalidateUIConfigCache();
       // Using the exported fetchUIConfig function that uses apiClient
       const data = await fetchUIConfig();
       setUiConfig(data);
@@ -40,12 +51,14 @@ export function UIConfigProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refreshUIConfig = useCallback(() => loadUiConfig({ refresh: true }), [loadUiConfig]);
 
   // Initial UI config fetch
   useEffect(() => {
-    fetchUiConfig();
-  }, []);
+    loadUiConfig();
+  }, [loadUiConfig]);
 
   // Cache error-page messages so the context-less generic ErrorBoundary
   // (mounted above this provider) can still render admin-configured text.
@@ -189,7 +202,7 @@ export function UIConfigProvider({ children }) {
         headerColor,
         setHeaderColor,
         resetHeaderColor,
-        refreshUIConfig: fetchUiConfig
+        refreshUIConfig
       }}
     >
       {children}

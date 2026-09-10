@@ -1,6 +1,6 @@
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
-import { CACHE_KEYS, DEFAULT_CACHE_TTL, buildCacheKey } from '../../utils/cache';
+import cache, { CACHE_KEYS, DEFAULT_CACHE_TTL, buildCacheKey } from '../../utils/cache';
 
 // Styles
 export const fetchStyles = async (options = {}) => {
@@ -80,3 +80,11 @@ export const fetchAuthStatus = async (options = {}) => {
 
   return handleApiResponse(() => apiClient.get('/auth/status'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
 };
+
+/**
+ * Drop the cached auth-status response so the next fetch reaches the server
+ * and repopulates the cache for every other consumer.
+ *
+ * @returns {number} How many cache entries were dropped
+ */
+export const invalidateAuthStatusCache = () => cache.invalidateByPattern(CACHE_KEYS.AUTH_STATUS);
