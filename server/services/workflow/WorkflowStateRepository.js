@@ -639,12 +639,27 @@ export async function importLegacyWorkflowStates({
   }
 
   const documents = repo.documents;
-  if (!force) {
+
+  /**
+   * Whether the import has already completed.
+   *
+   * Read twice: once before the lock, so a later boot costs one document
+   * read, and once inside it, because on the *first* boot every worker passes
+   * the outer check at the same moment and would otherwise each rescan the
+   * whole legacy directory behind the lock to import nothing.
+   *
+   * @returns {Promise<boolean>}
+   */
+  const alreadyImported = async () => {
+    if (force) return false;
     const marker = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
-    if (marker?.data?.completedAt) return { ...idle, reason: 'already-imported' };
-  }
+    return Boolean(marker?.data?.completedAt);
+  };
+
+  if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
 
   const run = async () => {
+    if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
     const scan = await repo.listLegacy({ max: MAX_SCAN_STATES });
     // Newest first, so a bound that cuts the import keeps the runs a user is
     // most likely to go looking for. An unknown timestamp sorts last rather

@@ -323,12 +323,29 @@ export async function importLegacyRunSummaries({
   }
 
   const documents = repo.documents;
-  if (!force) {
+
+  /**
+   * Whether the import has already completed.
+   *
+   * Read twice: once before the lock, so the common case of a later boot
+   * costs one document read, and once inside it, because on the *first* boot
+   * every worker passes the outer check simultaneously and would otherwise
+   * each redo the whole scan behind the lock — bounded and harmless, but on a
+   * large installation that is four full legacy scans and four thousand
+   * existence checks to import nothing.
+   *
+   * @returns {Promise<boolean>}
+   */
+  const alreadyImported = async () => {
+    if (force) return false;
     const marker = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
-    if (marker?.data?.completedAt) return { ...idle, reason: 'already-imported' };
-  }
+    return Boolean(marker?.data?.completedAt);
+  };
+
+  if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
 
   const run = async () => {
+    if (await alreadyImported()) return { ...idle, reason: 'already-imported' };
     const { records: indexRecords, files } = await readLedgerIndex(indexDir, log);
     const executions = await readExecutionRegistry(registryFile, log);
 
