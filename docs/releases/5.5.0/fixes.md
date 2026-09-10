@@ -632,3 +632,11 @@ request:
 
 When the ceiling does fire, the error names the setting to raise, and the server log records the
 endpoint that was tried (with URL secrets redacted) next to the model and provider.
+
+## Logging In No Longer Depends on Username Capitalization
+
+A user whose username was created as `Daniel.Manzke` could not log in by typing `daniel.manzke` —
+username and email lookups compared strings exactly, so any difference in capitalization was
+treated as a different account. Login, admin user creation, and duplicate-username checks now all
+match usernames and emails case-insensitively, and the same fix applies to how OIDC, LDAP, NTLM,
+and Teams sign-ins are matched against previously persisted accounts.

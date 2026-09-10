@@ -5,7 +5,7 @@ import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
 import { isContentAdminAuthRequired } from '../../middleware/contentAdminAuth.js';
-import { hashPasswordWithUserId } from '../../utils/userManager.js';
+import { equalsIgnoreCase, hashPasswordWithUserId } from '../../utils/userManager.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
@@ -397,8 +397,10 @@ export default function registerAdminAuthRoutes(app) {
         };
       }
 
-      // Check if username already exists
-      const existingUser = Object.values(usersData.users).find(user => user.username === username);
+      // Check if username already exists (case-insensitive)
+      const existingUser = Object.values(usersData.users).find(user =>
+        equalsIgnoreCase(user.username, username)
+      );
       if (existingUser) {
         return sendErrorResponse(res, 409, 'Username already exists');
       }
