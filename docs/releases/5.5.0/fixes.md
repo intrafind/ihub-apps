@@ -646,3 +646,11 @@ had permission to use it.
   too, so a differently-cased id is no longer rejected as access-denied right after being found.
 - New app and workflow ids must now be lowercase when created or edited, matching the existing rule
   for model and prompt ids.
+  
+## Logging In No Longer Depends on Username Capitalization
+
+A user whose username was created as `Daniel.Manzke` could not log in by typing `daniel.manzke` —
+username and email lookups compared strings exactly, so any difference in capitalization was
+treated as a different account. Login, admin user creation, and duplicate-username checks now all
+match usernames and emails case-insensitively, and the same fix applies to how OIDC, LDAP, NTLM,
+and Teams sign-ins are matched against previously persisted accounts.
