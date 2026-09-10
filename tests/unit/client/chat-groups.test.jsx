@@ -104,7 +104,7 @@ describe('groupChatsByRecency', () => {
     // Rendered a hair before midnight: everything from that day stays "today"
     // even though evaluating each row against its own `new Date()` could roll
     // some of them over into "yesterday" mid-list.
-    const almostMidnight = at(2026, 3, 15, 23, 59, 59);
+    const almostMidnight = at(2026, 3, 15, 23, 59);
     const chats = [chat('a', at(2026, 3, 15, 23, 58)), chat('b', at(2026, 3, 15, 0, 1))];
 
     expect(groupChatsByRecency(chats, almostMidnight)).toEqual([{ key: 'today', items: chats }]);

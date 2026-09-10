@@ -1452,9 +1452,8 @@ See [Storage Providers](../../storage.md).
 Chats can now be stored on the server instead of only in the browser: the transcript survives a
 reload, a new device and a lost connection, and a turn that is being stored **keeps running when
 the browser closes** — the answer is waiting in the chat when the user comes back. The feature is
-off by default (`features.chatPersistence`, "Durable Chats") and this release ships the server
-half only; the chat-list UI still shows sample data behind the separate Chat History flag, so
-enable it on a test installation rather than in production for now.
+off by default (`features.chatPersistence`, "Durable Chats") and still marked preview, so try it
+on a test installation before turning it on in production.
 
 - **A cost decision, not only a convenience.** Runs no longer die with the tab, so tokens are
   spent on answers nobody may read — a user who closes the laptop mid-answer is billed for the
@@ -1473,5 +1472,36 @@ enable it on a test installation rather than in production for now.
   chats; deleting one also erases its runs, their recorded events and their pending questions.
   Chat streams, chat posts and the stop endpoint now verify that the caller owns the chat id, not
   just that they may use the app.
+
+See [Chat Persistence](../../chat-persistence.md).
+
+## Chat History: Reopen and Continue a Past Conversation
+
+With durable chats switched on, the conversations the server stores now appear in the product: the
+sidebar lists the recent ones, `/chats` shows them all, and opening one reopens it inside its app
+with the whole transcript, ready to carry on. This is the client half of Durable Chats — until now
+stored chats had no UI at all, and the sidebar's chat list was sample data behind a separate
+preview flag, which is retired.
+
+- **Three places to pick a chat back up.** A *Recents* section in the sidebar (with an *All chats*
+  entry that survives collapsing it to the icon rail), the full `/chats` page — grouped by date or
+  by app, searchable, paged with **Show older chats** — and up to three *Pick up where you left
+  off* chips on the start page.
+- **Opening one continues it.** A chat opens at `/apps/:appId/c/:chatId` and loads its transcript
+  from the server instead of from the browser tab, so a conversation started on another device, or
+  in a tab that has since been closed, picks up exactly where it stopped. Reloading an app
+  restores its current conversation for the same reason.
+- **"Answered while you were away."** A chat whose answer finished with nobody watching is marked
+  with a dot in the sidebar and a **New** badge in the list, and the mark clears when the chat is
+  opened. That is what durable runs are for: close the laptop mid-answer, come back, read the
+  reply.
+- **Rename and delete.** Titles can be renamed in place from either list; deleting asks for
+  confirmation and then erases the conversation, its transcript and its runs for good.
+- **Nothing unstored is listed.** Anonymous visitors, incognito (ephemeral) chats, compare panels
+  and the canvas are never stored, so they never show up in the history — and with the feature
+  off, or without a working storage provider, the history UI is absent entirely.
+- **The chat client posts one message per turn** for a stored chat, which is what a
+  server-assembled history requires; anonymous and incognito chats keep the previous protocol
+  unchanged.
 
 See [Chat Persistence](../../chat-persistence.md).

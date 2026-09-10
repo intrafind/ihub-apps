@@ -15,12 +15,10 @@ everyone the feature does not cover (anonymous visitors, incognito turns,
 installations that leave it off) keeps exactly the behaviour they have today.
 That dual mode is permanent by design, not a transition.
 
-> **This release ships the server half only.** The bundled chat client still
-> posts its whole transcript on every turn, which a persisted chat rejects (see
-> [The server owns the history](#the-server-owns-the-history)), and it does not
-> yet send the `ephemeral` flag. The sidebar chat list is still the sample-data
-> preview behind the separate `chatHistoryPreview` flag. Turn `chatPersistence`
-> on for a test installation, not for production, until the client half lands.
+> **Both halves ship together.** The server stores the transcript and assembles
+> the history it sends to the model; the bundled chat client posts one message
+> per turn, reopens a stored chat from the store, and lists what is stored —
+> see [The chat history UI](#the-chat-history-ui).
 
 ## When a turn is persisted
 
@@ -80,6 +78,107 @@ storage readiness together.
 V095 also carries a saved `chatHistoryPreview: true` over to `chatPersistence`,
 on the reasoning that an admin who asked for chat history asked for chat
 history. An explicit `chatPersistence` setting always wins.
+
+## The chat history UI
+
+With the feature on, a signed-in user's stored chats show up in three places.
+All three read the same list (`GET /api/chats`), and none of them exist when
+durable chats are off.
+
+- **The sidebar's *Recents* section** — the five most recent chats, above an
+  **All chats** link. Collapsed to the icon rail, that same destination sits
+  behind a clock icon, so collapsing the sidebar no longer hides the history.
+  The number next to *All chats* is how many chats are **loaded**, with a `+`
+  when there are more: the listing is cursor-paged and has no cheap total.
+- **`/chats`** — the full list, grouped **by date** (Today / Yesterday / Last 7
+  days / Older), **by app**, or flat with the most recent first. The search box
+  filters the chats that are loaded by title and app name, and **Show older
+  chats** pages further back.
+- **The start page** — up to three *Pick up where you left off* chips.
+
+The app name, colour and icon on those rows are joined from the apps the viewer
+can see; the stored chat carries only an `appId` (see [API](#api)). A chat whose
+app was deleted, or whose app the user has lost access to, still lists and still
+opens — under a neutral tile and its raw app id.
+
+### Opening and continuing a chat
+
+A chat opens at **`/apps/:appId/c/:chatId`**. Rows are ordinary links, so
+middle-click and open-in-new-tab work. The route is the app's normal chat page
+with that chat loaded into it: the transcript comes from
+`GET /api/chats/:chatId` rather than from the tab's `sessionStorage`, and the
+page shows a loading state until it arrives instead of flashing the greeting and
+starter prompts of a chat that is not empty. Typing carries straight on — the
+turn posts only the new message and the server appends it to what it already
+holds.
+
+Reloading a plain `/apps/:appId` restores the conversation as well: the tab
+remembers which chat it is in and the transcript is fetched back from the store,
+where before it came from browser storage. Clearing the chat, or starting a new
+one, drops the chat id from the URL and begins a fresh conversation; nothing is
+lost, the previous chat simply stays in the list. A share link built on a chat
+page points at the **app**, never at the one stored chat — a recipient does not
+own it and could only get a 404 from it.
+
+Editing an earlier message and sending it again rewrites the stored transcript
+from that message, the same way it rewrites what is on screen — that is the
+`replaceFromMessageId` half of
+[The server owns the history](#the-server-owns-the-history). It works on
+messages that came back from the store; an exchange produced in the same
+session, before any reload, is only truncated locally and stays in the stored
+transcript behind the newer answer.
+
+### "Answered while you were away"
+
+A turn that finishes with nobody watching — the tab was closed, the laptop shut
+— marks its chat `hasUnseenActivity`. That is the whole point of durable runs,
+so the list says so:
+
+- in the sidebar, a dot on the row and an **N new** badge next to *Recents* (a
+  dot on the clock icon when the sidebar is collapsed),
+- on `/chats`, an amber **New** pill on the chat.
+
+Opening the chat is what clears it — reading it through `GET /api/chats/:chatId`
+is what "seen" means.
+
+### Renaming and deleting
+
+Hovering a chat, in the sidebar or on `/chats`, reveals a rename and a delete
+button; on `/chats` they are always visible on a touch screen.
+
+- **Rename** turns the title into an input in place. Enter or clicking away
+  commits, Escape cancels, and an unchanged or emptied field writes nothing. A
+  title set this way is marked as the user's and no later turn derives one over
+  it; it is capped at 200 characters.
+- **Delete** asks first, in an in-app confirmation, and then erases the chat,
+  its transcript and the runs behind it — the cascade described under
+  [API](#api). There is no undo. The row disappears immediately and comes back
+  with an error message if the call fails.
+
+Chats the user never renames are titled from their first message.
+
+### What never appears in the list
+
+Only stored chats can be listed, so the carve-outs in [Anonymous and ephemeral
+chats are never stored](#anonymous-and-ephemeral-chats-are-never-stored) are
+exactly the conversations with no history:
+
+- **Signed-out visitors have no history at all** — no *Recents*, no `/chats`.
+  Nothing is stored for them, so there would be nothing to list.
+- **Incognito chats.** With the ghost toggle under the chat input switched on
+  the turn is posted `ephemeral: true`, the transcript stays in the browser as
+  it always did, and no trace of it reaches the list.
+- **Compare panels and the canvas.** Each panel mints its own chat id and a
+  single submit fans out to several of them, so both surfaces send
+  `ephemeral: true` too — a comparison never fills the history with half
+  conversations.
+
+When the feature is off, or the storage provider did not come up, the UI is not
+there at all: no *Recents* section, `/chats` is not found, and the sidebar's
+search box goes back to reading "Search apps". The client decides that from the
+`chats.persistence` capability in `GET /api/configs/platform`, so an
+installation with the flag on but no working store falls back to the ephemeral
+experience rather than showing errors.
 
 ## What it costs: runs no longer die with the tab
 
@@ -164,8 +263,9 @@ an anonymous caller cannot reach them even when anonymous access is on.
 suppresses the write for that turn. It is client-asserted and therefore
 advisory — it can only ever turn persistence *off*, never on — and an ephemeral
 turn is not durable either, so it is aborted on disconnect like any
-non-persisted turn. The field is accepted on the wire today; the incognito
-toggle in the chat UI starts sending it with the client half of the feature.
+non-persisted turn. The incognito toggle under the chat input sends it, and so
+do the compare panels and the canvas, which mint their own chat ids and fan one
+submit out to several of them.
 
 Neither carve-out leaves a trace: no chat document, no transcript, nothing to
 delete afterwards.
@@ -277,7 +377,8 @@ Details that matter:
   clarification stores nothing — the question is an interaction, not a message.
 - **`hasUnseenActivity`** is set when the turn finished with no SSE client
   attached, and cleared when the chat is opened through `GET /api/chats/:id`.
-  That is how the future chat list marks "this one answered while you were away".
+  That is how the chat list marks "this one answered while you were away" — see
+  [The chat history UI](#the-chat-history-ui).
 - **The title** is derived from the first user message — whitespace collapsed,
   80 characters, ellipsis. A title the user set (`titleSetByUser`) is never
   overwritten.
