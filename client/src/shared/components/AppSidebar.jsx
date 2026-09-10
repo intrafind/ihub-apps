@@ -154,6 +154,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const navigationLabel = t('sidebar.navigation', 'Navigation');
   const allChatsLabel = t('sidebar.allChats', 'All chats');
   const untitledChatLabel = t('chatHistory.untitled', 'Untitled chat');
+  const unseenHint = t('chatHistory.unseenHint', 'This chat answered while you were away');
 
   // A drawer left open while the viewport grows to desktop would keep the
   // page scroll locked with nothing visible — close it.
@@ -348,13 +349,13 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
       // behind the confirmation would put two traps on the same Tab key.
       onMobileClose();
       setConfirmDialog({
-        title: t('chatHistory.deleteTitle', 'Delete chat?'),
-        message: t(
-          'chatHistory.deleteMessage',
-          '“{{title}}” and all of its messages will be permanently deleted. This cannot be undone.',
-          { title: chat.title || untitledChatLabel }
-        ),
-        confirmLabel: t('chatHistory.deleteConfirm', 'Delete'),
+        title: t('chatHistory.deleteTitle', 'Delete chat'),
+        message: t('chatHistory.deleteMessage', {
+          title: chat.title || untitledChatLabel,
+          defaultValue:
+            'Delete “{{title}}”? The conversation and everything in it is removed for good.'
+        }),
+        confirmLabel: t('common.delete', 'Delete'),
         danger: true,
         onConfirm: async () => {
           setConfirmDialog(null);
@@ -818,12 +819,14 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                       }`}
                     >
                       {renamingChatId === chat.id ? (
-                        <ChatTitleEditor
-                          value={chat.title || ''}
-                          onSave={next => handleRenameChat(chat.id, next)}
-                          onCancel={() => setRenamingChatId(null)}
-                          className="flex-1 min-w-0 px-2 py-1"
-                        />
+                        <div className="flex-1 min-w-0 px-2 py-1">
+                          <ChatTitleEditor
+                            value={chat.title || ''}
+                            onCommit={next => handleRenameChat(chat.id, next)}
+                            onCancel={() => setRenamingChatId(null)}
+                            className="text-[13px]"
+                          />
+                        </div>
                       ) : (
                         <>
                           {/* Stays a link so middle-click and open-in-new-tab
@@ -846,8 +849,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                             {chat.hasUnseenActivity && (
                               <span
                                 role="img"
-                                aria-label={t('chatHistory.unseen', 'New activity')}
-                                title={t('chatHistory.unseen', 'New activity')}
+                                aria-label={unseenHint}
+                                title={unseenHint}
                                 className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-none"
                               />
                             )}
