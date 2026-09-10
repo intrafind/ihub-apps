@@ -138,6 +138,25 @@ export function useChatPersistence() {
 }
 
 /**
+ * Whether the answer {@link useChatPersistence} is giving is still provisional.
+ *
+ * Both inputs resolve asynchronously, and until they have, the hook has to
+ * answer `false` — it cannot claim a capability it has not confirmed. For a
+ * list that is only a brief empty state, but a chat surface reads the same flag
+ * to decide whether an empty transcript means "new chat" or "not fetched yet",
+ * and answering "new chat" too early paints a greeting that the hydrated
+ * history then replaces. Such a caller should hold its empty state back while
+ * this is true.
+ *
+ * @returns {boolean}
+ */
+export function useChatPersistenceResolving() {
+  const { isLoading: platformLoading } = usePlatformConfig();
+  const { isLoading: authLoading } = useAuth();
+  return platformLoading === true || authLoading === true;
+}
+
+/**
  * State to start from, so a consumer that mounts onto a warm cache renders the
  * list on its first paint instead of flashing a spinner.
  *

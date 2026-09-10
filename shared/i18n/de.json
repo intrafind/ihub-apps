@@ -265,6 +265,7 @@
       "messagePlaceholder": "Gib deine Nachricht hier ein...",
       "send": "Senden",
       "thinking": "Denkt nach...",
+      "loadingChat": "Chat wird geladen...",
       "regenerate": "Antwort neu generieren",
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",

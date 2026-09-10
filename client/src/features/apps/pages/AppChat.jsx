@@ -26,7 +26,11 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-import { useChatPersistence } from '../../../shared/hooks/useChats';
+import {
+  invalidateChatsCache,
+  useChatPersistence,
+  useChatPersistenceResolving
+} from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -99,7 +103,22 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
-const renderStartupState = (app, welcomeMessage, handleStarterPromptClick, hydrating, t) => {
+const renderStartupState = (
+  app,
+  welcomeMessage,
+  handleStarterPromptClick,
+  hydrating,
+  modeResolving,
+  t
+) => {
+  // The app details can arrive before the platform config and the auth status
+  // do, and until both have, nothing here knows whether this chat is
+  // server-backed. Painting the greeting on that guess and correcting it a
+  // frame later is a visible flicker, so this window renders nothing at all —
+  // a spinner would only be a second flash for the installations that have no
+  // persistence to wait for.
+  if (modeResolving) return null;
+
   // A server-backed chat starts with an empty `messages` whether it is brand
   // new or holds a hundred turns — the difference only arrives with
   // `GET /api/chats/:id`. Greeting the user as if this were a new chat and then
@@ -542,6 +561,11 @@ function AppChat({ preloadedApp = null }) {
   // had it, and keep exactly the behaviour they have today.
   const chatPersistence = useChatPersistence();
   const serverBackedChat = chatPersistence && !ephemeral;
+  // `chatPersistence` answers false until the platform config and the auth
+  // status have both landed, so an early false is "not known yet", not "no".
+  // The startup state has to wait it out, or a persisted chat greets the user
+  // for a frame before its history arrives.
+  const chatModeResolving = useChatPersistenceResolving() && !ephemeral;
 
   const {
     messages,
@@ -594,6 +618,10 @@ function AppChat({ preloadedApp = null }) {
         // and an empty transcript still ends the loading state rather than
         // letting the greeting appear a beat late.
         loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
+        // Opening a chat is what "seen" means: this same GET cleared the
+        // chat's unseen flag server-side, so every list already on screen is
+        // now showing a badge the server no longer reports.
+        invalidateChatsCache();
       } catch (err) {
         if (cancelled) return;
         if (err?.status !== 404) {
@@ -607,6 +635,20 @@ function AppChat({ preloadedApp = null }) {
       cancelled = true;
     };
   }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
+
+  // A finished turn is what changes the chat list: a brand-new chat appears in
+  // it, an existing one moves to the top and may have gained a derived title,
+  // and opening this chat cleared its unseen flag. The sidebar is mounted once
+  // in Layout for the whole session, so without this its Recents would keep
+  // showing the list it fetched when the page first loaded. Every terminal
+  // branch of a turn clears `processing`, so the transition covers a failed
+  // turn too — that one is stored as well.
+  const wasProcessingRef = useRef(false);
+  useEffect(() => {
+    const wasProcessing = wasProcessingRef.current;
+    wasProcessingRef.current = processing;
+    if (serverBackedChat && wasProcessing && !processing) invalidateChatsCache();
+  }, [processing, serverBackedChat]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
@@ -1069,9 +1111,10 @@ function AppChat({ preloadedApp = null }) {
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
-    // Don't show welcome message if there are any messages, or while a stored
-    // transcript is still on its way — see renderStartupState.
-    if (!app || loading || hydrating || messages.length > 0) return null;
+    // Don't show welcome message if there are any messages, while the chat mode
+    // is still unknown, or while a stored transcript is still on its way — see
+    // renderStartupState.
+    if (!app || loading || hydrating || chatModeResolving || messages.length > 0) return null;
 
     // Skip if starter prompts are configured - they take priority
     if (app.starterPrompts && app.starterPrompts.length > 0) {
@@ -1092,7 +1135,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     return greeting;
-  }, [app, loading, hydrating, currentLanguage, messages.length]);
+  }, [app, loading, hydrating, chatModeResolving, currentLanguage, messages.length]);
 
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
@@ -2291,6 +2334,7 @@ function AppChat({ preloadedApp = null }) {
                             welcomeMessage,
                             handleStarterPromptClick,
                             hydrating,
+                            chatModeResolving,
                             t
                           )}
                         </div>
@@ -2336,6 +2380,7 @@ function AppChat({ preloadedApp = null }) {
                         welcomeMessage,
                         handleStarterPromptClick,
                         hydrating,
+                        chatModeResolving,
                         t
                       )}
                     </div>

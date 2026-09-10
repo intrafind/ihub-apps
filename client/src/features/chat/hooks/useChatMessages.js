@@ -169,11 +169,23 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
   // flipping incognito mid-chat has always kept the visible conversation and
   // only stopped persisting it.
   const [hydrated, setHydrated] = useState(!serverBacked);
-  const hydrating = serverBacked && !hydrated;
 
   // The mode can change after the first render: the persistence capability
   // rides on the platform config, which resolves asynchronously.
   const prevServerBackedRef = useRef(serverBacked);
+
+  // The two effects below reset `hydrated` — but an effect runs *after* the
+  // render that triggered it has painted, so on the frame a chat becomes
+  // server-backed (or switches to another chat) `hydrated` is still the
+  // previous mode's value and the surface renders one settled, empty
+  // transcript. That single frame is the greeting flash hydration exists to
+  // prevent, so both transitions are read straight from the refs here, in
+  // render, where they are already visible. The refs still hold the previous
+  // values until those effects run.
+  const becomingServerBacked = serverBacked && !prevServerBackedRef.current;
+  const switchingChat = prevChatIdRef.current !== chatId;
+  const hydrating = serverBacked && (!hydrated || becomingServerBacked || switchingChat);
+
   useEffect(() => {
     const wasServerBacked = prevServerBackedRef.current;
     prevServerBackedRef.current = serverBacked;

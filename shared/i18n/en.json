@@ -252,6 +252,7 @@
       "messagePlaceholder": "Type your message here...",
       "send": "Send",
       "thinking": "Thinking...",
+      "loadingChat": "Loading chat...",
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",

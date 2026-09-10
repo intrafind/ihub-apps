@@ -207,6 +207,56 @@ describe('useChatMessages in server-backed mode', () => {
     expect(result.current.messages).toEqual([]);
     expect(result.current.hydrating).toBe(true);
   });
+
+  test('the very frame a chat becomes server-backed already reports hydrating', () => {
+    // `hydrated` is reset in an effect, and React runs effects after the
+    // render that scheduled them has painted. Read from that state alone,
+    // `hydrating` would still be false for the one frame between "this chat
+    // is server-backed" and "so start hydrating it" — which is a settled,
+    // empty transcript on screen, i.e. the greeting flash, for a frame.
+    // `renderHook`'s `rerender` flushes effects before it returns, so only a
+    // per-render recording can see it.
+    seedLocalCopy('chat-flip-frame');
+    const frames = [];
+    const { rerender } = renderHook(
+      ({ serverBacked }) => {
+        const chat = useChatMessages('chat-flip-frame', { serverBacked });
+        frames.push({ serverBacked, hydrating: chat.hydrating });
+        return chat;
+      },
+      { initialProps: { serverBacked: false } }
+    );
+
+    frames.length = 0;
+    rerender({ serverBacked: true });
+
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames[0]).toEqual({ serverBacked: true, hydrating: true });
+    expect(frames.every(frame => frame.hydrating)).toBe(true);
+  });
+
+  test('the very frame a chat switches to another chat already reports hydrating', () => {
+    const frames = [];
+    const { result, rerender } = renderHook(
+      ({ chatId }) => {
+        const chat = useChatMessages(chatId, { serverBacked: true });
+        frames.push({ chatId, hydrating: chat.hydrating });
+        return chat;
+      },
+      { initialProps: { chatId: 'chat-frame-one' } }
+    );
+    act(() => {
+      result.current.loadServerMessages(STORED);
+    });
+    expect(result.current.hydrating).toBe(false);
+
+    frames.length = 0;
+    rerender({ chatId: 'chat-frame-two' });
+
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames[0]).toEqual({ chatId: 'chat-frame-two', hydrating: true });
+    expect(frames.every(frame => frame.hydrating)).toBe(true);
+  });
 });
 
 describe('the modes that are not server-backed', () => {
