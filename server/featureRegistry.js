@@ -103,17 +103,10 @@ export const featureRegistry = [
     category: 'ai',
     default: false
   },
-  {
-    id: 'chatHistoryPreview',
-    name: { en: 'Chat History', de: 'Chat-Verlauf' },
-    description: {
-      en: 'Show recent chats in the sidebar and a dedicated chat history page (currently uses sample data)',
-      de: 'Zeigt letzte Chats in der Seitenleiste und eine eigene Chat-Verlaufsseite (nutzt derzeit Beispieldaten)'
-    },
-    category: 'preview',
-    default: false,
-    preview: true
-  },
+  // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
+  // page backed by fixtures. The history UI is now driven by the durable-chat
+  // store, so `chatPersistence` is the single switch for both storing chats and
+  // showing them; V095 carries a saved `chatHistoryPreview: true` over to it.
   {
     id: 'chatPersistence',
     name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },

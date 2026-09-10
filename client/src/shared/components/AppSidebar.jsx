@@ -4,8 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import useFeatureFlags from '../hooks/useFeatureFlags';
 import useApps from '../hooks/useApps';
+import useChats, { invalidateChatsCache, useChatPersistence } from '../hooks/useChats';
 import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
+import ConfirmDialog from './ConfirmDialog';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { rankAppShortcuts, readAppShortcutConfig } from '../../utils/appShortcuts';
@@ -16,7 +18,8 @@ import BrandTitle from './BrandTitle';
 import { isActivePath } from '../../utils/pathUtils';
 import { canAccessLink, FEATURE_ROUTES } from '../../utils/pageAccess';
 import { useTranslation } from 'react-i18next';
-import { MOCK_CHATS } from '../../features/chat/data/mockChats';
+import { deleteChat, renameChat } from '../../api';
+import ChatTitleEditor from '../../features/chat/components/ChatTitleEditor';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import LanguageSelector from './LanguageSelector';
 import DarkModeToggle from './DarkModeToggle';
@@ -110,6 +113,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const location = useLocation();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
+  // Durable chats. The capability — a store is configured and this viewer can
+  // own chats — is the gate for every part of the history UI; the hook is inert
+  // and issues no request when it is off.
+  const chatsEnabled = useChatPersistence();
+  const { chats, loading: chatsLoading, error: chatsError, hasMore: hasMoreChats } = useChats();
   // Render exactly one sidebar variant instead of mounting both and hiding one with CSS.
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const { favorites: favoriteAppIds, isFavorite, toggleFavorite } = useFavorites(FAVORITE_APPS_KEY);
@@ -125,21 +133,27 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const [search, setSearch] = useState('');
   const [appsOpen, setAppsOpen] = useState(true);
   const [recentsOpen, setRecentsOpen] = useState(true);
+  const [renamingChatId, setRenamingChatId] = useState(null);
+  // Rename/delete report through the same one-line slot the list already uses
+  // for loading and empty states — the sidebar has no toast surface.
+  const [chatActionError, setChatActionError] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const drawerRef = useRef(null);
   const expandButtonRef = useRef(null);
   const collapseButtonRef = useRef(null);
   const refocusAfterToggle = useRef(false);
 
-  const chatHistoryEnabled = featureFlags.isEnabled('chatHistoryPreview', false);
   // Same gate as the /prompts route in App.jsx.
   const promptsEnabled =
     uiConfig?.promptsList?.enabled !== false && featureFlags.isEnabled('promptsLibrary', true);
   // Without chat history the search only covers apps — say so.
-  const searchLabel = chatHistoryEnabled
+  const searchLabel = chatsEnabled
     ? t('sidebar.searchChatsApps', 'Search chats & apps')
     : t('sidebar.searchApps', 'Search apps');
   const sidebarLabel = t('sidebar.label', 'Sidebar');
   const navigationLabel = t('sidebar.navigation', 'Navigation');
+  const allChatsLabel = t('sidebar.allChats', 'All chats');
+  const untitledChatLabel = t('chatHistory.untitled', 'Untitled chat');
 
   // A drawer left open while the viewport grows to desktop would keep the
   // page scroll locked with nothing visible — close it.
@@ -266,17 +280,98 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     [rankedApps, sidebarCount]
   );
 
+  const appsById = useMemo(() => new Map(apps.map(app => [app.id, app])), [apps]);
+
+  // `GET /api/chats` returns the stored document and nothing else, so the app's
+  // name, colour and icon are joined here from the list the sidebar already
+  // holds. Filtering is client-side over the page that is loaded: the shared
+  // search box is the same one that filters apps, and the API has no query
+  // parameter, so a match here means "among the recent chats you have".
   const recentChats = useMemo(() => {
-    if (!chatHistoryEnabled) return [];
+    if (!chatsEnabled) return [];
     const q = search.trim().toLowerCase();
-    if (!q) return MOCK_CHATS.slice(0, 5);
-    return MOCK_CHATS.filter(
-      c =>
-        c.title.toLowerCase().includes(q) ||
-        c.appName.toLowerCase().includes(q) ||
-        c.snippet.toLowerCase().includes(q)
-    ).slice(0, 5);
-  }, [chatHistoryEnabled, search]);
+    const decorated = chats.map(chat => {
+      const app = appsById.get(chat.appId);
+      return {
+        ...chat,
+        appName: (app && getLocalizedContent(app.name, currentLanguage)) || chat.appId || '',
+        appColor: app?.color || '#4f46e5',
+        appIcon: app?.icon || 'chat'
+      };
+    });
+    const matched = q
+      ? decorated.filter(
+          c => (c.title || '').toLowerCase().includes(q) || c.appName.toLowerCase().includes(q)
+        )
+      : decorated;
+    return matched.slice(0, 5);
+  }, [chatsEnabled, chats, appsById, currentLanguage, search]);
+
+  // Chats that finished a run while nobody was watching. Counted over the
+  // loaded page, which is the newest one — a chat can only become unseen by
+  // finishing a turn, so anything unseen is recent by construction.
+  const unseenChatCount = useMemo(
+    () => chats.reduce((total, chat) => total + (chat.hasUnseenActivity ? 1 : 0), 0),
+    [chats]
+  );
+  const unseenLabel =
+    unseenChatCount > 0
+      ? t('sidebar.unseenBadge', '{{count}} new', { count: unseenChatCount })
+      : null;
+
+  // A chat is opened inside its app. `appId` is set for every chat the chat
+  // route creates, but the document allows null, and there is nowhere to open
+  // such a chat — send those to the list rather than to `/apps/null/c/…`.
+  const chatLinkFor = chat => (chat.appId ? `/apps/${chat.appId}/c/${chat.id}` : '/chats');
+
+  const handleRenameChat = useCallback(
+    async (chatId, title) => {
+      setRenamingChatId(null);
+      setChatActionError(null);
+      try {
+        await renameChat(chatId, title);
+      } catch {
+        setChatActionError(
+          t('chatHistory.renameFailed', 'The chat could not be renamed. Please try again.')
+        );
+      }
+      invalidateChatsCache();
+    },
+    [t]
+  );
+
+  const requestDeleteChat = useCallback(
+    (e, chat) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // The mobile drawer is a focus-trapped modal of its own; leaving it open
+      // behind the confirmation would put two traps on the same Tab key.
+      onMobileClose();
+      setConfirmDialog({
+        title: t('chatHistory.deleteTitle', 'Delete chat?'),
+        message: t(
+          'chatHistory.deleteMessage',
+          '“{{title}}” and all of its messages will be permanently deleted. This cannot be undone.',
+          { title: chat.title || untitledChatLabel }
+        ),
+        confirmLabel: t('chatHistory.deleteConfirm', 'Delete'),
+        danger: true,
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          setChatActionError(null);
+          try {
+            await deleteChat(chat.id);
+          } catch {
+            setChatActionError(
+              t('chatHistory.deleteFailed', 'The chat could not be deleted. Please try again.')
+            );
+          }
+          invalidateChatsCache();
+        }
+      });
+    },
+    [t, untitledChatLabel, onMobileClose]
+  );
 
   const isOnPrompts = location.pathname.startsWith('/prompts');
   const isOnChats = location.pathname.startsWith('/chats');
@@ -388,6 +483,27 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         >
           <Icon name="home" size="md" />
         </Link>
+
+        {/* Collapsing must not lose the history: the rail carries the same
+            "All chats" destination the expanded Recents section ends with, and
+            the dot stands in for its unseen badge. */}
+        {chatsEnabled && (
+          <Link
+            to="/chats"
+            title={allChatsLabel}
+            aria-label={unseenLabel ? `${allChatsLabel} (${unseenLabel})` : allChatsLabel}
+            aria-current={isOnChats ? 'page' : undefined}
+            className={`relative ${railItemClass(isOnChats)}`}
+          >
+            <Icon name="clock" size="md" />
+            {unseenChatCount > 0 && (
+              <span
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-gray-900"
+                aria-hidden="true"
+              />
+            )}
+          </Link>
+        )}
 
         {promptsEnabled && (
           <Link
@@ -661,34 +777,107 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           </div>
         )}
 
-        {/* Recents section — feature-flagged */}
-        {chatHistoryEnabled && (
+        {/* Recents section — the viewer's stored chats */}
+        {chatsEnabled && (
           <>
             <SectionHeader
               label={t('sidebar.recents', 'Recents')}
-              badge={t('sidebar.sampleBadge', 'Sample')}
+              badge={unseenLabel}
               open={recentsOpen}
               onToggle={() => setRecentsOpen(o => !o)}
             />
             {recentsOpen && (
               <div className="px-2 pb-2">
-                {recentChats.map(chat => (
-                  <Link
-                    key={chat.id}
-                    to="/chats"
-                    onClick={onMobileClose}
-                    title={chat.title}
-                    className="flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-                  >
-                    <span
-                      className="w-5 h-5 rounded-md flex items-center justify-center flex-none text-white"
-                      style={{ backgroundColor: chat.appColor || '#4f46e5' }}
+                {chatActionError && (
+                  <p role="alert" className="text-xs text-red-600 dark:text-red-400 px-3 py-1">
+                    {chatActionError}
+                  </p>
+                )}
+                {recentChats.length === 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">
+                    {chatsLoading
+                      ? t('sidebar.loadingChats', 'Loading…')
+                      : chatsError && chats.length === 0
+                        ? t('sidebar.chatsUnavailable', 'Chats could not be loaded')
+                        : chats.length === 0
+                          ? t('sidebar.noChats', 'No chats yet')
+                          : t('sidebar.noChatsMatch', 'No chats match')}
+                  </p>
+                )}
+                {recentChats.map(chat => {
+                  const to = chatLinkFor(chat);
+                  const isActive = location.pathname === to;
+                  const title = chat.title || untitledChatLabel;
+                  return (
+                    <div
+                      key={chat.id}
+                      className={`group flex items-center rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
                     >
-                      <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
-                    </span>
-                    <span className="flex-1 truncate text-[13px]">{chat.title}</span>
-                  </Link>
-                ))}
+                      {renamingChatId === chat.id ? (
+                        <ChatTitleEditor
+                          value={chat.title || ''}
+                          onSave={next => handleRenameChat(chat.id, next)}
+                          onCancel={() => setRenamingChatId(null)}
+                          className="flex-1 min-w-0 px-2 py-1"
+                        />
+                      ) : (
+                        <>
+                          {/* Stays a link so middle-click and open-in-new-tab
+                              still work; the row actions are siblings, never
+                              nested inside it. */}
+                          <Link
+                            to={to}
+                            onClick={onMobileClose}
+                            title={title}
+                            aria-current={isActive ? 'page' : undefined}
+                            className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 text-left min-w-0"
+                          >
+                            <span
+                              className="w-5 h-5 rounded-md flex items-center justify-center flex-none text-white"
+                              style={{ backgroundColor: chat.appColor }}
+                            >
+                              <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
+                            </span>
+                            <span className="flex-1 truncate text-[13px]">{title}</span>
+                            {chat.hasUnseenActivity && (
+                              <span
+                                role="img"
+                                aria-label={t('chatHistory.unseen', 'New activity')}
+                                title={t('chatHistory.unseen', 'New activity')}
+                                className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-none"
+                              />
+                            )}
+                          </Link>
+                          <button
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setChatActionError(null);
+                              setRenamingChatId(chat.id);
+                            }}
+                            aria-label={t('chatHistory.rename', 'Rename chat')}
+                            title={t('chatHistory.rename', 'Rename chat')}
+                            className="w-7 h-7 flex-none rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <Icon name="pencil" size="sm" className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={e => requestDeleteChat(e, chat)}
+                            aria-label={t('chatHistory.delete', 'Delete chat')}
+                            title={t('chatHistory.delete', 'Delete chat')}
+                            className="w-7 h-7 flex-none mr-1 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          >
+                            <Icon name="trash" size="sm" className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
                 <Link
                   to="/chats"
                   onClick={onMobileClose}
@@ -698,10 +887,16 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                   <span className="w-5 h-5 flex items-center justify-center flex-none">
                     <Icon name="clock" size="sm" />
                   </span>
-                  <span className="flex-1">{t('sidebar.allChats', 'All chats')}</span>
-                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
-                    {MOCK_CHATS.length}
-                  </span>
+                  <span className="flex-1">{allChatsLabel}</span>
+                  {chats.length > 0 && (
+                    // How many are loaded, not how many exist: the list is
+                    // cursor-paged and the API has no cheap total, so a bare
+                    // number would be a page size pretending to be one.
+                    <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full px-2 py-0.5">
+                      {chats.length}
+                      {hasMoreChats ? '+' : ''}
+                    </span>
+                  )}
                 </Link>
               </div>
             )}
@@ -759,6 +954,14 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           </aside>
         </div>
       )}
+
+      {/* Outside both variants so the confirmation survives a collapse and is
+          never nested in the drawer's own focus trap. */}
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        {...confirmDialog}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </>
   );
 }

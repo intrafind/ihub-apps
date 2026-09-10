@@ -167,6 +167,7 @@ import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
+import { useChatPersistence } from './shared/hooks/useChats';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
@@ -194,9 +195,9 @@ function useIsTeamsEnvironment() {
 // element also avoids flashing the 404 page while the config is loading.
 function ChatHistoryRoute() {
   const { isLoading } = usePlatformConfig();
-  const featureFlags = useFeatureFlags();
+  const chatPersistence = useChatPersistence();
   if (isLoading) return <AdminLoading />;
-  if (!featureFlags.isEnabled('chatHistoryPreview', false)) return <NotFound />;
+  if (!chatPersistence) return <NotFound />;
   return (
     <Suspense fallback={<AdminLoading />}>
       <ChatHistoryPage />

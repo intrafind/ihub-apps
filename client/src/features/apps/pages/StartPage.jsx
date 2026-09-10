@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import Icon from '../../../shared/components/Icon';
 import { fetchAppDetails, fetchModels } from '../../../api';
 import useApps from '../../../shared/hooks/useApps';
+import useChats, { useChatPersistence } from '../../../shared/hooks/useChats';
 import useAuthKey from '../../../shared/hooks/useAuthKey';
 import useFavorites from '../../../shared/hooks/useFavorites';
 import IHubLogo from '../../../shared/components/IHubLogo';
@@ -15,7 +15,6 @@ import { getRecentAppIds } from '../../../utils/recentApps';
 import { pickDefaultChatApp } from '../../../utils/homePage';
 import { filterModelsForApp, pickInitialModelForApp } from '../../../utils/modelFiltering';
 import { useTranslation } from 'react-i18next';
-import { MOCK_CHATS } from '../../chat/data/mockChats';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import ChatInput from '../../chat/components/ChatInput';
@@ -30,10 +29,13 @@ export default function StartPage() {
   const { user } = useAuth();
   const authKey = useAuthKey();
   const { uiConfig, resetHeaderColor } = useUIConfig();
-  const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
+  // Durable chats — inert (no request, empty list) when the capability is off
+  // or the viewer cannot own chats.
+  const chatsEnabled = useChatPersistence();
+  const { chats } = useChats();
   const { favorites: favoriteAppIds } = useFavorites('ihub_favorite_apps');
   const [draft, setDraft] = useState('');
   const [defaultAppDetails, setDefaultAppDetails] = useState(null);
@@ -45,8 +47,6 @@ export default function StartPage() {
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const fileUploadHandler = useFileUploadHandler();
-
-  const chatHistoryEnabled = featureFlags.isEnabled('chatHistoryPreview', false);
 
   // Leaving an app for "/" must not keep that app's colour on the classic header.
   useEffect(() => {
@@ -196,7 +196,22 @@ export default function StartPage() {
     [rankedApps, startPageCount]
   );
 
-  const recentChats = chatHistoryEnabled ? MOCK_CHATS.slice(0, 3) : [];
+  // The three most recent stored chats. `GET /api/chats` returns the stored
+  // document only, so the app's colour and icon are joined from the apps list
+  // this page already has.
+  const recentChats = useMemo(() => {
+    if (!chatsEnabled) return [];
+    return chats.slice(0, 3).map(chat => {
+      const app = apps.find(a => a.id === chat.appId);
+      return {
+        id: chat.id,
+        appId: chat.appId,
+        title: chat.title,
+        appColor: app?.color || '#4f46e5',
+        appIcon: app?.icon || 'chat'
+      };
+    });
+  }, [chatsEnabled, chats, apps]);
 
   const uploadConfig = useMemo(
     () =>
@@ -392,30 +407,30 @@ export default function StartPage() {
           </div>
         )}
 
-        {/* Pick up where you left off — feature flagged */}
-        {chatHistoryEnabled && recentChats.length > 0 && (
+        {/* Pick up where you left off — the viewer's most recent stored chats */}
+        {recentChats.length > 0 && (
           <div>
-            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
+            <h2 className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-3">
               {t('startPage.pickUpWhereYouLeftOff', 'Pick up where you left off')}
-              {/* Preview flag renders fixtures until chat persistence exists. */}
-              <span className="text-[10px] font-semibold normal-case tracking-normal text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded px-1.5">
-                {t('sidebar.sampleBadge', 'Sample')}
-              </span>
             </h2>
             <div className="flex flex-wrap gap-2">
               {recentChats.map(chat => (
                 <button
                   key={chat.id}
-                  onClick={() => navigate('/chats')}
+                  onClick={() =>
+                    navigate(chat.appId ? `/apps/${chat.appId}/c/${chat.id}` : '/chats')
+                  }
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all max-w-xs"
                 >
                   <span
                     className="w-5 h-5 rounded-md flex items-center justify-center flex-none text-white"
-                    style={{ backgroundColor: chat.appColor || '#4f46e5' }}
+                    style={{ backgroundColor: chat.appColor }}
                   >
                     <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
                   </span>
-                  <span className="truncate">{chat.title}</span>
+                  <span className="truncate">
+                    {chat.title || t('chatHistory.untitled', 'Untitled chat')}
+                  </span>
                 </button>
               ))}
             </div>
