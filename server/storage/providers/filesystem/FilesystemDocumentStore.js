@@ -91,8 +91,7 @@ function isReservedEntry(entry) {
  * visible for a document that stores credentials.
  */
 function etagOf(json) {
-  // lgtm[js/insufficient-password-hash] -- entity tag over a document body, not a stored password.
-  return crypto.createHash('sha256').update(json, 'utf8').digest('hex');
+  return crypto.createHash('sha256').update(json, 'utf8').digest('hex'); // lgtm[js/insufficient-password-hash] -- entity tag over a document body, not a stored password
 }
 
 /**
