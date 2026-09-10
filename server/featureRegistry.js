@@ -115,6 +115,17 @@ export const featureRegistry = [
     preview: true
   },
   {
+    id: 'chatPersistence',
+    name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
+    description: {
+      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat',
+      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {
@@ -175,8 +186,7 @@ export const featureRegistry = [
       de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
     },
     category: 'preview',
-    default: false,
-    preview: true
+    default: false
   }
 ];
 

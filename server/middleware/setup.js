@@ -599,6 +599,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Rate limiting middleware - apply early to protect all endpoints
   // Public API rate limiter for general endpoints
   app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/chats'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);

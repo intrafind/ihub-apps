@@ -255,10 +255,22 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .default({}),
+    // Durable chats: server-side chat history written through the storage
+    // abstraction. The feature itself is gated by features.chatPersistence;
+    // these are its settings. Both retention rules are switched off by a value
+    // of zero or less — chats are then kept until an owner deletes them.
+    chats: z
+      .object({
+        enabled: z.boolean().default(true),
+        retentionDays: z.number().default(90),
+        maxChatsPerUser: z.number().default(200)
+      })
+      .passthrough()
+      .default({}),
     // Storage abstraction: which provider backs runtime data (documents,
-    // append-logs, locks, change events). Nothing reads it yet — it is the
-    // foundation for durable chats — so these settings only describe where that
-    // data will live. `provider` is deliberately a free string rather than an
+    // append-logs, locks, change events). Durable chats are its first consumer
+    // — `server/storage/bootstrap.js` brings this provider up at boot and the
+    // chat repository writes through it. `provider` is a free string rather than an
     // enum so an install can be pre-configured for a provider a later release
     // registers, without failing platform validation on the older one.
     storage: z

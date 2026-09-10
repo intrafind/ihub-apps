@@ -16,7 +16,7 @@ import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
 import { runTool as defaultRunTool } from '../../toolLoader.js';
-import { activeRequests } from '../../sse.js';
+import { activeRequests, hasChatClient } from '../../sse.js';
 import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
@@ -24,7 +24,7 @@ import defaultAgentLoop from '../loop/AgentLoop.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
-import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   imageLiftSeam,
   knowledgeSourceSeam,
@@ -33,6 +33,11 @@ import {
   questionSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
+import {
+  materializeAssistantTurn,
+  materializeUserTurn,
+  normalizeAttachments
+} from './chatMaterializer.js';
 import {
   chatTurnSeam,
   chatToolSeam,
@@ -204,6 +209,34 @@ class ChatService {
     }
   }
 
+  /**
+   * Append the run's `message/user` event.
+   *
+   * Nothing else in the tree produces one for a real user turn — the only
+   * other emitter covers synthetic steer messages — so without this a run's
+   * ledger records every answer and none of the questions, and the turn cannot
+   * be replayed as a conversation. Appended only for durable turns: chat
+   * persistence implies the ledger is on, and off it there is nobody to read
+   * the event back.
+   * @private
+   */
+  _appendUserMessageEvent({ runId, messageId, content, attachments }) {
+    try {
+      this.runLog.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, {
+        step: 0,
+        ...(messageId ? { messageId: String(messageId) } : {}),
+        content: typeof content === 'string' ? content : '',
+        ...(attachments.length > 0 ? { attachments } : {})
+      });
+    } catch (err) {
+      logger.warn('Run ledger user message failed', {
+        component: COMPONENT,
+        runId,
+        error: err.message
+      });
+    }
+  }
+
   _endLedgerRun(runId, { status, finishReason, usage, error, startedAt }) {
     try {
       this.runLog.endRun(runId, {
@@ -250,6 +283,14 @@ class ChatService {
    * @param {string} [params.language='en']
    * @param {Object} [params.user]
    * @param {string} [params.runId] - run id to use (default: minted)
+   * @param {Object} [params.persistence] - durable-chat context, supplied by the caller only
+   *   when `isChatPersistenceActive()` said yes for this request. Omitted (the default) the
+   *   turn is not stored and behaves exactly as it did before chat persistence existed.
+   *   `{ repository, ownerId, identityMode, content, clientMessageId?, attachments?,
+   *   replaceFromMessageId? }`, where `repository` is a `ChatRepository`, `ownerId`/
+   *   `identityMode` are the run principal resolved once by the caller, and `content` is the
+   *   raw text of the new user message (the stored history is never client-asserted, but the
+   *   message being sent comes from the request).
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo? }`
    */
@@ -264,7 +305,8 @@ class ChatService {
     getLocalizedError,
     language = 'en',
     user,
-    runId: givenRunId
+    runId: givenRunId,
+    persistence = null
   }) {
     const {
       app,
@@ -311,6 +353,32 @@ class ChatService {
     });
 
     await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language });
+
+    // A durable turn records the human half twice: on the ledger, so the run
+    // can be replayed as a conversation, and in the chat store, which is what
+    // the history UI reads back. Both happen before the first client frame so
+    // the chat document exists by the time anything can ask for it.
+    const persist = persistence?.repository ? persistence : null;
+    if (persist) {
+      const attachments = normalizeAttachments(persist.attachments);
+      this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
+      await materializeUserTurn({
+        repository: persist.repository,
+        chatId,
+        ownerId: persist.ownerId,
+        identityMode: persist.identityMode,
+        appId: app?.id,
+        modelId: model?.id,
+        runId,
+        content: persist.content,
+        // The only client id on the wire is the exchange id of the assistant
+        // placeholder, which the client also puts on the message it sends.
+        clientMessageId: persist.clientMessageId ?? messageId ?? null,
+        attachments,
+        replaceFromMessageId: persist.replaceFromMessageId
+      });
+    }
+
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
       kind: 'chat',
       ...(model?.id ? { model: model.id } : {}),
@@ -401,6 +469,18 @@ class ChatService {
         language,
         channel
       });
+      // The single choke point: every terminal shape `_finishTurn` produces —
+      // normal, aborted, error, passthrough answer, malformed response —
+      // passes through here with the same summary.
+      if (persist) {
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: outcome,
+          clientConnected: hasChatClient(chatId)
+        });
+      }
       this._endLedgerRun(runId, {
         status: outcome.status,
         finishReason: outcome.finishReason,
@@ -421,6 +501,22 @@ class ChatService {
         finishReason: 'error',
         error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
       });
+      // `_finishTurn` never ran, so nothing else releases the chat: without
+      // this it stays `running` with a live `activeRunId` forever.
+      if (persist) {
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: {
+            status: 'error',
+            content: '',
+            finishReason: 'error',
+            errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
+          },
+          clientConnected: hasChatClient(chatId)
+        });
+      }
       this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
       throw error;
     } finally {

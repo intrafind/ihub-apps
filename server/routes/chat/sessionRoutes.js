@@ -9,13 +9,17 @@ import llmClient, {
 import {
   clients,
   abortChatRequest,
+  abortChatRequestOnDisconnect,
+  clearChatDurable,
   closeChatClient,
   hasActiveChatRequest,
-  hasChatClient
+  hasChatClient,
+  isChatDurable,
+  markChatDurable
 } from '../../sse.js';
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId } from '../../services/loop/RunLog.js';
-import { resolveActorId } from '../../services/loop/runIdentity.js';
+import { resolveActorId, resolvePrincipal } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
@@ -27,6 +31,9 @@ import {
 } from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
+import { authorizeChat } from '../../services/chat/chatAccess.js';
+import { getChatRepository, isPersistableChatId } from '../../services/chat/ChatRepository.js';
+import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -61,6 +68,38 @@ function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs =
     finishReason: 'error',
     error: { ...(code ? { code: String(code) } : {}), message: String(message) }
   });
+}
+
+/**
+ * Chat-shaped view of a persisted transcript: role and content only.
+ *
+ * Everything else on a stored message — ids, usage, the error of a failed turn,
+ * attachment descriptors — is bookkeeping for the history UI and has no place
+ * in a model prompt. Contentless turns are dropped with it: an aborted or
+ * failed turn is stored with an empty answer, and several providers reject a
+ * blank message outright.
+ *
+ * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
+ * @returns {Array<{role: string, content: string}>}
+ */
+function historyForPrompt(stored) {
+  return stored
+    .filter(entry => entry?.role && typeof entry.content === 'string' && entry.content.trim())
+    .map(entry => ({ role: entry.role, content: entry.content }));
+}
+
+/**
+ * Upload descriptors carried by a chat message, for the materializer to
+ * normalize. The base64 payloads stay in the request: what a stored message
+ * keeps is the fact that a file was attached, not the file.
+ *
+ * @param {Object} message - The new user message from the request.
+ * @returns {Array<Object>}
+ */
+function messageAttachments(message) {
+  return [message?.fileData, message?.imageData, message?.audioData].filter(
+    entry => entry && typeof entry === 'object'
+  );
 }
 
 export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
@@ -162,6 +201,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           items:
    *             type: string
    *           description: IDs of documents to include as context
+   *         replaceFromMessageId:
+   *           type: string
+   *           description: |
+   *             Persisted chats only. Stored message id to fork the history from
+   *             (inclusive) before the new message is appended — an edit or a
+   *             regenerate. Unknown ids are rejected with 400 UNKNOWN_MESSAGE.
+   *         ephemeral:
+   *           type: boolean
+   *           description: |
+   *             Do not persist this turn. Advisory: it can only turn persistence
+   *             off, never on.
    *
    *     ChatStreamingResponse:
    *       type: object
@@ -371,6 +421,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // chatId when channel setup throws.
       const { appId, chatId } = req.params;
       try {
+        // `chatAuthRequired` authorizes the app, never the chat id. A persisted
+        // chat is a durable, guessable resource, so subscribing to its stream
+        // has to be an ownership decision as well as an app one.
+        const access = await authorizeChat(chatId, req.user);
+        if (!access.ok) return sendNotFound(res, 'Chat session');
+
         const channel = createSseChannel({
           req,
           res,
@@ -382,8 +438,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // The LLM call feeding this stream may be running on another
             // worker, so abort through the cluster-aware helper — otherwise a
             // browser closing the tab would leave the generation running to
-            // completion, billing tokens nobody will read.
-            abortChatRequest(chatId);
+            // completion, billing tokens nobody will read. A persisted turn is
+            // the exception: its answer is stored for the user to come back to,
+            // so the helper leaves that one running.
+            abortChatRequestOnDisconnect(chatId);
             logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
           }
         });
@@ -525,6 +583,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    * Run one chat turn through the shared chat service. With an SSE client the
    * turn streams over the chat channel and this resolves once it ended; without
    * one the answer is written to the HTTP response.
+   *
+   * `persistence` is the durable-chat context the POST handler assembled, or
+   * null when this turn is not stored — the service treats null as "behave
+   * exactly as you did before chat persistence existed".
    */
   async function processChatRequest({
     prep,
@@ -537,7 +599,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage,
-    user
+    user,
+    persistence = null
   }) {
     await logInteraction('chat_request', buildLogData(streaming));
 
@@ -551,7 +614,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       timeoutMs: DEFAULT_TIMEOUT,
       getLocalizedError,
       language: clientLanguage,
-      user
+      user,
+      persistence
     });
     if (streaming) return outcome;
 
@@ -662,8 +726,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     chatAuthRequired,
     validate(chatPostSchema),
     async (req, res) => {
+      // Destructured outside the try, and the durable mark tracked next to it,
+      // so the finally below can release the chat even when the handler throws
+      // before it ever reaches the turn.
+      const { appId, chatId } = req.params;
+      let durableTurn = false;
       try {
-        const { appId, chatId } = req.params;
         const {
           messages,
           modelId,
@@ -680,8 +748,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           imageAspectRatio,
           imageQuality,
           requestedSkill,
-          documentIds
+          documentIds,
+          replaceFromMessageId,
+          ephemeral
         } = req.body;
+
+        // `chatAuthRequired` authorizes the app, never the chat id. Once chats
+        // are stored, anyone who guesses one could otherwise append a turn to
+        // — and, through the stream, read back — another user's chat.
+        const access = await authorizeChat(chatId, req.user);
+        if (!access.ok) return sendNotFound(res, 'Chat session');
+
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
           language || req.headers['accept-language']?.split(',')[0] || defaultLang;
@@ -725,6 +802,67 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           return sendBadRequest(res, errorMessage);
         }
+
+        // --- durable chats: the server owns the history ---
+        // Persistence moves the conversation's source of truth. A persisted
+        // chat posts exactly one message — the new one — and the server reads
+        // the rest back out of the store, so a client can no longer rewrite
+        // what it already said. Anonymous callers, ephemeral turns and
+        // installations with persistence off keep posting their whole array and
+        // take the same code path they always have; both modes are permanent.
+        const repository = getChatRepository();
+        const persistTurn =
+          isPersistableChatId(chatId) &&
+          isChatPersistenceActive({
+            features: configCache.getFeatures(),
+            platformConfig: configCache.getPlatform(),
+            user: req.user,
+            ephemeral
+          });
+        if (persistTurn && messages.length > 1) {
+          return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED');
+        }
+
+        let conversation = messages;
+        let persistence = null;
+        const newMessage = messages[0];
+        if (persistTurn && newMessage) {
+          const stored = await repository.getMessages(chatId);
+          let history = stored.messages;
+          if (replaceFromMessageId) {
+            const forkAt = history.findIndex(entry => entry.id === replaceFromMessageId);
+            // Appending onto the untouched history instead would silently
+            // duplicate everything the edit meant to replace, so refuse.
+            if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
+            history = history.slice(0, forkAt);
+          }
+          // An app that opted out of chat history stays a one-shot prompt:
+          // storing the transcript must not start feeding it back to the model.
+          const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
+          conversation =
+            chatApp?.sendChatHistory === false
+              ? [newMessage]
+              : [...historyForPrompt(history), newMessage];
+
+          // Resolved once here and carried on the turn: `resolvePrincipal` is
+          // async and hits the filesystem, and the run finishes with no request
+          // in scope. The mode travels with the id so that an admin changing
+          // `runLog.identityMode` later cannot orphan this chat.
+          const identityMode = runLog.identityMode();
+          const principal = await resolvePrincipal(req.user, { mode: identityMode });
+          persistence = {
+            repository,
+            ownerId: principal.id,
+            identityMode: principal.mode || identityMode,
+            // The stored history is never client-asserted; the message being
+            // sent necessarily is — it only exists in this request.
+            content: typeof newMessage.content === 'string' ? newMessage.content : '',
+            clientMessageId: messageId,
+            attachments: messageAttachments(newMessage),
+            replaceFromMessageId: replaceFromMessageId || null
+          };
+        }
+
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
 
         // --- @mention workflow detection ---
@@ -785,8 +923,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             const fileData = lastUserMsg.fileData || null;
             const imageData = lastUserMsg.imageData || null;
 
-            // Build chat history from all prior messages (excluding the last)
-            const chatHistory = messages.slice(0, -1).map(m => ({
+            // Build chat history from all prior messages (excluding the last).
+            // From `conversation`, not the request body: for a persisted chat
+            // the prior turns came out of the store, not off the wire.
+            const chatHistory = conversation.slice(0, -1).map(m => ({
               role: m.role,
               content: m.content
             }));
@@ -852,6 +992,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // fetching separately) keeps the two in step.
         const streamOpen = hasChatClient(chatId);
 
+        // From here the turn owns the chat. A persisted turn has to survive the
+        // browser closing — its answer is written to the store either way — so
+        // the three paths that abort a run on disconnect must leave it alone
+        // until the finally below releases the mark.
+        if (persistence) {
+          markChatDurable(chatId);
+          durableTurn = true;
+        }
+
         if (!streamOpen) {
           logger.info('No active SSE connection, creating response without streaming', {
             component: 'sessionRoutes',
@@ -860,7 +1009,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
-            messages,
+            messages: conversation,
             temperature,
             style,
             outputFormat,
@@ -899,7 +1048,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           }
           ({ model, llmMessages } = prep.data);
 
-          return processChatRequest({
+          // Awaited, not returned bare: `return promise` inside a try/finally
+          // runs the finally before the turn settles, which would drop the
+          // durable mark while the run is still going.
+          return await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
@@ -909,7 +1061,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             DEFAULT_TIMEOUT,
             getLocalizedError,
             clientLanguage,
-            user: req.user
+            user: req.user,
+            persistence
           });
         } else {
           // Note that `hasChatClient` refreshed lastActivity on the
@@ -922,7 +1075,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
-            messages,
+            messages: conversation,
             temperature,
             style,
             outputFormat,
@@ -974,7 +1127,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             DEFAULT_TIMEOUT,
             getLocalizedError,
             clientLanguage,
-            user: req.user
+            user: req.user,
+            persistence
           });
 
           return res.json({ status: 'streaming', chatId });
@@ -982,6 +1136,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       } catch (error) {
         logger.error('Error in app chat', { component: 'sessionRoutes', error });
         return sendInternalError(res, error, 'app chat');
+      } finally {
+        // The turn is over however it ended, so a disconnect from here on has
+        // nothing to protect and should abort again.
+        if (durableTurn) clearChatDurable(chatId);
       }
     }
   );
@@ -1046,50 +1204,68 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     chatAuthRequired,
     async (req, res) => {
       const { chatId } = req.params;
-      if (hasChatClient(chatId)) {
-        // The stop is a human event on the run bound to this chat stream.
-        const bound = getStreamRun(chatId);
-        const boundRunId = bound && typeof bound === 'object' ? bound.runId : bound;
-        if (boundRunId) {
-          try {
-            // The turn may run on another worker: continue its persisted sequence.
-            await runLog.appendRecovered(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
-              kind: 'stop',
-              by: await resolveActorId(req.user, {
-                mode: runLog.getRunMeta(boundRunId)?.identityMode || runLog.identityMode()
-              }),
-              at: new Date().toISOString()
-            });
-          } catch (ledgerErr) {
-            logger.debug('Stop human/event not recorded', {
-              component: 'sessionRoutes',
-              chatId,
-              error: ledgerErr.message
-            });
-          }
-        }
-        // Each of the three teardown steps targets state that may live on a
-        // different worker than this POST landed on: the LLM call, the workflow
-        // execution and the SSE stream are registered independently, so each
-        // helper resolves its own owner and relays if it is not this process.
-        abortChatRequest(chatId);
+      // `chatAuthRequired` authorizes the app, never the chat id: stopping
+      // someone else's turn must not be one guessed id away.
+      const access = await authorizeChat(chatId, req.user);
+      if (!access.ok) return sendNotFound(res, 'Chat session');
 
-        // Also cancel any running workflow execution for this chatId
-        await cancelChatWorkflow(chatId);
-
-        // Note the awaits above: cancelling the workflow yields the event loop,
-        // and the SSE connection can close in that gap (its req.on('close')
-        // handler deletes the entry from `clients`). The top-of-handler check is
-        // therefore stale here, which is why the close goes through
-        // `closeChatClient` — it re-reads the entry and no-ops when it is gone,
-        // instead of dereferencing undefined. An unguarded
-        // `client.response.end()` throws a TypeError that crashes the whole
-        // process as an unhandled rejection on Node >= 15.
-        closeChatClient(chatId);
-        logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
-        return res.status(200).json({ success: true, message: 'Chat stream stopped' });
+      // A live SSE client used to be the proof that there was something to
+      // stop. It no longer is: a persisted turn keeps running after its client
+      // is gone, and that is exactly the turn a user needs to be able to stop.
+      // Anything in flight for this chat, anywhere in the cluster, qualifies.
+      if (!hasChatClient(chatId) && !isChatDurable(chatId) && !hasActiveChatRequest(chatId)) {
+        return sendNotFound(res, 'Chat session');
       }
-      return sendNotFound(res, 'Chat session');
+
+      // The stop is a human event on the run bound to this chat stream. That
+      // binding is process-local, so for a turn running on another worker —
+      // the normal case once the client is gone — fall back to the run the
+      // chat document recorded when the turn started.
+      const bound = getStreamRun(chatId);
+      const boundRunId =
+        (bound && typeof bound === 'object' ? bound.runId : bound) ||
+        access.chat?.activeRunId ||
+        null;
+      if (boundRunId) {
+        try {
+          // The turn may run on another worker: continue its persisted sequence.
+          await runLog.appendRecovered(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+            kind: 'stop',
+            by: await resolveActorId(req.user, {
+              mode: runLog.getRunMeta(boundRunId)?.identityMode || runLog.identityMode()
+            }),
+            at: new Date().toISOString()
+          });
+        } catch (ledgerErr) {
+          logger.debug('Stop human/event not recorded', {
+            component: 'sessionRoutes',
+            chatId,
+            error: ledgerErr.message
+          });
+        }
+      }
+      // Each of the three teardown steps targets state that may live on a
+      // different worker than this POST landed on: the LLM call, the workflow
+      // execution and the SSE stream are registered independently, so each
+      // helper resolves its own owner and relays if it is not this process.
+      // The abort is deliberately the unconditional one — Stop overrides
+      // durability, which only ever protects a run from a *disconnect*.
+      abortChatRequest(chatId);
+
+      // Also cancel any running workflow execution for this chatId
+      await cancelChatWorkflow(chatId);
+
+      // Note the awaits above: cancelling the workflow yields the event loop,
+      // and the SSE connection can close in that gap (its req.on('close')
+      // handler deletes the entry from `clients`). The check at the top of the
+      // handler is therefore stale here, which is why the close goes through
+      // `closeChatClient` — it re-reads the entry and no-ops when it is gone,
+      // instead of dereferencing undefined. An unguarded
+      // `client.response.end()` throws a TypeError that crashes the whole
+      // process as an unhandled rejection on Node >= 15.
+      closeChatClient(chatId);
+      logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
+      return res.status(200).json({ success: true, message: 'Chat stream stopped' });
     }
   );
 

@@ -1446,3 +1446,32 @@ through it yet, and behaviour is unchanged.
   reply, chat history, and continuing a past conversation.
 
 See [Storage Providers](../../storage.md).
+
+## Durable Chats: Conversations Stored Server-Side (Preview)
+
+Chats can now be stored on the server instead of only in the browser: the transcript survives a
+reload, a new device and a lost connection, and a turn that is being stored **keeps running when
+the browser closes** — the answer is waiting in the chat when the user comes back. The feature is
+off by default (`features.chatPersistence`, "Durable Chats") and this release ships the server
+half only; the chat-list UI still shows sample data behind the separate Chat History flag, so
+enable it on a test installation rather than in production for now.
+
+- **A cost decision, not only a convenience.** Runs no longer die with the tab, so tokens are
+  spent on answers nobody may read — a user who closes the laptop mid-answer is billed for the
+  whole answer. The Stop button still aborts immediately, and now works even when no browser is
+  connected. Anonymous and incognito turns are unaffected and are still cancelled on disconnect.
+- **Enabling durable chats also enables the run ledger**, because a stored turn is materialized
+  from its run's events. Plan for the ledger's disk use and retention
+  (`platform.runLog.retentionDays`) before switching this on.
+- **Anonymous visitors and incognito turns are never stored**, by design: an anonymous principal
+  gets a new id on every request, so such a chat could never be listed or reloaded again.
+- `platform.json → chats` sets `enabled`, `retentionDays` (90) and `maxChatsPerUser` (200); a
+  daily sweep deletes what falls outside either limit, and a value of zero or less switches that
+  rule off. A configuration migration adds the section to existing installations and carries a
+  saved Chat History preview choice over to the new flag.
+- New endpoints `GET/PATCH/DELETE /api/chats[/:id]` list, open, rename and erase a user's own
+  chats; deleting one also erases its runs, their recorded events and their pending questions.
+  Chat streams, chat posts and the stop endpoint now verify that the caller owns the chat id, not
+  just that they may use the app.
+
+See [Chat Persistence](../../chat-persistence.md).

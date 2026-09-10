@@ -23,6 +23,17 @@ export const clients = createPresenceMap('sse');
 /** chatId → AbortController for model turns running in this worker. */
 export const activeRequests = createPresenceMap('request');
 
+/**
+ * chatId → `true` while a durable (persisted) turn is running for that chat.
+ *
+ * A durable turn outlives the browser that started it: its answer is written
+ * to the chat store whether or not anyone is watching, so the paths that abort
+ * a run because the client went away have to leave it alone. Presence-mapped
+ * like the two maps above, because the worker that notices the disconnect is
+ * frequently not the worker running the turn.
+ */
+const durableChats = createPresenceMap('chat-durable');
+
 /** Bus channels. */
 const EVENT_CHANNEL = 'sse:event';
 const ABORT_CHANNEL = 'chat:abort';
@@ -67,11 +78,7 @@ export function deliverEnvelope(streamId, envelope) {
       error: error?.message || String(error)
     });
     try {
-      const controller = activeRequests.get(streamId);
-      if (controller) {
-        controller.abort();
-        activeRequests.delete(streamId);
-      }
+      abortChatRequestOnDisconnect(streamId);
     } catch (abortErr) {
       logger.error('Error aborting activeRequest after SSE write failure', {
         component: 'SSE',
@@ -83,7 +90,11 @@ export function deliverEnvelope(streamId, envelope) {
     // wiping out a freshly-reconnected entry on the same streamId.
     if (clients.get(streamId) === clientEntry) {
       clients.delete(streamId);
-      resetStream(streamId);
+      // A durable turn is still producing frames under this stream's run:
+      // dropping the seq counter would restart numbering mid-run, and dropping
+      // the run binding would re-parent every later tool-progress frame to a
+      // synthetic run. The LRU cap in RunStream bounds what we keep.
+      if (!isChatDurable(streamId)) resetStream(streamId);
     }
     return false;
   }
@@ -144,6 +155,39 @@ export function hasActiveChatRequest(chatId) {
 }
 
 /**
+ * Mark a chat's in-flight turn as durable, so losing the client no longer
+ * cancels it. Called when a persisted turn starts.
+ *
+ * @param {string} chatId
+ */
+export function markChatDurable(chatId) {
+  if (!chatId) return;
+  durableChats.set(chatId, true);
+}
+
+/**
+ * Drop a chat's durable mark. Called when the turn ends, whatever its outcome —
+ * from then on a disconnect aborts again, because there is nothing to protect.
+ *
+ * @param {string} chatId
+ */
+export function clearChatDurable(chatId) {
+  if (!chatId) return;
+  durableChats.delete(chatId);
+}
+
+/**
+ * Whether a durable turn is running for this chat anywhere in the cluster.
+ *
+ * @param {string} chatId
+ * @returns {boolean}
+ */
+export function isChatDurable(chatId) {
+  if (!chatId) return false;
+  return durableChats.has(chatId) || hasRemote('chat-durable', chatId);
+}
+
+/**
  * Abort the in-flight model turn for a chat, wherever it is running.
  *
  * @returns {boolean} True if the abort was applied locally or relayed.
@@ -168,6 +212,26 @@ export function abortChatRequest(chatId) {
     return true;
   }
   return false;
+}
+
+/**
+ * Abort a chat's turn because its client went away — the SSE socket closed, a
+ * write to it failed, or the inactivity sweep evicted it.
+ *
+ * The only difference from {@link abortChatRequest} is that a durable turn is
+ * left running: it is being persisted, so the user gets the answer when they
+ * come back. `abortChatRequest` itself stays unconditional, because the Stop
+ * button has to work on a durable turn too.
+ *
+ * @param {string} chatId
+ * @returns {boolean} True if an abort was applied locally or relayed.
+ */
+export function abortChatRequestOnDisconnect(chatId) {
+  if (isChatDurable(chatId)) {
+    logger.info('Client gone; durable chat turn keeps running', { component: 'SSE', chatId });
+    return false;
+  }
+  return abortChatRequest(chatId);
 }
 
 /**

@@ -1,0 +1,791 @@
+/**
+ * ChatRepository — durable chats on top of the storage abstraction.
+ *
+ * Two documents per chat, both owned by the run principal:
+ *
+ *   `chats/<chatId>`          the metadata a chat list needs, small and hot
+ *   `chat-messages/<chatId>`  the transcript, read in one go when a chat opens
+ *
+ * They are split because the list view reads N chat documents and zero
+ * transcripts; folding the messages in would make "show my chats" read every
+ * message the user ever wrote.
+ *
+ * Everything here degrades to a no-op when storage is unavailable — a
+ * misconfigured provider must leave chats working exactly as they did before
+ * persistence existed, not fail requests. The same is true for a chat id the
+ * store cannot key (headless agent chats are `agent:<runId>:<hex>`, and a
+ * colon is not a valid document key): such a chat is legal, it simply has no
+ * durable form.
+ *
+ * Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two
+ * browser tabs on one chat are ordinary here, and an unlocked
+ * read-append-write would silently drop one tab's message. A
+ * {@link LockTimeoutError} therefore propagates to the caller: writing anyway
+ * is precisely the corruption the lock exists to prevent.
+ *
+ * @module services/chat/ChatRepository
+ */
+import { randomUUID } from 'crypto';
+import logger from '../../utils/logger.js';
+import { isValidId } from '../../utils/pathSecurity.js';
+import { StorageError } from '../../storage/errors.js';
+import { getStorage } from '../../storage/bootstrap.js';
+
+const COMPONENT = 'ChatRepository';
+
+/** Namespace holding the chat metadata documents. */
+export const CHATS_NAMESPACE = 'chats';
+
+/** Namespace holding the chat transcript documents. */
+export const CHAT_MESSAGES_NAMESPACE = 'chat-messages';
+
+/** Schema version stamped on a transcript document. */
+export const CHAT_MESSAGES_VERSION = 1;
+
+/** Lifecycle states a chat document may carry. */
+export const CHAT_STATUSES = ['active', 'running', 'error'];
+
+/** Longest title derived from a user message. */
+export const MAX_DERIVED_TITLE_LENGTH = 80;
+
+/** Longest title accepted from a rename. */
+export const MAX_TITLE_LENGTH = 200;
+
+/**
+ * Run ids kept on a chat for the delete cascade. There is no chatId→runId
+ * index anywhere else in the tree, so this list is how `DELETE /api/chats/:id`
+ * finds the ledger runs to remove with it. Capped because a long-lived chat
+ * would otherwise grow the document without bound; the oldest runs age out of
+ * the ledger's own retention anyway.
+ */
+export const MAX_TRACKED_RUN_IDS = 200;
+
+/** Page size of {@link ChatRepository#listChats} when the caller names none. */
+const DEFAULT_PAGE_SIZE = 30;
+
+/** Largest page {@link ChatRepository#listChats} will return. */
+const MAX_PAGE_SIZE = 100;
+
+/** Page size used while walking an owner's chats out of the store. */
+const OWNER_PAGE_SIZE = 200;
+
+/**
+ * Hard bound on how many of one owner's chats are loaded for the in-memory
+ * sort. `platform.chats.maxChatsPerUser` (default 200) keeps the real number
+ * well under this; the cap only decides what happens when retention is off and
+ * a user has accumulated thousands. Then the newest chats by *key* order are
+ * loaded and the rest are invisible to the list — see the honesty note on
+ * {@link ChatRepository#listChats}.
+ */
+const MAX_OWNER_CHATS = 1000;
+
+/**
+ * Lock lease for one chat write. Short: the critical section is two document
+ * writes, and a lease held longer than that means a dead worker whose lock we
+ * want taken over quickly.
+ */
+const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
+
+/** Fields a patch may never change — identity and the owner index depend on them. */
+const PROTECTED_CHAT_FIELDS = new Set([
+  'id',
+  'ownerId',
+  'identityMode',
+  'createdAt',
+  '__proto__',
+  'constructor',
+  'prototype'
+]);
+
+/** Optional per-message fields carried through to storage when supplied. */
+const OPTIONAL_MESSAGE_FIELDS = [
+  'clientMessageId',
+  'usage',
+  'error',
+  'finishReason',
+  'attachments'
+];
+
+/**
+ * Whether a chat id can be a storage key.
+ *
+ * Chat ids are client-minted and unconstrained today, and some are structural
+ * rather than storable (`agent:<parentRunId>:<hex>` for headless invocations).
+ * Callers use this to skip the persistence path early instead of catching an
+ * `InvalidKeyError` per turn.
+ *
+ * @param {unknown} chatId - Candidate chat id.
+ * @returns {boolean}
+ */
+export function isPersistableChatId(chatId) {
+  return isValidId(chatId);
+}
+
+/**
+ * Derive a chat title from a message: whitespace collapsed, trimmed, and cut
+ * to `maxLength` with an ellipsis so a pasted wall of text does not become the
+ * sidebar entry.
+ *
+ * @param {unknown} content - Message content.
+ * @param {number} [maxLength=MAX_DERIVED_TITLE_LENGTH] - Inclusive length cap.
+ * @returns {string} The title, or '' when nothing usable was given.
+ */
+export function deriveChatTitle(content, maxLength = MAX_DERIVED_TITLE_LENGTH) {
+  if (typeof content !== 'string') return '';
+  const collapsed = content.replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= maxLength) return collapsed;
+  return `${collapsed.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+/**
+ * Normalize a title supplied by a caller (creation or rename).
+ *
+ * @param {unknown} title - Candidate title.
+ * @param {number} [maxLength=MAX_TITLE_LENGTH] - Inclusive length cap.
+ * @returns {string}
+ */
+function normalizeTitle(title, maxLength = MAX_TITLE_LENGTH) {
+  return deriveChatTitle(title, maxLength);
+}
+
+/**
+ * Coerce a stored `runIds` value into a capped array of ids.
+ *
+ * @param {unknown} runIds - Stored value.
+ * @returns {string[]}
+ */
+function normalizeRunIds(runIds) {
+  if (!Array.isArray(runIds)) return [];
+  const unique = [];
+  for (const runId of runIds) {
+    if (typeof runId === 'string' && runId && !unique.includes(runId)) unique.push(runId);
+  }
+  return unique.length > MAX_TRACKED_RUN_IDS ? unique.slice(-MAX_TRACKED_RUN_IDS) : unique;
+}
+
+/**
+ * Add a run id to a chat's cascade list, keeping the most recent ones.
+ *
+ * @param {string[]} runIds - Current list.
+ * @param {string} runId - Run to track.
+ * @returns {string[]} A new list.
+ */
+function trackRunId(runIds, runId) {
+  if (runIds.includes(runId)) return runIds;
+  const next = [...runIds, runId];
+  return next.length > MAX_TRACKED_RUN_IDS ? next.slice(-MAX_TRACKED_RUN_IDS) : next;
+}
+
+/**
+ * Build the chat object callers see from a stored document.
+ *
+ * @param {Object|null} doc - Document from the store.
+ * @returns {Object|null} The chat, or null when there was no document.
+ */
+function toChat(doc) {
+  if (!doc || !doc.data || typeof doc.data !== 'object') return null;
+  return {
+    ...doc.data,
+    id: doc.key,
+    ownerId: doc.data.ownerId ?? doc.ownerId ?? null,
+    runIds: normalizeRunIds(doc.data.runIds)
+  };
+}
+
+/**
+ * Apply a patch to a chat, protecting the immutable fields and re-deriving
+ * the values that are computed rather than set.
+ *
+ * @param {Object} chat - Stored chat.
+ * @param {Object} patch - Fields to change.
+ * @returns {Object} A new chat object.
+ */
+function applyChatPatch(chat, patch) {
+  const next = { ...chat };
+  for (const [key, value] of Object.entries(patch || {})) {
+    if (PROTECTED_CHAT_FIELDS.has(key) || value === undefined) continue;
+    next[key] = value;
+  }
+  if ('title' in patch) next.title = normalizeTitle(next.title);
+  // An unknown status is dropped rather than stored: the chat list renders it.
+  if (!CHAT_STATUSES.includes(next.status)) next.status = chat.status || 'active';
+  if (!Number.isFinite(next.messageCount)) next.messageCount = chat.messageCount || 0;
+  next.hasUnseenActivity = next.hasUnseenActivity === true;
+  next.runIds = normalizeRunIds(next.runIds);
+  // A run that was ever active on this chat is a run the delete cascade owes
+  // the ledger, whether or not a message from it ever landed.
+  if (typeof next.activeRunId === 'string' && next.activeRunId) {
+    next.runIds = trackRunId(next.runIds, next.activeRunId);
+  }
+  return next;
+}
+
+/**
+ * Normalize a stored transcript document.
+ *
+ * @param {unknown} data - Stored document body.
+ * @returns {{version: number, messages: Object[]}}
+ */
+function toMessages(data) {
+  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  const version = Number.isFinite(data?.version) ? data.version : CHAT_MESSAGES_VERSION;
+  return { version, messages };
+}
+
+/**
+ * Build the stored form of a message.
+ *
+ * The id is server-minted so the client can adopt a stable identity on
+ * hydrate; the client's own exchange id is kept as `clientMessageId` so an
+ * optimistic render can be reconciled instead of duplicated.
+ *
+ * @param {Object} message - Message as the materializer describes it.
+ * @returns {Object} The message to store.
+ */
+function buildMessage(message = {}) {
+  const stored = {
+    id: typeof message.id === 'string' && message.id ? message.id : randomUUID(),
+    role: typeof message.role === 'string' && message.role ? message.role : 'user',
+    content: typeof message.content === 'string' ? message.content : '',
+    ts: typeof message.ts === 'string' && message.ts ? message.ts : new Date().toISOString(),
+    runId: typeof message.runId === 'string' && message.runId ? message.runId : null
+  };
+  // `messageId` is what the wire calls the client's exchange id; accept either
+  // spelling so a caller holding the raw request field cannot lose it.
+  const clientMessageId = message.clientMessageId ?? message.messageId;
+  if (clientMessageId !== undefined && clientMessageId !== null) {
+    stored.clientMessageId = String(clientMessageId);
+  }
+  for (const field of OPTIONAL_MESSAGE_FIELDS) {
+    if (field === 'clientMessageId') continue;
+    if (message[field] !== undefined && message[field] !== null) stored[field] = message[field];
+  }
+  return stored;
+}
+
+/**
+ * Order chats newest-first, breaking ties on id so paging is deterministic.
+ *
+ * @param {{lastMessageAt?: string, id: string}} a
+ * @param {{lastMessageAt?: string, id: string}} b
+ * @returns {number}
+ */
+function compareChatsDesc(a, b) {
+  const left = a.lastMessageAt || '';
+  const right = b.lastMessageAt || '';
+  if (left !== right) return left < right ? 1 : -1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
+/**
+ * Encode the paging cursor. It carries the sort position rather than an
+ * offset, so a chat that moves to the top between two pages cannot make the
+ * next page repeat or skip an entry.
+ *
+ * @param {{lastMessageAt?: string, id: string}} chat - Last chat of the page.
+ * @returns {string}
+ */
+function encodeCursor(chat) {
+  const payload = JSON.stringify({ t: chat.lastMessageAt || '', i: chat.id });
+  return Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+/**
+ * Decode a paging cursor.
+ *
+ * @param {string} cursor - Cursor from a previous page.
+ * @returns {{lastMessageAt: string, id: string}}
+ * @throws {StorageError} Code `INVALID_CURSOR` for anything this store did not
+ *   issue — never silently restarting the listing, which would make a paging
+ *   loop repeat forever.
+ */
+function decodeCursor(cursor) {
+  try {
+    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    if (typeof parsed?.t === 'string' && typeof parsed?.i === 'string') {
+      return { lastMessageAt: parsed.t, id: parsed.i };
+    }
+  } catch {
+    // Fall through to the single error below: a malformed cursor and a
+    // well-formed cursor carrying the wrong shape are the same mistake.
+  }
+  throw new StorageError('Invalid chat list cursor', { code: 'INVALID_CURSOR' });
+}
+
+/**
+ * Clamp a requested page size instead of rejecting it.
+ *
+ * @param {unknown} limit - Requested size.
+ * @returns {number}
+ */
+function clampPageSize(limit) {
+  const parsed = Number(limit);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_PAGE_SIZE;
+  return Math.min(Math.floor(parsed), MAX_PAGE_SIZE);
+}
+
+/**
+ * Durable chat storage.
+ */
+export class ChatRepository {
+  /**
+   * @param {Object} [options]
+   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [options.documents]
+   *   Document facet; null makes every method a no-op.
+   * @param {import('../../storage/LockManager.js').LockManager|null} [options.locks]
+   *   Lock facet; null makes every method a no-op, because an unlocked
+   *   read-modify-write is not a degraded mode, it is data loss.
+   * @param {Object} [options.logger] - Logger; defaults to the shared one.
+   */
+  constructor({ documents = null, locks = null, logger: log } = {}) {
+    this.documents = documents || null;
+    this.locks = locks || null;
+    this.logger = log || logger;
+  }
+
+  /**
+   * Whether this repository can actually store anything.
+   *
+   * @returns {boolean}
+   */
+  isAvailable() {
+    return Boolean(this.documents && this.locks);
+  }
+
+  /**
+   * Whether an operation on this chat can reach storage at all.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} operation - Method name, for the log line.
+   * @returns {boolean}
+   * @private
+   */
+  _usable(chatId, operation) {
+    if (!this.isAvailable()) return false;
+    if (!isPersistableChatId(chatId)) {
+      this.logger.debug?.('Chat id is not storable; skipping persistence', {
+        component: COMPONENT,
+        operation,
+        chatId: String(chatId).slice(0, 64)
+      });
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Run `fn` while holding this chat's lock.
+   *
+   * The lock is never bypassed on timeout: a {@link LockTimeoutError} carries
+   * `httpStatus` 503 and reaches the caller unchanged, because the alternative
+   * — writing without it — loses one of two concurrent turns.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {() => Promise<T>} fn - Critical section.
+   * @returns {Promise<T>}
+   * @template T
+   * @private
+   */
+  _withChatLock(chatId, fn) {
+    return this.locks.withLock(`chat:${chatId}`, fn, LOCK_OPTIONS);
+  }
+
+  /**
+   * Read a chat without taking the lock — for use inside one.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Object|null>}
+   * @private
+   */
+  async _readChat(chatId) {
+    return toChat(await this.documents.get(CHATS_NAMESPACE, chatId));
+  }
+
+  /**
+   * Write a chat without taking the lock — for use inside one.
+   *
+   * @param {Object} chat - Complete chat document.
+   * @returns {Promise<Object>} The stored chat.
+   * @private
+   */
+  async _writeChat(chat) {
+    const doc = await this.documents.put(CHATS_NAMESPACE, chat.id, chat, {
+      ownerId: chat.ownerId
+    });
+    return toChat(doc);
+  }
+
+  /**
+   * Read a transcript without taking the lock — for use inside one.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{version: number, messages: Object[]}>}
+   * @private
+   */
+  async _readMessages(chatId) {
+    const doc = await this.documents.get(CHAT_MESSAGES_NAMESPACE, chatId);
+    return toMessages(doc?.data);
+  }
+
+  /**
+   * Write a transcript without taking the lock — for use inside one.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string|null} ownerId - Owner, mirrored from the chat document so
+   *   the transcript is reachable by the same owner index.
+   * @param {Object[]} messages - Complete message list.
+   * @returns {Promise<{version: number, messages: Object[]}>}
+   * @private
+   */
+  async _writeMessages(chatId, ownerId, messages) {
+    const body = { version: CHAT_MESSAGES_VERSION, messages };
+    await this.documents.put(CHAT_MESSAGES_NAMESPACE, chatId, body, { ownerId });
+    return body;
+  }
+
+  /**
+   * One chat's metadata.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Object|null>} The chat, or null when it does not exist
+   *   or storage is unavailable.
+   */
+  async getChat(chatId) {
+    if (!this._usable(chatId, 'getChat')) return null;
+    return this._readChat(chatId);
+  }
+
+  /**
+   * Walk an owner's chats out of the store.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @returns {Promise<Object[]>} Chats in store (key) order.
+   * @private
+   */
+  async _loadOwnerChats(ownerId) {
+    const chats = [];
+    let cursor = null;
+    do {
+      const page = await this.documents.list(CHATS_NAMESPACE, {
+        ownerId,
+        limit: OWNER_PAGE_SIZE,
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items) {
+        const chat = toChat(doc);
+        if (chat) chats.push(chat);
+      }
+      cursor = page.nextCursor;
+    } while (cursor && chats.length < MAX_OWNER_CHATS);
+    return chats;
+  }
+
+  /**
+   * One page of an owner's chats, newest activity first.
+   *
+   * **How this scales, honestly.** `DocumentStore.list` orders by key and only
+   * the owner filter is index-backed, so there is no stored order by
+   * `lastMessageAt`. This loads the owner's chat documents (an indexed
+   * directory read plus one small read per chat), sorts them in memory and
+   * then pages. `platform.chats.maxChatsPerUser` — 200 by default — is what
+   * keeps that bounded, and {@link MAX_OWNER_CHATS} bounds it even when
+   * retention is switched off; past that bound the newest chats *by id* are
+   * loaded rather than by activity. A database-backed provider will answer
+   * this with an index instead, and this method should shrink to a query then.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @param {Object} [options]
+   * @param {number} [options.limit=30] - Page size, clamped to 100.
+   * @param {string|null} [options.cursor=null] - Cursor from a previous page.
+   * @returns {Promise<{items: Object[], nextCursor: string|null}>}
+   * @throws {StorageError} Code `INVALID_CURSOR` for a cursor this store did
+   *   not issue.
+   */
+  async listChats(ownerId, { limit = DEFAULT_PAGE_SIZE, cursor = null } = {}) {
+    if (!this.isAvailable() || !ownerId) return { items: [], nextCursor: null };
+    const pageSize = clampPageSize(limit);
+    const after = cursor ? decodeCursor(cursor) : null;
+
+    const sorted = (await this._loadOwnerChats(ownerId)).sort(compareChatsDesc);
+    const remaining = after ? sorted.filter(chat => compareChatsDesc(chat, after) > 0) : sorted;
+    const items = remaining.slice(0, pageSize);
+    const nextCursor =
+      items.length > 0 && remaining.length > items.length
+        ? encodeCursor(items[items.length - 1])
+        : null;
+    return { items, nextCursor };
+  }
+
+  /**
+   * How many chats an owner has, bounded the same way {@link listChats} is.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @returns {Promise<number>}
+   */
+  async countChats(ownerId) {
+    if (!this.isAvailable() || !ownerId) return 0;
+    let count = 0;
+    let cursor = null;
+    do {
+      const page = await this.documents.list(CHATS_NAMESPACE, {
+        ownerId,
+        limit: OWNER_PAGE_SIZE,
+        includeData: false,
+        ...(cursor ? { cursor } : {})
+      });
+      count += page.items.length;
+      cursor = page.nextCursor;
+    } while (cursor && count < MAX_OWNER_CHATS);
+    return count;
+  }
+
+  /**
+   * Return this chat, creating it when it does not exist yet.
+   *
+   * An existing chat is returned untouched — including one owned by somebody
+   * else. Ownership is decided by `chatAccess.authorizeChat` before the write
+   * path runs; silently re-owning a chat here would turn a missing check into
+   * data theft rather than a 404.
+   *
+   * @param {Object} options
+   * @param {string} options.chatId - Chat id.
+   * @param {string} options.ownerId - Run principal that owns the chat.
+   * @param {string} options.identityMode - Identity mode `ownerId` was
+   *   resolved in; stored so the owner still matches after an admin changes
+   *   `platform.runLog.identityMode`.
+   * @param {string} [options.appId] - App the chat belongs to.
+   * @param {string} [options.modelId] - Model the chat last used.
+   * @param {string} [options.title] - Initial title; the first user message
+   *   supplies one when this is empty.
+   * @returns {Promise<Object|null>} The chat, or null when it cannot be stored.
+   */
+  async ensureChat({ chatId, ownerId, identityMode, appId, modelId, title } = {}) {
+    if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
+    return this._withChatLock(chatId, async () => {
+      const existing = await this._readChat(chatId);
+      if (existing) return existing;
+      const now = new Date().toISOString();
+      return this._writeChat({
+        id: chatId,
+        ownerId: String(ownerId),
+        identityMode: identityMode || 'default',
+        appId: appId || null,
+        modelId: modelId || null,
+        title: normalizeTitle(title),
+        titleSetByUser: false,
+        createdAt: now,
+        lastMessageAt: now,
+        messageCount: 0,
+        activeRunId: null,
+        hasUnseenActivity: false,
+        status: 'active',
+        runIds: []
+      });
+    });
+  }
+
+  /**
+   * Patch a chat's metadata under its lock.
+   *
+   * `id`, `ownerId`, `identityMode` and `createdAt` are immutable and ignored
+   * in the patch. Setting `activeRunId` also records the run in `runIds`, so
+   * the delete cascade knows about a run even if it never produced a message.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} patch - Fields to change.
+   * @returns {Promise<Object|null>} The stored chat, or null when it does not
+   *   exist or cannot be stored.
+   */
+  async updateChat(chatId, patch = {}) {
+    if (!this._usable(chatId, 'updateChat')) return null;
+    return this._withChatLock(chatId, async () => {
+      const existing = await this._readChat(chatId);
+      if (!existing) return null;
+      return this._writeChat(applyChatPatch(existing, patch));
+    });
+  }
+
+  /**
+   * Give a chat a user-chosen title.
+   *
+   * The title is marked as user-set so no later turn derives over it. An empty
+   * title clears that mark instead, which lets the next user message derive a
+   * fresh one — a rename to nothing is a reset, not a permanently blank chat.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} title - New title, capped at 200 characters.
+   * @returns {Promise<Object|null>} The stored chat, or null when it does not
+   *   exist or cannot be stored.
+   */
+  async renameChat(chatId, title) {
+    if (!this._usable(chatId, 'renameChat')) return null;
+    return this._withChatLock(chatId, async () => {
+      const existing = await this._readChat(chatId);
+      if (!existing) return null;
+      const normalized = normalizeTitle(title);
+      return this._writeChat({
+        ...existing,
+        title: normalized,
+        titleSetByUser: normalized.length > 0
+      });
+    });
+  }
+
+  /**
+   * Remove a chat and its transcript.
+   *
+   * The ledger runs are returned rather than deleted: cascading into `RunLog`
+   * is the route's job, because it is the layer that knows the ledger exists.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{deleted: boolean, runIds: string[]}>}
+   */
+  async deleteChat(chatId) {
+    if (!this._usable(chatId, 'deleteChat')) return { deleted: false, runIds: [] };
+    return this._withChatLock(chatId, async () => {
+      const existing = await this._readChat(chatId);
+      const runIds = normalizeRunIds(existing?.runIds);
+      const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
+      const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
+      return { deleted: removedChat || removedMessages, runIds };
+    });
+  }
+
+  /**
+   * A chat's stored transcript.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{version: number, messages: Object[]}>} An empty
+   *   transcript when the chat has none or storage is unavailable.
+   */
+  async getMessages(chatId) {
+    if (!this._usable(chatId, 'getMessages')) {
+      return { version: CHAT_MESSAGES_VERSION, messages: [] };
+    }
+    return this._readMessages(chatId);
+  }
+
+  /**
+   * Append a message to a chat, optionally forking the history first.
+   *
+   * With `replaceFromMessageId` the stored history is truncated from that
+   * message (inclusive) before the append — the server-side form of "edit this
+   * message and regenerate". An id that is not in the history is an error, not
+   * a plain append: appending the regenerated turn onto the full history would
+   * duplicate everything the user meant to replace.
+   *
+   * The chat document's `lastMessageAt`, `messageCount`, `runIds` and derived
+   * title are updated inside the same lock, so a reader never sees a
+   * transcript and a metadata document that disagree.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} message - Message to store; see {@link buildMessage}.
+   * @param {Object} [options]
+   * @param {string|null} [options.replaceFromMessageId=null] - Stored message
+   *   id to truncate from, inclusive.
+   * @returns {Promise<{message: Object, messages: Object[]}|null>} Null when
+   *   the chat does not exist or cannot be stored.
+   * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
+   *   is not in the stored history.
+   */
+  async appendMessage(chatId, message, { replaceFromMessageId = null } = {}) {
+    if (!this._usable(chatId, 'appendMessage')) return null;
+    return this._withChatLock(chatId, async () => {
+      const chat = await this._readChat(chatId);
+      if (!chat) {
+        this.logger.warn('Cannot append to a chat that was never created', {
+          component: COMPONENT,
+          chatId
+        });
+        return null;
+      }
+
+      const stored = await this._readMessages(chatId);
+      let messages = stored.messages;
+      if (replaceFromMessageId) {
+        const index = messages.findIndex(entry => entry.id === replaceFromMessageId);
+        if (index === -1) {
+          throw new StorageError(`Message ${replaceFromMessageId} is not part of chat ${chatId}`, {
+            code: 'UNKNOWN_MESSAGE'
+          });
+        }
+        messages = messages.slice(0, index);
+      }
+
+      const entry = buildMessage(message);
+      messages = [...messages, entry];
+      await this._writeMessages(chatId, chat.ownerId, messages);
+
+      const patch = { lastMessageAt: entry.ts, messageCount: messages.length };
+      if (entry.runId) patch.runIds = trackRunId(chat.runIds, entry.runId);
+      // The first user message names the chat, unless the user already did.
+      if (!chat.titleSetByUser && !chat.title && entry.role === 'user') {
+        const derived = deriveChatTitle(entry.content);
+        if (derived) patch.title = derived;
+      }
+      await this._writeChat(applyChatPatch(chat, patch));
+
+      return { message: entry, messages };
+    });
+  }
+
+  /**
+   * Mark a chat as seen — the counterpart of the `hasUnseenActivity` a turn
+   * that finished without a connected client sets.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Object|null>} The stored chat, or null when it does not
+   *   exist or cannot be stored.
+   */
+  async clearUnseen(chatId) {
+    return this.updateChat(chatId, { hasUnseenActivity: false });
+  }
+}
+
+/** @type {ChatRepository|null} */
+let cachedRepository = null;
+/** @type {import('../../storage/StorageProvider.js').StorageProvider|null} */
+let cachedProvider = null;
+
+/**
+ * Read a provider facet without letting a provider that does not implement it
+ * throw out of the accessor — an unsupported facet is unavailable storage,
+ * which the repository already knows how to be.
+ *
+ * @param {Object|null} provider - Storage provider.
+ * @param {string} facet - Facet name.
+ * @returns {Object|null}
+ */
+function readFacet(provider, facet) {
+  try {
+    return provider?.[facet] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The process-wide chat repository over the bootstrapped storage provider.
+ *
+ * Rebuilt when the provider changes (a test swapping one in, a shutdown
+ * followed by a fresh bootstrap) and cheap enough to call per request. Before
+ * storage is up it returns a repository whose every method is a no-op, so
+ * callers never branch on initialization order.
+ *
+ * @returns {ChatRepository}
+ */
+export function getChatRepository() {
+  const provider = getStorage();
+  if (!cachedRepository || cachedProvider !== provider) {
+    cachedProvider = provider;
+    cachedRepository = new ChatRepository({
+      documents: readFacet(provider, 'documents'),
+      locks: readFacet(provider, 'locks'),
+      logger
+    });
+  }
+  return cachedRepository;
+}
+
+export default ChatRepository;

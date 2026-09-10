@@ -15,10 +15,13 @@ earlier persistence design; the provider therefore exposes an **AppendLog** and
 a **DocumentStore** as separate facets, plus the two primitives a multi-instance
 deployment needs later (**ChangeNotifier**, **LockManager**).
 
-**Nothing uses it yet.** This release ships the abstraction, the filesystem
-provider, the `storage` section in `platform.json` and the conformance suite,
-and changes no existing code path. It is the foundation for durable chats
-(issue #2302); the full plan is in
+**Durable chats are the first consumer.** `server/storage/bootstrap.js` brings
+the provider up in every worker at startup, and `ChatRepository` keeps stored
+conversations in the `chats` and `chat-messages` namespaces — see
+[Chat Persistence](chat-persistence.md), which is off by default. Everything
+else — run ledgers, workflow state, interactions — is still filesystem code
+inside the service that owns it, and a provider that fails to initialize simply
+leaves those features behaving as they did before. The full plan is in
 `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`.
 
 ## The four facets

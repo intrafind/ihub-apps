@@ -381,6 +381,11 @@
     "flushIntervalMs": 2000,
     "spillThresholdBytes": 65536
   },
+  "chats": {
+    "enabled": true,
+    "retentionDays": 90,
+    "maxChatsPerUser": 200
+  },
   "storage": {
     "provider": "filesystem",
     "filesystem": {

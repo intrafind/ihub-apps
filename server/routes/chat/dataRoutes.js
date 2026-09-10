@@ -9,6 +9,7 @@ import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
+import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -956,6 +957,17 @@ export default function registerDataRoutes(app) {
               logs: platform.telemetry.logs
             }
           : undefined,
+        // Durable chats. The feature flag alone does not tell the client
+        // whether a conversation will actually be remembered — the platform
+        // switch and a storage provider that came up have to agree — so the
+        // answer is resolved server-side. Always sent as an object (the
+        // undefined-stripping below would otherwise hide it), but the client
+        // must still treat an absent block as "no persistence" to stay
+        // compatible with an older server.
+        chats: {
+          enabled: platform.chats?.enabled !== false,
+          persistence: isChatPersistenceConfigured(configCache.getFeatures(), platform)
+        },
         rateLimit: platform.rateLimit,
         swagger: platform.swagger
           ? {

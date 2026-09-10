@@ -39,7 +39,12 @@ import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
 import registerRunRoutes from './routes/runs.js';
+// Aliased: `./routes/chat/index.js` above already claims `registerChatRoutes`.
+// That one is the live chat turn (`/api/apps/:appId/chat/:chatId`); this one is
+// the durable-chat surface at `/api/chats`.
+import registerStoredChatRoutes from './routes/chats.js';
 import runLog from './services/loop/RunLog.js';
+import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
@@ -64,6 +69,7 @@ import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
 import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
 import { setDefaultLanguage } from '../shared/localize.js';
+import { bootstrapStorage, shutdownStorageBootstrap } from './storage/bootstrap.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
 import {
@@ -381,6 +387,12 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Bring the storage provider up in every worker, before anything that keeps
+  // durable state can be asked for it. It never throws: a broken `storage`
+  // block leaves `getStorage()` null and the features built on it degrade to
+  // their in-memory behaviour instead of taking the server down.
+  await bootstrapStorage(platformConfig);
+
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
   // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
   // not stop the rest of the worker - including the activity tracker - from
@@ -614,6 +626,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
   registerRunRoutes(app);
+  registerStoredChatRoutes(app);
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();
@@ -626,6 +639,12 @@ if (cluster.isPrimary && workerCount > 1) {
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();
     runLog.startCleanupScheduler();
+    // Durable chats age out on their own daily sweep rather than with the
+    // ledger's: deleting stored conversations and deleting the run ledger are
+    // separate admin decisions, so `platform.chats.retentionDays` is
+    // independent of `runLog.cleanupEnabled`. Same ownership guard, though —
+    // two workers sweeping in parallel would only race each other's deletes.
+    startChatRetentionSweep();
   }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
@@ -905,6 +924,12 @@ if (cluster.isPrimary && workerCount > 1) {
     } catch {
       // Audit flush failures are logged within the service
     }
+    // Stop the chat retention sweep before storage goes away, so a tick cannot
+    // start against a provider that is being torn down.
+    stopChatRetentionSweep();
+    // Flush buffered storage writes (chat documents, append-log entries) and
+    // release the provider's handles before the process goes away.
+    await shutdownStorageBootstrap();
     await shutdownTelemetry();
     process.exit(0);
   };

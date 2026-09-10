@@ -99,6 +99,7 @@
     - [SSE v2 Streaming](sse-v2.md)
     - [Run Ledger](run-ledger.md)
     - [Storage Providers](storage.md)
+    - [Chat Persistence](chat-persistence.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)
     - [Architecture Diagrams](diagrams.md)
     - [Troubleshooting](troubleshooting.md)
