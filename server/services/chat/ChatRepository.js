@@ -194,6 +194,74 @@ function toChat(doc) {
 }
 
 /**
+ * The chat-scoped answering settings a turn records, so reopening the chat
+ * restores the way it was being answered.
+ *
+ * The list is closed on purpose. These values come from a request body and
+ * are written to a document that is read back for as long as the chat lives,
+ * so an open-ended blob would let a client store whatever it liked under a
+ * key the server never looks at. Anything absent from a turn is simply not
+ * recorded by it — a turn that did not send `websearchEnabled` leaves
+ * whatever the last one said, which is what "the chat remembers" means.
+ *
+ * `modelId` is not here: it has its own field on the chat document and is
+ * written by the materializer.
+ *
+ * @type {Readonly<Object<string, 'string'|'number'|'boolean'|'stringArray'>>}
+ */
+const CHAT_SETTING_TYPES = Object.freeze({
+  style: 'string',
+  outputFormat: 'string',
+  temperature: 'number',
+  sendChatHistory: 'boolean',
+  thinkingEnabled: 'boolean',
+  thinkingBudget: 'number',
+  thinkingThoughts: 'boolean',
+  enabledTools: 'stringArray',
+  websearchEnabled: 'boolean',
+  imageAspectRatio: 'string',
+  imageQuality: 'string'
+});
+
+/** Longest string a single setting may be, and the cap on `enabledTools`. */
+const MAX_SETTING_CHARS = 64;
+const MAX_ENABLED_TOOLS = 64;
+
+/**
+ * The storable subset of a turn's settings.
+ *
+ * Returns null when nothing survives, so a caller can tell "this turn said
+ * nothing about settings" from "this turn asked for the defaults" — the first
+ * must leave the stored ones alone.
+ *
+ * @param {unknown} settings - Candidate settings, as a request sent them.
+ * @returns {Object|null} The subset worth storing, or null.
+ */
+export function normalizeChatSettings(settings) {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
+  const out = {};
+  for (const [key, kind] of Object.entries(CHAT_SETTING_TYPES)) {
+    if (!Object.hasOwn(settings, key)) continue;
+    const value = settings[key];
+    if (value === null || value === undefined) continue;
+    if (kind === 'boolean') {
+      if (typeof value === 'boolean') out[key] = value;
+    } else if (kind === 'number') {
+      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+    } else if (kind === 'string') {
+      if (typeof value === 'string' && value) out[key] = value.slice(0, MAX_SETTING_CHARS);
+    } else if (kind === 'stringArray') {
+      if (!Array.isArray(value)) continue;
+      out[key] = value
+        .filter(entry => typeof entry === 'string' && entry)
+        .slice(0, MAX_ENABLED_TOOLS)
+        .map(entry => entry.slice(0, MAX_SETTING_CHARS));
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
  * Apply a patch to a chat, protecting the immutable fields and re-deriving
  * the values that are computed rather than set.
  *
@@ -208,6 +276,16 @@ function applyChatPatch(chat, patch) {
     next[key] = value;
   }
   if ('title' in patch) next.title = normalizeTitle(next.title);
+  // Settings merge rather than replace: a turn that mentioned only the
+  // websearch toggle must not erase the style the chat was started with.
+  if ('settings' in patch) {
+    const incoming = normalizeChatSettings(patch.settings);
+    const existing = normalizeChatSettings(chat.settings);
+    const merged = { ...(existing || {}), ...(incoming || {}) };
+    next.settings = Object.keys(merged).length > 0 ? merged : null;
+  } else {
+    next.settings = normalizeChatSettings(chat.settings);
+  }
   // An unknown status is dropped rather than stored: the chat list renders it.
   if (!CHAT_STATUSES.includes(next.status)) next.status = chat.status || 'active';
   if (!Number.isFinite(next.messageCount)) next.messageCount = chat.messageCount || 0;
@@ -575,11 +653,12 @@ export class ChatRepository {
    *   `platform.runLog.identityMode`.
    * @param {string} [options.appId] - App the chat belongs to.
    * @param {string} [options.modelId] - Model the chat last used.
+   * @param {Object} [options.settings] - Answering settings of the opening turn.
    * @param {string} [options.title] - Initial title; the first user message
    *   supplies one when this is empty.
    * @returns {Promise<Object|null>} The chat, or null when it cannot be stored.
    */
-  async ensureChat({ chatId, ownerId, identityMode, appId, modelId, title } = {}) {
+  async ensureChat({ chatId, ownerId, identityMode, appId, modelId, settings, title } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
     return this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
@@ -591,6 +670,7 @@ export class ChatRepository {
         identityMode: identityMode || 'default',
         appId: appId || null,
         modelId: modelId || null,
+        settings: normalizeChatSettings(settings),
         title: normalizeTitle(title),
         titleSetByUser: false,
         createdAt: now,

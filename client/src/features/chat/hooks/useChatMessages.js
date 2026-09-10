@@ -39,6 +39,12 @@ function transformStoredMessage(msg) {
     // must not be handed through as-is.
     if (msg.error.code === 'ABORTED') message.cancelled = true;
     else message.error = true;
+    // The reason survives separately. A failed turn usually stored no content
+    // at all, so without this the bubble has nothing to show and reads as an
+    // answer the model never gave.
+    if (typeof msg.error.message === 'string' && msg.error.message) {
+      message.errorMessage = msg.error.message;
+    }
   }
 
   return message;

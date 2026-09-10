@@ -566,3 +566,40 @@ OpenAI-compatible servers are the usual culprits.
   sent again.
 - The wait *before* the first piece of an answer is unchanged, so a model that
   thinks for a long time before it starts writing is not cut off.
+
+## Reopening a Durable Chat Mid-Answer Now Picks the Answer Back Up
+
+Three defects, reported together from real use: start a chat with websearch,
+close the tab before the first text arrives, come back, and the chat was
+marked as having new activity but showed only the question — then, after a
+second reload, an empty assistant bubble.
+
+- **Leaving a durable chat no longer cancels its turn.** The page told the
+  server to stop whenever the chat surface unmounted for good. `POST …/stop`
+  is deliberately unconditional — the Stop button has to reach a turn whose
+  browser is gone — so closing the tab aborted the very answer durable chats
+  promise to finish, and stored it as an empty message with an `ABORTED`
+  error. Only the Stop button cancels a durable turn now. An ephemeral chat
+  still stops on leaving, or a generation nobody will read keeps running.
+- **Reopening a chat re-attaches to a turn that is still generating.** The
+  page replays what the run ledger already holds and then follows the live
+  stream, instead of showing the question and waiting for a frame that could
+  never arrive on a connection nobody had opened. When the turn ends the
+  transcript is re-read from the store.
+- **A stopped or failed turn says so.** Reconstructed from storage, both
+  rendered as a blank bubble: the "stopped" note is written into the message
+  as it happens live, and a failure that produced no text had only its reason,
+  which hydration was discarding. Both now render.
+
+## A Chat Reopens With the Settings It Was Using
+
+The websearch toggle, enabled tools, style, output format, temperature,
+thinking options and model are recorded on the chat and restored when it is
+reopened. They lived only in this browser's per-app storage, so the *app*
+remembered a preference and the *chat* remembered nothing: a chat you had
+turned websearch on for answered your next question without it.
+
+Only what a chat actually recorded is restored — everything else falls back to
+the app's defaults, and the model is re-selected only if the app still allows
+it. A turn merges its settings over the earlier ones rather than replacing
+them, because a surface only sends the toggles it shows.

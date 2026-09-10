@@ -17,6 +17,14 @@ import { renderHook, act } from '@testing-library/react';
  *    just opened stays disabled behind a Stop button and a queued message
  *    would be posted into the wrong chat.
  *
+ * A real unmount used to be the exception: it stopped the turn whatever the
+ * chat was. For a durable chat that is the same mistake with a different
+ * trigger, and it was reported from real use — close the tab on a running
+ * turn, come back, and the chat holds an empty assistant message with an
+ * ABORTED error where the answer should be. Unmount therefore stops an
+ * ephemeral turn (leaving the page must not bill a generation nobody will
+ * read) and leaves a durable one running.
+ *
  * The real `useAppChat` and the real `useEventSource` run; only the HTTP
  * transport underneath them is stubbed.
  */
@@ -157,11 +165,11 @@ test('a turn queued but never connected is not posted into the chat that replace
   expect(messages[0].content).toBe('meant for B');
 });
 
-test('unmounting for real still stops the stream', async () => {
-  // Leaving the surface altogether is a different intent from opening another
-  // chat, and keeps the behaviour it always had.
+test('unmounting an ephemeral chat still stops the stream', async () => {
+  // Nothing stores this turn, so leaving the surface for good is the last
+  // chance to stop a generation that no one will ever read.
   const { result, unmount } = renderHook(() =>
-    useAppChat({ appId: 'acme', chatId: 'chat-ccc', serverBacked: true })
+    useAppChat({ appId: 'acme', chatId: 'chat-ccc', serverBacked: false })
   );
 
   await startTurn(result, 'a question');
@@ -171,4 +179,22 @@ test('unmounting for real still stops the stream', async () => {
   });
 
   expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-ccc');
+});
+
+test('unmounting a durable chat leaves the turn running', async () => {
+  // The whole promise of a durable chat is that closing the tab does not cost
+  // you the answer. `POST …/stop` aborts unconditionally — it has to, so the
+  // Stop button works on a turn whose client is gone — so sending it here
+  // stored an empty assistant message with an ABORTED error instead.
+  const { result, unmount } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-ddd', serverBacked: true })
+  );
+
+  await startTurn(result, 'a question');
+
+  await act(async () => {
+    unmount();
+  });
+
+  expect(stopAppChatStream).not.toHaveBeenCalled();
 });

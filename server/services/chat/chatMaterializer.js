@@ -129,6 +129,8 @@ function messageError(summary) {
  * @param {string} params.identityMode - the mode `ownerId` was resolved in
  * @param {string} [params.appId]
  * @param {string} [params.modelId]
+ * @param {Object} [params.settings] - How this turn was answered (style, tools,
+ *   websearch, thinking …), so reopening the chat restores it
  * @param {string} params.runId
  * @param {string} params.content - raw text of the new user message
  * @param {string} [params.clientMessageId] - client exchange id, for reconciling an
@@ -145,6 +147,7 @@ export async function materializeUserTurn({
   identityMode,
   appId,
   modelId,
+  settings,
   runId,
   content,
   clientMessageId,
@@ -162,6 +165,7 @@ export async function materializeUserTurn({
       identityMode,
       appId,
       modelId,
+      settings,
       title
     });
     if (!chat) {
@@ -178,6 +182,9 @@ export async function materializeUserTurn({
       // The sender is demonstrably present, so nothing in this chat is unseen.
       hasUnseenActivity: false,
       ...(modelId ? { modelId } : {}),
+      // How the user has this chat set up right now. The repository merges,
+      // so a turn that changed one toggle does not reset the others.
+      ...(settings ? { settings } : {}),
       // A chat opened by an empty auto-start turn has no title yet; the first
       // message carrying text names it. A title the user set is never touched.
       ...(!chat.title && title && !chat.titleSetByUser ? { title } : {}),

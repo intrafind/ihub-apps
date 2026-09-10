@@ -21,17 +21,27 @@ import { RUN_EVENTS } from '../run/runReducer';
  * Terminal frames: `run/ended` of the turn's run and `stream/error` close the
  * fetch (release the HTTP/1.1 connection slot) and flip processing to false.
  * Also includes connection timeout, the chat heartbeat (`checkAppChatStatus`)
- * and, **on unmount only**, `stopAppChatStream`. Switching `chatId` while the
- * surface stays mounted merely detaches — see the teardown effect.
+ * and, **on unmount of an ephemeral chat only**, `stopAppChatStream`.
+ * Switching `chatId` while the surface stays mounted merely detaches — see the
+ * teardown effect.
  *
  * @param {Object} options
  * @param {string} options.appId - App ID (used for heartbeat + cleanup)
  * @param {string} options.chatId - Chat session ID (stream id; heartbeat + cleanup)
+ * @param {boolean} [options.durable=false] - The chat is stored server-side, so a
+ *   turn in flight must survive this surface going away
  * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
  * @param {Function} options.onEvent - Called for each SSE v2 frame: ({ type, envelope })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
  */
-function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
+function useEventSource({
+  appId,
+  chatId,
+  durable = false,
+  timeoutDuration = 60000,
+  onEvent,
+  onProcessingChange
+}) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
   // Exposed as eventSourceRef for backward-compatible isConnected check by callers
@@ -277,13 +287,18 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
   // when the surface stays mounted and simply switches to another chat —
   // `/apps/:appId/c/:chatId` does exactly that.
   //
-  // Only a real unmount tells the server to stop. `POST …/stop` is built to
-  // reach a turn whose client is gone, which is precisely the durable turn the
-  // user was promised would finish, so cancelling it merely because they
-  // opened a different chat would throw away the answer they are still
-  // waiting for. Leaving a chat therefore only detaches: release the HTTP
-  // slot, drop the timers, and report the turn as no longer processing *here*
-  // so the composer of the chat just opened is not stuck behind a Stop button.
+  // Switching chats only detaches: release the HTTP slot, drop the timers, and
+  // report the turn as no longer processing *here* so the composer of the chat
+  // just opened is not stuck behind a Stop button.
+  //
+  // A real unmount used to tell the server to stop unconditionally, and for a
+  // durable chat that was wrong in the one case durability exists for.
+  // `POST …/stop` is deliberately the unconditional abort — the Stop button
+  // has to work on a turn whose client is gone — so sending it on unmount
+  // killed the very answer the user was promised would finish, and stored it
+  // as an empty assistant message with an ABORTED error. A durable chat
+  // therefore never stops on unmount; only the Stop button does. An ephemeral
+  // one still must, or leaving the page bills a generation nobody will read.
   useEffect(() => {
     return () => {
       const wasActive = abortAndClearTimers();
@@ -291,13 +306,14 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
         if (wasActive) onProcessingChangeRef.current?.(false);
         return;
       }
+      if (durable) return;
       if (appId && chatId) {
         stopAppChatStream(appId, chatId).catch(() => {
           // server may be unreachable on tab close — best effort only
         });
       }
     };
-  }, [abortAndClearTimers, appId, chatId]);
+  }, [abortAndClearTimers, appId, chatId, durable]);
 
   return {
     initEventSource,

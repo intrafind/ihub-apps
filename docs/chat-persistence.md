@@ -131,10 +131,26 @@ the open session by the exchange id it was sent with, which the store keeps as
 without the second form it would leave the superseded exchange in the stored
 transcript and grow the conversation by one discarded round per retry.
 
-Opening a different chat while an answer is still streaming does **not** cancel
-it — that is the durable turn the feature exists for. The page releases its
-stream and shows the chat you opened; the answer keeps being written and is
-there when you come back. Only the Stop button cancels a turn.
+A chat reopens **the way you left it set up**. The websearch toggle, the tools
+you enabled, the style, the output format, the temperature and the model come
+back from the chat rather than from the app's defaults, so a chat you had
+turned websearch on for does not quietly answer the next question without it.
+Only what the chat actually recorded is restored; everything else falls back
+to the app's defaults, and the model is only re-selected if the app still
+allows it.
+
+**Reopening a chat mid-answer re-attaches to the turn.** The run may still be
+generating — it outlives the browser that started it — so the page replays
+what the run ledger already holds and then follows the live stream, rather
+than showing the question and waiting. When the turn ends the transcript is
+re-read from the store, which is the authority on what the answer finally was.
+
+Leaving a durable chat — opening another one, or closing the tab — does
+**not** cancel its turn. That is the whole promise of the feature: the answer
+keeps being written and is there when you come back. Only the Stop button
+cancels a turn, and it is deliberately unconditional so that it reaches a turn
+whose client is already gone. An ephemeral chat still stops on leaving, or a
+generation nobody will ever read would keep billing tokens.
 
 ### "Answered while you were away"
 
@@ -360,6 +376,7 @@ index can answer "list my chats" without scanning:
 {
   id, ownerId, identityMode,
   appId, modelId,
+  settings,             // how the chat is being answered — see below
   title, titleSetByUser,
   createdAt, lastMessageAt,
   messageCount,
@@ -391,6 +408,18 @@ Details that matter:
 - **Message ids are server-minted** (`crypto.randomUUID()`). The client's own
   exchange id is kept as `clientMessageId` so an optimistic render can be
   reconciled instead of duplicated.
+- **`settings` is a closed set, and it merges.** Each turn records how it was
+  answered — `style`, `outputFormat`, `temperature`, `sendChatHistory`, the
+  three `thinking*` fields, `enabledTools`, `websearchEnabled`,
+  `imageAspectRatio`, `imageQuality` — and nothing else: these arrive in a
+  request body and are read back for the life of the chat, so an open-ended
+  blob would let a client store anything under a key the server never checks.
+  Values of the wrong type are dropped rather than coerced, strings are capped
+  at 64 characters and `enabledTools` at 64 entries. A turn merges over what
+  earlier turns recorded, because a surface only sends the toggles it
+  surfaces: flipping websearch must not erase the style the chat was started
+  with. `modelId` is kept alongside rather than inside, since it has its own
+  field.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.

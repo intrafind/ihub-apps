@@ -470,8 +470,23 @@ function ChatMessage({
   // Render the message content based on the output format
   const renderContent = () => {
     // Ensure content is always a string for rendering
-    const contentToRender =
+    const storedContent =
       typeof message.content === 'string' ? message.content : message.content || '';
+
+    // A turn that was stopped or that failed is reconstructed here when the
+    // chat is reopened from the store. The live paths write their notice into
+    // the message content as it happens; a hydrated message carries only the
+    // flag and, for a failure, the stored reason. Without this the bubble
+    // renders empty — a stopped answer and a crashed one both look like the
+    // model replied with nothing.
+    const cancelledNote = t('message.generationCancelled', ' [Generation cancelled]');
+    let contentToRender = storedContent;
+    if (message.fromServer && message.cancelled && !storedContent.includes(cancelledNote)) {
+      contentToRender = `${storedContent}${cancelledNote}`;
+    } else if (message.fromServer && isError && !storedContent) {
+      contentToRender =
+        message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
+    }
 
     // For HTML content, check if it contains image tags or file indicators and render them properly
     const hasImageContent =

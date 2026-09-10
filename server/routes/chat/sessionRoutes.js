@@ -36,7 +36,11 @@ import {
   materializeUserTurn
 } from '../../services/chat/chatMaterializer.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
-import { getChatRepository, isPersistableChatId } from '../../services/chat/ChatRepository.js';
+import {
+  getChatRepository,
+  isPersistableChatId,
+  normalizeChatSettings
+} from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
@@ -152,6 +156,7 @@ export function workflowSummary(result) {
 async function materializeWorkflowUserTurn({ persistence, chatId, appId, modelId, runId }) {
   if (!persistence) return;
   await materializeUserTurn({
+    settings: persistence.settings,
     repository: persistence.repository,
     chatId,
     ownerId: persistence.ownerId,
@@ -968,7 +973,25 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             content: typeof newMessage.content === 'string' ? newMessage.content : '',
             clientMessageId: messageId,
             attachments: messageAttachments(newMessage),
-            replaceFromMessageId: replaceFromMessageId || null
+            replaceFromMessageId: replaceFromMessageId || null,
+            // How this turn is being answered, so reopening the chat comes
+            // back with the same setup rather than the app's defaults. Only
+            // the keys this request actually carried: the repository merges
+            // them over what earlier turns recorded, and `undefined` here
+            // means "this turn said nothing about it".
+            settings: normalizeChatSettings({
+              style,
+              outputFormat,
+              temperature,
+              sendChatHistory,
+              thinkingEnabled,
+              thinkingBudget,
+              thinkingThoughts,
+              enabledTools,
+              websearchEnabled,
+              imageAspectRatio,
+              imageQuality
+            })
           };
         }
 

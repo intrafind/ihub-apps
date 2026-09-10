@@ -141,6 +141,40 @@ describe('useChatMessages in server-backed mode', () => {
     expect(result.current.messages[1]).toMatchObject({ error: true });
   });
 
+  test('the reason a turn failed survives, so the bubble is not blank', () => {
+    // A turn that never produced a token stores an empty string and the
+    // reason. Keeping only the flag left `ChatMessage` with nothing to
+    // render, and a chat whose answer had crashed came back looking as though
+    // the model had replied with silence.
+    const { result } = renderHook(() => useChatMessages('chat-why', { serverBacked: true }));
+
+    act(() => {
+      result.current.loadServerMessages([
+        {
+          id: 'srv-1',
+          role: 'assistant',
+          content: '',
+          error: { code: 'PROVIDER_ERROR', message: 'The model endpoint refused the request.' }
+        },
+        {
+          id: 'srv-2',
+          role: 'assistant',
+          content: '',
+          error: { code: 'ABORTED', message: 'Turn stopped before it finished.' }
+        }
+      ]);
+    });
+
+    expect(result.current.messages[0]).toMatchObject({
+      error: true,
+      errorMessage: 'The model endpoint refused the request.'
+    });
+    expect(result.current.messages[1]).toMatchObject({
+      cancelled: true,
+      errorMessage: 'Turn stopped before it finished.'
+    });
+  });
+
   test('the hydrated transcript is not written back over the browser copy', () => {
     seedLocalCopy('chat-open');
     const before = sessionStorage.getItem(storageKey('chat-open'));

@@ -376,6 +376,7 @@ class ChatService {
         identityMode: persist.identityMode,
         appId: app?.id,
         modelId: model?.id,
+        settings: persist.settings,
         runId,
         content: persist.content,
         // The only client id on the wire is the exchange id of the assistant

@@ -15,6 +15,8 @@ import {
   getRuns
 } from '../../../shared/run/runReducer';
 import { projectMessageRuns } from '../runToMessage';
+import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
+import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 
 /**
  * High level hook combining chat message management with streaming
@@ -77,6 +79,9 @@ function useAppChat({
   // so forking the stored one at the same point is what puts the two back in
   // agreement.
   const pendingReplaceFromRef = useRef(null);
+  // The run this surface re-attached to after reopening the chat, and what to
+  // do when it settles. Set by `reattachToRun`, consumed once by `handleEvent`.
+  const reattachedRunRef = useRef(null);
 
   // Never persist the iAssistant conversationId for ephemeral chats.
   const shouldPersistConversationId = persistConversationId && !ephemeral;
@@ -282,6 +287,22 @@ function useAppChat({
     [messagesRef]
   );
 
+  /**
+   * Settle a re-attached run once, when it reaches a terminal frame.
+   *
+   * Guarded on the run id: a chat can have several runs in flight (a workflow
+   * child, a superseded turn), and only the one this surface re-attached to
+   * should trigger the caller's re-read.
+   *
+   * @param {string} runId - The run that just reached a terminal frame
+   */
+  const settleReattachedRun = useCallback(runId => {
+    const pending = reattachedRunRef.current;
+    if (!pending || pending.runId !== runId) return;
+    reattachedRunRef.current = null;
+    pending.onSettled?.();
+  }, []);
+
   const handleEvent = useCallback(
     async event => {
       const envelope = event?.envelope;
@@ -372,6 +393,11 @@ function useAppChat({
           break;
 
         case RUN_EVENTS.RUN_ENDED: {
+          // A re-attached turn is settled: hand back to the caller so it can
+          // re-read the stored transcript. The replay and the live stream meet
+          // at a fetch boundary, so what is on screen may be missing a delta
+          // that fell in it; the store is what the answer actually was.
+          settleReattachedRun(rootRun.runId);
           // Include stored metadata (customResponseRenderer, outputFormat) in the message.
           // Preserve workflow-set outputFormat — don't let the app default overwrite it.
           const metadata = {
@@ -415,6 +441,7 @@ function useAppChat({
         case RUN_EVENTS.STREAM_ERROR:
           // Preserve any streamed content (the projection appends the error text)
           updateAssistantMessage(messageId, content, false, extras);
+          settleReattachedRun(rootRun.runId);
           setProcessing(false);
           break;
 
@@ -426,6 +453,7 @@ function useAppChat({
       appId,
       bindRunToMessage,
       sendPendingMessage,
+      settleReattachedRun,
       updateAssistantMessage,
       onMessageComplete,
       t,
@@ -437,6 +465,8 @@ function useAppChat({
   const { initEventSource, cleanupEventSource } = useEventSource({
     appId,
     chatId: chatId,
+    // A stored chat's turn outlives this surface: leaving it must not stop it.
+    durable: serverBacked,
     onEvent: handleEvent,
     onProcessingChange: setProcessing
   });
@@ -792,6 +822,89 @@ function useAppChat({
     setConversationTitle(null);
   }, []);
 
+  /**
+   * Re-attach to a turn that is still running on the server.
+   *
+   * A durable chat outlives the browser: its turn keeps generating after the
+   * tab closes, and the answer is written to the store when it ends. Until
+   * this existed, reopening such a chat showed the stored transcript — the
+   * question, and nothing after it — and then sat there. The stream was never
+   * connected, so no frame could arrive, and the partial answer already in the
+   * ledger was never asked for. The chat looked stuck until the turn ended and
+   * the page was reloaded a second time.
+   *
+   * Two steps, in this order:
+   *
+   * 1. **Replay the ledger.** The run's events are fetched and folded through
+   *    the same `handleEvent` the live stream uses, so tool calls, progress
+   *    and partial text are reconstructed exactly as they were rendered the
+   *    first time rather than through a second, parallel projection.
+   * 2. **Then connect.** Connecting first would interleave live frames with
+   *    replayed ones out of order. This way every live frame folds on top of a
+   *    finished replay.
+   *
+   * The window between the two is a fetch apart, and a delta emitted inside it
+   * is not in the replay and not yet on the stream. `onSettled` is the answer
+   * to that: the caller re-reads the stored transcript when the turn ends, and
+   * the store is the authority on what the answer finally was.
+   *
+   * @param {string} runId - The run the chat document reports as active
+   * @param {Object} [options]
+   * @param {Function} [options.onSettled] - Called once the turn is no longer running
+   * @returns {Promise<boolean>} Whether the surface attached to a live turn
+   */
+  const reattachToRun = useCallback(
+    async (runId, { onSettled } = {}) => {
+      if (!runId || !appId || !chatId) return false;
+
+      // The replay needs somewhere to write. `bindRunToMessage` falls back to
+      // `lastMessageIdRef` for a run whose `run/started` names no message id —
+      // which is every run replayed from the ledger, since the message id it
+      // referenced belongs to the browser session that started the turn.
+      const placeholderId = addAssistantMessage();
+      lastMessageIdRef.current = placeholderId;
+      setProcessing(true);
+
+      let ended = false;
+      try {
+        const { events } = await fetchAllLedgerEvents(async (after, limit) => {
+          const res = await fetchWithAuthRetry(
+            buildApiUrl(
+              `runs/${encodeURIComponent(runId)}/events?after=${after}&limit=${limit}&view=sse`
+            ),
+            { method: 'GET', headers: { Accept: 'application/json' } }
+          );
+          if (!res.ok) throw new Error(`Run replay failed (${res.status})`);
+          return res.json();
+        });
+        for (const envelope of events) {
+          if (!envelope || envelope.v !== 2) continue;
+          // The ledger numbers a run's own events; the live stream numbers the
+          // chat's. Folding a ledger seq would poison gap detection with a
+          // counter from the wrong space.
+          const { seq: _ledgerSeq, ...live } = envelope;
+          if (live.type === RUN_EVENTS.RUN_ENDED) ended = true;
+          await handleEvent({ envelope: live });
+        }
+      } catch (err) {
+        console.warn('Could not replay the running turn:', err.message);
+      }
+
+      if (ended) {
+        // It finished between the chat document being read and this replay.
+        // Nothing to attach to, and the store already has the answer.
+        setProcessing(false);
+        onSettled?.();
+        return false;
+      }
+
+      reattachedRunRef.current = { runId, onSettled };
+      initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      return true;
+    },
+    [appId, chatId, addAssistantMessage, handleEvent, initEventSource]
+  );
+
   return {
     chatId: chatId,
     messages,
@@ -811,6 +924,7 @@ function useAppChat({
     addSystemMessage,
     submitClarificationResponse,
     loadServerMessages,
+    reattachToRun,
     resetConversationState,
     // Exposed so the transcription flow can render a transcript as a
     // locally-built assistant turn (streaming deltas), without going through the

@@ -237,6 +237,14 @@ function AppChat({ preloadedApp = null }) {
     });
   }, []);
 
+  // How the chat being opened was last answered — read from the stored chat
+  // document on hydrate and handed to `useAppSettings` as its last layer, so
+  // reopening a chat comes back with the websearch toggle, tools and style it
+  // was using rather than the app's defaults. Null for a new chat, and reset
+  // to null the moment the chat changes so one chat's setup never leaks into
+  // the next.
+  const [chatSettings, setChatSettings] = useState(null);
+
   // Shared app settings hook
   const {
     selectedModel,
@@ -268,7 +276,7 @@ function AppChat({ preloadedApp = null }) {
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
-  } = useAppSettings(appId, app);
+  } = useAppSettings(appId, app, { chatSettings });
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -600,6 +608,7 @@ function AppChat({ preloadedApp = null }) {
     submitClarificationResponse,
     conversationTitle,
     loadServerMessages,
+    reattachToRun,
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
@@ -620,6 +629,15 @@ function AppChat({ preloadedApp = null }) {
   // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
   // this tab minted but never sent is not in the store yet: that 404 is the
   // ordinary case for a new chat, not a failure worth reporting.
+  useEffect(() => {
+    // Switching chats drops the previous chat's setup immediately, rather than
+    // waiting for the new one's document to arrive. In the gap the app's own
+    // defaults apply, which is what a chat with no stored settings gets too —
+    // leaving the old ones in place would answer the new chat with the
+    // previous one's tools.
+    setChatSettings(null);
+  }, [chatId]);
+
   // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
   // on the mode too, because leaving and re-entering server-backed mode (the
   // incognito toggle) is a second entry into the same chat — a chat-id-only
@@ -674,10 +692,52 @@ function AppChat({ preloadedApp = null }) {
         loadServerMessages(Array.isArray(result?.messages) ? result.messages : [], {
           preserveLocal: true
         });
+        // `modelId` lives on the chat document rather than inside `settings`,
+        // so it is folded in here; `useAppSettings` still checks the app
+        // allows it before selecting it.
+        const stored = result?.chat?.settings;
+        const storedModelId = result?.chat?.modelId;
+        setChatSettings(
+          stored || storedModelId
+            ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
+            : null
+        );
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
         invalidateChatsCache();
+
+        // The turn may still be generating. A durable chat's run outlives the
+        // browser that started it, so reopening the chat has to re-attach to
+        // it — replay what the ledger already holds, then follow the stream —
+        // or the answer only appears after the turn ends and the page is
+        // loaded a second time. `onSettled` re-reads the transcript once it
+        // finishes, because the store, not this surface, is what the answer
+        // finally was.
+        const runningRunId =
+          result?.chat?.status === 'running' ? result.chat.activeRunId || null : null;
+        if (runningRunId) {
+          reattachToRun(runningRunId, {
+            onSettled: async () => {
+              if (!owns()) return;
+              try {
+                const settled = await fetchChat(chatId);
+                if (!owns()) return;
+                // Replaces the transcript outright, placeholder included: the
+                // store now holds the assistant message this surface was
+                // rendering live, and it is the version that survives a
+                // reload.
+                loadServerMessages(Array.isArray(settled?.messages) ? settled.messages : []);
+                invalidateChatsCache();
+              } catch (err) {
+                // The live projection stays on screen. It is very probably
+                // right — this re-read only exists to close the gap between
+                // the replay and the stream.
+                console.warn('Could not re-read the settled chat:', err.message);
+              }
+            }
+          });
+        }
       } catch (err) {
         if (!owns()) return;
         if (err?.status !== 404) {

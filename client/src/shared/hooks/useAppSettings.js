@@ -7,8 +7,27 @@ import { useUIConfig } from '../contexts/UIConfigContext';
 /**
  * Custom hook for managing app settings across chat and canvas modes
  * Provides shared state management for model, style, temperature, etc.
+ *
+ * Three layers, applied in this order, each overriding the last:
+ *
+ * 1. the app's own defaults,
+ * 2. what this browser last used for the app (`localStorage`),
+ * 3. `chatSettings` — what the chat being opened was last answered with.
+ *
+ * The third layer only exists for a stored chat. Reopening one used to come
+ * back with the app's defaults, so a chat the user had turned websearch on for
+ * silently answered the next question without it. Applying it last, inside the
+ * same effect as the other two, is what keeps it applied: the effect re-runs
+ * whenever the app or the model list settles, and anything applied outside it
+ * would be overwritten the next time it did.
+ *
+ * @param {string} appId - App id.
+ * @param {Object} app - App configuration.
+ * @param {Object} [options]
+ * @param {Object|null} [options.chatSettings] - Settings stored on the chat being
+ *   opened, or null for a new or non-persisted chat.
  */
-function useAppSettings(appId, app) {
+function useAppSettings(appId, app, { chatSettings = null } = {}) {
   const { setHeaderColor } = useUIConfig();
 
   // Configuration states
@@ -147,7 +166,35 @@ function useAppSettings(appId, app) {
         setImageAspectRatio(savedSettings.imageAspectRatio);
       if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
     }
-  }, [app, appId, setHeaderColor, models, modelsLoading]);
+
+    // The chat's own settings are the last word. Only the keys it actually
+    // recorded: a chat that never mentioned a style keeps the app's.
+    if (chatSettings && typeof chatSettings === 'object') {
+      if (chatSettings.style) setSelectedStyle(chatSettings.style);
+      if (chatSettings.outputFormat) setSelectedOutputFormat(chatSettings.outputFormat);
+      if (typeof chatSettings.temperature === 'number') setTemperature(chatSettings.temperature);
+      if (typeof chatSettings.sendChatHistory === 'boolean')
+        setSendChatHistory(chatSettings.sendChatHistory);
+      if (typeof chatSettings.thinkingEnabled === 'boolean')
+        setThinkingEnabled(chatSettings.thinkingEnabled);
+      if (typeof chatSettings.thinkingBudget === 'number')
+        setThinkingBudget(chatSettings.thinkingBudget);
+      if (typeof chatSettings.thinkingThoughts === 'boolean')
+        setThinkingThoughts(chatSettings.thinkingThoughts);
+      if (Array.isArray(chatSettings.enabledTools)) setEnabledTools(chatSettings.enabledTools);
+      if (typeof chatSettings.websearchEnabled === 'boolean')
+        setWebsearchEnabled(chatSettings.websearchEnabled);
+      if (chatSettings.imageAspectRatio) setImageAspectRatio(chatSettings.imageAspectRatio);
+      if (chatSettings.imageQuality) setImageQuality(chatSettings.imageQuality);
+      // The model the chat last used, but only if the app still allows it —
+      // the same guard the browser-saved selection gets above.
+      if (chatSettings.modelId) {
+        const stillAllowed = filterModelsForApp(models, app);
+        if (stillAllowed.some(m => m.id === chatSettings.modelId))
+          setSelectedModel(chatSettings.modelId);
+      }
+    }
+  }, [app, appId, chatSettings, setHeaderColor, models, modelsLoading]);
 
   // Save settings when they change
   useEffect(() => {
