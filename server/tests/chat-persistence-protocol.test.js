@@ -193,6 +193,42 @@ async function withPreparedRequests(fn) {
 }
 
 /**
+ * Run `fn` with `runTurn` replaced by a recorder, so a test can assert what
+ * the *route* resolved without running a model.
+ *
+ * `withPreparedRequests` stops one step earlier — at `prepareChatRequest` —
+ * which is why it cannot see anything the route computes for the store.
+ *
+ * @param {(calls: Object[]) => Promise<void>} fn - Test body; receives one
+ *   entry per `runTurn` call.
+ * @returns {Promise<void>}
+ */
+async function withRecordedTurns(fn) {
+  const originalPrepare = ChatService.prototype.prepareChatRequest;
+  const originalRun = ChatService.prototype.runTurn;
+  const calls = [];
+  ChatService.prototype.prepareChatRequest = async () => ({
+    success: true,
+    data: {
+      app: { id: APP_ID },
+      model: { id: 'gpt-4o' },
+      llmMessages: [{ role: 'user', content: 'x' }],
+      tools: []
+    }
+  });
+  ChatService.prototype.runTurn = async params => {
+    calls.push(params);
+    return { status: 'success', content: '', finishReason: 'stop' };
+  };
+  try {
+    await fn(calls);
+  } finally {
+    ChatService.prototype.prepareChatRequest = originalPrepare;
+    ChatService.prototype.runTurn = originalRun;
+  }
+}
+
+/**
  * Replace the cached feature flags for the duration of `fn`.
  *
  * @param {Object} features - Feature flags to serve.
@@ -442,6 +478,136 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
         'the forked-off exchange is gone from the prompt, not duplicated'
       );
     });
+  });
+
+  it('resolves the fork point to the stored id before handing it to the store', async () => {
+    // The regression guard for the route half. The store matches on `id`
+    // alone, so a client exchange id forwarded verbatim forks the prompt and
+    // not the transcript — silently, because `materializeUserTurn` swallows
+    // the UNKNOWN_MESSAGE it gets back.
+    const chatId = 'chat-fork-resolves-id';
+    const repository = getChatRepository();
+    await repository.ensureChat({ chatId, ownerId: USER.id, identityMode: 'default' });
+    await repository.appendMessage(chatId, {
+      role: 'user',
+      content: 'what is the retention default?',
+      runId: 'chat-run-1',
+      clientMessageId: 'msg-1700000000000-1'
+    });
+    await repository.appendMessage(chatId, {
+      role: 'assistant',
+      content: 'ninety days',
+      runId: 'chat-run-1'
+    });
+    const storedUserId = (await repository.getMessages(chatId)).messages[0].id;
+    assert.notEqual(storedUserId, 'msg-1700000000000-1', 'the two ids really do differ');
+
+    await withRecordedTurns(async calls => {
+      await withStreamingClient(chatId, async () => {
+        await postChat({
+          chatId,
+          body: {
+            replaceFromMessageId: 'msg-1700000000000-1',
+            messages: [{ role: 'user', content: 'let me rephrase' }]
+          }
+        });
+      });
+
+      assert.equal(calls.length, 1, 'the turn ran');
+      assert.equal(
+        calls[0].persistence?.replaceFromMessageId,
+        storedUserId,
+        'the store is handed the id it can actually match on'
+      );
+    });
+  });
+
+  it('forking by client exchange id truncates the stored transcript, not just the prompt', async () => {
+    // The route resolves the fork point against both the stored id and the
+    // client exchange id, but the store matches on `id` alone. Forwarding the
+    // client's value forked the prompt and left the transcript intact:
+    // `appendMessage` threw UNKNOWN_MESSAGE, `materializeUserTurn` logged and
+    // returned null, and the answer landed at the end of an untruncated
+    // history — so the replaced exchange survived and, for an edit, the
+    // edited question was never stored at all.
+    //
+    // The tests above stub `prepareChatRequest` to fail, so they stop before
+    // the store is ever touched. This one drives the turn to completion and
+    // asserts the transcript.
+    const chatId = 'chat-fork-stored-transcript';
+    const repository = getChatRepository();
+    await repository.ensureChat({ chatId, ownerId: USER.id, identityMode: 'default' });
+    await repository.appendMessage(chatId, {
+      role: 'user',
+      content: 'what is the retention default?',
+      runId: 'chat-run-1',
+      clientMessageId: 'msg-1700000000000-1'
+    });
+    await repository.appendMessage(chatId, {
+      role: 'assistant',
+      content: 'ninety days',
+      runId: 'chat-run-1'
+    });
+
+    const runLog = new RunLog({
+      baseDir: path.join(baseDir, 'fork-run-log'),
+      forceEnabled: false,
+      getPlatformConfig: () => ({})
+    });
+    const service = new ChatService({
+      agentLoop: {
+        run: async () => ({
+          status: 'success',
+          content: 'ninety days, regenerated',
+          finishReason: 'stop',
+          messages: []
+        })
+      },
+      runLog,
+      logInteraction: async () => {},
+      telemetry: { recordChatCallStart: async () => {}, recordChatCallEnd: async () => {} }
+    });
+
+    try {
+      await service.runTurn({
+        prep: {
+          app: { id: APP_ID },
+          model: { id: 'gpt-4o' },
+          llmMessages: [{ role: 'user', content: 'let me rephrase' }],
+          tools: []
+        },
+        chatId,
+        messageId: 'msg-1700000000000-2',
+        streaming: false,
+        buildLogData: () => ({}),
+        getLocalizedError: async code => code,
+        user: USER,
+        persistence: {
+          repository,
+          ownerId: USER.id,
+          identityMode: 'default',
+          content: 'let me rephrase',
+          clientMessageId: 'msg-1700000000000-2',
+          attachments: [],
+          // What the route now resolves and forwards: the *stored* id of the
+          // message the client addressed by its exchange id.
+          replaceFromMessageId: (await repository.getMessages(chatId)).messages[0].id
+        }
+      });
+    } finally {
+      await runLog.stop();
+      activeRequests.delete(chatId);
+    }
+
+    const { messages } = await repository.getMessages(chatId);
+    assert.deepEqual(
+      messages.map(m => [m.role, m.content]),
+      [
+        ['user', 'let me rephrase'],
+        ['assistant', 'ninety days, regenerated']
+      ],
+      'the replaced exchange is gone from the store and the new question is in it'
+    );
   });
 
   it('honours the caller opting out of chat history for one turn', async () => {

@@ -930,6 +930,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         if (persistTurn && newMessage) {
           const stored = await repository.getMessages(chatId);
           let history = stored.messages;
+          let forkStoredId = null;
           if (replaceFromMessageId) {
             // Either id the client can know this message by: the stored id it
             // was given on hydrate, or — for a turn made in the session that
@@ -945,6 +946,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // Appending onto the untouched history instead would silently
             // duplicate everything the edit meant to replace, so refuse.
             if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
+            // Carry the *stored* id onward. The store matches on `id` alone,
+            // so forwarding the client's value forked the prompt here and not
+            // the transcript: a regenerate in a session that never hydrated
+            // sends its exchange id, which this lookup resolves and the store
+            // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
+            // and returns null, the chat document has already been updated,
+            // and the answer lands at the end — so the stored history keeps
+            // the exchange the user replaced and, for an edit, never records
+            // the edited question at all. Permanent, and replayed to the model
+            // every turn after.
+            forkStoredId = history[forkAt].id;
             history = history.slice(0, forkAt);
           }
           // An app that opted out of chat history stays a one-shot prompt:
@@ -973,7 +985,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             content: typeof newMessage.content === 'string' ? newMessage.content : '',
             clientMessageId: messageId,
             attachments: messageAttachments(newMessage),
-            replaceFromMessageId: replaceFromMessageId || null,
+            replaceFromMessageId: forkStoredId,
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only
             // the keys this request actually carried: the repository merges

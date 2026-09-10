@@ -27,7 +27,8 @@ import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import runLog from '../loop/RunLog.js';
 import { CHATS_NAMESPACE, getChatRepository } from './ChatRepository.js';
-import { chatRetentionSettings } from './chatPersistence.js';
+import { chatRetentionSettings, isChatPersistenceConfigured } from './chatPersistence.js';
+import { isStorageReady } from '../../storage/bootstrap.js';
 
 const COMPONENT = 'ChatRetention';
 
@@ -272,6 +273,10 @@ export async function sweepChats({
  *   Repository to sweep. Resolved per tick from the bootstrapped storage
  *   provider when omitted, so a sweep started before storage came up (or after
  *   a provider swap) still sees the live one.
+ * @param {() => Object} [options.getFeatures] - Reads the feature flags.
+ *   Injectable for the same reason as the platform reader below.
+ * @param {() => boolean} [options.storageReady] - Storage-readiness probe, the
+ *   third half of the same predicate the write path evaluates.
  * @param {() => Object} [options.getPlatformConfig] - Reads the platform
  *   config each tick, so an admin's change to `platform.chats` takes effect
  *   without a restart.
@@ -281,6 +286,8 @@ export async function sweepChats({
 export function startChatRetentionSweep({
   repository = null,
   getPlatformConfig = () => configCache.getPlatform?.() || {},
+  getFeatures = () => configCache.getFeatures?.() || {},
+  storageReady = isStorageReady,
   intervalMs = DAY_MS
 } = {}) {
   if (sweepTimer) return stopChatRetentionSweep;
@@ -293,7 +300,16 @@ export function startChatRetentionSweep({
       // Turning durable chats off must not delete what is already stored: an
       // admin flipping the switch is disabling a feature, not asking for a
       // purge. Retention only runs while chats are on.
-      if (platform.chats?.enabled === false) return;
+      //
+      // This is the same predicate the write path uses, deliberately. Gating
+      // on `chats.enabled` alone read as "chats are on", but the switch an
+      // admin actually sees is the `chatPersistence` feature — and it does not
+      // touch `chats.enabled`. Turning the feature off therefore stopped
+      // writes while leaving this sweep running: no chat's `lastMessageAt`
+      // could advance again, so every stored chat was guaranteed to cross the
+      // cutoff, and the REST surface was already 503 so nobody could export or
+      // delete one first. Ninety days later the sweep deleted all of them.
+      if (!isChatPersistenceConfigured(getFeatures() || {}, platform, storageReady)) return;
       const { retentionDays, maxChatsPerUser } = chatRetentionSettings(platform);
       await sweepChats({
         repository: repository || getChatRepository(),

@@ -1,5 +1,5 @@
 /**
- * Migration V096 — Seed the platform `workflowState` section
+ * Migration V098 — Seed the platform `workflowState` section
  *
  * Workflow execution state was the one runtime store nothing ever swept. A
  * completed run left its `latest.json` behind — the full workflow definition

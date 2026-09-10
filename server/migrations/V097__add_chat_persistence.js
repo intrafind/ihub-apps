@@ -1,5 +1,5 @@
 /**
- * Migration V095 — Seed the platform `chats` section and carry the chat
+ * Migration V097 — Seed the platform `chats` section and carry the chat
  * history preview flag over to durable chats
  *
  * Durable chats store a conversation server-side (through the storage

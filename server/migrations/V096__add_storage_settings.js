@@ -1,5 +1,5 @@
 /**
- * Migration V094 — Seed the platform `storage` section
+ * Migration V096 — Seed the platform `storage` section
  *
  * iHub now has a storage abstraction (documents, append-logs, locks and change
  * events) behind a pluggable provider. Only the filesystem provider ships, and

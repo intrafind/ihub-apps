@@ -388,6 +388,7 @@ describe('startWorkflowStateRetention', () => {
       const stop = startWorkflowStateRetention({
         repository: ctx.repository,
         runSummaries: ctx.runSummaries,
+        getFeatures: () => ({ workflows: true }),
         getPlatformConfig: () => ({ workflowState: { retentionDays: 30 } }),
         intervalMs: 60_000
       });
@@ -428,6 +429,7 @@ describe('startWorkflowStateRetention', () => {
         startWorkflowStateRetention({
           repository: ctx.repository,
           runSummaries: ctx.runSummaries,
+          getFeatures: () => ({ workflows: true }),
           getPlatformConfig: () => ({ workflowState }),
           intervalMs: 60_000
         });

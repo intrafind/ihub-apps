@@ -44,12 +44,16 @@
  * @module services/workflow/workflowRetention
  */
 import configCache from '../../configCache.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import { getRunSummaryRepository } from '../runtime/RunSummaryRepository.js';
 import { WorkflowStatus } from './StateManager.js';
 import { getWorkflowStateRepository, MAX_SCAN_STATES } from './WorkflowStateRepository.js';
 
 const COMPONENT = 'WorkflowRetention';
+
+/** The preview flag that owns workflows; the sweep only runs while it is on. */
+const WORKFLOWS_FEATURE = 'workflows';
 
 /** One day in milliseconds — the sweep interval and the age unit. */
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -233,6 +237,8 @@ export async function sweepWorkflowStates({
  *   a provider swap) still sees the live one.
  * @param {import('../runtime/RunSummaryRepository.js').RunSummaryRepository} [options.runSummaries]
  *   Run summary store, resolved per tick the same way.
+ * @param {() => Object} [options.getFeatures] - Reads the feature flags, so a
+ *   test can drive the gate without a booted registry.
  * @param {() => Object} [options.getPlatformConfig] - Reads the platform
  *   config each tick, so an admin's change to `platform.workflowState` takes
  *   effect without a restart.
@@ -243,6 +249,7 @@ export function startWorkflowStateRetention({
   repository = null,
   runSummaries = null,
   getPlatformConfig = () => configCache.getPlatform?.() || {},
+  getFeatures = () => configCache.getFeatures?.() || {},
   intervalMs = DAY_MS
 } = {}) {
   if (sweepTimer) return stopWorkflowStateRetention;
@@ -251,6 +258,14 @@ export function startWorkflowStateRetention({
     if (sweeping) return;
     sweeping = true;
     try {
+      // Gated like both sibling sweeps. This one was the exception: the run
+      // ledger's cleanup short-circuits on the `runLog` flag and the chat
+      // sweep on `chatPersistence`, while this ran unconditionally — and it
+      // is the only one of the three whose first tick deletes data that
+      // existed before the upgrade. An install that never turned workflows on
+      // should not have its old checkpoints reclaimed by a feature it is not
+      // using.
+      if (!isFeatureEnabled(WORKFLOWS_FEATURE, getFeatures() || {})) return;
       const { retentionDays, cleanupEnabled } = workflowRetentionSettings(
         getPlatformConfig() || {}
       );

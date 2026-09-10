@@ -483,6 +483,15 @@ describe('sweepChats: nothing to sweep', () => {
   });
 });
 
+/**
+ * The two halves of the persistence predicate that are not the platform config.
+ *
+ * The sweep evaluates the same `isChatPersistenceConfigured` the write path
+ * does — feature flag, `chats.enabled`, storage readiness — so a test that
+ * wants a sweep to happen has to say the feature is on and storage is up.
+ */
+const SWEEP_ON = { getFeatures: () => ({ chatPersistence: true }), storageReady: () => true };
+
 describe('startChatRetentionSweep', () => {
   /**
    * Run `fn` with `setInterval` instrumented, so a test can inspect the timer
@@ -514,6 +523,8 @@ describe('startChatRetentionSweep', () => {
       await withCapturedTimers(async timers => {
         const stop = startChatRetentionSweep({
           repository,
+          getFeatures: () => ({ chatPersistence: true }),
+          storageReady: () => true,
           getPlatformConfig: () => ({ chats: { retentionDays: 90, maxChatsPerUser: 0 } }),
           intervalMs: 60_000
         });
@@ -547,9 +558,15 @@ describe('startChatRetentionSweep', () => {
       };
 
       await withCapturedTimers(async timers => {
-        const stop = startChatRetentionSweep({ repository, getPlatformConfig, intervalMs: 60_000 });
+        const stop = startChatRetentionSweep({
+          repository,
+          ...SWEEP_ON,
+          getPlatformConfig,
+          intervalMs: 60_000
+        });
         const stopAgain = startChatRetentionSweep({
           repository,
+          ...SWEEP_ON,
           getPlatformConfig,
           intervalMs: 60_000
         });
@@ -578,7 +595,12 @@ describe('startChatRetentionSweep', () => {
       };
 
       await withCapturedTimers(async () => {
-        const stop = startChatRetentionSweep({ repository, getPlatformConfig, intervalMs: 60_000 });
+        const stop = startChatRetentionSweep({
+          repository,
+          ...SWEEP_ON,
+          getPlatformConfig,
+          intervalMs: 60_000
+        });
         try {
           await waitFor(() => reads > 0, 'the first tick to read the platform config');
           await delay(POLL_MS * 2);
@@ -587,6 +609,75 @@ describe('startChatRetentionSweep', () => {
             await repository.getChat('chat-ancient'),
             'an admin turning the feature off is not asking for a purge'
           );
+        } finally {
+          stop();
+          await delay(POLL_MS * 2);
+        }
+      });
+    });
+  });
+
+  it('turning the Durable Chats feature off does not purge the store either', async () => {
+    // The switch an admin actually sees is `features.chatPersistence`; it does
+    // not touch `platform.chats.enabled`. Gating the sweep on the platform key
+    // alone meant turning the feature off stopped writes but kept deleting —
+    // and with writes stopped, every stored chat was guaranteed to age out.
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, { chatId: 'chat-ancient', ownerId: OWNER, ageDays: 4000 });
+      let reads = 0;
+      const getPlatformConfig = () => {
+        reads += 1;
+        return { chats: { enabled: true, retentionDays: 1, maxChatsPerUser: 1 } };
+      };
+
+      await withCapturedTimers(async () => {
+        const stop = startChatRetentionSweep({
+          repository,
+          getFeatures: () => ({ chatPersistence: false }),
+          storageReady: () => true,
+          getPlatformConfig,
+          intervalMs: 60_000
+        });
+        try {
+          await waitFor(() => reads > 0, 'the first tick to read the platform config');
+          await delay(POLL_MS * 2);
+
+          assert.ok(
+            await repository.getChat('chat-ancient'),
+            'an expired chat survives while the feature is off'
+          );
+        } finally {
+          stop();
+          await delay(POLL_MS * 2);
+        }
+      });
+    });
+  });
+
+  it('does not sweep while storage is unavailable', async () => {
+    // The third half of the predicate. A no-op repository would delete
+    // nothing anyway, but sweeping against one logs deletions that never
+    // happened.
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, { chatId: 'chat-ancient', ownerId: OWNER, ageDays: 4000 });
+      let reads = 0;
+      const getPlatformConfig = () => {
+        reads += 1;
+        return { chats: { enabled: true, retentionDays: 1, maxChatsPerUser: 1 } };
+      };
+
+      await withCapturedTimers(async () => {
+        const stop = startChatRetentionSweep({
+          repository,
+          getFeatures: () => ({ chatPersistence: true }),
+          storageReady: () => false,
+          getPlatformConfig,
+          intervalMs: 60_000
+        });
+        try {
+          await waitFor(() => reads > 0, 'the first tick to read the platform config');
+          await delay(POLL_MS * 2);
+          assert.ok(await repository.getChat('chat-ancient'));
         } finally {
           stop();
           await delay(POLL_MS * 2);
@@ -609,7 +700,12 @@ describe('startChatRetentionSweep', () => {
       await withCapturedTimers(async () => {
         // The first tick runs synchronously inside `start`, so the assertion
         // below is taken well before the interval can fire a second one.
-        const stop = startChatRetentionSweep({ repository, getPlatformConfig, intervalMs: 200 });
+        const stop = startChatRetentionSweep({
+          repository,
+          ...SWEEP_ON,
+          getPlatformConfig,
+          intervalMs: 200
+        });
         try {
           await waitFor(() => reads > 0, 'the immediate first tick');
           assert.equal(reads, 1, 'the sweep runs once immediately');
