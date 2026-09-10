@@ -4,12 +4,43 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Where an OAuth clients file lives, as both a cache key and an absolute path.
+ *
+ * `oauth.clientsFile` is a path relative to the installation root and the
+ * cache is keyed on the same file's path relative to `contents/`, which is
+ * also how the configuration store addresses it: `contents/config/
+ * oauth-clients.json` is the key `config/oauth-clients.json`.
+ *
+ * A `clientsFile` pointing outside `contents/` is supported and has no place
+ * in the store, so `relPath` is null and the caller writes the absolute path
+ * directly rather than relocating the file into `contents/`.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json as configured
+ * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
+ */
+function locateClientsFile(clientsFilePath) {
+  const rootDir = path.join(__dirname, '../../');
+  const fullPath = path.isAbsolute(clientsFilePath)
+    ? clientsFilePath
+    : path.join(rootDir, clientsFilePath);
+  let cacheKey = clientsFilePath.startsWith('contents/')
+    ? clientsFilePath.substring('contents/'.length)
+    : path.relative(rootDir, fullPath);
+  if (cacheKey.startsWith('contents/')) {
+    cacheKey = cacheKey.substring('contents/'.length);
+  }
+  const contained = !path.isAbsolute(cacheKey) && !cacheKey.startsWith('..');
+  return { fullPath, cacheKey, relPath: contained ? cacheKey : null };
+}
 
 /**
  * Load OAuth clients from the OAuth clients file
@@ -119,9 +150,7 @@ export function loadOAuthClients(clientsFilePath) {
  */
 export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
   try {
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
+    const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
 
     // Update metadata
     if (!clientsConfig.metadata) {
@@ -129,18 +158,12 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath, { announc
     }
     clientsConfig.metadata.lastUpdated = new Date().toISOString();
 
-    // Write to file atomically
-    await atomicWriteJSON(fullPath, clientsConfig);
-
-    // Update cache with the new data
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
+    // Write to file atomically. The store writes what it is handed, so the
+    // hashed client secrets in here are stored exactly as generated.
+    if (relPath) {
+      await configStore.writeJson(relPath, clientsConfig);
     } else {
-      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
+      await atomicWriteJSON(fullPath, clientsConfig);
     }
 
     configCache.setCacheEntry(cacheKey, clientsConfig);

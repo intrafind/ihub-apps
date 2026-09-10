@@ -1,11 +1,8 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { httpFetch } from '../utils/httpConfig.js';
-import { getRootDir } from '../pathUtils.js';
 import configCache from '../configCache.js';
+import configStore from '../services/config/ConfigStore.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { atomicWriteJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import {
@@ -17,6 +14,12 @@ import {
 
 // Cloud LLM providers that require API keys
 const LLM_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'mistral'];
+
+/** Platform configuration, relative to `contents/`. */
+const PLATFORM_FILE = 'config/platform.json';
+
+/** Provider configuration, relative to `contents/`. */
+const PROVIDERS_FILE = 'config/providers.json';
 
 /**
  * Test an API key by making a lightweight call to the provider's API.
@@ -61,13 +64,14 @@ async function testApiKey(providerId, apiKey) {
  * Mark setup as completed by setting setup.configured = true in platform.json.
  */
 async function markSetupConfigured() {
-  const rootDir = getRootDir();
-  const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
-  const raw = await fs.readFile(platformPath, 'utf8');
-  const platform = JSON.parse(raw);
+  const platform = await configStore.readJson(PLATFORM_FILE);
+  // A read resolves to null rather than throwing, so an unreadable platform
+  // config has to be turned back into the failure the caller maps onto a 500 —
+  // recording "setup is done" against an empty object would drop the file.
+  if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
   platform.setup = { ...(platform.setup || {}), configured: true };
-  await atomicWriteJSON(platformPath, platform);
-  await configCache.refreshCacheEntry('config/platform.json');
+  await configStore.writeJson(PLATFORM_FILE, platform);
+  await configCache.refreshCacheEntry(PLATFORM_FILE);
 }
 
 export default function registerSetupRoutes(app) {
@@ -167,12 +171,7 @@ export default function registerSetupRoutes(app) {
         enabled: true
       };
 
-      const rootDir = getRootDir();
-      const providersDir = join(rootDir, 'contents', 'config');
-      const providersPath = join(providersDir, 'providers.json');
-
-      await fs.mkdir(providersDir, { recursive: true });
-      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configStore.writeJson(PROVIDERS_FILE, { providers });
       await configCache.refreshProvidersCache();
 
       // Mark setup as complete in platform.json

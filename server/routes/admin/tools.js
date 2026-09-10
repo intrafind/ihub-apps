@@ -1,8 +1,9 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 import { createHash } from 'crypto';
 import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { loadAllTools } from '../../toolsLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -153,6 +154,22 @@ function filterExpandedTools(tools) {
  */
 async function loadRawTools() {
   return filterExpandedTools(await loadAllTools(true, false));
+}
+
+/**
+ * The file a tool id lives in.
+ *
+ * A tool file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a tool into two files. A tool that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} toolId - Tool id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function toolPath(toolId) {
+  return configStore.resolveIdToPath('tools', toolId);
 }
 
 export default function registerAdminToolsRoutes(app) {
@@ -377,10 +394,6 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
-
       // Load existing tools (raw, unexpanded) to confirm the tool exists
       const tools = await loadRawTools();
       const oldTool = tools.find(t => t.id === toolId);
@@ -390,12 +403,11 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Persist the update to the tool's individual file.
-      await fs.mkdir(toolsDir, { recursive: true });
-      const toolFilePath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
+      const toolFilePath = await toolPath(toolId);
       if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(updatedTool, null, 2));
+      await configStore.writeJson(toolFilePath, updatedTool);
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -495,10 +507,6 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
-
       // Load existing tools (raw, unexpanded)
       const tools = await loadRawTools();
 
@@ -513,15 +521,11 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Create the new tool as its own individual file.
-      await fs.mkdir(toolsDir, { recursive: true });
-      const newToolFilePath = await resolveAndValidatePath(
-        `${basename(newTool.id)}.json`,
-        toolsDir
-      );
+      const newToolFilePath = await toolPath(newTool.id);
       if (!newToolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(newToolFilePath, JSON.stringify(newTool, null, 2));
+      await configStore.writeJson(newToolFilePath, newTool);
 
       // Refresh cache
       await configCache.refreshToolsCache();
@@ -608,9 +612,6 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
-
       // Load existing tools (raw, unexpanded) to confirm the tool exists
       const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
@@ -644,9 +645,9 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Remove the tool's individual file.
-      const individualToolPath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
-      if (individualToolPath && existsSync(individualToolPath)) {
-        await fs.unlink(individualToolPath);
+      const individualToolPath = await toolPath(toolId);
+      if (individualToolPath) {
+        await configStore.remove(individualToolPath);
       }
 
       // Refresh cache
@@ -739,10 +740,6 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsDir = join(rootDir, contentsDir, 'tools');
-
       // Load existing tools (raw, unexpanded)
       const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
@@ -755,12 +752,11 @@ export default function registerAdminToolsRoutes(app) {
       tool.enabled = !tool.enabled;
 
       // Persist to the tool's individual file.
-      await fs.mkdir(toolsDir, { recursive: true });
-      const toolFilePath = await resolveAndValidatePath(`${basename(toolId)}.json`, toolsDir);
+      const toolFilePath = await toolPath(toolId);
       if (!toolFilePath) {
         return sendBadRequest(res, 'Invalid tool path');
       }
-      await fs.writeFile(toolFilePath, JSON.stringify(tool, null, 2));
+      await configStore.writeJson(toolFilePath, tool);
 
       // Refresh cache
       await configCache.refreshToolsCache();
