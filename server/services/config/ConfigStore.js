@@ -161,7 +161,14 @@ function resolveTarget(nsOrDir) {
   const declared = getRawNamespace(nsOrDir);
   if (declared) return { ns: nsOrDir, dir: declared.dir };
   if (typeof nsOrDir !== 'string' || nsOrDir.length === 0) return null;
-  const dir = nsOrDir.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  // Trailing slashes are trimmed by scanning rather than with `/\/+$/`, which
+  // backtracks quadratically on a run of slashes that does not reach the end
+  // of the string. The two remaining patterns are safe: a global replace of a
+  // single character, and an anchored two-character prefix.
+  let dir = nsOrDir.replace(/\\/g, '/').replace(/^\.\//, '');
+  let end = dir.length;
+  while (end > 0 && dir[end - 1] === '/') end -= 1;
+  dir = dir.slice(0, end);
   if (!dir) return null;
   for (const [ns, descriptor] of Object.entries(CONFIG_NAMESPACES)) {
     if (descriptor.dir === dir) return { ns, dir };
