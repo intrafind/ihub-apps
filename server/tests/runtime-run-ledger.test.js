@@ -24,7 +24,8 @@ import assert from 'node:assert/strict';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { RunLog } from '../services/loop/RunLog.js';
-import { RunLedgerStore, runStreamName } from '../services/loop/runLedgerStore.js';
+import { RunLedgerStore, runStreamName, runLockName } from '../services/loop/runLedgerStore.js';
+import { LockTimeoutError } from '../storage/errors.js';
 import { spillRefSchema } from '../services/loop/contracts/runLogEvents.js';
 import { RUNS_NAMESPACE } from '../services/runtime/RunSummaryRepository.js';
 
@@ -128,6 +129,24 @@ async function exists(target) {
  */
 function humanEvent(message) {
   return { kind: 'steer', message, by: 'u1', at: new Date().toISOString() };
+}
+
+/**
+ * Write a run's events into the ledger directory, the way the release before
+ * this one did.
+ *
+ * @param {string} legacyDir - The ledger directory.
+ * @param {string} runId - Run id.
+ * @param {Object[]} events - Events, already sequenced.
+ * @returns {Promise<void>}
+ */
+async function writeLegacyRunFile(legacyDir, runId, events) {
+  await fs.mkdir(path.join(legacyDir, 'runs'), { recursive: true });
+  await fs.writeFile(
+    path.join(legacyDir, 'runs', `${runId}.jsonl`),
+    events.map(event => JSON.stringify(event)).join('\n') + '\n',
+    'utf8'
+  );
 }
 
 describe('run ledger: events through the provider', () => {
@@ -274,6 +293,76 @@ describe('run ledger: events through the provider', () => {
     }
   });
 
+  it('keeps the whole history of a run whose events span the upgrade', async () => {
+    // The upgrade case nothing else covers: the run's start and its earlier
+    // turns are in the ledger directory, and a later append — feedback on
+    // yesterday's answer, a resumed checkpoint — goes through the provider,
+    // because `appendRecovered` continues the legacy sequence and then writes
+    // to the stream. Reading either backend alone loses the other half, and
+    // for such a run the half in the legacy file is its whole past.
+    await withLedger(async ({ runLog, legacyDir, provider }) => {
+      const runId = 'chat-across-the-upgrade';
+      await writeLegacyRunFile(legacyDir, runId, [
+        {
+          seq: 1,
+          ts: '2026-01-01T10:00:00.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.RUN_START,
+          data: { kind: 'chat', principal: { id: 'u1', mode: 'default', anonymous: false } }
+        },
+        {
+          seq: 2,
+          ts: '2026-01-01T10:00:01.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.HUMAN_EVENT,
+          data: humanEvent('yesterday')
+        },
+        {
+          seq: 3,
+          ts: '2026-01-01T10:00:02.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.RUN_END,
+          data: { status: 'completed', finishReason: 'stop' }
+        }
+      ]);
+
+      const appended = await runLog.appendRecovered(
+        runId,
+        RUN_LOG_EVENTS.HUMAN_EVENT,
+        humanEvent('feedback today')
+      );
+      assert.equal(appended.seq, 4, 'the new event continues the legacy sequence');
+      await runLog.flush();
+      assert.equal(
+        (await provider.logs.read(runStreamName(runId))).length,
+        1,
+        'and it really did land on the provider, not back in the ledger file'
+      );
+
+      assert.deepEqual(
+        (await runLog.readEvents(runId)).map(event => [event.seq, event.type]),
+        [
+          [1, RUN_LOG_EVENTS.RUN_START],
+          [2, RUN_LOG_EVENTS.HUMAN_EVENT],
+          [3, RUN_LOG_EVENTS.RUN_END],
+          [4, RUN_LOG_EVENTS.HUMAN_EVENT]
+        ],
+        'both halves, in sequence order'
+      );
+      assert.deepEqual(
+        (await runLog.readEvents(runId, { afterSeq: 2, limit: 2 })).map(e => e.seq),
+        [3, 4],
+        'and a slice pages across the seam'
+      );
+      assert.equal(await runLog.lastSeq(runId), 4);
+
+      const start = await runLog.readStart(runId);
+      assert.ok(start, 'the run/start is still found once the stream holds another event');
+      assert.equal(start.type, RUN_LOG_EVENTS.RUN_START);
+      assert.equal(start.data.principal.id, 'u1');
+    });
+  });
+
   it('behaves exactly as before when no provider is available', async () => {
     await withLedger(
       async ({ runLog, legacyDir }) => {
@@ -401,6 +490,37 @@ describe('run ledger: run summaries replace the per-day index', () => {
       assert.equal(listed.status, 'completed');
       assert.equal(listed.finishReason, 'stop');
       assert.deepEqual(listed.refs, { chatId: 'chat-9' });
+    });
+  });
+
+  it('records the end of a run that started and finished in the same tick', async () => {
+    // The `put` at run/start and the `patch` at run/end are both queued from
+    // synchronous callers, and the patch deliberately refuses to invent a
+    // document. A patch that overtook its put would therefore be dropped and
+    // the run would stay `running` in every listing for ever — so the start
+    // and the end are written here with no flush in between, which is the
+    // shape of any short chat or utility run.
+    await withLedger(async ({ runLog, provider }) => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+        runLog.append(runId, RUN_LOG_EVENTS.RUN_END, {
+          status: 'completed',
+          finishReason: 'stop'
+        });
+        await runLog.flush();
+
+        const doc = await provider.documents.get(RUNS_NAMESPACE, runId);
+        assert.ok(doc, `attempt ${attempt}: the summary exists`);
+        assert.equal(doc.data.status, 'completed', `attempt ${attempt}: the end was not lost`);
+        assert.ok(doc.data.endedAt, `attempt ${attempt}: endedAt is recorded`);
+        assert.equal(doc.data.ownerId, 'u1', `attempt ${attempt}: the owner survived`);
+        assert.deepEqual(
+          (await runLog.listRuns({})).map(entry => entry.status),
+          ['completed'],
+          `attempt ${attempt}: and the listing agrees`
+        );
+        await runLog.deleteRun(runId);
+      }
     });
   });
 
@@ -539,6 +659,97 @@ describe('run ledger: deletion and retention', () => {
     });
   });
 
+  it('leaves a fresh installation without a per-day index after a delete', async () => {
+    // The tombstone is the only way to hide a run recorded in an append-only
+    // index file, so a delete writes one — but only where such files exist.
+    // A provider-backed installation that grew one would pay a directory read
+    // and a parse on every `GET /api/runs` for a file holding nothing but
+    // tombstones, and would look half-migrated to anyone inspecting it.
+    await withLedger(async ({ runLog, legacyDir }) => {
+      const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+      await runLog.flush();
+      await runLog.deleteRun(runId);
+
+      assert.equal(await exists(path.join(legacyDir, 'index')), false);
+      assert.deepEqual(await runLog.listRuns({}), []);
+    });
+  });
+
+  it('sweeps an anonymous run: its summary goes and its cascade runs', async () => {
+    // Anonymous runs are hidden from every listing, and the retention sweep
+    // is driven by that same listing. Inheriting the filter would leave one
+    // document per anonymous chat behind for ever — and, because the id never
+    // reaches the cascade, the interactions those runs raised would never be
+    // reclaimed while their events were swept out underneath them.
+    await withLedger(async ({ runLog, provider }) => {
+      const anon = await runLog.startRun({ kind: 'chat', user: null });
+      assert.equal(anon.anonymous, true);
+      runLog.append(anon.runId, RUN_LOG_EVENTS.RUN_END, {
+        status: 'completed',
+        finishReason: 'stop'
+      });
+      const { runId: named } = await runLog.startRun({ kind: 'chat', user: USER });
+      runLog.append(named, RUN_LOG_EVENTS.RUN_END, { status: 'completed', finishReason: 'stop' });
+      await runLog.flush();
+
+      const aged = new Date(Date.now() - 400 * DAY_MS).toISOString();
+      for (const runId of [anon.runId, named]) {
+        const doc = await provider.documents.get(RUNS_NAMESPACE, runId);
+        await provider.documents.put(
+          RUNS_NAMESPACE,
+          runId,
+          { ...doc.data, startedAt: aged, updatedAt: aged, endedAt: aged },
+          { ownerId: doc.ownerId }
+        );
+      }
+
+      const cascaded = [];
+      runLog.onDelete(id => cascaded.push(id));
+
+      await runLog.cleanup(90);
+
+      assert.equal(
+        await provider.documents.get(RUNS_NAMESPACE, anon.runId),
+        null,
+        'the anonymous summary is gone, not only its events'
+      );
+      assert.equal(await provider.documents.get(RUNS_NAMESPACE, named), null);
+      assert.deepEqual(
+        cascaded.sort(),
+        [anon.runId, named].sort(),
+        'and the delete cascade ran for the anonymous run too'
+      );
+    });
+  });
+
+  it('sweeps a stream whose run was never summarized', async () => {
+    // `append()` registers an unknown run lazily, so a stream can exist with
+    // no summary — and the summary-driven pass cannot reach it. `logs.sweep`
+    // is the only thing that ages those out; without it they accumulate in
+    // `logs/run/` for the life of the installation.
+    await withLedger(async ({ runLog, provider, storageDir }) => {
+      const runId = 'run-never-started';
+      runLog.append(runId, RUN_LOG_EVENTS.HUMAN_EVENT, humanEvent('orphan'));
+      await runLog.flush();
+
+      const streamFile = path.join(storageDir, 'logs', 'run', `${runId}.jsonl`);
+      assert.equal(await exists(streamFile), true);
+      assert.equal(
+        await provider.documents.get(RUNS_NAMESPACE, runId),
+        null,
+        'the run has no summary to drive retention from'
+      );
+
+      const aged = new Date(Date.now() - 100 * DAY_MS);
+      await fs.utimes(streamFile, aged, aged);
+
+      const { removed } = await runLog.cleanup(90);
+      assert.equal(removed >= 1, true);
+      assert.equal(await exists(streamFile), false);
+      assert.equal(await provider.logs.lastSeq(runStreamName(runId)), 0);
+    });
+  });
+
   it('sweeps runs past the retention window and leaves recent ones alone', async () => {
     await withLedger(async ({ runLog, provider }) => {
       const { runId: oldRun } = await runLog.startRun({ kind: 'chat', user: USER });
@@ -586,6 +797,179 @@ describe('run ledger: deletion and retention', () => {
 });
 
 describe('RunLedgerStore: the persistence half on its own', () => {
+  it('runs the critical section anyway when the run lock times out', async () => {
+    // `utils/fileLock.js` warns and continues when it cannot take the lock,
+    // and the recovery path has always had that behaviour: refusing to append
+    // an answer because a peer is slow would lose the event outright — the
+    // answer happened, but the run's history would say it did not.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-run-lock-'));
+    const asked = [];
+    const failWith = error => ({
+      withLock: name => {
+        asked.push(name);
+        return Promise.reject(error);
+      }
+    });
+    const timingOut = new RunLedgerStore({
+      baseDir: path.join(root, 'run-log'),
+      locks: failWith(new LockTimeoutError('lease not acquired', 'runlog:chat-contended'))
+    });
+    const broken = new RunLedgerStore({
+      baseDir: path.join(root, 'run-log'),
+      locks: failWith(new Error('the lock manager is broken'))
+    });
+    try {
+      assert.equal(
+        await timingOut.withRunLock('chat-contended', () => 'appended'),
+        'appended',
+        'a lease this worker could not take does not cost the event'
+      );
+      assert.deepEqual(asked, [runLockName('chat-contended')]);
+
+      let ran = false;
+      await assert.rejects(
+        broken.withRunLock('chat-broken', () => {
+          ran = true;
+        }),
+        /the lock manager is broken/,
+        'while any other lock failure still propagates'
+      );
+      assert.equal(ran, false, 'and the section does not run behind it');
+    } finally {
+      timingOut.stop();
+      broken.stop();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('contributes its half of a summary the execution registry co-owns', async () => {
+    // For a workflow or agent run the execution id *is* the run id, so the
+    // registry writes the same document from a queue of its own. The ledger
+    // owns `identityMode`, `parentRunId`, `refs` and `model`; replacing the
+    // document would leave the admin list showing "Unknown Workflow" with no
+    // input preview, and would drop the human who triggered an agent run.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-run-ledger-summary-'));
+    const provider = new FilesystemStorageProvider({
+      baseDir: path.join(root, 'storage'),
+      flushIntervalMs: 25
+    });
+    await provider.initialize();
+    const store = new RunLedgerStore({
+      baseDir: path.join(root, 'run-log'),
+      logs: provider.logs,
+      documents: provider.documents,
+      locks: provider.locks
+    });
+    try {
+      const startedAt = new Date().toISOString();
+      // What `ExecutionRegistry.register` puts there when it wins the race.
+      await provider.documents.put(
+        RUNS_NAMESPACE,
+        'wf-exec-1',
+        {
+          runId: 'wf-exec-1',
+          kind: 'workflow',
+          ownerId: 'u1',
+          anonymous: false,
+          status: 'running',
+          startedAt,
+          updatedAt: startedAt,
+          refs: { executionId: 'wf-exec-1' },
+          workflowId: 'quarterly-report',
+          workflowName: { en: 'Quarterly Report' },
+          inputPreview: { topic: 'Q4 revenue' },
+          models: ['gpt-4o'],
+          triggeredBy: { userId: 'u1' }
+        },
+        { ownerId: 'u1' }
+      );
+
+      store.recordRunStart({
+        runId: 'wf-exec-1',
+        kind: 'workflow',
+        principalId: 'u1',
+        identityMode: 'pseudonymized',
+        anonymous: false,
+        parentRunId: 'wf-exec-parent',
+        refs: { executionId: 'wf-exec-1', chatId: 'chat-5' },
+        model: 'gpt-4o',
+        startedAt
+      });
+      await store.flush();
+
+      const stored = (await provider.documents.get(RUNS_NAMESPACE, 'wf-exec-1')).data;
+      assert.equal(stored.identityMode, 'pseudonymized', 'the ledger contributed its half');
+      assert.equal(stored.parentRunId, 'wf-exec-parent');
+      assert.deepEqual(stored.refs, { executionId: 'wf-exec-1', chatId: 'chat-5' });
+      assert.deepEqual(
+        stored.workflowName,
+        { en: 'Quarterly Report' },
+        'without erasing the registry s'
+      );
+      assert.deepEqual(stored.inputPreview, { topic: 'Q4 revenue' });
+      assert.deepEqual(stored.triggeredBy, { userId: 'u1' });
+      assert.deepEqual(stored.models, ['gpt-4o']);
+    } finally {
+      store.stop();
+      await provider.shutdown();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('records an end behind the start it depends on, with no lock to fall back on', async () => {
+    // The `put` at run/start and the `patch` at run/end are queued from
+    // synchronous callers, and the patch deliberately refuses to invent a
+    // document. On a provider that reports no locking there is nothing but
+    // this queue to keep the two in order, and a patch that overtook its
+    // start would be dropped — leaving the run `running` for ever.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-run-ledger-order-'));
+    const provider = new FilesystemStorageProvider({
+      baseDir: path.join(root, 'storage'),
+      flushIntervalMs: 25
+    });
+    await provider.initialize();
+    const store = new RunLedgerStore({
+      baseDir: path.join(root, 'run-log'),
+      logs: provider.logs,
+      documents: provider.documents
+      // No `locks`: the degradation path, where ordering is the queue's job.
+    });
+    try {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const runId = `chat-unlocked-${attempt}`;
+        const startedAt = new Date().toISOString();
+        store.recordRunStart({
+          runId,
+          kind: 'chat',
+          principalId: 'u1',
+          anonymous: false,
+          refs: {},
+          startedAt
+        });
+        store.recordRunEnd({
+          runId,
+          kind: 'chat',
+          principalId: 'u1',
+          anonymous: false,
+          status: 'completed',
+          finishReason: 'stop',
+          usage: { totalTokens: 3 },
+          endedAt: new Date().toISOString()
+        });
+        await store.flush();
+
+        const doc = await provider.documents.get(RUNS_NAMESPACE, runId);
+        assert.ok(doc, `attempt ${attempt}: the summary exists`);
+        assert.equal(doc.data.status, 'completed', `attempt ${attempt}: the end was not dropped`);
+        assert.equal(doc.data.ownerId, 'u1', `attempt ${attempt}: and the owner survived`);
+      }
+    } finally {
+      store.stop();
+      await provider.shutdown();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reads a run that only the legacy directory has', async () => {
     // What every installation looks like immediately after the upgrade: the
     // provider is up, but the events on disk were written by the old code.

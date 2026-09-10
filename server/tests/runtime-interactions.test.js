@@ -30,6 +30,8 @@ import {
   InteractionService,
   InteractionError,
   INTERACTIONS_NAMESPACE,
+  IMPORT_STATE_NAMESPACE,
+  IMPORT_STATE_KEY,
   interactionDocumentKey
 } from '../services/loop/InteractionService.js';
 
@@ -128,7 +130,12 @@ async function openInteractions({ services = 1, withProvider = true } = {}) {
       locks: provider ? provider.locks : null
     });
   const all = Array.from({ length: services }, make);
-  return { root, legacyDir, provider, runLog, services: all, service: all[0] };
+  const addService = () => {
+    const extra = make();
+    all.push(extra);
+    return extra;
+  };
+  return { root, legacyDir, provider, runLog, services: all, service: all[0], addService };
 }
 
 /**
@@ -262,6 +269,86 @@ describe('interactions: the shared namespace', () => {
     );
   });
 
+  it('stores an interaction whose id the document store could not spell', async () => {
+    // A chat clarification's id embeds the client-supplied chatId, so it can
+    // run past the store's length limit or carry characters it refuses.
+    // Hashing it is what keeps `raise()` — which sits on the critical path of
+    // a chat turn — from failing that turn, and what keeps the record shared
+    // rather than stranded in one worker's memory.
+    await withInteractions(
+      async ({ runLog, provider, services: [first, second] }) => {
+        const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+        const longId = `clarify-${runId}-${'c'.repeat(140)}`;
+        const slashId = `clarify-${runId}/needs-input`;
+
+        for (const id of [longId, slashId]) {
+          const raised = await raiseQuestion(first, runId, { id, kind: 'question' });
+          assert.equal(raised.id, id, 'the interaction keeps the id its caller minted');
+          const key = interactionDocumentKey(id);
+          assert.notEqual(key, id, 'but the document is filed under a key the store accepts');
+          const doc = await provider.documents.get(INTERACTIONS_NAMESPACE, key);
+          assert.ok(doc, `no document for ${id}`);
+          assert.equal(doc.data.id, id);
+        }
+
+        assert.deepEqual(
+          (await second.listPending({ runId })).map(item => item.id).sort(),
+          [longId, slashId].sort(),
+          'and another worker sees both'
+        );
+        const answered = await second.answer(longId, { value: 'eu' }, { user: USER });
+        assert.equal(answered.status, 'answered');
+        assert.equal(
+          (await provider.documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(longId)))
+            .data.status,
+          'answered'
+        );
+      },
+      { services: 2 }
+    );
+  });
+
+  it('re-reads the namespace on every unscoped listing', async () => {
+    // The approvals queue is a whole-installation query. A worker that
+    // answered it from its mirror would keep showing the state of its first
+    // request for the life of the process whenever a bus message is dropped —
+    // and the load path is memoized, so it would never recover.
+    await withInteractions(
+      async ({ runLog, services: [first, second] }) => {
+        const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+        const warm = await raiseQuestion(first, runId);
+        assert.deepEqual(
+          (await second.listPending({})).map(item => item.id),
+          [warm.id],
+          'the first unscoped listing loads the namespace'
+        );
+
+        // The bus is silent, so `second` hears nothing about this one.
+        const later = await raiseQuestion(first, runId, {
+          prompt: { message: 'And after that?', inputType: 'text' },
+          policy: { approverGroups: ['release'] },
+          source: { principalId: 'u2' }
+        });
+
+        assert.deepEqual(
+          (await second.listPending({})).map(item => item.id).sort(),
+          [warm.id, later.id].sort(),
+          'a warm worker still picks up what was raised elsewhere'
+        );
+        assert.deepEqual(
+          (await second.listPending({ principalId: 'u2' })).map(item => item.id),
+          [later.id],
+          'and the post-filters still apply to the newly adopted record'
+        );
+        assert.deepEqual(
+          (await second.listPending({ approverGroups: ['other'] })).map(item => item.id),
+          [warm.id]
+        );
+      },
+      { services: 2 }
+    );
+  });
+
   it('keeps the legacy file layout when there is no provider', async () => {
     await withInteractions(
       async ({ runLog, service, legacyDir }) => {
@@ -293,7 +380,7 @@ describe('interactions: the shared namespace', () => {
 describe('interactions: the answer claim', () => {
   it('runs the handler exactly once when two workers answer at the same time', async () => {
     await withInteractions(
-      async ({ runLog, services: [first, second] }) => {
+      async ({ runLog, provider, services: [first, second] }) => {
         const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
         const raised = await raiseQuestion(first, runId);
         await second.get(raised.id); // both workers hold the pending record
@@ -340,7 +427,12 @@ describe('interactions: the answer claim', () => {
           `unexpected code ${error.code}`
         );
 
-        const stored = await first.get(raised.id);
+        // The shared document, not either worker's mirror: with the bus
+        // silent the loser never hears about the winner's answer, so whose
+        // mirror holds it depends on who won the lease.
+        const stored = (
+          await provider.documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(raised.id))
+        ).data;
         assert.equal(stored.status, 'answered');
         assert.equal(stored.answer.value, fulfilled[0].value.answer.value);
       },
@@ -419,6 +511,120 @@ describe('interactions: the answer claim', () => {
     });
   });
 
+  it('translates a contended lease into the 409 clients have always seen', async () => {
+    // The lease is a storage primitive and its timeout is a storage error.
+    // Reaching a route untranslated it fails the `InteractionError` check and
+    // becomes a 500, where answering an approval while a colleague's answer
+    // is still resuming the workflow has always been a retryable 409.
+    await withInteractions(
+      async ({ runLog, services: [first, second] }) => {
+        const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+        const raised = await raiseQuestion(first, runId);
+        await second.get(raised.id);
+
+        // Longer than ANSWER_LOCK_OPTIONS.waitMs (50 ms), so the loser really
+        // times out on the lease instead of arriving after it was released
+        // and failing the compare-and-set instead.
+        const gate = deferred();
+        first.onAnswer(() => gate.promise);
+        const winner = first.answer(raised.id, { value: 'eu' }, { user: USER });
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        await assert.rejects(second.answer(raised.id, { value: 'us' }, { user: USER }), error => {
+          assert.ok(error instanceof InteractionError, `got ${error?.name}: ${error?.message}`);
+          assert.equal(error.code, 'ANSWER_IN_PROGRESS');
+          assert.equal(error.status, 409);
+          return true;
+        });
+
+        gate.resolve();
+        assert.equal((await withDeadline(winner, 5000, 'the winning answer')).status, 'answered');
+      },
+      { services: 2 }
+    );
+  });
+
+  it('leaves a settle that landed during the handler alone when it rolls back', async () => {
+    // The expiry sweep takes no lease and runs on the cluster singleton: it
+    // can settle the interaction and cancel the run the handler is resuming,
+    // which is exactly what makes the handler throw. Rolling back from this
+    // worker's mirror would erase the tombstone and put the interaction back
+    // in the approvals queue, where every further answer fails.
+    await withInteractions(
+      async ({ runLog, provider, services: [sweeper, worker] }) => {
+        const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+        const raised = await raiseQuestion(sweeper, runId);
+        assert.equal((await worker.get(raised.id)).status, 'pending', 'the mirror is warm');
+
+        const inHandler = deferred();
+        const release = deferred();
+        worker.onAnswer(async () => {
+          inHandler.resolve();
+          await release.promise;
+          throw new Error('USER_CANCELLED');
+        });
+
+        const answering = worker.answer(raised.id, { value: 'eu' }, { user: USER });
+        await withDeadline(inHandler.promise, 5000, 'the answer handler to start');
+
+        // The sweep settles the shared document while the handler is inside
+        // the critical section. The bus is silent, so `worker` never hears.
+        await sweeper.expire(raised.id);
+        assert.equal(
+          (await provider.documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(raised.id)))
+            .data.status,
+          'expired'
+        );
+
+        release.resolve();
+        await assert.rejects(withDeadline(answering, 5000, 'the failing answer'), /USER_CANCELLED/);
+
+        assert.equal(
+          (await provider.documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(raised.id)))
+            .data.status,
+          'expired',
+          'the settled record is still the tombstone'
+        );
+        assert.deepEqual(
+          await sweeper.listPending({ runId }),
+          [],
+          'and the interaction did not come back into the queue'
+        );
+      },
+      { services: 2 }
+    );
+  });
+
+  it('does not deadlock when the handler answers the run s next interaction', async () => {
+    // `raise()` takes no lease, so a handler that only raises cannot tell a
+    // per-interaction lease from a per-run one. A handler that *answers* a
+    // sibling of the same run can: `withLock` is not reentrant, so a per-run
+    // lease would block the nested answer for the full wait budget, throw,
+    // and roll the outer interaction back to pending for ever.
+    await withInteractions(async ({ runLog, service }) => {
+      const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+      const outer = await raiseQuestion(service, runId);
+      const sibling = await raiseQuestion(service, runId, {
+        prompt: { message: 'And the sibling?', inputType: 'text' }
+      });
+
+      service.onAnswer(async answered => {
+        if (answered.id !== outer.id) return;
+        await service.answer(sibling.id, { value: 'auto' }, { user: USER });
+      });
+
+      const answered = await withDeadline(
+        service.answer(outer.id, { value: 'eu' }, { user: USER }),
+        5000,
+        'an answer whose handler answers a sibling of the same run'
+      );
+
+      assert.equal(answered.status, 'answered');
+      assert.equal((await service.get(sibling.id)).status, 'answered');
+      assert.deepEqual(await service.listPending({ runId }), []);
+    });
+  });
+
   it('leaves the interaction pending when the handler throws', async () => {
     await withInteractions(
       async ({ runLog, services: [first, second] }) => {
@@ -482,24 +688,32 @@ describe('interactions: the answer claim', () => {
   });
 });
 
+/**
+ * The pending interaction a previous release left in `interactions.json`.
+ *
+ * @returns {Object} A legacy record.
+ */
+function legacyRecord() {
+  return {
+    id: 'int-legacy',
+    runId: 'wf-exec-1',
+    step: 0,
+    kind: 'question',
+    origin: 'node',
+    prompt: { message: 'Approve?', inputType: 'text', allowSkip: false, allowOther: false },
+    policy: { onTimeout: 'fail', fallback: 'park' },
+    status: 'pending',
+    source: { principalId: 'u1', executionId: 'wf-exec-1' },
+    createdAt: new Date().toISOString()
+  };
+}
+
 describe('interactions: the legacy import', () => {
   it('carries pending interactions over once, leaving the file alone', async () => {
     await withInteractions(
       async ({ legacyDir, provider, services: [first, second] }) => {
         const legacyFile = path.join(legacyDir, 'interactions.json');
-        const record = {
-          id: 'int-legacy',
-          runId: 'wf-exec-1',
-          step: 0,
-          kind: 'question',
-          origin: 'node',
-          prompt: { message: 'Approve?', inputType: 'text', allowSkip: false, allowOther: false },
-          policy: { onTimeout: 'fail', fallback: 'park' },
-          status: 'pending',
-          source: { principalId: 'u1', executionId: 'wf-exec-1' },
-          createdAt: new Date().toISOString()
-        };
-        const body = JSON.stringify({ version: 1, interactions: { 'int-legacy': record } });
+        const body = JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } });
         await fs.writeFile(legacyFile, body, 'utf8');
 
         const pending = await first.listPending({});
@@ -518,6 +732,87 @@ describe('interactions: the legacy import', () => {
         assert.equal(await fs.readFile(legacyFile, 'utf8'), body);
       },
       { services: 2 }
+    );
+  });
+
+  it('does not re-import once the answered record s tombstone has been swept', async () => {
+    // The marker is the guard with an independent failure path. The settled
+    // document is evicted after its grace period, and the legacy file is
+    // deliberately never rewritten — so on a boot more than two grace periods
+    // after the answer, only the marker stands between the untouched
+    // `status: 'pending'` record and a second resume of the run.
+    await withInteractions(
+      async ({ legacyDir, provider, service, addService }) => {
+        await fs.writeFile(
+          path.join(legacyDir, 'interactions.json'),
+          JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } }),
+          'utf8'
+        );
+
+        await service.listPending({});
+        await service.answer('int-legacy', { value: 'yes' }, { user: USER });
+
+        // What `_scheduleEviction` and `_sweepSettled` do once the tombstone
+        // has outlived its use.
+        await provider.documents.delete(INTERACTIONS_NAMESPACE, 'int-legacy');
+        assert.ok(
+          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
+          'the import marker is what is left'
+        );
+
+        assert.deepEqual(
+          await addService().listPending({}),
+          [],
+          'a later boot does not raise the answered checkpoint again'
+        );
+        assert.equal(
+          await provider.documents.get(INTERACTIONS_NAMESPACE, 'int-legacy'),
+          null,
+          'and writes nothing back into the namespace'
+        );
+      },
+      { services: 1 }
+    );
+  });
+
+  it('never overwrites a record the live path already wrote', async () => {
+    // The per-record existence check, on its own: with the marker absent —
+    // an import interrupted before it could write one — a settled document
+    // must still win over the legacy file's stale pending copy.
+    await withInteractions(
+      async ({ legacyDir, provider, addService }) => {
+        await fs.writeFile(
+          path.join(legacyDir, 'interactions.json'),
+          JSON.stringify({ version: 1, interactions: { 'int-legacy': legacyRecord() } }),
+          'utf8'
+        );
+        const settled = {
+          ...legacyRecord(),
+          status: 'answered',
+          answer: { value: 'yes', by: 'u1', at: new Date().toISOString(), channel: 'api' },
+          updatedAt: new Date().toISOString()
+        };
+        await provider.documents.put(INTERACTIONS_NAMESPACE, 'int-legacy', settled, {
+          ownerId: 'u1'
+        });
+        assert.equal(
+          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
+          null,
+          'no marker: the import runs in full'
+        );
+
+        assert.deepEqual(await addService().listPending({}), []);
+        assert.equal(
+          (await provider.documents.get(INTERACTIONS_NAMESPACE, 'int-legacy')).data.status,
+          'answered',
+          'the settled document is left exactly as it was'
+        );
+        assert.ok(
+          await provider.documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY),
+          'and the import still records that it ran'
+        );
+      },
+      { services: 0 }
     );
   });
 });

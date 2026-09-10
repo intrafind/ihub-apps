@@ -255,6 +255,59 @@ describe('RunSummaryRepository: the runs namespace', () => {
     });
   });
 
+  it('keeps a filtered listing whole when other kinds fill the owner s runs', async () => {
+    // The `runs` namespace is shared by every run kind, and `DocumentStore`
+    // keys ascend, so `chat-…` sorts before `wf-exec-…`. A bound applied
+    // before the kind filter would therefore be spent entirely on chat runs
+    // and the owner's workflow executions would be invisible — deterministic
+    // starvation, not a partial page.
+    await withRepository(async ({ repository, lines }) => {
+      const base = Date.now();
+      // Past MAX_OWNER_RUNS (1000), so the bound is genuinely reached.
+      for (let i = 0; i < 1005; i += 1) {
+        await repository.put(
+          summary({
+            runId: `chat-${String(i).padStart(5, '0')}`,
+            kind: 'chat',
+            status: 'completed',
+            startedAt: new Date(base - (i + 100) * 1000).toISOString()
+          })
+        );
+      }
+      for (let i = 0; i < 3; i += 1) {
+        await repository.put(
+          summary({
+            runId: `wf-exec-${i}`,
+            kind: 'workflow',
+            startedAt: new Date(base - i * 1000).toISOString()
+          })
+        );
+      }
+
+      const executions = await repository.listByOwner(OWNER, { kind: 'workflow' });
+      assert.deepEqual(
+        executions.items.map(item => item.runId),
+        ['wf-exec-0', 'wf-exec-1', 'wf-exec-2'],
+        'every execution is found, however many chat runs sort before it'
+      );
+      assert.equal(executions.total, 3);
+      assert.equal(executions.truncated, false, 'and the filtered listing is complete');
+
+      const viaPredicate = await repository.listByOwner(OWNER, {
+        match: record => record.kind === 'workflow'
+      });
+      assert.equal(viaPredicate.total, 3, 'the caller s own predicate shares the bound too');
+
+      const everything = await repository.listByOwner(OWNER);
+      assert.equal(everything.total, 1000, 'an unfiltered listing still stops at the bound');
+      assert.equal(everything.truncated, true);
+      assert.ok(
+        lines.some(line => line.level === 'warn' && line.meta.operation === 'listByOwner'),
+        'and says so, because a silent cap reads as the whole truth'
+      );
+    });
+  });
+
   it('never lists an anonymous run, and never indexes it by owner', async () => {
     await withRepository(async ({ repository, provider }) => {
       const anonId = 'anon-0123456789abcdef';
@@ -412,7 +465,164 @@ describe('RunSummaryRepository: the runs namespace', () => {
   });
 });
 
+describe('RunSummaryRepository: the shared upsert', () => {
+  it('creates once, then merges, so two writers keep both halves', async () => {
+    // A workflow run's summary has two writers with disjoint halves: the
+    // ledger owns `identityMode`, `parentRunId`, `refs` and `model`, the
+    // execution registry owns `workflowName`, `inputPreview`, `models` and
+    // `triggeredBy`. Neither can assume it writes first, so both merge.
+    await withRepository(async ({ repository }) => {
+      const registryFields = {
+        runId: 'wf-exec-1',
+        kind: 'workflow',
+        ownerId: OWNER,
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        workflowId: 'quarterly-report',
+        workflowName: { en: 'Quarterly Report' },
+        inputPreview: { topic: 'Q4 revenue' },
+        models: ['gpt-4o'],
+        triggeredBy: { userId: OWNER }
+      };
+      const ledgerFields = {
+        runId: 'wf-exec-1',
+        kind: 'workflow',
+        ownerId: OWNER,
+        identityMode: 'pseudonymized',
+        parentRunId: 'wf-exec-parent',
+        refs: { executionId: 'wf-exec-1', workflowId: 'quarterly-report', chatId: 'chat-3' },
+        model: 'gpt-4o',
+        source: 'ledger',
+        status: 'running',
+        startedAt: new Date().toISOString()
+      };
+
+      // Ledger first, registry second — the order the routes produce.
+      const created = await repository.merge('wf-exec-1', ledgerFields);
+      assert.deepEqual(created.refs, ledgerFields.refs, 'the create keeps what it was given');
+      await repository.merge('wf-exec-1', registryFields, {
+        defaults: { refs: { executionId: 'wf-exec-1' } }
+      });
+
+      const stored = await repository.get('wf-exec-1');
+      assert.equal(stored.identityMode, 'pseudonymized', 'the ledger half survived the registry');
+      assert.equal(stored.parentRunId, 'wf-exec-parent');
+      assert.equal(stored.model, 'gpt-4o');
+      assert.deepEqual(stored.refs, ledgerFields.refs, 'including the richer reference set');
+      assert.deepEqual(stored.workflowName, { en: 'Quarterly Report' });
+      assert.deepEqual(stored.inputPreview, { topic: 'Q4 revenue' });
+      assert.deepEqual(stored.triggeredBy, { userId: OWNER });
+    });
+  });
+
+  it('keeps the ledger half when the registry gets there first', async () => {
+    // The other order, which is the one the race actually produces: the
+    // registry's create fallback must not replace the document the ledger's
+    // queued write has just put there.
+    await withRepository(async ({ repository }) => {
+      await repository.merge(
+        'wf-exec-2',
+        {
+          runId: 'wf-exec-2',
+          kind: 'workflow',
+          ownerId: OWNER,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+          workflowId: 'w1',
+          workflowName: { en: 'First' },
+          inputPreview: { topic: 'anything' }
+        },
+        { defaults: { refs: { executionId: 'wf-exec-2' } } }
+      );
+      assert.deepEqual(
+        (await repository.get('wf-exec-2')).refs,
+        { executionId: 'wf-exec-2' },
+        'the create default supplies the reference the registry knows'
+      );
+
+      await repository.merge('wf-exec-2', {
+        identityMode: 'pseudonymized',
+        refs: { executionId: 'wf-exec-2', chatId: 'chat-4' },
+        model: 'gpt-4o'
+      });
+
+      const stored = await repository.get('wf-exec-2');
+      assert.equal(stored.identityMode, 'pseudonymized');
+      assert.deepEqual(stored.refs, { executionId: 'wf-exec-2', chatId: 'chat-4' });
+      assert.deepEqual(stored.workflowName, { en: 'First' }, 'and the registry half is intact');
+      assert.deepEqual(stored.inputPreview, { topic: 'anything' });
+    });
+  });
+
+  it('round-trips the object input preview a UI-started workflow records', async () => {
+    // `buildInputPreview()` returns a map of the workflow's input variables,
+    // and the execution card renders nothing for anything that is not an
+    // object. An agent run passes a plain string through the same field.
+    await withRepository(async ({ repository }) => {
+      const preview = { topic: 'Q4 revenue', region: 'EMEA', __more: 3 };
+      await repository.put(summary({ runId: 'wf-exec-3', inputPreview: preview }));
+      assert.deepEqual((await repository.get('wf-exec-3')).inputPreview, preview);
+
+      await repository.put(summary({ runId: 'agent-1', inputPreview: 'Summarize the deck' }));
+      assert.equal((await repository.get('agent-1')).inputPreview, 'Summarize the deck');
+
+      await repository.patch('wf-exec-3', { inputPreview: { topic: 'Q1 revenue' } });
+      assert.deepEqual((await repository.get('wf-exec-3')).inputPreview, { topic: 'Q1 revenue' });
+      assert.equal(
+        normalizeRunSummary({ runId: 'r', inputPreview: preview }).inputPreview,
+        preview,
+        'and the normalizer keeps the object rather than dropping it to null'
+      );
+    });
+  });
+});
+
 describe('RunSummaryRepository: concurrent writers', () => {
+  it('keeps both writers half when two workers upsert one run at once', async () => {
+    // Two providers over one directory: the ledger on one worker and the
+    // execution registry on another, creating the same run's summary at the
+    // same moment. Whichever order the lease grants, neither half is lost.
+    await withTwoRepositories(async (first, second) => {
+      const startedAt = new Date().toISOString();
+      await Promise.all([
+        first.repository.merge('wf-exec-race', {
+          runId: 'wf-exec-race',
+          kind: 'workflow',
+          ownerId: OWNER,
+          identityMode: 'pseudonymized',
+          refs: { executionId: 'wf-exec-race', chatId: 'chat-9' },
+          model: 'gpt-4o',
+          source: 'ledger',
+          status: 'running',
+          startedAt
+        }),
+        second.repository.merge(
+          'wf-exec-race',
+          {
+            runId: 'wf-exec-race',
+            kind: 'workflow',
+            ownerId: OWNER,
+            status: 'running',
+            startedAt,
+            workflowId: 'quarterly-report',
+            workflowName: { en: 'Quarterly Report' },
+            inputPreview: { topic: 'Q4 revenue' },
+            triggeredBy: { userId: OWNER }
+          },
+          { defaults: { refs: { executionId: 'wf-exec-race' } } }
+        )
+      ]);
+
+      const stored = await first.repository.get('wf-exec-race');
+      assert.equal(stored.identityMode, 'pseudonymized');
+      assert.equal(stored.model, 'gpt-4o');
+      assert.deepEqual(stored.refs, { executionId: 'wf-exec-race', chatId: 'chat-9' });
+      assert.deepEqual(stored.workflowName, { en: 'Quarterly Report' });
+      assert.deepEqual(stored.inputPreview, { topic: 'Q4 revenue' });
+      assert.deepEqual(stored.triggeredBy, { userId: OWNER });
+    });
+  });
+
   it('keeps every run when two workers record runs at the same time', async () => {
     // The race the single `execution-registry.json` lost data to: each worker
     // held a different subset in memory and rewrote the whole file from it.
@@ -473,6 +683,39 @@ describe('RunSummaryRepository: concurrent writers', () => {
         assert.equal(record[key], value, `patch of ${key} survived`);
       }
       assert.equal(record.ownerId, OWNER, 'the owner survived every read-modify-write');
+    });
+  });
+
+  it('runs every mutator under the run s lock', async () => {
+    // `put` is the one that is easy to leave out, and the one that hurts
+    // most: it is a whole-document replace, so an unlocked one interleaving
+    // with another writer's read-modify-write erases whatever that writer
+    // had just merged in. There is no torn state to observe afterwards —
+    // only whether the lease was taken — so this asserts the lease itself.
+    await withRepository(async ({ provider }) => {
+      const taken = [];
+      const repository = new RunSummaryRepository({
+        documents: provider.documents,
+        locks: {
+          withLock: (name, fn, options) => {
+            taken.push({ name, options });
+            return provider.locks.withLock(name, fn, options);
+          }
+        },
+        logger: recordingLogger().logger
+      });
+
+      await repository.put(summary());
+      await repository.merge('run-1', { status: 'paused' });
+      await repository.patch('run-1', { status: 'completed' });
+      await repository.remove('run-1');
+
+      assert.deepEqual(
+        taken.map(entry => entry.name),
+        Array(4).fill('run-summary:run-1'),
+        'put, merge, patch and remove all take the run s lease'
+      );
+      assert.ok(taken.every(entry => entry.options?.ttlMs > 0 && entry.options?.waitMs > 0));
     });
   });
 

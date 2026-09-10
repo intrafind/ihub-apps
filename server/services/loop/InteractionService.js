@@ -1032,7 +1032,17 @@ export class InteractionService extends EventEmitter {
         }
         await this._save(answered);
       } catch (err) {
-        if (this._byId.get(id)?.status === 'pending') await this._save({ ...unclaimed });
+        // The rollback is a compare-and-set against the same shared record,
+        // not a check of this worker's mirror. The expiry sweep takes no
+        // lease and runs on the cluster singleton: it can settle this
+        // interaction and cancel the run the handler is resuming, which is
+        // what made the handler throw. Restoring `pending` from a mirror that
+        // has not yet applied that settle would erase the tombstone and put
+        // an answered-or-expired interaction back in the approvals queue.
+        const current = await this._readShared(id);
+        const stillOurs =
+          current?.claim?.pid === claimed.claim.pid && current?.claim?.at === claimed.claim.at;
+        if (current?.status === 'pending' && stillOurs) await this._save({ ...unclaimed });
         throw err;
       }
     };

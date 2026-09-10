@@ -241,6 +241,35 @@ describe('conversation state: the streaming path', () => {
     );
   });
 
+  it('persists mid-stream rather than only when the stream ends', async () => {
+    // A throttle with a trailing write, not a restarting debounce. The
+    // difference only shows when the chunks keep coming: a debounce re-armed
+    // by every chunk writes nothing for the whole turn, so a crash or a
+    // deploy mid-answer loses `lastParentId` and the next turn threads onto
+    // a stale parent message — the cluster bug this store exists to fix.
+    await withManager(
+      async ({ manager, provider }) => {
+        manager.setState(CHAT_ID, { conversationId: 'conv-7' });
+
+        // Chunks closer together than the debounce window, for several
+        // windows: a restarting timer would never fire while this loop runs.
+        let persisted = null;
+        for (let i = 1; i <= 40 && !persisted; i += 1) {
+          manager.updateParentId(CHAT_ID, `msg-${i}`);
+          await new Promise(resolve => setTimeout(resolve, 5));
+          persisted = await provider.documents.get(INTEGRATION_CONVERSATIONS_NAMESPACE, CHAT_ID);
+        }
+
+        assert.ok(persisted, 'a write landed while the turn was still streaming');
+        assert.ok(
+          persisted.data.lastParentId.startsWith('msg-'),
+          'and it carried the parent id of the chunk it saw'
+        );
+      },
+      { writeDebounceMs: 20 }
+    );
+  });
+
   it('writes an update that lands mid-write rather than losing it', async () => {
     await withManager(async ({ manager, provider }) => {
       manager.setState(CHAT_ID, { conversationId: 'conv-7' });

@@ -138,7 +138,10 @@ or rewritten; a later release removes them. Until then they are still read:
 
 - a run's *events* are never imported at all — `run-log/runs/<runId>.jsonl` is
   read in place, so a run recorded before the upgrade still opens, still
-  re-syncs and still replays;
+  re-syncs and still replays. A run that is *continued* after the upgrade —
+  feedback on yesterday's answer, a checkpoint answered today — has events in
+  both places, and reading it merges the two by sequence number, so its whole
+  history stays visible;
 - `GET /api/runs` merges the `runs` namespace with the per-day index files, the
   namespace winning on any run both describe, so runs past the import bound
   stay listed until retention ages those files out;

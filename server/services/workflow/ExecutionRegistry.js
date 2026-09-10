@@ -490,9 +490,13 @@ export class ExecutionRegistry {
     const store = this._store();
     if (store) {
       try {
-        const page = await store.listAll({});
+        // `match` runs inside the repository's scan, so the bound counts
+        // executions rather than documents: the `runs` namespace is shared
+        // with every chat and inference run the ledger records, and those
+        // sort before `wf-exec-…`.
+        const page = await store.listAll({ match: isExecutionSummary });
         for (const summary of page.items) {
-          if (isExecutionSummary(summary)) records.set(summary.runId, fromSummary(summary));
+          records.set(summary.runId, fromSummary(summary));
         }
       } catch (error) {
         this.logger.warn('Could not read executions from storage; reporting local runs only', {
@@ -592,11 +596,17 @@ export class ExecutionRegistry {
     this._enqueue(executionId, async () => {
       const store = this._store();
       if (!store) return;
-      // Merge first: the ledger records a summary for the same run id at
-      // `run/start`, and replacing it would drop the principal's identity
-      // mode, the parent run and the cross-references it carries.
-      const merged = await store.patch(executionId, toSummaryFields(execution));
-      if (!merged) await store.put(toNewSummary(execution));
+      // One locked upsert, never a read then a replace: the ledger records a
+      // summary for the same run id at `run/start` from a queue of its own,
+      // and the two chains have no ordering between them. A create fallback
+      // that replaced would drop the principal's identity mode, the parent
+      // run, the model and the cross-references the ledger carries whenever
+      // its write landed in between.
+      await store.merge(executionId, toSummaryFields(execution), {
+        // Only on create: on a merge this would replace the richer reference
+        // set the ledger records (chat id, profile id, workflow id).
+        defaults: { refs: { executionId } }
+      });
     });
 
     return { ...execution };
@@ -790,10 +800,16 @@ export class ExecutionRegistry {
       try {
         // Everything for this owner: the archived rule below is the
         // registry's own tri-state and is applied once, after the local
-        // executions have been merged in.
-        const page = await store.listByOwner(userId, { archived: 'all' });
+        // executions have been merged in. `match` narrows inside the scan so
+        // the owner's chat runs — which share this namespace and sort before
+        // `wf-exec-…` — cannot consume the whole record bound and leave the
+        // listing empty.
+        const page = await store.listByOwner(userId, {
+          archived: 'all',
+          match: isExecutionSummary
+        });
         for (const summary of page.items) {
-          if (isExecutionSummary(summary)) records.set(summary.runId, fromSummary(summary));
+          records.set(summary.runId, fromSummary(summary));
         }
       } catch (error) {
         this.logger.warn('Could not list executions for user; reporting local runs only', {

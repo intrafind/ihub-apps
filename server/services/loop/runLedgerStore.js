@@ -22,7 +22,9 @@
  * The second backend is not dead code once the first exists. It is both the
  * degradation path when no provider is available (a supported state, not an
  * error) *and* the compatibility path for runs written before this release:
- * every read falls back to it, and retention keeps ageing the old files out.
+ * every read consults it as well — a run continued after the upgrade has
+ * events in both backends and they are merged, not chosen between — and
+ * retention keeps ageing the old files out.
  * That is what lets a running installation upgrade without its ledger
  * appearing to have been wiped.
  *
@@ -194,6 +196,27 @@ function summaryToListing(summary) {
     if (summary.usage) entry.usage = summary.usage;
   }
   return entry;
+}
+
+/**
+ * Merge two ascending event slices into one, newest write winning a shared
+ * sequence number.
+ *
+ * The only overlap that can occur is a run re-appended through the provider
+ * after its legacy file was written, so the provider record is the later of
+ * the two and takes the seq.
+ *
+ * @param {Object[]} legacy - Events from the ledger directory.
+ * @param {Object[]} events - Events from the append log.
+ * @param {number} limit - Maximum events to return.
+ * @returns {Object[]} Ascending by seq, no duplicates.
+ */
+function mergeEventsBySeq(legacy, events, limit) {
+  const bySeq = new Map();
+  for (const event of legacy) bySeq.set(event.seq, event);
+  for (const event of events) bySeq.set(event.seq, event);
+  const merged = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+  return Number.isFinite(limit) ? merged.slice(0, limit) : merged;
 }
 
 /**
@@ -434,8 +457,12 @@ export class RunLedgerStore {
   /**
    * A run's events in ascending sequence order.
    *
-   * Runs written before the ledger moved onto the provider have no stream, so
-   * an empty provider read falls back to the legacy file.
+   * A run whose history spans the upgrade has events in **both** backends:
+   * its start and its earlier turns are in the legacy file, and anything
+   * appended since — `appendRecovered` continues the legacy sequence and then
+   * writes through the provider — is in the stream. So the two are merged
+   * rather than chosen between; reading only the non-empty one would hide
+   * everything the other holds, which for such a run is its whole history.
    *
    * @param {string} runId - Run id.
    * @param {Object} [opts]
@@ -445,26 +472,34 @@ export class RunLedgerStore {
    */
   async readEvents(runId, { afterSeq = 0, limit = Infinity } = {}) {
     const logs = this._logs();
-    if (logs) {
-      const events = await logs.read(runStreamName(runId), { afterSeq, limit });
-      if (events.length > 0) return events;
+    if (!logs) return this._legacyReadEvents(runId, { afterSeq, limit });
+    // The common case — a run written entirely through the provider — costs
+    // one `access` miss and keeps the requested limit on the provider read.
+    if (!(await this._hasLegacyRunFile(runId))) {
+      return logs.read(runStreamName(runId), { afterSeq, limit });
     }
-    return this._legacyReadEvents(runId, { afterSeq, limit });
+    const [legacy, events] = await Promise.all([
+      this._legacyReadEvents(runId, { afterSeq, limit: Infinity }),
+      logs.read(runStreamName(runId), { afterSeq, limit: Infinity })
+    ]);
+    return mergeEventsBySeq(legacy, events, limit);
   }
 
   /**
    * The highest persisted sequence number for a run, or 0.
+   *
+   * The maximum across both backends, so a run that spans the upgrade never
+   * hands a recovering worker a sequence number the legacy file already used.
    *
    * @param {string} runId - Run id.
    * @returns {Promise<number>}
    */
   async lastSeq(runId) {
     const logs = this._logs();
-    if (logs) {
-      const seq = await logs.lastSeq(runStreamName(runId));
-      if (seq > 0) return seq;
-    }
-    return (await this._legacyLastEvent(runId))?.seq || 0;
+    if (!logs) return (await this._legacyLastEvent(runId))?.seq || 0;
+    const seq = await logs.lastSeq(runStreamName(runId));
+    if (!(await this._hasLegacyRunFile(runId))) return seq;
+    return Math.max(seq, (await this._legacyLastEvent(runId))?.seq || 0);
   }
 
   /**
@@ -475,19 +510,26 @@ export class RunLedgerStore {
    */
   async lastEvent(runId) {
     const logs = this._logs();
-    if (logs) {
-      const stream = runStreamName(runId);
-      const seq = await logs.lastSeq(stream);
-      if (seq > 0) {
-        const [event] = await logs.read(stream, { afterSeq: seq - 1, limit: 1 });
-        if (event) return event;
-      }
+    if (!logs) return this._legacyLastEvent(runId);
+    const stream = runStreamName(runId);
+    const seq = await logs.lastSeq(stream);
+    const legacy = (await this._hasLegacyRunFile(runId))
+      ? await this._legacyLastEvent(runId)
+      : null;
+    if (seq > 0 && seq >= (legacy?.seq || 0)) {
+      const [event] = await logs.read(stream, { afterSeq: seq - 1, limit: 1 });
+      if (event) return event;
     }
-    return this._legacyLastEvent(runId);
+    return legacy;
   }
 
   /**
    * A run's `run/start` event, without reading the rest of it.
+   *
+   * For a run that spans the upgrade the stream's first record is whatever
+   * was appended after it — never the start — so a provider read that does
+   * not find a `run/start` falls through to the legacy file rather than
+   * answering "this run never started".
    *
    * @param {string} runId - Run id.
    * @returns {Promise<Object|null>} The event, or null when the run has none.
@@ -496,7 +538,7 @@ export class RunLedgerStore {
     const logs = this._logs();
     if (logs) {
       const [first] = await logs.read(runStreamName(runId), { afterSeq: 0, limit: 1 });
-      if (first) return first.type === RUN_LOG_EVENTS.RUN_START ? first : null;
+      if (first?.type === RUN_LOG_EVENTS.RUN_START) return first;
     }
     const line = await this._legacyFirstLine(runId);
     if (!line) return null;
@@ -605,8 +647,13 @@ export class RunLedgerStore {
       });
       return;
     }
+    // Merged, never replaced: for a workflow or agent run the execution id is
+    // the run id, so `ExecutionRegistry.register` writes the same document
+    // from a queue of its own. A replace here would erase the workflow name,
+    // the input preview, the models and who triggered the run whenever the
+    // registry got there first.
     this._queueSummaryWrite(() =>
-      summaries.put({
+      summaries.merge(summary.runId, {
         runId: summary.runId,
         kind: summary.kind,
         ownerId: summary.principalId,
@@ -785,7 +832,12 @@ export class RunLedgerStore {
 
     const summaries = this._summaries();
     if (summaries) {
-      for (const summary of await this._scanSummaries({})) {
+      // `includeAnonymous`: the listings hide anonymous runs by design, but a
+      // sweep that inherited that filter would never delete their documents
+      // and never run the delete cascade for them — so an anonymous chat
+      // would leave a summary behind for ever, and the interactions it raised
+      // would never be reclaimed, while its events were swept out underneath.
+      for (const summary of await this._scanSummaries({ includeAnonymous: true })) {
         const touched = Date.parse(summary.endedAt || summary.updatedAt || summary.startedAt || '');
         if (!Number.isFinite(touched) || touched >= cutoffMs) continue;
         // deleteRun drops the stream, the blobs, any legacy leftovers and the
@@ -898,16 +950,18 @@ export class RunLedgerStore {
    * bound truncates, and paging here would cut the set *before* the day-range
    * filter and the final `limit` are applied.
    *
-   * @param {{kind?: string, principalId?: string}} filter - Narrowing hints.
+   * @param {{kind?: string, principalId?: string, includeAnonymous?: boolean}} filter
+   *   Narrowing hints. `includeAnonymous` is for the retention sweep only:
+   *   an anonymous run is never listed, but it must still age out.
    * @returns {Promise<Object[]>} The summaries, newest first.
    * @private
    */
-  async _scanSummaries({ kind, principalId }) {
+  async _scanSummaries({ kind, principalId, includeAnonymous = false }) {
     const summaries = this._summaries();
     if (!summaries) return [];
     const page = principalId
       ? await summaries.listByOwner(principalId, { kind, archived: 'all' })
-      : await summaries.listAll({});
+      : await summaries.listAll({ includeAnonymous });
     return page?.items || [];
   }
 
@@ -926,6 +980,28 @@ export class RunLedgerStore {
   async _hasLegacyIndex() {
     try {
       await fs.access(this._containedPath('index'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Whether this run has events in the ledger directory as well.
+   *
+   * One `access` call, so the reads can ask it before deciding whether they
+   * have to merge the two backends: a fresh installation pays a miss, and an
+   * upgraded one pays it only for the runs that actually predate the move.
+   *
+   * @param {string} runId - Run id.
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _hasLegacyRunFile(runId) {
+    // A run started while no provider was up can still be in the buffer.
+    if (this._appender.queueLength() > 0) await this._appender.flush();
+    try {
+      await fs.access(this.runFilePath(runId));
       return true;
     } catch {
       return false;

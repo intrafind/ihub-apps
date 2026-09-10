@@ -98,6 +98,16 @@ const MAX_OWNER_RUNS = 1000;
 const MAX_SCAN_RUNS = 20_000;
 
 /**
+ * Hard bound on how many *documents* a scan may examine, whatever it keeps.
+ *
+ * The record bounds above count records that matched, so a namespace whose
+ * runs are overwhelmingly of another kind — a busy installation's chat runs,
+ * against a handful of workflow executions — cannot starve a filtered listing
+ * of its budget. This second bound is what still makes such a scan terminate.
+ */
+const MAX_EXAMINED_RUNS = 100_000;
+
+/**
  * Lease for one read-modify-write. Short: the critical section is a read and a
  * write, and a lease held longer than that means a dead worker whose lock we
  * want taken over quickly.
@@ -168,7 +178,10 @@ export function normalizeRunSummary(input = {}) {
     workflowName: obj(input.workflowName) || str(input.workflowName),
     currentNode: str(input.currentNode),
     pendingCheckpoint: obj(input.pendingCheckpoint),
-    inputPreview: str(input.inputPreview),
+    // A map of the workflow's input variables for a UI-started run
+    // (`buildInputPreview`), a plain string for an agent run. Both shapes
+    // reach here, so coercing to a string alone would silently store null.
+    inputPreview: obj(input.inputPreview) || str(input.inputPreview),
     models: Array.isArray(input.models) ? [...input.models] : [],
     triggeredBy: obj(input.triggeredBy),
     archived: input.archived === true
@@ -342,18 +355,39 @@ export class RunSummaryRepository {
   }
 
   /**
-   * Walk a page of the namespace, optionally scoped to one owner, up to `max`
-   * records. Truncation is reported so the caller can log it once with its own
-   * context rather than guessing from a short result.
+   * Walk the namespace, optionally scoped to one owner, keeping the records
+   * `match` accepts up to `max` of them.
+   *
+   * The predicate runs **inside** the scan, before the bound is counted,
+   * because the `runs` namespace is shared by every run kind: an owner with a
+   * thousand chat runs and five workflow executions would otherwise spend the
+   * whole budget on documents the caller is about to discard, and its
+   * executions — keyed `wf-exec-…`, which sorts after `chat-…` — would never
+   * be loaded at all. So `max` bounds the matches and `maxExamined` bounds the
+   * documents read, which is what still makes a pathological namespace
+   * terminate.
+   *
+   * Truncation is reported so the caller can log it once with its own context
+   * rather than guessing from a short result.
    *
    * @param {Object} [options]
    * @param {string|null} [options.ownerId=null] - Owner to scope to.
-   * @param {number} [options.max=MAX_SCAN_RUNS] - Hard record bound.
+   * @param {number} [options.max=MAX_SCAN_RUNS] - Hard bound on matches kept.
+   * @param {number} [options.maxExamined=MAX_EXAMINED_RUNS] - Hard bound on
+   *   documents read.
+   * @param {((record: Object) => boolean)|null} [options.match=null] - Keep
+   *   only the records this accepts.
    * @returns {Promise<{records: Object[], truncated: boolean}>}
    * @private
    */
-  async _load({ ownerId = null, max = MAX_SCAN_RUNS } = {}) {
+  async _load({
+    ownerId = null,
+    max = MAX_SCAN_RUNS,
+    maxExamined = MAX_EXAMINED_RUNS,
+    match = null
+  } = {}) {
     const records = [];
+    let examined = 0;
     let cursor = null;
     do {
       const page = await this.documents.list(RUNS_NAMESPACE, {
@@ -362,11 +396,15 @@ export class RunSummaryRepository {
         ...(cursor ? { cursor } : {})
       });
       for (const doc of page.items) {
+        examined += 1;
         const record = toSummary(doc);
-        if (record) records.push(record);
+        if (!record) continue;
+        if (match && !match(record)) continue;
+        records.push(record);
+        if (records.length >= max) break;
       }
       cursor = page.nextCursor;
-    } while (cursor && records.length < max);
+    } while (cursor && records.length < max && examined < maxExamined);
     return { records, truncated: Boolean(cursor) };
   }
 
@@ -413,10 +451,51 @@ export class RunSummaryRepository {
   async put(summary) {
     const record = normalizeRunSummary(summary);
     if (!this._usable(record.runId, 'put')) return null;
-    const doc = await this.documents.put(RUNS_NAMESPACE, record.runId, record, {
-      ownerId: record.anonymous ? null : record.ownerId
+    // Under the run's lock like every other mutator. A bare replace could
+    // interleave with a concurrent `patch`/`merge` for the same run — the two
+    // writers of an execution's summary, the ledger and the registry, do
+    // exactly that at every workflow start — and erase what the other had
+    // just merged in.
+    return this._withRunLock(record.runId, async () => {
+      const doc = await this.documents.put(RUNS_NAMESPACE, record.runId, record, {
+        ownerId: record.anonymous ? null : record.ownerId
+      });
+      return toSummary(doc);
     });
-    return toSummary(doc);
+  }
+
+  /**
+   * Create or merge a run's summary in one locked read-modify-write.
+   *
+   * This is the upsert both writers of an execution's summary use: the ledger
+   * at `run/start` and {@link module:services/workflow/ExecutionRegistry} at
+   * `register()`. They own disjoint halves of the record — the ledger has
+   * `identityMode`, `parentRunId`, `refs` and `model`, the registry has
+   * `workflowName`, `inputPreview`, `models` and `triggeredBy` — and both are
+   * queued from synchronous callers onto independent chains, so neither can
+   * assume it writes first. A create-or-replace would therefore drop the other
+   * half whenever the two crossed; merging inside the lock means each writer
+   * contributes only its own fields, in either order.
+   *
+   * @param {string} runId - Run id.
+   * @param {Object} [fields] - Fields to write, on create and on merge alike.
+   * @param {Object} [options]
+   * @param {Object} [options.defaults] - Fields applied only when the summary
+   *   is being created, for what is true of a new run and not of an update.
+   * @returns {Promise<Object|null>} The stored summary, or null when the run
+   *   id is not storable or storage is unavailable.
+   */
+  async merge(runId, fields = {}, { defaults = {} } = {}) {
+    if (!this._usable(runId, 'merge')) return null;
+    return this._withRunLock(runId, async () => {
+      const existing = toSummary(await this.documents.get(RUNS_NAMESPACE, runId));
+      const base = existing || { ...defaults, runId };
+      const record = normalizeRunSummary(applyPatch(base, fields));
+      const doc = await this.documents.put(RUNS_NAMESPACE, record.runId, record, {
+        ownerId: record.anonymous ? null : record.ownerId
+      });
+      return toSummary(doc);
+    });
   }
 
   /**
@@ -473,25 +552,30 @@ export class RunSummaryRepository {
    *   default hides archived runs.
    * @param {number} [filters.limit] - Page size; absent means everything.
    * @param {number} [filters.offset] - Records to skip.
+   * @param {(record: Object) => boolean} [filters.match] - Extra predicate,
+   *   applied inside the scan like the rest so it shares the record bound
+   *   instead of thinning an already-truncated page.
    * @returns {Promise<{items: Object[], total: number, truncated: boolean}>}
    *   The page, how many matched before paging, and whether the owner has more
    *   runs than the scan bound could load.
    */
-  async listByOwner(ownerId, { status, kind, archived, limit, offset } = {}) {
+  async listByOwner(ownerId, { status, kind, archived, limit, offset, match } = {}) {
     if (!this.isAvailable() || !ownerId) return { ...EMPTY_PAGE };
+    const accept = record =>
+      !record.anonymous &&
+      (status ? record.status === status : true) &&
+      (kind ? record.kind === kind : true) &&
+      matchesArchived(record, archived) &&
+      (match ? match(record) : true);
     const { records, truncated } = await this._load({
       ownerId: String(ownerId),
-      max: MAX_OWNER_RUNS
+      max: MAX_OWNER_RUNS,
+      match: accept
     });
     if (truncated) {
       this._logTruncation('listByOwner', { ownerId: String(ownerId), loaded: records.length });
     }
-    const matched = records
-      .filter(record => !record.anonymous)
-      .filter(record => (status ? record.status === status : true))
-      .filter(record => (kind ? record.kind === kind : true))
-      .filter(record => matchesArchived(record, archived))
-      .sort(compareByStartedAtDesc);
+    const matched = records.sort(compareByStartedAtDesc);
     return { items: paginate(matched, limit, offset), total: matched.length, truncated };
   }
 
@@ -513,18 +597,24 @@ export class RunSummaryRepository {
    *   workflow name or workflow id.
    * @param {number} [filters.limit] - Page size; absent means everything.
    * @param {number} [filters.offset] - Records to skip.
+   * @param {boolean} [filters.includeAnonymous] - Include anonymous runs. Off
+   *   for every listing; the retention sweep turns it on, because a run whose
+   *   summary no listing may show is still a run whose data has to age out.
+   * @param {(record: Object) => boolean} [filters.match] - Extra predicate,
+   *   applied inside the scan so it shares the record bound.
    * @returns {Promise<{items: Object[], total: number, truncated: boolean}>}
    */
-  async listAll({ status, search, limit, offset } = {}) {
+  async listAll({ status, search, limit, offset, includeAnonymous, match } = {}) {
     if (!this.isAvailable()) return { ...EMPTY_PAGE };
-    const { records, truncated } = await this._load();
-    if (truncated) this._logTruncation('listAll', { loaded: records.length });
     const needle = typeof search === 'string' && search ? search.toLowerCase() : null;
-    const matched = records
-      .filter(record => !record.anonymous)
-      .filter(record => (status && status !== 'all' ? record.status === status : true))
-      .filter(record => (needle ? matchesSearch(record, needle) : true))
-      .sort(compareByStartedAtDesc);
+    const accept = record =>
+      (includeAnonymous === true || !record.anonymous) &&
+      (status && status !== 'all' ? record.status === status : true) &&
+      (needle ? matchesSearch(record, needle) : true) &&
+      (match ? match(record) : true);
+    const { records, truncated } = await this._load({ match: accept });
+    if (truncated) this._logTruncation('listAll', { loaded: records.length });
+    const matched = records.sort(compareByStartedAtDesc);
     return { items: paginate(matched, limit, offset), total: matched.length, truncated };
   }
 
