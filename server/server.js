@@ -826,15 +826,23 @@ if (cluster.isPrimary && workerCount > 1) {
   // Workflow recovery + trigger init on boot. Order matters:
   //   1. Attach the engine to the TriggerManager (this acquires the
   //      cross-process scheduler lock).
-  //   2. Resume runs interrupted by the previous process from their last
+  //   2. Rescan the execution records: recover anything that exists only as a
+  //      checkpoint and mark whatever the previous process left `running` as
+  //      failed. Before the resume in step 3, exactly as it has always been —
+  //      a run that resumes is set back to `running` by the engine. This used
+  //      to run un-gated in every worker, which is safe only while each
+  //      worker has its own registry; now the records are shared, so it is
+  //      owner-gated like the two steps below.
+  //   3. Resume runs interrupted by the previous process from their last
   //      checkpoint (only the scheduler-lock owner does this).
-  //   3. Orphan-sweep whatever could NOT be resumed, marking it failed. Also
+  //   4. Orphan-sweep whatever could NOT be resumed, marking it failed. Also
   //      owner-gated: resume + sweep run in the SAME process so the sweeper's
   //      in-memory activeStates guard authoritatively skips just-resumed runs.
   //      A non-owner worker must not sweep — it would clobber the owner's runs.
-  //   4. Register schedule/webhook triggers.
+  //   5. Register schedule/webhook triggers.
   try {
-    const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
+    const { loadWorkflows, markInterruptedExecutionsFailed } =
+      await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
     const { getWorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
     const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
@@ -848,6 +856,14 @@ if (cluster.isPrimary && workerCount > 1) {
     const triggerManager = getTriggerManager();
     triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
+
+    // Step 2: awaited, so the resume below observes the rescan's writes rather
+    // than racing them back to `failed`.
+    try {
+      await markInterruptedExecutionsFailed({ requireSchedulerOwner: true });
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Execution rescan skipped: ${error.message}` });
+    }
 
     // 30-minute node timeout for resumed runs, consistent with the agent-run
     // engine in routes/agents/runs.js — needed so resumed agent runs

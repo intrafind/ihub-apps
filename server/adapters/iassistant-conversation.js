@@ -80,7 +80,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     }
 
     const config = this.resolveConfig(model, options);
-    let state = conversationStateManager.getState(chatId);
+    // The durable read, not the cache-only `getState`: a chat whose first turn
+    // landed on another worker (or before a restart) must thread onto the same
+    // remote conversation instead of silently starting a second one.
+    let state = await conversationStateManager.loadState(chatId);
 
     // Lazy conversation creation: create on first message if no conversation exists
     if (!state?.conversationId) {

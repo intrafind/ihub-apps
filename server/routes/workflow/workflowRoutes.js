@@ -344,12 +344,12 @@ function validateWorkflow(workflow) {
  * as failed the very runs the lock owner is resuming from checkpoint, and the
  * result would be written to the record they all read.
  *
- * Note that route registration happens before the scheduler-lock heartbeat is
- * started (`triggerManager.setEngine`), so at boot no process owns the lock
- * and this skips. `sweepOrphanedExecutions`, which runs after the resume
- * manager in the owner process, performs the same failure-marking and also
- * rewrites the state file. Call this from that same owner-gated phase if the
- * checkpoint recovery is wanted alongside it.
+ * Called from `server.js`, not from route registration: the scheduler-lock
+ * heartbeat is only started by `triggerManager.setEngine`, so at registration
+ * time no process owns the lock and this would always skip. It runs in the
+ * same owner-gated boot phase as the resume manager and the orphan sweeper,
+ * and before both — a run that is resumable is set back to `running` by the
+ * engine moments later, which is the ordering this rescan has always had.
  *
  * @param {Object} [opts]
  * @param {boolean} [opts.requireSchedulerOwner=true] - Only run if this
@@ -395,15 +395,6 @@ export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = 
  */
 export default function registerWorkflowRoutes(app, deps = {}) {
   const workflowEngine = deps.workflowEngine || getWorkflowEngine();
-
-  // Recover persisted executions on startup — only in the instance that owns
-  // the scheduler lock, so this never races the resume manager.
-  markInterruptedExecutionsFailed().catch(error => {
-    logger.error('Execution rescan failed', {
-      component: 'WorkflowRoutes',
-      error: error.message
-    });
-  });
 
   // ============================================================================
   // Workflow Definition Endpoints
