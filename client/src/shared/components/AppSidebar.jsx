@@ -9,7 +9,7 @@ import Icon from './Icon';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { rankAppShortcuts, readAppShortcutConfig } from '../../utils/appShortcuts';
-import { getRecentAppIds } from '../../utils/recentApps';
+import useRecentAppIds from '../hooks/useRecentAppIds';
 import { START_PAGE_PATH } from '../../utils/homePage';
 import useMediaQuery from '../hooks/useMediaQuery';
 import BrandTitle from './BrandTitle';
@@ -229,9 +229,12 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     [uiConfig]
   );
 
-  // Read once per mount: re-reading on every render would reorder the list
-  // while the user is aiming at it. Only the `recent` mode needs it.
-  const recentAppIds = useMemo(() => (mode === 'recent' ? getRecentAppIds() : []), [mode]);
+  // Only the `recent` mode needs the list, and it has to stay live: this
+  // sidebar is mounted once in the Layout, so a read on mount would keep the
+  // ranking it had when the app booted no matter how many apps were opened
+  // since. Usage is recorded on navigation, so the list only ever reorders
+  // right after the user left it.
+  const recentAppIds = useRecentAppIds(mode === 'recent');
 
   // Favorites first, then the admin's default apps, then the rest by mode.
   const rankedApps = useMemo(
