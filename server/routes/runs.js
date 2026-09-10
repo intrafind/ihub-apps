@@ -69,7 +69,16 @@ async function stopRun(runId, meta) {
     await cancelChatWorkflow(refs.chatId);
     return 'chat_aborted';
   }
-  if (meta?.kind === 'workflow' || meta?.kind === 'agent' || getExecutionRegistry().get(runId)) {
+  // The registry read is async now that execution records live in the shared
+  // `runs` namespace instead of a per-worker Map. Left inside the `||` chain
+  // unawaited it would be a promise — always truthy — and every chat run
+  // would try to cancel a workflow. `||` still short-circuits, so a run the
+  // metadata already identifies never pays for the read.
+  const targetsExecution =
+    meta?.kind === 'workflow' ||
+    meta?.kind === 'agent' ||
+    Boolean(await getExecutionRegistry().get(runId));
+  if (targetsExecution) {
     try {
       // The execution may run on another worker: the engine relays the
       // cancellation to whoever holds its abort controller.

@@ -1510,3 +1510,56 @@ preview flag, which is retired.
   written and is waiting when the chat is reopened. Only the Stop button cancels a turn.
 
 See [Chat Persistence](../../chat-persistence.md).
+
+## Runtime Data Moves Behind the Storage Provider
+
+The run ledger, workflow execution records, human interactions and the
+iAssistant conversation mapping now go through the same storage provider
+durable chats already used, instead of each service writing files of its own.
+This is a consolidation: behaviour is deliberately unchanged, with the
+exceptions below, which are fixes.
+
+- **The run index is per-user now, not per-day.** A new `runs` namespace holds
+  one summary document per run — chat, workflow execution and agent run alike
+  — owned by the principal that started it. It replaces both the ledger's daily
+  `index/<date>.jsonl` files and `execution-registry.json`. Listing a user's
+  runs is an index read instead of a scan, and two workers recording two
+  different runs can no longer erase each other, which one shared registry file
+  rewritten in whole allowed.
+- **Executions are visible on every worker.** With the default four workers, a
+  workflow or agent run started on one worker could be missing from *My
+  Executions*, from the admin execution list and from an agent's running-run
+  count when the next request landed on another worker. It is not any more.
+- **Finished workflow state is swept.** New `platform.workflowState` settings —
+  `retentionDays` (30) and `cleanupEnabled` — delete terminal executions on the
+  same daily cadence as the chat and ledger sweeps: the state, the run summary,
+  and the `wf-child-…` sub-workflow states that no delete button ever reached.
+  Nothing removed any of that before, and each state carries a full workflow
+  definition and every node result. Set `retentionDays` to zero or less to keep
+  the previous behaviour of never deleting. A configuration migration adds the
+  section to existing installations.
+- **iAssistant conversations survive a restart and a worker hop.** The mapping
+  from a chat to its remote conversation lived in per-worker memory, so a
+  second turn landing on another worker quietly created a *second* conversation
+  and reset threading. It is stored now, and written off the streaming path so
+  answers are not slowed down by it.
+- **Pending interactions are documents.** They still survive a restart, and are
+  still persisted whether or not the run-ledger flag is on. An answer is still
+  accepted by exactly one worker, now through a lease over the shared record
+  rather than exclusive claim marker files; the `409` a concurrent or late
+  answer receives is unchanged.
+- **Existing data is imported on the first boot, and nothing is deleted.** The
+  daily run index, the execution registry, the `<executionId>/latest.json`
+  checkpoint directories and pending interactions are carried into the new
+  namespaces once, idempotently, by one worker. The old files stay exactly
+  where they are and are still read for everything not carried over —
+  including every run's recorded events, which are read in place and never
+  imported. A rollback to the previous release therefore finds its own data
+  intact; what it does not see is anything the newer release wrote after the
+  upgrade.
+- **Without a storage provider nothing changes.** Each of these stores falls
+  back to the layout and the behaviour it had before. That is a supported
+  state, not an error.
+
+See [Run Ledger](../../run-ledger.md), [Workflows](../../workflows.md) and
+[Storage Providers](../../storage.md).

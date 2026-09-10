@@ -386,6 +386,10 @@
     "retentionDays": 90,
     "maxChatsPerUser": 200
   },
+  "workflowState": {
+    "retentionDays": 30,
+    "cleanupEnabled": true
+  },
   "storage": {
     "provider": "filesystem",
     "filesystem": {

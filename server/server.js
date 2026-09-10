@@ -45,6 +45,13 @@ import registerRunRoutes from './routes/runs.js';
 import registerStoredChatRoutes from './routes/chats.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
+import {
+  startWorkflowStateRetention,
+  stopWorkflowStateRetention
+} from './services/workflow/workflowRetention.js';
+import { importLegacyWorkflowStates } from './services/workflow/WorkflowStateRepository.js';
+import { importLegacyRunSummaries } from './services/runtime/runSummaryImport.js';
+import conversationStateManager from './services/integrations/ConversationStateManager.js';
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
@@ -393,6 +400,26 @@ if (cluster.isPrimary && workerCount > 1) {
   // their in-memory behaviour instead of taking the server down.
   await bootstrapStorage(platformConfig);
 
+  // Carry what an upgraded installation already has on disk — the ledger's
+  // per-day run index, the workflow execution registry and the
+  // `<executionId>/latest.json` state directories — into the namespaces that
+  // now hold them, before anything reads them. Both are one-time, idempotent
+  // and non-destructive (the legacy files stay, and stay readable), both
+  // short-circuit on a marker document afterwards, and both take a storage
+  // lock so only one worker does the work. A failure here must not stop the
+  // server: the legacy paths are still the fallback for everything not yet
+  // carried over.
+  try {
+    await importLegacyRunSummaries();
+    await importLegacyWorkflowStates();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Legacy runtime store import failed; falling back to the legacy files',
+      error: error.message
+    });
+  }
+
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
   // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
   // not stop the rest of the worker - including the activity tracker - from
@@ -645,6 +672,11 @@ if (cluster.isPrimary && workerCount > 1) {
     // independent of `runLog.cleanupEnabled`. Same ownership guard, though —
     // two workers sweeping in parallel would only race each other's deletes.
     startChatRetentionSweep();
+    // Terminal workflow state accumulated forever before this: a completed
+    // run kept its full state document, its run summary and — for a
+    // sub-workflow — a state nothing ever deleted. Same daily cadence and the
+    // same ownership guard as the sweeps above.
+    startWorkflowStateRetention();
   }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
@@ -924,9 +956,14 @@ if (cluster.isPrimary && workerCount > 1) {
     } catch {
       // Audit flush failures are logged within the service
     }
-    // Stop the chat retention sweep before storage goes away, so a tick cannot
+    // Stop the retention sweeps before storage goes away, so a tick cannot
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
+    stopWorkflowStateRetention();
+    // Conversation state coalesces its writes on a timer to keep document I/O
+    // off the streaming path; drain what is still buffered, or a chat resumes
+    // after the restart threaded onto a stale parent message.
+    await conversationStateManager.flush();
     // Flush buffered storage writes (chat documents, append-log entries) and
     // release the provider's handles before the process goes away.
     await shutdownStorageBootstrap();

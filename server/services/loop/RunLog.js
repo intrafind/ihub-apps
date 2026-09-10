@@ -1,15 +1,6 @@
 /**
  * RunLog — the append-only ledger underneath every run (concept §5.4).
  *
- * One JSONL file per run under `contents/data/run-log/runs/<runId>.jsonl`,
- * written through the shared buffered JSONL appender (the AuditLogService
- * pattern): batched appends, periodic flush, drop-oldest overflow cap, and a
- * write lock that serializes flushes against retention cleanup. Large payloads
- * are spilled to `spill/<runId>/` and referenced from the line. A per-day
- * index (`index/<YYYY-MM-DD>.jsonl`) carries run/start + run/end summaries for
- * listing; anonymous runs are indexed with `anonymous: true` and are never
- * returned by `listRuns()`.
- *
  * Two layers:
  *   1. In-memory event stream — `append()` always assigns a per-run sequence
  *      number and notifies subscribers synchronously. SSE v2 projections and
@@ -17,30 +8,33 @@
  *   2. Persistence — only when `features.runLog` is enabled (ships dark) and
  *      `platform.runLog.enabled !== false`.
  *
- * Deleting a run (`deleteRun`) is a file delete with cascade: run file, spill
- * dir, index tombstone, and any registered cascade hooks (e.g. pending
- * interactions).
+ * Everything in the second layer lives in {@link RunLedgerStore}: one run's
+ * events are an append-log stream, large payloads are blobs beside it, and run
+ * summaries are owner-indexed documents in the `runs` namespace. When no
+ * storage provider is available the store keeps writing the layout every
+ * installation already has (`runs/<runId>.jsonl`, `spill/<runId>/`,
+ * `index/<YYYY-MM-DD>.jsonl`), and it reads that layout either way so runs
+ * written before the move stay readable. Anonymous runs are recorded with
+ * `anonymous: true` and are never returned by `listRuns()`.
+ *
+ * Deleting a run (`deleteRun`) removes everything stored for it — events,
+ * spilled payloads, summary — and runs any registered cascade hooks (e.g.
+ * pending interactions).
  *
  * Sequence ownership in a cluster: the worker that started (or resumed) a run
  * owns its sequence and announces that on the cluster bus. An append made on
  * another worker on behalf of a request (`appendRecovered`: answers, human
  * events) is routed to the owner; when no worker owns the run any more the
- * recovering worker continues from the persisted ledger under a per-run lock
- * file, so two recovering workers never allocate the same sequence number.
+ * recovering worker continues from the persisted ledger under a per-run lock,
+ * so two recovering workers never allocate the same sequence number.
  *
  * @module services/loop/RunLog
  */
-import { promises as fs, createReadStream } from 'fs';
-import { createInterface } from 'readline';
-import path from 'path';
 import crypto from 'crypto';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../chat/chatPersistence.js';
 import logger from '../../utils/logger.js';
-import { createJsonlAppender } from '../../utils/jsonlAppender.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { parseRunLogEventData } from './contracts/runLogEvents.js';
 import { resolvePrincipal, isAnonymousUser } from './runIdentity.js';
@@ -50,13 +44,11 @@ import {
   hasRemote as busHasRemote,
   createPresenceMap
 } from '../../clusterBus.js';
-import { withFileLock } from '../../utils/fileLock.js';
+import { RunLedgerStore } from './runLedgerStore.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
-const DEFAULT_FLUSH_MS = 2000;
-const MAX_QUEUE = 20000;
 /** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
 /** Cluster bus channel on which the owner of a run describes it to other workers. */
@@ -86,18 +78,6 @@ function sha256(value) {
     .digest('hex');
 }
 
-/**
- * Validate an id and reduce it to a single path segment. `path.basename` is
- * the sanitizer static analysis recognizes; `assertRunId` already rejects
- * separators and dots, so for valid ids this is the identity.
- * @param {string} id
- * @returns {string}
- */
-function safeSegment(id) {
-  assertRunId(id);
-  return path.basename(String(id));
-}
-
 export function newRunId(kind = 'run') {
   const prefix = String(kind || 'run').replace(/[^a-z]/gi, '') || 'run';
   return `${prefix}-${crypto.randomUUID()}`;
@@ -117,10 +97,13 @@ export class RunLog {
    * @param {boolean} [opts.forceEnabled] - bypass the feature flag (tests)
    * @param {{request: Function, respond: Function, hasRemote: Function, createPresenceMap: Function}} [opts.bus]
    *   cluster bus (default: clusterBus) — tests inject a fake to simulate workers
+   * @param {Object} [opts.logs] - append-log facet, overriding the storage provider's
+   * @param {Object} [opts.documents] - document facet backing the `runs` namespace
+   * @param {Object} [opts.locks] - lock facet, overriding the storage provider's
+   * @param {Object} [opts.runSummaries] - ready-made run summary repository
+   * @param {RunLedgerStore} [opts.store] - the persistence half, fully assembled
    */
   constructor(opts = {}) {
-    this._baseDir =
-      opts.baseDir || path.join(getRootDir(), config.CONTENTS_DIR, config.DATA_DIR, 'run-log');
     this._getPlatform = opts.getPlatformConfig || (() => configCache.getPlatform?.() || {});
     this._getFeatures = opts.getFeatures || (() => configCache.getFeatures?.() || {});
     this._forceEnabled = opts.forceEnabled ?? null;
@@ -144,19 +127,16 @@ export class RunLog {
       this._metaForRemote(payload)
     );
 
-    const flushIntervalMs = Number(this._runLogConfig().flushIntervalMs) || DEFAULT_FLUSH_MS;
-    this._appender = createJsonlAppender({
-      getFilePath: entry => this.runFilePath(entry.runId),
-      flushIntervalMs,
-      maxQueueSize: MAX_QUEUE,
-      component: 'RunLog'
-    });
-    this._indexAppender = createJsonlAppender({
-      getFilePath: entry => path.join(this._baseDir, 'index', `${entry.ts.slice(0, 10)}.jsonl`),
-      flushIntervalMs,
-      maxQueueSize: MAX_QUEUE,
-      component: 'RunLogIndex'
-    });
+    this._store =
+      opts.store ||
+      new RunLedgerStore({
+        baseDir: opts.baseDir,
+        flushIntervalMs: this._runLogConfig().flushIntervalMs,
+        logs: opts.logs,
+        documents: opts.documents,
+        locks: opts.locks,
+        runSummaries: opts.runSummaries
+      });
   }
 
   // ── configuration ──────────────────────────────────────────────────────
@@ -199,30 +179,32 @@ export class RunLog {
     return Number.isFinite(v) && v > 0 ? v : 64 * 1024;
   }
 
+  /**
+   * The ledger's own directory. `InteractionService` keeps its store beside
+   * it, so this stays the ledger's identity on disk even when events are
+   * persisted through a storage provider.
+   * @returns {string}
+   */
   get baseDir() {
-    return this._baseDir;
-  }
-
-  runFilePath(runId) {
-    return this._containedPath('runs', `${safeSegment(runId)}.jsonl`);
-  }
-
-  spillDir(runId) {
-    return this._containedPath('spill', safeSegment(runId));
+    return this._store.baseDir;
   }
 
   /**
-   * Join `segments` under the ledger base dir and refuse anything that would
-   * resolve outside it (defense in depth on top of `assertRunId`).
-   * @private
+   * Path of a run's event file in the ledger directory.
+   * @param {string} runId
+   * @returns {string}
    */
-  _containedPath(...segments) {
-    const root = path.resolve(this._baseDir);
-    const resolved = path.resolve(root, ...segments);
-    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
-      throw new Error('RunLog path escapes the ledger directory');
-    }
-    return resolved;
+  runFilePath(runId) {
+    return this._store.runFilePath(runId);
+  }
+
+  /**
+   * Path of a run's spill directory in the ledger directory.
+   * @param {string} runId
+   * @returns {string}
+   */
+  spillDir(runId) {
+    return this._store.spillDir(runId);
   }
 
   // ── run lifecycle ──────────────────────────────────────────────────────
@@ -292,15 +274,16 @@ export class RunLog {
       policies
     });
     if (this.isEnabled()) {
-      this._indexAppender.append({
-        ts: startedAt,
+      this._store.recordRunStart({
         runId,
         kind,
         principalId: principal.id,
+        identityMode: principal.mode || this.identityMode(),
         anonymous,
         parentRunId: parentRunId || null,
         refs,
-        status: 'running'
+        model,
+        startedAt
       });
     }
     return { runId, principal, anonymous };
@@ -345,15 +328,11 @@ export class RunLog {
    */
   async _syncSeqFromDisk(runId, entry) {
     if (!this.isEnabled()) return;
-    await withFileLock(
-      this._lockPath(runId),
-      async () => {
-        await this.flush();
-        const persisted = await this._diskLastSeq(runId);
-        if (persisted > entry.seq) entry.seq = persisted;
-      },
-      { component: 'RunLog' }
-    );
+    await this._store.withRunLock(runId, async () => {
+      await this.flush();
+      const persisted = await this._diskLastSeq(runId);
+      if (persisted > entry.seq) entry.seq = persisted;
+    });
   }
 
   /**
@@ -403,20 +382,16 @@ export class RunLog {
       return this.append(runId, type, data);
     }
 
-    return withFileLock(
-      this._lockPath(runId),
-      async () => {
-        await this.flush();
-        const persisted = await this._diskLastSeq(runId);
-        const entry =
-          this._runs.get(runId) || this._register(runId, this._newEntry({ kind, owned: false }));
-        if (persisted > entry.seq) entry.seq = persisted;
-        const event = this.append(runId, type, data);
-        await this.flush();
-        return event;
-      },
-      { component: 'RunLog' }
-    );
+    return this._store.withRunLock(runId, async () => {
+      await this.flush();
+      const persisted = await this._diskLastSeq(runId);
+      const entry =
+        this._runs.get(runId) || this._register(runId, this._newEntry({ kind, owned: false }));
+      if (persisted > entry.seq) entry.seq = persisted;
+      const event = this.append(runId, type, data);
+      await this.flush();
+      return event;
+    });
   }
 
   /**
@@ -504,14 +479,10 @@ export class RunLog {
     this._owned.delete(runId);
   }
 
-  _lockPath(runId) {
-    return this._containedPath('locks', `${safeSegment(runId)}.lock`);
-  }
-
-  /** Highest seq on disk for a run (0 when persistence is off or the run has no file). */
+  /** Highest persisted seq for a run (0 when persistence is off or it has none). */
   async _diskLastSeq(runId) {
     if (!this.isEnabled()) return 0;
-    return (await this._diskLastEvent(runId))?.seq || 0;
+    return this._store.lastSeq(runId);
   }
 
   /**
@@ -565,10 +536,12 @@ export class RunLog {
     }
 
     if (this.isEnabled()) {
-      this._appender.append(event);
+      // Fire-and-forget by design (see runLedgerStore): the persistence layer
+      // accepts the event before it does any I/O, so this stays synchronous
+      // and the queue order still matches the sequence order.
+      this._store.appendEvent(runId, event);
       if (type === RUN_LOG_EVENTS.RUN_END) {
-        this._indexAppender.append({
-          ts: event.ts,
+        this._store.recordRunEnd({
           runId,
           kind: entry.kind,
           principalId: entry.principalId,
@@ -625,7 +598,7 @@ export class RunLog {
     const meta = this._runs.get(runId);
     if (meta) return meta.ended === true;
     if (!this.isEnabled()) return false;
-    const last = await this._diskLastEvent(runId);
+    const last = await this._store.lastEvent(runId);
     return last?.type === RUN_LOG_EVENTS.RUN_END;
   }
 
@@ -687,263 +660,99 @@ export class RunLog {
   // ── persistence helpers ────────────────────────────────────────────────
 
   async flush() {
-    await this._appender.flush();
-    await this._indexAppender.flush();
+    await this._store.flush();
   }
 
   /**
-   * Spill a large payload next to the run and return a reference.
+   * Spill a large payload beside the run and return a reference.
+   *
+   * The reference keeps its `path` string on every backend: it is validated by
+   * `spillRefSchema`, copied into the tool message the model reads, and hashed
+   * into `request/header.messagesHash`.
+   *
+   * @param {string} runId
+   * @param {string} name - name for the payload; sanitized
+   * @param {string|Object} content - serialized when it is not already a string
+   * @param {string} [contentType='application/json']
    * @returns {Promise<{path:string, bytes:number, sha256:string, contentType?:string}|null>}
    */
   async spill(runId, name, content, contentType = 'application/json') {
     if (!this.isEnabled()) return null;
-    const dir = this.spillDir(runId);
-    const safeName = String(name)
-      .replace(/[^A-Za-z0-9._-]+/g, '_')
-      .slice(0, 120);
+    assertRunId(runId);
     const body = typeof content === 'string' ? content : JSON.stringify(content);
-    await fs.mkdir(dir, { recursive: true });
-    const file = this._containedPath('spill', safeSegment(runId), path.basename(safeName));
-    await fs.writeFile(file, body, 'utf8');
-    return {
-      path: path.relative(this._baseDir, file),
-      bytes: Buffer.byteLength(body, 'utf8'),
-      sha256: sha256(body),
-      contentType
-    };
-  }
-
-  async readSpill(runId, ref) {
-    // Spill files are flat under the run's spill dir, so the reference reduces
-    // to its basename; anything else is a forged reference.
-    const name = path.basename(String(ref?.path || ''));
-    if (!name || name === '.' || name === '..') {
-      throw new Error('Invalid spill reference');
-    }
-    const abs = this._containedPath('spill', safeSegment(runId), name);
-    return fs.readFile(abs, 'utf8');
+    return this._store.putSpill(runId, name, body, contentType);
   }
 
   /**
-   * Read a run's events from disk (flushes first). Returns [] when persistence
-   * is off or the run has no file.
+   * Read a spilled payload back as text.
+   * @param {string} runId
+   * @param {{path?:string}} ref - reference taken off a ledger event
+   * @returns {Promise<string>}
+   */
+  async readSpill(runId, ref) {
+    assertRunId(runId);
+    return this._store.readSpill(runId, ref);
+  }
+
+  /**
+   * Read a run's persisted events. Returns [] when persistence is off or the
+   * run has none.
    * @param {string} runId
    * @param {{afterSeq?:number, limit?:number}} [opts]
    */
   async readEvents(runId, { afterSeq = 0, limit = Infinity } = {}) {
     if (!this.isEnabled()) return [];
-    // Only flush when something is buffered: a read must never cost a disk
-    // write when the appender is idle.
-    if (this._appender.queueLength() > 0) await this.flush();
-    const file = this.runFilePath(runId);
-    try {
-      await fs.access(file);
-    } catch {
-      return [];
-    }
-    const out = [];
-    const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      let evt;
-      try {
-        evt = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      if (evt.seq > afterSeq) {
-        out.push(evt);
-        if (out.length >= limit) break;
-      }
-    }
-    return out;
+    assertRunId(runId);
+    return this._store.readEvents(runId, { afterSeq, limit });
   }
 
-  /** Highest seq known for a run (memory first, then the last persisted line). */
+  /** Highest seq known for a run (memory first, then the last persisted event). */
   async lastSeq(runId) {
     const mem = this._runs.get(runId)?.seq;
     if (mem) return mem;
     if (!this.isEnabled()) return 0;
-    return (await this._diskLastEvent(runId))?.seq || 0;
+    return this._store.lastSeq(runId);
   }
 
   /**
-   * The run's `run/start` event from disk (the first line), without flushing
-   * or reading the rest of the file. `null` when persistence is off or the
-   * run has no file.
+   * The run's `run/start` event as persisted, without reading the rest of it.
+   * `null` when persistence is off or the run has none.
+   * @param {string} runId
+   * @returns {Promise<Object|null>}
    */
   async readStart(runId) {
     if (!this.isEnabled()) return null;
-    const file = this.runFilePath(runId);
-    let first = await this._readFirstLine(file);
-    if (first === null && this._appender.queueLength() > 0) {
-      // The start may still sit in the buffer.
-      await this.flush();
-      first = await this._readFirstLine(file);
-    }
-    if (!first) return null;
-    try {
-      const evt = JSON.parse(first);
-      return evt?.type === RUN_LOG_EVENTS.RUN_START ? evt : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async _readFirstLine(file) {
-    let handle;
-    try {
-      handle = await fs.open(file, 'r');
-    } catch (err) {
-      if (err.code === 'ENOENT') return null;
-      throw err;
-    }
-    try {
-      const chunks = [];
-      const buf = Buffer.alloc(16 * 1024);
-      let position = 0;
-      for (;;) {
-        const { bytesRead } = await handle.read(buf, 0, buf.length, position);
-        if (bytesRead === 0) break;
-        const text = buf.toString('utf8', 0, bytesRead);
-        const nl = text.indexOf('\n');
-        if (nl >= 0) {
-          chunks.push(text.slice(0, nl));
-          return chunks.join('');
-        }
-        chunks.push(text);
-        position += bytesRead;
-      }
-      return chunks.length ? chunks.join('') : null;
-    } finally {
-      await handle.close();
-    }
+    assertRunId(runId);
+    return this._store.readStart(runId);
   }
 
   /**
-   * The last complete event on disk, read from the file's tail (the last
-   * 64 KiB, growing backwards when a line is longer). Flushes first only when
-   * the appender holds buffered events.
-   * @private
-   */
-  async _diskLastEvent(runId) {
-    if (this._appender.queueLength() > 0) await this.flush();
-    const file = this.runFilePath(runId);
-    let handle;
-    try {
-      handle = await fs.open(file, 'r');
-    } catch (err) {
-      if (err.code === 'ENOENT') return null;
-      throw err;
-    }
-    try {
-      const { size } = await handle.stat();
-      let span = Math.min(size, 64 * 1024);
-      for (;;) {
-        const buf = Buffer.alloc(span);
-        await handle.read(buf, 0, span, size - span);
-        const lines = buf
-          .toString('utf8')
-          .split('\n')
-          .filter(l => l.trim());
-        // The first line of the chunk may be cut; use it only when the chunk
-        // starts at the beginning of the file.
-        const usable = span === size ? lines : lines.slice(1);
-        for (let i = usable.length - 1; i >= 0; i--) {
-          try {
-            return JSON.parse(usable[i]);
-          } catch {
-            /* a partial line: keep looking backwards */
-          }
-        }
-        if (span >= size) return null;
-        span = Math.min(size, span * 4);
-      }
-    } finally {
-      await handle.close();
-    }
-  }
-
-  /**
-   * List runs from the per-day index. Anonymous runs are never listed.
+   * List runs, newest first. Anonymous runs are never listed.
+   *
+   * The `runs` namespace is the index; runs that predate it are still read out
+   * of the legacy per-day index files.
+   *
    * @param {{from?:string|Date, to?:string|Date, kind?:string, principalId?:string, limit?:number}} [opts]
+   * @returns {Promise<Object[]>}
    */
   async listRuns({ from, to, kind, principalId, limit = 100 } = {}) {
     if (!this.isEnabled()) return [];
     await this.flush();
-    const dir = path.join(this._baseDir, 'index');
-    let files;
-    try {
-      files = (await fs.readdir(dir)).filter(f => f.endsWith('.jsonl')).sort();
-    } catch {
-      return [];
-    }
-    const fromDay = from ? new Date(from).toISOString().slice(0, 10) : null;
-    const toDay = to ? new Date(to).toISOString().slice(0, 10) : null;
-    const byRun = new Map();
-    const deleted = new Set();
-    for (const f of files) {
-      const day = f.slice(0, 10);
-      if (fromDay && day < fromDay) continue;
-      if (toDay && day > toDay) continue;
-      const rl = createInterface({
-        input: createReadStream(path.join(dir, f), 'utf8'),
-        crlfDelay: Infinity
-      });
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        let e;
-        try {
-          e = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (e.deleted) {
-          deleted.add(e.runId);
-          byRun.delete(e.runId);
-          continue;
-        }
-        if (e.anonymous) continue;
-        if (deleted.has(e.runId)) continue;
-        const prev = byRun.get(e.runId) || {};
-        byRun.set(e.runId, { ...prev, ...e, startedAt: prev.startedAt || e.ts });
-      }
-    }
-    let runs = [...byRun.values()];
-    if (kind) runs = runs.filter(r => r.kind === kind);
-    if (principalId) runs = runs.filter(r => r.principalId === principalId);
-    runs.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
-    return runs.slice(0, limit);
+    return this._store.listRuns({ from, to, kind, principalId, limit });
   }
 
   /**
-   * Delete a run with cascade: run file, spill dir, index tombstone, hooks.
+   * Delete a run with cascade: its events, its spilled payloads, its summary,
+   * and any registered cascade hooks.
+   * @param {string} runId
    * @returns {Promise<{runId:string, deleted:boolean, cascaded:string[]}>}
    */
   async deleteRun(runId) {
     assertRunId(runId);
     const cascaded = await this._cascadeDelete(runId);
     if (!this.isEnabled()) return { runId, deleted: false, cascaded };
-    await this._appender.withWriteLock(async () => {
-      await this._appender.drainToDisk().catch(() => {});
-      let deleted = false;
-      try {
-        await fs.unlink(this.runFilePath(runId));
-        deleted = true;
-        cascaded.push('run-file');
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-      try {
-        await fs.rm(this.spillDir(runId), { recursive: true, force: true });
-        cascaded.push('spill');
-      } catch {
-        /* ignore */
-      }
-      this._indexAppender.append({ ts: new Date().toISOString(), runId, deleted: true });
-      await this._indexAppender.flush();
-      return deleted;
-    });
+    const { removed } = await this._store.deleteRun(runId);
+    cascaded.push(...removed);
     return { runId, deleted: true, cascaded };
   }
 
@@ -973,56 +782,22 @@ export class RunLog {
   }
 
   /**
-   * Remove runs older than `retentionDays`: run file, spill dir and the same
-   * cascade `deleteRun` performs (delete hooks, e.g. the run's interactions);
-   * index files older than the cutoff are removed as well.
+   * Remove runs older than `retentionDays`: their events, their spilled
+   * payloads, their summary, and the same cascade `deleteRun` performs
+   * (delete hooks, e.g. the run's interactions). Legacy index files older
+   * than the cutoff are removed as well.
+   *
+   * @param {number} retentionDays - days to keep; `<= 0` disables the sweep
+   * @returns {Promise<{removed:number}>}
    */
   async cleanup(retentionDays) {
     if (!Number.isFinite(retentionDays) || retentionDays <= 0) return { removed: 0 };
     if (!this.isEnabled()) return { removed: 0 };
     const cutoff = Date.now() - retentionDays * DAY_MS;
-    let removed = 0;
-    await this._appender.withWriteLock(async () => {
-      await this._appender.drainToDisk().catch(() => {});
-      const runsDir = path.join(this._baseDir, 'runs');
-      let files = [];
-      try {
-        files = await fs.readdir(runsDir);
-      } catch {
-        return;
-      }
-      for (const f of files) {
-        if (!f.endsWith('.jsonl')) continue;
-        const abs = path.join(runsDir, f);
-        try {
-          const st = await fs.stat(abs);
-          if (st.mtimeMs < cutoff) {
-            const runId = f.replace(/\.jsonl$/, '');
-            await fs.unlink(abs);
-            await fs.rm(path.join(this._baseDir, 'spill', runId), {
-              recursive: true,
-              force: true
-            });
-            if (isValidRunId(runId)) await this._cascadeDelete(runId);
-            removed++;
-          }
-        } catch {
-          /* ignore individual failures */
-        }
-      }
-      const indexDir = path.join(this._baseDir, 'index');
-      try {
-        const idx = await fs.readdir(indexDir);
-        const cutoffDay = new Date(cutoff).toISOString().slice(0, 10);
-        for (const f of idx) {
-          if (f.endsWith('.jsonl') && f.slice(0, 10) < cutoffDay) {
-            await fs.unlink(path.join(indexDir, f)).catch(() => {});
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    });
+    const { removed, cascadeIds } = await this._store.cleanup(cutoff);
+    for (const runId of cascadeIds) {
+      if (isValidRunId(runId)) await this._cascadeDelete(runId);
+    }
     if (removed > 0) logger.info('RunLog retention cleanup', { component: 'RunLog', removed });
     return { removed };
   }
@@ -1051,8 +826,7 @@ export class RunLog {
     this._unrespondMeta?.();
     this._unrespondMeta = null;
     this._owned.clear();
-    this._appender.stop();
-    this._indexAppender.stop();
+    this._store.stop();
     await this.flush();
   }
 }

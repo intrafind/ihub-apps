@@ -1,11 +1,10 @@
 # Storage Providers
 
 The storage abstraction is the seam between runtime data and where that data
-lives. Today everything runtime writes — run ledgers, workflow state,
-interactions — is filesystem code spread across the services that own it. The
-abstraction pulls that behaviour behind one provider interface so a later
-release can put the same data in SQLite, PostgreSQL or OpenSearch without
-touching the services.
+lives. Run ledgers, workflow state, interactions and stored chats each used to
+be filesystem code inside the service that owned it. They now go through one
+provider interface, so a later release can put the same data in SQLite,
+PostgreSQL or OpenSearch without touching the services.
 
 Two kinds of data, two facets: the [run ledger](run-ledger.md) is an
 append-only stream of events for a run that is happening right now, while
@@ -15,13 +14,50 @@ earlier persistence design; the provider therefore exposes an **AppendLog** and
 a **DocumentStore** as separate facets, plus the two primitives a multi-instance
 deployment needs later (**ChangeNotifier**, **LockManager**).
 
-**Durable chats are the first consumer.** `server/storage/bootstrap.js` brings
-the provider up in every worker at startup, and `ChatRepository` keeps stored
-conversations in the `chats` and `chat-messages` namespaces — see
-[Chat Persistence](chat-persistence.md), which is off by default. Everything
-else — run ledgers, workflow state, interactions — is still filesystem code
-inside the service that owns it, and a provider that fails to initialize simply
-leaves those features behaving as they did before. The full plan is in
+## Who uses it
+
+`server/storage/bootstrap.js` brings the provider up in every worker at
+startup. Durable chats were the first consumer; the runtime stores followed.
+
+| Namespace                   | Holds                                                       | Owner id                    | Documented in                            |
+| --------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------- |
+| `chats`, `chat-messages`    | stored conversations and their transcripts (off by default)  | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
+| `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
+| `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
+| `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
+| `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
+| `runtime-imports`           | markers saying a one-time legacy import has already run       | –                           | [Run Ledger](run-ledger.md)              |
+
+`integration-conversations` is the smallest of them and the least visible: two
+fields per chat (the remote conversation id and the id of the last answer,
+which the next message threads onto) that used to live in a per-worker `Map`.
+Storing them means a chat keeps one iAssistant conversation across a restart
+and across workers, instead of quietly starting a second one. Writes are
+coalesced on a timer, because that state is updated on every streamed chunk
+and a document write on the streaming path is not acceptable.
+
+Append-log streams are named `run:<runId>` and carry a run's events, with its
+spilled payloads as blobs beside them. Leases are taken on `chat:<id>` for a
+chat's read-modify-write, on `interaction:<id>` for the answer critical
+section, on `runlog:<runId>` while a recovering worker continues a run's
+sequence, and on `runtime-import:<store>` for the one-time legacy imports.
+
+**A provider that fails to initialize is not fatal to any of them.** Each
+consumer keeps the behaviour and the on-disk layout it had before the move:
+the ledger writes `contents/data/run-log/` as it always did, workflow state
+stays in its `<executionId>/latest.json` directories, interactions fall back to
+`interactions.json` plus claim markers, iAssistant conversation state stays
+in memory, and durable chats — which have no earlier layout — are simply off.
+That is a supported state, not a degraded one.
+
+One namespace shares a directory with the files it replaces: `workflow-state`
+documents (`contents/data/workflow-state/<executionId>.json`) sit beside the
+legacy `<executionId>/latest.json` checkpoint directories that are already
+there, and the two are read as a union with the document winning. The one-time
+imports that populate these namespaces never delete what they read — see
+[Upgrading an installation that already has a ledger](run-ledger.md#upgrading-an-installation-that-already-has-a-ledger).
+
+The full plan is in
 `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`.
 
 ## The four facets

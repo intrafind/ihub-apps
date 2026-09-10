@@ -8,8 +8,7 @@
  *    run's ledger, notify listeners (channels decide how to deliver).
  *  - answer(): validate the answer (options, approver groups, expiry), persist,
  *    append `interaction/answered`, resolve any awaiting promise.
- *  - Durable pending store (`contents/data/run-log/interactions.json`,
- *    debounced atomic writes) so a paused run survives a restart. Pending
+ *  - Durable pending store so a paused run survives a restart. Pending
  *    interactions are persisted whenever the service is used — independently
  *    of the run-ledger feature flag, which only governs the event ledger.
  *  - Cascade: deleting a run removes its interactions (registered as a RunLog
@@ -17,13 +16,31 @@
  *  - Cluster: every mutation is published on the cluster bus so all workers
  *    share one view (a checkpoint raised on worker A is listed and answered on
  *    worker B); each worker persists the converged snapshot. An answer is
- *    accepted by exactly one worker: before the handlers run, the answering
- *    worker creates an exclusive claim marker on the shared filesystem
- *    (`interaction-claims/<id>.json`), the one compare-and-set the workers
- *    have in common, so a lagging replica can never resume the same run twice.
+ *    accepted by exactly one worker, so a lagging replica can never resume the
+ *    same run twice.
  *
- * C0 ships the skeleton (store + lifecycle + one answer path). C5 moves the
- * chat clarification, workflow `human` node and agent approvals onto it.
+ * ## Where the records live
+ *
+ * With a storage provider the records are documents in the `interactions`
+ * namespace, owned by the run's principal, and an answer runs inside
+ * `locks.withLock('interaction:<id>')`. Without one — a provider that failed
+ * to start, or a test constructing this class directly — everything falls
+ * back to the layout this service has always used:
+ * `contents/data/run-log/interactions.json` written through a debounced
+ * atomic whole-file store, plus exclusive claim markers under
+ * `interaction-claims/`. Both are supported states. The mode is decided once,
+ * at the first load, and never mixed: a process that split its records across
+ * two stores would answer some interactions twice and lose others.
+ *
+ * ## Answering exactly once
+ *
+ * A lease cannot say "already answered": `withLock` releases the moment the
+ * critical section settles, where the claim marker it replaces stayed on disk
+ * as a tombstone. So the decisive check is the *shared record* read at the top
+ * of the critical section, and a settled document is the tombstone — kept for
+ * twice the in-memory grace period, then swept. Swapping the lock in without
+ * moving the record into shared storage would have regressed the
+ * compare-and-set, which is why both moved in the same change.
  *
  * @module services/loop/InteractionService
  */
@@ -34,6 +51,8 @@ import crypto from 'crypto';
 import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
+import { isValidId } from '../../utils/pathSecurity.js';
+import { getStorage } from '../../storage/bootstrap.js';
 import { resolveActorId, isAdminUser } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -61,6 +80,99 @@ const SETTLED_RETENTION_MS = 60 * 1000;
 /** Directory (next to the pending store) holding the exclusive answer claim markers. */
 export const CLAIM_DIR_NAME = 'interaction-claims';
 
+/** Namespace holding one document per interaction (pending, or recently settled). */
+export const INTERACTIONS_NAMESPACE = 'interactions';
+
+/** Namespace the runtime stores keep their "this import already ran" markers in. */
+export const IMPORT_STATE_NAMESPACE = 'runtime-imports';
+
+/** Key of the interaction import marker within {@link IMPORT_STATE_NAMESPACE}. */
+export const IMPORT_STATE_KEY = 'interactions';
+
+/**
+ * Lease options for the answer critical section.
+ *
+ * `ttlMs` matches {@link ANSWER_CLAIM_TTL_MS}: the marker file this lease
+ * replaces carried exactly that lifetime. `waitMs` is deliberately tiny
+ * because a contended answer has always failed fast with `ANSWER_IN_PROGRESS`
+ * rather than queueing behind a handler that is resuming a workflow — a
+ * client made to wait would only be told `NOT_PENDING` seconds later. It is
+ * not zero because the lock manager rejects a non-positive budget, and because
+ * a lease released between two attempts deserves one more try.
+ */
+const ANSWER_LOCK_OPTIONS = { ttlMs: ANSWER_CLAIM_TTL_MS, waitMs: 50 };
+
+/** Documents fetched per `list` call while paging the interactions namespace. */
+const SCAN_PAGE_SIZE = 200;
+
+/**
+ * Hard ceiling on how many documents one namespace scan considers.
+ *
+ * The namespace only ever holds pending and recently settled interactions, so
+ * the bound sits far above any healthy installation. When it does truncate,
+ * that is logged: a silently short list reads as "that is all there is".
+ */
+export const MAX_SCAN_INTERACTIONS = 20_000;
+
+/** Hard bound on how many legacy pending interactions one import carries over. */
+const MAX_IMPORT_INTERACTIONS = 5000;
+
+/**
+ * Lease for the whole legacy import. Long, because the import is the critical
+ * section: a sibling worker that cannot take the lock skips the import rather
+ * than racing it.
+ */
+const IMPORT_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 1000 };
+
+/**
+ * A facet of a storage provider, or null when there is no provider or the
+ * provider does not offer that facet.
+ *
+ * @param {Object|null} provider - Storage provider, or null.
+ * @param {string} facet - Facet name (`documents`, `locks`).
+ * @returns {Object|null} The facet, or null.
+ */
+function readFacet(provider, facet) {
+  try {
+    return provider?.[facet] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Document key for an interaction id.
+ *
+ * Most ids are generated here (`int-<uuid>`, `ckpt-<uuid>`) and are already
+ * usable as keys, but the chat clarification id embeds the client-supplied
+ * chatId, so an id can be longer than the document store allows or carry
+ * characters it refuses. Those are hashed rather than rejected: `raise()` is
+ * on the critical path of a chat turn, and an id the store cannot spell must
+ * not be able to fail one.
+ *
+ * @param {string} id - Interaction id.
+ * @returns {string} A key the document store accepts.
+ */
+export function interactionDocumentKey(id) {
+  if (isValidId(id)) return id;
+  const digest = crypto.createHash('sha256').update(String(id), 'utf8').digest('hex');
+  return `k-${digest.slice(0, 40)}`;
+}
+
+/**
+ * Whether a parsed value can be treated as an interaction record.
+ *
+ * Deliberately loose — a record written by an older release must stay
+ * readable — but strict enough to skip anything else the namespace holds.
+ *
+ * @param {unknown} value - Parsed JSON.
+ * @returns {boolean} True when the value can be treated as an interaction.
+ */
+function isInteractionRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return typeof value.id === 'string' && value.id.length > 0 && typeof value.status === 'string';
+}
+
 export class InteractionError extends Error {
   constructor(message, code, status = 400) {
     super(message);
@@ -74,8 +186,12 @@ export class InteractionService extends EventEmitter {
   /**
    * @param {Object} [opts]
    * @param {import('./RunLog.js').RunLog} [opts.runLog]
-   * @param {string} [opts.storePath] - override pending-store file (tests)
+   * @param {string} [opts.storePath] - override pending-store file (tests; legacy layout only)
    * @param {boolean} [opts.persist] - disable the durable store and claim markers (tests; default true)
+   * @param {import('../../storage/DocumentStore.js').DocumentStore|null} [opts.documents] -
+   *   document facet; null forces the legacy file layout. Omitted entirely, the
+   *   bootstrapped provider is used when one is up.
+   * @param {import('../../storage/LockManager.js').LockManager|null} [opts.locks] - lock facet
    * @param {() => number} [opts.now]
    * @param {{publish: Function, subscribe: Function}} [opts.bus] - cluster bus (default: clusterBus)
    */
@@ -95,6 +211,17 @@ export class InteractionService extends EventEmitter {
       saveIntervalMs: opts.saveIntervalMs ?? 500,
       component: 'InteractionService'
     });
+    /**
+     * Document and lock facets. Passing either (even as null) pins the mode;
+     * otherwise the bootstrapped provider is resolved at the first load, once
+     * — see the module header on why the two layouts are never mixed.
+     * @type {Object|null}
+     */
+    this._documents = opts.documents ?? null;
+    /** @type {Object|null} */
+    this._locks = opts.locks ?? null;
+    /** @type {boolean} the caller chose the mode; do not consult the bootstrap */
+    this._storagePinned = 'documents' in opts || 'locks' in opts;
     /** @type {Map<string, Object>} in-memory mirror (id → interaction) */
     this._byId = new Map();
     this._settledRetentionMs = opts.settledRetentionMs ?? SETTLED_RETENTION_MS;
@@ -137,7 +264,24 @@ export class InteractionService extends EventEmitter {
 
   async _loadStore() {
     if (!this._persist()) return;
+    this._resolveStorage();
     try {
+      if (this._documents) {
+        // The import runs before the first read so that a checkpoint raised by
+        // the previous release is in the mirror from the very first request,
+        // not only after the next sweep. It is carrying old data over, so a
+        // failure must not cost us the records already in the namespace.
+        try {
+          await this._importLegacyPending();
+        } catch (err) {
+          logger.warn('InteractionService: legacy interaction import failed', {
+            component: 'InteractionService',
+            error: err.message
+          });
+        }
+        await this._loadFromNamespace();
+        return;
+      }
       const data = await this._store.load();
       for (const [id, it] of Object.entries(data.interactions || {})) {
         if (!this._byId.has(id)) this._byId.set(id, it);
@@ -146,6 +290,247 @@ export class InteractionService extends EventEmitter {
       logger.warn('InteractionService: failed to load pending store', {
         component: 'InteractionService',
         error: err.message
+      });
+    }
+  }
+
+  /**
+   * Pick the storage mode for the lifetime of this service.
+   *
+   * Called from the one-shot load rather than the constructor: the
+   * process-wide singleton is built when this module is imported, long before
+   * `bootstrapStorage()` has resolved a provider.
+   * @private
+   */
+  _resolveStorage() {
+    if (this._storagePinned) return;
+    this._storagePinned = true;
+    const provider = getStorage();
+    this._documents = readFacet(provider, 'documents');
+    this._locks = readFacet(provider, 'locks');
+  }
+
+  /**
+   * Walk every interaction document in the namespace, oldest key first.
+   *
+   * `DocumentStore.list` is cursor-paged, so every whole-namespace question
+   * this service asks — load, refresh, sweep, run cascade — has to page. The
+   * scan is bounded and reports truncation instead of quietly stopping.
+   *
+   * @param {(record: Object) => void|Promise<void>} visit - Called per record.
+   * @param {Object} [opts]
+   * @param {number} [opts.max] - Bound on records visited.
+   * @returns {Promise<{count: number, truncated: boolean}>}
+   * @private
+   */
+  async _pageInteractions(visit, { max = MAX_SCAN_INTERACTIONS } = {}) {
+    if (!this._documents) return { count: 0, truncated: false };
+    let cursor;
+    let count = 0;
+    do {
+      const page = await this._documents.list(INTERACTIONS_NAMESPACE, {
+        limit: SCAN_PAGE_SIZE,
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items) {
+        if (!isInteractionRecord(doc?.data)) continue;
+        if (count >= max) return { count, truncated: true };
+        count += 1;
+        await visit(doc.data);
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    return { count, truncated: false };
+  }
+
+  /**
+   * Adopt a pending record this worker has not seen. Never overwrites a local
+   * copy: the same rule `_applyRemote` follows, so a settled interaction is
+   * not regressed by a document whose deletion has not landed yet.
+   * @private
+   */
+  _mergePending(record) {
+    if (record.status !== 'pending') return;
+    if (!this._byId.has(record.id)) this._byId.set(record.id, record);
+  }
+
+  /**
+   * Fill the mirror from the namespace. Only pending records are adopted, the
+   * same set the legacy file ever held; a settled document is a tombstone for
+   * the answer compare-and-set, not something a reader should see again.
+   * @private
+   */
+  async _loadFromNamespace() {
+    const { count, truncated } = await this._pageInteractions(record => this._mergePending(record));
+    if (truncated) {
+      logger.warn('InteractionService: interaction namespace scan hit its bound', {
+        component: 'InteractionService',
+        bound: MAX_SCAN_INTERACTIONS,
+        scanned: count
+      });
+    }
+  }
+
+  /**
+   * Re-read the namespace into the mirror.
+   *
+   * Additive on purpose: a pending record that has disappeared from the
+   * namespace is left in place rather than evicted, because a document
+   * written after the scan passed its key would look exactly the same and
+   * dropping it would lose a live interaction.
+   * @private
+   */
+  async _refreshPending() {
+    if (!this._documents) return;
+    try {
+      await this._loadFromNamespace();
+    } catch (err) {
+      // A queue listing degrades to this worker's view rather than failing.
+      logger.warn('InteractionService: could not refresh from the interactions namespace', {
+        component: 'InteractionService',
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Read the record every worker shares.
+   *
+   * @param {string} id - Interaction id.
+   * @returns {Promise<Object|null>} The shared record, or null when there is none.
+   * @private
+   */
+  async _readShared(id) {
+    if (!this._documents) return this._byId.get(id) || null;
+    const doc = await this._documents.get(INTERACTIONS_NAMESPACE, interactionDocumentKey(id));
+    if (isInteractionRecord(doc?.data)) return doc.data;
+    // No document at all: the record was never persisted (a store that could
+    // not be written — `_save` logs and carries on), or its tombstone has aged
+    // out. Both are exactly the situation a swept claim marker used to leave
+    // behind, so fall back to the local mirror as before.
+    return this._byId.get(id) || null;
+  }
+
+  /**
+   * Write one interaction document.
+   *
+   * Settled records are written too, unlike the legacy file which deleted
+   * them: the settled document is the tombstone the answer compare-and-set
+   * reads. `_scheduleEviction` and `_sweepSettled` remove it once no lagging
+   * replica could still act on it.
+   *
+   * @param {Object} interaction - The record to store.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _writeDocument(interaction) {
+    const principalId = interaction.source?.principalId;
+    const ownerId = typeof principalId === 'string' && principalId.length > 0 ? principalId : null;
+    await this._documents.put(
+      INTERACTIONS_NAMESPACE,
+      interactionDocumentKey(interaction.id),
+      interaction,
+      { ownerId }
+    );
+  }
+
+  /**
+   * Remove one interaction document. Never throws: every caller is
+   * housekeeping that must not take a request down with it.
+   * @private
+   */
+  async _removeDocument(id) {
+    if (!this._documents) return;
+    try {
+      await this._documents.delete(INTERACTIONS_NAMESPACE, interactionDocumentKey(id));
+    } catch (err) {
+      logger.debug('InteractionService: could not remove an interaction document', {
+        component: 'InteractionService',
+        interactionId: id,
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Carry the pending interactions of the previous release into the namespace.
+   *
+   * Safe on every boot: a marker records that it ran, ids that already have a
+   * document are left alone, and the legacy file is never touched — it stays
+   * as it is until a later release removes it. The marker matters more here
+   * than for the other runtime stores: without it, an interaction answered
+   * after the import would be re-imported as pending on the next boot and
+   * could resume its run a second time.
+   * @private
+   */
+  async _importLegacyPending() {
+    const documents = this._documents;
+    const marker = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
+    if (marker?.data?.completedAt) return;
+
+    const run = async () => {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(await fs.readFile(this._storePath, 'utf8'));
+      } catch {
+        // No legacy file, or one that is not readable JSON: nothing to carry.
+      }
+      const candidates =
+        parsed && typeof parsed === 'object' ? Object.values(parsed.interactions || {}) : [];
+      const pending = candidates.filter(
+        record => isInteractionRecord(record) && record.status === 'pending'
+      );
+      const truncated = pending.length > MAX_IMPORT_INTERACTIONS;
+      const selected = truncated ? pending.slice(0, MAX_IMPORT_INTERACTIONS) : pending;
+
+      let imported = 0;
+      let skipped = 0;
+      for (const record of selected) {
+        try {
+          const key = interactionDocumentKey(record.id);
+          if (await documents.get(INTERACTIONS_NAMESPACE, key)) {
+            skipped += 1;
+            continue;
+          }
+          await this._writeDocument(record);
+          imported += 1;
+        } catch (err) {
+          skipped += 1;
+          logger.warn('InteractionService: could not import a legacy interaction', {
+            component: 'InteractionService',
+            interactionId: record.id,
+            error: err.message
+          });
+        }
+      }
+
+      await documents.put(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY, {
+        completedAt: new Date(this._now()).toISOString(),
+        imported,
+        skipped,
+        truncated,
+        candidates: pending.length
+      });
+      if (pending.length > 0) {
+        logger.info('Imported legacy pending interactions into the interactions namespace', {
+          component: 'InteractionService',
+          imported,
+          skipped,
+          truncated,
+          candidates: pending.length,
+          ...(truncated ? { bound: MAX_IMPORT_INTERACTIONS } : {})
+        });
+      }
+    };
+
+    if (!this._locks) return run();
+    try {
+      await this._locks.withLock('runtime-import:interactions', run, IMPORT_LOCK_OPTIONS);
+    } catch (err) {
+      if (err?.code !== 'LOCK_TIMEOUT') throw err;
+      // A sibling worker is importing the same records; waiting adds nothing.
+      logger.debug('InteractionService: legacy interaction import already running elsewhere', {
+        component: 'InteractionService'
       });
     }
   }
@@ -164,6 +549,26 @@ export class InteractionService extends EventEmitter {
       }
     }
     if (!this._persist()) return;
+    if (this._documents) {
+      // A replicated mutation was already written by the worker that made it.
+      // Writing it again would be a redundant round-trip, and could race that
+      // worker's eviction of the same document back into existence.
+      if (!replicate) return;
+      // Best effort, exactly as the debounced file store is: a store that
+      // cannot be written must not fail the run that raised the interaction.
+      // The one place durability is load-bearing — the answer compare-and-set
+      // — reads the record back instead, and fails loudly there.
+      try {
+        await this._writeDocument(interaction);
+      } catch (err) {
+        logger.warn('InteractionService: could not persist interaction', {
+          component: 'InteractionService',
+          interactionId: interaction.id,
+          error: err.message
+        });
+      }
+      return;
+    }
     const data = await this._store.load();
     if (interaction.status === 'pending') {
       data.interactions[interaction.id] = interaction;
@@ -186,7 +591,11 @@ export class InteractionService extends EventEmitter {
     if (interaction.status === 'pending') return;
     const timer = setTimeout(() => {
       this._evictTimers.delete(interaction.id);
-      if (this._byId.get(interaction.id)?.status !== 'pending') this._byId.delete(interaction.id);
+      if (this._byId.get(interaction.id)?.status === 'pending') return;
+      this._byId.delete(interaction.id);
+      // The settled document is the tombstone the answer compare-and-set
+      // reads; it stops being useful at the same moment the memory copy does.
+      void this._removeDocument(interaction.id);
     }, this._settledRetentionMs);
     if (typeof timer.unref === 'function') timer.unref();
     this._evictTimers.set(interaction.id, timer);
@@ -248,7 +657,21 @@ export class InteractionService extends EventEmitter {
         n++;
       }
     }
-    if (this._persist()) {
+    if (this._persist() && this._documents) {
+      // The mirror only holds what this worker saw, so the cascade pages the
+      // namespace as well — the same reason the file rewrite below walks the
+      // whole store rather than the ids just deleted from memory.
+      const { truncated } = await this._pageInteractions(async record => {
+        if (record.runId === runId) await this._removeDocument(record.id);
+      });
+      if (truncated) {
+        logger.warn('InteractionService: run cascade hit the namespace scan bound', {
+          component: 'InteractionService',
+          runId,
+          bound: MAX_SCAN_INTERACTIONS
+        });
+      }
+    } else if (this._persist()) {
       const data = await this._store.load();
       for (const [id, it] of Object.entries(data.interactions || {})) {
         if (it.runId === runId) delete data.interactions[id];
@@ -337,9 +760,28 @@ export class InteractionService extends EventEmitter {
     return this._byId.get(id) || null;
   }
 
-  /** List pending interactions, optionally filtered. */
+  /**
+   * List pending interactions, optionally filtered.
+   *
+   * Without a `runId` or `chatId` this is a whole-installation query — the
+   * approvals queue — so it pages the shared namespace first instead of
+   * trusting that every raise reached this worker over the cluster bus. The
+   * `approverGroups` / `principalId` filters stay where they are: they are
+   * post-filters, and applying them to a single page of a cursor-paged list
+   * would silently drop matches beyond it. Run- and chat-scoped calls sit on
+   * the per-turn paths and keep answering from the mirror.
+   *
+   * @param {Object} [filter]
+   * @param {string} [filter.runId]
+   * @param {string} [filter.kind]
+   * @param {string[]} [filter.approverGroups]
+   * @param {string} [filter.principalId]
+   * @param {string} [filter.chatId]
+   * @returns {Promise<Object[]>} Pending interactions, oldest first.
+   */
   async listPending({ runId, kind, approverGroups, principalId, chatId } = {}) {
     await this._ensureLoaded();
+    if (!runId && !chatId) await this._refreshPending();
     let items = [...this._byId.values()].filter(i => i.status === 'pending');
     if (runId) items = items.filter(i => i.runId === runId);
     if (kind) items = items.filter(i => i.kind === kind);
@@ -531,41 +973,10 @@ export class InteractionService extends EventEmitter {
     // The actor is recorded the way the run's principal is (a pseudonymized
     // ledger never carries a raw user id).
     const by = await this._actorId(interaction, user);
-    // One answer at a time, three layers from cheapest to decisive: this
-    // worker's in-flight set (synchronous, so two requests here cannot both
-    // pass the pending check), the claim replicated from another worker, and
-    // the exclusive claim marker on the shared filesystem — the only check
-    // that is atomic across workers, taken before any handler runs.
-    const liveClaim =
-      interaction.claim &&
-      interaction.claim.pid !== this._pid &&
-      this._now() - new Date(interaction.claim.at).getTime() < ANSWER_CLAIM_TTL_MS;
-    if (liveClaim || this._answering.has(id)) {
-      throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
-    }
-    this._answering.add(id);
-    let claimFile = null;
-    try {
-      claimFile = await this._acquireAnswerClaim(id);
-      // A settle replicated from another worker may have landed meanwhile.
-      const current = this._byId.get(id);
-      if (!current || current.status !== 'pending') {
-        throw new InteractionError(
-          `Interaction is ${current?.status || 'gone'}`,
-          'NOT_PENDING',
-          409
-        );
-      }
-    } catch (err) {
-      this._answering.delete(id);
-      await this._releaseAnswerClaim(claimFile); // held only if the pending re-check failed
-      throw err;
-    }
     const claimed = {
       ...interaction,
       claim: { pid: this._pid, at: new Date(this._now()).toISOString() }
     };
-    this._byId.set(id, claimed);
     const full = interactionAnswerSchema.parse({
       value: answer.value ?? answer.decision ?? (answer.skipped ? null : undefined),
       data: answer.data,
@@ -583,24 +994,63 @@ export class InteractionService extends EventEmitter {
       answer: full,
       updatedAt: full.at
     };
-    try {
-      await this._save(claimed);
-      // Let the owner of the paused run take the answer first; a throwing
-      // handler releases the claim and leaves the interaction pending so the
-      // human can try again.
-      for (const handler of this._answerHandlers) {
-        await handler(answered, { user, channel });
+    // One answer at a time, cheapest check first: this worker's in-flight set
+    // (synchronous, so two requests here cannot both pass the pending check)
+    // and the claim replicated from another worker. Both are advisory; the
+    // critical section below is what decides.
+    const liveClaim =
+      interaction.claim &&
+      interaction.claim.pid !== this._pid &&
+      this._now() - new Date(interaction.claim.at).getTime() < ANSWER_CLAIM_TTL_MS;
+    if (liveClaim || this._answering.has(id)) {
+      throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
+    }
+    this._answering.add(id);
+
+    /**
+     * The critical section, run under the shared lease.
+     *
+     * Its first act is the compare-and-set: re-read the record every worker
+     * shares and refuse anything that is no longer pending — a settle
+     * replicated from another worker, or one this worker never heard about.
+     */
+    const runAnswer = async () => {
+      const current = await this._readShared(id);
+      if (!current || current.status !== 'pending') {
+        throw new InteractionError(
+          `Interaction is ${current?.status || 'gone'}`,
+          'NOT_PENDING',
+          409
+        );
       }
-      await this._save(answered);
+      try {
+        await this._save(claimed);
+        // Let the owner of the paused run take the answer first; a throwing
+        // handler leaves the interaction pending so the human can try again.
+        for (const handler of this._answerHandlers) {
+          await handler(answered, { user, channel });
+        }
+        await this._save(answered);
+      } catch (err) {
+        if (this._byId.get(id)?.status === 'pending') await this._save({ ...unclaimed });
+        throw err;
+      }
+    };
+
+    let claimFile = null;
+    try {
+      claimFile = await this._acquireAnswerClaim(id);
+      await this._withAnswerLock(id, runAnswer);
     } catch (err) {
-      if (this._byId.get(id)?.status === 'pending') await this._save({ ...unclaimed });
       await this._releaseAnswerClaim(claimFile);
       throw err;
     } finally {
       this._answering.delete(id);
     }
-    // The marker now says "answered": a worker whose replica still shows
-    // pending gets NOT_PENDING instead of a second resume.
+    // Legacy layout: the marker now says "answered", so a worker whose replica
+    // still shows pending gets NOT_PENDING instead of a second resume. On the
+    // provider the settled document `_save(answered)` just wrote is that
+    // tombstone, and this is a no-op.
     await this._settleAnswerClaim(claimFile, id, full.at);
     try {
       await this.runLog.appendRecovered(interaction.runId, RUN_LOG_EVENTS.INTERACTION_ANSWERED, {
@@ -661,10 +1111,17 @@ export class InteractionService extends EventEmitter {
 
   /**
    * Expire every pending interaction whose policy.expiresAt has passed, and
-   * drop answer claim markers old enough to be of no use any more.
+   * drop the claim markers (or settled documents) that are of no use any more.
+   *
+   * The sweep runs first because it also adopts pending records this worker
+   * never saw — one raised by a worker that has since died — so they expire in
+   * this pass rather than the next.
+   *
+   * @returns {Promise<Object[]>} The interactions that were expired.
    */
   async expireOverdue() {
     await this._ensureLoaded();
+    await this._sweepSettled();
     const now = this._now();
     const out = [];
     for (const it of [...this._byId.values()]) {
@@ -676,11 +1133,81 @@ export class InteractionService extends EventEmitter {
         out.push(await this.expire(it.id));
       }
     }
-    await this._sweepAnswerClaims();
     return out;
   }
 
-  // ── answer claims (shared-filesystem CAS) ──────────────────────────────
+  /**
+   * Housekeeping for the shared namespace: adopt pending records this worker
+   * has not seen, and drop settled documents that have outlived their use as
+   * tombstones.
+   *
+   * The retention is twice the in-memory grace period — the same relationship
+   * the claim-marker sweep it replaces had to the claim TTL. A tombstone only
+   * has to outlive the replication of the answer that created it.
+   *
+   * Falls through to the claim-marker sweep in the legacy layout, and never
+   * throws: it runs on the expiry timer, ahead of work that must still happen.
+   * @private
+   */
+  async _sweepSettled() {
+    if (!this._documents) return this._sweepAnswerClaims();
+    const cutoff = this._now() - 2 * this._settledRetentionMs;
+    const stale = [];
+    try {
+      const { truncated } = await this._pageInteractions(record => {
+        if (record.status === 'pending') {
+          this._mergePending(record);
+          return;
+        }
+        const at = Date.parse(record.updatedAt || record.createdAt);
+        if (!Number.isFinite(at) || at <= cutoff) stale.push(record.id);
+      });
+      if (truncated) {
+        logger.warn('InteractionService: settled sweep hit the namespace scan bound', {
+          component: 'InteractionService',
+          bound: MAX_SCAN_INTERACTIONS
+        });
+      }
+      for (const id of stale) await this._removeDocument(id);
+    } catch (err) {
+      logger.warn('InteractionService: settled sweep failed', {
+        component: 'InteractionService',
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Run the answer critical section under the shared lease.
+   *
+   * The lease is named per interaction, never per run: a handler resumes the
+   * paused workflow from inside the critical section and a resumed workflow
+   * can raise the *next* interaction, so a per-run lease would deadlock on
+   * exactly the flow this service exists for — `withLock` is not reentrant.
+   *
+   * A `LockTimeoutError` is translated here rather than at the routes: every
+   * caller knows `InteractionError` and nothing else, so the storage error
+   * would reach a client as a 500 where a contended answer has always been a
+   * 409 `ANSWER_IN_PROGRESS`.
+   *
+   * @param {string} id - Interaction id; the lease name.
+   * @param {() => Promise<void>} fn - The critical section.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _withAnswerLock(id, fn) {
+    if (!this._locks) return fn();
+    try {
+      return await this._locks.withLock(`interaction:${id}`, fn, ANSWER_LOCK_OPTIONS);
+    } catch (err) {
+      if (err?.code === 'LOCK_TIMEOUT') {
+        throw new InteractionError('Interaction is being answered', 'ANSWER_IN_PROGRESS', 409);
+      }
+      throw err;
+    }
+  }
+
+  // ── answer claims (legacy shared-filesystem CAS) ───────────────────────
 
   _claimPath(id) {
     const safe = String(id)
@@ -692,14 +1219,16 @@ export class InteractionService extends EventEmitter {
   /**
    * Take the exclusive answer claim for `id`: creating the marker file is
    * atomic on the shared filesystem, so exactly one worker wins even when its
-   * replica of the interaction lags. Resolves the marker path (or null when
-   * persistence is off — a single process, where `_answering` suffices).
+   * replica of the interaction lags. Resolves the marker path, or null when
+   * there is nothing to claim — persistence is off (a single process, where
+   * `_answering` suffices), or the provider layout is in use and
+   * {@link InteractionService#_withAnswerLock} holds the lease instead.
    *
    * @throws {InteractionError} ANSWER_IN_PROGRESS (live claim) / NOT_PENDING (already answered)
    * @private
    */
   async _acquireAnswerClaim(id) {
-    if (!this._persist()) return null;
+    if (!this._persist() || this._documents) return null;
     const file = this._claimPath(id);
     const payload = JSON.stringify({
       interactionId: id,
@@ -744,7 +1273,7 @@ export class InteractionService extends EventEmitter {
 
   /** Remove a claim marker (a failed handler, a cancel / expiry, a deleted run). */
   async _releaseAnswerClaim(file) {
-    if (!file || !this._persist()) return;
+    if (!file || !this._persist() || this._documents) return;
     try {
       await removeIfExists(file);
     } catch (err) {
@@ -762,7 +1291,7 @@ export class InteractionService extends EventEmitter {
    * @private
    */
   async _sweepAnswerClaims() {
-    if (!this._persist()) return;
+    if (!this._persist() || this._documents) return;
     let names;
     try {
       names = await fs.readdir(this._claimDir);
@@ -855,6 +1384,13 @@ export class InteractionService extends EventEmitter {
     this._expiryTimer = null;
   }
 
+  /**
+   * Drain the debounced pending store. A no-op on the storage provider, where
+   * every record is written before its mutation resolves — nothing is
+   * buffered there to lose.
+   *
+   * @returns {Promise<void>}
+   */
   async flush() {
     if (this._persist()) await this._store.flush();
   }

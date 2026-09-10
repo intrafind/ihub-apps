@@ -267,6 +267,19 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .default({}),
+    // Workflow execution state: the checkpoint a paused run resumes from and
+    // the record a finished one leaves behind. Nothing deleted these on a
+    // timer before, so a busy installation accumulated every state it ever
+    // wrote. Only terminal executions are swept; `retentionDays` of zero or
+    // less keeps them forever, and `cleanupEnabled: false` stops the sweep
+    // without changing the window.
+    workflowState: z
+      .object({
+        retentionDays: z.number().default(30),
+        cleanupEnabled: z.boolean().default(true)
+      })
+      .passthrough()
+      .default({}),
     // Storage abstraction: which provider backs runtime data (documents,
     // append-logs, locks, change events). Durable chats are its first consumer
     // — `server/storage/bootstrap.js` brings this provider up at boot and the

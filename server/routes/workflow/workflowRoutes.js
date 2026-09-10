@@ -22,6 +22,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
+import { isSchedulerOwner } from '../../services/workflow/triggers/schedulerLock.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
@@ -109,11 +110,11 @@ function isAdmin(user) {
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {string} executionId
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function authorizeExecutionAccess(req, res, executionId) {
+async function authorizeExecutionAccess(req, res, executionId) {
   const registry = getExecutionRegistry();
-  const execution = registry.get(executionId);
+  const execution = await registry.get(executionId);
 
   if (!execution) {
     sendNotFound(res, 'Execution');
@@ -333,6 +334,58 @@ function validateWorkflow(workflow) {
 }
 
 /**
+ * Recover executions that only exist as a checkpoint directory, then mark
+ * whatever is still `running` as failed — the previous process died holding
+ * it.
+ *
+ * Guarded by the scheduler lock, exactly like `resumeInterruptedRuns` and
+ * `sweepOrphanedExecutions`. Execution records are shared across workers now,
+ * so an ungated rescan is no longer merely wasteful: every worker would mark
+ * as failed the very runs the lock owner is resuming from checkpoint, and the
+ * result would be written to the record they all read.
+ *
+ * Note that route registration happens before the scheduler-lock heartbeat is
+ * started (`triggerManager.setEngine`), so at boot no process owns the lock
+ * and this skips. `sweepOrphanedExecutions`, which runs after the resume
+ * manager in the owner process, performs the same failure-marking and also
+ * rewrites the state file. Call this from that same owner-gated phase if the
+ * checkpoint recovery is wanted alongside it.
+ *
+ * @param {Object} [opts]
+ * @param {boolean} [opts.requireSchedulerOwner=true] - Only run if this
+ *   instance owns the scheduler lock.
+ * @returns {Promise<{recovered: boolean, marked: number}>}
+ */
+export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
+  if (requireSchedulerOwner && !isSchedulerOwner()) {
+    logger.debug('Not the scheduler-lock owner — skipping the execution rescan', {
+      component: 'WorkflowRoutes'
+    });
+    return { recovered: false, marked: 0 };
+  }
+
+  const registry = getExecutionRegistry();
+  let marked = 0;
+  try {
+    await registry.loadFromDisk();
+    // Mark previously-running executions as failed (server process died)
+    for (const exec of await registry.getActive()) {
+      if (exec.status === 'running') {
+        registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
+        marked += 1;
+      }
+    }
+    await registry.flushWrites();
+  } catch (error) {
+    logger.error('Failed to recover the execution registry on startup', {
+      component: 'WorkflowRoutes',
+      error: error.message
+    });
+  }
+  return { recovered: true, marked };
+}
+
+/**
  * Registers all workflow-related API routes.
  *
  * @param {Express} app - Express application instance
@@ -343,24 +396,14 @@ function validateWorkflow(workflow) {
 export default function registerWorkflowRoutes(app, deps = {}) {
   const workflowEngine = deps.workflowEngine || getWorkflowEngine();
 
-  // Recover persisted executions from disk on startup
-  const registry = getExecutionRegistry();
-  (async () => {
-    try {
-      await registry.loadFromDisk();
-      // Mark previously-running executions as failed (server process died)
-      for (const exec of registry.getActive()) {
-        if (exec.status === 'running') {
-          registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load execution registry from disk', {
-        component: 'WorkflowRoutes',
-        error: error.message
-      });
-    }
-  })();
+  // Recover persisted executions on startup — only in the instance that owns
+  // the scheduler lock, so this never races the resume manager.
+  markInterruptedExecutionsFailed().catch(error => {
+    logger.error('Execution rescan failed', {
+      component: 'WorkflowRoutes',
+      error: error.message
+    });
+  });
 
   // ============================================================================
   // Workflow Definition Endpoints
@@ -465,7 +508,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { status, limit = 20, offset = 0, includeArchived } = req.query;
 
         const registry = getExecutionRegistry();
-        const executions = registry.getByUser(userId, {
+        const executions = await registry.getByUser(userId, {
           status,
           includeArchived: includeArchived === 'true' || includeArchived === '1',
           limit: parseInt(limit, 10),
@@ -998,7 +1041,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1111,7 +1154,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         // Build resume data
         const resumeData = {
@@ -1196,7 +1239,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user
@@ -1285,7 +1328,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         // The execution may run on another worker: the engine relays the cancel.
         const state = await workflowEngine.cancelAnywhere(executionId, reason);
@@ -1359,7 +1402,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        const execution = authorizeExecutionAccess(req, res, executionId);
+        const execution = await authorizeExecutionAccess(req, res, executionId);
         if (!execution) return;
 
         const registry = getExecutionRegistry();
@@ -1383,7 +1426,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           throw error;
         }
 
-        registry.remove(executionId);
+        // Awaited: the client reloads its execution list straight after this
+        // responds, and that list now reads the shared record rather than
+        // this worker's memory.
+        await registry.remove(executionId);
 
         logger.info('Workflow execution deleted', {
           component: 'WorkflowRoutes',
@@ -1450,11 +1496,11 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'archived must be a boolean');
         }
 
-        const execution = authorizeExecutionAccess(req, res, executionId);
+        const execution = await authorizeExecutionAccess(req, res, executionId);
         if (!execution) return;
 
         const registry = getExecutionRegistry();
-        const updated = registry.setArchived(executionId, archived);
+        const updated = await registry.setArchived(executionId, archived);
 
         logger.info('Workflow execution archive toggled', {
           component: 'WorkflowRoutes',
@@ -1520,7 +1566,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1628,10 +1674,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     buildServerPath('/api/workflows/executions/:executionId/stream'),
     checkWorkflowsFeature,
     authRequired,
-    (req, res) => {
+    // Async only because the ownership check reads the shared execution
+    // record; the SSE channel is still set up in the same tick afterwards.
+    async (req, res) => {
       const { executionId } = req.params;
 
-      if (!authorizeExecutionAccess(req, res, executionId)) return;
+      if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
       const channel = createSseChannel({
         req,
@@ -1929,46 +1977,19 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { status, search, limit = 100, offset = 0 } = req.query;
         const registry = getExecutionRegistry();
 
-        let executions;
-
         if (status === 'all' || status) {
-          // Get all executions from the registry
-          let allExecutions = Array.from(registry.executions.values()).map(e => ({ ...e }));
-
-          // Apply status filter (unless 'all')
-          if (status && status !== 'all') {
-            allExecutions = allExecutions.filter(e => e.status === status);
-          }
-
-          // Apply search filter on userId or workflowName
-          if (search) {
-            const searchLower = search.toLowerCase();
-            allExecutions = allExecutions.filter(e => {
-              const userId = (e.userId || '').toLowerCase();
-              const workflowName =
-                typeof e.workflowName === 'object'
-                  ? Object.values(e.workflowName).join(' ').toLowerCase()
-                  : (e.workflowName || '').toLowerCase();
-              const workflowId = (e.workflowId || '').toLowerCase();
-              return (
-                userId.includes(searchLower) ||
-                workflowName.includes(searchLower) ||
-                workflowId.includes(searchLower)
-              );
-            });
-          }
-
-          // Sort by startedAt descending (most recent first)
-          allExecutions.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-
-          // Apply pagination
           const parsedOffset = parseInt(offset, 10) || 0;
           const parsedLimit = parseInt(limit, 10) || 100;
-          const total = allExecutions.length;
-          executions = allExecutions.slice(parsedOffset, parsedOffset + parsedLimit);
 
-          // Get stats from registry
-          const stats = registry.getStats();
+          // One listing call: the registry filters, searches, orders and
+          // pages the shared execution records, and reports the statistics
+          // over all of them rather than over the page.
+          const { executions, total, stats } = await registry.list({
+            status,
+            search,
+            limit: parsedLimit,
+            offset: parsedOffset
+          });
 
           res.json({
             executions,
@@ -1980,7 +2001,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         } else {
           // Default behavior: return only active executions from WorkflowEngine
           const activeExecutions = await workflowEngine.listActiveExecutions();
-          const stats = registry.getStats();
+          const stats = await registry.getStats();
 
           res.json({
             executions: activeExecutions,
