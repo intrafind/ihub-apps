@@ -299,6 +299,24 @@ const LITERAL_CONFIG_PATH = new RegExp(
 const TREE_WIDE_CONTEXT_LINES = 6;
 
 /**
+ * Escape a string so it matches itself when interpolated into a regex.
+ *
+ * The names interpolated below are JavaScript identifiers read out of source
+ * files, and `$` is legal in one and is a regex anchor. `$el` built
+ * `(?<![.\\w$])$el(?![\\w$])`, which cannot match anything — the guard went
+ * quiet on exactly the code that uses that naming style, and passed. A silent
+ * guard is worse than no guard. Escaping the whole metacharacter set rather
+ * than the one character that happens to appear here is what stops the next
+ * such name from doing it again.
+ *
+ * @param {string} value - Literal text to match
+ * @returns {string} The same text, safe to interpolate into a pattern
+ */
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Identifiers bound to a hardcoded config path anywhere in a file, so a call
  * that receives one through a variable is caught however far from the literal
  * it sits. `const usersFile = 'contents/config/users.json'` sixty lines above
@@ -335,7 +353,7 @@ function configPathBindings(source) {
         continue;
       }
       for (const other of tainted) {
-        if (new RegExp(`(?<![.\\w$])${other}(?![\\w$])`).test(init)) {
+        if (new RegExp(`(?<![.\\w$])${escapeRegExp(other)}(?![\\w$])`).test(init)) {
           tainted.add(name);
           break;
         }
@@ -556,7 +574,7 @@ function findFsCalls(repoPath, source) {
 
   const alternatives = [];
   for (const ns of namespaces) {
-    const escaped = ns.replace(/[$]/g, '\\$');
+    const escaped = escapeRegExp(ns);
     alternatives.push(`${escaped}\\s*\\.\\s*(?:promises\\s*\\.\\s*)?(${FS_OPS.join('|')})\\s*\\(`);
   }
   const bareNames = [...named].filter(n => FS_OPS.includes(n)).concat(ATOMIC_HELPERS);
@@ -645,7 +663,7 @@ function scan() {
         continue;
       }
       const carries = [...bound].some(name =>
-        new RegExp(`(?<![.\\w$])${name}(?![\\w$])`).test(site.arg || '')
+        new RegExp(`(?<![.\\w$])${escapeRegExp(name)}(?![\\w$])`).test(site.arg || '')
       );
       if (carries) {
         violations.push({ ...site, rule: 'config-path-binding' });

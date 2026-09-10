@@ -63,6 +63,40 @@ export async function writeProbeConfig(data) {
 }
 `;
 
+/** A probe outside the guard's own scan list, so only the tree-wide rules can catch it. */
+const DOLLAR_PROBE = 'server/utils/__config-access-dollar-probe__.js';
+
+/**
+ * The same violation reached through a `$`-prefixed binding, far enough from
+ * the literal that only the binding rule can see it.
+ *
+ * `$` is legal in a JavaScript identifier and is a regex anchor, so a name
+ * interpolated into a pattern unescaped built one that cannot match — and the
+ * guard went quiet on exactly the code that uses this naming style, rather
+ * than erroring. A silent guard is worse than no guard.
+ */
+const DOLLAR_PROBE_SOURCE = `/**
+ * Temporary fixture written by server/tests/config-store-fs-guard.test.js.
+ * If this file is still here, a test run was killed between writing it and
+ * removing it again — delete it.
+ */
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+
+${Array.from({ length: 12 }, (_unused, i) => `// spacer ${i}`).join('\n')}
+
+/**
+ * @param {string} data - Serialized platform configuration
+ * @returns {void}
+ */
+export function writeDollarProbeConfig(data) {
+  const $configPath = 'contents/config/platform.json';
+${Array.from({ length: 12 }, (_unused, i) => `  // spacer ${i}`).join('\n')}
+  const target = join('/srv', $configPath);
+  writeFileSync(target, data);
+}
+`;
+
 /**
  * Run the guard and report how it went, whatever its exit status.
  *
@@ -152,5 +186,32 @@ describe('the config filesystem-access guard', () => {
     const after = await runGuard();
     assert.doesNotMatch(after.output, /__config-access-guard-probe__/, 'the probe is gone again');
     assert.equal(after.code, baseline.code, 'and the guard is back to what it said before');
+  });
+
+  it('sees a config path carried by a $-named binding', async () => {
+    // CodeQL found the escaping bug behind this (alert 640) as an incomplete
+    // encoding; the consequence is what matters. The name reaches a `new
+    // RegExp`, and unescaped `$name` compiled to a pattern that matches
+    // nothing, so the guard passed a leak it was built to catch and said so
+    // cheerfully.
+    const probePath = path.join(REPO_ROOT, DOLLAR_PROBE);
+    await fs.writeFile(probePath, DOLLAR_PROBE_SOURCE, 'utf8');
+    let planted;
+    try {
+      planted = await runGuard();
+    } finally {
+      await fs.rm(probePath, { force: true });
+    }
+
+    assert.notEqual(
+      planted.code,
+      0,
+      'a config path reaching an fs call through a $-named binding must fail the build.\n' +
+        planted.output
+    );
+    assert.match(planted.output, /__config-access-dollar-probe__/, 'and it has to name the file');
+
+    const after = await runGuard();
+    assert.doesNotMatch(after.output, /__config-access-dollar-probe__/, 'the probe is gone again');
   });
 });
