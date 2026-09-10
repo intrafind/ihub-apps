@@ -20,8 +20,10 @@ import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import ChatInput from '../../chat/components/ChatInput';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
+import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
+import { loadAppSettings } from '../../../utils/appSettings';
 
 export default function StartPage() {
   const { t, i18n } = useTranslation();
@@ -43,6 +45,18 @@ export default function StartPage() {
   // Models the viewer may use, tagged with the identity they were loaded for.
   const [modelsState, setModelsState] = useState({ key: null, models: [], loaded: false });
   const [selectedModel, setSelectedModel] = useState(null);
+
+  // Per-chat feature toggles offered by the input's actions menu (the `+`).
+  // The start page renders the default app's real chat input, so it has to
+  // own this state too — otherwise the menu shows the app's tools with no way
+  // to toggle them and hides web search entirely (issue #2322). `null` for
+  // the tools means "not resolved yet", matching AppChat's convention of
+  // passing `null` to hide the tools section outright.
+  const [enabledTools, setEnabledTools] = useState(null);
+  const [websearchEnabled, setWebsearchEnabled] = useState(false);
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
+  const [imageQuality, setImageQuality] = useState('Medium');
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
@@ -178,6 +192,54 @@ export default function StartPage() {
     });
   }, [defaultAppDetails, compatibleModels]);
 
+  // Seed the actions-menu toggles from the app config, then let anything the
+  // user already chose for this app in the current session win — the same
+  // precedence `useAppSettings` applies inside the app, so the `+` menu shows
+  // the same state on both surfaces.
+  useEffect(() => {
+    if (!defaultAppDetails) {
+      setEnabledTools(null);
+      return;
+    }
+    const saved = loadAppSettings(defaultAppDetails.id) || {};
+    setEnabledTools(
+      Array.isArray(saved.enabledTools) ? saved.enabledTools : defaultAppDetails.tools || []
+    );
+    setWebsearchEnabled(
+      saved.websearchEnabled ?? defaultAppDetails.websearch?.enabledByDefault ?? false
+    );
+    setTranscriptionEnabled(defaultAppDetails.transcription?.defaultEnabled !== false);
+    setImageAspectRatio(
+      saved.imageAspectRatio || defaultAppDetails.imageGeneration?.aspectRatio || '1:1'
+    );
+    setImageQuality(saved.imageQuality || defaultAppDetails.imageGeneration?.quality || 'Medium');
+  }, [defaultAppDetails]);
+
+  // Platform-wide kill switch for tools, mirroring AppChat: `null` keeps the
+  // tools section out of the actions menu entirely.
+  const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
+  const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
+
+  // Magic prompt rewrites the draft in place, exactly as it does in the app.
+  const magicPromptHandler = useMagicPrompt();
+  const magicPromptEnabled = featureFlags.isAppFeatureEnabled(
+    defaultAppDetails,
+    'magicPrompt.enabled',
+    false
+  );
+  const handleMagicPrompt = useCallback(async () => {
+    const enhanced = await magicPromptHandler.handleMagicPrompt(
+      draft,
+      defaultAppDetails,
+      defaultAppDetails?.id
+    );
+    if (enhanced) setDraft(enhanced);
+  }, [draft, defaultAppDetails, magicPromptHandler]);
+  const handleUndoMagicPrompt = useCallback(() => {
+    const restored = magicPromptHandler.handleUndoMagicPrompt();
+    if (restored !== null) setDraft(restored);
+  }, [magicPromptHandler]);
+
   // Same rule as the in-app chat; ChatInput shows its "No models available"
   // notice when the list is empty, so a misconfigured group is visible rather
   // than silently hiding the selector. Kept hidden until the list has loaded.
@@ -213,10 +275,19 @@ export default function StartPage() {
     });
   }, [chatsEnabled, chats, apps]);
 
+  // The model object (not just its id) drives the image-generation controls and
+  // the upload config's vision/audio gating, same as in the app chat.
+  const selectedModelObject = useMemo(
+    () => compatibleModels.find(m => m.id === selectedModel) || null,
+    [compatibleModels, selectedModel]
+  );
+
   const uploadConfig = useMemo(
     () =>
-      defaultAppDetails ? fileUploadHandler.createUploadConfig(defaultAppDetails, null) : undefined,
-    [defaultAppDetails, fileUploadHandler]
+      defaultAppDetails
+        ? fileUploadHandler.createUploadConfig(defaultAppDetails, selectedModelObject)
+        : undefined,
+    [defaultAppDetails, fileUploadHandler, selectedModelObject]
   );
 
   // Start the chat: carry the message via prefill+send (so refresh/shared links
@@ -229,9 +300,20 @@ export default function StartPage() {
       const hasFile = fileUploadHandler.selectedFile != null;
       if (!text && !hasFile && !defaultAppDetails?.allowEmptyContent) return;
 
-      if (hasFile) {
-        setPendingChatStart({ appId: defaultApp.id, files: fileUploadHandler.selectedFile });
-      }
+      // Hand the app the toggles picked here (and any processed attachment) so
+      // the auto-sent first message runs with the same features the user saw
+      // in the `+` menu — issue #2322.
+      setPendingChatStart({
+        appId: defaultApp.id,
+        ...(hasFile ? { files: fileUploadHandler.selectedFile } : {}),
+        settings: {
+          ...(effectiveEnabledTools !== null ? { enabledTools: effectiveEnabledTools } : {}),
+          websearchEnabled,
+          transcriptionEnabled,
+          imageAspectRatio,
+          imageQuality
+        }
+      });
 
       const params = new URLSearchParams();
       if (text) {
@@ -245,7 +327,19 @@ export default function StartPage() {
       const qs = params.toString();
       navigate(`/apps/${defaultApp.id}${qs ? `?${qs}` : ''}`);
     },
-    [draft, defaultApp, defaultAppDetails, fileUploadHandler, navigate, selectedModel]
+    [
+      draft,
+      defaultApp,
+      defaultAppDetails,
+      fileUploadHandler,
+      navigate,
+      selectedModel,
+      effectiveEnabledTools,
+      websearchEnabled,
+      transcriptionEnabled,
+      imageAspectRatio,
+      imageQuality
+    ]
   );
 
   const logoSrc = uiConfig?.header?.logo?.url ? buildAssetUrl(uiConfig.header.logo.url) : null;
@@ -324,6 +418,29 @@ export default function StartPage() {
                 }
                 onVoiceInput={micEnabled ? handleVoiceInput : undefined}
                 onVoiceCommand={micEnabled ? handleVoiceCommand : undefined}
+                magicPromptEnabled={magicPromptEnabled}
+                onMagicPrompt={handleMagicPrompt}
+                showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
+                onUndoMagicPrompt={handleUndoMagicPrompt}
+                magicPromptLoading={magicPromptHandler.magicLoading}
+                enabledTools={effectiveEnabledTools}
+                onEnabledToolsChange={toolsFeatureEnabled ? setEnabledTools : undefined}
+                websearchEnabled={websearchEnabled}
+                onWebsearchEnabledChange={
+                  defaultAppDetails?.websearch?.enabled ? setWebsearchEnabled : undefined
+                }
+                transcriptionAvailable={defaultAppDetails?.transcription?.enabled === true}
+                transcriptionEnabled={transcriptionEnabled}
+                onTranscriptionEnabledChange={
+                  defaultAppDetails?.transcription?.enabled === true
+                    ? setTranscriptionEnabled
+                    : undefined
+                }
+                model={selectedModelObject}
+                imageAspectRatio={imageAspectRatio}
+                imageQuality={imageQuality}
+                onImageAspectRatioChange={setImageAspectRatio}
+                onImageQualityChange={setImageQuality}
                 models={compatibleModels}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}

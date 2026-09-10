@@ -1,5 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { fetchAuthStatus, fetchUIConfig, fetchPlatformConfig } from '../../api';
+import {
+  fetchAuthStatus,
+  fetchUIConfig,
+  fetchPlatformConfig,
+  invalidateAuthStatusCache,
+  invalidatePlatformConfigCache,
+  invalidateUIConfigCache
+} from '../../api';
 
 const PlatformConfigContext = createContext({
   platformConfig: null,
@@ -17,13 +24,21 @@ export function PlatformConfigProvider({ children }) {
     try {
       setIsLoading(true);
 
+      // On refresh (not initial load) drop the cached responses first instead
+      // of bypassing the cache: bypassing left the stale entries in place for
+      // every other consumer, so a refresh here did not help the sidebar or
+      // the "/" redirect. Refetching normally repopulates them.
+      if (platformConfig !== null) {
+        invalidateAuthStatusCache();
+        invalidateUIConfigCache();
+        invalidatePlatformConfigCache();
+      }
+
       // Fetch auth status, UI config, and platform config in parallel
-      // On refresh (not initial load), skip cache to get fresh data
-      const skipCache = platformConfig !== null;
       const [authStatus, uiConfig, platformCfg] = await Promise.all([
-        fetchAuthStatus({ skipCache }),
-        fetchUIConfig({ skipCache }),
-        fetchPlatformConfig({ skipCache })
+        fetchAuthStatus(),
+        fetchUIConfig(),
+        fetchPlatformConfig()
       ]);
 
       // Combine all configs into a single object that matches the previous platform config structure

@@ -113,6 +113,29 @@ class Cache {
   }
 
   /**
+   * Remove every entry whose key matches `pattern`.
+   *
+   * A string matches by prefix, so one call drops every variant of a
+   * parameterized key — `'ui-config'` clears `ui-config` together with
+   * `ui-config?language=de` (the shape `buildCacheKey` produces). A RegExp is
+   * tested against the whole key.
+   *
+   * @param {string|RegExp} pattern - Key prefix or expression to match
+   * @returns {number} How many entries were removed
+   */
+  invalidateByPattern(pattern) {
+    if (!pattern) return 0;
+    const matches =
+      pattern instanceof RegExp ? key => pattern.test(key) : key => key.startsWith(pattern);
+
+    let count = 0;
+    for (const key of [...this.store.keys()]) {
+      if (matches(key) && this.delete(key)) count++;
+    }
+    return count;
+  }
+
+  /**
    * Clear the entire cache
    */
   clear() {
@@ -254,9 +277,16 @@ const cache = new Cache({
   storageType: 'session'
 });
 
-// Add global access in development for debugging
-if (import.meta.env.DEV) {
-  window.appCache = cache;
-}
+/**
+ * Expose the cache as `window.appCache` so it can be inspected from the
+ * devtools console. Called from the app entry point, which is where the
+ * dev-mode flag lives: keeping `import.meta` out of this module is what lets
+ * it be unit-tested, since the Jest transform cannot parse it.
+ */
+export const exposeCacheForDebugging = () => {
+  if (typeof window !== 'undefined') {
+    window.appCache = cache;
+  }
+};
 
 export default cache;
