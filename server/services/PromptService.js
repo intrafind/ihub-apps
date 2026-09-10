@@ -201,6 +201,27 @@ class PromptService {
   }
 
   /**
+   * Replace {{variable}} placeholders in a text with the given values.
+   * Unknown placeholders are left intact — the same semantics as system
+   * prompt processing, so a typo shows up literally instead of vanishing.
+   * @param {string} text - Text containing {{variable}} placeholders
+   * @param {Object} variables - Variable name/value map (e.g. from resolveGlobalPromptVariables)
+   * @returns {string} Text with known placeholders replaced
+   */
+  substituteVariables(text, variables) {
+    if (!text || typeof text !== 'string' || !text.includes('{{')) {
+      return text;
+    }
+    let result = text;
+    for (const [key, value] of Object.entries(variables || {})) {
+      if (value === null || value === undefined) continue;
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), String(value));
+    }
+    return result;
+  }
+
+  /**
    * Process message templates with variable substitution and source content
    * @param {Array} messages - Array of messages to process
    * @param {Object} app - App configuration object

@@ -1,0 +1,64 @@
+{
+  "id": "iassistant",
+  "name": {
+    "en": "iAssistant",
+    "de": "iAssistant"
+  },
+  "description": {
+    "en": "Chat with the internal iFinder / iAssistant",
+    "de": "Chat mit dem internen iFinder / iAssistant"
+  },
+  "color": "#4F46E5",
+  "icon": "chat-bubbles",
+  "type": "chat",
+  "order": 1,
+  "preferredModel": "iassistant-conversation",
+  "preferredOutputFormat": "markdown",
+  "preferredTemperature": 1,
+  "sendChatHistory": true,
+  "variables": [],
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": false
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "starterPrompts": [],
+  "disallowModelSelection": true,
+  "iassistant": {
+    "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}), the user's timezone is {{timezone}}. Address the user by name when appropriate and answer in the user's language."
+  },
+  "category": "utility",
+  "enabled": false
+}
