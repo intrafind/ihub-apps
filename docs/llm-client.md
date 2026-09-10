@@ -137,25 +137,39 @@ Three separate deadlines cover one model call, because "cannot reach the
 provider", "the provider is thinking" and "the provider died mid-answer" are
 different failures and only the middle one deserves patience:
 
-| Phase                                          | Deadline                       | `providerCode` on expiry |
-| ---------------------------------------------- | ------------------------------ | ------------------------ |
-| Connect + response headers, per streamed attempt | 10 s                         | `CONNECT_TIMEOUT`        |
-| Headers → first stream chunk                   | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
-| Gap between two stream chunks                  | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
-| A non-streamed call, start to finish           | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+| Phase                                   | Deadline                       | `providerCode` on expiry |
+| --------------------------------------- | ------------------------------ | ------------------------ |
+| Connect + response headers, per attempt | 10 s                           | `CONNECT_TIMEOUT`        |
+| Headers → first stream chunk            | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
+| Gap between two stream chunks           | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
 
-The connect ceiling covers **streamed** calls only, and only the time the
-request actually spends on the network:
+Two properties make the connect ceiling a measure of *reach* rather than of
+generation, and both are load-bearing:
 
-- A non-streamed response arrives in one piece and its headers are withheld
-  until the whole answer has been generated — Google's `:generateContent`, and
-  every other buffered completion endpoint — so its time-to-first-byte *is*
-  generation time. Timing it capped generation at ten seconds and reported the
-  provider as unreachable; those calls are left to the whole-call deadline.
-- Every attempt first waits for a slot in the per-model throttle
-  (`platform.requestConcurrency` defaults to 5). A request still queued behind
-  others has not been sent yet, so the ceiling is armed inside the slot, once
-  the request is about to go out.
+**Every provider call streams.** A non-streamed response arrives in one piece
+and the provider withholds its headers until the whole answer has been
+generated — Google's `:generateContent`, and every other buffered completion
+endpoint — so its time-to-first-byte *is* generation time, and timing it caps
+generation instead of detecting an unreachable host. So the transport always
+streams, and a consumer that wants one object gets that stream collected:
+
+- `execute({ stream: false })` and `complete()` return a `CompletionResult`
+  built by `collect()`, not a buffered request upstream.
+- The [OpenAI-compatible API](openai-compatible-api.md) does the same: a client
+  request with `stream: false` (its default) still streams from the provider
+  and is collected into one `chat.completion`. The client-visible wire is
+  unchanged — the golden tests in `openaiProxy.test.js` pin it — but the
+  provider call now flushes its headers immediately.
+- `stream: false` is still honoured for embedders, and adapters keep their
+  non-streamed parsers (the conformance matrix covers both). A ceiling that
+  fires on such a call says in its message that the wait may have been
+  generation rather than asserting the endpoint is unreachable.
+
+**Only time on the network counts.** Every attempt first waits for a slot in
+the per-model throttle (`platform.requestConcurrency` defaults to 5). A
+request still queued behind others has not been sent yet, let alone ignored,
+so `_connect` takes the slot first and arms the ceiling inside it. Queue time
+is left to the whole-call deadline.
 
 The stream-idle deadline is armed only after a chunk has been handed to the
 consumer, so a reasoning model that is silent for minutes before its first
@@ -192,6 +206,10 @@ Provider google sent no response headers within 10000 ms — endpoint
 unreachable. Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs
 on model gemini-2.5-flash, if this endpoint is reachable but slow to answer.
 ```
+
+On a call that opted out of streaming the message instead says that a slow
+generation is indistinguishable from an unreachable host there, and suggests
+streaming the request.
 
 The endpoint it tried is logged rather than returned, with URL secrets
 redacted, because the message reaches inference-API clients.

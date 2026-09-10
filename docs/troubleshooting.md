@@ -824,31 +824,37 @@ handler.execute({
   10000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
   provider, while the same model answers fine from `curl`.
 - It hits longer jobs — a summary, a translation pass, a batch of them — and
-  short chats are unaffected.
+  short chats through the web UI are unaffected.
 
 **Cause:**
 
 That message comes from the connect/headers ceiling, which bounds the phase
 before the provider's first response byte so an unreachable host fails fast
 instead of hanging on the 5-minute whole-call deadline (see
-[Stream deadlines](llm-client.md#stream-deadlines)). Two things made it fire on
-healthy providers, both fixed:
+[Stream deadlines](llm-client.md#stream-deadlines)). It is only a measure of
+reach if the request streams, and two things broke that — both fixed:
 
-- **Non-streamed calls.** A buffered completion endpoint (Google's
-  `:generateContent`, and every other one) withholds its headers until the
-  whole answer is generated, so its time-to-first-byte *is* generation time.
-  Any non-streamed call slower than the ceiling was reported as unreachable.
-  These calls are now governed by the whole-call deadline instead.
-- **Queue time.** Every attempt waits for a slot in the per-model throttle
-  (`platform.requestConcurrency` defaults to **5**). With more than five
-  requests in flight for one model, the ones still queued were timed as if
-  they had been sent and ignored. The ceiling is now armed inside the slot.
+- **The provider call was not streamed.** The OpenAI-compatible API defaults
+  `stream` to `false`, and that flag used to be passed straight through to the
+  provider. A buffered endpoint (Google's `:generateContent`, and every other
+  one) withholds its headers until the whole answer is generated, so the
+  ceiling was timing the generation. Every provider call now streams and is
+  collected when the client wants one object, so the headers arrive
+  immediately. The chat UI streamed already, which is why only API jobs failed.
+- **Queue time counted.** Every attempt waits for a slot in the per-model
+  throttle (`platform.requestConcurrency` defaults to **5**). With more than
+  five requests in flight for one model, the ones still queued were timed as
+  if they had been sent and ignored. The ceiling is now armed inside the slot.
 
 **Solutions:**
 
-1. Upgrade to a build that carries both fixes.
-2. If a streamed call to a reachable-but-slow endpoint still trips it, raise
-   the ceiling — per installation in `platform.json`, or for the one model:
+1. Upgrade to a build that carries both fixes. On an older build, setting
+   `"llm": { "connectTimeoutMs": 0 }` in `platform.json` (or
+   `LLM_CONNECT_TIMEOUT_MS=0`) removes the ceiling and leaves the call to
+   `REQUEST_TIMEOUT`; sending `"stream": true` from the client also avoids it.
+2. If it still fires, the endpoint really is slow to *accept* a request — a
+   VPN-only host, or a gateway that authenticates before forwarding. Raise the
+   ceiling per installation or for the one model:
 
 ```json
 // contents/config/platform.json
@@ -858,13 +864,12 @@ healthy providers, both fixed:
 { "connectTimeoutMs": 30000 }
 ```
 
-`LLM_CONNECT_TIMEOUT_MS` does the same for the whole process, and `0` disables
-the ceiling. Raise `platform.requestConcurrency` (or the model's own
-`concurrency`) if batches are queueing longer than you expect.
+Raise `platform.requestConcurrency` (or the model's own `concurrency`) if
+batches are queueing longer than you expect.
 
-3. If the endpoint really is unreachable, the server log names the URL it tried
-   (secrets redacted) alongside the model and provider. Check DNS, the proxy
-   and VPN reachability of that host from the server — not from your
+3. If the endpoint is genuinely unreachable, the server log names the URL it
+   tried (secrets redacted) alongside the model and provider. Check DNS, the
+   proxy and VPN reachability of that host from the server — not from your
    workstation.
 
 ### API Key Issues

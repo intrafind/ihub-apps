@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LLM_ERROR_CODES, isLLMError } from '../../services/loop/contracts/errors.js';
 import { RETRYABLE_LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
-import { makeClient, sseResponse, jsonResponse, openaiText } from './helpers/llmFixtures.js';
+import { makeClient, sseResponse, openaiText } from './helpers/llmFixtures.js';
 import configCache from '../../configCache.js';
 
 const messages = [{ role: 'user', content: 'hi' }];
@@ -104,57 +104,11 @@ test('connectTimeoutMs <= 0 disables the phase deadline', async () => {
   assert.equal(res.content, 'no phase deadline');
 });
 
-test('a non-streamed call is NOT capped by the connect ceiling', async () => {
-  // The bug this pins: a buffered completion endpoint (Google's
-  // :generateContent, and every other non-streamed one) withholds its response
-  // headers until the whole answer is generated, so time-to-first-byte *is*
-  // generation time. Timing it turned every summary or translation that took
-  // longer than the ceiling into "endpoint unreachable" — the provider was
-  // answering fine, it was just answering slowly.
-  const { client } = makeClient({
-    connectTimeoutMs: 40,
-    maxRetries: 0,
-    // Honors the signal, like a real fetch: if the ceiling applied, the
-    // aborted attempt would surface as CONNECT_TIMEOUT instead of an answer.
-    transport: (request, ctx) =>
-      new Promise((resolve, reject) => {
-        const t = setTimeout(
-          () =>
-            resolve(
-              jsonResponse({
-                id: 'x',
-                choices: [
-                  {
-                    index: 0,
-                    message: { role: 'assistant', content: 'ein Wort' },
-                    finish_reason: 'stop'
-                  }
-                ]
-              })
-            ),
-          150
-        );
-        ctx.signal?.addEventListener('abort', () => {
-          clearTimeout(t);
-          const err = new Error('The operation was aborted');
-          err.name = 'AbortError';
-          reject(err);
-        });
-      })
-  });
-
-  const result = await client.complete({
-    modelId: 'oa',
-    messages,
-    stream: false,
-    telemetry: { autoRun: false },
-    timeoutMs: 5_000
-  });
-  assert.equal(result.content, 'ein Wort');
-});
-
-test('a non-streamed call still answers to the whole-call deadline', async () => {
-  // Dropping the connect ceiling for these calls must not leave them unbounded.
+test('a ceiling that fires on a non-streamed request says the wait may be generation', async () => {
+  // Nothing in the server asks a provider for a buffered response any more (the
+  // inference API streams and collects), but `stream: false` stays available to
+  // embedders. There the ceiling cannot tell reach from generation, so the
+  // failure must not simply assert that the endpoint is unreachable.
   const { client } = makeClient({
     connectTimeoutMs: 40,
     maxRetries: 0,
@@ -169,10 +123,11 @@ test('a non-streamed call still answers to the whole-call deadline', async () =>
   });
 
   await assert.rejects(
-    client.execute({ modelId: 'oa', messages, stream: false, timeoutMs: 120 }),
+    client.execute({ modelId: 'oa', messages, stream: false, timeoutMs: 5_000 }),
     err => {
-      assert.equal(err.code, LLM_ERROR_CODES.TIMEOUT);
-      assert.equal(err.providerCode, 'TIMEOUT', 'the whole-call deadline, not the connect one');
+      assert.equal(err.providerCode, 'CONNECT_TIMEOUT');
+      assert.match(err.message, /did not stream/);
+      assert.match(err.message, /looks the same as an unreachable host/);
       return true;
     }
   );

@@ -11,9 +11,8 @@
  * Platform Configuration. They are the same numbers the code falls back to, so
  * nothing changes in behaviour on upgrade:
  *
- * - `llm.connectTimeoutMs`    — 10 s before the first byte of a STREAMED call
- *                               (non-streamed calls are governed by the
- *                               whole-call deadline instead).
+ * - `llm.connectTimeoutMs`    — 10 s before the provider's first response
+ *                               byte, per attempt.
  * - `llm.streamIdleTimeoutMs` — 60 s between two chunks of a live stream.
  *
  * 0 disables either ceiling; a single model can override both in its own

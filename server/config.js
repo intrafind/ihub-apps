@@ -14,10 +14,11 @@ const env = cleanEnv(
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
     REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
-    // Ceiling for the phase before a provider's first response byte, applied
-    // per attempt to STREAMED calls only (see services/loop/LLMClient.js).
-    // 0 disables it. Overridable per deployment via platform.json `llm`
-    // and per model via the model config's `connectTimeoutMs`.
+    // Ceiling for the phase before a provider's first response byte, per
+    // attempt (see services/loop/LLMClient.js). Every provider call streams,
+    // so that phase is reach rather than generation. 0 disables it.
+    // Overridable per deployment via platform.json `llm` and per model via
+    // the model config's `connectTimeoutMs`.
     LLM_CONNECT_TIMEOUT_MS: num({ default: 10000 }),
     // Ceiling for the gap between two chunks of a stream that has already
     // produced one. 0 disables it.

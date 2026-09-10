@@ -601,22 +601,26 @@ question that needed a web lookup or a tool had to be re-typed inside the app.
 
 ## Slow Providers Are No Longer Reported as Unreachable
 
-Calls that took longer than ten seconds failed with `Provider <name> sent no response headers
-within 10000 ms — endpoint unreachable` (HTTP 504, `code: TIMEOUT`) even though the provider was
-answering normally. It hit longer jobs hardest — summaries, translation passes, batches of them
-through the inference API — while short chats looked fine.
+Calls through the OpenAI-compatible inference API failed with `Provider <name> sent no response
+headers within 10000 ms — endpoint unreachable` (HTTP 504, `code: TIMEOUT`) even though the
+provider was answering normally. It hit longer jobs hardest — summaries, translation passes,
+batches of them — while chats in the web UI looked fine.
 
 The ten-second ceiling exists to fail fast on a host that cannot be reached, instead of hanging on
-the five-minute request timeout. It was being applied to two things it cannot measure:
+the five-minute request timeout. It only measures reachability if the request streams, and two
+things broke that:
 
-- **Answers that arrive in one piece.** A non-streamed endpoint (Google's `:generateContent`, and
-  every other buffered one) withholds its response headers until the whole answer is generated, so
-  the wait for the first byte *is* the generation. Those calls now run against the whole-call
-  timeout, and only streamed calls are held to the ten seconds.
-- **Time spent waiting in line.** Each request first waits for a slot in the per-model throttle
-  (`requestConcurrency`, 5 by default). A request queued behind five others had not been sent yet,
-  but was timed as if the provider had ignored it. The ceiling now starts when the request actually
-  goes out.
+- **The provider call was not streamed.** The inference API defaults `stream` to `false`, and that
+  flag was passed straight through to the provider. A buffered endpoint — Google's
+  `:generateContent`, and every other one — withholds its response headers until the whole answer
+  is generated, so the ceiling was timing the generation, not the connection. Every provider call
+  now streams, and a client that asked for a single response gets that stream collected into one
+  `chat.completion`. The response you receive is unchanged, `usage` included. The web UI streamed
+  already, which is why only API jobs were affected.
+- **Time spent waiting in line counted.** Each request first waits for a slot in the per-model
+  throttle (`requestConcurrency`, 5 by default). A request queued behind five others had not been
+  sent yet, but was timed as if the provider had ignored it. The ceiling now starts when the
+  request actually goes out.
 
 Both ceilings are also adjustable now, for an endpoint that is reachable but slow to accept a
 request:
@@ -626,5 +630,5 @@ request:
 - `connectTimeoutMs` / `streamIdleTimeoutMs` in a single model's config for that model only.
 - `0` disables either ceiling and leaves the call to the request timeout.
 
-When the ceiling does fire, the error now names the setting to raise, and the server log records
-the endpoint that was tried (with URL secrets redacted) next to the model and provider.
+When the ceiling does fire, the error names the setting to raise, and the server log records the
+endpoint that was tried (with URL secrets redacted) next to the model and provider.

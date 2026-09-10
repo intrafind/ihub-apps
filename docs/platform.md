@@ -374,11 +374,10 @@ the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
 }
 ```
 
-- **connectTimeoutMs** (number) – Longest a **streamed** call waits for the
-  provider's response headers, per attempt, before failing as unreachable.
-  Time spent queued in the per-model throttle does not count. Non-streamed
-  calls are governed by `REQUEST_TIMEOUT` instead, because their headers only
-  arrive with the finished answer. Default: `10000`
+- **connectTimeoutMs** (number) – Longest a provider call waits for the
+  response headers, per attempt, before failing as unreachable. Every provider
+  call streams, so those headers arrive as soon as the request is accepted;
+  time spent queued in the per-model throttle does not count. Default: `10000`
 - **streamIdleTimeoutMs** (number) – Longest gap between two chunks of a
   stream that has already produced one. Armed only after the first chunk, so a
   model that thinks for minutes before answering is not cut off.

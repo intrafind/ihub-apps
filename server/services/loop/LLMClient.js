@@ -96,21 +96,23 @@ const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
  * before the first byte separates "cannot reach the provider" from "the
  * provider is generating slowly".
  *
- * Two limits on where that inference holds, both learned the hard way:
+ * Two conditions make that inference sound, both learned the hard way:
  *
- *   - It only holds for a STREAMED response, whose headers are flushed as soon
- *     as the provider accepts the request. A non-streamed response arrives in
- *     one piece and its headers are withheld until the whole answer has been
- *     generated — Google's `:generateContent`, and every other buffered
- *     completion endpoint — so time-to-first-byte there *is* generation time.
- *     Timing it capped generation at ten seconds and reported the provider as
- *     unreachable, so non-streamed calls are left to the whole-call deadline
- *     (see `_connectTimeoutMsFor`).
- *   - It only holds for time actually spent waiting on the network. Every
- *     attempt goes through the per-model throttle queue (platform
- *     `requestConcurrency` defaults to 5), and a request still queued behind
- *     five others has not been sent yet, let alone ignored. `_connect` arms
- *     the ceiling inside its throttle slot for that reason.
+ *   - The request must be STREAMED, so the headers are flushed as soon as the
+ *     provider accepts it. A non-streamed response arrives in one piece and its
+ *     headers are withheld until the whole answer has been generated — Google's
+ *     `:generateContent`, and every other buffered completion endpoint — which
+ *     makes time-to-first-byte indistinguishable from generation time; timing it
+ *     capped generation at ten seconds and blamed the endpoint. Every provider
+ *     call the server makes therefore streams, and a consumer that wants one
+ *     object gets this stream collected (`collect`) rather than a buffered
+ *     request upstream. `stream: false` remains available to embedders, and a
+ *     ceiling that fires on such a call says so in its message.
+ *   - The time measured must be time on the network. Every attempt goes through
+ *     the per-model throttle queue (platform `requestConcurrency` defaults to
+ *     5), and a request still queued behind five others has not been sent yet,
+ *     let alone ignored. `_connect` arms the ceiling inside its throttle slot
+ *     for that reason.
  *
  * Operators can override the default per deployment (platform.json `llm` or
  * LLM_CONNECT_TIMEOUT_MS) and per model (`connectTimeoutMs`).
@@ -1153,18 +1155,10 @@ export class LLMClient {
   /** Build an LLMError for a non-2xx provider response (with diagnostics). */
   /**
    * The connect/headers ceiling that applies to one attempt, or 0 for none.
-   *
-   * Non-streamed calls always get 0: their headers arrive with the finished
-   * answer, so the phase this ceiling times is the generation itself (see
-   * DEFAULT_CONNECT_TIMEOUT_MS). An operator who wants a non-streamed call
-   * bounded sets the whole-call deadline (`timeoutMs`) instead.
-   *
    * @param {object} model - resolved model config
-   * @param {boolean} stream - whether this attempt asked for a streamed response
    * @returns {number} milliseconds; 0 disables the ceiling
    */
-  _connectTimeoutMsFor(model, stream) {
-    if (stream === false) return 0;
+  _connectTimeoutMsFor(model) {
     return resolveTimeoutMs(
       model,
       this._connectTimeoutMsOpt,
@@ -1211,21 +1205,23 @@ export class LLMClient {
    * @param {{url: string}} request - built provider request
    * @param {AbortSignal|undefined} callSignal - whole-call signal
    * @param {object} model - resolved model config
-   * @param {boolean} [stream=true] - whether this attempt asked for a streamed response
+   * @param {boolean} [stream=true] - whether this attempt asked for a streamed response;
+   *   only shapes the failure message, since a buffered response cannot separate
+   *   reach from generation (see DEFAULT_CONNECT_TIMEOUT_MS)
    * @returns {Promise<Response>}
    */
   async _connect(request, callSignal, model, stream = true) {
-    const ms = this._connectTimeoutMsFor(model, stream);
+    const ms = this._connectTimeoutMsFor(model);
     return throttledRun(model.id, () => {
       if (!Number.isFinite(ms) || ms <= 0) {
         return this.transport(request, { signal: callSignal, model });
       }
-      return this._connectWithin(ms, request, callSignal, model);
+      return this._connectWithin(ms, request, callSignal, model, stream);
     });
   }
 
   /** `_connect`'s timed inner half; runs inside the throttle slot. */
-  async _connectWithin(ms, request, callSignal, model) {
+  async _connectWithin(ms, request, callSignal, model, stream = true) {
     const attempt = new AbortController();
     const signal = callSignal ? AbortSignal.any([callSignal, attempt.signal]) : attempt.signal;
 
@@ -1249,13 +1245,23 @@ export class LLMClient {
           provider: model.provider,
           modelId: model.id,
           connectTimeoutMs: ms,
+          stream,
           url: redactUrlSecrets(request.url)
         });
         throw new LLMError(
           `Provider ${model.provider} sent no response headers within ${ms} ms — ` +
-            `endpoint unreachable. Raise llm.connectTimeoutMs in platform.json, or ` +
-            `connectTimeoutMs on model ${model.id}, if this endpoint is reachable ` +
-            `but slow to answer.`,
+            `endpoint unreachable. ` +
+            (stream === false
+              ? // A buffered request cannot distinguish the two, so say so
+                // rather than assert an endpoint problem: this call asked the
+                // provider for the whole answer at once, and those headers
+                // arrive only once it has been generated.
+                `This request did not stream, so the provider withholds its headers until the ` +
+                `whole answer is ready — a slow generation looks the same as an unreachable ` +
+                `host here. Stream the request, or raise llm.connectTimeoutMs in ` +
+                `platform.json / connectTimeoutMs on model ${model.id}.`
+              : `Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs on model ` +
+                `${model.id}, if this endpoint is reachable but slow to answer.`),
           {
             code: LLM_ERROR_CODES.TIMEOUT,
             providerCode: 'CONNECT_TIMEOUT',

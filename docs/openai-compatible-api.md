@@ -53,7 +53,7 @@ https://your-ihub-instance.com/api/inference/v1
 | ------------- | -------------------------------------------------------------- |
 | `model`       | **Required.** An iHub model `id` (see `GET .../models`).        |
 | `messages`    | **Required.** Standard `role`/`content` array.                 |
-| `stream`      | `true` streams Server-Sent Events; default `false`.            |
+| `stream`      | `true` streams Server-Sent Events back to you; default `false`. It describes *your* response only — see below. |
 | `temperature` | `0`–`2`, default `0.7`.                                        |
 | `max_tokens`  | Maximum tokens to generate.                                    |
 | `tools`       | OpenAI tool/function definitions — translated to each provider.|
@@ -63,6 +63,16 @@ https://your-ihub-instance.com/api/inference/v1
 Tool calling works across all providers: iHub converts OpenAI-format tools into its generic
 format, dispatches to the provider, and converts the response (including streamed tool-call
 deltas) back into OpenAI format.
+
+#### `stream` shapes your response, not the provider call
+
+iHub always streams from the provider. With `"stream": false` it collects that stream and
+returns one `chat.completion` — the same body, `usage` included, that a buffered provider
+response produced. Nothing changes for you as a client; it matters because a provider asked
+for one buffered piece withholds its response headers until the whole answer is generated,
+which made a slow-but-healthy model indistinguishable from an unreachable endpoint and
+produced spurious `504 TIMEOUT` replies on longer jobs. See
+[Stream deadlines](llm-client.md#stream-deadlines).
 
 ### Tool calling with Gemini — thought signatures
 

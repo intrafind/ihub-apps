@@ -251,9 +251,9 @@ export const platformConfigSchema = z
     llm: z
       .object({
         // Ceiling for the phase before the provider's first response byte,
-        // per attempt. Applies to STREAMED calls only: a non-streamed
-        // endpoint withholds its headers until the whole answer is generated,
-        // so timing that phase would cap generation rather than reach.
+        // per attempt. Every provider call streams, so those headers arrive
+        // as soon as the request is accepted and the phase measures reach
+        // rather than generation.
         connectTimeoutMs: z.number().int().min(0).optional(),
         // Ceiling for the gap between two chunks of a stream that has already
         // produced one.
