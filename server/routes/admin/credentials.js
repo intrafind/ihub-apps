@@ -74,17 +74,21 @@ function redactProfile(profile) {
  * An absent store is `{ credentials: {} }` — that is the ordinary first-run
  * state. A store that exists but cannot be read is *not*: every caller of this
  * writes the result straight back, so folding a corrupt file into an empty one
- * would let the next save delete every credential in it. The store resolves
- * both cases to null, so the namespace listing is what tells them apart.
+ * would let the next save delete every credential in it.
+ *
+ * `readJsonStrict` is what separates the two. The first version of this guard
+ * asked the namespace listing whether the file was there — which cannot work,
+ * because a listing drops the documents it cannot parse, so the file was
+ * missing from it exactly when the guard needed it present. A truncated
+ * `credentials.json` therefore read as `{ credentials: {} }`, the admin page
+ * rendered as if nothing were configured, and the next create wrote every
+ * encrypted secret away with a 201 and no backup.
  *
  * @returns {Promise<{ credentials: Record<string, object> }>} The store
  * @throws {Error} When the file is present but unreadable or malformed
  */
 async function readStore() {
-  const parsed = await configStore.readJson(CREDENTIALS_FILE);
-  if (parsed === null && (await configStore.list('config')).includes('credentials')) {
-    throw new Error(`${CREDENTIALS_FILE} exists but could not be read`);
-  }
+  const parsed = await configStore.readJsonStrict(CREDENTIALS_FILE);
   if (!parsed || typeof parsed !== 'object' || !parsed.credentials) {
     return { credentials: {} };
   }

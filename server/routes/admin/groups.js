@@ -460,7 +460,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // No group file yet is the first-run case: start the structure here.
-      const groupsData = (await configStore.readJson(GROUPS_FILE)) || {
+      const groupsData = (await configStore.readJsonStrict(GROUPS_FILE)) || {
         groups: {},
         metadata: {
           version: '1.0.0',
@@ -590,7 +590,7 @@ export default function registerAdminGroupRoutes(app) {
 
       const { name, description, permissions, mappings, inherits } = req.body;
 
-      const groupsData = await configStore.readJson(GROUPS_FILE);
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
       if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }
@@ -756,7 +756,7 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
-      const groupsData = await configStore.readJson(GROUPS_FILE);
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
       if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }

@@ -440,6 +440,36 @@ export class RawDocumentStore extends DocumentStore {
   }
 
   /**
+   * Whether a document file is present, regardless of whether it parses.
+   *
+   * `get` and `list` both fold "absent", "unreadable" and "malformed" into
+   * the same answer, deliberately — a broken app definition must not take the
+   * boot down. That leaves read-modify-write callers with no way to tell a
+   * first run from a corrupt file, and folding the second into the first lets
+   * the next save write every other entry away. This is the primitive that
+   * separates them, and it deliberately does not parse: a file whose contents
+   * cannot be read is exactly the case it exists to report.
+   *
+   * @param {string} ns - Raw namespace name
+   * @param {string} key - Document key
+   * @returns {Promise<boolean>} True when a file exists at the document's path
+   */
+  async exists(ns, key) {
+    this._assertNamespace(ns);
+    assertValidKey(key);
+    try {
+      const stat = await fs.stat(this._docPath(ns, key));
+      return stat.isFile();
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false;
+      // EACCES on the file or its directory means something is there that we
+      // are not allowed to look at — which is "present but unreadable", the
+      // case this method is for.
+      return true;
+    }
+  }
+
+  /**
    * Reject a namespace this store does not serve.
    *
    * A plain `InvalidKeyError` would be wrong: the name may be perfectly valid

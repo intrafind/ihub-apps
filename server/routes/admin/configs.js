@@ -279,10 +279,16 @@ export default function registerAdminConfigRoutes(app) {
         return sendBadRequest(res, 'Invalid configuration data');
       }
 
-      // Load existing config to preserve other fields and track changes
-      const storedConfig = await configStore.readJson(PLATFORM_FILE);
+      // Load existing config to preserve other fields and track changes.
+      // Strict, because this is a read-modify-write: the merge below emits
+      // only the named keys, so treating an unparseable platform.json as a
+      // first run would answer 200 while replacing `features`, `cors`,
+      // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
+      // One trailing comma left by an operator, one Save, and the file is
+      // gone.
+      const storedConfig = await configStore.readJsonStrict(PLATFORM_FILE);
       if (!storedConfig) {
-        // File doesn't exist, start with empty config
+        // File genuinely absent: first run.
         logger.info('Creating new platform config file', { component: 'AdminConfigs' });
       }
       const existingConfig = storedConfig || {};

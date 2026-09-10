@@ -317,6 +317,67 @@ export class ConfigStore {
   }
 
   /**
+   * Whether a configuration file is present, whether or not it parses.
+   *
+   * {@link ConfigStore#readJson} folds missing, unreadable and malformed into
+   * one `null`, which is right for the boot path and wrong for every
+   * read-modify-write: a caller that reads `null`, treats it as a first run
+   * and writes the result back replaces a corrupt file's entire contents with
+   * whatever it happened to be adding. This is what separates the two cases.
+   *
+   * It does not use the namespace listing to answer. A listing drops the
+   * documents it cannot parse — which is exactly the case this reports — so a
+   * guard built on `list()` is dead precisely when it is needed.
+   *
+   * @param {string} relPath - Path relative to `contents/`
+   * @returns {Promise<boolean>} True when a file exists at that path
+   */
+  async exists(relPath) {
+    const location = parseRawRelPath(relPath);
+    const documents = location ? documentsFor(location.ns) : null;
+    if (documents?.exists) {
+      try {
+        return await documents.exists(location.ns, location.key);
+      } catch (error) {
+        logFailure(relPath, 'existence', error);
+        return false;
+      }
+    }
+    const fullPath = await resolveConfigPath(relPath);
+    if (!fullPath) return false;
+    try {
+      return (await fs.stat(fullPath)).isFile();
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false;
+      // Present but not readable is still present, and is the case a
+      // read-modify-write must refuse to overwrite.
+      return true;
+    }
+  }
+
+  /**
+   * Read a JSON configuration file, refusing to report a corrupt one as absent.
+   *
+   * Use this wherever the result is merged and written back. `readJson`'s
+   * lenient `null` is a boot-path affordance — one broken app definition must
+   * not stop the server — but on a write path it silently converts "I could
+   * not read this" into "there was nothing here", and the save that follows
+   * deletes everything the file held.
+   *
+   * @param {string} relPath - Path relative to `contents/`
+   * @returns {Promise<any|null>} The parsed body, or null when genuinely absent
+   * @throws {Error} When the file is present but unreadable or malformed
+   */
+  async readJsonStrict(relPath) {
+    const data = await this.readJson(relPath);
+    if (data !== null) return data;
+    if (await this.exists(relPath)) {
+      throw new Error(`${relPath} exists but could not be read`);
+    }
+    return null;
+  }
+
+  /**
    * Read a text file under `contents/` — a page body, a renderer, a markdown
    * source.
    *

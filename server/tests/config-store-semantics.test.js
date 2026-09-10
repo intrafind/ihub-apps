@@ -216,6 +216,49 @@ describe('configuration store: preserved read and write semantics', () => {
     });
   });
 
+  describe('a corrupt file is distinguishable from an absent one', () => {
+    // `readJson` folds missing, unreadable and malformed into one null, which
+    // is right for the boot path and destructive on a read-modify-write: a
+    // caller that reads null, calls it a first run and writes the result back
+    // replaces everything the file held. The first guard written for this
+    // asked the namespace listing whether the file was there — dead, because
+    // a listing drops what it cannot parse, so the file was absent from it
+    // exactly when the guard needed it present.
+    it('exists() reports a malformed file as present, while list() cannot', async () => {
+      await place('config/broken-store.json', '{ "credentials": { "a": ');
+
+      assert.equal(await configStore.readJson('config/broken-store.json'), null);
+      assert.equal(
+        (await configStore.list('config')).includes('broken-store'),
+        false,
+        'the listing drops it — which is why a guard built on list() is dead'
+      );
+      assert.equal(await configStore.exists('config/broken-store.json'), true);
+    });
+
+    it('exists() is false for a file that was never written', async () => {
+      assert.equal(await configStore.exists('config/never-written-at-all.json'), false);
+      assert.equal(await configStore.exists('apps/never-written-at-all.json'), false);
+    });
+
+    it('readJsonStrict throws on a malformed file and returns null on an absent one', async () => {
+      await place('config/strict-broken.json', 'not json at all');
+
+      await assert.rejects(
+        () => configStore.readJsonStrict('config/strict-broken.json'),
+        /exists but could not be read/
+      );
+      assert.equal(await configStore.readJsonStrict('config/strict-absent.json'), null);
+    });
+
+    it('readJsonStrict returns the body of a file that is simply fine', async () => {
+      await place('config/strict-fine.json', JSON.stringify({ credentials: { a: 1 } }));
+      assert.deepEqual(await configStore.readJsonStrict('config/strict-fine.json'), {
+        credentials: { a: 1 }
+      });
+    });
+  });
+
   describe('D4: a file name may diverge from the id inside it', () => {
     before(async () => {
       await place(
