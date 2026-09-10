@@ -4,6 +4,7 @@
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import authDebugService from '../utils/authDebugService.js';
 import configCache from '../configCache.js';
+import { hasIdCaseInsensitive } from '../utils/resourceLookup.js';
 
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
@@ -98,8 +99,10 @@ function resourceAccessRequired(resourceType) {
     if (req.user && req.user.permissions) {
       const allowedResources = req.user.permissions[permissionsKey] || new Set();
 
-      // Check if user has wildcard access or specific resource access
-      if (!allowedResources.has('*') && !allowedResources.has(resourceId)) {
+      // Check if user has wildcard access or specific resource access.
+      // Resource ids arriving from outside (e.g. the OpenAI-compatible
+      // inference API) may not match the configured casing exactly.
+      if (!allowedResources.has('*') && !hasIdCaseInsensitive(allowedResources, resourceId)) {
         return res.status(403).json({
           error: 'Access denied',
           code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,

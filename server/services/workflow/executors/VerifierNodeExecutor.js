@@ -25,6 +25,7 @@ import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 
 export class VerifierNodeExecutor extends BaseNodeExecutor {
   /**
@@ -476,7 +477,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    */
   resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {
     if (!Array.isArray(models) || models.length === 0) return null;
-    const byId = id => (id ? models.find(m => m.id === id) : null);
+    const byId = id => (id ? findByIdCaseInsensitive(models, id) : null);
     return (
       byId(config.modelId) ||
       byId(context?.workflow?.config?.defaultModelId) ||

@@ -2,6 +2,7 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -341,7 +342,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
             new Error('apps is null')
           );
         }
-        const appData = apps.find(a => a.id === appId);
+        const appData = findByIdCaseInsensitive(apps, appId);
         if (!appData) {
           const errorMessage = await getLocalizedError('appNotFound', {}, language);
           return sendErrorResponse(res, 404, errorMessage);
@@ -350,7 +351,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         // Check if user has permission to access this app
         if (req.user && req.user.permissions) {
           const allowedApps = req.user.permissions.apps || new Set();
-          if (!allowedApps.has('*') && !allowedApps.has(appId)) {
+          if (!allowedApps.has('*') && !allowedApps.has(appData.id)) {
             const errorMessage = await getLocalizedError('appNotFound', {}, language);
             return sendErrorResponse(res, 404, errorMessage);
           }

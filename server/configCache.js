@@ -20,6 +20,7 @@ import tokenStorageService from './services/TokenStorageService.js';
 import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
+import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 
 /**
  * Resolve environment variables in a string
@@ -1029,7 +1030,7 @@ class ConfigCache {
    */
   getWorkflowById(id) {
     const { data } = this.getWorkflows(true);
-    return data.find(workflow => workflow.id === id) || null;
+    return findByIdCaseInsensitive(data, id) || null;
   }
 
   /**

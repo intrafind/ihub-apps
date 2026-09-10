@@ -41,6 +41,7 @@ import { httpFetch, redactUrlSecrets } from '../../utils/httpConfig.js';
 import { isDnsFailure } from '../../utils/dnsGuard.js';
 import configCache from '../../configCache.js';
 import config from '../../config.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
@@ -508,7 +509,7 @@ export class LLMClient {
    */
   findModel(modelId, { includeDisabled = false } = {}) {
     if (!modelId) return null;
-    return this.listModels(includeDisabled).find(m => m.id === modelId) || null;
+    return findByIdCaseInsensitive(this.listModels(includeDisabled), modelId) || null;
   }
 
   /**
@@ -539,7 +540,7 @@ export class LLMClient {
     if (pool.length === 0) return null;
     for (const id of [modelId, ...preferredIds]) {
       if (!id) continue;
-      const found = pool.find(m => m.id === id);
+      const found = findByIdCaseInsensitive(pool, id);
       if (found) return found;
     }
     if (!fallbackToDefault) return null;
