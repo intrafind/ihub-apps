@@ -367,7 +367,10 @@ export class RunLedgerStore {
     if (this._injectedLocks) return this._injectedLocks;
     const provider = this._provider();
     if (!provider?.locks) return null;
-    let locking = 'none';
+    // Declared without an initializer on purpose: the try either assigns it
+    // (a provider without getCapabilities yields undefined, which the ?? turns
+    // into 'none') or the catch returns, so a default here would be dead.
+    let locking;
     try {
       locking = provider.getCapabilities?.().locking ?? 'none';
     } catch {
