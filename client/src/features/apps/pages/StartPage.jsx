@@ -22,6 +22,7 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
 import { loadAppSettings } from '../../../utils/appSettings';
 
@@ -31,6 +32,7 @@ export default function StartPage() {
   const { user } = useAuth();
   const authKey = useAuthKey();
   const { uiConfig, resetHeaderColor } = useUIConfig();
+  const featureFlags = useFeatureFlags();
   const navigate = useNavigate();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
