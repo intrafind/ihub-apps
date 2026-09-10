@@ -16,8 +16,32 @@ import useRecentAppIds from '../../../client/src/shared/hooks/useRecentAppIds';
  * whatever it was when the page loaded (#2320) — it needs a subscription.
  */
 
+// A cross-tab write, as the listener sees it: only `type` and `key` are read.
+// Built on a plain Event rather than `new StorageEvent('storage', { key })` —
+// the two-argument constructor is standard, but CodeQL's bundled DOM externs
+// declare the pre-EventInit single-argument form and flag the init object as a
+// superfluous trailing argument. This also keeps the test independent of
+// jsdom's StorageEvent implementation.
+const storageEvent = key => {
+  const event = new Event('storage');
+  Object.defineProperty(event, 'key', { value: key, configurable: true });
+  return event;
+};
+
 beforeEach(() => {
   localStorage.clear();
+  // Recency is ordered by millisecond timestamps, so two ids recorded in the
+  // same millisecond tie and fall back to insertion order — which turns any
+  // "most recent first" assertion into a race against the clock, passing only
+  // while the work between two writes happens to cross a millisecond
+  // boundary. Hand out a distinct, increasing time per call so the expected
+  // order is the only possible order.
+  let clock = 1_700_000_000_000;
+  jest.spyOn(Date, 'now').mockImplementation(() => (clock += 1000));
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe('recent item helpers', () => {
@@ -42,11 +66,11 @@ describe('recent item helpers', () => {
     const listener = jest.fn();
     const unsubscribe = subscribeToRecentApps(listener);
 
-    window.dispatchEvent(new StorageEvent('storage', { key: 'ihub_recent_apps_default' }));
+    window.dispatchEvent(storageEvent('ihub_recent_apps_default'));
     expect(listener).toHaveBeenCalledTimes(1);
 
     // Another key's storage event is not ours.
-    window.dispatchEvent(new StorageEvent('storage', { key: 'ihub_favorite_apps' }));
+    window.dispatchEvent(storageEvent('ihub_favorite_apps'));
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
