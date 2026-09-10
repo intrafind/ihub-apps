@@ -354,16 +354,37 @@ function AppChat({ preloadedApp = null }) {
   );
   useNextcloudEmbedAttachments(fileUploadHandler, app, currentModelObject);
 
-  // Consume any attachments handed off from the start page. The message text
-  // and auto-send still arrive via the `prefill` / `send=true` query params;
-  // here we only restore the already-processed file payload so the auto-send
-  // includes it.
+  // Consume the start-page handoff: the already-processed file payload plus the
+  // feature toggles the user picked in that page's actions menu (web search,
+  // tools, image settings, transcription — issue #2322). The message text and
+  // auto-send still arrive via the `prefill` / `send=true` query params.
+  //
+  // Gated on `app && !modelsLoading` on purpose: `useAppSettings` seeds those
+  // same values from the app config on exactly that gate, and its effect is
+  // registered before this one, so applying here reliably lands *after* the
+  // seeding instead of being overwritten by it.
+  const handoffAppliedRef = useRef(false);
   useEffect(() => {
+    handoffAppliedRef.current = false;
+  }, [appId]);
+  useEffect(() => {
+    if (handoffAppliedRef.current || !app || modelsLoading) return;
     const handoff = consumePendingChatStart(appId);
-    if (handoff?.files) {
+    handoffAppliedRef.current = true;
+    if (!handoff) return;
+    if (handoff.files) {
       fileUploadHandler.setSelectedFile(handoff.files);
     }
-  }, [appId]); // eslint-disable-line @eslint-react/exhaustive-deps
+    const settings = handoff.settings;
+    if (!settings) return;
+    if (Array.isArray(settings.enabledTools)) setEnabledTools(settings.enabledTools);
+    if (typeof settings.websearchEnabled === 'boolean')
+      setWebsearchEnabled(settings.websearchEnabled);
+    if (typeof settings.transcriptionEnabled === 'boolean')
+      setTranscriptionEnabled(settings.transcriptionEnabled);
+    if (settings.imageAspectRatio) setImageAspectRatio(settings.imageAspectRatio);
+    if (settings.imageQuality) setImageQuality(settings.imageQuality);
+  }, [app, appId, modelsLoading]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Check document token size against model context window and warn user if needed
   useEffect(() => {

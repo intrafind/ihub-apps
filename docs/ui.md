@@ -416,6 +416,12 @@ model selector appears unless the app disables it, lists the models the current 
 with that app, and shows the same "No models available" notice as the chat when the user's
 groups permit none.
 
+The input is the default app's real chat input, so its **+** menu offers the same per-chat
+features the app itself offers — web search, the app's tools, the transcription toggle, the
+image-generation settings and Magic Prompt — each shown only when the app (and the platform
+feature flag) enables it. The toggles open in the state already chosen for that app in the
+current session, and whatever is picked applies to the first message when it is sent in the app.
+
 The `startPage` section configures it. It can be edited under **Admin → UI Customization →
 Start Page**; existing installations receive the defaults through a configuration migration.
 
