@@ -1,7 +1,4 @@
-import { existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../pathUtils.js';
+import configStore from '../services/config/ConfigStore.js';
 import logger from './logger.js';
 
 /**
@@ -11,6 +8,13 @@ import logger from './logger.js';
  * and legacy JSON array files for backward compatibility.
  *
  * This eliminates the duplication between appsLoader, modelsLoader, and promptsLoader.
+ *
+ * Both sources are read through {@link module:services/config/ConfigStore}, so
+ * apps, models, prompts and the rest go through the storage provider like every
+ * other configuration file. That also gives them the `CONTENTS_DIR` setting,
+ * which the hardcoded `contents/` path this loader used to build ignored: an
+ * installation with a relocated contents directory silently loaded no
+ * resources at all.
  */
 
 /**
@@ -45,39 +49,37 @@ export function createResourceLoader({
    * @returns {Array} Array of resource objects
    */
   async function loadFromFiles(verbose = true) {
-    const rootDir = getRootDir();
-    const resourceDir = join(rootDir, 'contents', individualPath);
+    // Files that do not parse never reach here: the store skips them and logs
+    // them itself, the same outcome as the per-file catch this loop used to do.
+    const documents = await configStore.listDocuments(individualPath);
 
-    if (!existsSync(resourceDir)) {
+    if (documents.length === 0) {
       if (verbose) {
-        logger.info('Resource directory not found, skipping individual files', {
+        logger.info('No individual resource files found, skipping', {
           component: 'ResourceLoader',
-          resourceName
+          resourceName,
+          individualPath
         });
       }
       return [];
     }
 
-    const resources = [];
-    const dirContents = await fs.readdir(resourceDir);
-    const files = dirContents.filter(file => file.endsWith('.json'));
-
-    if (verbose && files.length > 0) {
+    if (verbose) {
       logger.info('Loading resource', {
         component: 'ResourceLoader',
         resourceName,
-        count: files.length
+        count: documents.length
       });
     }
 
+    const resources = [];
     const loadedItems = [];
     const errorItems = [];
 
-    for (const file of files) {
+    for (const document of documents) {
+      const source = document.path;
       try {
-        const filePath = join(resourceDir, file);
-        const fileContent = await fs.readFile(filePath, 'utf8');
-        let resource = JSON.parse(fileContent);
+        let resource = document.data;
 
         // Add enabled field if it doesn't exist (defaults to true)
         if (resource.enabled === undefined) {
@@ -86,12 +88,12 @@ export function createResourceLoader({
 
         // Process item if processor is provided
         if (processItem) {
-          resource = processItem(resource, filePath);
+          resource = processItem(resource, source);
         }
 
         // Validate item if validator is provided
         if (validateItem) {
-          resource = validateItem(resource, filePath);
+          resource = validateItem(resource, source);
         }
 
         resources.push(resource);
@@ -100,7 +102,7 @@ export function createResourceLoader({
           loadedItems.push({ id: resource.id, enabled: resource.enabled !== false, icon });
         }
       } catch (error) {
-        errorItems.push({ file, error: error.message });
+        errorItems.push({ file: source, error: error.message });
       }
     }
 
@@ -133,10 +135,11 @@ export function createResourceLoader({
    * @returns {Array} Array of resource objects
    */
   async function loadFromLegacyFile(verbose = true) {
-    const rootDir = getRootDir();
-    const legacyFilePath = join(rootDir, 'contents', legacyPath);
+    // A missing legacy file and an unreadable one both read as null; the store
+    // has already logged the difference.
+    let resources = await configStore.readJson(legacyPath);
 
-    if (!existsSync(legacyFilePath)) {
+    if (resources === null) {
       if (verbose) {
         logger.info('Legacy file not found, skipping', {
           component: 'ResourceLoader',
@@ -147,9 +150,6 @@ export function createResourceLoader({
     }
 
     try {
-      const fileContent = await fs.readFile(legacyFilePath, 'utf8');
-      let resources = JSON.parse(fileContent);
-
       if (!Array.isArray(resources)) {
         logger.warn('Legacy file is not an array', { component: 'ResourceLoader', legacyPath });
         return [];
@@ -174,12 +174,12 @@ export function createResourceLoader({
         // Process item if processor is provided
         let processedResource = resource;
         if (processItem) {
-          processedResource = processItem(resource, `${legacyFilePath}[${idx}]`);
+          processedResource = processItem(resource, `${legacyPath}[${idx}]`);
         }
 
         // Validate item if validator is provided
         if (validateItem) {
-          processedResource = validateItem(processedResource, `${legacyFilePath}[${idx}]`);
+          processedResource = validateItem(processedResource, `${legacyPath}[${idx}]`);
         }
 
         return processedResource;
@@ -326,19 +326,34 @@ export function createValidator(requiredFields = []) {
 }
 
 /**
+ * Directory a source path sits in, mapped to the resource type it holds.
+ * Ordered: `config/groups` has to be recognized before the wider `config/`.
+ */
+const RESOURCE_TYPES_BY_DIRECTORY = [
+  ['apps/', 'app'],
+  ['models/', 'model'],
+  ['prompts/', 'prompt'],
+  ['tools/', 'tool'],
+  ['sources/', 'source'],
+  ['config/groups', 'group'],
+  ['config/', 'config']
+];
+
+/**
  * Helper function to extract resource type from file path
+ *
+ * Sources are contents-relative (`apps/chat.json`) since resources are loaded
+ * through the config store, so the directory is matched at the start of the
+ * path as well as after a separator.
+ *
  * @param {string} source - File path or source string
  * @returns {string} Resource type (app, model, prompt, tool, source, etc.)
  */
 function extractResourceType(source) {
-  if (source.includes('/apps/')) return 'app';
-  if (source.includes('/models/')) return 'model';
-  if (source.includes('/prompts/')) return 'prompt';
-  if (source.includes('/tools/')) return 'tool';
-  if (source.includes('/sources/')) return 'source';
-  if (source.includes('/config/groups')) return 'group';
-  if (source.includes('/config/')) return 'config';
-  return 'resource';
+  const match = RESOURCE_TYPES_BY_DIRECTORY.find(
+    ([directory]) => source.startsWith(directory) || source.includes(`/${directory}`)
+  );
+  return match ? match[1] : 'resource';
 }
 
 /**

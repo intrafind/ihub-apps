@@ -27,7 +27,13 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { EtagMismatchError, InvalidKeyError, LockTimeoutError, StorageError } from '../errors.js';
+import {
+  EtagMismatchError,
+  InvalidKeyError,
+  LockTimeoutError,
+  NotSupportedError,
+  StorageError
+} from '../errors.js';
 
 /** ISO-8601 instant with an optional fractional part — the Document timestamp format. */
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
@@ -121,6 +127,37 @@ function contractSize(data) {
 }
 
 /**
+ * The bytes a raw namespace stores for a document body.
+ *
+ * A raw namespace is a view over files an installation edits by hand, so its
+ * serialization is fixed by compatibility rather than chosen: two-space
+ * indent, no trailing newline — exactly what the configuration tooling has
+ * always written. Recomputed here rather than read back from the provider,
+ * like every other value the contract fixes.
+ *
+ * @param {any} data - Document body
+ * @returns {string} The stored bytes
+ */
+function rawBytes(data) {
+  return JSON.stringify(data, null, 2);
+}
+
+/**
+ * The etag a raw namespace reports: sha256 of the stored bytes.
+ *
+ * Deliberately not {@link contractEtag}. In a raw namespace the file is the
+ * document, so two files whose parsed data is equal but whose formatting
+ * differs are different documents — that is what lets a compare-and-set
+ * notice a hand edit.
+ *
+ * @param {string} bytes - Stored bytes
+ * @returns {string} Hex digest
+ */
+function rawEtag(bytes) {
+  return crypto.createHash('sha256').update(bytes, 'utf8').digest('hex');
+}
+
+/**
  * Assert the envelope fields every Document carries, independent of its body.
  *
  * @param {Object} doc - Document returned by the store
@@ -182,13 +219,36 @@ async function startProvider(createProvider, options) {
  *   call — that is how the restart-recovery case gets a second process's view
  *   of the same durable data.
  * @param {Object} options.capabilities - The exact object
- *   `getCapabilities()` is expected to return.
+ *   `getCapabilities()` is expected to return. `rawNamespaces` is the one
+ *   optional member: name the raw namespaces here and the raw-mode group below
+ *   runs against the first of them, leave it out and that group is skipped
+ *   while the rest of the suite is unaffected. Leaving it out is the right
+ *   choice unless the factory pointed the provider's raw location at a scratch
+ *   directory — a raw namespace is a view over an installation's real
+ *   configuration files, and the suite writes to it.
+ * @param {Object} [options.rawFiles] - Access to the bytes behind a raw
+ *   namespace, for the cases that assert the stored representation itself:
+ *   `read(provider, ns, key) => Promise<string|null>` returns the stored bytes
+ *   for a document key, `write(provider, ns, key, bytes) => Promise<void>`
+ *   puts bytes there behind the store's back (a hand edit), and
+ *   `entries(provider, ns) => Promise<string[]>` lists everything the backing
+ *   location holds — which is how the suite proves no sidecar was written
+ *   beside a configuration file. Omitted, those cases are skipped.
  * @returns {void}
  */
-export function runProviderConformance({ name, createProvider, capabilities }) {
+export function runProviderConformance({ name, createProvider, capabilities, rawFiles }) {
   assert.equal(typeof name, 'string', 'runProviderConformance needs a provider name');
   assert.equal(typeof createProvider, 'function', 'runProviderConformance needs a factory');
   assert.ok(capabilities && typeof capabilities === 'object', 'expected capabilities are required');
+
+  // `rawNamespaces` is asserted separately from the rest of the capability set
+  // so a provider may report it while a runner that does not exercise raw mode
+  // stays a three-line runner.
+  const { rawNamespaces: expectedRawNamespaces, ...expectedCoreCapabilities } = capabilities;
+  const rawNamespace =
+    Array.isArray(expectedRawNamespaces) && expectedRawNamespaces.length > 0
+      ? expectedRawNamespaces[0]
+      : null;
 
   /** Skip reasons for the facets a provider may legitimately not offer. */
   const skipWithoutBlobs = capabilities.blobs ? false : 'provider reports blobs: false';
@@ -199,6 +259,9 @@ export function runProviderConformance({ name, createProvider, capabilities }) {
   const skipWithoutCas = capabilities.conditionalWrites
     ? false
     : 'provider reports conditionalWrites: false';
+  const skipWithoutRaw = rawNamespace ? false : 'runner declares no raw namespaces';
+  const skipWithoutRawFiles =
+    skipWithoutRaw || (rawFiles ? false : 'runner supplies no rawFiles access');
 
   describe(`storage conformance: ${name}`, () => {
     /**
@@ -248,7 +311,21 @@ export function runProviderConformance({ name, createProvider, capabilities }) {
 
       it('getCapabilities() reports the expected, well-formed capability set', () => {
         const caps = shared.getCapabilities();
-        assert.deepEqual(caps, capabilities);
+        const { rawNamespaces, ...core } = caps;
+        assert.deepEqual(core, expectedCoreCapabilities);
+        if (expectedRawNamespaces === undefined) {
+          // A provider may serve raw namespaces the runner chose not to
+          // exercise, but it must still describe them in a usable shape —
+          // callers branch on this to know an owner has no meaning there.
+          assert.ok(
+            rawNamespaces === undefined ||
+              (Array.isArray(rawNamespaces) &&
+                rawNamespaces.every(ns => typeof ns === 'string' && ns.length > 0)),
+            'rawNamespaces, when reported, is an array of namespace names'
+          );
+        } else {
+          assert.deepEqual(rawNamespaces, expectedRawNamespaces, 'the raw namespaces are reported');
+        }
         assert.equal(typeof caps.transactions, 'boolean');
         assert.ok(NOTIFICATION_MODES.includes(caps.notifications), 'notifications is in the enum');
         assert.ok(LOCKING_MODES.includes(caps.locking), 'locking is in the enum');
@@ -683,6 +760,231 @@ export function runProviderConformance({ name, createProvider, capabilities }) {
         assert.equal(item.ownerId, 'alice');
         assert.equal(item.etag, contractEtag(data), 'the etag still describes the body');
         assert.equal(item.size, contractSize(data));
+      });
+    });
+
+    /**
+     * Raw namespaces — the mode where the stored file *is* the document.
+     *
+     * A provider may declare that some namespaces are views over
+     * configuration an installation already owns and edits by hand. Those
+     * namespaces keep the DocumentStore interface but change what the stored
+     * representation is, and three contract points follow from that: the
+     * bytes are the two-space JSON the configuration tooling has always
+     * written, the etag digests those bytes rather than a re-serialization of
+     * the parsed data, and there is no owner to file the document under.
+     *
+     * The owner-scoped cases in `listing and paging` therefore do **not** run
+     * against a raw namespace. They are not quietly assumed to pass either:
+     * the cases below assert that asking for an owner is refused outright, so
+     * a provider that started storing owners here would fail rather than drift.
+     */
+    describe('raw namespaces', { skip: skipWithoutRaw }, () => {
+      const ns = rawNamespace;
+
+      /** Entries the backing location gained between two listings. */
+      const added = (before, after) => after.filter(entry => !before.includes(entry));
+
+      it('round-trips a document stored unwrapped, with no owner', async () => {
+        const key = nextId('raw');
+        const data = { id: key, nested: { list: [1, 2, 3] }, flag: true, nothing: null };
+        const written = await shared.documents.put(ns, key, data);
+        assertDocumentShape(written, ns, key);
+        assert.equal(written.ownerId, null, 'configuration has no owner');
+        assert.equal(written.contentType, 'application/json', 'the file is JSON');
+        const read = await shared.documents.get(ns, key);
+        assert.deepEqual(read, written, 'put returns exactly what a following get returns');
+        assert.deepEqual(read.data, data);
+      });
+
+      it('etag and size describe the stored bytes, not a re-serialization', async () => {
+        const key = nextId('raw');
+        const data = { id: key, list: ['x', 'y'] };
+        const bytes = rawBytes(data);
+        const written = await shared.documents.put(ns, key, data);
+        assert.equal(written.etag, rawEtag(bytes), 'etag is sha256 of the stored bytes');
+        assert.equal(written.size, Buffer.byteLength(bytes, 'utf8'));
+        assert.notEqual(
+          written.etag,
+          contractEtag(data),
+          'an enveloped etag over the compact form would miss a whitespace-only edit'
+        );
+      });
+
+      it('rejects an ownerId with NotSupportedError and stores nothing', async () => {
+        const key = nextId('raw');
+        await assert.rejects(
+          () => shared.documents.put(ns, key, { v: 1 }, { ownerId: 'alice' }),
+          NotSupportedError,
+          'a configuration document cannot be owned'
+        );
+        assert.equal(await shared.documents.get(ns, key), null, 'the rejected put stored nothing');
+        await assert.rejects(
+          () => shared.documents.list(ns, { ownerId: 'alice' }),
+          NotSupportedError,
+          'and it cannot be listed by owner either'
+        );
+      });
+
+      it('accepts ownerId: null, the state the document is already in', async () => {
+        const key = nextId('raw');
+        const written = await shared.documents.put(ns, key, { v: 1 }, { ownerId: null });
+        assert.equal(written.ownerId, null);
+        const page = await shared.documents.list(ns, { prefix: key, ownerId: null });
+        assert.deepEqual(
+          page.items.map(item => item.key),
+          [key],
+          'an explicit null is "no filter", not an owner'
+        );
+      });
+
+      it('rejects a content type the file cannot carry', async () => {
+        const key = nextId('raw');
+        await assert.rejects(
+          () => shared.documents.put(ns, key, { v: 1 }, { contentType: 'text/plain' }),
+          NotSupportedError,
+          'silently storing it as JSON and reporting text/plain would be a lie'
+        );
+        assert.equal(await shared.documents.get(ns, key), null);
+      });
+
+      it('a document that was never written reads null and lists nothing', async () => {
+        const key = nextId('raw');
+        assert.equal(await shared.documents.get(ns, key), null);
+        const page = await shared.documents.list(ns, { prefix: key });
+        assert.deepEqual(page.items, [], 'and it is absent from the listing too');
+      });
+
+      it('delete reports true once and false afterwards', async () => {
+        const key = nextId('raw');
+        await shared.documents.put(ns, key, { v: 1 });
+        assert.equal(await shared.documents.delete(ns, key), true);
+        assert.equal(await shared.documents.delete(ns, key), false);
+        assert.equal(await shared.documents.get(ns, key), null);
+      });
+
+      it('lists the namespace in ascending key order', async () => {
+        const prefix = nextId('raw');
+        const keys = [`${prefix}.c`, `${prefix}.a`, `${prefix}.b`];
+        for (const key of keys) await shared.documents.put(ns, key, { key });
+        const page = await shared.documents.list(ns, { prefix });
+        assert.deepEqual(
+          page.items.map(item => item.key),
+          [...keys].sort()
+        );
+      });
+
+      it('rejects an unsafe key with InvalidKeyError', async () => {
+        for (const bad of INVALID_IDS) {
+          await assert.rejects(() => shared.documents.get(ns, bad), InvalidKeyError);
+          await assert.rejects(() => shared.documents.put(ns, bad, {}), InvalidKeyError);
+          await assert.rejects(() => shared.documents.delete(ns, bad), InvalidKeyError);
+        }
+      });
+
+      describe('conditional writes', { skip: skipWithoutCas }, () => {
+        it('a put carrying the current etag succeeds', async () => {
+          const key = nextId('raw');
+          const first = await shared.documents.put(ns, key, { v: 1 });
+          const second = await shared.documents.put(ns, key, { v: 2 }, { etag: first.etag });
+          assert.deepEqual(second.data, { v: 2 });
+          assert.equal(second.etag, rawEtag(rawBytes({ v: 2 })));
+        });
+
+        it('a stale etag and a create-only write on an existing file both lose', async () => {
+          const key = nextId('raw');
+          const first = await shared.documents.put(ns, key, { v: 1 });
+          await shared.documents.put(ns, key, { v: 2 });
+          await assert.rejects(
+            () => shared.documents.put(ns, key, { v: 3 }, { etag: first.etag }),
+            EtagMismatchError
+          );
+          await assert.rejects(
+            () => shared.documents.put(ns, key, { v: 4 }, { etag: null }),
+            EtagMismatchError
+          );
+          assert.deepEqual((await shared.documents.get(ns, key)).data, { v: 2 }, 'untouched');
+        });
+      });
+
+      describe('the bytes on disk', { skip: skipWithoutRawFiles }, () => {
+        it('stores exactly the two-space JSON, with no trailing newline', async () => {
+          const key = nextId('raw');
+          const data = { id: key, name: { en: 'Config' }, list: [1, 2] };
+          await shared.documents.put(ns, key, data);
+          const stored = await rawFiles.read(shared, ns, key);
+          assert.equal(
+            stored,
+            rawBytes(data),
+            'a different serialization rewrites every configuration file on first save'
+          );
+          assert.ok(!stored.endsWith('\n'), 'no trailing newline is part of that shape');
+        });
+
+        it('reads a document written by hand, formatting and all', async () => {
+          const key = nextId('raw');
+          const handWritten = '{\n\t"id":"hand",\n\n  "list": [ 1,2 ]\n}';
+          await rawFiles.write(shared, ns, key, handWritten);
+          const read = await shared.documents.get(ns, key);
+          assert.deepEqual(
+            read.data,
+            { id: 'hand', list: [1, 2] },
+            'the body is what it parses to'
+          );
+          assert.equal(read.etag, rawEtag(handWritten), 'the etag follows the bytes as written');
+          assert.equal(read.size, Buffer.byteLength(handWritten, 'utf8'));
+        });
+
+        it('a malformed document reads as absent instead of throwing', async () => {
+          const key = nextId('raw');
+          await rawFiles.write(shared, ns, key, '{ "half": ');
+          assert.equal(
+            await shared.documents.get(ns, key),
+            null,
+            'callers branch on null; a throw here would fail a boot over one bad file'
+          );
+          const page = await shared.documents.list(ns, { prefix: key });
+          assert.deepEqual(page.items, [], 'and the listing does not invent an empty document');
+        });
+
+        it(
+          'a hand edit between read and write fails the compare-and-set',
+          {
+            skip: skipWithoutCas
+          },
+          async () => {
+            const key = nextId('raw');
+            const read = await shared.documents.put(ns, key, { v: 1 });
+            const edited = rawBytes({ v: 1, byHand: true });
+            await rawFiles.write(shared, ns, key, edited);
+            await assert.rejects(
+              () => shared.documents.put(ns, key, { v: 2 }, { etag: read.etag }),
+              EtagMismatchError,
+              'the point of digesting the bytes: an out-of-band edit is not lost'
+            );
+            assert.equal(await rawFiles.read(shared, ns, key), edited, 'the hand edit survived');
+          }
+        );
+
+        it('writes nothing beside the documents themselves', async () => {
+          const prefix = nextId('raw');
+          const before = await rawFiles.entries(shared, ns);
+          await shared.documents.put(ns, `${prefix}.a`, { v: 1 });
+          await shared.documents.put(ns, `${prefix}.b`, { v: 2 });
+          const afterWrite = await rawFiles.entries(shared, ns);
+          assert.equal(
+            added(before, afterWrite).length,
+            2,
+            'an owner index, a lock file or a leftover temp file here would be loaded as configuration'
+          );
+          assert.equal(await shared.documents.delete(ns, `${prefix}.a`), true);
+          assert.equal(await shared.documents.delete(ns, `${prefix}.b`), true);
+          assert.deepEqual(
+            added(before, await rawFiles.entries(shared, ns)),
+            [],
+            'and a delete leaves nothing behind either'
+          );
+        });
       });
     });
 
