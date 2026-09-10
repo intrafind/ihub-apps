@@ -1425,3 +1425,18 @@ heading says, under **UI Customization → Start Page**.
   renders empty falls back to the built-in greeting, so the page always has one.
 - Existing installations keep greeting users by name; a configuration migration writes that
   choice, and the heading stays unset so the bundled greeting translations continue to be used.
+
+## Personalized iAssistant Context with Prompt Variables
+
+The iAssistant *Extra Context* and *System Prompt Preamble* settings now support global prompt
+variables — the same `{{user_name}}`, `{{user_email}}`, `{{date}}`, `{{timezone}}` and
+admin-defined custom variables that already work in system prompts. The values resolve against
+the requesting user when a conversation starts, so the assistant addresses each user personally
+instead of carrying one fixed identity for everyone.
+
+- A default **iAssistant** app ships with the platform: disabled until an admin enables it, with
+  the model selector hidden and an extra context that introduces the requesting user by name,
+  email and current date.
+- Installations whose iAssistant app still carries the hardcoded test context ("My name is
+  Daniel …") get it replaced by the templated default automatically; any other custom extra
+  context is left untouched.

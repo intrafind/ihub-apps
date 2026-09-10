@@ -97,7 +97,7 @@ function IAssistantSection({ app, onChange }) {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {t(
                     'admin.apps.edit.iassistantExtraContextDesc',
-                    'Additional context to be added to the response state prompt. Use with care as changes can impact answer quality.'
+                    'Additional context to be added to the response state prompt. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care as changes can impact answer quality.'
                   )}
                 </p>
                 <textarea
@@ -116,7 +116,7 @@ function IAssistantSection({ app, onChange }) {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {t(
                     'admin.apps.edit.iassistantSystemPromptPreambleDesc',
-                    'The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Use with care.'
+                    'The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.'
                   )}
                 </p>
                 <textarea
