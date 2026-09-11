@@ -33,6 +33,10 @@ import { RUN_EVENTS } from '../run/runReducer';
  * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
  * @param {Function} options.onEvent - Called for each SSE v2 frame: ({ type, envelope })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
+ * @param {Function} [options.isFollowingExistingRun] - Whether this stream is
+ *   following a turn it did not start. Only then does the heartbeat treat "the
+ *   server is running nothing on this chat" as a reason to stop — see
+ *   {@link startHeartbeat}.
  */
 function useEventSource({
   appId,
@@ -40,7 +44,8 @@ function useEventSource({
   durable = false,
   timeoutDuration = 60000,
   onEvent,
-  onProcessingChange
+  onProcessingChange,
+  isFollowingExistingRun
 }) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
@@ -95,6 +100,24 @@ function useEventSource({
     }
   }, [appId, chatId, abortAndClearTimers]);
 
+  /**
+   * Poll the server for whether this chat's stream is still worth holding.
+   *
+   * `active` answers whether the server still has this client's stream, which
+   * is the original question. `processing` answers whether anything is
+   * actually producing on the chat, and it is only trustworthy as a stop
+   * signal for a stream that is *following* a turn it did not start.
+   *
+   * That distinction matters. A stream this surface opened for its own turn is
+   * briefly connected before the turn's POST reaches the server, and treating
+   * `processing: false` as terminal there would cancel the turn the user just
+   * sent. But a surface re-attached to a chat the store says is running has
+   * nothing of its own in flight, and "the server is running nothing" is then
+   * the whole answer: the turn ended in a process that died before it could
+   * write a terminal frame. Without this the SSE connects, no frame ever
+   * arrives, and the chat renders as generating — with the composer disabled
+   * behind a Stop button — on every single open, forever.
+   */
   const startHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -103,7 +126,9 @@ function useEventSource({
       if (!abortControllerRef.current || !appId || !chatId) return;
       try {
         const status = await checkAppChatStatus(appId, chatId);
-        if (!status || !status.active) {
+        const idle =
+          status?.active && status.processing === false && isFollowingExistingRun?.() === true;
+        if (!status || !status.active || idle) {
           cleanupEventSource();
           if (onProcessingChange) onProcessingChange(false);
         }
@@ -111,7 +136,7 @@ function useEventSource({
         console.warn('Error checking chat status:', err);
       }
     }, 60000);
-  }, [appId, chatId, cleanupEventSource, onProcessingChange]);
+  }, [appId, chatId, cleanupEventSource, onProcessingChange, isFollowingExistingRun]);
 
   /**
    * Open the SSE stream to the given URL.

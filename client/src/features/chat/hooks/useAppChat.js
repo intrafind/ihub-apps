@@ -500,7 +500,12 @@ function useAppChat({
     // A stored chat's turn outlives this surface: leaving it must not stop it.
     durable: serverBacked,
     onEvent: handleEvent,
-    onProcessingChange: setProcessing
+    onProcessingChange: setProcessing,
+    // True only while this surface is following a turn it did not start, which
+    // is what makes the heartbeat's "nothing is running on this chat" answer
+    // safe to act on. A turn this surface sent itself is briefly connected
+    // before its POST lands, and acting on it there would cancel it.
+    isFollowingExistingRun: () => reattachedRunRef.current !== null
   });
 
   // Store cleanup function in ref for access in callbacks

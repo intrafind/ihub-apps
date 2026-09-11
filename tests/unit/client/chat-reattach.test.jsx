@@ -40,7 +40,7 @@ jest.mock('../../../client/src/api', () => ({
   __esModule: true,
   sendAppChatMessage: jest.fn().mockResolvedValue({}),
   stopAppChatStream: jest.fn().mockResolvedValue({}),
-  checkAppChatStatus: jest.fn().mockResolvedValue({ active: true })
+  checkAppChatStatus: jest.fn().mockResolvedValue({ active: true, processing: true })
 }));
 
 const mockOpenCalls = [];
@@ -70,6 +70,7 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
 
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
 const { fetchWithAuthRetry } = require('../../../client/src/shared/utils/openSseStream');
+const { checkAppChatStatus } = require('../../../client/src/api');
 
 const RUN_ID = 'chat-run-77';
 
@@ -96,6 +97,7 @@ beforeEach(() => {
   ledgerPages.length = 0;
   sessionStorage.clear();
   fetchWithAuthRetry.mockClear();
+  checkAppChatStatus.mockReset().mockResolvedValue({ active: true, processing: true });
 });
 
 test('replays what the ledger already holds, then follows the stream', async () => {
@@ -339,4 +341,91 @@ test('reattaching to nothing is a no-op', async () => {
   expect(attached).toBe(false);
   expect(fetchWithAuthRetry).not.toHaveBeenCalled();
   expect(mockOpenCalls).toEqual([]);
+});
+
+describe('the heartbeat backstop for a turn nobody is running', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** Attach to a run whose ledger has no terminal frame. */
+  async function attachToStrandedRun() {
+    ledgerPages.push(
+      page([
+        envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+        envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'half an answer' })
+      ])
+    );
+    const rendered = renderHook(() =>
+      useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
+    );
+    await act(async () => {
+      await rendered.result.current.reattachToRun(RUN_ID);
+    });
+    expect(rendered.result.current.processing).toBe(true);
+    return rendered;
+  }
+
+  test('releases the composer when the server is running nothing on the chat', async () => {
+    // A restart leaves the chat document `running` with a live `activeRunId`
+    // and no terminal frame in the ledger, so the replay attaches and the SSE
+    // connects — to a turn that ended in a process that no longer exists. No
+    // frame can ever arrive, so the chat rendered as generating, with the
+    // composer disabled behind a Stop button, on every single open.
+    checkAppChatStatus.mockResolvedValue({ active: true, processing: false });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.processing).toBe(false);
+  });
+
+  test('does not stop a turn this surface sent itself', async () => {
+    // The window the predicate exists for: a stream opened for our own turn is
+    // connected before the turn's POST reaches the server, so `processing` is
+    // legitimately false for a moment. Acting on it there would cancel the
+    // message the user just sent. Only a surface following a turn it did not
+    // start can read "the server is running nothing" as the whole answer.
+    checkAppChatStatus.mockResolvedValue({ active: true, processing: false });
+    const { result } = renderHook(() =>
+      useAppChat({ appId: 'acme', chatId: 'chat-own-turn', serverBacked: true })
+    );
+
+    await act(async () => {
+      result.current.sendMessage({
+        displayMessage: 'a question of our own',
+        apiMessage: { content: 'a question of our own' },
+        params: { modelId: 'model-x' }
+      });
+    });
+    expect(result.current.processing).toBe(true);
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.processing).toBe(true);
+  });
+
+  test('leaves a turn that is genuinely producing alone', async () => {
+    checkAppChatStatus.mockResolvedValue({ active: true, processing: true });
+    const { result } = await attachToStrandedRun();
+
+    await act(async () => {
+      jest.advanceTimersByTime(60000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.processing).toBe(true);
+  });
 });
