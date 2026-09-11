@@ -38,8 +38,16 @@ export const activeRequests = createPresenceMap('request');
  * new one is still producing*. With a plain flag that unwind would drop the
  * mark the live turn depends on, leaving it one disconnect away from being
  * killed silently.
+ *
+ * `shared: true` is the same argument one level up. Presence is exclusive by
+ * default — one SSE stream lives in one worker — but two overlapping turns on
+ * one chat can sit in two workers, and under the exclusive rule the second
+ * worker's retraction removed the cluster-wide mark while the first was still
+ * generating. The local count is then right and the mirror is wrong, which is
+ * worse than either: a third worker holding the browser's stream sees the chat
+ * as ephemeral and relays an abort on disconnect.
  */
-const durableChats = createPresenceMap('chat-durable');
+const durableChats = createPresenceMap('chat-durable', { shared: true });
 
 /** Bus channels. */
 const EVENT_CHANNEL = 'sse:event';

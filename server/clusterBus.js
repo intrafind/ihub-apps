@@ -99,6 +99,24 @@ const remoteOwnership = new Map();
 /** Presence maps created in this worker, keyed by kind, for re-announcement. */
 const presenceMaps = new Map();
 
+/**
+ * Kinds whose keys may be held by several workers at once.
+ *
+ * The default is exclusive, and it fits what presence was built for: one SSE
+ * stream lives in one worker, one abort controller belongs to one turn. The
+ * primary therefore keeps a single owner per key, and a second worker
+ * announcing the same key takes it over.
+ *
+ * That is wrong for anything counted. `chat-durable` marks "a turn on this
+ * chat must survive its client", and turns on one chat overlap by design —
+ * `runTurn` supersedes rather than refuses — so two workers legitimately hold
+ * the same chat. Under the exclusive rule the second worker's retraction
+ * removed the mark while the first was still generating, and the next
+ * disconnect relayed an abort that killed a live durable turn: the exact thing
+ * durability exists to prevent, silently.
+ */
+const sharedKinds = new Set();
+
 const stats = { published: 0, received: 0, presenceAnnounced: 0 };
 
 function remoteBucket(kind) {
@@ -147,6 +165,20 @@ export function initPrimaryBus({ getWorkers }) {
   /** kind → Map<key, workerId> */
   const ownership = new Map();
 
+  /**
+   * Kinds this primary has seen announced as shared. Learned from the messages
+   * rather than configured, because the primary never builds a presence map of
+   * its own and so never calls `createPresenceMap`.
+   */
+  const sharedOwnKinds = new Set();
+
+  /** Every worker currently holding `key` of `kind`, for either bucket shape. */
+  const ownersOf = (kind, key) => {
+    const held = ownership.get(kind)?.get(key);
+    if (held === undefined) return [];
+    return held instanceof Set ? [...held] : [held];
+  };
+
   const broadcast = (message, exceptWorkerId = null) => {
     for (const worker of getWorkers()) {
       if (!worker || worker.isDead?.()) continue;
@@ -167,9 +199,13 @@ export function initPrimaryBus({ getWorkers }) {
   const snapshotFor = workerId => {
     const entries = [];
     for (const [kind, bucket] of ownership) {
-      for (const [key, owner] of bucket) {
-        if (owner === workerId) continue;
-        entries.push([kind, key, owner]);
+      for (const key of bucket.keys()) {
+        // One entry per key, naming any holder other than the asker: the
+        // mirror is read as a boolean ("is this held somewhere else"), so
+        // which of several holders it names does not matter.
+        const other = ownersOf(kind, key).find(owner => owner !== workerId);
+        if (other === undefined) continue;
+        entries.push([kind, key, other]);
       }
     }
     return entries;
@@ -187,7 +223,12 @@ export function initPrimaryBus({ getWorkers }) {
         // and discard each chunk.
         const route = message.route;
         if (route) {
-          const owner = ownership.get(route.kind)?.get(route.key);
+          // A shared kind has no single owner to route to, so it falls
+          // through to the broadcast below rather than picking one arbitrarily.
+          const held = sharedOwnKinds.has(route.kind)
+            ? undefined
+            : ownership.get(route.kind)?.get(route.key);
+          const owner = held instanceof Set ? undefined : held;
           if (owner !== undefined && owner !== worker.id) {
             const target = getWorkers().find(w => w && w.id === owner && !w.isDead?.());
             if (target) {
@@ -215,7 +256,32 @@ export function initPrimaryBus({ getWorkers }) {
       case MSG_PRESENCE_SET: {
         const bucket = ownership.get(message.ownKind) || new Map();
         ownership.set(message.ownKind, bucket);
-        if (message.owned) {
+        // A retraction of a shared key goes to every worker, the announcer
+        // included: the announcer's own mirror can hold an entry naming a
+        // *different* worker that held the key earlier, and nothing else would
+        // ever clear it. An acquisition still skips the announcer, so a worker
+        // never mirrors itself as remote.
+        let broadcastExcept = worker.id;
+        if (message.shared) {
+          sharedOwnKinds.add(message.ownKind);
+          const owners = bucket.get(message.key) instanceof Set ? bucket.get(message.key) : null;
+          if (message.owned) {
+            const held = owners || new Set();
+            bucket.set(message.key, held);
+            const isFirst = held.size === 0;
+            held.add(worker.id);
+            // Already announced by whoever got here first; the mirrors are
+            // right as they stand.
+            if (!isFirst) break;
+          } else {
+            if (!owners || !owners.delete(worker.id)) break;
+            // Somebody else still holds it. This is the case the exclusive
+            // rule got wrong.
+            if (owners.size > 0) break;
+            bucket.delete(message.key);
+            broadcastExcept = null;
+          }
+        } else if (message.owned) {
           bucket.set(message.key, worker.id);
         } else if (bucket.get(message.key) === worker.id) {
           // Only the current owner may retract. Without this guard a slow
@@ -233,9 +299,10 @@ export function initPrimaryBus({ getWorkers }) {
             ownKind: message.ownKind,
             key: message.key,
             owned: message.owned,
-            owner: worker.id
+            owner: worker.id,
+            shared: message.shared === true
           },
-          worker.id
+          broadcastExcept
         );
         break;
       }
@@ -268,10 +335,24 @@ export function initPrimaryBus({ getWorkers }) {
     // a process that no longer exists, and the browser's reconnect would be
     // told a stream already exists somewhere.
     for (const [kind, bucket] of ownership) {
-      for (const [key, owner] of bucket) {
-        if (owner !== worker.id) continue;
-        bucket.delete(key);
-        broadcast({ kind: MSG_PRESENCE_SYNC, ownKind: kind, key, owned: false, owner: worker.id });
+      for (const [key, held] of [...bucket]) {
+        if (held instanceof Set) {
+          // Only this worker's share goes; a key another worker also holds
+          // stays held, which is the whole point of a shared kind.
+          if (!held.delete(worker.id) || held.size > 0) continue;
+          bucket.delete(key);
+        } else {
+          if (held !== worker.id) continue;
+          bucket.delete(key);
+        }
+        broadcast({
+          kind: MSG_PRESENCE_SYNC,
+          ownKind: kind,
+          key,
+          owned: false,
+          owner: worker.id,
+          shared: held instanceof Set
+        });
       }
     }
   });
@@ -315,7 +396,13 @@ export function initWorkerBus() {
       case MSG_PRESENCE_SYNC: {
         const bucket = remoteBucket(message.ownKind);
         if (message.owned) bucket.set(message.key, message.owner);
-        else if (bucket.get(message.key) === message.owner) bucket.delete(message.key);
+        // The primary only retracts a shared key once the last holder has let
+        // go, so the message is authoritative whoever it names. The
+        // owner-matching guard belongs to exclusive kinds, where it stops a
+        // slow delete from erasing a registration that has already moved.
+        else if (message.shared || bucket.get(message.key) === message.owner) {
+          bucket.delete(message.key);
+        }
         break;
       }
 
@@ -340,7 +427,13 @@ export function initWorkerBus() {
   // tests), but cheap insurance against a silently invisible worker.
   for (const [kind, map] of presenceMaps) {
     for (const key of map.keys()) {
-      sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: true });
+      sendToPrimary({
+        kind: MSG_PRESENCE_SET,
+        ownKind: kind,
+        key,
+        owned: true,
+        shared: sharedKinds.has(kind)
+      });
     }
   }
 }
@@ -521,14 +614,15 @@ export function respond(type, handler) {
  *
  * @param {string} kind - Namespace, e.g. `'sse'` or `'request'`.
  */
-export function createPresenceMap(kind) {
+export function createPresenceMap(kind, { shared = false } = {}) {
+  if (shared) sharedKinds.add(kind);
   class PresenceMap extends Map {
     set(key, value) {
       const isNew = !super.has(key);
       const result = super.set(key, value);
       if (isNew && busActive) {
         stats.presenceAnnounced += 1;
-        sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: true });
+        sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: true, shared });
       }
       return result;
     }
@@ -536,7 +630,7 @@ export function createPresenceMap(kind) {
     delete(key) {
       const existed = super.delete(key);
       if (existed && busActive) {
-        sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false });
+        sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false, shared });
       }
       return existed;
     }
@@ -544,7 +638,7 @@ export function createPresenceMap(kind) {
     clear() {
       if (busActive) {
         for (const key of super.keys()) {
-          sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false });
+          sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false, shared });
         }
       }
       return super.clear();
@@ -565,9 +659,14 @@ export function hasRemote(kind, key) {
   return remoteOwnership.get(kind)?.has(key) === true;
 }
 
-/** Relay counters, for diagnostics. */
+/**
+ * Relay counters and the presence kinds this process declared shared, for
+ * diagnostics — and so a test can assert that a counted concept was actually
+ * declared as one. Getting that wrong is invisible at runtime until two
+ * workers hold the same key.
+ */
 export function getBusStats() {
-  return { ...stats, active: busActive };
+  return { ...stats, active: busActive, sharedKinds: [...sharedKinds].sort() };
 }
 
 /** Test seam: drop all bus state so a suite can rebuild it. */

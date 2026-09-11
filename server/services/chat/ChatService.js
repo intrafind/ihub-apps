@@ -53,6 +53,34 @@ const COMPONENT = 'ChatService';
 export const CHAT_MAX_TOOL_ROUNDS = 10;
 
 /**
+ * Wall-clock ceiling on a durable chat turn.
+ *
+ * An interactive turn has an implicit one: the browser goes away and the
+ * disconnect aborts it. Durability removes exactly that, on purpose — the
+ * answer has to survive a closed tab — which also removes the only thing that
+ * ever ended a wedged turn. A tool that never returns then holds the request
+ * entry, the cluster-wide durable mark and the provider connection for the
+ * life of the process, and the chat stays `running` forever, so every reopen
+ * replays a dead run and spins on an empty placeholder. There is nobody left
+ * to press Stop.
+ *
+ * `invokeAppInternal`, the other path that runs without a client, already
+ * carries a deadline for the same reason; this is the chat path's.
+ *
+ * Half an hour rather than `invokeAppInternal`'s three minutes: a durable turn
+ * is meant to be waited out across a commute, and killing a legitimate long
+ * agentic turn is a worse failure than a wedged one taking thirty minutes to
+ * clear. When it does fire, the loop aborts with a budget error, the turn is
+ * stored as failed and the run is released — so the chat comes unstuck and
+ * says what happened, rather than spinning.
+ *
+ * It is deliberately not applied to interactive turns: those are bounded by
+ * their client, and a user watching a long tool chain must not have it cut
+ * short by a ceiling that exists for absent clients.
+ */
+export const DURABLE_TURN_WALL_CLOCK_MS = 30 * 60 * 1000;
+
+/**
  * Floor for the chat compaction threshold, and the share of a model's context
  * window a chat turn may fill before old tool output is collapsed.
  *
@@ -444,7 +472,11 @@ class ChatService {
         tools: loopTools,
         toolExecution: 'server',
         policies: {
-          budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS },
+          budgets: {
+            maxToolRounds: CHAT_MAX_TOOL_ROUNDS,
+            // Only for a turn that can outlive its client; see the constant.
+            ...(persist ? { maxWallClockMs: DURABLE_TURN_WALL_CLOCK_MS } : {})
+          },
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
           tools: { parallel: false },
