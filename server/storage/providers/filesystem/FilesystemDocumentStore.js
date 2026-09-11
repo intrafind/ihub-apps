@@ -31,7 +31,12 @@ import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
-import { EtagMismatchError, InvalidKeyError, StorageError } from '../../errors.js';
+import {
+  CorruptDocumentError,
+  EtagMismatchError,
+  InvalidKeyError,
+  StorageError
+} from '../../errors.js';
 import {
   DOC_EXT,
   assertValidKey,
@@ -263,7 +268,10 @@ export class FilesystemDocumentStore extends DocumentStore {
     const document = await withFileLock(
       this._lockPath(ns, key),
       async () => {
-        const existing = await this._readEnvelope(ns, key);
+        // Lenient: an unconditional overwrite is the deliberate repair for a
+        // torn document, and the create-only branch below asks `_docExists`
+        // rather than this, so it still refuses to write over one.
+        const existing = await this._readEnvelope(ns, key, { lenient: true });
 
         if (expectedEtag === null && existing) {
           throw new EtagMismatchError(`Document ${ns}/${key} already exists`);
@@ -383,7 +391,10 @@ export class FilesystemDocumentStore extends DocumentStore {
     const outcome = await withFileLock(
       this._lockPath(ns, key),
       async () => {
-        const existing = await this._readEnvelope(ns, key);
+        // Lenient: a delete does not need to parse what it is removing, and
+        // refusing to remove a torn document would leave the caller no way to
+        // clear it.
+        const existing = await this._readEnvelope(ns, key, { lenient: true });
         const ownerId = storedOwnerId(existing);
         const removed = await removeIfExists(this._docPath(ns, key));
         // Drop the index entry after the envelope: a marker may outlive its
@@ -435,7 +446,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     const items = [];
     let index = 0;
     for (; index < keys.length && items.length < pageSize; index++) {
-      const envelope = await this._readEnvelope(ns, keys[index]);
+      const envelope = await this._readEnvelope(ns, keys[index], { lenient: true });
       // A missing envelope is a stale owner marker (or a document deleted
       // between the readdir and here). Skip it — never delete it here: a
       // marker whose put has not yet written its envelope looks exactly the
@@ -481,7 +492,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     for (const key of keys) {
       // Same reasoning as `list`: a missing envelope is a stale owner marker
       // or a document deleted mid-walk, and is skipped rather than removed.
-      const envelope = await this._readEnvelope(ns, key);
+      const envelope = await this._readEnvelope(ns, key, { lenient: true });
       if (!envelope) continue;
       if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
       yield this._toDocument(ns, key, envelope, includeData !== false);
@@ -632,8 +643,40 @@ export class FilesystemDocumentStore extends DocumentStore {
     }
   }
 
-  /** Read and parse an envelope; null when it is absent or unreadable. @private */
-  async _readEnvelope(ns, key) {
+  /**
+   * Read and parse an envelope.
+   *
+   * Absent is null. Present-but-unparseable is an error by default, and the
+   * difference matters more than it looks: envelopes are written atomically,
+   * so a file that will not parse was truncated or edited out of band — the
+   * document is still there. Folding that into null hands the caller "no such
+   * document", and the callers act on it. `ChatRepository.ensureChat` sees no
+   * chat and writes a fresh one owned by whoever asked, while the transcript —
+   * a separate document that still parses — comes along, so a torn chat
+   * document silently transfers one user's conversation to another, at warn
+   * level. `atomicWriteFile` does not fsync the temp file or the parent
+   * directory, so a host crash after the rename can leave exactly that.
+   *
+   * `lenient` is for the callers that are enumerating rather than fetching. A
+   * listing must not fail its whole page because one document in it is torn,
+   * and a delete does not need to parse what it is removing — but both log it,
+   * at error, so a corrupt document is never silent.
+   *
+   * Nothing quarantines the file. Moving it aside would make the next
+   * `ensureChat` succeed and re-own the chat, which is the outcome this exists
+   * to prevent; the file stays where an operator can look at it, and
+   * `_docExists` already stops a create from writing over it.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} [options]
+   * @param {boolean} [options.lenient=false] - Report a torn document as
+   *   absent instead of throwing.
+   * @returns {Promise<Object|null>} The envelope, or null.
+   * @throws {CorruptDocumentError} When the file is present but unreadable.
+   * @private
+   */
+  async _readEnvelope(ns, key, { lenient = false } = {}) {
     let raw;
     try {
       raw = await fs.readFile(this._docPath(ns, key), 'utf8');
@@ -644,16 +687,38 @@ export class FilesystemDocumentStore extends DocumentStore {
     let envelope;
     try {
       envelope = JSON.parse(raw);
-    } catch {
-      // Envelopes are written atomically, so this means the file was edited or
-      // truncated out of band. Reading it as absent keeps the store usable and
-      // lets the next put replace it, which is friendlier than failing every
-      // subsequent call on that key.
-      logger.warn('Ignoring unreadable storage document', { component: COMPONENT, ns, key });
-      return null;
+    } catch (cause) {
+      return this._corrupt(ns, key, lenient, cause);
     }
-    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return null;
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+      return this._corrupt(ns, key, lenient, null);
+    }
     return envelope;
+  }
+
+  /**
+   * Report a document that exists but cannot be read as one.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {boolean} lenient - Whether to answer null instead of throwing.
+   * @param {unknown} cause - The parse error, when there was one.
+   * @returns {null} When `lenient`.
+   * @throws {CorruptDocumentError} Otherwise.
+   * @private
+   */
+  _corrupt(ns, key, lenient, cause) {
+    logger.error('Storage document exists but cannot be read', {
+      component: COMPONENT,
+      ns,
+      key,
+      path: this._docPath(ns, key),
+      ...(cause ? { error: cause.message } : { reason: 'not a document envelope' })
+    });
+    if (lenient) return null;
+    throw new CorruptDocumentError(`Document ${ns}/${key} is present but unreadable`, {
+      ...(cause ? { cause } : {})
+    });
   }
 
   /** Project a stored envelope into the public Document shape. @private */

@@ -90,11 +90,10 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
       // What a killed write, a full disk or a hand-edit leaves behind.
       await fs.writeFile(docPath, '{"v":1,"key":"trunca', 'utf8');
 
-      // Reading it as absent is deliberate — it keeps the store usable and is
-      // what every read path here answers. Creating over it is a different
-      // question: the file is somebody's chat, and "it did not parse" is a
-      // reason to keep it for a human to look at, not a licence to destroy the
-      // last copy. A create that judged existence by parsing would say yes.
+      // Creating over it is refused for the same reason `get` now throws: the
+      // file is somebody's chat, and "it did not parse" is a reason to keep it
+      // for a human to look at, not a licence to destroy the last copy. A
+      // create that judged existence by parsing would say yes.
       await assert.rejects(
         () => provider.documents.put('chats', 'truncated', { id: 'other' }, { etag: null }),
         error => error?.code === 'ETAG_MISMATCH',
@@ -117,6 +116,45 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
         1,
         'exactly one owner index still claims the key — the original owner, not the refused creator'
       );
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
+  it('reports a torn document as unreadable rather than absent', async () => {
+    // The distinction is the point. Envelopes are written atomically, so a
+    // file that will not parse was truncated or edited out of band and the
+    // document is still there — but `atomicWriteFile` does not fsync the temp
+    // file or the parent directory, so a host crash after the rename leaves
+    // exactly this. Answering `null` handed the caller "no such document", and
+    // `ChatRepository.ensureChat` acts on that by writing a fresh chat owned by
+    // whoever asked, while the transcript — a separate document that still
+    // parses — comes with it. One user's conversation, silently re-owned, at
+    // warn level.
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      await provider.documents.put('chats', 'torn', { id: 'torn' }, { ownerId: 'ann' });
+      const docPath = path.join(provider.baseDir, 'chats', 'torn.json');
+      await fs.writeFile(docPath, '{"v":1,"key":"tor', 'utf8');
+
+      await assert.rejects(
+        () => provider.documents.get('chats', 'torn'),
+        error => error?.code === 'CORRUPT_DOCUMENT',
+        'a fetch fails closed'
+      );
+
+      // Enumerating is the exception: one torn document must not fail the whole
+      // page, and a delete does not need to parse what it is removing.
+      const page = await provider.documents.list('chats', { ownerId: 'ann' });
+      assert.deepEqual(
+        page.items.map(item => item.key),
+        [],
+        'the torn document is skipped rather than throwing the listing'
+      );
+      assert.equal(await provider.documents.delete('chats', 'torn'), true);
+      assert.equal(await provider.documents.get('chats', 'torn'), null, 'and now it is absent');
     } finally {
       await provider.shutdown();
       await cleanup();

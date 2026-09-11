@@ -32,7 +32,8 @@ export const STORAGE_CODE_STATUS = Object.freeze({
   NOT_SUPPORTED: 501,
   STORAGE_SHUT_DOWN: 503,
   UNKNOWN_PROVIDER: 500,
-  UNKNOWN_NAMESPACE: 400
+  UNKNOWN_NAMESPACE: 400,
+  CORRUPT_DOCUMENT: 500
 });
 
 /**
@@ -172,6 +173,34 @@ export class StorageShutDownError extends StorageError {
   constructor(message, options = {}) {
     super(message, { ...options, code: 'STORAGE_SHUT_DOWN' });
     this.name = 'StorageShutDownError';
+  }
+}
+
+/**
+ * A stored document exists but cannot be read as one.
+ *
+ * Distinct from "absent", and the distinction is the point. A read that folds
+ * the two together hands a caller `null` for a document that is still there,
+ * and the callers act on that: `ChatRepository.ensureChat` sees no chat and
+ * writes a fresh one owned by whoever asked, while the transcript — a separate
+ * document that still parses — comes with it, so a truncated chat document
+ * silently transfers one user's conversation to another. Failing closed costs
+ * a 500 on that one key and leaves the file where an operator can look at it.
+ *
+ * Enveloped namespaces only. A raw configuration file is hand-edited and
+ * git-tracked, and a missing comma in `platform.json` must not stop the server
+ * from booting — `RawDocumentStore` keeps reading an unparseable file as
+ * absent, deliberately.
+ */
+export class CorruptDocumentError extends StorageError {
+  /**
+   * @param {string} message - Human-readable description.
+   * @param {Object} [options]
+   * @param {unknown} [options.cause] - Underlying parse error, kept for logging.
+   */
+  constructor(message, options = {}) {
+    super(message, { ...options, code: 'CORRUPT_DOCUMENT' });
+    this.name = 'CorruptDocumentError';
   }
 }
 
