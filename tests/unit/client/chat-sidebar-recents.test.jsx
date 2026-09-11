@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 
 /**
  * The sidebar's Recents section.
@@ -122,20 +122,42 @@ const chatDoc = (id, title, appId = 'acme') => ({
   hasUnseenActivity: false
 });
 
+/** Renders the current path so a test can assert on where the router went. */
+function LocationProbe() {
+  return <span data-testid="location">{useLocation().pathname}</span>;
+}
+
 /** Mount the sidebar at one location and wait for the chat list. */
 async function renderSidebar(path = '/apps/acme') {
   const view = render(
     <MemoryRouter initialEntries={[path]}>
       <AppSidebar />
+      <LocationProbe />
     </MemoryRouter>
   );
   await waitFor(() => expect(mockApi.fetchChats).toHaveBeenCalled());
   return view;
 }
 
+/** Click a row's delete button and confirm the dialog it opens. */
+async function deleteFirstChat(container) {
+  const remove = container.querySelector('[aria-label="Delete chat"]');
+  await act(async () => {
+    fireEvent.click(remove);
+  });
+  const dialog = screen.getByRole('alertdialog');
+  const confirm = Array.from(dialog.querySelectorAll('button')).find(
+    b => b.textContent === 'Delete'
+  );
+  await act(async () => {
+    fireEvent.click(confirm);
+  });
+}
+
 beforeEach(() => {
   invalidateChatsCache();
   localStorage.clear();
+  sessionStorage.clear();
   mockApi.fetchChats.mockReset();
   mockApi.renameChat.mockReset();
   mockApi.deleteChat.mockReset();
@@ -189,6 +211,46 @@ describe('deleting a chat from the sidebar', () => {
 
     await waitFor(() => expect(screen.queryByText('First chat')).toBeNull());
     expect(screen.getByText('Second chat')).toBeInTheDocument();
+  });
+
+  test('deleting the chat that is open leaves it, rather than sitting on a dead transcript', async () => {
+    // The sidebar sits next to the chat it deletes. The row went, and the pane
+    // kept the conversation on screen — a transcript of something that no
+    // longer exists, with a composer that would post the next message into a
+    // chat id the store had forgotten.
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-1');
+    const { container } = await renderSidebar('/apps/acme/c/chat-1');
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    await deleteFirstChat(container);
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/apps/acme'));
+    expect(screen.getByTestId('location').textContent).toBe('/apps/acme');
+    // And the id this tab holds for the app is dropped, or opening the app
+    // would resolve straight back to the chat that was just deleted.
+    expect(sessionStorage.getItem('ai_hub_chat_id_acme')).not.toBe('chat-1');
+  });
+
+  test('deleting some other chat leaves the one in front of the user alone', async () => {
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-9');
+    mockApi.fetchChats.mockResolvedValue({
+      items: [
+        {
+          ...chatDoc('chat-2', 'Second chat', 'legal-review'),
+          lastMessageAt: '2026-03-15T09:00:00.000Z'
+        },
+        { ...chatDoc('chat-9', 'Open chat'), lastMessageAt: '2026-03-14T09:00:00.000Z' }
+      ],
+      nextCursor: null
+    });
+    const { container } = await renderSidebar('/apps/acme/c/chat-9');
+    await waitFor(() => expect(screen.getByText('Second chat')).toBeInTheDocument());
+
+    await deleteFirstChat(container);
+
+    expect(mockApi.deleteChat).toHaveBeenCalledWith('chat-2');
+    expect(screen.getByTestId('location').textContent).toBe('/apps/acme/c/chat-9');
+    expect(sessionStorage.getItem('ai_hub_chat_id_acme')).toBe('chat-9');
   });
 });
 

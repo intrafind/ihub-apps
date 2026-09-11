@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import useFeatureFlags from '../hooks/useFeatureFlags';
@@ -18,6 +18,7 @@ import { getLocalizedContent } from '../../utils/localizeContent';
 import { rankAppShortcuts, readAppShortcutConfig } from '../../utils/appShortcuts';
 import useRecentAppIds from '../hooks/useRecentAppIds';
 import { START_PAGE_PATH } from '../../utils/homePage';
+import { readChatId, resetChatId } from '../../utils/chatId';
 import useMediaQuery from '../hooks/useMediaQuery';
 import BrandTitle from './BrandTitle';
 import { isActivePath } from '../../utils/pathUtils';
@@ -116,6 +117,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const { apps, loading: appsLoading, error: appsError } = useApps();
   // Durable chats. The capability — a store is configured and this viewer can
@@ -392,6 +394,34 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     recentsRef.current?.focus();
   });
 
+  /**
+   * Get off a chat that has just been deleted.
+   *
+   * The sidebar sits next to the chat it deletes, so the row goes and the pane
+   * keeps the conversation on screen — a transcript of something that no longer
+   * exists, and a composer that would post the next message into a chat id the
+   * store has forgotten. This leaves the chat's own URL for the app's, and
+   * drops the id this tab holds for that app when it is the deleted one, so the
+   * app opens on a new chat rather than resolving straight back to this one.
+   *
+   * Only what this tab is actually showing is touched: deleting some other app's
+   * chat from the sidebar leaves the chat in front of the user alone.
+   *
+   * @param {Object} chat - The chat that was deleted.
+   * @returns {void}
+   */
+  const leaveDeletedChat = useCallback(
+    chat => {
+      if (!chat?.appId) return;
+      if (readChatId(chat.appId) === chat.id) resetChatId(chat.appId);
+      // `replace`, so Back does not return to a chat that is gone.
+      if (location.pathname === `/apps/${chat.appId}/c/${chat.id}`) {
+        navigate(`/apps/${chat.appId}`, { replace: true });
+      }
+    },
+    [location.pathname, navigate]
+  );
+
   const requestDeleteChat = useCallback(
     (e, chat) => {
       e.preventDefault();
@@ -417,6 +447,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             await deleteChat(chat.id);
             restoreRecentsFocusRef.current = true;
             setChatActionStatus(t('chatHistory.deleted', 'Chat deleted'));
+            leaveDeletedChat(chat);
           } catch {
             setChatActionError(
               t('chatHistory.deleteFailed', 'The chat could not be deleted. Please try again.')
@@ -428,7 +459,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         }
       });
     },
-    [t, untitledChatLabel, onMobileClose]
+    [t, untitledChatLabel, onMobileClose, leaveDeletedChat]
   );
 
   // `/apps/:appId/c/:chatId` matches the app row's prefix test as well as the
