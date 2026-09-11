@@ -982,3 +982,49 @@ describe('ChatRepository: degraded modes', () => {
     });
   });
 });
+
+describe('ChatRepository: what a listing costs', () => {
+  it('does not reload the owner every page, but does after a write', async () => {
+    // `listChats` has no stored order by `lastMessageAt`, so it loads the
+    // owner's chats and sorts in memory — and its cursor is a position in that
+    // sort, not a store cursor, so every page repeated the whole load. Page
+    // seven of a 200-chat owner cost 1400 document reads, and the sidebar
+    // invalidates its list after every completed turn.
+    await withRepository(async ({ provider }) => {
+      let listCalls = 0;
+      const documents = Object.create(provider.documents);
+      documents.list = (...args) => {
+        listCalls += 1;
+        return provider.documents.list(...args);
+      };
+      const repository = new ChatRepository({
+        documents,
+        locks: provider.locks,
+        logger: recordingLogger().logger
+      });
+
+      for (const n of [1, 2, 3, 4]) {
+        await repository.ensureChat({ chatId: `chat-page-${n}`, ownerId: OWNER, appId: 'chat' });
+      }
+
+      listCalls = 0;
+      const first = await repository.listChats(OWNER, { limit: 2 });
+      const afterFirst = listCalls;
+      assert.ok(afterFirst > 0, 'the first page loads the owner');
+
+      await repository.listChats(OWNER, { limit: 2, cursor: first.nextCursor });
+      assert.equal(listCalls, afterFirst, 'the next page is served from what the first loaded');
+
+      // A write this process made has to be visible to its own next read: the
+      // client sends a turn and reloads the list, and answering that from the
+      // snapshot would show a chat under its old title or one it just deleted.
+      await repository.renameChat('chat-page-1', 'renamed');
+      const renamed = await repository.listChats(OWNER, { limit: 10 });
+      assert.ok(listCalls > afterFirst, 'the memo was dropped by the write');
+      assert.ok(
+        renamed.items.some(chat => chat.title === 'renamed'),
+        'and the listing shows it'
+      );
+    });
+  });
+});

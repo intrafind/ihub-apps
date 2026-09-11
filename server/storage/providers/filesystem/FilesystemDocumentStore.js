@@ -55,6 +55,17 @@ const DEFAULT_LIMIT = 100;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 1000;
 
+/**
+ * How many document envelopes a page reads at once.
+ *
+ * The reads inside one page have no order between them, so serializing them
+ * bought nothing and cost the whole latency of a listing. Bounded rather than
+ * unbounded: a page may ask for up to `MAX_LIMIT` documents, and opening a
+ * thousand file handles at once is a different way to be slow — and on a
+ * shared volume, a way to be rude to everything else on it.
+ */
+const READ_CONCURRENCY = 16;
+
 /** Sub-directories of a namespace that hold bookkeeping rather than documents. */
 const OWNERS_DIR = '.owners';
 const LOCKS_DIR = '.locks';
@@ -444,20 +455,39 @@ export class FilesystemDocumentStore extends DocumentStore {
     }
 
     const items = [];
-    let index = 0;
-    for (; index < keys.length && items.length < pageSize; index++) {
-      const envelope = await this._readEnvelope(ns, keys[index], { lenient: true });
-      // A missing envelope is a stale owner marker (or a document deleted
-      // between the readdir and here). Skip it — never delete it here: a
-      // marker whose put has not yet written its envelope looks exactly the
-      // same, and removing that one would hide a live document from its owner.
-      if (!envelope) continue;
-      if (await this._rejectForeign(ns, keys[index], envelope, ownerId)) continue;
-      items.push(this._toDocument(ns, keys[index], envelope, includeData !== false));
+    // Read in parallel batches rather than one document at a time. A page is
+    // assembled from the keys in order, but the reads have no order between
+    // them, and serially they were the whole cost of a listing: an owner at the
+    // shipped `maxChatsPerUser` of 200 paid 200 `readFile`s, parses and sha256s
+    // to return 30 rows, once per call — and the chat list is invalidated after
+    // every completed turn. On a shared NFS volume at a few ms per read that is
+    // most of a second of strictly serialized I/O before the sidebar paints.
+    let consumed = 0;
+    while (consumed < keys.length && items.length < pageSize) {
+      const batch = keys.slice(consumed, consumed + READ_CONCURRENCY);
+      const envelopes = await Promise.all(
+        batch.map(key => this._readEnvelope(ns, key, { lenient: true }))
+      );
+      let taken = 0;
+      for (let offset = 0; offset < batch.length && items.length < pageSize; offset += 1) {
+        // Counted before the skips, so `consumed` means "keys this page has
+        // looked at" — a batch that is half rejected must not be read again.
+        taken = offset + 1;
+        const key = batch[offset];
+        const envelope = envelopes[offset];
+        // A missing envelope is a stale owner marker (or a document deleted
+        // between the readdir and here). Skip it — never delete it here: a
+        // marker whose put has not yet written its envelope looks exactly the
+        // same, and removing that one would hide a live document from its owner.
+        if (!envelope) continue;
+        if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
+        items.push(this._toDocument(ns, key, envelope, includeData !== false));
+      }
+      consumed += taken;
     }
 
     const nextCursor =
-      index < keys.length && items.length > 0 ? encodeCursor(items[items.length - 1].key) : null;
+      consumed < keys.length && items.length > 0 ? encodeCursor(items[items.length - 1].key) : null;
     return { items, nextCursor };
   }
 

@@ -72,6 +72,21 @@ const MAX_PAGE_SIZE = 100;
 const OWNER_PAGE_SIZE = 200;
 
 /**
+ * How long one owner's loaded chat set is reused, in milliseconds.
+ *
+ * `listChats` has no stored order by `lastMessageAt`, so it loads the owner's
+ * chat documents and sorts them in memory — and its cursor is a position in
+ * that sort, not a store cursor, so every page repeated the whole load. Page
+ * seven of a 200-chat owner cost 1400 document reads, and the sidebar
+ * invalidates its list after every completed turn.
+ *
+ * Short on purpose. The window only has to cover a burst — a page, the "show
+ * older" that follows it, the refetch after a turn — and a stale listing is a
+ * chat missing from the top of somebody's sidebar for a moment.
+ */
+const OWNER_CHATS_TTL_MS = 5000;
+
+/**
  * Hard bound on how many of one owner's chats are loaded for the in-memory
  * sort. `platform.chats.maxChatsPerUser` (default 200) keeps the real number
  * well under this; the cap only decides what happens when retention is off and
@@ -474,6 +489,13 @@ export class ChatRepository {
      * does not have to restart the server for it to take effect.
      */
     this._maxMessages = maxMessages;
+    /**
+     * One owner's loaded chat set, held for {@link OWNER_CHATS_TTL_MS} so a
+     * cursor walk does not repeat it. Keyed by owner; entries are dropped by
+     * `_forgetOwnerChats` whenever this process changes what a listing shows.
+     * @type {Map<string, {at: number, chats: Object[], pending?: Promise<Object[]>}>}
+     */
+    this._ownerChats = new Map();
   }
 
   /**
@@ -556,6 +578,10 @@ export class ChatRepository {
     const doc = await this.documents.put(CHATS_NAMESPACE, chat.id, chat, {
       ownerId: chat.ownerId
     });
+    // The single funnel for every change a listing can show — create, rename,
+    // a turn moving the chat to the top, the unseen flag — so the memo is
+    // dropped here rather than at each of them.
+    this._forgetOwnerChats(chat.ownerId);
     return toChat(doc);
   }
 
@@ -607,6 +633,33 @@ export class ChatRepository {
    * @private
    */
   async _loadOwnerChats(ownerId) {
+    const cached = this._ownerChats.get(ownerId);
+    if (cached && Date.now() - cached.at < OWNER_CHATS_TTL_MS) return cached.chats;
+    if (cached?.pending) return cached.pending;
+
+    const pending = this._scanOwnerChats(ownerId)
+      .then(chats => {
+        this._ownerChats.set(ownerId, { at: Date.now(), chats });
+        return chats;
+      })
+      .catch(error => {
+        this._ownerChats.delete(ownerId);
+        throw error;
+      });
+    // Concurrent callers share one walk: the sidebar and the history page ask
+    // within the same tick often enough to matter.
+    this._ownerChats.set(ownerId, { at: 0, chats: cached?.chats ?? [], pending });
+    return pending;
+  }
+
+  /**
+   * Page an owner's chat documents out of the store, without the memo.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @returns {Promise<Object[]>} The owner's chats, in key order.
+   * @private
+   */
+  async _scanOwnerChats(ownerId) {
     const chats = [];
     let cursor = null;
     do {
@@ -622,6 +675,24 @@ export class ChatRepository {
       cursor = page.nextCursor;
     } while (cursor && chats.length < MAX_OWNER_CHATS);
     return chats;
+  }
+
+  /**
+   * Forget an owner's memoized chat set, because this process just changed it.
+   *
+   * A write this process made must be visible to its own next read — the
+   * client sends the turn and then reloads the list, and answering that from a
+   * five-second-old snapshot would show them a chat they just renamed under
+   * its old title, or one they just deleted. Only the writes that change what
+   * a *listing* shows invalidate; a message append does, because it moves the
+   * chat to the top.
+   *
+   * @param {string|null|undefined} ownerId - Owner whose listing changed.
+   * @returns {void}
+   * @private
+   */
+  _forgetOwnerChats(ownerId) {
+    if (ownerId) this._ownerChats.delete(ownerId);
   }
 
   /**
@@ -835,6 +906,9 @@ export class ChatRepository {
       // dangling index entry.
       const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
       const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
+      // A delete is the other thing that changes a listing, and it does not go
+      // through `_writeChat`.
+      this._forgetOwnerChats(existing?.ownerId);
       return { deleted: removedChat || removedMessages, runIds };
     });
   }
