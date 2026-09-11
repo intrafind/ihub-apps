@@ -710,9 +710,8 @@ function AppChat({ preloadedApp = null }) {
         // and an empty transcript still ends the loading state rather than
         // letting the greeting appear a beat late. A turn started meanwhile is
         // kept, with the stored history restored in front of it.
-        loadServerMessages(Array.isArray(result?.messages) ? result.messages : [], {
-          preserveLocal: true
-        });
+        const storedMessages = Array.isArray(result?.messages) ? result.messages : [];
+        loadServerMessages(storedMessages, { preserveLocal: true });
         // `modelId` lives on the chat document rather than inside `settings`,
         // so it is folded in here; `useAppSettings` still checks the app
         // allows it before selecting it.
@@ -735,8 +734,24 @@ function AppChat({ preloadedApp = null }) {
         // loaded a second time. `onSettled` re-reads the transcript once it
         // finishes, because the store, not this surface, is what the answer
         // finally was.
-        const runningRunId =
+        // ...unless its answer is already in the transcript we just read.
+        // The server stores the answer *before* it releases the run — the two
+        // take the chat lock separately, and the other order lets a reader see
+        // a settled chat whose answer is not stored yet and clear the unseen
+        // flag on it permanently. The cost of the safe order is this window:
+        // `status` still says `running` while the reply is already here. Keying
+        // off the status alone, the client renders the stored answer and then
+        // mints a second bubble and replays the same tokens into it — and it
+        // never recovers on its own, because the run has ended and `onSettled`
+        // has no end to wait for, so `processing` sticks until a reload.
+        const activeRunId =
           result?.chat?.status === 'running' ? result.chat.activeRunId || null : null;
+        const answered =
+          activeRunId !== null &&
+          storedMessages.some(
+            message => message.role === 'assistant' && message.runId === activeRunId
+          );
+        const runningRunId = answered ? null : activeRunId;
         if (runningRunId) {
           reattachToRun(runningRunId, {
             onSettled: async () => {

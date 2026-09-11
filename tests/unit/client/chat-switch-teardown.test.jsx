@@ -181,6 +181,31 @@ test('unmounting an ephemeral chat still stops the stream', async () => {
   expect(stopAppChatStream).toHaveBeenCalledWith('acme', 'chat-ccc');
 });
 
+test('a durability flip mid-turn does not tear the stream down', async () => {
+  // `serverBacked` comes from platform config and from auth, so it can change
+  // while a turn is running. In the teardown effect's dependency array that
+  // change *runs the teardown* — whose first act is aborting the fetch, three
+  // lines before anything reads the flag it was keyed on. The stream is gone
+  // by the time the guard is consulted, on a chat nobody left.
+  const { result, rerender } = renderHook(
+    ({ serverBacked }) => useAppChat({ appId: 'acme', chatId: 'chat-flip', serverBacked }),
+    { initialProps: { serverBacked: true } }
+  );
+
+  await startTurn(result, 'a question');
+  expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-flip']);
+
+  await act(async () => {
+    rerender({ serverBacked: false });
+  });
+
+  // Still one connection, and no reconnect to paper over a teardown: the
+  // effect is keyed on the stream's identity, which did not change.
+  expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-flip']);
+  expect(stopAppChatStream).not.toHaveBeenCalled();
+  expect(result.current.processing).toBe(true);
+});
+
 test('unmounting a durable chat leaves the turn running', async () => {
   // The whole promise of a durable chat is that closing the tab does not cost
   // you the answer. `POST …/stop` aborts unconditionally — it has to, so the

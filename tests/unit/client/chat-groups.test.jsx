@@ -53,6 +53,29 @@ describe('chatRecencyGroup', () => {
     expect(chatRecencyGroup(at(2025, 12, 31), NOW)).toBe('older');
   });
 
+  test('a 23-hour day across spring forward is still one calendar day', () => {
+    // Europe/Berlin springs forward on 2026-03-29, so local midnight to local
+    // midnight is 23 hours. Every other instant in this file sits in a window
+    // with no transition, where a day is exactly 86.4M ms and rounding cannot
+    // be told from truncating — which is how `Math.floor` here would file a
+    // chat from the 29th under Today on the 30th and keep the suite green.
+    const morningAfter = at(2026, 3, 30, 9, 0);
+    expect(chatRecencyGroup(at(2026, 3, 29, 22, 0), morningAfter)).toBe('yesterday');
+    expect(chatRecencyGroup(at(2026, 3, 30, 0, 30), morningAfter)).toBe('today');
+    // And the seven-day edge measured across the same transition.
+    expect(chatRecencyGroup(at(2026, 3, 24, 12, 0), morningAfter)).toBe('last7days');
+    expect(chatRecencyGroup(at(2026, 3, 23, 12, 0), morningAfter)).toBe('older');
+  });
+
+  test('a 25-hour day across fall back is still one calendar day', () => {
+    // The other direction, on 2026-10-25: 25 hours between local midnights.
+    const morningAfter = at(2026, 10, 26, 9, 0);
+    expect(chatRecencyGroup(at(2026, 10, 25, 22, 0), morningAfter)).toBe('yesterday');
+    expect(chatRecencyGroup(at(2026, 10, 26, 0, 30), morningAfter)).toBe('today');
+    expect(chatRecencyGroup(at(2026, 10, 20, 12, 0), morningAfter)).toBe('last7days');
+    expect(chatRecencyGroup(at(2026, 10, 19, 12, 0), morningAfter)).toBe('older');
+  });
+
   test('a clock skew into the future reads as today rather than inventing a bucket', () => {
     expect(chatRecencyGroup(at(2026, 3, 15, 23, 0), NOW)).toBe('today');
     expect(chatRecencyGroup(at(2026, 3, 16, 9, 0), NOW)).toBe('today');

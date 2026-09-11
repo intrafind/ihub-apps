@@ -306,14 +306,14 @@ function renderChat({ path = '/apps/acme', app = APP } = {}) {
 }
 
 /** A `fetchChat` that stays out until the test resolves it. */
-function deferredChat() {
+function deferredChat(chat = {}) {
   let settle;
   const promise = new Promise(resolve => {
     settle = resolve;
   });
   fetchChat.mockReturnValueOnce(promise);
   return messages => {
-    settle({ chat: { id: 'chat-stored' }, messages });
+    settle({ chat: { id: 'chat-stored', ...chat }, messages });
     return promise;
   };
 }
@@ -345,6 +345,62 @@ describe('opening a stored chat', () => {
       'stored question|stored answer'
     );
     expect(screen.queryByTestId('greeting')).toBeNull();
+  });
+});
+
+describe('reopening a chat whose turn is still running', () => {
+  test('re-attaches when the answer has not been stored yet', async () => {
+    const resolveChat = deferredChat({ status: 'running', activeRunId: 'run-live' });
+    renderChat({ path: '/apps/acme/c/chat-stored' });
+
+    await act(async () => {
+      await resolveChat([STORED_MESSAGES[0]]);
+    });
+
+    // The whole point of durability: the turn outlived the tab, so reopening
+    // has to follow it rather than wait for a second page load.
+    expect(mockStreams).toEqual(['/api/apps/acme/chat/chat-stored']);
+  });
+
+  test('does not re-attach when the answer is already in the transcript', async () => {
+    // The server stores the answer *before* it releases the run — the two take
+    // the chat lock separately, and the other order lets a reader see a settled
+    // chat whose answer is not stored yet and clear its unseen flag for good.
+    // The cost of the safe order is this window: `status` still says `running`
+    // while the reply is already here.
+    const resolveChat = deferredChat({ status: 'running', activeRunId: 'run-done' });
+    renderChat({ path: '/apps/acme/c/chat-stored' });
+
+    await act(async () => {
+      await resolveChat([STORED_MESSAGES[0], { ...STORED_MESSAGES[1], runId: 'run-done' }]);
+    });
+
+    // Keyed off the status alone, the client renders this answer and then mints
+    // a second bubble and replays the same tokens into it — and never recovers,
+    // because the run has ended and there is no settle left to wait for, so the
+    // processing state sticks until a reload.
+    expect(mockStreams).toEqual([]);
+    expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent(
+      'stored question|stored answer'
+    );
+  });
+
+  test('re-attaches when the stored answer belongs to an earlier run', async () => {
+    const resolveChat = deferredChat({ status: 'running', activeRunId: 'run-two' });
+    renderChat({ path: '/apps/acme/c/chat-stored' });
+
+    await act(async () => {
+      await resolveChat([
+        STORED_MESSAGES[0],
+        { ...STORED_MESSAGES[1], runId: 'run-one' },
+        { id: 'srv-3', role: 'user', content: 'and again', ts: '2026-03-15T09:01:00.000Z' }
+      ]);
+    });
+
+    // A previous turn's answer says nothing about this one. Matching on
+    // "is there any assistant message" rather than on the run id would leave
+    // every continued chat unable to follow its live turn.
+    expect(mockStreams).toEqual(['/api/apps/acme/chat/chat-stored']);
   });
 });
 

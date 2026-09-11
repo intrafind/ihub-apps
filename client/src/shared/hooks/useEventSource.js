@@ -283,6 +283,17 @@ function useEventSource({
   const onProcessingChangeRef = useRef(onProcessingChange);
   onProcessingChangeRef.current = onProcessingChange;
 
+  // `durable` for the same reason, and it is the sharper case of the two. It
+  // derives from platform config and from auth, so it can flip while a turn is
+  // running — and in the dependency array that flip runs the cleanup, whose
+  // very first act is `abortAndClearTimers()`. The guard it is read for sits
+  // three lines further down, so the stream is already gone by the time
+  // anything asks whether it was allowed to be. Nothing flips it mid-turn
+  // today; the effect is still keyed on the stream's identity alone, which is
+  // what its own comment above claims.
+  const durableRef = useRef(durable);
+  durableRef.current = durable;
+
   // Teardown. This effect is keyed on the stream's identity, so it also runs
   // when the surface stays mounted and simply switches to another chat —
   // `/apps/:appId/c/:chatId` does exactly that.
@@ -306,14 +317,14 @@ function useEventSource({
         if (wasActive) onProcessingChangeRef.current?.(false);
         return;
       }
-      if (durable) return;
+      if (durableRef.current) return;
       if (appId && chatId) {
         stopAppChatStream(appId, chatId).catch(() => {
           // server may be unreachable on tab close — best effort only
         });
       }
     };
-  }, [abortAndClearTimers, appId, chatId, durable]);
+  }, [abortAndClearTimers, appId, chatId]);
 
   return {
     initEventSource,
