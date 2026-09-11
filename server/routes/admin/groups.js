@@ -249,9 +249,14 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      let groupsData = await configStore.readJson(GROUPS_FILE);
+      // Strict, so an unreadable file is not rendered as an empty one. The
+      // write path already fails closed, but an admin page showing no groups
+      // over a `groups.json` with a trailing comma in it says the permissions
+      // are gone rather than that the file cannot be parsed — and the first
+      // thing it invites is a save.
+      let groupsData = await configStore.readJsonStrict(GROUPS_FILE);
       if (!groupsData) {
-        logger.info('Groups file not found or invalid, returning empty list', {
+        logger.info('Groups file not found, returning empty list', {
           component: 'AdminGroups'
         });
         groupsData = { groups: {}, metadata: {} };

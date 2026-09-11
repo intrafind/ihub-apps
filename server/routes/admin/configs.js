@@ -172,7 +172,10 @@ export default function registerAdminConfigRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
-      let platformConfig = await configStore.readJson(PLATFORM_FILE);
+      // Strict, for the reason the save below is: defaults rendered over a
+      // platform.json that merely cannot be parsed read as "nothing is
+      // configured", which is the one thing that is not true.
+      let platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
       if (!platformConfig) {
         logger.info('Platform config not found, returning default config', {
           component: 'AdminConfigs'
