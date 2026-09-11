@@ -71,9 +71,26 @@ export function tryAcquireSchedulerLock(opts = {}) {
   const now = opts.now ?? Date.now();
   const current = readLock(lockPath);
 
+  // A lock recording *our own* pid under a different identity was written by a
+  // process that no longer exists: no live process can be holding the pid this
+  // one is running under. That is the ordinary container restart — node is PID
+  // 1, the previous PID 1 was SIGKILLed (OOM, `docker kill`) without releasing
+  // the lock, and the supervisor started us inside the TTL. The liveness probe
+  // below cannot see it, because `process.kill(1, 0)` succeeds against
+  // ourselves, so the restarted process waited out the full TTL — and the boot
+  // steps gated on ownership, the interrupted-execution rescan among them, were
+  // skipped outright in precisely the crash they exist for.
+  //
+  // A pid the OS has since handed to an *unrelated* process is still covered by
+  // the liveness probe and the TTL, unchanged: this clause only fires when the
+  // recorded pid is the one we are running under.
+  const heldByOurDeadPredecessor =
+    current && current.pid === process.pid && current.identity !== IDENTITY;
+
   const canTake =
     !current ||
     current.identity === IDENTITY ||
+    heldByOurDeadPredecessor ||
     now - (current.lockTime || 0) > LOCK_TTL_MS ||
     (current.hostname === HOSTNAME && !isProcessAlive(current.pid));
 

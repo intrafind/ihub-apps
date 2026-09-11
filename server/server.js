@@ -410,26 +410,6 @@ if (cluster.isPrimary && workerCount > 1) {
   // their in-memory behaviour instead of taking the server down.
   await bootstrapStorage(platformConfig);
 
-  // Carry what an upgraded installation already has on disk — the ledger's
-  // per-day run index, the workflow execution registry and the
-  // `<executionId>/latest.json` state directories — into the namespaces that
-  // now hold them, before anything reads them. Both are one-time, idempotent
-  // and non-destructive (the legacy files stay, and stay readable), both
-  // short-circuit on a marker document afterwards, and both take a storage
-  // lock so only one worker does the work. A failure here must not stop the
-  // server: the legacy paths are still the fallback for everything not yet
-  // carried over.
-  try {
-    await importLegacyRunSummaries();
-    await importLegacyWorkflowStates();
-  } catch (error) {
-    logger.error({
-      component: 'Server',
-      message: 'Legacy runtime store import failed; falling back to the legacy files',
-      error: error.message
-    });
-  }
-
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
   // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
   // not stop the rest of the worker - including the activity tracker - from
@@ -834,6 +814,39 @@ if (cluster.isPrimary && workerCount > 1) {
           url: `${protocol}://${HOST}:${PORT}`
         });
       }
+    });
+  }
+
+  // Carry what an upgraded installation already has on disk — the ledger's
+  // per-day run index, the workflow execution registry and the
+  // `<executionId>/latest.json` state directories — into the namespaces that
+  // now hold them. Both are one-time, idempotent and non-destructive (the
+  // legacy files stay, and stay readable), both short-circuit on a marker
+  // document afterwards, and both take a storage lock so only one worker does
+  // the work. A failure here must not stop the server: the legacy paths are
+  // still the fallback for everything not yet carried over.
+  //
+  // After the worker is serving, not before. On the awaited boot path this was
+  // between the process starting and the port being answerable, and it is not a
+  // fast step: a 100k-run legacy index is seconds of scanning, and the write
+  // loop is serial locked writes, up to `MAX_IMPORT_RUNS` of them. On a network
+  // filesystem that is minutes of an unbound port, which a container health
+  // check answers by killing the worker — and the restart re-reads the same
+  // index and is killed again. Nothing on the request path needs it to have
+  // finished: `readRunSummary` falls back to the legacy records and
+  // `GET /api/runs` merges the namespace with the per-day index files.
+  //
+  // Still awaited here rather than fired and forgotten, because the workflow
+  // recovery below reads the execution records this carries over — a rescan
+  // that runs first would not see a legacy execution at all.
+  try {
+    await importLegacyRunSummaries();
+    await importLegacyWorkflowStates();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Legacy runtime store import failed; falling back to the legacy files',
+      error: error.message
     });
   }
 

@@ -323,7 +323,11 @@ function validateWorkflow(workflow) {
  */
 export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
   if (requireSchedulerOwner && !isSchedulerOwner()) {
-    logger.debug('Not the scheduler-lock owner — skipping the execution rescan', {
+    // Info, not debug: in a cluster this is the ordinary state of every worker
+    // but one, so it is not a warning — but it is the one line that says why a
+    // restart left executions marked `running`, and at debug it was invisible
+    // under the default level.
+    logger.info('Not the scheduler-lock owner — skipping the execution rescan', {
       component: 'WorkflowRoutes'
     });
     return { recovered: false, marked: 0 };
