@@ -26,8 +26,8 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { atomicWriteJSON } from '../../../utils/atomicWrite.js';
-import { withFileLock, removeIfExists } from '../../../utils/fileLock.js';
+import { atomicCreateJSON, atomicWriteJSON } from '../../../utils/atomicWrite.js';
+import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
@@ -294,6 +294,56 @@ export class FilesystemDocumentStore extends DocumentStore {
         };
 
         await fs.mkdir(this._nsDir(ns), { recursive: true });
+
+        if (expectedEtag === null) {
+          // O_EXCL decides the create, not the read above, for two reasons
+          // that the read cannot cover on its own.
+          //
+          // `withFileLock` runs its critical section anyway once its 5 s wait
+          // expires, so two concurrent creates can both read "absent" and both
+          // write, and the second silently replaces the first — with both told
+          // they created it.
+          //
+          // And `_readEnvelope` answers null for a file that exists but does
+          // not parse, so a create-only write over a truncated document would
+          // be allowed to destroy it. That file is somebody's chat; "it did
+          // not parse" is a reason to preserve it for a human, not a licence
+          // to overwrite. The filesystem knows the file is there whether or
+          // not its contents make sense.
+          //
+          // Marker first, as below — but recorded, so a create that loses the
+          // race does not leave this owner's index pointing at a document that
+          // belongs to somebody else. `tryCreateExclusive` reports whether it
+          // was this call that created the marker, which is what makes the
+          // rollback safe when the winner happens to share the owner.
+          const markerPath = ownerId ? this._ownerMarkerPath(ns, ownerId, key) : null;
+          const markerCreated = markerPath ? await tryCreateExclusive(markerPath, '') : false;
+          try {
+            await atomicCreateJSON(this._docPath(ns, key), envelope);
+          } catch (error) {
+            if (markerCreated) await removeIfExists(markerPath);
+            if (error?.code === 'EEXIST') {
+              throw new EtagMismatchError(`Document ${ns}/${key} already exists`);
+            }
+            throw error;
+          }
+          return this._toDocument(ns, key, envelope, true);
+        }
+
+        // Not a create, and nothing parsed — so this write is about to replace
+        // a document that is on disk and unreadable. `_readEnvelope` logs that
+        // at warn as a read problem; here it is a write destroying the last
+        // copy of a body nobody could read, which the operator has to see
+        // before the user does. It still proceeds: the alternative is a key
+        // that can never be written again.
+        if (!existing && (await this._docExists(ns, key))) {
+          logger.error('Overwriting a stored document that could not be read', {
+            component: COMPONENT,
+            ns,
+            key
+          });
+        }
+
         // The owner marker is written BEFORE the envelope. A crash between the
         // two leaves an index entry pointing at a document that does not
         // exist; list() skips such markers and the next put/delete removes
@@ -516,6 +566,27 @@ export class FilesystemDocumentStore extends DocumentStore {
       // An unknown namespace, or an owner with nothing filed, is an empty
       // listing rather than an error.
       if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return [];
+      throw error;
+    }
+  }
+
+  /**
+   * Is there a file for this key, whatever is in it?
+   *
+   * Separate from `_readEnvelope` on purpose: that one answers "is there a
+   * document I can give you", and a corrupt file is correctly absent by that
+   * measure. This one answers "is this key taken", which is what a create has
+   * to ask — the two differ exactly when a file has been truncated or edited
+   * out of band, and that is the case where overwriting is the wrong move.
+   *
+   * @private
+   */
+  async _docExists(ns, key) {
+    try {
+      await fs.stat(this._docPath(ns, key));
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false;
       throw error;
     }
   }

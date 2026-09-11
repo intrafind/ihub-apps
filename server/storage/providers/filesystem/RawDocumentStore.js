@@ -343,11 +343,41 @@ export class RawDocumentStore extends DocumentStore {
         }
 
         await fs.mkdir(this._dirs.get(ns), { recursive: true });
-        // `atomicWriteFile` with the bytes this store serialized, rather than
-        // `atomicWriteJSON` with the object: the etag below has to describe the
-        // bytes that actually landed, and going through one string makes that
-        // true by construction instead of by two serializers agreeing.
-        await atomicWriteFile(filePath, json, 'utf8');
+        if (expectedEtag === null) {
+          // O_EXCL decides a create, not the read above. `withFileLock` runs
+          // its critical section anyway once its 5 s wait expires — sound for
+          // its other callers, fatal here: two admins POSTing the same app id
+          // would both read "absent" and both write, and the second would
+          // silently replace the first with no conflict reported to either.
+          // That is the exact race `atomicCreateJSON` was written to close,
+          // and this store took over from it. `wx` is the same syscall pair
+          // (O_CREAT|O_EXCL), so exclusivity no longer rests on an advisory
+          // lock holding.
+          //
+          // It writes in place rather than through a temp file and a rename,
+          // which is what `atomicCreateJSON` did too: a rename cannot be made
+          // exclusive. A reader that catches a partial create sees bytes that
+          // do not parse, and every read path here — `get`, `list`, `scan` —
+          // answers "absent" for those, which is the correct answer for a
+          // document that is still being created. The same tear on an
+          // *overwrite* would read as absent for a document that is very much
+          // there, so the unconditional path below keeps the rename.
+          try {
+            // lgtm[js/path-injection] -- key validated by assertValidKey above.
+            await fs.writeFile(filePath, json, { encoding: 'utf8', flag: 'wx' });
+          } catch (error) {
+            if (error?.code === 'EEXIST') {
+              throw new EtagMismatchError(`Document ${ns}/${key} already exists`);
+            }
+            throw error;
+          }
+        } else {
+          // `atomicWriteFile` with the bytes this store serialized, rather than
+          // `atomicWriteJSON` with the object: the etag below has to describe the
+          // bytes that actually landed, and going through one string makes that
+          // true by construction instead of by two serializers agreeing.
+          await atomicWriteFile(filePath, json, 'utf8');
+        }
         const stat = await fs.stat(filePath);
         // The round-tripped body, so what put() returns is exactly what a
         // following get() reads back (JSON drops undefined-valued keys and

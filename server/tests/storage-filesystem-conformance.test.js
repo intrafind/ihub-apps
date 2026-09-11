@@ -80,6 +80,115 @@ const ABANDONED_LEASE_BYTES = 8 * 1024 * 1024;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+describe('filesystem storage provider: create-only writes (filesystem-specific)', () => {
+  it('refuses to create over a document that exists but does not parse', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      await provider.documents.put('chats', 'truncated', { id: 'truncated' }, { ownerId: 'ann' });
+      const docPath = path.join(provider.baseDir, 'chats', 'truncated.json');
+      // What a killed write, a full disk or a hand-edit leaves behind.
+      await fs.writeFile(docPath, '{"v":1,"key":"trunca', 'utf8');
+
+      // Reading it as absent is deliberate — it keeps the store usable and is
+      // what every read path here answers. Creating over it is a different
+      // question: the file is somebody's chat, and "it did not parse" is a
+      // reason to keep it for a human to look at, not a licence to destroy the
+      // last copy. A create that judged existence by parsing would say yes.
+      await assert.rejects(
+        () => provider.documents.put('chats', 'truncated', { id: 'other' }, { etag: null }),
+        error => error?.code === 'ETAG_MISMATCH',
+        'a create-only write must not replace an unreadable document'
+      );
+      assert.equal(
+        await fs.readFile(docPath, 'utf8'),
+        '{"v":1,"key":"trunca',
+        'and the bytes that were there are still there'
+      );
+
+      // The refused create must not leave its owner pointing at a document it
+      // does not own. Reachable because the marker is written first, so that a
+      // crash can never hide a document from its owner's listing.
+      const owners = await fs
+        .readdir(path.join(provider.baseDir, 'chats', '.owners'), { recursive: true })
+        .catch(() => []);
+      assert.equal(
+        owners.filter(entry => entry.endsWith('truncated')).length,
+        1,
+        'exactly one owner index still claims the key — the original owner, not the refused creator'
+      );
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
+  it('lets only one create-only write win even when the advisory lock is not held', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      // `withFileLock` runs its critical section anyway once its wait expires
+      // rather than failing, which is right for its other callers and fatal
+      // here: create-only is a read followed by a write, so two writers that
+      // both give up waiting both see "absent" and both write. Holding the
+      // lock from outside puts both writers in that state without a second
+      // process, at the cost of the lock's full 5 s wait budget.
+      const lockPath = path.join(provider.baseDir, 'chats', '.locks', 'contended.lock');
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      await fs.writeFile(lockPath, JSON.stringify({ pid: -1, at: new Date().toISOString() }));
+      const keepAlive = setInterval(() => {
+        fs.utimes(lockPath, new Date(), new Date()).catch(() => {});
+      }, 1000);
+
+      let settled;
+      try {
+        settled = await Promise.allSettled([
+          provider.documents.put(
+            'chats',
+            'contended',
+            { by: 'first' },
+            { etag: null, ownerId: 'ann' }
+          ),
+          provider.documents.put(
+            'chats',
+            'contended',
+            { by: 'second' },
+            { etag: null, ownerId: 'bob' }
+          )
+        ]);
+      } finally {
+        clearInterval(keepAlive);
+        await fs.rm(lockPath, { force: true });
+      }
+
+      const created = settled.filter(r => r.status === 'fulfilled');
+      assert.equal(
+        created.length,
+        1,
+        `exactly one create-only write may succeed; ${created.length} did`
+      );
+      assert.equal(
+        settled.find(r => r.status === 'rejected')?.reason?.code,
+        'ETAG_MISMATCH',
+        'and the other is told the document already exists'
+      );
+
+      const stored = await provider.documents.get('chats', 'contended');
+      assert.equal(stored.data.by, created[0].value.data.by, 'the winner is what is on disk');
+      assert.deepEqual(
+        await provider.documents
+          .list('chats', { ownerId: created[0].value.ownerId === 'ann' ? 'bob' : 'ann' })
+          .then(page => page.items.map(item => item.key)),
+        [],
+        "and the refused creator's owner index does not claim the winner's document"
+      );
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+});
+
 describe('filesystem storage provider: lease takeover (filesystem-specific)', () => {
   it('a waiter never removes a lease acquired after the one it judged abandoned', async () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-storage-lease-'));

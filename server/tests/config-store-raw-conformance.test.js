@@ -189,6 +189,85 @@ describe('raw namespaces: on-disk layout (filesystem-specific)', () => {
     }
   });
 
+  it('lets only one create-only write win even when the advisory lock is not held', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      // `withFileLock` runs its critical section anyway once its wait expires,
+      // rather than failing — a deliberate choice for its other callers, who
+      // guard bookkeeping and would rather write unguarded than hang a
+      // request forever. Create-only cannot live with it: the check is a read
+      // followed by a write, so two writers that both give up waiting both see
+      // "absent" and both write, and the loser is told it created a document
+      // it in fact destroyed. Admin POST for apps, agents and prompts maps
+      // this store's conflict onto HTTP 409, so losing it means one admin's
+      // new app silently replaces another's under the same id.
+      //
+      // Holding the lock from outside is how the test reaches that state
+      // without waiting on a real second process. Both writers below wait out
+      // the full timeout and then proceed with no lock at all, which is
+      // exactly the production case this has to survive — and it costs the
+      // lock's whole 5 s wait budget, by construction. Shortening it would
+      // mean a tuning knob on the provider that exists only for this test;
+      // five seconds once per CI run is the cheaper of the two.
+      const lockPath = path.join(provider.baseDir, CONFIG_LOCK_DIR, 'apps', 'contended.lock');
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      await fs.writeFile(lockPath, JSON.stringify({ pid: -1, at: new Date().toISOString() }));
+      // The holder has to look alive for the whole wait, or it is taken over
+      // as stale and the lock does its job after all — which would test
+      // nothing.
+      const keepAlive = setInterval(() => {
+        fs.utimes(lockPath, new Date(), new Date()).catch(() => {});
+      }, 1000);
+
+      let settled;
+      try {
+        settled = await Promise.allSettled([
+          provider.documents.put(
+            'apps',
+            'contended',
+            { id: 'contended', by: 'first' },
+            { etag: null }
+          ),
+          provider.documents.put(
+            'apps',
+            'contended',
+            { id: 'contended', by: 'second' },
+            { etag: null }
+          )
+        ]);
+      } finally {
+        clearInterval(keepAlive);
+        await fs.rm(lockPath, { force: true });
+      }
+
+      const created = settled.filter(r => r.status === 'fulfilled');
+      const rejected = settled.filter(r => r.status === 'rejected');
+      assert.equal(
+        created.length,
+        1,
+        `exactly one create-only write may succeed; ${created.length} did. ` +
+          'Both winning means the second POST overwrote the first and neither admin saw a conflict.'
+      );
+      assert.equal(rejected.length, 1, 'and the other is told the document already exists');
+      assert.equal(
+        rejected[0].reason?.code,
+        'ETAG_MISMATCH',
+        `ConfigStore.createJson maps exactly this code onto EEXIST and then onto 409; got ${rejected[0].reason?.code}`
+      );
+
+      const stored = await provider.documents.get('apps', 'contended');
+      assert.equal(
+        stored.data.by,
+        created[0].value.data.by,
+        'and the winner is the document on disk — not overwritten by the writer that was refused'
+      );
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
   it('lists a namespace directory an installation never created as empty', async () => {
     const { provider, cleanup } = await createProvider();
     await provider.initialize();
