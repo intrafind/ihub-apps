@@ -539,3 +539,53 @@ describe('filesystem storage provider: lease takeover (filesystem-specific)', ()
     }
   });
 });
+
+describe('filesystem append log: a crashed write (filesystem-specific)', () => {
+  it('keeps the records before a torn tail, and the first one written after it', async () => {
+    // The shared suite's restart case is a clean process exit, so the crash
+    // tolerance the append log documents — "a torn tail from a crashed write
+    // must not make the records before it unreadable" — was never exercised.
+    // It held only for the records *before* the tear: a flush writes
+    // `entries.join('\n') + '\n'`, which assumes the file already ends in a
+    // newline, so the first batch after a restart was concatenated onto the
+    // partial line and skipped along with it. Written cleanly, gone silently —
+    // and for a run ledger that is the event the crash was about.
+    const first = await createProvider();
+    await first.provider.initialize();
+    const stream = 'run:torn-tail';
+    const file = first.provider.logs.streamFilePath(stream);
+    try {
+      await first.provider.logs.append(stream, { n: 'a' }, 1);
+      await first.provider.logs.append(stream, { n: 'b' }, 2);
+      await first.provider.logs.flush();
+    } finally {
+      await first.provider.shutdown();
+    }
+
+    // What SIGKILL mid-`appendFile` leaves: the last record cut off, with no
+    // terminator after it.
+    const { size } = await fs.stat(file);
+    await fs.truncate(file, size - 12);
+    const torn = await fs.readFile(file, 'utf8');
+    assert.equal(torn.endsWith('\n'), false, 'the file really is missing its terminator');
+
+    const second = await createProvider({ reuse: true });
+    await second.provider.initialize();
+    try {
+      await second.provider.logs.append(stream, { n: 'c' }, 3);
+      await second.provider.logs.flush();
+
+      const records = await second.provider.logs.read(stream);
+      const seqs = records.map(record => record.seq);
+      assert.ok(seqs.includes(1), 'the record before the tear survived');
+      assert.ok(
+        seqs.includes(3),
+        'and so did the one written after the restart, which used to be glued to the torn line'
+      );
+      assert.equal(await second.provider.logs.lastSeq(stream), 3);
+    } finally {
+      await second.provider.shutdown();
+      await second.cleanup();
+    }
+  });
+});
