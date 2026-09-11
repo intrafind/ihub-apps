@@ -36,7 +36,7 @@ import { createJsonlAppender } from '../../../utils/jsonlAppender.js';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import { AppendLog } from '../../AppendLog.js';
 import { StorageError, StorageShutDownError } from '../../errors.js';
-import { containedPath, sanitizeBlobName, streamSegments } from './paths.js';
+import { containedPath, sanitizeBlobName, streamKindSegment, streamSegments } from './paths.js';
 
 const COMPONENT = 'FilesystemAppendLog';
 
@@ -383,51 +383,64 @@ export class FilesystemAppendLog extends AppendLog {
    * @returns {Promise<{streams: number, blobs: number}>} How many streams and blobs went
    * @throws {StorageError} Code `INVALID_ARGUMENT` when `olderThan` is unusable
    */
-  async sweep({ olderThan } = {}) {
+  async sweep({ olderThan, kind } = {}) {
     const cutoff = toEpochMs(olderThan);
     let streams = 0;
     let blobs = 0;
-    await this._appender.withWriteLock(async () => {
-      await this._drain();
-      const found = await this._collectSweepTargets(this._logsDir);
-      for (const file of found.streams) {
-        try {
-          const stat = await fs.stat(file);
-          if (stat.mtimeMs >= cutoff) continue;
-          // Blobs go first: a stream file left behind by a failed removal is
-          // recoverable data, an orphaned blob directory is only garbage.
-          blobs += await this._removeBlobDir(file.slice(0, -STREAM_EXT.length) + BLOBS_EXT);
-          await fs.unlink(file);
-          streams += 1;
-        } catch (err) {
-          logger.warn('Failed to sweep append-log stream', {
-            component: COMPONENT,
-            file: path.basename(file),
-            error: err.message
-          });
-        }
+    // A stream name's first segment is its directory, so scoping is a matter
+    // of where the walk starts.
+    const root =
+      kind === undefined || kind === null
+        ? this._logsDir
+        : containedPath(this._logsDir, streamKindSegment(kind));
+
+    // The lock covers the drain and nothing else. Held across the whole walk —
+    // a readdir per directory and a stat per file, which at 90-day retention
+    // is on the order of 10^5 files — it queued `read()` and `lastSeq()`
+    // behind it through the shared barrier, and the retention scheduler fires
+    // at boot. The drain is the only part that needs exclusion: after it, the
+    // buffer is empty and a concurrent append creates or touches a file, which
+    // the cutoff check below then spares on its own.
+    await this._appender.withWriteLock(() => this._drain());
+
+    const found = await this._collectSweepTargets(root);
+    for (const file of found.streams) {
+      try {
+        const stat = await fs.stat(file);
+        if (stat.mtimeMs >= cutoff) continue;
+        // Blobs go first: a stream file left behind by a failed removal is
+        // recoverable data, an orphaned blob directory is only garbage.
+        blobs += await this._removeBlobDir(file.slice(0, -STREAM_EXT.length) + BLOBS_EXT);
+        await fs.unlink(file);
+        streams += 1;
+      } catch (err) {
+        logger.warn('Failed to sweep append-log stream', {
+          component: COMPONENT,
+          file: path.basename(file),
+          error: err.message
+        });
       }
-      for (const dir of found.blobDirs) {
-        try {
-          // A blob directory whose stream file is still on disk belongs to a
-          // stream that survived the cut-off, and the stream — not the
-          // directory's own mtime — decides its fate. One whose stream was
-          // swept above went with it and is already gone (ENOENT, below).
-          const stream = `${dir.slice(0, -BLOBS_EXT.length)}${STREAM_EXT}`;
-          if (await pathExists(stream)) continue;
-          const stat = await fs.stat(dir);
-          if (stat.mtimeMs >= cutoff) continue;
-          blobs += await this._removeBlobDir(dir);
-        } catch (err) {
-          if (err.code === 'ENOENT') continue; // swept with its stream above
-          logger.warn('Failed to sweep orphaned append-log blobs', {
-            component: COMPONENT,
-            dir: path.basename(dir),
-            error: err.message
-          });
-        }
+    }
+    for (const dir of found.blobDirs) {
+      try {
+        // A blob directory whose stream file is still on disk belongs to a
+        // stream that survived the cut-off, and the stream — not the
+        // directory's own mtime — decides its fate. One whose stream was
+        // swept above went with it and is already gone (ENOENT, below).
+        const stream = `${dir.slice(0, -BLOBS_EXT.length)}${STREAM_EXT}`;
+        if (await pathExists(stream)) continue;
+        const stat = await fs.stat(dir);
+        if (stat.mtimeMs >= cutoff) continue;
+        blobs += await this._removeBlobDir(dir);
+      } catch (err) {
+        if (err.code === 'ENOENT') continue; // swept with its stream above
+        logger.warn('Failed to sweep orphaned append-log blobs', {
+          component: COMPONENT,
+          dir: path.basename(dir),
+          error: err.message
+        });
       }
-    });
+    }
     return { streams, blobs };
   }
 

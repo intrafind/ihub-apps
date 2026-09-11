@@ -132,8 +132,16 @@ const MAX_IMPORT_INTERACTIONS = 5000;
  * Lease for the whole legacy import. Long, because the import is the critical
  * section: a sibling worker that cannot take the lock skips the import rather
  * than racing it.
+ *
+ * 300s, matching `runSummaryImport` and `WorkflowStateRepository`, which carry
+ * the same shape of one-time import. `ttlMs` bounds how long the section may
+ * run — a lease older than its TTL is taken over whether or not its holder is
+ * alive — and this section reads a legacy file, then does up to
+ * `MAX_IMPORT_INTERACTIONS` document reads and writes. At 60s a slow disk was
+ * enough for the lease to be taken from a worker still importing, which is the
+ * one thing the lock is here to prevent.
  */
-const IMPORT_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 1000 };
+const IMPORT_LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
 
 /**
  * A facet of a storage provider, or null when there is no provider or the
@@ -480,6 +488,16 @@ export class InteractionService extends EventEmitter {
     if (marker?.data?.completedAt) return;
 
     const run = async () => {
+      // Re-read the marker now that the lock is held. The check above answers
+      // from before the wait, and the ordinary case is exactly the one it gets
+      // wrong: every worker boots at once, one imports, the rest wait, take
+      // the lock in turn and — without this — each re-reads the legacy file
+      // and re-checks up to MAX_IMPORT_INTERACTIONS documents to import
+      // nothing. `runSummaryImport` and `WorkflowStateRepository` both do this;
+      // this third importer was the one that missed it.
+      const held = await documents.get(IMPORT_STATE_NAMESPACE, IMPORT_STATE_KEY);
+      if (held?.data?.completedAt) return;
+
       let parsed = null;
       try {
         parsed = JSON.parse(await fs.readFile(this._storePath, 'utf8'));

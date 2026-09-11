@@ -735,6 +735,55 @@ describe('interactions: the legacy import', () => {
     );
   });
 
+  it('does not redo the scan on a worker that waited for the import lock', async () => {
+    // Every worker boots at once, so they all see no marker, one takes the
+    // lock and imports, and the rest wait. Checking the marker only *before*
+    // the wait, each of those then takes the lock in turn and re-reads the
+    // legacy file and re-checks every record — up to 5000 document reads per
+    // worker — to import nothing. The two sibling importers
+    // (`runSummaryImport`, `WorkflowStateRepository`) both re-check under the
+    // lock; this one did not.
+    await withInteractions(
+      async ({ legacyDir, provider, services: [first, second] }) => {
+        const records = {};
+        for (const id of ['int-a', 'int-b', 'int-c']) {
+          records[id] = { ...legacyRecord(), id };
+        }
+        await fs.writeFile(
+          path.join(legacyDir, 'interactions.json'),
+          JSON.stringify({ version: 1, interactions: records }),
+          'utf8'
+        );
+
+        const perRecordReads = [];
+        const realGet = provider.documents.get.bind(provider.documents);
+        provider.documents.get = async (ns, key) => {
+          if (ns === INTERACTIONS_NAMESPACE) perRecordReads.push(key);
+          return realGet(ns, key);
+        };
+
+        // Concurrently, so both pass the pre-lock marker check before either
+        // has written one — the ordinary boot, not a contrived one.
+        await Promise.all([first.listPending({}), second.listPending({})]);
+        provider.documents.get = realGet;
+
+        const imported = perRecordReads.filter(key => key in records);
+        assert.equal(
+          imported.length,
+          Object.keys(records).length,
+          `each legacy record is checked once, by the worker that won the lock; ` +
+            `saw ${imported.length} checks for ${Object.keys(records).length} records`
+        );
+        assert.deepEqual(
+          (await second.listPending({})).map(item => item.id).sort(),
+          ['int-a', 'int-b', 'int-c'],
+          'and the import still happened'
+        );
+      },
+      { services: 2 }
+    );
+  });
+
   it('does not re-import once the answered record s tombstone has been swept', async () => {
     // The marker is the guard with an independent failure path. The settled
     // document is evicted after its grace period, and the legacy file is

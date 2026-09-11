@@ -849,7 +849,12 @@ export class RunLedgerStore {
     }
     const logs = this._logs();
     if (logs) {
-      const swept = await logs.sweep({ olderThan: cutoffMs });
+      // Scoped to this ledger's own streams. The sweep is driven from
+      // `runLog.retentionDays`, which is a policy about runs — store-wide, it
+      // would delete any other consumer's streams on that policy and count
+      // them into `removed`, so the number in the log would not even show it
+      // happening.
+      const swept = await logs.sweep({ olderThan: cutoffMs, kind: RUN_STREAM_KIND });
       removed += swept?.streams || 0;
     }
 

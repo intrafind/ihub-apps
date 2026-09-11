@@ -48,6 +48,13 @@ import { NotSupportedError } from './errors.js';
  * @typedef {Object} SweepOptions
  * @property {Date|number} olderThan - Cut-off; streams last modified before it
  *   are removed. Accepts a Date or epoch milliseconds.
+ * @property {string} [kind] - Sweep only streams whose name begins `\`${kind}:\``.
+ *   Omitting it sweeps the whole store, which is only ever right for a store
+ *   with one consumer. It has one today; the run ledger drives the sweep from
+ *   its own `runLog.retentionDays`, and a second consumer's streams would be
+ *   deleted on a retention policy that has nothing to do with them — and
+ *   counted into the ledger's own `removed` total, so the log would not even
+ *   show it happening.
  */
 
 /**
@@ -161,6 +168,10 @@ export class AppendLog {
    * they belong to: a payload spilled for a stream that never persisted a
    * record is exactly the large object retention exists to reclaim, and nothing
    * else will ever look for it.
+   *
+   * `kind` scopes the sweep to one consumer's streams. Without it the sweep is
+   * store-wide, which means one consumer's retention policy deletes another's
+   * data — pass it unless the store genuinely has a single consumer.
    *
    * @param {SweepOptions} opts - Cut-off for the sweep.
    * @returns {Promise<{streams: number, blobs: number}>} How many streams and

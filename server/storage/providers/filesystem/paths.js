@@ -158,6 +158,25 @@ export function streamSegments(stream) {
 }
 
 /**
+ * The directory segment holding every stream of one kind.
+ *
+ * A stream name is `<kind>:<id>` and its first segment is its directory, so a
+ * sweep or a listing scoped to one kind is a matter of where the walk starts.
+ * Validated by the same rule as a stream name, which is what keeps a
+ * caller-supplied kind from walking out of the log tree.
+ *
+ * @param {string} kind - Stream kind, e.g. `run`
+ * @returns {string} The directory segment
+ * @throws {InvalidKeyError} When `kind` is not a usable identifier
+ */
+export function streamKindSegment(kind) {
+  if (typeof kind !== 'string' || !isValidId(kind)) {
+    throw new InvalidKeyError(`Invalid stream kind: ${describe(kind)}`);
+  }
+  return kind;
+}
+
+/**
  * Reduce a blob name to a flat, path-safe file name.
  *
  * Unlike namespaces and keys, blob names come from payload metadata (upload

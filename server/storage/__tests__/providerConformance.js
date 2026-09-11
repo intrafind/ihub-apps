@@ -1243,6 +1243,39 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(await shared.logs.deleteStream(stream), false);
       });
 
+      it("sweep({kind}) leaves another consumer's streams alone", async () => {
+        // The sweep is driven from one consumer's retention policy — today the
+        // run ledger's `runLog.retentionDays`. Store-wide, that policy deletes
+        // every other consumer's aged streams too, and counts them into the
+        // ledger's own `removed` total, so the number in the log does not even
+        // show it happening. The second consumer does not exist yet, which is
+        // exactly why this is worth pinning now: nothing would fail when it
+        // arrives, its data would simply stop being there.
+        const { provider, dispose } = await startProvider(createProvider);
+        try {
+          const mine = `retained:${nextId('sweep')}`;
+          const theirs = `other:${nextId('sweep')}`;
+          await provider.logs.append(mine, { n: 'mine' }, 1);
+          await provider.logs.append(theirs, { n: 'theirs' }, 1);
+          await provider.logs.flush();
+          await delay(SHORT_WAIT_MS);
+
+          const result = await provider.logs.sweep({
+            olderThan: Date.now(),
+            kind: 'retained'
+          });
+          assert.ok(result.streams >= 1, 'the scoped stream was swept');
+          assert.deepEqual(await provider.logs.read(mine), [], 'the scoped stream is gone');
+          assert.equal(
+            (await provider.logs.read(theirs)).length,
+            1,
+            "a stream of another kind is not this policy's to delete"
+          );
+        } finally {
+          await dispose();
+        }
+      });
+
       it('sweep removes streams older than olderThan and keeps newer ones', async () => {
         // Retention is store-wide, so it runs on its own instance rather than
         // sweeping away streams other cases are still using.
