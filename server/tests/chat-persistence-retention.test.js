@@ -725,3 +725,73 @@ describe('startChatRetentionSweep', () => {
     });
   });
 });
+
+describe('sweepChats: a namespace bigger than one page', () => {
+  it('reaches an owner whose chats sort past the first pages', async () => {
+    // The defect this replaces: the sweep materialized the namespace behind a
+    // fixed 20,000-document ceiling. Listing is ascending by key and chat ids
+    // are random uuids, so every tick saw the same lexicographic prefix and
+    // everything past it was invisible to *both* rules — while the count rule
+    // was the only thing keeping the namespace under that ceiling.
+    //
+    // Scaled down: eight chats sort ahead of the owner under test, so a walk
+    // that stops early never learns that owner exists and never applies the
+    // count rule to them at all.
+    await withRepository(async ({ repository }) => {
+      for (let index = 0; index < 8; index += 1) {
+        await storeChat(repository, {
+          chatId: `aa-early-${index}`,
+          ownerId: OWNER,
+          ageDays: 100 + index
+        });
+      }
+      for (let index = 0; index < 5; index += 1) {
+        await storeChat(repository, {
+          chatId: `zz-late-${index}`,
+          ownerId: OTHER_OWNER,
+          ageDays: index
+        });
+      }
+
+      const result = await sweepChats({
+        repository,
+        retentionDays: 30,
+        maxChatsPerUser: 2,
+        deleteRun: recordingCascade().deleteRun,
+        // Two per page, so thirteen chats span seven pages and the owner under
+        // test appears only in the last three.
+        pageSize: 2
+      });
+
+      // Eight expired by age at the front, three over the cap at the back.
+      assert.equal(result.removed, 11);
+      assert.deepEqual(await survivingIds(repository, OWNER), []);
+      assert.deepEqual(
+        await survivingIds(repository, OTHER_OWNER),
+        ['zz-late-0', 'zz-late-1'],
+        'the count rule reached an owner the old scan would have stopped short of'
+      );
+    });
+  });
+
+  it('does not remove a live chat to make up a quota the age rule already met', async () => {
+    // The count rule runs after the age rule and is told what it took. Counting
+    // an already-deleted chat against the quota would take a live one to make
+    // up the number.
+    await withRepository(async ({ repository }) => {
+      await storeChat(repository, { chatId: 'chat-ancient', ownerId: OWNER, ageDays: 100 });
+      await storeChat(repository, { chatId: 'chat-live-1', ownerId: OWNER, ageDays: 2 });
+      await storeChat(repository, { chatId: 'chat-live-2', ownerId: OWNER, ageDays: 1 });
+
+      const result = await sweepChats({
+        repository,
+        retentionDays: 30,
+        maxChatsPerUser: 2,
+        deleteRun: recordingCascade().deleteRun
+      });
+
+      assert.equal(result.removed, 1, 'only the ancient one');
+      assert.deepEqual(await survivingIds(repository, OWNER), ['chat-live-1', 'chat-live-2']);
+    });
+  });
+});

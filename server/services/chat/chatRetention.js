@@ -17,10 +17,19 @@
  * the ledger's own retention.
  *
  * Scanning: `DocumentStore.list` is index-backed per owner and key-ordered
- * otherwise, so the sweep pages the whole `chats` namespace once and groups it
- * in memory. That is affordable exactly because the count rule bounds what the
- * namespace can hold; a database-backed provider will eventually answer both
- * rules with a query and this module should shrink to two of them.
+ * otherwise, so the two rules are read differently. The age rule pages the
+ * whole `chats` namespace and decides each document as it arrives, holding
+ * only the ids it condemned and the set of owners whose chats survived. The
+ * count rule then asks the owner index, one owner at a time.
+ *
+ * Nothing global is materialized, and that is not an optimization. The sweep
+ * used to hold the namespace in memory behind a fixed 20,000-document ceiling,
+ * which made the count rule self-defeating: listing is ascending by key and
+ * chat ids are random uuids, so every tick saw the same lexicographic prefix
+ * and the tail was permanently invisible to both rules — while the count rule
+ * was the only thing keeping the namespace under that ceiling. A database-backed
+ * provider will eventually answer both rules with a query and this module
+ * should shrink to two of them.
  *
  * @module services/chat/chatRetention
  */
@@ -42,14 +51,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SCAN_PAGE_SIZE = 200;
 
 /**
- * Hard ceiling on how many chats one sweep considers.
+ * Chats read per owner when the count rule checks a quota.
  *
- * A sweep that tried to hold an unbounded namespace in memory would fail on
- * the installation that needs it most. The excess is not lost — the next tick
- * starts over from the beginning of the namespace, and by then this tick's
- * deletions have made room.
+ * The rule keeps the `maxChatsPerUser` most recently active, so it has to see
+ * that owner's chats — but only that owner's, through the index, one owner at
+ * a time. Bounded because an owner over this many has more chats than the
+ * quota can meaningfully rank; the oldest of what is read still goes, so the
+ * count converges over successive ticks rather than stalling.
  */
-const MAX_SWEEP_CHATS = 20_000;
+const MAX_OWNER_CHATS = 2000;
 
 /** The running sweep timer, so starting twice does not sweep twice. */
 let sweepTimer = null;
@@ -95,37 +105,88 @@ function activityTime(doc) {
 }
 
 /**
- * Read the whole `chats` namespace as the tuples the two rules need.
+ * Walk the whole `chats` namespace, applying the age rule as it goes.
+ *
+ * Nothing global is held. The walk keeps the ids the age rule condemned and
+ * the set of owners whose chats survived it — one page at a time, and the
+ * owner set is bounded by how many people use the installation rather than by
+ * how many chats they have.
+ *
+ * It used to materialize the namespace and stop at a fixed 20,000, which made
+ * the count rule self-defeating: `list` is ascending by key and chat ids are
+ * random uuids, so every tick saw the same lexicographic prefix and the tail
+ * was permanently invisible to *both* rules — while the count rule was the only
+ * thing keeping the namespace under that ceiling in the first place. Past
+ * equilibrium the visible fraction shrank, owners kept `maxChatsPerUser /
+ * fraction` chats each, and disk grew without bound while both settings read
+ * as configured.
  *
  * @param {import('../../storage/DocumentStore.js').DocumentStore} documents
- * @returns {Promise<Array<{id: string, ownerId: string|null, activeAt: number}>>}
+ * @param {number|null} cutoff - Age cutoff in ms, or null when the age rule is off.
+ * @returns {Promise<{expired: string[], owners: Set<string>, scanned: number}>}
  */
-async function scanChats(documents) {
-  const chats = [];
+async function scanChats(documents, cutoff, pageSize) {
+  const expired = [];
+  const owners = new Set();
+  let scanned = 0;
   let cursor = null;
   do {
     const page = await documents.list(CHATS_NAMESPACE, {
-      limit: SCAN_PAGE_SIZE,
+      limit: pageSize,
       ...(cursor ? { cursor } : {})
     });
     for (const doc of page.items) {
-      chats.push({
-        id: doc.key,
-        ownerId: doc.data?.ownerId ?? doc.ownerId ?? null,
-        activeAt: activityTime(doc)
-      });
+      scanned += 1;
+      const activeAt = activityTime(doc);
+      if (cutoff !== null && Number.isFinite(activeAt) && activeAt < cutoff) {
+        expired.push(doc.key);
+        continue;
+      }
+      // Only survivors count towards a quota, and only an owned chat counts at
+      // all — an unowned one cannot be attributed to anybody's.
+      const ownerId = doc.data?.ownerId ?? doc.ownerId ?? null;
+      if (ownerId) owners.add(ownerId);
     }
     cursor = page.nextCursor;
-  } while (cursor && chats.length < MAX_SWEEP_CHATS);
+  } while (cursor);
 
-  if (cursor) {
-    logger.warn('Chat retention stopped scanning at the per-sweep cap', {
-      component: COMPONENT,
-      scanned: chats.length,
-      cap: MAX_SWEEP_CHATS
+  return { expired, owners, scanned };
+}
+
+/**
+ * The chats one owner has to give up to the count rule.
+ *
+ * Read through the owner index rather than out of a global scan, so the rule
+ * sees that owner's chats whatever the size of the namespace around them.
+ *
+ * @param {import('../../storage/DocumentStore.js').DocumentStore} documents
+ * @param {string} ownerId - Owner to check.
+ * @param {number} maxChatsPerUser - Cap; zero or less disables the rule.
+ * @param {number} pageSize - Documents per index read.
+ * @returns {Promise<string[]>} Chat ids past the cap, oldest first.
+ */
+async function overflowingForOwner(documents, ownerId, maxChatsPerUser, pageSize) {
+  if (!(maxChatsPerUser > 0)) return [];
+  const owned = [];
+  let cursor = null;
+  do {
+    const page = await documents.list(CHATS_NAMESPACE, {
+      ownerId,
+      limit: pageSize,
+      ...(cursor ? { cursor } : {})
     });
-  }
-  return chats;
+    for (const doc of page.items) {
+      // `ownerId` included because `overflowingChats` groups on it — an entry
+      // without one is a chat it cannot attribute to a quota, and would skip.
+      // No need to exclude what the age rule already took: that ran first and
+      // its deletes removed the index entries, so a chat listed here is one
+      // that is still stored.
+      owned.push({ id: doc.key, ownerId, activeAt: activityTime(doc) });
+    }
+    cursor = page.nextCursor;
+  } while (cursor && owned.length < MAX_OWNER_CHATS);
+  if (owned.length <= maxChatsPerUser) return [];
+  return overflowingChats(owned, maxChatsPerUser).map(chat => chat.id);
 }
 
 /**
@@ -180,6 +241,9 @@ function overflowingChats(chats, maxChatsPerUser) {
  *   without a ledger on disk.
  * @param {(runId: string) => Promise<unknown>} [options.removeWorkflowState] -
  *   Workflow-state cascade, injectable for the same reason.
+ * @param {number} [options.pageSize] - Documents per `list` call. Injectable
+ *   so a test can drive the walk across page boundaries, which is where the
+ *   ceiling this replaced used to lose the tail of the namespace.
  * @param {() => number} [options.now] - Clock, for tests.
  * @returns {Promise<{removed: number}>} How many chats were removed.
  */
@@ -189,6 +253,7 @@ export async function sweepChats({
   maxChatsPerUser,
   deleteRun = runId => runLog.deleteRun(runId),
   removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
+  pageSize = SCAN_PAGE_SIZE,
   now = Date.now
 } = {}) {
   const documents = documentsOf(repository);
@@ -197,24 +262,20 @@ export async function sweepChats({
   // namespace every day to decide nothing.
   if (!(retentionDays > 0) && !(maxChatsPerUser > 0)) return { removed: 0 };
 
-  const chats = await scanChats(documents);
   const cutoff = retentionDays > 0 ? now() - retentionDays * DAY_MS : null;
+  const { expired, owners, scanned } = await scanChats(documents, cutoff, pageSize);
 
-  const expired = [];
-  const survivors = [];
-  for (const chat of chats) {
-    if (cutoff !== null && Number.isFinite(chat.activeAt) && chat.activeAt < cutoff) {
-      expired.push(chat);
-    } else {
-      survivors.push(chat);
-    }
-  }
-
-  const doomed = [...expired, ...overflowingChats(survivors, maxChatsPerUser)];
   let removed = 0;
-  for (const chat of doomed) {
+  /**
+   * Remove one chat, isolated: a chat that refuses to go must not strand the
+   * rest of the sweep, and there is no caller to report it to.
+   *
+   * @param {string} chatId - Chat to remove.
+   * @returns {Promise<void>}
+   */
+  const remove = async chatId => {
     try {
-      const { deleted } = await deleteChatWithCascade(repository, chat.id, {
+      const { deleted } = await deleteChatWithCascade(repository, chatId, {
         deleteRun,
         removeWorkflowState,
         component: COMPONENT
@@ -223,9 +284,32 @@ export async function sweepChats({
     } catch (error) {
       logger.error('Chat retention failed to remove a chat', {
         component: COMPONENT,
-        chatId: chat.id,
+        chatId,
         error: error.message
       });
+    }
+  };
+
+  for (const chatId of expired) await remove(chatId);
+
+  // The count rule, per owner and off the index. Deliberately after the age
+  // rule and told what it already took: an owner whose overflow was expired
+  // anyway must not have live chats removed to make up the number.
+  let byCount = 0;
+  for (const ownerId of owners) {
+    let overflow;
+    try {
+      overflow = await overflowingForOwner(documents, ownerId, maxChatsPerUser, pageSize);
+    } catch (error) {
+      logger.error('Chat retention failed to check an owner against the count rule', {
+        component: COMPONENT,
+        error: error.message
+      });
+      continue;
+    }
+    for (const chatId of overflow) {
+      byCount += 1;
+      await remove(chatId);
     }
   }
 
@@ -234,7 +318,8 @@ export async function sweepChats({
       component: COMPONENT,
       removed,
       byAge: expired.length,
-      scanned: chats.length
+      byCount,
+      scanned
     });
   }
   return { removed };
