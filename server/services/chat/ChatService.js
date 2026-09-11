@@ -509,6 +509,29 @@ class ChatService {
         language,
         channel
       });
+      // The ledger's terminal frame first, then the chat document.
+      //
+      // A client reopening a chat asks the document whether a turn is running
+      // and, if it is, replays the run's ledger to catch up. Materializing
+      // first opens a window between the answer being appended and the run
+      // being released — `materializeAssistantTurn` takes the chat lock for
+      // each separately — in which the document still says `running` and the
+      // ledger holds no `run/ended`. A client reopening inside it attaches to
+      // a run that is already over: nothing further arrives, so the placeholder
+      // spins and the composer stays behind a Stop button until the user
+      // presses it. Ending the ledger first means the replay always carries the
+      // terminal frame, and the reattach settles instead of latching.
+      //
+      // The reverse window — a released document while the ledger has not
+      // ended — costs nothing: a document that is not `running` is never
+      // reattached to in the first place.
+      this._endLedgerRun(runId, {
+        status: outcome.status,
+        finishReason: outcome.finishReason,
+        usage: outcome.usage,
+        error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+        startedAt
+      });
       // The single choke point: every terminal shape `_finishTurn` produces —
       // normal, aborted, error, passthrough answer, malformed response —
       // passes through here with the same summary.
@@ -521,13 +544,6 @@ class ChatService {
           clientConnected: hasChatClient(chatId)
         });
       }
-      this._endLedgerRun(runId, {
-        status: outcome.status,
-        finishReason: outcome.finishReason,
-        usage: outcome.usage,
-        error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
-        startedAt
-      });
       return outcome;
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
@@ -541,6 +557,8 @@ class ChatService {
         finishReason: 'error',
         error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
       });
+      // Ledger first here too, for the reason above.
+      this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
       // `_finishTurn` never ran, so nothing else releases the chat: without
       // this it stays `running` with a live `activeRunId` forever.
       if (persist) {
@@ -557,7 +575,6 @@ class ChatService {
           clientConnected: hasChatClient(chatId)
         });
       }
-      this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
       throw error;
     } finally {
       // Never let a detected source leak into the next turn on this chatId.

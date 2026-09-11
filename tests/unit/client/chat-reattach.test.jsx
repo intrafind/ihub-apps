@@ -44,14 +44,16 @@ jest.mock('../../../client/src/api', () => ({
 }));
 
 const mockOpenCalls = [];
+const mockEmitters = [];
 const ledgerPages = [];
 jest.mock('../../../client/src/shared/utils/openSseStream', () => {
   const actual = jest.requireActual('../../../client/src/shared/utils/openSseStream');
   return {
     __esModule: true,
     ...actual,
-    openSseStream: jest.fn((url, { signal, onOpen }) => {
+    openSseStream: jest.fn((url, { signal, onOpen, onEvent }) => {
       mockOpenCalls.push(url);
+      mockEmitters.push(onEvent);
       onOpen?.();
       return new Promise(resolve => {
         if (signal.aborted) return resolve();
@@ -90,6 +92,7 @@ const page = events => ({
 
 beforeEach(() => {
   mockOpenCalls.length = 0;
+  mockEmitters.length = 0;
   ledgerPages.length = 0;
   sessionStorage.clear();
   fetchWithAuthRetry.mockClear();
@@ -146,6 +149,112 @@ test('does not attach to a run that already ended, and settles instead', async (
   // Opening a stream for a finished run would leave the composer behind a
   // Stop button until the connection timed out.
   expect(mockOpenCalls).toEqual([]);
+  expect(onSettled).toHaveBeenCalledTimes(1);
+  expect(result.current.processing).toBe(false);
+});
+
+test('a live run/ended on the attached run settles it', async () => {
+  // The live half of the reattach had no test at all: the suite's stream mock
+  // never delivered an event, so no terminal frame ever reached `handleEvent`
+  // and both `settleReattachedRun` calls could be deleted with every test
+  // still passing.
+  ledgerPages.push(
+    page([
+      envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+      envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'still going' })
+    ])
+  );
+
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
+  );
+
+  const onSettled = jest.fn();
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID, { onSettled });
+  });
+  expect(onSettled).not.toHaveBeenCalled();
+
+  const emit = mockEmitters[mockEmitters.length - 1];
+  await act(async () => {
+    emit('run/ended', envelope(3, 'run/ended', { status: 'completed', finishReason: 'stop' }));
+  });
+
+  expect(onSettled).toHaveBeenCalledTimes(1);
+  expect(result.current.processing).toBe(false);
+});
+
+test('another run ending in the same chat does not settle the attached one', async () => {
+  // A chat can have several runs in flight — a workflow child, a superseded
+  // turn — and only the one this surface attached to means the store is worth
+  // re-reading.
+  ledgerPages.push(
+    page([
+      envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+      envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'still going' })
+    ])
+  );
+
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
+  );
+
+  const onSettled = jest.fn();
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID, { onSettled });
+  });
+
+  const emit = mockEmitters[mockEmitters.length - 1];
+  await act(async () => {
+    emit('run/ended', {
+      v: 2,
+      seq: 3,
+      runId: 'some-other-run',
+      ts: new Date(3000).toISOString(),
+      type: 'run/ended',
+      data: { status: 'completed', finishReason: 'stop' }
+    });
+  });
+
+  expect(onSettled).not.toHaveBeenCalled();
+});
+
+test('a stream that drops settles the attached run rather than latching it forever', async () => {
+  // The turn being re-attached to outlived the browser that started it, so the
+  // connection dropping or timing out is its ordinary ending. A stream-level
+  // error stamps the *chat* id as its runId, so nothing could ever match it
+  // against the attached run: the attachment stayed latched, the caller never
+  // re-read the store, and the chat kept a partial projection and a running
+  // badge until a reload.
+  ledgerPages.push(
+    page([
+      envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+      envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'half an answer' })
+    ])
+  );
+
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })
+  );
+
+  const onSettled = jest.fn();
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID, { onSettled });
+  });
+
+  const emit = mockEmitters[mockEmitters.length - 1];
+  await act(async () => {
+    emit('stream/error', {
+      v: 2,
+      seq: 0,
+      // What `syntheticStreamError` stamps: the stream id, which is the chat.
+      runId: 'chat-abc',
+      ts: new Date(0).toISOString(),
+      type: 'stream/error',
+      data: { message: 'connection lost' }
+    });
+  });
+
   expect(onSettled).toHaveBeenCalledTimes(1);
   expect(result.current.processing).toBe(false);
 });

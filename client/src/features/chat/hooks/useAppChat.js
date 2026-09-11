@@ -310,11 +310,23 @@ function useAppChat({
    * child, a superseded turn), and only the one this surface re-attached to
    * should trigger the caller's re-read.
    *
-   * @param {string} runId - The run that just reached a terminal frame
+   * `transportFailure` is the exception, and it has to be: a stream-level
+   * error carries the *chat* id as its `runId` (`syntheticStreamError` stamps
+   * `runId: streamId`), so there is no run to match against. Re-attaching is
+   * the case that needs it most — the turn it follows outlived the browser
+   * that started it, so the connection dropping or timing out is the ordinary
+   * ending, not an exceptional one. Without it the attachment stayed latched
+   * forever: `onSettled` never ran, the caller never re-read the store, and
+   * the chat kept a partial projection and a running badge until a reload.
+   *
+   * @param {string|null} runId - The run that reached a terminal frame
+   * @param {Object} [options]
+   * @param {boolean} [options.transportFailure=false] - Settle whatever is
+   *   attached, because the stream itself failed and named no run
    */
-  const settleReattachedRun = useCallback(runId => {
+  const settleReattachedRun = useCallback((runId, { transportFailure = false } = {}) => {
     const pending = reattachedRunRef.current;
-    if (!pending || pending.runId !== runId) return;
+    if (!pending || (!transportFailure && pending.runId !== runId)) return;
     reattachedRunRef.current = null;
     pending.onSettled?.();
   }, []);
@@ -352,6 +364,10 @@ function useAppChat({
       // Stream-level error (transport failure / error before any run started):
       // nothing to project, append the message like the legacy 'error' case.
       if (type === RUN_EVENTS.STREAM_ERROR && !run) {
+        // Before the early return below, which is what used to strand a
+        // re-attached turn: the stream names the chat rather than the run, so
+        // nothing further down could ever have matched it.
+        settleReattachedRun(null, { transportFailure: true });
         if (messageId && !isCancellingRef.current) {
           const currentMessage = messagesRef.current.find(m => m.id === messageId);
           const errorMessage =
